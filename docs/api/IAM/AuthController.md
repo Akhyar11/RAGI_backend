@@ -10,9 +10,11 @@
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
-| POST | `/api/auth/register` | Mendaftarkan akun baru | ❌ Publik |
-| POST | `/api/auth/login` | Login dan mendapatkan token | ❌ Publik |
-| GET | `/api/auth/me` | Melihat profil pengguna aktif | ✅ Required |
+| POST | `/api/auth/register` | Mendaftarkan pengguna baru (Testing/Calon Mhs) | ❌ Publik |
+| POST | `/api/auth/verify-email` | Verifikasi token dari email | ❌ Publik |
+| POST | `/api/auth/login` | Autentikasi dengan email & password | ❌ Publik |
+| POST | `/api/auth/mfa/login-verify`| Verifikasi TOTP untuk login tahap 2 | ❌ Publik |
+| GET | `/api/auth/me` | Mendapatkan data pengguna yang sedang login | ✅ Passport |
 | POST | `/api/auth/logout` | Menghapus token aktif (logout) | ✅ Required |
 | POST | `/api/auth/logout-all` | Logout dari semua perangkat & app | ✅ Required |
 | POST | `/api/auth/change-password` | Ganti password + paksa login ulang | ✅ Required |
@@ -52,40 +54,65 @@
 | `phone` | string | ❌ | — |
 | `user_type` | string | ✅ | Enum: `mahasiswa`, `dosen`, `tendik`, `admin`, `calon_mhs` |
 
-### Response Sukses
+### Response Sukses (201 Created)
 
-**201 Created**
 ```json
 {
-    "message": "User registered successfully",
+    "message": "User registered successfully. Silakan periksa email Anda untuk memverifikasi akun.",
     "data": {
-        "id": 1,
-        "username": "budi.santoso",
-        "email": "budi@kampus.ac.id",
-        "phone": "081234567890",
-        "user_type": "mahasiswa",
+        "username": "budi_calon",
+        "email": "budi_calon@gmail.com",
+        "user_type": "calon_mhs",
         "is_active": true,
         "is_verified": false,
-        "last_login_at": null,
-        "created_at": "2026-07-28T14:00:00.000000Z",
-        "updated_at": "2026-07-28T14:00:00.000000Z"
+        "id": 1,
+        "email_verified_at": null,
+        "created_at": "2026-07-28T04:23:36.000000Z",
+        "updated_at": "2026-07-28T04:23:36.000000Z"
     },
-    "access_token": "1|aBcDeFgHiJkLmNoPqRsTuVwXyZ...",
+    "access_token": "1|eyJ0eXA...",
     "token_type": "Bearer"
 }
 ```
 
-### Response Error
+> **Catatan:** Setelah register berhasil, sistem akan mengantrekan pengiriman email ke background job (queue). Email berisi link verifikasi dengan token unik.
 
-**422 Unprocessable Entity**
+---
+
+## POST /api/auth/verify-email
+
+> Memverifikasi akun pengguna melalui token unik yang dikirimkan ke email mereka.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "token": "token_unik_dari_email_..."
+}
+```
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Email berhasil diverifikasi."
+}
+```
+
+### Response Error (400 Bad Request) - Token Salah/Expired
+
 ```json
 {
     "status": "error",
-    "message": "Data yang diberikan tidak valid.",
-    "errors": {
-        "email": ["Email sudah digunakan."],
-        "username": ["Username sudah digunakan."]
-    }
+    "message": "Token verifikasi tidak valid atau telah kedaluwarsa."
 }
 ```
 
@@ -93,7 +120,7 @@
 
 ## POST /api/auth/login
 
-> Melakukan autentikasi pengguna dan mengembalikan Bearer Token. Token ini digunakan pada semua endpoint yang memerlukan autentikasi.
+> Endpoint utama untuk masuk ke sistem. Jika pengguna **tidak** mengaktifkan 2FA, mereka akan langsung mendapatkan `access_token`. Jika pengguna **telah mengaktifkan** 2FA, sistem akan meminta verifikasi langkah kedua (TOTP) dengan merespons status `requires_2fa: true`.
 
 ### Headers
 
@@ -116,34 +143,92 @@
 | `email` | string | ✅ | Email terdaftar |
 | `password` | string | ✅ | Password akun |
 
-### Response Sukses
+### Response Sukses (200 OK) - Tanpa 2FA
 
-**200 OK**
 ```json
 {
+    "status": "success",
     "message": "Login successful",
+    "requires_2fa": false,
     "data": {
         "id": 1,
-        "username": "budi.santoso",
-        "email": "budi@kampus.ac.id",
-        "user_type": "mahasiswa",
-        "is_active": true,
-        "last_login_at": "2026-07-28T14:05:00.000000Z"
+        "username": "admin",
+        "email": "admin@kampus.ac.id",
+        "user_type": "admin",
+        "is_active": 1,
+        "is_verified": 1,
+        "last_login_at": "2026-07-28T04:25:10.000000Z"
     },
-    "access_token": "2|aBcDeFgHiJkLmNoPqRsTuVwXyZ...",
+    "access_token": "2|eyJ0eXA...",
     "token_type": "Bearer"
 }
 ```
 
-### Response Error
+### Response Sukses (200 OK) - Membutuhkan 2FA
 
-**422 Unprocessable Entity** — Kredensial salah
 ```json
 {
-    "message": "The given data was invalid.",
+    "status": "success",
+    "requires_2fa": true,
+    "temp_token": "token_sementara_yg_random_...",
+    "message": "Silakan masukkan kode TOTP dari aplikasi Authenticator Anda."
+}
+```
+
+> **Catatan 2FA:** Jika Anda menerima respons `requires_2fa: true`, Anda **belum login secara penuh**. Frontend harus meminta kode 6 digit dari user dan memanggil endpoint `/api/auth/mfa/login-verify` dengan melampirkan `temp_token` ini.
+
+### Response Error (422 Unprocessable Entity) - Validasi Gagal
+
+```json
+{
+    "message": "Data yang diberikan tidak valid.",
     "errors": {
         "email": ["Kredensial yang diberikan salah."]
     }
+}
+```
+
+---
+
+## POST /api/auth/mfa/login-verify
+
+> Melengkapi proses login dua langkah (2-Step Verification). Endpoint ini akan menukarkan `temp_token` dan `totp_code` menjadi `access_token` asli.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "temp_token": "token_sementara_dari_response_login",
+    "totp_code": "123456"
+}
+```
+
+### Response Sukses (200 OK)
+
+Mengembalikan payload yang persis sama dengan respons *Login sukses tanpa 2FA* (berisi `access_token`).
+
+### Response Error
+
+**400 Bad Request - Sesi Kedaluwarsa**
+```json
+{
+    "status": "error",
+    "message": "Sesi login telah kedaluwarsa. Silakan login ulang dengan password."
+}
+```
+
+**422 Unprocessable Entity - TOTP Salah**
+```json
+{
+    "status": "error",
+    "message": "Kode TOTP tidak valid."
 }
 ```
 
