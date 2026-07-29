@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\IAM\PasswordResetService;
+use App\Mail\PasswordResetMail;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class PasswordResetController extends Controller
 {
@@ -32,16 +34,8 @@ class PasswordResetController extends Controller
         if ($user) {
             $plainToken = $this->passwordResetService->createToken($user);
 
-            // TODO: Kirim email dengan link reset password
-            // Mail::to($user->email)->send(new PasswordResetMail($plainToken));
-            // Untuk sementara, token dikembalikan di response (DEVELOPMENT ONLY)
-            if (app()->environment('local', 'testing')) {
-                return response()->json([
-                    'status'  => 'success',
-                    'message' => 'Link reset password telah dikirim ke email Anda.',
-                    '_dev_token' => $plainToken, // Hanya tersedia di environment lokal
-                ]);
-            }
+            // Queue the email to be sent in the background
+            Mail::to($user->email)->send(new PasswordResetMail($plainToken, $user->email));
         }
 
         // Response yang sama meskipun email tidak ada (security)
