@@ -47,4 +47,19 @@ class AuthApiTest extends TestCase
         $response->assertStatus(200)
                  ->assertJsonStructure(['access_token']);
     }
+
+    public function test_user_can_refresh_token()
+    {
+        $user = User::factory()->create();
+        
+        $ssoService = app(\App\Services\IAM\SsoService::class);
+        $ssoToken = $ssoService->generateTokens($user, 'spmb');
+
+        $response = $this->postJson('/api/auth/refresh', [
+            'refresh_token' => $ssoToken->refresh_token
+        ]);
+
+        $response->assertStatus(200)
+                 ->assertJsonStructure(['data' => ['access_token', 'refresh_token']]);
+    }
 }

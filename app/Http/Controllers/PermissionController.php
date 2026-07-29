@@ -9,8 +9,7 @@ class PermissionController extends Controller
 {
     public function index(Request $request)
     {
-        // Hanya bisa diakses jika user punya permission melihat roles atau user
-        $this->authorize('viewAny', App\Models\Role::class);
+        $this->authorize('viewAny', Permission::class);
 
         $perPage = min(100, $request->integer('per_page', 50));
         $query = Permission::query();
@@ -52,6 +51,62 @@ class PermissionController extends Controller
                 'sort_by' => $sortBy,
                 'sort_order' => $sortOrder
             ]
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        $this->authorize('create', Permission::class);
+
+        $request->validate([
+            'module' => 'required|string|max:100',
+            'action' => 'required|string|max:50',
+            'name' => 'required|string|max:150',
+            'slug' => 'required|string|max:150|unique:permissions',
+            'description' => 'nullable|string',
+        ]);
+
+        $permission = Permission::create($request->only(['module', 'action', 'name', 'slug', 'description']));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Permission created successfully',
+            'data' => $permission
+        ], 201);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $permission = Permission::findOrFail($id);
+        $this->authorize('update', $permission);
+
+        $request->validate([
+            'module' => 'required|string|max:100',
+            'action' => 'required|string|max:50',
+            'name' => 'required|string|max:150',
+            'slug' => 'required|string|max:150|unique:permissions,slug,' . $id,
+            'description' => 'nullable|string',
+        ]);
+
+        $permission->update($request->only(['module', 'action', 'name', 'slug', 'description']));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Permission updated successfully',
+            'data' => $permission
+        ]);
+    }
+
+    public function destroy($id)
+    {
+        $permission = Permission::findOrFail($id);
+        $this->authorize('delete', $permission);
+
+        $permission->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Permission deleted successfully'
         ]);
     }
 }

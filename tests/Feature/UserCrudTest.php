@@ -27,7 +27,7 @@ class UserCrudTest extends TestCase
         User::factory()->count(5)->create();
         Passport::actingAs($this->admin);
 
-        $response = $this->getJson('/api/users');
+        $response = $this->getJson('/api/admin/users');
 
         $response->assertStatus(200)
                  ->assertJsonStructure(['data', 'current_page', 'total']);
@@ -37,7 +37,7 @@ class UserCrudTest extends TestCase
     {
         Passport::actingAs($this->nonAdmin);
 
-        $response = $this->getJson('/api/users');
+        $response = $this->getJson('/api/admin/users');
 
         $response->assertStatus(403);
     }
@@ -46,7 +46,7 @@ class UserCrudTest extends TestCase
     {
         Passport::actingAs($this->admin);
 
-        $response = $this->postJson('/api/users', [
+        $response = $this->postJson('/api/admin/users', [
             'username'              => 'newuser',
             'email'                 => 'newuser@example.com',
             'password'              => 'password123',
@@ -69,7 +69,7 @@ class UserCrudTest extends TestCase
         Passport::actingAs($this->admin);
         $userToUpdate = User::factory()->create();
 
-        $response = $this->putJson('/api/users/' . $userToUpdate->id, [
+        $response = $this->putJson('/api/admin/users/' . $userToUpdate->id, [
             'username'  => 'updateduser',
             'user_type' => 'tendik',
         ]);
@@ -87,12 +87,31 @@ class UserCrudTest extends TestCase
         Passport::actingAs($this->admin);
         $userToDelete = User::factory()->create();
 
-        $response = $this->deleteJson('/api/users/' . $userToDelete->id);
+        $response = $this->deleteJson('/api/admin/users/' . $userToDelete->id);
 
         $response->assertStatus(200);
         $this->assertDatabaseMissing('users', [
             'id'         => $userToDelete->id,
             'deleted_at' => null,
+        ]);
+    }
+
+    public function test_admin_can_toggle_user_status()
+    {
+        Passport::actingAs($this->admin);
+        $user = User::factory()->create(['is_active' => true]);
+
+        $response = $this->patchJson("/api/admin/users/{$user->id}/status", [
+            'is_active' => false
+        ]);
+
+        $response->assertStatus(200)
+                 ->assertJsonPath('status', 'success')
+                 ->assertJsonPath('data.is_active', false);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'is_active' => false
         ]);
     }
 }

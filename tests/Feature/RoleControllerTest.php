@@ -37,7 +37,7 @@ class RoleControllerTest extends TestCase
 
     public function test_unauthenticated_user_cannot_access_roles()
     {
-        $response = $this->getJson('/api/roles');
+        $response = $this->getJson('/api/admin/roles');
         $response->assertStatus(401);
     }
 
@@ -46,7 +46,7 @@ class RoleControllerTest extends TestCase
         $user = User::factory()->create();
         Passport::actingAs($user);
 
-        $response = $this->getJson('/api/roles');
+        $response = $this->getJson('/api/admin/roles');
         $response->assertStatus(403);
     }
 
@@ -57,7 +57,7 @@ class RoleControllerTest extends TestCase
 
         Role::factory()->count(3)->create();
 
-        $response = $this->getJson('/api/roles');
+        $response = $this->getJson('/api/admin/roles');
 
         $response->assertStatus(200)
                  ->assertJsonStructure([
@@ -86,7 +86,7 @@ class RoleControllerTest extends TestCase
             'permissions' => [$permission->id]
         ];
 
-        $response = $this->postJson('/api/roles', $payload);
+        $response = $this->postJson('/api/admin/roles', $payload);
 
         $response->assertStatus(201)
                  ->assertJsonPath('status', 'success')
@@ -115,7 +115,7 @@ class RoleControllerTest extends TestCase
             'slug' => 'old-name',
         ];
 
-        $response = $this->putJson("/api/roles/{$role->id}", $payload);
+        $response = $this->putJson("/api/admin/roles/{$role->id}", $payload);
 
         $response->assertStatus(200)
                  ->assertJsonPath('data.name', 'New Name');
@@ -133,7 +133,7 @@ class RoleControllerTest extends TestCase
 
         $role = Role::factory()->create();
 
-        $response = $this->deleteJson("/api/roles/{$role->id}");
+        $response = $this->deleteJson("/api/admin/roles/{$role->id}");
 
         $response->assertStatus(200);
         $this->assertDatabaseMissing('roles', [
@@ -148,7 +148,7 @@ class RoleControllerTest extends TestCase
 
         $role = Role::factory()->create(['slug' => 'super-admin']);
 
-        $response = $this->deleteJson("/api/roles/{$role->id}");
+        $response = $this->deleteJson("/api/admin/roles/{$role->id}");
 
         $response->assertStatus(403); // Forbidden dari Policy
         $this->assertDatabaseHas('roles', [

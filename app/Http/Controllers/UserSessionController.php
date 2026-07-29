@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\UserSessionIam;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 class UserSessionController extends Controller
 {
@@ -104,6 +105,66 @@ class UserSessionController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => count($otherSessions) . ' sesi lain berhasil dihapus (logout dari perangkat lain).'
+        ]);
+    }
+
+    /**
+     * Admin: Display all active sessions across all users.
+     */
+    public function adminIndex(Request $request)
+    {
+        if ($request->user()->user_type !== 'admin') abort(403);
+
+        $query = UserSessionIam::with('user:id,username,email')->orderBy('created_at', 'desc');
+            
+        $perPage = $request->input('per_page', 15);
+        $sessions = $query->paginate($perPage);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data retrieved successfully',
+            'data' => $sessions->items(),
+            'meta' => [
+                'current_page' => $sessions->currentPage(),
+                'per_page' => $sessions->perPage(),
+                'total' => $sessions->total(),
+                'last_page' => $sessions->lastPage(),
+                'from' => $sessions->firstItem(),
+                'to' => $sessions->lastItem(),
+            ],
+            'filters' => [
+                'search' => null,
+                'sort_by' => 'created_at',
+                'sort_order' => 'desc',
+            ]
+        ]);
+    }
+
+    /**
+     * Admin: Revoke any specific session globally.
+     */
+    public function adminDestroy(Request $request, $id)
+    {
+        $session = UserSessionIam::find($id);
+
+        if (!$session) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Sesi tidak ditemukan.'
+            ], 404);
+        }
+
+        if ($request->user()->user_type !== 'admin') abort(403);
+
+        DB::table('oauth_access_tokens')
+            ->where('id', $session->token)
+            ->update(['revoked' => true]);
+
+        $session->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Sesi berhasil diputus paksa (force logout).'
         ]);
     }
 }

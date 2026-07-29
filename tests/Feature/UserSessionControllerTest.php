@@ -171,4 +171,51 @@ class UserSessionControllerTest extends TestCase
         $this->assertDatabaseHas('oauth_access_tokens', ['id' => $tokenB->token->id, 'revoked' => 1]);
         $this->assertDatabaseHas('oauth_access_tokens', ['id' => $tokenC->token->id, 'revoked' => 0]);
     }
+
+    public function test_admin_can_view_all_sessions()
+    {
+        $admin = User::factory()->create(['user_type' => 'admin']);
+        $this->actingAs($admin, 'api');
+
+        UserSessionIam::create([
+            'user_id' => $admin->id,
+            'token' => 'dummy',
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'Test'
+        ]);
+
+        $response = $this->getJson('/api/admin/sessions');
+        $response->assertStatus(200)->assertJsonStructure(['data', 'meta']);
+    }
+
+    public function test_admin_can_destroy_any_session()
+    {
+        $admin = User::factory()->create(['user_type' => 'admin']);
+        $this->actingAs($admin, 'api');
+
+        $user = User::factory()->create();
+        $session = UserSessionIam::create([
+            'user_id' => $user->id,
+            'token' => 'dummy',
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'Test'
+        ]);
+
+        // Mock DB table for oauth_access_tokens
+        \Illuminate\Support\Facades\DB::table('oauth_access_tokens')->insert([
+            'id' => 'dummy',
+            'user_id' => $user->id,
+            'client_id' => 1,
+            'scopes' => '[]',
+            'revoked' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+            'expires_at' => now()->addDays(1)
+        ]);
+
+        $response = $this->deleteJson("/api/admin/sessions/{$session->id}");
+        $response->assertStatus(200);
+
+        $this->assertDatabaseMissing('user_sessions_iam', ['id' => $session->id]);
+    }
 }

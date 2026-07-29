@@ -13,9 +13,12 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use App\Mail\VerifyEmailMail;
 use App\Services\AuditLogService;
+use App\Services\IAM\SsoService;
 
 class AuthController extends Controller
 {
+    public function __construct(private SsoService $ssoService) {}
+
     public function register(Request $request)
     {
         $request->validate([
@@ -208,6 +211,34 @@ class AuthController extends Controller
     {
         return response()->json([
             'data' => $request->user()
+        ]);
+    }
+
+    public function refresh(Request $request)
+    {
+        $request->validate([
+            'refresh_token' => 'required|string',
+        ]);
+
+        $newToken = $this->ssoService->refreshTokens($request->refresh_token);
+
+        if (!$newToken) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Refresh token tidak valid atau sudah kedaluwarsa.',
+            ], 401);
+        }
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Token berhasil diperbarui',
+            'data'    => [
+                'access_token'       => $newToken->access_token,
+                'refresh_token'      => $newToken->refresh_token,
+                'client_app'         => $newToken->client_app,
+                'access_expires_at'  => $newToken->access_expires_at,
+                'refresh_expires_at' => $newToken->refresh_expires_at,
+            ],
         ]);
     }
 

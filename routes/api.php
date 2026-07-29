@@ -26,6 +26,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword'])
         ->middleware('throttle:forgot-password');
     Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']);
+    Route::post('/refresh', [AuthController::class, 'refresh']);
 
     // Endpoint terproteksi (Passport atau Sanctum)
     Route::middleware('auth:api')->group(function () {
@@ -79,10 +80,22 @@ Route::prefix('sso')->group(function () {
 | RBAC & Users CRUD Routes (Terproteksi Policy)
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth:api')->group(function () {
+Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::apiResource('users', App\Http\Controllers\UserController::class);
+    Route::patch('users/{id}/status', [App\Http\Controllers\UserController::class, 'toggleStatus']);
+    
     Route::apiResource('roles', App\Http\Controllers\RoleController::class);
-    Route::get('permissions', [App\Http\Controllers\PermissionController::class, 'index']);
+    Route::apiResource('permissions', App\Http\Controllers\PermissionController::class);
+    
+    // Role & Permission Assignment
+    Route::post('users/{id}/roles', [App\Http\Controllers\RoleAssignmentController::class, 'assignRoles']);
+    Route::post('roles/{id}/permissions', [App\Http\Controllers\RoleAssignmentController::class, 'assignPermissions']);
+    Route::get('user-roles', [App\Http\Controllers\RoleAssignmentController::class, 'getUserRoles']);
+    Route::get('role-permissions', [App\Http\Controllers\RoleAssignmentController::class, 'getRolePermissions']);
+
+    // Admin Session Management
+    Route::get('sessions', [App\Http\Controllers\UserSessionController::class, 'adminIndex']);
+    Route::delete('sessions/{id}', [App\Http\Controllers\UserSessionController::class, 'adminDestroy']);
     
     // Audit Logs
     Route::get('audit-logs', [App\Http\Controllers\AuditLogController::class, 'index']);

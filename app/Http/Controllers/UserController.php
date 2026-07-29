@@ -113,4 +113,28 @@ class UserController extends Controller
             'message' => 'User deleted successfully'
         ]);
     }
+
+    /**
+     * Toggle the active status of the user.
+     */
+    public function toggleStatus(Request $request, $id)
+    {
+        $this->ensureAdmin();
+        
+        $user = User::findOrFail($id);
+        
+        $request->validate([
+            'is_active' => 'required|boolean'
+        ]);
+
+        $user->update(['is_active' => $request->is_active]);
+
+        $statusStr = $request->is_active ? 'diaktifkan' : 'dinonaktifkan';
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "User berhasil {$statusStr}.",
+            'data' => $user
+        ]);
+    }
 }

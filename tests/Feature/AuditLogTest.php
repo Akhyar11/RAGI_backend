@@ -146,7 +146,7 @@ class AuditLogTest extends TestCase
             'table_name' => 'dummy'
         ]);
 
-        $response = $this->withToken($tokenStr)->getJson('/api/audit-logs');
+        $response = $this->withToken($tokenStr)->getJson('/api/admin/audit-logs');
 
         $response->assertStatus(200)
                  ->assertJsonStructure(['data', 'meta', 'filters']);
@@ -157,7 +157,7 @@ class AuditLogTest extends TestCase
         $mahasiswa = User::factory()->create(['user_type' => 'mahasiswa']);
         $token = $mahasiswa->createToken('mhs_token')->accessToken ?? clone $mahasiswa->createToken('mhs_token')->plainTextToken;
 
-        $response = $this->withToken($token)->getJson('/api/audit-logs');
+        $response = $this->withToken($token)->getJson('/api/admin/audit-logs');
 
         // Should be forbidden because no view-audit-logs permission
         $response->assertStatus(403);
