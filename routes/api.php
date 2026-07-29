@@ -38,6 +38,11 @@ Route::prefix('auth')->group(function () {
         Route::post('/mfa/setup', [MfaController::class, 'setup']);
         Route::post('/mfa/verify', [MfaController::class, 'verify']);
         Route::post('/mfa/disable', [MfaController::class, 'disable']);
+
+        // Session & Devices Management
+        Route::get('/sessions', [App\Http\Controllers\UserSessionController::class, 'index']);
+        Route::delete('/sessions/others', [App\Http\Controllers\UserSessionController::class, 'destroyOthers']);
+        Route::delete('/sessions/{id}', [App\Http\Controllers\UserSessionController::class, 'destroy']);
     });
 });
 
@@ -71,9 +76,11 @@ Route::prefix('sso')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| Users CRUD Routes (Admin Only)
+| RBAC & Users CRUD Routes (Terproteksi Policy)
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:api')->group(function () {
     Route::apiResource('users', App\Http\Controllers\UserController::class);
+    Route::apiResource('roles', App\Http\Controllers\RoleController::class);
+    Route::get('permissions', [App\Http\Controllers\PermissionController::class, 'index']);
 });

@@ -58,4 +58,24 @@ class User extends Authenticatable
     {
         return $this->hasMany(PasswordReset::class);
     }
+
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id')
+            ->withPivot(['valid_from', 'valid_until'])
+            ->wherePivot('valid_until', '>=', now()->toDateString())
+            ->orWherePivotNull('valid_until');
+    }
+
+    public function hasPermission(string $permissionSlug): bool
+    {
+        return $this->roles()
+            ->whereHas('permissions', fn($q) => $q->where('slug', $permissionSlug))
+            ->exists();
+    }
+
+    public function hasRole(string $roleSlug): bool
+    {
+        return $this->roles()->where('slug', $roleSlug)->exists();
+    }
 }

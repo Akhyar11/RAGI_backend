@@ -16,6 +16,7 @@
 | `PasswordResetController` | Lupa & reset password | `/api/auth/forgot-password`, `/api/auth/reset-password` | [PasswordResetController.md](api/IAM/PasswordResetController.md) |
 | `SsoController` | SSO token kustom (kompatibilitas API/mobile) | `/api/sso/*` | [SsoController.md](api/IAM/SsoController.md) |
 | `UserController` | CRUD manajemen pengguna (Admin) | `/api/users` | [UserController.md](api/IAM/UserController.md) |
+| `RoleController` | CRUD manajemen peran & hak akses (RBAC) | `/api/roles`, `/api/permissions` | [RoleController (RBAC)](api/IAM/RoleController.md)<br>[UserSessionController (Manajemen Sesi)](api/IAM/UserSessionController.md) |
 | `MfaController` | Autentikasi Dua Faktor (2FA/TOTP) | `/api/auth/mfa/*` | [MfaController.md](api/IAM/MfaController.md) |
 
 ---
@@ -117,6 +118,17 @@
 | GET | `/api/users/{id}` | ✅ Admin | Detail satu user |
 | PUT | `/api/users/{id}` | ✅ Admin | Update user |
 | DELETE | `/api/users/{id}` | ✅ Admin | Hapus user (soft delete) |
+
+### Role & Permission Management (RBAC)
+
+| Method | Endpoint | Auth | Keterangan |
+|---|---|---|---|
+| GET | `/api/roles` | ✅ `roles.read` | Daftar semua role |
+| POST | `/api/roles` | ✅ `roles.create`| Buat role baru & assign permission |
+| GET | `/api/roles/{id}` | ✅ `roles.read` | Detail role |
+| PUT | `/api/roles/{id}` | ✅ `roles.update`| Update role |
+| DELETE | `/api/roles/{id}` | ✅ `roles.delete`| Hapus role |
+| GET | `/api/permissions`| ✅ `roles.read` | Daftar semua permission |
 
 ---
 

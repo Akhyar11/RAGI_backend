@@ -125,7 +125,16 @@ class AuthController extends Controller
         }
 
         $user->update(['last_login_at' => now()]);
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $tokenResult = $user->createToken('auth_token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+        
+        \App\Models\UserSessionIam::create([
+            'user_id' => $user->id,
+            'token' => $tokenResult->token->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'created_at' => now(),
+        ]);
 
         return response()->json([
             'status' => 'success',
@@ -163,7 +172,16 @@ class AuthController extends Controller
             Cache::forget('2fa_login_' . $request->temp_token);
             $user->update(['last_login_at' => now()]);
             
-            $token = $user->createToken('auth_token')->plainTextToken;
+            $tokenResult = $user->createToken('auth_token');
+            $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+            \App\Models\UserSessionIam::create([
+                'user_id' => $user->id,
+                'token' => $tokenResult->token->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'created_at' => now(),
+            ]);
 
             return response()->json([
                 'status' => 'success',
@@ -189,7 +207,12 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $token = $request->user()->token();
+        
+        if ($token) {
+            \App\Models\UserSessionIam::where('token', $token->id)->delete();
+            $token->revoke();
+        }
 
         return response()->json([
             'message' => 'Successfully logged out'
@@ -199,7 +222,14 @@ class AuthController extends Controller
     public function logoutAll(Request $request)
     {
         $user = $request->user();
-        $user->tokens()->delete();
+        
+        // Revoke all Passport tokens
+        $user->tokens->each(function ($token) {
+            $token->revoke();
+        });
+        
+        // Clear sessions
+        \App\Models\UserSessionIam::where('user_id', $user->id)->delete();
         SsoToken::where('user_id', $user->id)->delete();
 
         return response()->json([
@@ -224,7 +254,13 @@ class AuthController extends Controller
         }
 
         $user->update(['password' => Hash::make($request->password)]);
-        $user->tokens()->delete();
+        
+        // Revoke all Passport tokens
+        $user->tokens->each(function ($token) {
+            $token->revoke();
+        });
+        
+        \App\Models\UserSessionIam::where('user_id', $user->id)->delete();
         SsoToken::where('user_id', $user->id)->delete();
 
         return response()->json([
