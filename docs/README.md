@@ -16,6 +16,7 @@
 | `PasswordResetController` | Lupa & reset password | `/api/auth/forgot-password`, `/api/auth/reset-password` | [PasswordResetController.md](api/IAM/PasswordResetController.md) |
 | `SsoController` | SSO token kustom (kompatibilitas API/mobile) | `/api/sso/*` | [SsoController.md](api/IAM/SsoController.md) |
 | `UserController` | CRUD manajemen pengguna (Admin) | `/api/users` | [UserController.md](api/IAM/UserController.md) |
+| `MfaController` | Autentikasi Dua Faktor (2FA/TOTP) | `/api/auth/mfa/*` | [MfaController.md](api/IAM/MfaController.md) |
 
 ---
 
@@ -85,13 +86,18 @@
 | Method | Endpoint | Auth | Keterangan |
 |---|---|---|---|
 | POST | `/api/auth/register` | ❌ Publik | Daftar akun baru |
+| POST | `/api/auth/verify-email` | ❌ Publik | Verifikasi token dari email |
 | POST | `/api/auth/login` | ❌ Publik | Login → dapat token |
+| POST | `/api/auth/mfa/login-verify` | ❌ Publik | Verifikasi TOTP (login tahap 2) |
 | GET | `/api/auth/me` | ✅ Bearer | Profil user aktif |
 | POST | `/api/auth/logout` | ✅ Bearer | Logout perangkat ini |
 | POST | `/api/auth/logout-all` | ✅ Bearer | Logout semua perangkat |
 | POST | `/api/auth/change-password` | ✅ Bearer | Ganti password |
 | POST | `/api/auth/forgot-password` | ❌ Publik | Kirim link reset |
 | POST | `/api/auth/reset-password` | ❌ Publik | Reset password |
+| POST | `/api/auth/mfa/setup` | ✅ Bearer | Generate Secret 2FA |
+| POST | `/api/auth/mfa/verify` | ✅ Bearer | Aktifkan 2FA pertama kali |
+| POST | `/api/auth/mfa/disable` | ✅ Bearer | Matikan 2FA (butuh password) |
 
 ### SSO Token Kustom (Kompatibilitas Mundur — API/Mobile)
 
