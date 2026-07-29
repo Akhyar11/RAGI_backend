@@ -27,6 +27,14 @@
 
 ---
 
+## 🚀 Server & Deployment
+
+| Topik | Deskripsi | Dokumen |
+|---|---|---|
+| Konfigurasi Queue (Supervisor) | Cara menjalankan *background jobs* 24/7 di VPS/HestiaCP | [SERVER_SETUP.md](SERVER_SETUP.md) |
+
+---
+
 ## 🎓 Modul SIAKAD
 
 | Controller | Deskripsi | Dokumen |
