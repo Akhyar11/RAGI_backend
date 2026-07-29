@@ -153,6 +153,6 @@
 
 ### Catatan Penting
 
-> - Setelah reset password berhasil, semua **token Sanctum yang aktif tidak otomatis dihapus**. User perlu login ulang secara manual untuk mendapatkan token baru.
+> - Setelah reset password berhasil, semua **token Passport yang aktif tidak otomatis dihapus**. User perlu login ulang secara manual untuk mendapatkan token baru.
 > - Password lama **tidak dapat** digunakan untuk login setelah proses reset berhasil.
 > - Token reset disimpan dalam bentuk **hash** di database — plain-text token hanya ada di email user dan tidak bisa diambil kembali dari sistem.

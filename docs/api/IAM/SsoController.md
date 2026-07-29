@@ -10,13 +10,13 @@
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
-| POST | `/api/sso/token` | Generate SSO token untuk client app | ✅ Sanctum |
+| POST | `/api/sso/token` | Generate SSO token untuk client app | ✅ Passport |
 | POST | `/api/sso/verify` | Verifikasi validitas access token | ❌ Publik (server-to-server) |
 | POST | `/api/sso/refresh` | Tukar refresh token → token baru | ❌ Publik |
-| POST | `/api/sso/revoke` | Cabut token SSO (logout dari app) | ✅ Sanctum |
+| POST | `/api/sso/revoke` | Cabut token SSO (logout dari app) | ✅ Passport |
 
 > **Alur umum SSO:**
-> 1. User login di IAM → dapat Sanctum token
+> 1. User login di IAM → dapat Passport token
 > 2. User/App minta SSO token via `POST /sso/token`
 > 3. IAM redirect ke `client_app` dengan `access_token` di query string
 > 4. `client_app` verifikasi token via `POST /sso/verify`
@@ -33,7 +33,7 @@
 
 | Key | Value | Required |
 |---|---|---|
-| `Authorization` | `Bearer {sanctum_token}` | ✅ |
+| `Authorization` | `Bearer {Passport_token}` | ✅ |
 | `Accept` | `application/json` | ✅ |
 | `Content-Type` | `application/json` | ✅ |
 
@@ -70,7 +70,7 @@
 
 ### Response Error
 
-**401 Unauthorized** — Sanctum token tidak valid
+**401 Unauthorized** — Passport token tidak valid
 ```json
 {
     "status": "error",
@@ -94,7 +94,7 @@
 ## POST /api/sso/verify
 
 > Memverifikasi `access_token` SSO dan mengembalikan data user pemilik token.
-> Endpoint ini **tidak memerlukan autentikasi Sanctum** — dirancang untuk dipanggil oleh server aplikasi klien (server-to-server).
+> Endpoint ini **tidak memerlukan autentikasi Passport** — dirancang untuk dipanggil oleh server aplikasi klien (server-to-server).
 
 ### Headers
 
@@ -213,7 +213,7 @@
 
 | Key | Value | Required |
 |---|---|---|
-| `Authorization` | `Bearer {sanctum_token}` | ✅ |
+| `Authorization` | `Bearer {Passport_token}` | ✅ |
 | `Accept` | `application/json` | ✅ |
 | `Content-Type` | `application/json` | ✅ |
 

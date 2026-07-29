@@ -2,7 +2,7 @@
 
 > **Modul**: IAM & Auth Center  
 > **Base URL**: `/api/users`  
-> **Autentikasi**: Bearer Token (Sanctum) — Semua endpoint  
+> **Autentikasi**: Bearer Token (Passport) — Semua endpoint  
 > **Otorisasi**: Hanya `user_type = admin`  
 > **Dibuat**: 2026-07-28  
 > **Diperbarui**: 2026-07-28

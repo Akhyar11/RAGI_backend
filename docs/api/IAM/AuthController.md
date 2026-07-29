@@ -2,7 +2,7 @@
 
 > **Modul**: IAM & Auth Center  
 > **Base URL**: `/api/auth`  
-> **Autentikasi**: Bearer Token (Sanctum) — kecuali dinyatakan lain  
+> **Autentikasi**: Bearer Token (Passport) — kecuali dinyatakan lain  
 > **Dibuat**: 2026-07-28  
 > **Diperbarui**: 2026-07-28
 
@@ -220,7 +220,7 @@
 
 ## POST /api/auth/logout-all
 
-> Menghapus **seluruh** Sanctum token dan SSO token milik user yang sedang login.
+> Menghapus **seluruh** Passport token dan SSO token milik user yang sedang login.
 > Digunakan saat user ingin keluar dari semua perangkat sekaligus — misalnya saat akun dicurigai diakses orang lain.
 
 ### Headers
@@ -250,13 +250,13 @@
 }
 ```
 
-> ⚠️ Setelah endpoint ini dipanggil, **semua token Sanctum dan SSO** milik user dihapus. User harus login ulang di semua perangkat dan aplikasi.
+> ⚠️ Setelah endpoint ini dipanggil, **semua token Passport dan SSO** milik user dihapus. User harus login ulang di semua perangkat dan aplikasi.
 
 ---
 
 ## POST /api/auth/change-password
 
-> Mengganti password pengguna yang sedang login. Setelah berhasil, **seluruh token aktif** (Sanctum + SSO di semua aplikasi) otomatis dihapus sebagai langkah keamanan.
+> Mengganti password pengguna yang sedang login. Setelah berhasil, **seluruh token aktif** (Passport + SSO di semua aplikasi) otomatis dihapus sebagai langkah keamanan.
 
 ### Headers
 
