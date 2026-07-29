@@ -1,8 +1,8 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\OAuthController;
 use App\Http\Controllers\SsoController;
 use App\Http\Controllers\PasswordResetController;
 
@@ -23,7 +23,8 @@ Route::prefix('auth')->group(function () {
         ->middleware('throttle:forgot-password');
     Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']);
 
-    Route::middleware('auth:sanctum')->group(function () {
+    // Endpoint terproteksi (Passport atau Sanctum)
+    Route::middleware('auth:api')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/logout-all', [AuthController::class, 'logoutAll']);
@@ -33,18 +34,27 @@ Route::prefix('auth')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| SSO Routes
+| OAuth2 Resource Server
 |--------------------------------------------------------------------------
-| /verify dan /refresh tidak memerlukan Sanctum (dipanggil server-to-server)
-| /token dan /revoke memerlukan Sanctum (user harus sudah login)
+| Endpoint untuk aplikasi klien mengambil data user setelah dapat token
+*/
+Route::middleware('auth:api')->group(function () {
+    Route::get('/auth/user', [OAuthController::class, 'user']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| SSO Token Routes (Custom — kompatibilitas mundur untuk mobile/API client)
+|--------------------------------------------------------------------------
+| Dipertahankan untuk client yang belum mendukung OAuth2 redirect flow.
+| Endpoint /verify dan /refresh tidak memerlukan auth (server-to-server).
 */
 Route::prefix('sso')->group(function () {
-    // Rate limited: maks 60 verifikasi per menit (server-to-server)
     Route::post('/verify', [SsoController::class, 'verify'])
         ->middleware('throttle:sso-verify');
     Route::post('/refresh', [SsoController::class, 'refresh']);
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware('auth:api')->group(function () {
         Route::post('/token', [SsoController::class, 'token']);
         Route::post('/revoke', [SsoController::class, 'revoke']);
     });
@@ -55,6 +65,6 @@ Route::prefix('sso')->group(function () {
 | Users CRUD Routes (Admin Only)
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:api')->group(function () {
     Route::apiResource('users', App\Http\Controllers\UserController::class);
 });

@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\WithFaker;
+use Laravel\Passport\Passport;
 use Tests\TestCase;
 use App\Models\User;
 
@@ -17,87 +17,82 @@ class UserCrudTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
-        $this->admin = User::factory()->create([
-            'user_type' => 'admin',
-        ]);
-        
-        $this->nonAdmin = User::factory()->create([
-            'user_type' => 'mahasiswa',
-        ]);
+        $this->setUpPassport();
+        $this->admin = User::factory()->create(['user_type' => 'admin']);
+        $this->nonAdmin = User::factory()->create(['user_type' => 'mahasiswa']);
     }
 
     public function test_admin_can_list_users()
     {
         User::factory()->count(5)->create();
-        
-        $response = $this->actingAs($this->admin)->getJson('/api/users');
-        
+        Passport::actingAs($this->admin);
+
+        $response = $this->getJson('/api/users');
+
         $response->assertStatus(200)
                  ->assertJsonStructure(['data', 'current_page', 'total']);
     }
 
     public function test_non_admin_cannot_list_users()
     {
-        $response = $this->actingAs($this->nonAdmin)->getJson('/api/users');
-        
+        Passport::actingAs($this->nonAdmin);
+
+        $response = $this->getJson('/api/users');
+
         $response->assertStatus(403);
     }
 
     public function test_admin_can_create_user()
     {
-        $payload = [
-            'username' => 'newuser',
-            'email' => 'newuser@example.com',
-            'password' => 'password123',
+        Passport::actingAs($this->admin);
+
+        $response = $this->postJson('/api/users', [
+            'username'              => 'newuser',
+            'email'                 => 'newuser@example.com',
+            'password'              => 'password123',
             'password_confirmation' => 'password123',
-            'phone' => '0812345678',
-            'user_type' => 'dosen',
-            'is_active' => true,
-        ];
-        
-        $response = $this->actingAs($this->admin)->postJson('/api/users', $payload);
-        
+            'phone'                 => '0812345678',
+            'user_type'             => 'dosen',
+            'is_active'             => true,
+        ]);
+
         $response->assertStatus(201);
-        
         $this->assertDatabaseHas('users', [
-            'username' => 'newuser',
-            'email' => 'newuser@example.com',
+            'username'  => 'newuser',
+            'email'     => 'newuser@example.com',
             'user_type' => 'dosen',
         ]);
     }
 
     public function test_admin_can_update_user()
     {
+        Passport::actingAs($this->admin);
         $userToUpdate = User::factory()->create();
-        
-        $payload = [
-            'username' => 'updateduser',
+
+        $response = $this->putJson('/api/users/' . $userToUpdate->id, [
+            'username'  => 'updateduser',
             'user_type' => 'tendik',
-        ];
-        
-        $response = $this->actingAs($this->admin)->putJson('/api/users/' . $userToUpdate->id, $payload);
-        
+        ]);
+
         $response->assertStatus(200);
-        
         $this->assertDatabaseHas('users', [
-            'id' => $userToUpdate->id,
-            'username' => 'updateduser',
+            'id'        => $userToUpdate->id,
+            'username'  => 'updateduser',
             'user_type' => 'tendik',
         ]);
     }
 
     public function test_admin_can_delete_user()
     {
+        Passport::actingAs($this->admin);
         $userToDelete = User::factory()->create();
-        
-        $response = $this->actingAs($this->admin)->deleteJson('/api/users/' . $userToDelete->id);
-        
+
+        $response = $this->deleteJson('/api/users/' . $userToDelete->id);
+
         $response->assertStatus(200);
-        
         $this->assertDatabaseMissing('users', [
-            'id' => $userToDelete->id,
-            'deleted_at' => null
+            'id'         => $userToDelete->id,
+            'deleted_at' => null,
         ]);
     }
 }

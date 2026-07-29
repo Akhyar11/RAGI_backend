@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\SsoToken;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 class SsoTest extends TestCase
@@ -16,13 +17,15 @@ class SsoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->setUpPassport();
         $this->user = User::factory()->create(['is_active' => true]);
     }
 
     public function test_authenticated_user_can_generate_sso_token()
     {
-        $response = $this->actingAs($this->user)
-            ->postJson('/api/sso/token', ['client_app' => 'siakad']);
+        Passport::actingAs($this->user);
+
+        $response = $this->postJson('/api/sso/token', ['client_app' => 'siakad']);
 
         $response->assertStatus(200)
                  ->assertJsonStructure(['data' => [
@@ -100,6 +103,8 @@ class SsoTest extends TestCase
 
     public function test_authenticated_user_can_revoke_sso_token()
     {
+        Passport::actingAs($this->user);
+
         SsoToken::create([
             'user_id'            => $this->user->id,
             'access_token'       => 'token-to-revoke',
@@ -109,8 +114,7 @@ class SsoTest extends TestCase
             'refresh_expires_at' => now()->addDays(30),
         ]);
 
-        $response = $this->actingAs($this->user)
-            ->postJson('/api/sso/revoke', ['client_app' => 'lms']);
+        $response = $this->postJson('/api/sso/revoke', ['client_app' => 'lms']);
 
         $response->assertStatus(200);
         $this->assertDatabaseMissing('sso_tokens', ['access_token' => 'token-to-revoke']);
