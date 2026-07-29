@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\OAuthController;
 use App\Http\Controllers\SsoController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\MfaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -18,6 +19,9 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])
         ->middleware('throttle:login');
 
+    Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
+    Route::post('/mfa/login-verify', [AuthController::class, 'mfaLoginVerify']);
+
     // Rate limited: maks 3 permintaan per 5 menit per IP
     Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword'])
         ->middleware('throttle:forgot-password');
@@ -29,6 +33,11 @@ Route::prefix('auth')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/logout-all', [AuthController::class, 'logoutAll']);
         Route::post('/change-password', [AuthController::class, 'changePassword']);
+
+        // MFA Routes
+        Route::post('/mfa/setup', [MfaController::class, 'setup']);
+        Route::post('/mfa/verify', [MfaController::class, 'verify']);
+        Route::post('/mfa/disable', [MfaController::class, 'disable']);
     });
 });
 

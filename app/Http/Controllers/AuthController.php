@@ -8,6 +8,10 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
+use App\Mail\VerifyEmailMail;
 
 class AuthController extends Controller
 {
@@ -31,14 +35,59 @@ class AuthController extends Controller
             'is_verified' => false,
         ]);
 
+        // Generate email verification token
+        $verifyToken = Str::random(60);
+        Cache::put('email_verify_' . $verifyToken, $user->id, now()->addMinutes(60));
+
+        // Construct frontend URL (adjust as needed)
+        $verifyUrl = config('app.url') . '/verify-email?token=' . $verifyToken;
+
+        // Send email
+        Mail::to($user->email)->send(new VerifyEmailMail($verifyUrl, $user->username));
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'message' => 'User registered successfully',
+            'message' => 'User registered successfully. Silakan periksa email Anda untuk memverifikasi akun.',
             'data' => $user,
             'access_token' => $token,
             'token_type' => 'Bearer',
         ], 201);
+    }
+
+    public function verifyEmail(Request $request)
+    {
+        $request->validate([
+            'token' => 'required|string',
+        ]);
+
+        $userId = Cache::get('email_verify_' . $request->token);
+
+        if (!$userId) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Token verifikasi tidak valid atau telah kedaluwarsa.'
+            ], 400);
+        }
+
+        $user = User::find($userId);
+        if ($user) {
+            $user->email_verified_at = now();
+            $user->is_verified = true;
+            $user->save();
+
+            Cache::forget('email_verify_' . $request->token);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Email berhasil diverifikasi.'
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'error',
+            'message' => 'User tidak ditemukan.'
+        ], 404);
     }
 
     public function login(Request $request)
@@ -62,16 +111,73 @@ class AuthController extends Controller
             ]);
         }
 
-        $user->update(['last_login_at' => now()]);
+        // 2FA Check (Opsi B: Temporary Token)
+        if ($user->two_factor_confirmed_at) {
+            $tempToken = Str::random(60);
+            Cache::put('2fa_login_' . $tempToken, $user->id, now()->addMinutes(10));
 
+            return response()->json([
+                'status' => 'success',
+                'requires_2fa' => true,
+                'temp_token' => $tempToken,
+                'message' => 'Silakan masukkan kode TOTP dari aplikasi Authenticator Anda.'
+            ]);
+        }
+
+        $user->update(['last_login_at' => now()]);
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
+            'status' => 'success',
             'message' => 'Login successful',
+            'requires_2fa' => false,
             'data' => $user,
             'access_token' => $token,
             'token_type' => 'Bearer',
         ]);
+    }
+
+    public function mfaLoginVerify(Request $request)
+    {
+        $request->validate([
+            'temp_token' => 'required|string',
+            'totp_code' => 'required|string|size:6'
+        ]);
+
+        $userId = Cache::get('2fa_login_' . $request->temp_token);
+
+        if (!$userId) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Sesi login telah kedaluwarsa. Silakan login ulang dengan password.'
+            ], 400);
+        }
+
+        $user = User::find($userId);
+        $google2fa = new \PragmaRX\Google2FA\Google2FA();
+        
+        $secret = decrypt($user->two_factor_secret);
+        $valid = $google2fa->verifyKey($secret, $request->totp_code);
+
+        if ($valid) {
+            Cache::forget('2fa_login_' . $request->temp_token);
+            $user->update(['last_login_at' => now()]);
+            
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Login successful',
+                'data' => $user,
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Kode TOTP tidak valid.'
+        ], 422);
     }
 
     public function me(Request $request)
@@ -90,18 +196,10 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * Logout dari SEMUA perangkat — hapus seluruh Sanctum token + SSO token milik user.
-     * POST /api/auth/logout-all
-     */
     public function logoutAll(Request $request)
     {
         $user = $request->user();
-
-        // Hapus semua Sanctum token
         $user->tokens()->delete();
-
-        // Hapus semua SSO token
         SsoToken::where('user_id', $user->id)->delete();
 
         return response()->json([
@@ -110,11 +208,6 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * Ganti password — dan otomatis invalidasi semua token aktif (Sanctum + SSO)
-     * agar user wajib login ulang di semua perangkat.
-     * POST /api/auth/change-password
-     */
     public function changePassword(Request $request)
     {
         $request->validate([
@@ -130,10 +223,7 @@ class AuthController extends Controller
             ]);
         }
 
-        // Update password
         $user->update(['password' => Hash::make($request->password)]);
-
-        // Invalidasi SEMUA token aktif (Sanctum + SSO) — security best practice
         $user->tokens()->delete();
         SsoToken::where('user_id', $user->id)->delete();
 
