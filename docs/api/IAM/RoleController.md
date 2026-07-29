@@ -1,7 +1,7 @@
 # RoleController & PermissionController
 
 > **Modul**: IAM & Auth Center  
-> **Base URL**: `/api/roles` & `/api/permissions`  
+> **Base URL**: `/api/admin/roles` & `/api/permissions`  
 > **Autentikasi**: Bearer Token (Passport)  
 > **Dibuat**: 2026-07-29
 
@@ -11,16 +11,16 @@ Controller ini menangani manajemen *Role* (Peran) dan *Permission* (Hak Akses) u
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
-| GET | `/api/roles` | Daftar semua role beserta permissionnya | ✅ `roles.read` |
-| POST | `/api/roles` | Buat role baru & assign permission | ✅ `roles.create` |
-| GET | `/api/roles/{id}` | Detail satu role | ✅ `roles.read` |
-| PUT | `/api/roles/{id}` | Update role & sync permission | ✅ `roles.update` |
-| DELETE | `/api/roles/{id}` | Hapus role | ✅ `roles.delete` |
+| GET | `/api/admin/roles` | Daftar semua role beserta permissionnya | ✅ `roles.read` |
+| POST | `/api/admin/roles` | Buat role baru & assign permission | ✅ `roles.create` |
+| GET | `/api/admin/roles/{id}` | Detail satu role | ✅ `roles.read` |
+| PUT | `/api/admin/roles/{id}` | Update role & sync permission | ✅ `roles.update` |
+| DELETE | `/api/admin/roles/{id}` | Hapus role | ✅ `roles.delete` |
 | GET | `/api/permissions` | Daftar semua permission yang tersedia | ✅ `roles.read` |
 
 ---
 
-## POST /api/roles
+## POST /api/admin/roles
 
 > Membuat role baru dan secara opsional menautkannya dengan beberapa permission sekaligus.
 

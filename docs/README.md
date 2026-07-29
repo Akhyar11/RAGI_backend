@@ -9,15 +9,15 @@
 
 ## 🔐 Modul IAM & Auth Center
 
-| Controller | Deskripsi | Endpoint | Dokumen |
-|---|---|---|---|
-| `OAuthController` | SSO OAuth2 flow, halaman login, resource server | `GET/POST /sso/login`, `GET /api/auth/user`, `GET /oauth/authorize`, `POST /oauth/token` | [OAuthController.md](api/IAM/OAuthController.md) |
-| `AuthController` | Register, login API, logout, change password | `/api/auth/*` | [AuthController.md](api/IAM/AuthController.md) |
-| `PasswordResetController` | Lupa & reset password | `/api/auth/forgot-password`, `/api/auth/reset-password` | [PasswordResetController.md](api/IAM/PasswordResetController.md) |
-| `SsoController` | SSO token kustom (kompatibilitas API/mobile) | `/api/sso/*` | [SsoController.md](api/IAM/SsoController.md) |
-| `UserController` | CRUD manajemen pengguna (Admin) | `/api/users` | [UserController.md](api/IAM/UserController.md) |
-| `RoleController` | CRUD manajemen peran & hak akses (RBAC) | `/api/roles`, `/api/permissions` | [RoleController (RBAC)](api/IAM/RoleController.md)<br>[UserSessionController (Manajemen Sesi)](api/IAM/UserSessionController.md) |
-| `MfaController` | Autentikasi Dua Faktor (2FA/TOTP) | `/api/auth/mfa/*` | [MfaController.md](api/IAM/MfaController.md) |
+| Controller | Deskripsi | Dokumen |
+|---|---|---|
+| AuthController | Login, register, logout, MFA, verifikasi | [docs/api/IAM/AuthController.md](api/IAM/AuthController.md) |
+| UserController | CRUD pengguna, toggle status | [docs/api/IAM/UserController.md](api/IAM/UserController.md) |
+| RoleController | CRUD peran (Role) pengguna | [docs/api/IAM/RoleController.md](api/IAM/RoleController.md) |
+| PermissionController | CRUD hak akses sistem | [docs/api/IAM/PermissionController.md](api/IAM/PermissionController.md) |
+| RoleAssignmentController | Pemetaan relasi User-Role dan Role-Permission | [docs/api/IAM/RoleAssignmentController.md](api/IAM/RoleAssignmentController.md) |
+| UserSessionController | Pemantauan & pencabutan sesi pengguna | [docs/api/IAM/UserSessionController.md](api/IAM/UserSessionController.md) |
+| AuditLogController | Rekaman log sistem (Akuntabilitas) | [docs/api/IAM/AuditLogController.md](api/IAM/AuditLogController.md) |
 
 ---
 

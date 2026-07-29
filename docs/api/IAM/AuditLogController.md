@@ -2,12 +2,12 @@
 
 Dokumentasi ini menjelaskan _endpoint_ untuk membaca rekam jejak sistem (Audit Logs). Endpoint ini hanya dapat diakses oleh *Super Admin* atau pengguna dengan permission `view-audit-logs`.
 
-**Base URL:** `/api/audit-logs`
+**Base URL:** `/api/admin/audit-logs`
 
 ## 1. List Audit Logs
 Menampilkan daftar aktivitas sistem dengan dukungan paginasi, pencarian, dan filter.
 
-**Endpoint:** `GET /api/audit-logs`  
+**Endpoint:** `GET /api/admin/audit-logs`  
 **Auth Required:** Yes (Bearer Token)
 
 ### Parameter Query (Opsional)
@@ -66,7 +66,7 @@ Menampilkan daftar aktivitas sistem dengan dukungan paginasi, pencarian, dan fil
 ## 2. Detail Audit Log
 Menampilkan rincian satu catatan log secara spesifik.
 
-**Endpoint:** `GET /api/audit-logs/{id}`  
+**Endpoint:** `GET /api/admin/audit-logs/{id}`  
 **Auth Required:** Yes (Bearer Token)
 
 ### Response Sukses (200 OK)

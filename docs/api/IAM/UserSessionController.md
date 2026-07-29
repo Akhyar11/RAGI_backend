@@ -43,6 +43,62 @@ Menampilkan daftar perangkat (sesi login) yang sedang aktif untuk pengguna yang 
 }
 ```
 
+---
+
+## [GET] /api/admin/sessions
+
+> Mengambil daftar seluruh sesi aktif yang ada di dalam sistem (Admin only). Mendukung paginasi.
+
+### Query Parameters
+
+Sama seperti GET list standar (mendukung `per_page` dll).
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Data retrieved successfully",
+    "data": [
+        {
+            "id": 5,
+            "user_id": 1,
+            "token": "e4f5a...",
+            "ip_address": "192.168.1.1",
+            "user_agent": "Mozilla/5.0...",
+            "created_at": "2026-07-29T10:00:00.000000Z",
+            "user": {
+                "id": 1,
+                "username": "budi.admin",
+                "email": "admin@kampus.ac.id"
+            }
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 100
+    }
+}
+```
+
+---
+
+## [DELETE] /api/admin/sessions/{id}
+
+> Memutuskan / mencabut paksa sesi milik pengguna mana saja berdasarkan ID Sesi di tabel `user_sessions_iam` (Force Logout).
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Sesi berhasil diputus paksa (force logout)."
+}
+```
+
 ## 2. Revoke Sesi (Logout Perangkat Tertentu)
 Menghapus (logout paksa) sesi dari suatu perangkat berdasarkan `id` tabel `user_sessions_iam`.
 

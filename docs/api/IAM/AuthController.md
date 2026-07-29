@@ -14,6 +14,7 @@
 | POST | `/api/auth/verify-email` | Verifikasi token dari email | ❌ Publik |
 | POST | `/api/auth/login` | Autentikasi dengan email & password | ❌ Publik |
 | POST | `/api/auth/mfa/login-verify`| Verifikasi TOTP untuk login tahap 2 | ❌ Publik |
+| POST | `/api/auth/refresh` | Perbarui access token dengan refresh token | ❌ Publik |
 | GET | `/api/auth/me` | Mendapatkan data pengguna yang sedang login | ✅ Passport |
 | POST | `/api/auth/logout` | Menghapus token aktif (logout) | ✅ Required |
 | POST | `/api/auth/logout-all` | Logout dari semua perangkat & app | ✅ Required |
@@ -233,6 +234,37 @@ Mengembalikan payload yang persis sama dengan respons *Login sukses tanpa 2FA* (
 ```
 
 > ⚠️ Jika akun `is_active = false`, login akan ditolak dengan pesan *"Akun Anda tidak aktif."*
+
+---
+
+## POST /api/auth/refresh
+
+> Digunakan untuk mendapatkan `access_token` baru dengan menggunakan `refresh_token` yang masih valid tanpa perlu login ulang (terutama untuk aplikasi Frontend pihak pertama / SPA / Mobile).
+
+### Request Body
+
+```json
+{
+    "refresh_token": "string, required"
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Token berhasil diperbarui",
+    "data": {
+        "access_token": "eyJ0eXAiOiJKV...",
+        "refresh_token": "def50200...",
+        "client_app": "spmb",
+        "access_expires_at": "2026-07-29T16:00:00.000000Z",
+        "refresh_expires_at": "2026-08-12T14:00:00.000000Z"
+    }
+}
+```
 
 ---
 

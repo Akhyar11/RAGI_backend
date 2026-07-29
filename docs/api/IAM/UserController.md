@@ -1,7 +1,7 @@
 # UserController
 
 > **Modul**: IAM & Auth Center  
-> **Base URL**: `/api/users`  
+> **Base URL**: `/api/admin/users`  
 > **Autentikasi**: Bearer Token (Passport) — Semua endpoint  
 > **Otorisasi**: Hanya `user_type = admin`  
 > **Dibuat**: 2026-07-28  
@@ -11,15 +11,16 @@
 
 | Method | Endpoint | Fungsi | Auth | Role |
 |---|---|---|---|---|
-| GET | `/api/users` | Daftar semua pengguna | ✅ | Admin |
-| POST | `/api/users` | Buat pengguna baru | ✅ | Admin |
-| GET | `/api/users/{id}` | Detail pengguna | ✅ | Admin |
-| PUT | `/api/users/{id}` | Perbarui data pengguna | ✅ | Admin |
-| DELETE | `/api/users/{id}` | Hapus pengguna (soft delete) | ✅ | Admin |
+| GET | `/api/admin/users` | Daftar semua pengguna | ✅ | Admin |
+| POST | `/api/admin/users` | Buat pengguna baru | ✅ | Admin |
+| GET | `/api/admin/users/{id}` | Detail pengguna | ✅ | Admin |
+| PUT | `/api/admin/users/{id}` | Perbarui data pengguna | ✅ | Admin |
+| PATCH | `/api/admin/users/{id}/status` | Toggle status aktif/non-aktif | ✅ | Admin |
+| DELETE | `/api/admin/users/{id}` | Hapus pengguna (soft delete) | ✅ | Admin |
 
 ---
 
-## GET /api/users
+## GET /api/admin/users
 
 > Mengembalikan daftar semua pengguna dengan pagination.
 
@@ -61,7 +62,7 @@
             "updated_at": "2026-07-28T14:00:00.000000Z"
         }
     ],
-    "first_page_url": "http://localhost:8000/api/users?page=1",
+    "first_page_url": "http://localhost:8000/api/admin/users?page=1",
     "last_page": 7,
     "per_page": 15,
     "total": 100
@@ -80,7 +81,7 @@
 
 ---
 
-## POST /api/users
+## POST /api/admin/users
 
 > Membuat pengguna baru. Hanya dapat dilakukan oleh Admin.
 
@@ -141,7 +142,7 @@
 
 ---
 
-## GET /api/users/{id}
+## GET /api/admin/users/{id}
 
 > Mengembalikan detail satu pengguna berdasarkan ID.
 
@@ -183,7 +184,7 @@
 
 ---
 
-## PUT /api/users/{id}
+## PUT /api/admin/users/{id}
 
 > Memperbarui data pengguna. Semua field bersifat opsional (partial update).
 
@@ -234,7 +235,37 @@
 
 ---
 
-## DELETE /api/users/{id}
+## PATCH /api/admin/users/{id}/status
+
+> Mengubah status aktif/non-aktif (`is_active`) seorang pengguna tanpa mengirim keseluruhan data profil.
+
+### Request Body
+
+```json
+{
+    "is_active": "boolean, required"
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "User berhasil dinonaktifkan.",
+    "data": {
+        "id": 1,
+        "username": "budi.santoso",
+        "is_active": false,
+        "..." : "..."
+    }
+}
+```
+
+---
+
+## DELETE /api/admin/users/{id}
 
 > Melakukan **soft delete** pada pengguna. Data tidak benar-benar dihapus dari database, hanya ditandai `deleted_at`.
 
@@ -253,4 +284,4 @@
 }
 ```
 
-> ⚠️ Pengguna yang sudah dihapus tidak akan muncul di endpoint `GET /api/users` dan tidak bisa login. Data tetap tersimpan di database dengan kolom `deleted_at` berisi timestamp penghapusan.
+> ⚠️ Pengguna yang sudah dihapus tidak akan muncul di endpoint `GET /api/admin/users` dan tidak bisa login. Data tetap tersimpan di database dengan kolom `deleted_at` berisi timestamp penghapusan.
