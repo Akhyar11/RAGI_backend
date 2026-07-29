@@ -7,6 +7,10 @@ description: Standar kapan dan bagaimana mencatat jejak perubahan data sensitif 
 
 Tabel `audit_logs` sudah tersedia di database. Gunakan standar berikut untuk mencatat setiap perubahan data yang signifikan secara konsisten.
 
+> [!IMPORTANT]
+> **INSTRUKSI KRITIKAL UNTUK AGEN (AI):**
+> Setiap kali Anda (Agen) diminta untuk membuat **Modul Baru, Fitur CRUD Baru, atau Model Eloquent Baru** yang menyimpan data operasional/sensitif (misalnya modul SPMB, SIAKAD, dsb), Anda **WAJIB** membuat `Observer` untuk model tersebut (misal `MahasiswaObserver`) dan mendaftarkannya di `AppServiceProvider.php` agar setiap aksi Create, Update, dan Delete langsung terintegrasi dengan `AuditLogService`. Jangan menunggu instruksi spesifik dari pengguna untuk melakukan ini.
+
 ---
 
 ## 1. Data Apa yang Wajib Dicatat?
@@ -20,7 +24,9 @@ Tabel `audit_logs` sudah tersedia di database. Gunakan standar berikut untuk men
 | Delete / Soft Delete | ✅ Ya | Hapus user, hapus nilai |
 | Read / View biasa | ❌ Tidak | Melihat daftar mahasiswa |
 | Export data | ✅ Ya | Export laporan ke PDF/Excel |
-| Persetujuan KRS | ✅ Ya | Dosen wali menyetujui KRS |
+| Persetujuan/Validasi | ✅ Ya | Dosen wali menyetujui KRS, ACC Dokumen |
+
+*Catatan: Semua tabel operasional di modul OBE, SIMPI, SIMANTA, SIMPRESKUL, SIKEU (seperti data mahasiswa, mata kuliah, transaksi, pendaftaran) masuk dalam kategori data sensitif.*
 
 ---
 

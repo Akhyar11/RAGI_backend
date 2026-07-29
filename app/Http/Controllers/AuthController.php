@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use App\Mail\VerifyEmailMail;
+use App\Services\AuditLogService;
 
 class AuthController extends Controller
 {
@@ -100,6 +101,7 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
+            AuditLogService::record('IAM', 'login_failed', 'users', $user?->id, null, ['email' => $request->email]);
             throw ValidationException::withMessages([
                 'email' => ['Kredensial yang diberikan salah.'],
             ]);
@@ -135,6 +137,8 @@ class AuthController extends Controller
             'user_agent' => $request->userAgent(),
             'created_at' => now(),
         ]);
+
+        AuditLogService::record('IAM', 'login', 'users', $user->id);
 
         return response()->json([
             'status' => 'success',
@@ -183,6 +187,8 @@ class AuthController extends Controller
                 'created_at' => now(),
             ]);
 
+            AuditLogService::record('IAM', 'login', 'users', $user->id);
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Login successful',
@@ -210,6 +216,7 @@ class AuthController extends Controller
         $token = $request->user()->token();
         
         if ($token) {
+            AuditLogService::record('IAM', 'logout', 'users', $request->user()->id);
             \App\Models\UserSessionIam::where('token', $token->id)->delete();
             $token->revoke();
         }
@@ -232,6 +239,8 @@ class AuthController extends Controller
         \App\Models\UserSessionIam::where('user_id', $user->id)->delete();
         SsoToken::where('user_id', $user->id)->delete();
 
+        AuditLogService::record('IAM', 'logout_all', 'users', $user->id);
+
         return response()->json([
             'status'  => 'success',
             'message' => 'Berhasil logout dari semua perangkat dan aplikasi.',
@@ -248,6 +257,7 @@ class AuthController extends Controller
         $user = $request->user();
 
         if (!Hash::check($request->current_password, $user->password)) {
+            AuditLogService::record('IAM', 'change_password_failed', 'users', $user->id);
             throw ValidationException::withMessages([
                 'current_password' => ['Password saat ini tidak sesuai.'],
             ]);

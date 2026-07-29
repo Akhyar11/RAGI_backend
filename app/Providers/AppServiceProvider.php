@@ -16,6 +16,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Observers
+        \App\Models\User::observe(\App\Observers\UserObserver::class);
+        \App\Models\Role::observe(\App\Observers\RoleObserver::class);
+        \App\Models\Permission::observe(\App\Observers\PermissionObserver::class);
         Gate::before(function (User $user, string $ability) {
             // Super admin bypass semua permission
             if ($user->user_type === 'admin' && $user->roles->contains('slug', 'super-admin')) {

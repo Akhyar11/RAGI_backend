@@ -83,4 +83,8 @@ Route::middleware('auth:api')->group(function () {
     Route::apiResource('users', App\Http\Controllers\UserController::class);
     Route::apiResource('roles', App\Http\Controllers\RoleController::class);
     Route::get('permissions', [App\Http\Controllers\PermissionController::class, 'index']);
+    
+    // Audit Logs
+    Route::get('audit-logs', [App\Http\Controllers\AuditLogController::class, 'index']);
+    Route::get('audit-logs/{id}', [App\Http\Controllers\AuditLogController::class, 'show']);
 });
