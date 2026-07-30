@@ -10,30 +10,17 @@ class MenuSeeder extends Seeder
 {
     public function run(): void
     {
+        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
+        \Illuminate\Support\Facades\DB::table('menus')->truncate();
+        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
+
         // Cari permission untuk dijadikan referensi
         $dashboardPermission = Permission::where('slug', 'dashboard.read')->first();
         $userPermission = Permission::where('slug', 'users.read')->first();
         $rolePermission = Permission::where('slug', 'roles.read')->first();
 
         $menus = [
-            // Menu SPMB
-            [
-                'name' => 'Dashboard SPMB',
-                'url' => '/spmb/dashboard',
-                'icon' => 'FaHome',
-                'module' => 'SPMB',
-                'permission_slug' => null, // Bebas jika tidak ada permission khusus
-                'order_index' => 1,
-            ],
-            [
-                'name' => 'Pendaftaran',
-                'url' => '/spmb/pendaftaran',
-                'icon' => 'FaUserPlus',
-                'module' => 'SPMB',
-                'permission_slug' => null,
-                'order_index' => 2,
-            ],
-            // Menu SIAKAD (Core)
+            // Menu SSO (Core)
             [
                 'name' => 'Dashboard Utama',
                 'url' => '/dashboard',
@@ -43,37 +30,31 @@ class MenuSeeder extends Seeder
                 'order_index' => 1,
             ],
             [
-                'name' => 'Manajemen Pengguna',
-                'url' => '#admin-users',
-                'icon' => 'FaUsers',
+                'name' => 'MASTER',
+                'url' => '#master',
+                'icon' => 'FaList',
                 'module' => 'sso',
-                'permission_slug' => 'users.read',
                 'order_index' => 2,
                 'children' => [
-                    [
-                        'name' => 'Daftar Pengguna',
-                        'url' => '/admin/users',
-                        'icon' => 'FaList',
-                        'module' => 'sso',
-                        'permission_slug' => 'users.read',
-                        'order_index' => 1,
-                    ],
-                    [
-                        'name' => 'Hak Akses & Role',
-                        'url' => '/admin/roles',
-                        'icon' => 'FaShieldAlt',
-                        'module' => 'sso',
-                        'permission_slug' => 'roles.read',
-                        'order_index' => 2,
-                    ],
-                    [
-                        'name' => 'Manajemen Menu',
-                        'url' => '/admin/menus',
-                        'icon' => 'FaList',
-                        'module' => 'sso',
-                        'permission_slug' => 'roles.read', // Sementara disamakan dengan roles.read karena belum ada menus.read
-                        'order_index' => 3,
-                    ]
+                    ['name' => 'User', 'url' => '/admin/users', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.users.read', 'order_index' => 1],
+                    ['name' => 'Role', 'url' => '/admin/roles', 'icon' => 'FaShieldAlt', 'module' => 'sso', 'permission_slug' => 'iam.roles.read', 'order_index' => 2],
+                    ['name' => 'Module (Sistem)', 'url' => '/admin/modules', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.permissions.manage', 'order_index' => 3],
+                    ['name' => 'Menu', 'url' => '/admin/menus', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.permissions.manage', 'order_index' => 4],
+                ]
+            ],
+            [
+                'name' => 'MENU',
+                'url' => '#menu',
+                'icon' => 'FaList',
+                'module' => 'sso',
+                'order_index' => 3,
+                'children' => [
+                    ['name' => 'User Role', 'url' => '/admin/user-roles', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.user_roles.manage', 'order_index' => 1],
+                    ['name' => 'Role Permission', 'url' => '/admin/role-permissions', 'icon' => 'FaShieldAlt', 'module' => 'sso', 'permission_slug' => 'iam.permissions.manage', 'order_index' => 2],
+                    ['name' => 'Permission Akses', 'url' => '/admin/permissions', 'icon' => 'FaShieldAlt', 'module' => 'sso', 'permission_slug' => 'iam.permissions.read', 'order_index' => 3],
+                    ['name' => 'Akses Menu', 'url' => '/admin/role-menus', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.permissions.manage', 'order_index' => 4],
+                    ['name' => 'Monitor Aksi', 'url' => '/admin/sessions', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.sessions.read', 'order_index' => 5],
+                    ['name' => 'Audit Logs', 'url' => '/admin/audit-logs', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.audit_logs.read', 'order_index' => 6],
                 ]
             ],
         ];

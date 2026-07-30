@@ -7,6 +7,8 @@ use App\Http\Controllers\SsoController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\MfaController;
 use App\Http\Controllers\API\MenuController;
+use App\Http\Controllers\API\RoleMenuController;
+use App\Http\Controllers\API\ModuleController;
 
 /*
 |--------------------------------------------------------------------------
@@ -108,6 +110,17 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::put('menus/{menu}', [MenuController::class, 'update']);
     Route::delete('menus/{menu}', [MenuController::class, 'destroy']);
     Route::put('menus/{menu}/toggle', [MenuController::class, 'toggleActive']);
+
+    // Role-Menus Assignment
+    Route::get('role-menus/{roleId}', [RoleMenuController::class, 'getRoleMenus']);
+    Route::post('role-menus/{roleId}', [RoleMenuController::class, 'assignMenusToRole']);
+
+    // Modules (Admin Management)
+    Route::get('modules', [ModuleController::class, 'index']);
+    Route::post('modules', [ModuleController::class, 'store']);
+    Route::put('modules/{module}', [ModuleController::class, 'update']);
+    Route::delete('modules/{module}', [ModuleController::class, 'destroy']);
+    Route::put('modules/{module}/toggle', [ModuleController::class, 'toggleActive']);
 });
 
 /*

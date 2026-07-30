@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\IAM\RoleSeeder::class,
             \Database\Seeders\IAM\PermissionSeeder::class,
             \Database\Seeders\IAM\AdminUserSeeder::class,
+            \Database\Seeders\IAM\ModuleSeeder::class,
             \Database\Seeders\IAM\MenuSeeder::class,
             OauthAppClientSeeder::class,
 

@@ -24,13 +24,13 @@ class RolePolicy
 
     public function update(User $user, Role $role): bool
     {
-        if ($role->slug === 'admin' || $role->slug === 'super-admin') return false;
+        if ($role->slug === 'admin' || $role->slug === 'superadmin') return false;
         return $user->hasRole('admin') || $user->hasRole('superadmin') || $user->hasPermission('iam.roles.update') || $user->hasPermission('roles.update');
     }
 
     public function delete(User $user, Role $role): bool
     {
-        if ($role->slug === 'admin' || $role->slug === 'super-admin') return false;
+        if ($role->slug === 'admin' || $role->slug === 'superadmin') return false;
         return $user->hasRole('admin') || $user->hasRole('superadmin') || $user->hasPermission('iam.roles.delete') || $user->hasPermission('roles.delete');
     }
 }

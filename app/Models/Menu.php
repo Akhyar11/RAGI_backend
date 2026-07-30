@@ -49,4 +49,12 @@ class Menu extends Model
     {
         return $this->belongsTo(Permission::class, 'permission_id');
     }
+
+    /**
+     * Get the roles that have access to this menu.
+     */
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class, 'menu_role');
+    }
 }

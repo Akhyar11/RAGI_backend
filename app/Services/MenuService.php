@@ -23,25 +23,17 @@ class MenuService
         }
 
         // Cek apakah user adalah super-admin
-        $isSuperAdmin = $user->roles()->where('slug', 'super-admin')->exists();
+        $isSuperAdmin = $user->roles()->where('slug', 'superadmin')->exists();
 
-        // 1. Dapatkan daftar id permission yang dimiliki user dari relasi role_permissions (jika bukan super-admin)
-        $permissionIds = [];
-        if (!$isSuperAdmin) {
-            $permissionIds = $user->roles()
-                ->join('role_permissions', 'roles.id', '=', 'role_permissions.role_id')
-                ->pluck('role_permissions.permission_id')
-                ->unique()
-                ->toArray();
-        }
+        // 1. Dapatkan daftar id role yang dimiliki user
+        $roleIds = $user->roles()->pluck('roles.id')->toArray();
 
-        // 2. Ambil menu root yang aktif, sesuai modul, dan user memiliki hak akses
-        $menus = Menu::with(['children' => function($query) use ($permissionIds, $isSuperAdmin) {
+        // 2. Ambil menu root yang aktif, sesuai modul, dan user memiliki hak akses melalui role
+        $menus = Menu::with(['children' => function($query) use ($roleIds, $isSuperAdmin) {
                 $query->where('is_active', true);
                 if (!$isSuperAdmin) {
-                    $query->where(function($q) use ($permissionIds) {
-                        $q->whereNull('permission_id')
-                          ->orWhereIn('permission_id', $permissionIds);
+                    $query->whereHas('roles', function($q) use ($roleIds) {
+                        $q->whereIn('roles.id', $roleIds);
                     });
                 }
                 $query->orderBy('order_index');
@@ -49,10 +41,9 @@ class MenuService
             ->whereNull('parent_id')
             ->where('module', $module)
             ->where('is_active', true)
-            ->when(!$isSuperAdmin, function ($query) use ($permissionIds) {
-                $query->where(function($q) use ($permissionIds) {
-                    $q->whereNull('permission_id')
-                      ->orWhereIn('permission_id', $permissionIds);
+            ->when(!$isSuperAdmin, function ($query) use ($roleIds) {
+                $query->whereHas('roles', function($q) use ($roleIds) {
+                    $q->whereIn('roles.id', $roleIds);
                 });
             })
             ->orderBy('order_index')

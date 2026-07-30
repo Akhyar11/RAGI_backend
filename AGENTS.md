@@ -22,6 +22,7 @@ Sebelum mengeksekusi tugas apapun, Anda WAJIB memeriksa daftar skill di bawah in
 | `event-listener-standard`     | `.gemini/skills/event_listener_standard/SKILL.md`     | Membuat Event, Listener, atau alur reaktif antar-modul                   |
 | `api-documentation`           | `.gemini/skills/api_documentation/SKILL.md`           | Membuat Controller baru ATAU memodifikasi endpoint yang sudah ada        |
 | `rbac-refactoring-standard`   | `.agent/skills/rbac_refactoring_standard/SKILL.md`   | Melakukan refaktor controller, model, migration, atau merancang pengecekan akses (RBAC) tanpa mengandalkan field statis. |
+| `module-management-standard`| `.agent/skills/module_management_standard/SKILL.md`  | Merancang, menambah, atau memodifikasi modul aplikasi (Master Modul) di ekosistem kampus terintegrasi. |
 
 ## Aturan Wajib
 
@@ -30,3 +31,8 @@ Sebelum mengeksekusi tugas apapun, Anda WAJIB memeriksa daftar skill di bawah in
 3. Jika sebuah tugas melibatkan **lebih dari satu skill** (misalnya: membuat API CRUD + unit test-nya), baca **semua** SKILL.md yang relevan terlebih dahulu.
 4. **JANGAN** menyimpang dari standar yang sudah ditetapkan di skill tanpa persetujuan eksplisit dari user.
    </RULE[agent_skills]>
+
+<RULE[github_push]>
+# Git Push Policy
+Agent **DILARANG KERAS** melakukan eksekusi perintah `git push` secara otomatis setelah menyelesaikan tugas atau setelah melakukan commit. Perintah `git push` HANYA boleh dieksekusi jika User memintanya secara eksplisit (misalnya: "push ke github").
+</RULE[github_push]>

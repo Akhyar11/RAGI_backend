@@ -18,6 +18,17 @@ class AdminUserSeeder extends Seeder
         Schema::enableForeignKeyConstraints();
 
         // 1. Seed Super Admin
+        $superadmin = User::updateOrCreate(
+            ['email' => 'superadmin@kampus.ac.id'],
+            [
+                'username'    => 'superadmin',
+                'password'    => Hash::make('password'),
+                'is_active'   => true,
+                'is_verified' => true,
+            ]
+        );
+
+        // 1b. Seed Admin
         $admin = User::updateOrCreate(
             ['email' => 'admin@kampus.ac.id'],
             [
@@ -84,18 +95,30 @@ class AdminUserSeeder extends Seeder
         );
 
         // ── MAP USER ROLES ──────────────────────────────────────────
+        $roleSuperAdmin = Role::where('slug', 'superadmin')->first();
         $roleAdmin = Role::where('slug', 'admin')->first();
         $roleAdminSimpeg = Role::where('slug', 'admin_simpeg')->first();
         $roleDosen = Role::where('slug', 'dosen')->first();
         $roleTendik = Role::where('slug', 'tendik')->first();
         $roleMhs = Role::where('slug', 'mahasiswa')->first();
 
-        // Admin -> Role Super Admin
+        // Super Admin -> Role Super Admin
+        if ($roleSuperAdmin) {
+            DB::table('user_roles')->insert([
+                'user_id' => $superadmin->id,
+                'role_id' => $roleSuperAdmin->id,
+                'assigned_by' => $superadmin->id,
+                'valid_from' => now()->toDateString(),
+                'created_at' => now(),
+            ]);
+        }
+
+        // Admin -> Role Administrator
         if ($roleAdmin) {
             DB::table('user_roles')->insert([
                 'user_id' => $admin->id,
                 'role_id' => $roleAdmin->id,
-                'assigned_by' => $admin->id,
+                'assigned_by' => $superadmin->id,
                 'valid_from' => now()->toDateString(),
                 'created_at' => now(),
             ]);

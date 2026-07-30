@@ -19,8 +19,13 @@ class RoleSeeder extends Seeder
         $roles = [
             [
                 'name' => 'Super Administrator',
+                'slug' => 'superadmin',
+                'description' => 'Akses penuh tanpa batas ke seluruh ekosistem SSO dan semua modul aplikasi universitas',
+            ],
+            [
+                'name' => 'Administrator',
                 'slug' => 'admin',
-                'description' => 'Akses penuh ke seluruh ekosistem SSO dan semua modul aplikasi universitas',
+                'description' => 'Administrator tingkat tinggi dengan akses ke manajemen pengguna dan sistem',
             ],
             [
                 'name' => 'Admin SIMPEG',
