@@ -1,0 +1,47 @@
+<?php
+
+namespace App\Models\Simpeg;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class RiwayatJabatan extends Model
+{
+    use HasFactory;
+
+    protected $table = 'riwayat_jabatan';
+
+    protected $fillable = [
+        'pegawai_id',
+        'jabatan_id',
+        'jabatan_fungsional_id',
+        'mulai_jabatan',
+        'selesai_jabatan',
+        'sk_nomor',
+        'sk_tanggal',
+        'file_sk',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'mulai_jabatan' => 'date',
+        'selesai_jabatan' => 'date',
+        'sk_tanggal' => 'date',
+        'is_active' => 'boolean',
+    ];
+
+    public function pegawai()
+    {
+        return $this->belongsTo(Pegawai::class, 'pegawai_id');
+    }
+
+    public function jabatan()
+    {
+        return $this->belongsTo(Jabatan::class, 'jabatan_id');
+    }
+
+    public function jabatanFungsional()
+    {
+        return $this->belongsTo(JabatanFungsionalAkademik::class, 'jabatan_fungsional_id');
+    }
+}

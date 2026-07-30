@@ -4,31 +4,58 @@ namespace Database\Seeders\IAM;
 
 use Illuminate\Database\Seeder;
 use App\Models\Role;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class RoleSeeder extends Seeder
 {
     public function run(): void
     {
+        Schema::disableForeignKeyConstraints();
+        DB::table('role_permissions')->truncate();
+        DB::table('roles')->truncate();
+        Schema::enableForeignKeyConstraints();
+
         $roles = [
-            ['name' => 'Super Admin',     'slug' => 'super-admin',     'description' => 'Akses penuh ke seluruh sistem'],
-            ['name' => 'Admin IAM',       'slug' => 'admin-iam',       'description' => 'Mengelola user, role, dan permission'],
-            ['name' => 'Dosen',           'slug' => 'dosen',           'description' => 'Tenaga pengajar'],
-            ['name' => 'Dosen Wali',      'slug' => 'dosen-wali',      'description' => 'Dosen dengan tugas bimbingan akademik'],
-            ['name' => 'Mahasiswa',       'slug' => 'mahasiswa',       'description' => 'Mahasiswa aktif'],
-            ['name' => 'Admin SPMB',      'slug' => 'admin-spmb',      'description' => 'Mengelola penerimaan mahasiswa baru'],
-            ['name' => 'Admin SIAKAD',    'slug' => 'admin-siakad',    'description' => 'Mengelola akademik core'],
-            ['name' => 'Admin SIKEU',     'slug' => 'admin-sikeu',     'description' => 'Mengelola tagihan dan pembayaran'],
+            [
+                'name' => 'Super Administrator',
+                'slug' => 'admin',
+                'description' => 'Akses penuh ke seluruh ekosistem SSO dan semua modul aplikasi universitas',
+            ],
+            [
+                'name' => 'Admin SIMPEG',
+                'slug' => 'admin_simpeg',
+                'description' => 'Administrator penuh Sistem Informasi Manajemen Kepegawaian (SIMPEG)',
+            ],
+            [
+                'name' => 'Operator SDM',
+                'slug' => 'operator_sdm',
+                'description' => 'Staf operasional kepegawaian, pengelola dokumen e-file, presensi, & cuti',
+            ],
+            [
+                'name' => 'Dosen Pengajar',
+                'slug' => 'dosen',
+                'description' => 'Tenaga pengajar dengan akses Portal Mandiri Dosen, BKD, & Usulan Jafung',
+            ],
+            [
+                'name' => 'Tenaga Kependidikan',
+                'slug' => 'tendik',
+                'description' => 'Staf pendukung administrasi dengan akses Portal Mandiri Tendik, Presensi, & Cuti',
+            ],
+            [
+                'name' => 'Mahasiswa Reguler',
+                'slug' => 'mahasiswa',
+                'description' => 'Pengguna SSO Portal Mahasiswa (Tidak memiliki akses ke sistem SIMPEG)',
+            ],
         ];
 
         foreach ($roles as $role) {
-            Role::updateOrCreate(
-                ['slug' => $role['slug']],
-                [
-                    'name' => $role['name'],
-                    'description' => $role['description'],
-                    'is_active' => true
-                ]
-            );
+            Role::create([
+                'name' => $role['name'],
+                'slug' => $role['slug'],
+                'description' => $role['description'],
+                'is_active' => true,
+            ]);
         }
     }
 }

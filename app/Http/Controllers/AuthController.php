@@ -147,7 +147,7 @@ class AuthController extends Controller
             'status' => 'success',
             'message' => 'Login successful',
             'requires_2fa' => false,
-            'data' => $user,
+            'data' => $user->load(['roles', 'roles.permissions']),
             'access_token' => $token,
             'token_type' => 'Bearer',
         ]);
@@ -195,7 +195,7 @@ class AuthController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'Login successful',
-                'data' => $user,
+                'data' => $user->load(['roles', 'roles.permissions']),
                 'access_token' => $token,
                 'token_type' => 'Bearer',
             ]);
@@ -210,7 +210,7 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         return response()->json([
-            'data' => $request->user()
+            'data' => $request->user()->load(['roles', 'roles.permissions'])
         ]);
     }
 

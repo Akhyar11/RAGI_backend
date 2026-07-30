@@ -44,6 +44,11 @@ class User extends Authenticatable
         ];
     }
 
+    public function pegawai()
+    {
+        return $this->hasOne(\App\Models\Simpeg\Pegawai::class, 'user_id');
+    }
+
     public function ssoTokens()
     {
         return $this->hasMany(SsoToken::class);
@@ -63,19 +68,34 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id')
             ->withPivot(['valid_from', 'valid_until'])
-            ->wherePivot('valid_until', '>=', now()->toDateString())
-            ->orWherePivotNull('valid_until');
+            ->where(function ($q) {
+                $q->whereNull('user_roles.valid_until')
+                  ->orWhere('user_roles.valid_until', '>=', now()->toDateString());
+            });
     }
 
     public function hasPermission(string $permissionSlug): bool
     {
+        if ($this->user_type === 'admin') {
+            return true;
+        }
+
+        $shortSlug = str_replace('iam.', '', $permissionSlug);
+
         return $this->roles()
-            ->whereHas('permissions', fn($q) => $q->where('slug', $permissionSlug))
+            ->whereHas('permissions', fn($q) => 
+                $q->where('slug', $permissionSlug)
+                  ->orWhere('slug', "iam.{$shortSlug}")
+                  ->orWhere('slug', $shortSlug)
+            )
             ->exists();
     }
 
     public function hasRole(string $roleSlug): bool
     {
+        if ($this->user_type === 'admin' && ($roleSlug === 'admin' || $roleSlug === 'super-admin')) {
+            return true;
+        }
         return $this->roles()->where('slug', $roleSlug)->exists();
     }
 }

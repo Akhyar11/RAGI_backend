@@ -3,37 +3,35 @@
 namespace App\Policies;
 
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class UserPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasPermission('users.read');
+        return $user->user_type === 'admin' || $user->hasPermission('iam.users.read') || $user->hasPermission('users.read');
     }
 
     public function view(User $user, User $model): bool
     {
-        return $user->hasPermission('users.read');
+        return $user->user_type === 'admin' || $user->hasPermission('iam.users.read') || $user->hasPermission('users.read');
     }
 
     public function create(User $user): bool
     {
-        return $user->hasPermission('users.create');
+        return $user->user_type === 'admin' || $user->hasPermission('iam.users.create') || $user->hasPermission('users.create');
     }
 
     public function update(User $user, User $model): bool
     {
-        // Tidak boleh edit super-admin jika bukan super-admin
-        if ($model->hasRole('super-admin') && !$user->hasRole('super-admin')) {
+        if ($model->hasRole('admin') && !$user->hasRole('admin')) {
             return false;
         }
-        return $user->hasPermission('users.update');
+        return $user->user_type === 'admin' || $user->hasPermission('iam.users.update') || $user->hasPermission('users.update');
     }
 
     public function delete(User $user, User $model): bool
     {
-        if ($model->hasRole('super-admin')) return false; // Super admin tak boleh dihapus
-        return $user->hasPermission('users.delete');
+        if ($model->username === 'admin' || $model->hasRole('admin')) return false;
+        return $user->user_type === 'admin' || $user->hasPermission('iam.users.delete') || $user->hasPermission('users.delete');
     }
 }

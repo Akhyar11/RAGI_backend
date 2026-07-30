@@ -27,6 +27,8 @@ class AppServiceProvider extends ServiceProvider
             }
         });
 
+        Passport::$validateKeyPermissions = false;
+
         // Arahkan Passport ke halaman login SSO kustom kita
         // saat user mengakses /oauth/authorize tanpa sesi web aktif
         Passport::authorizationView(fn ($params) =>

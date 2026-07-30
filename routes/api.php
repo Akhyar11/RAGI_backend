@@ -101,3 +101,54 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::get('audit-logs', [App\Http\Controllers\AuditLogController::class, 'index']);
     Route::get('audit-logs/{id}', [App\Http\Controllers\AuditLogController::class, 'show']);
 });
+
+/*
+|--------------------------------------------------------------------------
+| SIMPEG (Sistem Informasi Kepegawaian) Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth:api')->prefix('simpeg')->group(function () {
+    // Unit Kerja
+    Route::apiResource('unit-kerja', App\Http\Controllers\Simpeg\UnitKerjaController::class);
+
+    // Jabatan & Jabatan Fungsional
+    Route::apiResource('jabatan', App\Http\Controllers\Simpeg\JabatanController::class);
+    Route::get('jabatan-fungsional', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'index']);
+    Route::post('jabatan-fungsional', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'store']);
+
+    // Pegawai
+    Route::apiResource('pegawai', App\Http\Controllers\Simpeg\PegawaiController::class);
+
+    // Riwayat Jabatan & Pendidikan
+    Route::get('pegawai/{id}/riwayat-jabatan', [App\Http\Controllers\Simpeg\RiwayatController::class, 'getRiwayatJabatan']);
+    Route::post('pegawai/{id}/riwayat-jabatan', [App\Http\Controllers\Simpeg\RiwayatController::class, 'storeRiwayatJabatan']);
+    Route::get('pegawai/{id}/riwayat-pendidikan', [App\Http\Controllers\Simpeg\RiwayatController::class, 'getRiwayatPendidikan']);
+    Route::post('pegawai/{id}/riwayat-pendidikan', [App\Http\Controllers\Simpeg\RiwayatController::class, 'storeRiwayatPendidikan']);
+
+    // Enterprise SIMPEG Features
+    Route::get('dokumen', [App\Http\Controllers\Simpeg\DokumenController::class, 'index']);
+    Route::post('dokumen', [App\Http\Controllers\Simpeg\DokumenController::class, 'store']);
+    Route::get('dokumen/{id}/secure-view', [App\Http\Controllers\Simpeg\DokumenController::class, 'getSecureView']);
+    Route::delete('dokumen/{id}', [App\Http\Controllers\Simpeg\DokumenController::class, 'destroy']);
+
+    Route::get('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'index']);
+    Route::post('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'store']);
+    Route::patch('cuti/{id}/status', [App\Http\Controllers\Simpeg\CutiController::class, 'updateStatus']);
+
+    Route::get('presensi', [App\Http\Controllers\Simpeg\PresensiController::class, 'index']);
+    Route::post('presensi', [App\Http\Controllers\Simpeg\PresensiController::class, 'store']);
+
+    Route::get('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'index']);
+    Route::post('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'store']);
+
+    Route::get('usulan-jafung', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'index']);
+    Route::post('usulan-jafung', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'store']);
+
+    Route::get('penilaian-kinerja', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'index']);
+    Route::post('penilaian-kinerja', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'store']);
+
+    // PDDikti Feeder Integration
+    Route::get('pddikti/status', [App\Http\Controllers\Simpeg\PddiktiSyncController::class, 'getStatus']);
+    Route::post('pddikti/sync-all', [App\Http\Controllers\Simpeg\PddiktiSyncController::class, 'triggerSync']);
+});
+
