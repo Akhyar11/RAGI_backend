@@ -6,6 +6,7 @@ use App\Http\Controllers\OAuthController;
 use App\Http\Controllers\SsoController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\MfaController;
+use App\Http\Controllers\API\MenuController;
 
 /*
 |--------------------------------------------------------------------------
@@ -100,6 +101,22 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     // Audit Logs
     Route::get('audit-logs', [App\Http\Controllers\AuditLogController::class, 'index']);
     Route::get('audit-logs/{id}', [App\Http\Controllers\AuditLogController::class, 'show']);
+
+    // Menus (Admin Management)
+    Route::get('menus', [MenuController::class, 'index']);
+    Route::post('menus', [MenuController::class, 'store']);
+    Route::put('menus/{menu}', [MenuController::class, 'update']);
+    Route::delete('menus/{menu}', [MenuController::class, 'destroy']);
+    Route::put('menus/{menu}/toggle', [MenuController::class, 'toggleActive']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Common Protected Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth:api')->group(function () {
+    Route::get('menus/my-menus', [MenuController::class, 'getMyMenus']);
 });
 
 /*

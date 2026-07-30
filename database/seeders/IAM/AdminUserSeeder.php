@@ -17,7 +17,7 @@ class AdminUserSeeder extends Seeder
         DB::table('user_roles')->truncate();
         Schema::enableForeignKeyConstraints();
 
-        // 1. User Super Admin
+        // 1. Seed Super Admin
         $admin = User::updateOrCreate(
             ['email' => 'admin@kampus.ac.id'],
             [
@@ -171,6 +171,34 @@ class AdminUserSeeder extends Seeder
                 'valid_from' => now()->toDateString(),
                 'created_at' => now(),
             ]);
+        }
+
+        // 2. Seed Admin SPMB
+        $adminSpmb = User::updateOrCreate(
+            ['email' => env('SPMB_ADMIN_EMAIL', 'adminspmb@kampus.ac.id')],
+            [
+                'username'  => 'adminspmb',
+                'password'  => Hash::make(env('SPMB_ADMIN_PASSWORD', 'password')),
+                'user_type' => 'admin',
+                'is_active' => true,
+                'is_verified' => true,
+            ]
+        );
+
+        $spmbAdminRole = Role::where('slug', 'admin-spmb')->first();
+        
+        if ($spmbAdminRole) {
+            DB::table('user_roles')->updateOrInsert(
+                [
+                    'user_id' => $adminSpmb->id,
+                    'role_id' => $spmbAdminRole->id,
+                ],
+                [
+                    'assigned_by' => $admin->id, // Assigned by superadmin
+                    'valid_from' => now()->toDateString(),
+                    'created_at' => now(),
+                ]
+            );
         }
     }
 }
