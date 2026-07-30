@@ -17,7 +17,6 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->string('password');
             $table->string('phone')->nullable();
-            $table->enum('user_type', ['mahasiswa', 'dosen', 'tendik', 'admin', 'calon_mhs'])->default('calon_mhs');
             $table->boolean('is_active')->default(true);
             $table->boolean('is_verified')->default(false);
             $table->timestamp('email_verified_at')->nullable();

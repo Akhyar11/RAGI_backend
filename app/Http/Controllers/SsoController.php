@@ -85,7 +85,7 @@ class SsoController extends Controller
                     'id'        => $user->id,
                     'username'  => $user->username,
                     'email'     => $user->email,
-                    'user_type' => $user->user_type,
+                    // user_type removed
                     'is_active' => $user->is_active,
                 ],
             ],

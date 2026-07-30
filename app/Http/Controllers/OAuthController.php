@@ -93,7 +93,7 @@ class OAuthController extends Controller
                 'username'      => $user->username,
                 'email'         => $user->email,
                 'phone'         => $user->phone,
-                'user_type'     => $user->user_type,
+                // user_type removed
                 'is_active'     => $user->is_active,
                 'is_verified'   => $user->is_verified,
                 'last_login_at' => $user->last_login_at,

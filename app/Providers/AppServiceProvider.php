@@ -22,7 +22,7 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Permission::observe(\App\Observers\PermissionObserver::class);
         Gate::before(function (User $user, string $ability) {
             // Super admin bypass semua permission
-            if ($user->user_type === 'admin' && $user->roles->contains('slug', 'super-admin')) {
+            if ($user->hasRole('admin') || $user->hasRole('superadmin')) {
                 return true;
             }
         });

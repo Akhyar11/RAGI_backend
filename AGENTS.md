@@ -21,6 +21,7 @@ Sebelum mengeksekusi tugas apapun, Anda WAJIB memeriksa daftar skill di bawah in
 | `seeder-standard`             | `.gemini/skills/seeder_standard/SKILL.md`             | Membuat atau memodifikasi file Seeder                                    |
 | `event-listener-standard`     | `.gemini/skills/event_listener_standard/SKILL.md`     | Membuat Event, Listener, atau alur reaktif antar-modul                   |
 | `api-documentation`           | `.gemini/skills/api_documentation/SKILL.md`           | Membuat Controller baru ATAU memodifikasi endpoint yang sudah ada        |
+| `rbac-refactoring-standard`   | `.agent/skills/rbac_refactoring_standard/SKILL.md`   | Melakukan refaktor controller, model, migration, atau merancang pengecekan akses (RBAC) tanpa mengandalkan field statis. |
 
 ## Aturan Wajib
 

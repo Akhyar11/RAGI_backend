@@ -13,8 +13,8 @@ class UserController extends Controller
      */
     private function ensureAdmin()
     {
-        if (auth()->user()->user_type !== 'admin') {
-            abort(403, 'Unauthorized action. Only admins can access this resource.');
+        if (!auth()->user()->hasRole('admin') && !auth()->user()->hasRole('superadmin')) {
+            abort(403, 'Anda tidak memiliki akses superadmin.');
         }
     }
 
@@ -40,7 +40,7 @@ class UserController extends Controller
             'email' => 'required|string|email|unique:users',
             'password' => 'required|string|min:8|confirmed',
             'phone' => 'nullable|string',
-            'user_type' => 'required|in:mahasiswa,dosen,tendik,admin,calon_mhs',
+            // user_type removed
             'is_active' => 'boolean',
             'is_verified' => 'boolean',
         ]);
@@ -50,7 +50,7 @@ class UserController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'phone' => $request->phone,
-            'user_type' => $request->user_type,
+            // user_type removed
             'is_active' => $request->has('is_active') ? $request->is_active : true,
             'is_verified' => $request->has('is_verified') ? $request->is_verified : false,
         ]);
@@ -82,12 +82,12 @@ class UserController extends Controller
             'email' => 'sometimes|string|email|unique:users,email,'.$user->id,
             'password' => 'sometimes|string|min:8|confirmed',
             'phone' => 'nullable|string',
-            'user_type' => 'sometimes|in:mahasiswa,dosen,tendik,admin,calon_mhs',
+            // user_type removed
             'is_active' => 'boolean',
             'is_verified' => 'boolean',
         ]);
 
-        $data = $request->only(['username', 'email', 'phone', 'user_type', 'is_active', 'is_verified']);
+        $data = $request->only(['username', 'email', 'phone', 'is_active', 'is_verified']);
         
         if ($request->filled('password')) {
             $data['password'] = Hash::make($request->password);

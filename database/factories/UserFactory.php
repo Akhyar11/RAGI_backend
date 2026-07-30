@@ -28,7 +28,6 @@ class UserFactory extends Factory
             'username' => fake()->unique()->userName(),
             'email' => fake()->unique()->safeEmail(),
             'phone' => fake()->phoneNumber(),
-            'user_type' => fake()->randomElement(['mahasiswa', 'dosen', 'tendik', 'admin', 'calon_mhs']),
             'is_active' => true,
             'is_verified' => true,
             'email_verified_at' => now(),

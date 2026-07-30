@@ -17,7 +17,6 @@ use Laravel\Passport\HasApiTokens;
     'email',
     'password',
     'phone',
-    'user_type',
     'is_active',
     'is_verified',
     'last_login_at',
@@ -76,7 +75,7 @@ class User extends Authenticatable
 
     public function hasPermission(string $permissionSlug): bool
     {
-        if ($this->user_type === 'admin') {
+        if ($this->hasRole('admin') || $this->hasRole('superadmin')) {
             return true;
         }
 
@@ -93,9 +92,6 @@ class User extends Authenticatable
 
     public function hasRole(string $roleSlug): bool
     {
-        if ($this->user_type === 'admin' && ($roleSlug === 'admin' || $roleSlug === 'super-admin')) {
-            return true;
-        }
         return $this->roles()->where('slug', $roleSlug)->exists();
     }
 }

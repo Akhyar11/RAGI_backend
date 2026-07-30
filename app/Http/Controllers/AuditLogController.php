@@ -16,7 +16,7 @@ class AuditLogController extends Controller
         // Pastikan hanya admin (atau user ber-permission) yang bisa melihat
         Gate::authorize('viewAny', AuditLog::class);
 
-        $query = AuditLog::with('user:id,username,email,user_type')
+        $query = AuditLog::with('user:id,username,email')
             ->orderBy('created_at', 'desc');
 
         // Fitur pencarian berdasarkan module, action, table_name

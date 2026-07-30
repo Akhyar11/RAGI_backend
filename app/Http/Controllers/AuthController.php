@@ -26,7 +26,7 @@ class AuthController extends Controller
             'email' => 'required|string|email|unique:users',
             'password' => 'required|string|min:8|confirmed',
             'phone' => 'nullable|string',
-            'user_type' => 'required|in:mahasiswa,dosen,tendik,admin,calon_mhs',
+// user_type removed
         ]);
 
         $user = User::create([
@@ -34,7 +34,7 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'phone' => $request->phone,
-            'user_type' => $request->user_type,
+            // user_type removed
             'is_active' => true,
             'is_verified' => false,
         ]);

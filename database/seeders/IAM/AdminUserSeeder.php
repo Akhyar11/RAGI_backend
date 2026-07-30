@@ -23,7 +23,6 @@ class AdminUserSeeder extends Seeder
             [
                 'username'    => 'admin',
                 'password'    => Hash::make('password'),
-                'user_type'   => 'admin',
                 'is_active'   => true,
                 'is_verified' => true,
             ]
@@ -35,7 +34,6 @@ class AdminUserSeeder extends Seeder
             [
                 'username'    => 'wasis',
                 'password'    => Hash::make('password'),
-                'user_type'   => 'dosen',
                 'is_active'   => true,
                 'is_verified' => true,
             ]
@@ -47,7 +45,6 @@ class AdminUserSeeder extends Seeder
             [
                 'username'    => 'admin_simpeg',
                 'password'    => Hash::make('password'),
-                'user_type'   => 'admin',
                 'is_active'   => true,
                 'is_verified' => true,
             ]
@@ -59,7 +56,6 @@ class AdminUserSeeder extends Seeder
             [
                 'username'    => 'dosen',
                 'password'    => Hash::make('password'),
-                'user_type'   => 'dosen',
                 'is_active'   => true,
                 'is_verified' => true,
             ]
@@ -71,7 +67,6 @@ class AdminUserSeeder extends Seeder
             [
                 'username'    => 'tendik',
                 'password'    => Hash::make('password'),
-                'user_type'   => 'tendik',
                 'is_active'   => true,
                 'is_verified' => true,
             ]
@@ -83,7 +78,6 @@ class AdminUserSeeder extends Seeder
             [
                 'username'    => 'mahasiswa',
                 'password'    => Hash::make('password'),
-                'user_type'   => 'mahasiswa',
                 'is_active'   => true,
                 'is_verified' => true,
             ]
@@ -179,7 +173,6 @@ class AdminUserSeeder extends Seeder
             [
                 'username'  => 'adminspmb',
                 'password'  => Hash::make(env('SPMB_ADMIN_PASSWORD', 'password')),
-                'user_type' => 'admin',
                 'is_active' => true,
                 'is_verified' => true,
             ]

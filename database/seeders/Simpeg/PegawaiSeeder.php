@@ -15,7 +15,7 @@ class PegawaiSeeder extends Seeder
 {
     public function run(): void
     {
-        $adminUser = User::where('user_type', 'admin')->first() ?? User::where('email', 'admin@campus.ac.id')->first();
+        $adminUser = User::where('email', 'admin@kampus.ac.id')->first();
         $prodiIf = UnitKerja::where('kode', 'IF')->first();
         $jabatanDosen = Jabatan::where('nama', 'Dosen Pengajar')->first();
         $jafungLektor = JabatanFungsionalAkademik::where('golongan', 'lektor')->first();
