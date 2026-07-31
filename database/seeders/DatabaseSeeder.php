@@ -25,6 +25,11 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\Simpeg\JabatanSeeder::class,
             \Database\Seeders\Simpeg\PegawaiSeeder::class,
             \Database\Seeders\Simpeg\EnterpriseSimpegSeeder::class,
+
+            // SIPPM Seeders
+            \Database\Seeders\Sippm\SippmSkemaSeeder::class,
+            \Database\Seeders\Sippm\SippmPeriodeSeeder::class,
+            \Database\Seeders\Sippm\SippmSampleDataSeeder::class,
         ]);
     }
 }

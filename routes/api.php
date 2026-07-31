@@ -183,3 +183,49 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::post('pddikti/sync-all', [App\Http\Controllers\Simpeg\PddiktiSyncController::class, 'triggerSync']);
 });
 
+/*
+|--------------------------------------------------------------------------
+| SIPPM (Penelitian & PkM) Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth:api')->prefix('sippm')->group(function () {
+    // Master Skema & Periode
+    Route::get('skema', [App\Http\Controllers\Sippm\MasterSippmController::class, 'indexSkema']);
+    Route::post('skema', [App\Http\Controllers\Sippm\MasterSippmController::class, 'storeSkema']);
+    Route::get('periode', [App\Http\Controllers\Sippm\MasterSippmController::class, 'indexPeriode']);
+    Route::post('periode', [App\Http\Controllers\Sippm\MasterSippmController::class, 'storePeriode']);
+
+    // Proposal Kegiatan
+    Route::get('proposal', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'index']);
+    Route::get('proposal/{id}', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'show']);
+    Route::post('proposal', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'store']);
+    Route::put('proposal/{id}', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'update']);
+    Route::post('proposal/{id}/submit', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'submit']);
+    Route::post('proposal/{id}/assign-reviewer', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'assignReviewer']);
+
+    // Reviewer & Final Decision
+    Route::get('reviewer/assigned', [App\Http\Controllers\Sippm\ReviewerKegiatanController::class, 'myAssignedProposals']);
+    Route::post('reviewer/{id}/penilaian', [App\Http\Controllers\Sippm\ReviewerKegiatanController::class, 'submitPenilaian']);
+    Route::post('proposal/{id}/finalize', [App\Http\Controllers\Sippm\ReviewerKegiatanController::class, 'finalizeDecision']);
+
+    // Kontrak, Pencairan, & Monev/Laporan
+    Route::get('kontrak', [App\Http\Controllers\Sippm\KontrakMonevController::class, 'indexKontrak']);
+    Route::post('proposal/{id}/kontrak', [App\Http\Controllers\Sippm\KontrakMonevController::class, 'storeKontrak']);
+    Route::post('kontrak/{id}/pencairan', [App\Http\Controllers\Sippm\KontrakMonevController::class, 'requestPencairan']);
+    Route::post('kontrak/{id}/laporan', [App\Http\Controllers\Sippm\KontrakMonevController::class, 'submitLaporan']);
+
+    // Portofolio Luaran (Publikasi & HKI)
+    Route::get('luaran/publikasi', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'indexPublikasi']);
+    Route::post('luaran/publikasi', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'storePublikasi']);
+    Route::post('luaran/publikasi/{id}/verify', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'verifyPublikasi']);
+
+    Route::get('luaran/hki', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'indexHki']);
+    Route::post('luaran/hki', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'storeHki']);
+    Route::post('luaran/hki/{id}/verify', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'verifyHki']);
+
+    // Cross-Module Integration Endpoints (UPM IKU & SIKEU Callback)
+    Route::get('integration/upm-iku-metrics', [App\Http\Controllers\Sippm\MasterSippmController::class, 'getUpmMetrics']);
+    Route::post('integration/sikeu-disbursement-callback/{id}', [App\Http\Controllers\Sippm\MasterSippmController::class, 'processDisbursementCallback']);
+});
+
+

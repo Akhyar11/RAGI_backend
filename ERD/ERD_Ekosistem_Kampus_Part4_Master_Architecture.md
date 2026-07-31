@@ -1,5 +1,5 @@
 # 🏛️ GLOBAL FINAL ERD — Ekosistem Kampus Terintegrasi
-## Part 4 of 4: Master Integration Map | Full Architecture Notes
+## Part 4 of 5: Master Integration Map | Full Architecture Notes
 
 ---
 
@@ -109,24 +109,26 @@ erDiagram
         enum tipe "dudi|kampus|pemerintah"
     }
 
-    mitra_industri_simpi {
+    proposal_kegiatan {
         bigint id PK
-        bigint mitra_kerjasama_id FK
-        varchar nama
+        bigint periode_id FK
+        bigint skema_id FK
+        bigint ketua_pegawai_id FK
+        varchar kode_proposal UK
+        enum status "draft|diajukan|lolos|ditolak"
     }
 
-    pengajuan_magang {
+    publikasi_ilmiah {
         bigint id PK
-        bigint mahasiswa_id FK
-        bigint mitra_industri_id FK
-        bigint tahun_akademik_id FK
+        bigint pegawai_id FK
+        varchar judul_artikel
+        enum indexing "scopus_q1|sinta_1|lainnya"
     }
 
-    pengajuan_judul_ta {
+    hki_dan_buku {
         bigint id PK
-        bigint mahasiswa_id FK
-        bigint tahun_akademik_id FK
-        enum status "disetujui|ditolak"
+        bigint pegawai_id FK
+        enum jenis_luaran "paten|hak_cipta|buku_ajar"
     }
 
     ruangan {
@@ -157,10 +159,11 @@ erDiagram
     kelas_lms ||--o{ sync_nilai_lms : "LMS→SIAKAD: sync nilai"
     sync_nilai_lms ||--|| nilai_mahasiswa : "update nilai harian"
     kelas ||--|| ruangan : "SINAPRA: menggunakan ruangan"
-    mitra ||--o| mitra_industri_simpi : "KERJASAMA→SIMPI: link mitra"
-    mitra_industri_simpi ||--o{ pengajuan_magang : "SIMPI: tempat magang"
-    pengajuan_magang ||--|| mahasiswa : "mahasiswa magang"
-    pengajuan_judul_ta ||--|| mahasiswa : "mahasiswa skripsi"
+    pegawai ||--o{ proposal_kegiatan : "SIPPM: mengajukan penelitian/PkM"
+    proposal_kegiatan ||--o{ publikasi_ilmiah : "SIPPM: menghasilkan luaran"
+    proposal_kegiatan ||--o{ hki_dan_buku : "SIPPM: menghasilkan HKI/buku"
+    publikasi_ilmiah }o--|| beban_kerja_dosen : "SIPPM→SIMPEG: auto BKD & Jafung"
+    mitra ||--o{ proposal_kegiatan : "KERJASAMA→SIPPM: riset mitra"
     users ||--o{ audit_logs : "IAM: semua aksi dicatat"
 ```
 
@@ -183,7 +186,8 @@ erDiagram
 | 8 | SINAPRA | 9 |
 | 9 | KERJASAMA | 6 |
 | 10 | UPM | 11 |
-| **TOTAL** | **13 Domain** | **🔴 140 Tabel** |
+| 11 | SIPPM (Penelitian & PkM) | 11 |
+| **TOTAL** | **14 Domain** | **🔴 151 Tabel** |
 
 ---
 
@@ -463,5 +467,6 @@ Tabel dan field yang kritis untuk pelaporan PDDikti:
 | [Part 2 — OBE, SIMPI, SIMANTA, SIMPRESKUL, SIKEU](./ERD_Ekosistem_Kampus_Part2_OBE_SIMPI_SIMANTA_SIKEU.md) | 47 tabel |
 | [Part 3 — SIMPEG, LMS, SINAPRA, KERJASAMA, UPM](./ERD_Ekosistem_Kampus_Part3_SIMPEG_LMS_SINAPRA_UPM.md) | 51 tabel |
 | **Part 4 — Master Integration + Architecture Notes** | **Cross-module** |
+| [Part 5 — SIPPM (Penelitian & PkM)](./ERD_Ekosistem_Kampus_Part5_SIPPM.md) | 11 tabel |
 
-> **Total: 140 Tabel | 13 Domain Modul | Production-Ready Architecture**
+> **Total: 151 Tabel | 14 Domain Modul | Production-Ready Architecture**

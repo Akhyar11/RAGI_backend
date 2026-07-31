@@ -1,0 +1,35 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('skema_kegiatan', function (Blueprint $table) {
+            $table->id();
+            $table->string('kode', 50)->unique();
+            $table->string('nama', 255);
+            $table->enum('tipe', ['penelitian', 'pengabdian']);
+            $table->enum('sumber_dana', ['internal', 'dikti_bima', 'mitra_industri', 'mandiri'])->default('internal');
+            $table->decimal('maksimal_anggaran', 15, 2)->default(0.00);
+            $table->text('deskripsi')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+            $table->softDeletes();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('skema_kegiatan');
+    }
+};
