@@ -22,6 +22,11 @@ class UsulanJafungController extends Controller
 
         if ($request->has('pegawai_id')) {
             $query->where('pegawai_id', $request->pegawai_id);
+        } elseif ($request->user()->user_type !== 'admin' && !$request->user()->hasPermission('simpeg.usulan_jafung.verify')) {
+            $pegId = $request->user()->pegawai?->id;
+            if ($pegId) {
+                $query->where('pegawai_id', $pegId);
+            }
         }
 
         $usulan = $query->latest()->get();

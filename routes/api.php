@@ -147,6 +147,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::post('jabatan-fungsional', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'store']);
 
     // Pegawai
+    Route::get('pegawai/me', [App\Http\Controllers\Simpeg\PegawaiController::class, 'me']);
     Route::apiResource('pegawai', App\Http\Controllers\Simpeg\PegawaiController::class);
 
     // Riwayat Jabatan & Pendidikan

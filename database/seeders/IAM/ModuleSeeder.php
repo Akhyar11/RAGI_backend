@@ -12,11 +12,22 @@ class ModuleSeeder extends Seeder
      */
     public function run(): void
     {
-        Module::create([
-            'name' => 'IAM & Auth Center',
-            'code' => 'sso',
-            'description' => 'Modul inti untuk Single Sign-On dan Manajemen Pengguna (IAM).',
-            'is_active' => true,
-        ]);
+        Module::updateOrCreate(
+            ['code' => 'sso'],
+            [
+                'name' => 'IAM & Auth Center',
+                'description' => 'Modul inti untuk Single Sign-On dan Manajemen Pengguna (IAM).',
+                'is_active' => true,
+            ]
+        );
+
+        Module::updateOrCreate(
+            ['code' => 'simpeg'],
+            [
+                'name' => 'SIMPEG (Kepegawaian)',
+                'description' => 'Sistem Informasi Manajemen Kepegawaian Kampus.',
+                'is_active' => true,
+            ]
+        );
     }
 }

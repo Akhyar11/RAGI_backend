@@ -22,6 +22,11 @@ class PayrollController extends Controller
 
         if ($request->has('pegawai_id')) {
             $query->where('pegawai_id', $request->pegawai_id);
+        } elseif ($request->user()->user_type !== 'admin' && !$request->user()->hasPermission('simpeg.payroll.manage')) {
+            $pegId = $request->user()->pegawai?->id;
+            if ($pegId) {
+                $query->where('pegawai_id', $pegId);
+            }
         }
 
         if ($request->has('periode')) {

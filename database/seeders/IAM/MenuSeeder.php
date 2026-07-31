@@ -57,6 +57,43 @@ class MenuSeeder extends Seeder
                     ['name' => 'Audit Logs', 'url' => '/admin/audit-logs', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.audit_logs.read', 'order_index' => 6],
                 ]
             ],
+
+            // Menu SIMPEG
+            [
+                'name' => 'Dashboard SIMPEG',
+                'url' => '/simpeg',
+                'icon' => 'FaChartPie',
+                'module' => 'simpeg',
+                'permission_slug' => 'simpeg.pegawai.read',
+                'order_index' => 1,
+            ],
+            [
+                'name' => 'LAYANAN PEGAWAI',
+                'url' => '#layanan_pegawai',
+                'icon' => 'FaList',
+                'module' => 'simpeg',
+                'order_index' => 2,
+                'children' => [
+                    ['name' => 'Data Pegawai', 'url' => '/simpeg/pegawai', 'icon' => 'FaUsers', 'module' => 'simpeg', 'permission_slug' => 'simpeg.pegawai.read', 'order_index' => 1],
+                    ['name' => 'Dokumen E-File Digital', 'url' => '/simpeg/dokumen', 'icon' => 'FaFileAlt', 'module' => 'simpeg', 'permission_slug' => 'simpeg.dokumen.read', 'order_index' => 2],
+                    ['name' => 'Layanan & Cuti Pegawai', 'url' => '/simpeg/cuti', 'icon' => 'FaCalendarCheck', 'module' => 'simpeg', 'permission_slug' => 'simpeg.cuti.read', 'order_index' => 3],
+                    ['name' => 'Monitoring Presensi', 'url' => '/simpeg/presensi', 'icon' => 'FaClock', 'module' => 'simpeg', 'permission_slug' => 'simpeg.presensi.read', 'order_index' => 4],
+                    ['name' => 'Payroll & Slip Gaji', 'url' => '/simpeg/payroll', 'icon' => 'FaMoneyBillWave', 'module' => 'simpeg', 'permission_slug' => 'simpeg.payroll.read', 'order_index' => 5],
+                    ['name' => 'Usulan Jafung (KUM)', 'url' => '/simpeg/usulan-jafung', 'icon' => 'FaAward', 'module' => 'simpeg', 'permission_slug' => 'simpeg.usulan_jafung.read', 'order_index' => 6],
+                    ['name' => 'Penilaian Kinerja SKP', 'url' => '/simpeg/kinerja', 'icon' => 'FaTrophy', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kinerja.read', 'order_index' => 7],
+                ]
+            ],
+            [
+                'name' => 'MASTER DATA',
+                'url' => '#master_simpeg',
+                'icon' => 'FaList',
+                'module' => 'simpeg',
+                'order_index' => 3,
+                'children' => [
+                    ['name' => 'Unit Kerja', 'url' => '/simpeg/unit-kerja', 'icon' => 'FaSitemap', 'module' => 'simpeg', 'permission_slug' => 'simpeg.unit_kerja.read', 'order_index' => 1],
+                    ['name' => 'Master Jabatan & Jafung', 'url' => '/simpeg/jabatan', 'icon' => 'FaBriefcase', 'module' => 'simpeg', 'permission_slug' => 'simpeg.jabatan.read', 'order_index' => 2],
+                ]
+            ],
         ];
 
         foreach ($menus as $menuData) {

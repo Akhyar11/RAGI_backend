@@ -22,8 +22,8 @@ class MenuService
             return collect();
         }
 
-        // Cek apakah user adalah super-admin
-        $isSuperAdmin = $user->roles()->where('slug', 'superadmin')->exists();
+        // Cek apakah user adalah superadmin atau admin
+        $isSuperAdmin = $user->roles()->whereIn('slug', ['superadmin', 'admin'])->exists();
 
         // 1. Dapatkan daftar id role yang dimiliki user
         $roleIds = $user->roles()->pluck('roles.id')->toArray();
@@ -32,8 +32,11 @@ class MenuService
         $menus = Menu::with(['children' => function($query) use ($roleIds, $isSuperAdmin) {
                 $query->where('is_active', true);
                 if (!$isSuperAdmin) {
-                    $query->whereHas('roles', function($q) use ($roleIds) {
-                        $q->whereIn('roles.id', $roleIds);
+                    $query->where(function($q) use ($roleIds) {
+                        $q->whereDoesntHave('roles')
+                          ->orWhereHas('roles', function($r) use ($roleIds) {
+                              $r->whereIn('roles.id', $roleIds);
+                          });
                     });
                 }
                 $query->orderBy('order_index');
@@ -42,8 +45,11 @@ class MenuService
             ->where('module', $module)
             ->where('is_active', true)
             ->when(!$isSuperAdmin, function ($query) use ($roleIds) {
-                $query->whereHas('roles', function($q) use ($roleIds) {
-                    $q->whereIn('roles.id', $roleIds);
+                $query->where(function($q) use ($roleIds) {
+                    $q->whereDoesntHave('roles')
+                      ->orWhereHas('roles', function($r) use ($roleIds) {
+                          $r->whereIn('roles.id', $roleIds);
+                      });
                 });
             })
             ->orderBy('order_index')

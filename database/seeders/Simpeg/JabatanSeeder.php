@@ -15,49 +15,43 @@ class JabatanSeeder extends Seeder
         $prodiIf = UnitKerja::where('kode', 'IF')->first();
         $biroKeuangan = UnitKerja::where('kode', 'KU')->first();
 
-        Jabatan::create([
+        Jabatan::firstOrCreate(['nama' => 'Rektor'], [
             'unit_kerja_id' => $rektorat?->id,
-            'nama' => 'Rektor',
             'tipe' => 'struktural',
             'level_jabatan' => 1,
             'is_active' => true,
         ]);
 
-        Jabatan::create([
+        Jabatan::firstOrCreate(['nama' => 'Dekan Fakultas Teknik'], [
             'unit_kerja_id' => $ft?->id,
-            'nama' => 'Dekan Fakultas Teknik',
             'tipe' => 'struktural',
             'level_jabatan' => 2,
             'is_active' => true,
         ]);
 
-        Jabatan::create([
+        Jabatan::firstOrCreate(['nama' => 'Ketua Program Studi Informatika'], [
             'unit_kerja_id' => $prodiIf?->id,
-            'nama' => 'Ketua Program Studi Informatika',
             'tipe' => 'struktural',
             'level_jabatan' => 3,
             'is_active' => true,
         ]);
 
-        Jabatan::create([
+        Jabatan::firstOrCreate(['nama' => 'Kepala Biro Keuangan'], [
             'unit_kerja_id' => $biroKeuangan?->id,
-            'nama' => 'Kepala Biro Keuangan',
             'tipe' => 'struktural',
             'level_jabatan' => 2,
             'is_active' => true,
         ]);
 
-        Jabatan::create([
+        Jabatan::firstOrCreate(['nama' => 'Dosen Pengajar'], [
             'unit_kerja_id' => $prodiIf?->id,
-            'nama' => 'Dosen Pengajar',
             'tipe' => 'fungsional',
             'level_jabatan' => 4,
             'is_active' => true,
         ]);
 
-        Jabatan::create([
+        Jabatan::firstOrCreate(['nama' => 'Staf Administrasi Keuangan'], [
             'unit_kerja_id' => $biroKeuangan?->id,
-            'nama' => 'Staf Administrasi Keuangan',
             'tipe' => 'teknis',
             'level_jabatan' => 4,
             'is_active' => true,

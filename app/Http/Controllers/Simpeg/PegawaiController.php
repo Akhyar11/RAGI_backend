@@ -16,6 +16,37 @@ class PegawaiController extends Controller
         $this->pegawaiService = $pegawaiService;
     }
 
+    public function me(Request $request)
+    {
+        $user = $request->user();
+        $pegawai = Pegawai::with(['unitKerja', 'riwayatJabatan.jabatan', 'riwayatJabatan.jabatanFungsional', 'riwayatPendidikan'])
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$pegawai) {
+            $unitKerja = \App\Models\Simpeg\UnitKerja::first();
+            $nama = $user->username === 'admin' ? 'Dr. Wasis Utama, M.T.' : ($user->username === 'dosen' ? 'Anisa Rahmawati, M.Kom.' : ucfirst($user->username));
+            $pegawai = Pegawai::create([
+                'user_id' => $user->id,
+                'unit_kerja_id' => $unitKerja?->id,
+                'nip' => '19920815' . rand(100000, 999999),
+                'nama_lengkap' => $nama,
+                'jenis_kelamin' => 'P',
+                'jenis_pegawai' => $user->user_type === 'dosen' ? 'dosen' : ($user->user_type === 'tendik' ? 'tendik' : 'dosen'),
+                'status_kepegawaian' => 'tetap_yayasan',
+                'status' => 'aktif',
+                'telepon' => '081234567890',
+                'alamat' => 'Jl. Merdeka No. 45, Bandung',
+            ]);
+            $pegawai->load(['unitKerja', 'riwayatJabatan', 'riwayatPendidikan']);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $pegawai
+        ]);
+    }
+
     public function index(Request $request)
     {
         if (!$request->user()->hasPermission('simpeg.pegawai.read') && !$request->user()->hasPermission('simpeg.pegawai.manage')) {
@@ -95,14 +126,16 @@ class PegawaiController extends Controller
 
     public function update(Request $request, $id)
     {
-        if (!$request->user()->hasPermission('simpeg.pegawai.update') && !$request->user()->hasPermission('simpeg.pegawai.manage')) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Anda tidak memiliki hak akses (permission) untuk memperbarui Data Pegawai.'
-            ], 403);
-        }
-
         $pegawai = Pegawai::findOrFail($id);
+
+        if (!$request->user()->hasPermission('simpeg.pegawai.update') && !$request->user()->hasPermission('simpeg.pegawai.manage')) {
+            if ($pegawai->user_id !== $request->user()->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda tidak memiliki hak akses (permission) untuk memperbarui Data Pegawai.'
+                ], 403);
+            }
+        }
 
         $request->validate([
             'user_id' => 'nullable|exists:users,id|unique:pegawai,user_id,' . $id,

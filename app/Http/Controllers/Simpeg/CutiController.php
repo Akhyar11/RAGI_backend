@@ -22,6 +22,11 @@ class CutiController extends Controller
 
         if ($request->has('pegawai_id')) {
             $query->where('pegawai_id', $request->pegawai_id);
+        } elseif ($request->user()->user_type !== 'admin' && !$request->user()->hasPermission('simpeg.cuti.manage') && !$request->user()->hasPermission('simpeg.cuti.approve')) {
+            $pegId = $request->user()->pegawai?->id;
+            if ($pegId) {
+                $query->where('pegawai_id', $pegId);
+            }
         }
 
         if ($request->has('status_approval')) {
