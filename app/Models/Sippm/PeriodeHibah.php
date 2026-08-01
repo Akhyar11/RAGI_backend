@@ -23,7 +23,7 @@ class PeriodeHibah extends Model
     ];
 
     protected $casts = [
-        'tahun_anggaran' => 'integer',
+        'tahun_anggaran' => 'string',
         'tgl_buka_proposal' => 'date',
         'tgl_tutup_proposal' => 'date',
         'tgl_tutup_monev' => 'date',

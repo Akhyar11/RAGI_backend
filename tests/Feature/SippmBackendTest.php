@@ -12,10 +12,13 @@ use App\Models\Sippm\ReviewerKegiatan;
 use App\Models\Sippm\KontrakKegiatan;
 use App\Models\Sippm\PublikasiIlmiah;
 use App\Models\Sippm\HkiDanBuku;
+
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class SippmBackendTest extends TestCase
 {
+    use RefreshDatabase;
+
     protected $user;
 
     protected function setUp(): void
@@ -36,6 +39,21 @@ class SippmBackendTest extends TestCase
                         ->assertJsonStructure(['status', 'data']);
     }
 
+    public function test_can_fetch_siakad_and_simpeg_references(): void
+    {
+        $dosenResponse = $this->actingAs($this->user, 'api')->getJson('/api/sippm/ref/dosen');
+        $dosenResponse->assertStatus(200)
+                      ->assertJsonStructure(['status', 'data']);
+
+        $tendikResponse = $this->actingAs($this->user, 'api')->getJson('/api/sippm/ref/tendik');
+        $tendikResponse->assertStatus(200)
+                       ->assertJsonStructure(['status', 'data']);
+
+        $siakadResponse = $this->actingAs($this->user, 'api')->getJson('/api/sippm/ref/mahasiswa/1001/mata-kuliah-aktif');
+        $siakadResponse->assertStatus(200)
+                       ->assertJsonStructure(['status', 'data']);
+    }
+
     public function test_can_list_proposals(): void
     {
         $response = $this->actingAs($this->user, 'api')->getJson('/api/sippm/proposal');
@@ -45,7 +63,7 @@ class SippmBackendTest extends TestCase
 
     public function test_can_fetch_upm_iku_metrics(): void
     {
-        $response = $this->actingAs($this->user, 'api')->getJson('/api/sippm/integration/upm-iku-metrics?tahun=2026');
+        $response = $this->actingAs($this->user, 'api')->getJson('/api/sippm/integration/upm-iku-metrics?tahun=2025/2026');
         $response->assertStatus(200)
                  ->assertJsonPath('status', 'success')
                  ->assertJsonStructure(['status', 'data' => ['tahun_anggaran', 'iku_5', 'iku_6', 'total_riset_aktif']]);

@@ -137,7 +137,8 @@ class MenuSeeder extends Seeder
                 'children' => [
                     ['name' => 'Master Skema Kegiatan', 'url' => '/sippm/skema', 'icon' => 'FaLayers', 'module' => 'sippm', 'permission_slug' => 'sippm.skema.read', 'order_index' => 1],
                     ['name' => 'Master Periode Hibah', 'url' => '/sippm/periode', 'icon' => 'FaCalendar', 'module' => 'sippm', 'permission_slug' => 'sippm.periode.read', 'order_index' => 2],
-                    ['name' => 'Standar IKU 5 Prodi', 'url' => '/sippm/iku5-standards', 'icon' => 'FaChartPie', 'module' => 'sippm', 'permission_slug' => 'sippm.iku5.manage', 'order_index' => 3],
+                    ['name' => 'Standar IKU 5 Prodi', 'url' => '/sippm/iku5-standards', 'icon' => 'FaChartPie', 'module' => 'sippm', 'permission_slug' => 'sippm.iku5.read', 'order_index' => 3],
+                    ['name' => 'Rubrik Indikator Penilaian', 'url' => '/sippm/rubrik', 'icon' => 'FaClipboardCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.rubrik.read', 'order_index' => 4],
                 ]
             ],
         ];

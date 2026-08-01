@@ -18,7 +18,7 @@ return new class extends Migration
             $table->decimal('dana_disetujui', 15, 2);
             $table->date('tgl_mulai');
             $table->date('tgl_selesai');
-            $table->string('file_kontrak', 255);
+            $table->string('file_kontrak', 255)->nullable();
             $table->enum('status', ['aktif', 'selesai', 'dibatalkan'])->default('aktif');
             $table->timestamps();
             $table->softDeletes();

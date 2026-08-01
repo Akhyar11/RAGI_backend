@@ -189,11 +189,12 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:api')->prefix('sippm')->group(function () {
-    // Master Skema & Periode
+    // Master Skema, Periode & Rubrik Indikator Penilaian
     Route::get('skema', [App\Http\Controllers\Sippm\MasterSippmController::class, 'indexSkema']);
     Route::post('skema', [App\Http\Controllers\Sippm\MasterSippmController::class, 'storeSkema']);
     Route::get('periode', [App\Http\Controllers\Sippm\MasterSippmController::class, 'indexPeriode']);
     Route::post('periode', [App\Http\Controllers\Sippm\MasterSippmController::class, 'storePeriode']);
+    Route::apiResource('rubrik', App\Http\Controllers\Sippm\RubrikIndikatorController::class);
 
     // Proposal Kegiatan
     Route::get('proposal', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'index']);
@@ -202,6 +203,11 @@ Route::middleware('auth:api')->prefix('sippm')->group(function () {
     Route::put('proposal/{id}', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'update']);
     Route::post('proposal/{id}/submit', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'submit']);
     Route::post('proposal/{id}/assign-reviewer', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'assignReviewer']);
+
+    // Reference Endpoints (SIMPEG Pegawai & SIAKAD Mata Kuliah Integration)
+    Route::get('ref/dosen', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'getDosenReference']);
+    Route::get('ref/tendik', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'getTendikReference']);
+    Route::get('ref/mahasiswa/{mahasiswaId}/mata-kuliah-aktif', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'getActiveMataKuliahMahasiswa']);
 
     // Reviewer & Final Decision
     Route::get('reviewer/assigned', [App\Http\Controllers\Sippm\ReviewerKegiatanController::class, 'myAssignedProposals']);

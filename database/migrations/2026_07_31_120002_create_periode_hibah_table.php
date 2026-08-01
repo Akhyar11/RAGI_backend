@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('periode_hibah', function (Blueprint $table) {
             $table->id();
-            $table->integer('tahun_anggaran');
+            $table->string('tahun_anggaran', 20); // Format TA, misal 2025/2026
             $table->string('nama_gelombang', 100);
             $table->date('tgl_buka_proposal');
             $table->date('tgl_tutup_proposal');

@@ -58,10 +58,11 @@ class SippmIntegrationService
     /**
      * Aggregate IKU 5 & IKU 6 metrics for UPM (Unit Penjaminan Mutu).
      */
-    public function getUpmIkuMetrics(int $tahunAnggaran): array
+    public function getUpmIkuMetrics($tahunAnggaran): array
     {
-        $totalProposalLolos = ProposalKegiatan::whereHas('periode', function ($q) use ($tahunAnggaran) {
-            $q->where('tahun_anggaran', $tahunAnggaran);
+        $tahunStr = (string) $tahunAnggaran;
+        $totalProposalLolos = ProposalKegiatan::whereHas('periode', function ($q) use ($tahunStr) {
+            $q->where('tahun_anggaran', 'LIKE', "%{$tahunStr}%");
         })->whereIn('status', ['lolos', 'berjalan', 'selesai'])->count();
 
         $totalPublikasiScopus = PublikasiIlmiah::whereYear('created_at', $tahunAnggaran)

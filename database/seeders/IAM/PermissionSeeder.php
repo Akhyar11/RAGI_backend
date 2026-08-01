@@ -99,12 +99,35 @@ class PermissionSeeder extends Seeder
             // ── MODUL SIPPM (PENELITIAN & PKM) ──────────────────────────────────
             ['name' => 'Lihat Dashboard SIPPM', 'slug' => 'sippm.dashboard.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat dashboard utama & metrik IKU SIPPM'],
             
+            // Master Skema
             ['name' => 'Lihat Master Skema', 'slug' => 'sippm.skema.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar master skema kegiatan'],
-            ['name' => 'Kelola Master Skema', 'slug' => 'sippm.skema.manage', 'module' => 'sippm', 'action' => 'update', 'description' => 'Menambah & mengubah master skema kegiatan'],
+            ['name' => 'Tambah Master Skema', 'slug' => 'sippm.skema.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menambah master skema kegiatan baru'],
+            ['name' => 'Ubah Master Skema', 'slug' => 'sippm.skema.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah data master skema kegiatan'],
+            ['name' => 'Hapus Master Skema', 'slug' => 'sippm.skema.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus master skema kegiatan'],
 
+            // Master Periode
             ['name' => 'Lihat Master Periode', 'slug' => 'sippm.periode.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar periode hibah tahunan'],
-            ['name' => 'Kelola Master Periode', 'slug' => 'sippm.periode.manage', 'module' => 'sippm', 'action' => 'update', 'description' => 'Menambah & mengubah jadwal periode hibah'],
-            ['name' => 'Kelola Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.manage', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengatur target standar IKU 5 per program studi'],
+            ['name' => 'Tambah Master Periode', 'slug' => 'sippm.periode.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menambah periode hibah baru'],
+            ['name' => 'Ubah Master Periode', 'slug' => 'sippm.periode.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah jadwal & data periode hibah'],
+            ['name' => 'Hapus Master Periode', 'slug' => 'sippm.periode.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus periode hibah'],
+
+            // Standar IKU 5 Prodi
+            ['name' => 'Lihat Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar standar IKU 5 per program studi'],
+            ['name' => 'Tambah Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menambah target standar IKU 5 prodi'],
+            ['name' => 'Ubah Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah target standar IKU 5 prodi'],
+            ['name' => 'Hapus Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus standar IKU 5 prodi'],
+
+            // Master Rubrik Indikator Penilaian
+            ['name' => 'Lihat Rubrik Indikator Penilaian', 'slug' => 'sippm.rubrik.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar indikator rubrik penilaian Kaprodi & Admin'],
+            ['name' => 'Tambah Rubrik Indikator Penilaian', 'slug' => 'sippm.rubrik.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menambah indikator rubrik penilaian baru'],
+            ['name' => 'Ubah Rubrik Indikator Penilaian', 'slug' => 'sippm.rubrik.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah indikator & minimal score rubrik penilaian'],
+            ['name' => 'Hapus Rubrik Indikator Penilaian', 'slug' => 'sippm.rubrik.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus indikator rubrik penilaian'],
+
+            // Kontrak SPK
+            ['name' => 'Lihat Kontrak SPK', 'slug' => 'sippm.kontrak.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar kontrak perjanjian kerja hibah'],
+            ['name' => 'Tambah Kontrak SPK', 'slug' => 'sippm.kontrak.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menerbitkan kontrak perjanjian hibah baru'],
+            ['name' => 'Ubah Kontrak SPK', 'slug' => 'sippm.kontrak.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah rincian & status kontrak hibah'],
+            ['name' => 'Hapus Kontrak SPK', 'slug' => 'sippm.kontrak.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus kontrak perjanjian hibah'],
 
             ['name' => 'Lihat Proposal Usulan', 'slug' => 'sippm.proposal.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar & detail proposal usulan'],
             ['name' => 'Buat Proposal Usulan', 'slug' => 'sippm.proposal.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Mengajukan proposal riset/PkM baru'],
@@ -116,9 +139,6 @@ class PermissionSeeder extends Seeder
 
             ['name' => 'Lihat Penugasan Reviewer', 'slug' => 'sippm.reviewer.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat penugasan desk evaluation'],
             ['name' => 'Input Desk Evaluation', 'slug' => 'sippm.reviewer.evaluate', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengisi rubrik & rekomendasi penilaian proposal'],
-
-            ['name' => 'Lihat Kontrak SPK', 'slug' => 'sippm.kontrak.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar kontrak perjanjian kerja hibah'],
-            ['name' => 'Kelola Kontrak SPK', 'slug' => 'sippm.kontrak.manage', 'module' => 'sippm', 'action' => 'update', 'description' => 'Menerbitkan & memperbarui kontrak hibah'],
 
             ['name' => 'Lihat Pencairan Dana', 'slug' => 'sippm.pencairan.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat status pencairan dana & LPJ'],
             ['name' => 'Pengajuan Pencairan Dana', 'slug' => 'sippm.pencairan.request', 'module' => 'sippm', 'action' => 'create', 'description' => 'Mengajukan pencairan dana Termin 1/2'],

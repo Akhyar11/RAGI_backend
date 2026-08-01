@@ -14,14 +14,33 @@ class AnggotaKegiatan extends Model
 
     protected $fillable = [
         'proposal_id',
-        'jenis_anggota',
+        'jenis_tim',
         'pegawai_id',
         'mahasiswa_id',
+        'mata_kuliah_id',
         'nama_eksternal',
         'instansi_eksternal',
-        'peran',
+        'nidn_eksternal',
+        'peran_dalam_tim',
         'tugas_kegiatan',
     ];
+
+    protected $appends = ['nama', 'peran', 'tugas'];
+
+    public function getNamaAttribute()
+    {
+        return $this->pegawai?->nama_lengkap ?? $this->nama_eksternal ?? ($this->mahasiswa_id ? ('Mahasiswa #' . $this->mahasiswa_id) : 'Anggota');
+    }
+
+    public function getPeranAttribute()
+    {
+        return $this->peran_dalam_tim ?? 'anggota';
+    }
+
+    public function getTugasAttribute()
+    {
+        return $this->tugas_kegiatan;
+    }
 
     public function proposal()
     {

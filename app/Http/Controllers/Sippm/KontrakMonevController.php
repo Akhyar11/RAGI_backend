@@ -33,12 +33,16 @@ class KontrakMonevController extends Controller
     {
         $proposal = ProposalKegiatan::findOrFail($proposalId);
 
+        if ($request->has('nominal_dana') && !$request->has('dana_disetujui')) {
+            $request->merge(['dana_disetujui' => $request->input('nominal_dana')]);
+        }
+
         $validated = $request->validate([
-            'nomor_kontrak' => 'nullable|string|max:100|unique:kontrak_kegiatan,nomor_kontrak',
+            'nomor_kontrak' => 'nullable|string|max:100',
             'dana_disetujui' => 'nullable|numeric|min:0',
             'tgl_mulai' => 'required|date',
             'tgl_selesai' => 'required|date|after:tgl_mulai',
-            'file_kontrak' => 'required|string',
+            'file_kontrak' => 'nullable|string',
         ]);
 
         $kontrak = $this->kontrakMonevService->createKontrak($proposal, $validated);

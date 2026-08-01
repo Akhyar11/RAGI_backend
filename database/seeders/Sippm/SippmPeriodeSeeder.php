@@ -14,21 +14,21 @@ class SippmPeriodeSeeder extends Seeder
     {
         $periodeList = [
             [
-                'tahun_anggaran' => 2026,
-                'nama_gelombang' => 'Hibah Internal Semester Ganjil TA 2026/2027',
-                'tgl_buka_proposal' => '2026-01-10',
-                'tgl_tutup_proposal' => '2026-03-30',
-                'tgl_tutup_monev' => '2026-07-15',
-                'tgl_tutup_laporan' => '2026-11-30',
+                'tahun_anggaran' => '2025/2026',
+                'nama_gelombang' => 'Hibah Internal TA 2025/2026',
+                'tgl_buka_proposal' => '2025-01-10',
+                'tgl_tutup_proposal' => '2025-03-30',
+                'tgl_tutup_monev' => '2025-07-15',
+                'tgl_tutup_laporan' => '2025-11-30',
                 'is_active' => true,
             ],
             [
-                'tahun_anggaran' => 2026,
-                'nama_gelombang' => 'Hibah BIMA Kemendikbudristek Gelombang I 2026',
-                'tgl_buka_proposal' => '2026-02-01',
-                'tgl_tutup_proposal' => '2026-04-15',
-                'tgl_tutup_monev' => '2026-08-30',
-                'tgl_tutup_laporan' => '2026-12-15',
+                'tahun_anggaran' => '2024/2025',
+                'nama_gelombang' => 'Hibah Internal TA 2024/2025',
+                'tgl_buka_proposal' => '2024-01-10',
+                'tgl_tutup_proposal' => '2024-03-30',
+                'tgl_tutup_monev' => '2024-07-15',
+                'tgl_tutup_laporan' => '2024-11-30',
                 'is_active' => true,
             ],
         ];
@@ -37,7 +37,6 @@ class SippmPeriodeSeeder extends Seeder
             PeriodeHibah::updateOrCreate(
                 [
                     'tahun_anggaran' => $periode['tahun_anggaran'],
-                    'nama_gelombang' => $periode['nama_gelombang'],
                 ],
                 $periode
             );

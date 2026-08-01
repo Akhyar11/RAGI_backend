@@ -27,6 +27,18 @@ class SkemaKegiatan extends Model
         'is_active' => 'boolean',
     ];
 
+    protected $appends = ['nama_skema', 'kode_skema'];
+
+    public function getNamaSkemaAttribute()
+    {
+        return $this->nama;
+    }
+
+    public function getKodeSkemaAttribute()
+    {
+        return $this->kode;
+    }
+
     public function proposalKegiatan()
     {
         return $this->hasMany(ProposalKegiatan::class, 'skema_id');

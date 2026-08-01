@@ -18,6 +18,7 @@ class ProposalKegiatan extends Model
         'skema_id',
         'ketua_pegawai_id',
         'mitra_kerjasama_id',
+        'mata_kuliah_id',
         'kode_proposal',
         'judul',
         'abstrak',
@@ -34,6 +35,23 @@ class ProposalKegiatan extends Model
         'anggaran_diajukan' => 'decimal:2',
         'anggaran_disetujui' => 'decimal:2',
     ];
+
+    protected $appends = ['ketua', 'dana_diusulkan', 'dana_disetujui'];
+
+    public function getKetuaAttribute()
+    {
+        return $this->ketuaPegawai;
+    }
+
+    public function getDanaDiusulkanAttribute()
+    {
+        return (float) $this->anggaran_diajukan;
+    }
+
+    public function getDanaDisetujuiAttribute()
+    {
+        return (float) $this->anggaran_disetujui;
+    }
 
     public function periode()
     {

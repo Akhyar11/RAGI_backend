@@ -18,7 +18,7 @@ class ProposalKegiatanController extends Controller
 
     public function index(Request $request)
     {
-        $query = ProposalKegiatan::with(['skema', 'periode', 'ketuaPegawai', 'anggota']);
+        $query = ProposalKegiatan::with(['skema', 'periode', 'ketuaPegawai', 'anggota.pegawai']);
 
         if ($request->has('ketua_pegawai_id')) {
             $query->where('ketua_pegawai_id', $request->ketua_pegawai_id);
@@ -62,6 +62,7 @@ class ProposalKegiatanController extends Controller
             'skema_id' => 'required|exists:skema_kegiatan,id',
             'ketua_pegawai_id' => 'required|exists:pegawai,id',
             'mitra_kerjasama_id' => 'nullable|integer',
+            'mata_kuliah_id' => 'nullable|integer',
             'judul' => 'required|string',
             'abstrak' => 'required|string',
             'rumpun_ilmu' => 'required|string|max:150',
@@ -69,6 +70,16 @@ class ProposalKegiatanController extends Controller
             'anggaran_diajukan' => 'required|numeric|min:0',
             'file_proposal' => 'required|string',
             'anggota' => 'nullable|array',
+            'anggota.*.jenis_tim' => 'nullable|string|in:dosen,tendik,mahasiswa,dosen_eksternal,eksternal',
+            'anggota.*.jenis_anggota' => 'nullable|string',
+            'anggota.*.pegawai_id' => 'nullable|integer',
+            'anggota.*.mahasiswa_id' => 'nullable|integer',
+            'anggota.*.mata_kuliah_id' => 'nullable|integer',
+            'anggota.*.nama_eksternal' => 'nullable|string|max:255',
+            'anggota.*.instansi_eksternal' => 'nullable|string|max:255',
+            'anggota.*.nidn_eksternal' => 'nullable|string|max:50',
+            'anggota.*.peran_dalam_tim' => 'nullable|string|max:100',
+            'anggota.*.tugas_kegiatan' => 'nullable|string',
         ]);
 
         $proposal = $this->proposalService->createProposal($validated);
@@ -91,6 +102,7 @@ class ProposalKegiatanController extends Controller
             'target_tkt' => 'nullable|integer|min:1|max:9',
             'anggaran_diajukan' => 'nullable|numeric|min:0',
             'file_proposal' => 'nullable|string',
+            'mata_kuliah_id' => 'nullable|integer',
         ]);
 
         $updated = $this->proposalService->updateProposal($proposal, $validated);
@@ -128,6 +140,45 @@ class ProposalKegiatanController extends Controller
             'status' => 'success',
             'message' => 'Reviewer berhasil ditugaskan.',
             'data' => $reviewer,
+        ]);
+    }
+
+    /**
+     * Get active courses for a specific student from SIAKAD for Grade Conversion integration.
+     */
+    public function getActiveMataKuliahMahasiswa($mahasiswaId)
+    {
+        $mataKuliah = $this->proposalService->getActiveMataKuliahForMahasiswa((int) $mahasiswaId);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $mataKuliah,
+        ]);
+    }
+
+    /**
+     * Get active Tendik reference list from SIMPEG.
+     */
+    public function getTendikReference()
+    {
+        $tendik = $this->proposalService->getTendikReference();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $tendik,
+        ]);
+    }
+
+    /**
+     * Get active Dosen reference list from SIMPEG.
+     */
+    public function getDosenReference()
+    {
+        $dosen = $this->proposalService->getDosenReference();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $dosen,
         ]);
     }
 }

@@ -54,7 +54,7 @@ class MasterSippmController extends Controller
     public function storePeriode(Request $request)
     {
         $validated = $request->validate([
-            'tahun_anggaran' => 'required|integer',
+            'tahun_anggaran' => 'required|string|max:20',
             'nama_gelombang' => 'required|string|max:100',
             'tgl_buka_proposal' => 'required|date',
             'tgl_tutup_proposal' => 'required|date|after_or_equal:tgl_buka_proposal',

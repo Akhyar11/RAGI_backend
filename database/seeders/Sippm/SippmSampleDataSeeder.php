@@ -66,13 +66,38 @@ class SippmSampleDataSeeder extends Seeder
                     ]
                 );
 
-                // 2. Add Anggota Kegiatan
+                // 2. Add Anggota Kegiatan (Ketua Dosen, Anggota Tendik, Mahasiswa, & Dosen Eksternal)
                 AnggotaKegiatan::updateOrCreate(
-                    ['proposal_id' => $proposal->id, 'peran' => 'ketua'],
+                    ['proposal_id' => $proposal->id, 'peran_dalam_tim' => 'Ketua Pengusul'],
                     [
-                        'jenis_anggota' => 'dosen',
+                        'jenis_tim' => 'dosen',
                         'pegawai_id' => $dosen->id,
+                        'peran_dalam_tim' => 'Ketua Pengusul',
                         'tugas_kegiatan' => 'Penanggung jawab utama pelaksanaan riset dan perancangan metodologi.',
+                    ]
+                );
+
+                // Add Dosen Eksternal Anggota
+                AnggotaKegiatan::updateOrCreate(
+                    ['proposal_id' => $proposal->id, 'nama_eksternal' => 'Dr. Ir. Budi Santoso, M.T.'],
+                    [
+                        'jenis_tim' => 'dosen_eksternal',
+                        'instansi_eksternal' => 'Universitas Gadjah Mada',
+                        'nidn_eksternal' => '0012057801',
+                        'peran_dalam_tim' => 'Anggota Peneliti Eksternal',
+                        'tugas_kegiatan' => 'Pengujian skala laboratorium dan validasi data instrumen.',
+                    ]
+                );
+
+                // Add Mahasiswa Anggota with SIAKAD Grade Conversion Course
+                AnggotaKegiatan::updateOrCreate(
+                    ['proposal_id' => $proposal->id, 'mahasiswa_id' => 1001],
+                    [
+                        'jenis_tim' => 'mahasiswa',
+                        'mahasiswa_id' => 1001,
+                        'mata_kuliah_id' => 101, // SIAKAD Course Integration for grade conversion
+                        'peran_dalam_tim' => 'Anggota Mahasiswa (MBKM)',
+                        'tugas_kegiatan' => 'Pengumpulan sampel data lapangan dan pembantu pengolahan kuisioner.',
                     ]
                 );
 

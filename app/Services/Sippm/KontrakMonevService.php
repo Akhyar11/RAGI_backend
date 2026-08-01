@@ -26,7 +26,7 @@ class KontrakMonevService
                 'dana_disetujui' => $data['dana_disetujui'] ?? $proposal->anggaran_disetujui,
                 'tgl_mulai' => $data['tgl_mulai'],
                 'tgl_selesai' => $data['tgl_selesai'],
-                'file_kontrak' => $data['file_kontrak'],
+                'file_kontrak' => $data['file_kontrak'] ?? ('spk_draft_' . $proposal->id . '.pdf'),
                 'status' => 'aktif',
             ]);
 

@@ -14,12 +14,14 @@ return new class extends Migration
         Schema::create('anggota_kegiatan', function (Blueprint $table) {
             $table->id();
             $table->foreignId('proposal_id')->constrained('proposal_kegiatan')->cascadeOnDelete();
-            $table->enum('jenis_anggota', ['dosen', 'mahasiswa', 'eksternal']);
-            $table->foreignId('pegawai_id')->nullable()->constrained('pegawai')->nullOnDelete();
+            $table->enum('jenis_tim', ['dosen', 'tendik', 'mahasiswa', 'dosen_eksternal', 'eksternal'])->default('dosen');
+            $table->foreignId('pegawai_id')->nullable()->constrained('pegawai')->nullOnDelete(); // Dosen or Tendik from SIMPEG
             $table->unsignedBigInteger('mahasiswa_id')->nullable(); // FK to SIAKAD mahasiswa
+            $table->unsignedBigInteger('mata_kuliah_id')->nullable(); // FK to SIAKAD mata_kuliah for Grade Conversion (Konversi Nilai)
             $table->string('nama_eksternal', 255)->nullable();
             $table->string('instansi_eksternal', 255)->nullable();
-            $table->enum('peran', ['ketua', 'anggota', 'penanggung_jawab_lapangan'])->default('anggota');
+            $table->string('nidn_eksternal', 50)->nullable();
+            $table->string('peran_dalam_tim', 100)->default('Anggota');
             $table->text('tugas_kegiatan')->nullable();
             $table->timestamps();
         });

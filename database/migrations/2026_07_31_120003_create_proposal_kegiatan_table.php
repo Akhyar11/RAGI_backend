@@ -17,6 +17,7 @@ return new class extends Migration
             $table->foreignId('skema_id')->constrained('skema_kegiatan')->cascadeOnDelete();
             $table->foreignId('ketua_pegawai_id')->constrained('pegawai')->cascadeOnDelete();
             $table->unsignedBigInteger('mitra_kerjasama_id')->nullable(); // FK to KERJASAMA mitra
+            $table->unsignedBigInteger('mata_kuliah_id')->nullable(); // FK to SIAKAD mata_kuliah (Integrasi konversi nilai)
             $table->string('kode_proposal', 100)->unique();
             $table->text('judul');
             $table->text('abstrak');
@@ -25,10 +26,7 @@ return new class extends Migration
             $table->decimal('anggaran_diajukan', 15, 2);
             $table->decimal('anggaran_disetujui', 15, 2)->default(0.00);
             $table->string('file_proposal', 255);
-            $table->enum('status', [
-                'draft', 'diajukan', 'plot_reviewer', 'penilaian', 
-                'revisi', 'lolos', 'ditolak', 'berjalan', 'selesai'
-            ])->default('draft');
+            $table->string('status', 50)->default('draft');
             $table->timestamps();
             $table->softDeletes();
         });
