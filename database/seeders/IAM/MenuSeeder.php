@@ -94,6 +94,52 @@ class MenuSeeder extends Seeder
                     ['name' => 'Master Jabatan & Jafung', 'url' => '/simpeg/jabatan', 'icon' => 'FaBriefcase', 'module' => 'simpeg', 'permission_slug' => 'simpeg.jabatan.read', 'order_index' => 2],
                 ]
             ],
+
+            // Menu SIPPM (Penelitian & PkM)
+            [
+                'name' => 'Dashboard SIPPM',
+                'url' => '/sippm',
+                'icon' => 'FaChartPie',
+                'module' => 'sippm',
+                'permission_slug' => 'sippm.dashboard.read',
+                'order_index' => 1,
+            ],
+            [
+                'name' => 'PENELITIAN & PKM',
+                'url' => '#layanan_sippm',
+                'icon' => 'FaList',
+                'module' => 'sippm',
+                'order_index' => 2,
+                'children' => [
+                    ['name' => 'Proposal Usulan', 'url' => '/sippm/proposal', 'icon' => 'FaFileAlt', 'module' => 'sippm', 'permission_slug' => 'sippm.proposal.read', 'order_index' => 1],
+                    ['name' => 'Portal Reviewer', 'url' => '/sippm/reviewer', 'icon' => 'FaClipboardCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.reviewer.read', 'order_index' => 2],
+                    ['name' => 'Kontrak Hibah SPK', 'url' => '/sippm/kontrak', 'icon' => 'FaFileCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.kontrak.read', 'order_index' => 3],
+                    ['name' => 'Pencairan Dana & LPJ', 'url' => '/sippm/pencairan', 'icon' => 'FaCreditCard', 'module' => 'sippm', 'permission_slug' => 'sippm.pencairan.read', 'order_index' => 4],
+                ]
+            ],
+            [
+                'name' => 'PORTOFOLIO LUARAN',
+                'url' => '#luaran_sippm',
+                'icon' => 'FaList',
+                'module' => 'sippm',
+                'order_index' => 3,
+                'children' => [
+                    ['name' => 'Publikasi Ilmiah', 'url' => '/sippm/luaran/publikasi', 'icon' => 'FaBookOpen', 'module' => 'sippm', 'permission_slug' => 'sippm.luaran.read', 'order_index' => 1],
+                    ['name' => 'HKI & Paten Kampus', 'url' => '/sippm/luaran/hki', 'icon' => 'FaAward', 'module' => 'sippm', 'permission_slug' => 'sippm.luaran.read', 'order_index' => 2],
+                ]
+            ],
+            [
+                'name' => 'MASTER DATA',
+                'url' => '#master_sippm',
+                'icon' => 'FaList',
+                'module' => 'sippm',
+                'order_index' => 4,
+                'children' => [
+                    ['name' => 'Master Skema Kegiatan', 'url' => '/sippm/skema', 'icon' => 'FaLayers', 'module' => 'sippm', 'permission_slug' => 'sippm.skema.read', 'order_index' => 1],
+                    ['name' => 'Master Periode Hibah', 'url' => '/sippm/periode', 'icon' => 'FaCalendar', 'module' => 'sippm', 'permission_slug' => 'sippm.periode.read', 'order_index' => 2],
+                    ['name' => 'Standar IKU 5 Prodi', 'url' => '/sippm/iku5-standards', 'icon' => 'FaChartPie', 'module' => 'sippm', 'permission_slug' => 'sippm.iku5.manage', 'order_index' => 3],
+                ]
+            ],
         ];
 
         foreach ($menus as $menuData) {

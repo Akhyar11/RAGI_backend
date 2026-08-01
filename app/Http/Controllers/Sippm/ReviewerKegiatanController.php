@@ -19,14 +19,15 @@ class ReviewerKegiatanController extends Controller
 
     public function myAssignedProposals(Request $request)
     {
-        $request->validate([
-            'reviewer_pegawai_id' => 'required|exists:pegawai,id',
-        ]);
+        $reviewerPegawaiId = $request->input('reviewer_pegawai_id') ?? $request->user()?->pegawai_id;
 
-        $assigned = ReviewerKegiatan::with(['proposal.skema', 'proposal.ketuaPegawai', 'penilaian'])
-            ->where('reviewer_pegawai_id', $request->reviewer_pegawai_id)
-            ->orderBy('tgl_penugasan', 'desc')
-            ->get();
+        $query = ReviewerKegiatan::with(['proposal.skema', 'proposal.ketuaPegawai', 'penilaian']);
+
+        if ($reviewerPegawaiId) {
+            $query->where('reviewer_pegawai_id', $reviewerPegawaiId);
+        }
+
+        $assigned = $query->orderBy('tgl_penugasan', 'desc')->get();
 
         return response()->json([
             'status' => 'success',

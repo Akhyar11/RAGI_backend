@@ -48,6 +48,16 @@ class RoleSeeder extends Seeder
                 'description' => 'Staf pendukung administrasi dengan akses Portal Mandiri Tendik, Presensi, & Cuti',
             ],
             [
+                'name' => 'Admin LPPM (SIPPM)',
+                'slug' => 'admin_lppm',
+                'description' => 'Administrator Lembaga Penelitian & Pengabdian Masyarakat (Pengelola Master, Kontrak, & Keuangan SIPPM)',
+            ],
+            [
+                'name' => 'Reviewer SIPPM',
+                'slug' => 'reviewer_sippm',
+                'description' => 'Tim penilai desk evaluation & verifikator kelayakan proposal riset serta luaran',
+            ],
+            [
                 'name' => 'Mahasiswa Reguler',
                 'slug' => 'mahasiswa',
                 'description' => 'Pengguna SSO Portal Mahasiswa (Tidak memiliki akses ke sistem SIMPEG)',

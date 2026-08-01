@@ -29,6 +29,14 @@ class UnitKerjaSeeder extends Seeder
             'is_active' => true,
         ]);
 
+        // Fakultas
+        $fasilkom = UnitKerja::updateOrCreate(['kode' => 'FASILKOM'], [
+            'induk_id' => $rektorat->id,
+            'nama' => 'Fakultas Ilmu Komputer',
+            'tipe' => 'fakultas',
+            'is_active' => true,
+        ]);
+
         $fakultasTeknik = UnitKerja::updateOrCreate(['kode' => 'FT'], [
             'induk_id' => $rektorat->id,
             'nama' => 'Fakultas Teknik',
@@ -36,16 +44,52 @@ class UnitKerjaSeeder extends Seeder
             'is_active' => true,
         ]);
 
+        $fakultasDesain = UnitKerja::updateOrCreate(['kode' => 'FDS'], [
+            'induk_id' => $rektorat->id,
+            'nama' => 'Fakultas Desain & Seni',
+            'tipe' => 'fakultas',
+            'is_active' => true,
+        ]);
+
+        // 6 Program Studi
         UnitKerja::updateOrCreate(['kode' => 'IF'], [
-            'induk_id' => $fakultasTeknik->id,
-            'nama' => 'Program Studi Informatika',
+            'induk_id' => $fasilkom->id,
+            'nama' => 'S1 Teknik Informatika',
             'tipe' => 'prodi',
             'is_active' => true,
         ]);
 
         UnitKerja::updateOrCreate(['kode' => 'SI'], [
+            'induk_id' => $fasilkom->id,
+            'nama' => 'S1 Sistem Informasi',
+            'tipe' => 'prodi',
+            'is_active' => true,
+        ]);
+
+        UnitKerja::updateOrCreate(['kode' => 'DKV'], [
+            'induk_id' => $fakultasDesain->id,
+            'nama' => 'S1 Desain Komunikasi Visual',
+            'tipe' => 'prodi',
+            'is_active' => true,
+        ]);
+
+        UnitKerja::updateOrCreate(['kode' => 'TE'], [
             'induk_id' => $fakultasTeknik->id,
-            'nama' => 'Program Studi Sistem Informasi',
+            'nama' => 'S1 Teknik Elektro',
+            'tipe' => 'prodi',
+            'is_active' => true,
+        ]);
+
+        UnitKerja::updateOrCreate(['kode' => 'MI'], [
+            'induk_id' => $fasilkom->id,
+            'nama' => 'S1 Manajemen Informatika',
+            'tipe' => 'prodi',
+            'is_active' => true,
+        ]);
+
+        UnitKerja::updateOrCreate(['kode' => 'D3SI'], [
+            'induk_id' => $fasilkom->id,
+            'nama' => 'D3 Sistem Informasi',
             'tipe' => 'prodi',
             'is_active' => true,
         ]);

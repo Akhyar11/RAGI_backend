@@ -29,5 +29,14 @@ class ModuleSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        Module::updateOrCreate(
+            ['code' => 'sippm'],
+            [
+                'name' => 'SIPPM Kampus',
+                'description' => 'Sistem Informasi Penelitian dan Pengabdian Masyarakat.',
+                'is_active' => true,
+            ]
+        );
     }
 }

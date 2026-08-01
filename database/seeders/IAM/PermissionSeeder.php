@@ -95,6 +95,38 @@ class PermissionSeeder extends Seeder
             ['name' => 'Tambah Kinerja SKP & BKD', 'slug' => 'simpeg.kinerja.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Menginput skor evaluasi kinerja baru'],
             ['name' => 'Ubah Kinerja SKP & BKD', 'slug' => 'simpeg.kinerja.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah skor & predikat evaluasi kinerja'],
             ['name' => 'Hapus Kinerja SKP & BKD', 'slug' => 'simpeg.kinerja.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus laporan evaluasi kinerja'],
+
+            // ── MODUL SIPPM (PENELITIAN & PKM) ──────────────────────────────────
+            ['name' => 'Lihat Dashboard SIPPM', 'slug' => 'sippm.dashboard.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat dashboard utama & metrik IKU SIPPM'],
+            
+            ['name' => 'Lihat Master Skema', 'slug' => 'sippm.skema.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar master skema kegiatan'],
+            ['name' => 'Kelola Master Skema', 'slug' => 'sippm.skema.manage', 'module' => 'sippm', 'action' => 'update', 'description' => 'Menambah & mengubah master skema kegiatan'],
+
+            ['name' => 'Lihat Master Periode', 'slug' => 'sippm.periode.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar periode hibah tahunan'],
+            ['name' => 'Kelola Master Periode', 'slug' => 'sippm.periode.manage', 'module' => 'sippm', 'action' => 'update', 'description' => 'Menambah & mengubah jadwal periode hibah'],
+            ['name' => 'Kelola Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.manage', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengatur target standar IKU 5 per program studi'],
+
+            ['name' => 'Lihat Proposal Usulan', 'slug' => 'sippm.proposal.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar & detail proposal usulan'],
+            ['name' => 'Buat Proposal Usulan', 'slug' => 'sippm.proposal.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Mengajukan proposal riset/PkM baru'],
+            ['name' => 'Ubah Proposal Usulan', 'slug' => 'sippm.proposal.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah draf proposal usulan'],
+            ['name' => 'Hapus Proposal Usulan', 'slug' => 'sippm.proposal.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus draf proposal usulan'],
+            ['name' => 'Submit Proposal Usulan', 'slug' => 'sippm.proposal.submit', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengirimkan proposal draf ke LPPM'],
+            ['name' => 'Penugasan Reviewer Proposal', 'slug' => 'sippm.proposal.assign_reviewer', 'module' => 'sippm', 'action' => 'update', 'description' => 'Menugaskan reviewer ke proposal usulan'],
+            ['name' => 'Finalisasi Status Proposal', 'slug' => 'sippm.proposal.finalize', 'module' => 'sippm', 'action' => 'update', 'description' => 'Memutuskan persetujuan & nominal dana hibah'],
+
+            ['name' => 'Lihat Penugasan Reviewer', 'slug' => 'sippm.reviewer.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat penugasan desk evaluation'],
+            ['name' => 'Input Desk Evaluation', 'slug' => 'sippm.reviewer.evaluate', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengisi rubrik & rekomendasi penilaian proposal'],
+
+            ['name' => 'Lihat Kontrak SPK', 'slug' => 'sippm.kontrak.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar kontrak perjanjian kerja hibah'],
+            ['name' => 'Kelola Kontrak SPK', 'slug' => 'sippm.kontrak.manage', 'module' => 'sippm', 'action' => 'update', 'description' => 'Menerbitkan & memperbarui kontrak hibah'],
+
+            ['name' => 'Lihat Pencairan Dana', 'slug' => 'sippm.pencairan.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat status pencairan dana & LPJ'],
+            ['name' => 'Pengajuan Pencairan Dana', 'slug' => 'sippm.pencairan.request', 'module' => 'sippm', 'action' => 'create', 'description' => 'Mengajukan pencairan dana Termin 1/2'],
+            ['name' => 'Verifikasi Pencairan LPJ', 'slug' => 'sippm.pencairan.verify', 'module' => 'sippm', 'action' => 'update', 'description' => 'Memverifikasi kelayakan LPJ & disbursement'],
+
+            ['name' => 'Lihat Portofolio Luaran', 'slug' => 'sippm.luaran.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat registry publikasi & HKI'],
+            ['name' => 'Registrasi Luaran Baru', 'slug' => 'sippm.luaran.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Mendaftarkan artikel ilmiah atau HKI/paten baru'],
+            ['name' => 'Verifikasi Luaran Riset', 'slug' => 'sippm.luaran.verify', 'module' => 'sippm', 'action' => 'update', 'description' => 'Memverifikasi keabsahan publikasi & HKI'],
         ];
 
         // Insert semua permissions ke database
@@ -111,12 +143,20 @@ class PermissionSeeder extends Seeder
         // ── AUTO MAP ROLE PERMISSIONS ───────────────────────────────
         $allPermissions = Permission::all();
         $adminRole = Role::where('slug', 'admin')->first();
+        $superAdminRole = Role::where('slug', 'superadmin')->first();
         $adminSimpegRole = Role::where('slug', 'admin_simpeg')->first();
+        $adminLppmRole = Role::where('slug', 'admin_lppm')->first();
+        $reviewerSippmRole = Role::where('slug', 'reviewer_sippm')->first();
         $operatorSdmRole = Role::where('slug', 'operator_sdm')->first();
         $dosenRole = Role::where('slug', 'dosen')->first();
         $tendikRole = Role::where('slug', 'tendik')->first();
 
-        // 1. Super Admin -> Semua permissions (SSO & SIMPEG)
+        // 1. Super Admin & Admin -> Semua permissions
+        if ($superAdminRole) {
+            foreach ($allPermissions as $p) {
+                RolePermission::create(['role_id' => $superAdminRole->id, 'permission_id' => $p->id]);
+            }
+        }
         if ($adminRole) {
             foreach ($allPermissions as $p) {
                 RolePermission::create(['role_id' => $adminRole->id, 'permission_id' => $p->id]);
@@ -132,7 +172,32 @@ class PermissionSeeder extends Seeder
             }
         }
 
-        // 3. Operator SDM -> Permission Operasional SIMPEG (CRUD Lengkap)
+        // 3. Admin LPPM -> Semua permissions SIPPM + IAM Read
+        if ($adminLppmRole) {
+            foreach ($allPermissions as $p) {
+                if ($p->module === 'sippm' || str_starts_with($p->slug, 'iam.users.read')) {
+                    RolePermission::create(['role_id' => $adminLppmRole->id, 'permission_id' => $p->id]);
+                }
+            }
+        }
+
+        // 4. Reviewer SIPPM -> Assessment & Reading Permissions
+        if ($reviewerSippmRole) {
+            $reviewerSlugs = [
+                'sippm.dashboard.read',
+                'sippm.proposal.read',
+                'sippm.reviewer.read',
+                'sippm.reviewer.evaluate',
+                'sippm.luaran.read',
+                'sippm.luaran.verify',
+            ];
+            $perms = Permission::whereIn('slug', $reviewerSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::create(['role_id' => $reviewerSippmRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 5. Operator SDM -> Permission Operasional SIMPEG (CRUD Lengkap)
         if ($operatorSdmRole) {
             $simpegPerms = Permission::where('module', 'simpeg')->get();
             foreach ($simpegPerms as $p) {
@@ -140,9 +205,10 @@ class PermissionSeeder extends Seeder
             }
         }
 
-        // 4. Dosen -> Portal Mandiri Dosen + Usulan Jafung (Read & Create mandiri)
+        // 6. Dosen -> Portal Mandiri SIMPEG & Akses Pengusul SIPPM
         if ($dosenRole) {
             $dosenSlugs = [
+                // SIMPEG Mandiri
                 'simpeg.dashboard.read',
                 'simpeg.unit_kerja.read',
                 'simpeg.jabatan.read',
@@ -152,7 +218,15 @@ class PermissionSeeder extends Seeder
                 'simpeg.presensi.read', 'simpeg.presensi.create',
                 'simpeg.payroll.read',
                 'simpeg.usulan_jafung.read', 'simpeg.usulan_jafung.create',
-                'simpeg.kinerja.read'
+                'simpeg.kinerja.read',
+                // SIPPM Pengusul
+                'sippm.dashboard.read',
+                'sippm.skema.read',
+                'sippm.periode.read',
+                'sippm.proposal.read', 'sippm.proposal.create', 'sippm.proposal.update', 'sippm.proposal.submit',
+                'sippm.kontrak.read',
+                'sippm.pencairan.read', 'sippm.pencairan.request',
+                'sippm.luaran.read', 'sippm.luaran.create',
             ];
             $perms = Permission::whereIn('slug', $dosenSlugs)->get();
             foreach ($perms as $p) {
@@ -160,7 +234,7 @@ class PermissionSeeder extends Seeder
             }
         }
 
-        // 5. Tendik -> Portal Mandiri Tendik (Tanpa Jafung!)
+        // 7. Tendik -> Portal Mandiri Tendik
         if ($tendikRole) {
             $tendikSlugs = [
                 'simpeg.dashboard.read',
