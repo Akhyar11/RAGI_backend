@@ -147,6 +147,10 @@ class PermissionSeeder extends Seeder
             ['name' => 'Lihat Portofolio Luaran', 'slug' => 'sippm.luaran.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat registry publikasi & HKI'],
             ['name' => 'Registrasi Luaran Baru', 'slug' => 'sippm.luaran.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Mendaftarkan artikel ilmiah atau HKI/paten baru'],
             ['name' => 'Verifikasi Luaran Riset', 'slug' => 'sippm.luaran.verify', 'module' => 'sippm', 'action' => 'update', 'description' => 'Memverifikasi keabsahan publikasi & HKI'],
+
+            // ── MODUL SPMB ──────────────────────────────────
+            ['name' => 'Lihat Dashboard SPMB', 'slug' => 'spmb.dashboard.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Melihat dashboard & pengumuman SPMB'],
+            ['name' => 'Pendaftaran SPMB', 'slug' => 'spmb.pendaftaran.create', 'module' => 'spmb', 'action' => 'create', 'description' => 'Mengisi formulir pendaftaran mahasiswa baru'],
         ];
 
         // Insert semua permissions ke database
@@ -170,6 +174,7 @@ class PermissionSeeder extends Seeder
         $operatorSdmRole = Role::where('slug', 'operator_sdm')->first();
         $dosenRole = Role::where('slug', 'dosen')->first();
         $tendikRole = Role::where('slug', 'tendik')->first();
+        $calonMhsRole = Role::where('slug', 'calon_mhs')->first();
 
         // 1. Super Admin & Admin -> Semua permissions
         if ($superAdminRole) {
@@ -270,6 +275,14 @@ class PermissionSeeder extends Seeder
             $perms = Permission::whereIn('slug', $tendikSlugs)->get();
             foreach ($perms as $p) {
                 RolePermission::create(['role_id' => $tendikRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 8. Calon Mahasiswa -> SPMB
+        if ($calonMhsRole) {
+            $spmbPerms = Permission::where('module', 'spmb')->get();
+            foreach ($spmbPerms as $p) {
+                RolePermission::create(['role_id' => $calonMhsRole->id, 'permission_id' => $p->id]);
             }
         }
     }

@@ -34,10 +34,15 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'phone' => $request->phone,
-            // user_type removed
             'is_active' => true,
             'is_verified' => false,
         ]);
+
+        // Default assign role 'calon_mhs' to newly registered users
+        $roleCalonMhs = \App\Models\Role::where('slug', 'calon_mhs')->first();
+        if ($roleCalonMhs) {
+            $user->roles()->attach($roleCalonMhs->id);
+        }
 
         // Generate email verification token
         $verifyToken = Str::random(60);

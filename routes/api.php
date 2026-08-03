@@ -185,6 +185,28 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
+| SPMB (Sistem Penerimaan Mahasiswa Baru) Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth:api')->prefix('spmb')->group(function () {
+    // Master SPMB (Admin Only)
+    Route::get('jalur-masuk', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getJalurMasuk']);
+    Route::get('gelombang', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getGelombang']);
+    Route::post('gelombang', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'storeGelombang']);
+
+    // Pendaftaran (Calon Mahasiswa)
+    Route::get('pendaftaran/me', [App\Http\Controllers\API\Spmb\CalonMahasiswaController::class, 'myPendaftaran']);
+    Route::post('pendaftaran/biodata', [App\Http\Controllers\API\Spmb\CalonMahasiswaController::class, 'storeBiodata']);
+    Route::post('pendaftaran/finalize', [App\Http\Controllers\API\Spmb\CalonMahasiswaController::class, 'finalize']);
+
+    // Seleksi & Verifikasi (Admin SPMB)
+    Route::get('pendaftar', [App\Http\Controllers\API\Spmb\AdminSeleksiController::class, 'getPendaftar']);
+    Route::post('pendaftar/{id}/verifikasi', [App\Http\Controllers\API\Spmb\AdminSeleksiController::class, 'verifikasi']);
+    Route::post('pendaftar/{id}/kelulusan', [App\Http\Controllers\API\Spmb\AdminSeleksiController::class, 'tetapkanKelulusan']);
+});
+
+/*
+|--------------------------------------------------------------------------
 | SIPPM (Penelitian & PkM) Routes
 |--------------------------------------------------------------------------
 */

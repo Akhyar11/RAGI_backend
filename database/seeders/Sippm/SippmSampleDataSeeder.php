@@ -31,8 +31,8 @@ class SippmSampleDataSeeder extends Seeder
             return;
         }
 
-        $skemaDikti = SkemaKegiatan::where('kategori', 'penelitian')->first() ?? $skemas->first();
-        $skemaInternal = SkemaKegiatan::where('kategori', 'pengabdian')->first() ?? $skemas->last();
+        $skemaDikti = SkemaKegiatan::where('tipe', 'penelitian')->first() ?? $skemas->first();
+        $skemaInternal = SkemaKegiatan::where('tipe', 'pengabdian')->first() ?? $skemas->last();
 
         $prodis = UnitKerja::where('tipe', 'prodi')->get();
 

@@ -21,10 +21,55 @@ class UserController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         $this->ensureAdmin();
-        $users = User::paginate(15);
+        
+        $query = User::query();
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('username', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('is_active')) {
+            $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
+        }
+
+        if ($request->filled('is_verified')) {
+            $query->where('is_verified', filter_var($request->is_verified, FILTER_VALIDATE_BOOLEAN));
+        }
+
+        if ($request->filled('name')) {
+            $query->where('username', 'like', "%{$request->name}%");
+        }
+
+        if ($request->filled('role_id')) {
+            $query->whereHas('roles', function($q) use ($request) {
+                $q->where('roles.id', $request->role_id);
+            });
+        }
+
+        if ($request->filled('created_at')) {
+            $query->whereDate('created_at', $request->created_at);
+        }
+
+        $orderBy = $request->input('order_by', 'id');
+        $allowedSorts = ['id', 'username', 'email', 'created_at', 'is_active', 'is_verified'];
+        if (!in_array($orderBy, $allowedSorts)) {
+            $orderBy = 'id';
+        }
+
+        $orderDir = strtolower($request->input('order_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($orderBy, $orderDir);
+
+        $limit = (int) $request->input('limit', 15);
+        if ($limit < 1 || $limit > 100) $limit = 15;
+
+        $users = $query->with('roles')->paginate($limit);
         return response()->json($users);
     }
 

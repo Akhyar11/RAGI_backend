@@ -62,6 +62,11 @@ class RoleSeeder extends Seeder
                 'slug' => 'mahasiswa',
                 'description' => 'Pengguna SSO Portal Mahasiswa (Tidak memiliki akses ke sistem SIMPEG)',
             ],
+            [
+                'name' => 'Calon Mahasiswa',
+                'slug' => 'calon_mhs',
+                'description' => 'Pendaftar Sistem Penerimaan Mahasiswa Baru (SPMB)',
+            ],
         ];
 
         foreach ($roles as $role) {

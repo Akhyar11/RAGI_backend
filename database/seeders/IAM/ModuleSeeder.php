@@ -38,5 +38,14 @@ class ModuleSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        Module::updateOrCreate(
+            ['code' => 'spmb'],
+            [
+                'name' => 'SPMB (Penerimaan Mahasiswa)',
+                'description' => 'Sistem Penerimaan Mahasiswa Baru Terpadu.',
+                'is_active' => true,
+            ]
+        );
     }
 }

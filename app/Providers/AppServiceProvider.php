@@ -20,6 +20,10 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\User::observe(\App\Observers\UserObserver::class);
         \App\Models\Role::observe(\App\Observers\RoleObserver::class);
         \App\Models\Permission::observe(\App\Observers\PermissionObserver::class);
+        
+        // SPMB Observers
+        \App\Models\Spmb\PendaftaranCalonMhs::observe(\App\Observers\Spmb\PendaftaranCalonMhsObserver::class);
+        \App\Models\Spmb\GelombangPenerimaan::observe(\App\Observers\Spmb\GelombangPenerimaanObserver::class);
         Gate::before(function (User $user, string $ability) {
             // Super admin bypass semua permission
             if ($user->hasRole('admin') || $user->hasRole('superadmin')) {
