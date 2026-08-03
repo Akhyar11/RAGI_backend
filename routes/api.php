@@ -191,8 +191,14 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 Route::middleware('auth:api')->prefix('spmb')->group(function () {
     // Master SPMB (Admin Only)
     Route::get('jalur-masuk', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getJalurMasuk']);
+    Route::post('jalur-masuk', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'storeJalurMasuk']);
+    Route::put('jalur-masuk/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'updateJalurMasuk']);
+    Route::delete('jalur-masuk/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'destroyJalurMasuk']);
+    
     Route::get('gelombang', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getGelombang']);
     Route::post('gelombang', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'storeGelombang']);
+    Route::put('gelombang/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'updateGelombang']);
+    Route::delete('gelombang/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'destroyGelombang']);
 
     // Pendaftaran (Calon Mahasiswa)
     Route::get('pendaftaran/me', [App\Http\Controllers\API\Spmb\CalonMahasiswaController::class, 'myPendaftaran']);

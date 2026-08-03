@@ -198,6 +198,27 @@ class MenuSeeder extends Seeder
                     ['name' => 'Master Tarif & Beasiswa', 'url' => '/sikeu/master', 'icon' => 'FaCogs', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
                 ]
             ],
+
+            // Menu SPMB
+            [
+                'name' => 'Dashboard SPMB',
+                'url' => '/spmb',
+                'icon' => 'FaChartPie',
+                'module' => 'spmb',
+                'permission_slug' => 'spmb.dashboard.read',
+                'order_index' => 1,
+            ],
+            [
+                'name' => 'MASTER DATA',
+                'url' => '#master_spmb',
+                'icon' => 'FaList',
+                'module' => 'spmb',
+                'order_index' => 2,
+                'children' => [
+                    ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 1],
+                    ['name' => 'Gelombang', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 2],
+                ]
+            ],
         ];
 
         foreach ($menus as $menuData) {
