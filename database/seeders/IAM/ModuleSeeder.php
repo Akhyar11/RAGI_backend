@@ -47,5 +47,14 @@ class ModuleSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        Module::updateOrCreate(
+            ['code' => 'sikeu'],
+            [
+                'name' => 'SIKEU Kampus',
+                'description' => 'Sistem Informasi Keuangan & Akuntansi Kampus.',
+                'is_active' => true,
+            ]
+        );
     }
 }

@@ -69,10 +69,20 @@ class KontrakMonevController extends Controller
             $validated['persen_pencairan']
         );
 
+        // Auto-integrate to SIKEU Accounting & Pemasukan Kampus
+        $sikeuIntegration = null;
+        try {
+            $sippmSikeuService = app(\App\Services\Sikeu\SippmSikeuService::class);
+            $sikeuIntegration = $sippmSikeuService->recordHibahDisbursement($kontrak, $pencairan);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning("SIKEU Integration Warning on SIPPM Pencairan: " . $e->getMessage());
+        }
+
         return response()->json([
             'status' => 'success',
-            'message' => 'Pengajuan pencairan dana termin berhasil dikirim.',
+            'message' => 'Pengajuan pencairan dana termin berhasil dikirim dan dicatat di SIKEU.',
             'data' => $pencairan,
+            'sikeu_integration' => $sikeuIntegration,
         ], 201);
     }
 

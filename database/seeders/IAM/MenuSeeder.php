@@ -141,6 +141,63 @@ class MenuSeeder extends Seeder
                     ['name' => 'Rubrik Indikator Penilaian', 'url' => '/sippm/rubrik', 'icon' => 'FaClipboardCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.rubrik.read', 'order_index' => 4],
                 ]
             ],
+
+            // Menu SIKEU (Keuangan & Akuntansi Kampus)
+            [
+                'name' => 'Dashboard SIKEU',
+                'url' => '/sikeu',
+                'icon' => 'FaChartPie',
+                'module' => 'sikeu',
+                'permission_slug' => 'sikeu.dashboard.read',
+                'order_index' => 1,
+            ],
+            [
+                'name' => 'TAGIHAN & PEMBAYARAN',
+                'url' => '#layanan_sikeu',
+                'icon' => 'FaList',
+                'module' => 'sikeu',
+                'order_index' => 2,
+                'children' => [
+                    ['name' => 'Tagihan & SPP', 'url' => '/sikeu/tagihan', 'icon' => 'FaReceipt', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 1],
+                    ['name' => 'Tagihan Saya (Mahasiswa)', 'url' => '/sikeu/mahasiswa/tagihan', 'icon' => 'FaFileInvoice', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 2],
+                    ['name' => 'Pembayaran Mahasiswa', 'url' => '/sikeu/pembayaran', 'icon' => 'FaCreditCard', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 3],
+                    ['name' => 'Dispensasi Pembayaran', 'url' => '/sikeu/dispensasi', 'icon' => 'FaCalendarCheck', 'module' => 'sikeu', 'permission_slug' => 'sikeu.dispensasi.read', 'order_index' => 4],
+                    ['name' => 'Approval Pimpinan', 'url' => '/sikeu/approval', 'icon' => 'FaShieldAlt', 'module' => 'sikeu', 'permission_slug' => 'sikeu.approval.read', 'order_index' => 5],
+                ]
+            ],
+            [
+                'name' => 'TRANSAKSI KAS & KEUANGAN',
+                'url' => '#transaksi_sikeu',
+                'icon' => 'FaList',
+                'module' => 'sikeu',
+                'order_index' => 3,
+                'children' => [
+                    ['name' => 'Pemasukan Kampus', 'url' => '/sikeu/pemasukan', 'icon' => 'FaMoneyBillWave', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pemasukan.manage', 'order_index' => 1],
+                    ['name' => 'Pengeluaran Operasional', 'url' => '/sikeu/pengeluaran', 'icon' => 'FaFileAlt', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pengeluaran.manage', 'order_index' => 2],
+                    ['name' => 'Kas Unit & Petty Cash', 'url' => '/sikeu/unit-kas', 'icon' => 'FaWallet', 'module' => 'sikeu', 'permission_slug' => 'sikeu.kas.manage', 'order_index' => 3],
+                ]
+            ],
+            [
+                'name' => 'AKUNTANSI & PELAPORAN',
+                'url' => '#akuntansi_sikeu',
+                'icon' => 'FaList',
+                'module' => 'sikeu',
+                'order_index' => 4,
+                'children' => [
+                    ['name' => 'Jurnal & Buku Besar', 'url' => '/sikeu/akuntansi', 'icon' => 'FaBookOpen', 'module' => 'sikeu', 'permission_slug' => 'sikeu.akuntansi.manage', 'order_index' => 1],
+                    ['name' => 'Laporan Keuangan & Pajak', 'url' => '/sikeu/pajak', 'icon' => 'FaChartLine', 'module' => 'sikeu', 'permission_slug' => 'sikeu.laporan.read', 'order_index' => 2],
+                ]
+            ],
+            [
+                'name' => 'MASTER DATA',
+                'url' => '#master_sikeu',
+                'icon' => 'FaList',
+                'module' => 'sikeu',
+                'order_index' => 5,
+                'children' => [
+                    ['name' => 'Master Tarif & Beasiswa', 'url' => '/sikeu/master', 'icon' => 'FaCogs', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
+                ]
+            ],
         ];
 
         foreach ($menus as $menuData) {

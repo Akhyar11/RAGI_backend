@@ -256,4 +256,82 @@ Route::middleware('auth:api')->prefix('sippm')->group(function () {
     Route::post('integration/sikeu-disbursement-callback/{id}', [App\Http\Controllers\Sippm\MasterSippmController::class, 'processDisbursementCallback']);
 });
 
+/*
+|--------------------------------------------------------------------------
+| SIKEU (Keuangan, Akuntansi, & Pajak) Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
+    // API Tagihan Eksternal (SPMB, SIAKAD, SIMPEG, SIPPM)
+    Route::post('tagihan/external', [App\Http\Controllers\Sikeu\ExternalTagihanController::class, 'createExternalBill']);
+
+    // Master Tarif UKT per Angkatan & Jalur Kelas
+    Route::get('master/tarif-ukt', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexTarif']);
+    Route::post('master/tarif-ukt', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'storeTarif']);
+    Route::put('master/tarif-ukt/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateTarif']);
+    Route::delete('master/tarif-ukt/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'destroyTarif']);
+
+    // Master Jalur Kelas & Tipe Mahasiswa
+    Route::get('master/jalur-kelas', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexJalurKelas']);
+    Route::post('master/jalur-kelas', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'storeJalurKelas']);
+    Route::put('master/jalur-kelas/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateJalurKelas']);
+    Route::delete('master/jalur-kelas/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'destroyJalurKelas']);
+
+    // Master Jenis Biaya Pendidikan
+    Route::get('master/jenis-biaya', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexJenisBiaya']);
+    Route::post('master/jenis-biaya', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'storeJenisBiaya']);
+    Route::put('master/jenis-biaya/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateJenisBiaya']);
+
+    // Master & Mapping Beasiswa Mahasiswa
+    Route::get('master/beasiswa', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexBeasiswa']);
+    Route::post('master/beasiswa', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'storeBeasiswa']);
+    Route::put('master/beasiswa/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateBeasiswa']);
+    Route::get('master/mahasiswa-beasiswa', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexMahasiswaBeasiswa']);
+    Route::post('master/mahasiswa-beasiswa', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'assignMahasiswaBeasiswa']);
+
+    // Penetapan & Integrasi Tipe Tagihan Mahasiswa (SPMB / SIAKAD / Admin Change)
+    Route::get('master/student-billing-categories', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getStudentBillingCategories']);
+    Route::get('master/student-billing-types', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexStudentBillingTypes']);
+    Route::post('master/assign-student-billing-type', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'assignStudentBillingType']);
+    Route::put('master/update-student-billing-type/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateStudentBillingType']);
+
+    // Pencarian Mahasiswa untuk Tagihan & Dispensasi
+    Route::get('mahasiswa-search', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'searchMahasiswa']);
+
+    // Portal Tagihan & Invoice Mahasiswa Mandiri
+    Route::get('mahasiswa/tagihan', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'myBills']);
+    Route::get('mahasiswa/invoice/{id}', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'generateInvoice']);
+
+    // Dispensasi Pembayaran & Cetak Bukti Resmi
+    Route::get('dispensasi', [App\Http\Controllers\Sikeu\DispensasiTagihanController::class, 'index']);
+    Route::post('dispensasi', [App\Http\Controllers\Sikeu\DispensasiTagihanController::class, 'store']);
+    Route::get('dispensasi/{id}', [App\Http\Controllers\Sikeu\DispensasiTagihanController::class, 'show']);
+    Route::get('dispensasi/{id}/cetak-bukti', [App\Http\Controllers\Sikeu\DispensasiTagihanController::class, 'cetakBukti']);
+
+    // Riwayat Pembayaran Mahasiswa
+    Route::get('pembayaran', [App\Http\Controllers\Sikeu\ExternalTagihanController::class, 'indexPembayaran']);
+
+    // Approval Pimpinan (Tagihan & Dispensasi)
+    Route::get('approvals', [App\Http\Controllers\Sikeu\TagihanApprovalController::class, 'index']);
+    Route::post('approvals/tagihan/{id}/approve', [App\Http\Controllers\Sikeu\TagihanApprovalController::class, 'approveTagihan']);
+    Route::post('approvals/tagihan/{id}/reject', [App\Http\Controllers\Sikeu\TagihanApprovalController::class, 'rejectTagihan']);
+    Route::post('approvals/dispensasi/{id}/approve', [App\Http\Controllers\Sikeu\TagihanApprovalController::class, 'approveDispensasi']);
+    Route::post('approvals/dispensasi/{id}/reject', [App\Http\Controllers\Sikeu\TagihanApprovalController::class, 'rejectDispensasi']);
+
+    // Pemasukan Kampus (Hibah SIPPM, Donatur, Kerjasama)
+    Route::get('pemasukan', [App\Http\Controllers\Sikeu\PemasukanKampusController::class, 'index']);
+    Route::post('pemasukan/external', [App\Http\Controllers\Sikeu\PemasukanKampusController::class, 'storeExternalIncome']);
+
+    // Akuntansi & COA
+    Route::get('akuntansi/coa', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'indexCoa']);
+    Route::post('akuntansi/coa', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'storeCoa']);
+    Route::get('akuntansi/jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'indexJurnal']);
+    Route::post('akuntansi/jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'storeJurnal']);
+    Route::get('akuntansi/buku-besar', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'bukuBesar']);
+
+    // SPMB Payment Callback / Webhook Integration
+    Route::post('callback/spmb/{mahasiswaId}', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'handleSpmbPaymentCallback']);
+});
+
+
 

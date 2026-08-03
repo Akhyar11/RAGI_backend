@@ -30,6 +30,11 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\Sippm\SippmSkemaSeeder::class,
             \Database\Seeders\Sippm\SippmPeriodeSeeder::class,
             \Database\Seeders\Sippm\SippmSampleDataSeeder::class,
+
+            // SIKEU Seeders
+            \Database\Seeders\Sikeu\SikeuAkuntansiSeeder::class,
+            \Database\Seeders\Sikeu\SikeuMasterSeeder::class,
+            \Database\Seeders\Sikeu\MahasiswaBillingSeeder::class,
         ]);
     }
 }

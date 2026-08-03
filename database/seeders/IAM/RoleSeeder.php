@@ -67,6 +67,21 @@ class RoleSeeder extends Seeder
                 'slug' => 'calon_mhs',
                 'description' => 'Pendaftar Sistem Penerimaan Mahasiswa Baru (SPMB)',
             ],
+            [
+                'name' => 'Pimpinan Kampus / WR II / Direktur Keuangan',
+                'slug' => 'pimpinan',
+                'description' => 'Pimpinan eksekutif universitas dengan wewenang approval tagihan, pencairan dana, & dispensasi keuangan',
+            ],
+            [
+                'name' => 'Operator SIKEU',
+                'slug' => 'operator_sikeu',
+                'description' => 'Staf keuangan operasional SIKEU, pengelola tagihan, jurnal akuntansi, & pelaporan pajak',
+            ],
+            [
+                'name' => 'Kabag Keuangan',
+                'slug' => 'kabag_keuangan',
+                'description' => 'Kepala Bagian Keuangan, penanggung jawab kas utama, verifikator pengeluaran & dispensasi',
+            ],
         ];
 
         foreach ($roles as $role) {
