@@ -578,20 +578,16 @@ class SikeuMasterController extends Controller
     {
         $search = $request->query('q', '');
 
-        if (empty($search)) {
-            return response()->json([
-                'status' => 'success',
-                'data' => []
-            ]);
-        }
+        $queryBuilder = TagihanMahasiswa::with(['details.jenisBiaya', 'dispensasis']);
 
-        $tagihans = TagihanMahasiswa::with(['details.jenisBiaya', 'dispensasis'])
-            ->where(function ($q) use ($search) {
+        if (!empty($search)) {
+            $queryBuilder->where(function ($q) use ($search) {
                 $q->where('nomor_tagihan', 'like', "%{$search}%")
                   ->orWhere('mahasiswa_id', 'like', "%{$search}%");
-            })
-            ->limit(10)
-            ->get();
+            });
+        }
+
+        $tagihans = $queryBuilder->limit(10)->get();
 
         $results = $tagihans->map(function ($t) {
             $hasUnpaidDispensation = DispensasiTagihan::where('mahasiswa_id', $t->mahasiswa_id)

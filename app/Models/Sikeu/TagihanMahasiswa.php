@@ -44,6 +44,11 @@ class TagihanMahasiswa extends Model
         return $this->hasMany(DetailTagihan::class, 'tagihan_id');
     }
 
+    public function details()
+    {
+        return $this->hasMany(DetailTagihan::class, 'tagihan_id');
+    }
+
     public function potonganTagihan()
     {
         return $this->hasMany(PotonganTagihan::class, 'tagihan_id');
@@ -52,6 +57,11 @@ class TagihanMahasiswa extends Model
     public function dendaTagihan()
     {
         return $this->hasMany(DendaTagihan::class, 'tagihan_id');
+    }
+
+    public function virtualAccount()
+    {
+        return $this->hasOne(VirtualAccount::class, 'tagihan_id');
     }
 
     public function virtualAccounts()
@@ -65,6 +75,11 @@ class TagihanMahasiswa extends Model
     }
 
     public function dispensasi()
+    {
+        return $this->hasMany(DispensasiTagihan::class, 'tagihan_id');
+    }
+
+    public function dispensasis()
     {
         return $this->hasMany(DispensasiTagihan::class, 'tagihan_id');
     }
