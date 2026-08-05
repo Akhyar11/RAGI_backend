@@ -9,6 +9,7 @@ use App\Models\Sikeu\JurnalUmum;
 use App\Models\Sikeu\DetailJurnalUmum;
 use App\Models\Sikeu\UnitKas;
 use App\Models\Sikeu\Pembayaran;
+use App\Events\Sikeu\PembayaranSpmbLunas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -17,10 +18,10 @@ use Illuminate\Support\Str;
 class SpmBSikeuCallbackController extends Controller
 {
     /**
-     * POST /api/v1/sikeu/callback/spmb/{mahasiswaId}
+     * POST /api/v1/sikeu/callback/spmb/{calonMahasiswaId}
      * Webhook/Callback handler for SPMB registration fee payment completion.
      */
-    public function handleSpmbPaymentCallback(Request $request, $mahasiswaId)
+    public function handleSpmbPaymentCallback(Request $request, $calonMahasiswaId)
     {
         $validated = $request->validate([
             'order_id' => 'required|string',
@@ -33,15 +34,20 @@ class SpmBSikeuCallbackController extends Controller
         try {
             DB::beginTransaction();
 
-            $tagihan = TagihanMahasiswa::where('mahasiswa_id', $mahasiswaId)
-                ->where('source_system', 'SPMB')
-                ->where('status', '!=', 'lunas')
-                ->first();
+            $tagihan = TagihanMahasiswa::where(function ($q) use ($calonMahasiswaId) {
+                $q->where('calon_mahasiswa_id', $calonMahasiswaId)
+                  ->orWhere('mahasiswa_id', $calonMahasiswaId);
+            })
+            ->where('source_system', 'SPMB')
+            ->where('status', '!=', 'lunas')
+            ->first();
 
             if (!$tagihan) {
-                // If bill doesn't exist, create a lunas bill
+                // If bill doesn't exist, create a lunas bill for calon mahasiswa
                 $tagihan = TagihanMahasiswa::create([
-                    'mahasiswa_id' => $mahasiswaId,
+                    'mahasiswa_id' => $calonMahasiswaId,
+                    'calon_mahasiswa_id' => $calonMahasiswaId,
+                    'tipe_referensi' => 'calon_mahasiswa',
                     'tahun_akademik_id' => 1,
                     'nomor_tagihan' => 'INV-SPMB-' . date('Ymd') . '-' . Str::random(4),
                     'total_tagihan' => $validated['nominal'],
@@ -51,6 +57,7 @@ class SpmBSikeuCallbackController extends Controller
                 ]);
             } else {
                 $tagihan->update([
+                    'calon_mahasiswa_id' => $tagihan->calon_mahasiswa_id ?? $calonMahasiswaId,
                     'status' => 'lunas',
                     'total_bayar' => $validated['nominal'],
                 ]);
@@ -83,7 +90,7 @@ class SpmBSikeuCallbackController extends Controller
                     'tanggal_jurnal' => now()->toDateString(),
                     'jenis_sumber' => 'pembayaran_mahasiswa',
                     'referensi_id' => $pembayaran->id,
-                    'keterangan' => "Penerimaan Biaya Pendaftaran SPMB Mahasiswa ID #{$mahasiswaId}",
+                    'keterangan' => "Penerimaan Biaya Pendaftaran SPMB Calon Mahasiswa ID #{$calonMahasiswaId}",
                     'status_posting' => 'posted',
                     'total_debet' => $validated['nominal'],
                     'total_kredit' => $validated['nominal'],
@@ -97,7 +104,7 @@ class SpmBSikeuCallbackController extends Controller
                     'akun_id' => $akunKas->id,
                     'debet' => $validated['nominal'],
                     'kredit' => 0,
-                    'keterangan' => "Penerimaan Kas/Bank Pendaftaran SPMB ID #{$mahasiswaId}",
+                    'keterangan' => "Penerimaan Kas/Bank Pendaftaran SPMB ID #{$calonMahasiswaId}",
                 ]);
 
                 DetailJurnalUmum::create([
@@ -105,20 +112,23 @@ class SpmBSikeuCallbackController extends Controller
                     'akun_id' => $akunSpmb->id,
                     'debet' => 0,
                     'kredit' => $validated['nominal'],
-                    'keterangan' => "Pendapatan Pendaftaran SPMB ID #{$mahasiswaId}",
+                    'keterangan' => "Pendapatan Pendaftaran SPMB ID #{$calonMahasiswaId}",
                 ]);
             }
 
             DB::commit();
 
-            Log::info("SPMB Callback -> SIKEU: Pembayaran SPMB Mahasiswa #{$mahasiswaId} Lunas. SPMB Unlocked!");
+            // Trigger Laravel Event for SPMB system listeners
+            event(new PembayaranSpmbLunas($calonMahasiswaId, $tagihan, $pembayaran));
+
+            Log::info("SPMB Callback -> SIKEU: Pembayaran SPMB Calon Mahasiswa #{$calonMahasiswaId} Lunas. Event PembayaranSpmbLunas dispatched!");
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'Pembayaran SPMB berhasil diproses, saldo kas diperbarui, dan status pendaftaran SPMB dibuka (unlocked).',
                 'spmb_unlock' => true,
                 'data' => [
-                    'mahasiswa_id' => $mahasiswaId,
+                    'calon_mahasiswa_id' => $calonMahasiswaId,
                     'tagihan_status' => 'lunas',
                     'pembayaran_id' => $pembayaran->id,
                 ]

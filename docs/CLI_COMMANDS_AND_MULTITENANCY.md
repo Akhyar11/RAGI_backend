@@ -52,7 +52,7 @@ Menjalankan `install:{modul}` murni data produksi (hanya COA, Master Jenis Biaya
 ```bash
 # Instalasi SIKEU Siap Pakai Produksi
 php artisan install-prod:sikeu
-
+ƒ
 # Instalasi SIMPEG Siap Pakai Produksi
 php artisan install-prod:simpeg
 

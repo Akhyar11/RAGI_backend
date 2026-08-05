@@ -13,6 +13,8 @@ class TagihanMahasiswa extends Model
 
     protected $fillable = [
         'mahasiswa_id',
+        'calon_mahasiswa_id',
+        'tipe_referensi',
         'tahun_akademik_id',
         'nomor_tagihan',
         'total_tagihan',

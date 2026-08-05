@@ -22,7 +22,9 @@ class ExternalTagihanController extends Controller
     public function createExternalBill(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'mahasiswa_id' => 'required|integer',
+            'mahasiswa_id' => 'nullable|integer|required_without:calon_mahasiswa_id',
+            'calon_mahasiswa_id' => 'nullable|integer|required_without:mahasiswa_id',
+            'tipe_referensi' => 'nullable|string|max:30',
             'tahun_akademik_id' => 'nullable|integer',
             'source_system' => 'required|string|max:50',
             'requires_approval' => 'nullable|boolean',
@@ -92,9 +94,12 @@ class ExternalTagihanController extends Controller
             $totalBayar = max(0, $totalNominal - $totalPotongan);
             $initialStatus = $requiresApproval ? 'pending_approval' : 'belum_bayar';
             $statusApproval = $requiresApproval ? 'pending' : 'approved';
+            $tipeReferensi = $request->input('tipe_referensi', $request->filled('calon_mahasiswa_id') ? 'calon_mahasiswa' : 'mahasiswa');
 
             $tagihan = TagihanMahasiswa::create([
                 'mahasiswa_id' => $request->mahasiswa_id,
+                'calon_mahasiswa_id' => $request->calon_mahasiswa_id,
+                'tipe_referensi' => $tipeReferensi,
                 'tahun_akademik_id' => $request->tahun_akademik_id ?? 1,
                 'nomor_tagihan' => strtoupper($nomorTagihan),
                 'total_tagihan' => $totalNominal,

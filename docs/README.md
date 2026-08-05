@@ -49,7 +49,18 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
-| — | *Belum diimplementasikan* | — |
+| SikeuMasterController | Master Tarif UKT, Tarif SPMB, Jalur Kelas, Jenis Biaya, & Beasiswa | [docs/api/Sikeu/SikeuMasterController.md](api/Sikeu/SikeuMasterController.md) |
+| ExternalTagihanController | Penerbitan Tagihan Eksternal & Riwayat Pembayaran | [docs/api/Sikeu/ExternalTagihanController.md](api/Sikeu/ExternalTagihanController.md) |
+| SpmBSikeuCallbackController | Webhook Callback Integrasi Pelunasan Biaya SPMB | [docs/api/Sikeu/SpmBSikeuCallbackController.md](api/Sikeu/SpmBSikeuCallbackController.md) |
+| SpmbIntegration | Rangkuman Integrasi Tarif & Callback SPMB | [docs/api/Sikeu/SpmbIntegration.md](api/Sikeu/SpmbIntegration.md) |
+| MahasiswaTagihanController | Portal Tagihan Mahasiswa Mandiri & Invoice | [docs/api/Sikeu/MahasiswaTagihanController.md](api/Sikeu/MahasiswaTagihanController.md) |
+| DispensasiTagihanController | Permohonan Dispensasi Tagihan & Cetak Bukti | [docs/api/Sikeu/DispensasiTagihanController.md](api/Sikeu/DispensasiTagihanController.md) |
+| TagihanApprovalController | Approval Pimpinan untuk Tagihan & Dispensasi | [docs/api/Sikeu/TagihanApprovalController.md](api/Sikeu/TagihanApprovalController.md) |
+| UnitKasController | Master Unit Kas & Saldo Operasional | [docs/api/Sikeu/UnitKasController.md](api/Sikeu/UnitKasController.md) |
+| PengajuanKasController | Pengajuan & Persetujuan Pencairan Kas Unit | [docs/api/Sikeu/PengajuanKasController.md](api/Sikeu/PengajuanKasController.md) |
+| PemasukanKampusController | Pencatatan Pemasukan Hibah, Donatur, & Kerjasama | [docs/api/Sikeu/PemasukanKampusController.md](api/Sikeu/PemasukanKampusController.md) |
+| AkuntansiController | Chart of Accounts (COA), Jurnal Umum, & Buku Besar | [docs/api/Sikeu/AkuntansiController.md](api/Sikeu/AkuntansiController.md) |
+| PaymentGatewayConfigController | Pengaturan Provider Payment Gateway (Midtrans/Xendit) | [docs/api/Sikeu/PaymentGatewayConfigController.md](api/Sikeu/PaymentGatewayConfigController.md) |
 
 ---
 
