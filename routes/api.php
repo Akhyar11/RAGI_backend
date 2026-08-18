@@ -363,6 +363,18 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
 
     // SPMB Payment Callback / Webhook Integration
     Route::post('callback/spmb/{calonMahasiswaId}', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'handleSpmbPaymentCallback']);
+
+    // Dashboard Executive Summary & Live Xendit Balance
+    Route::get('dashboard-summary', [App\Http\Controllers\Sikeu\SikeuDashboardController::class, 'summary']);
+
+    // Pengeluaran Kampus & Vendor / Petty Cash Operasional
+    Route::get('pengeluaran', [App\Http\Controllers\Sikeu\PengeluaranKampusController::class, 'index']);
+    Route::post('pengeluaran', [App\Http\Controllers\Sikeu\PengeluaranKampusController::class, 'store']);
+    Route::get('pengeluaran/{id}', [App\Http\Controllers\Sikeu\PengeluaranKampusController::class, 'show']);
+
+    // Pajak Kampus (PPh 21, PPh 23, PPN 11%) & Setor NTPN
+    Route::get('pajak', [App\Http\Controllers\Sikeu\PajakKampusController::class, 'index']);
+    Route::post('pajak/{id}/setor', [App\Http\Controllers\Sikeu\PajakKampusController::class, 'setorPajak']);
 });
 
 
