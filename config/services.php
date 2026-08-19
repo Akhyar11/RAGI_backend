@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'scopus' => [
+        'api_key' => env('SCOPUS_API_KEY'),
+    ],
+
+    'sinta' => [
+        'api_token' => env('SINTA_API_TOKEN'),
+    ],
+
 ];

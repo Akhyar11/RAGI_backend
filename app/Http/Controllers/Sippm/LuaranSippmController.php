@@ -11,10 +11,62 @@ use App\Services\Sippm\LuaranService;
 class LuaranSippmController extends Controller
 {
     protected $luaranService;
+    protected $syncService;
 
-    public function __construct(LuaranService $luaranService)
+    public function __construct(LuaranService $luaranService, \App\Services\Sippm\PublikasiSyncService $syncService)
     {
         $this->luaranService = $luaranService;
+        $this->syncService = $syncService;
+    }
+
+    public function fetchExternalPublikasi(Request $request)
+    {
+        $validated = $request->validate([
+            'source' => 'required|in:doi,scopus,sinta',
+            'identifier' => 'required|string|max:255',
+        ]);
+
+        try {
+            $data = $this->syncService->fetchExternalData($validated['source'], $validated['identifier']);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Data publikasi berhasil ditarik dari ' . strtoupper($validated['source']),
+                'data' => $data,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function importExternalPublikasi(Request $request)
+    {
+        $validated = $request->validate([
+            'pegawai_id' => 'required|exists:pegawai,id',
+            'proposal_id' => 'nullable|exists:proposal_kegiatan,id',
+            'judul_artikel' => 'required|string',
+            'jenis_publikasi' => 'required|string',
+            'nama_jurnal_prosiding' => 'required|string',
+            'indexing' => 'nullable|string',
+            'volume_issue_tahun' => 'nullable|string',
+            'doi' => 'nullable|string',
+            'url_artikel' => 'nullable|string',
+            'scopus_eid' => 'nullable|string',
+            'sinta_article_id' => 'nullable|string',
+            'citation_count' => 'nullable|integer',
+            'publisher' => 'nullable|string',
+        ]);
+
+        $pegawai = \App\Models\Simpeg\Pegawai::findOrFail($validated['pegawai_id']);
+        $publikasi = $this->syncService->importExternalPublikasi($pegawai, $validated, $validated['proposal_id'] ?? null);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data publikasi berhasil di-import dan disinkronkan ke sistem.',
+            'data' => $publikasi,
+        ], 201);
     }
 
     public function indexPublikasi(Request $request)

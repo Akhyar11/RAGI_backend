@@ -1,0 +1,69 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Ruangan extends Model
+{
+    use HasFactory, SoftDeletes;
+
+    protected $table = 'ruangan';
+
+    protected $fillable = [
+        'gedung_id',
+        'kode',
+        'nama',
+        'lantai',
+        'tipe',
+        'kapasitas',
+        'ada_ac',
+        'ada_proyektor',
+        'ada_wifi',
+        'status',
+    ];
+
+    protected $casts = [
+        'lantai' => 'integer',
+        'kapasitas' => 'integer',
+        'ada_ac' => 'boolean',
+        'ada_proyektor' => 'boolean',
+        'ada_wifi' => 'boolean',
+    ];
+
+    /**
+     * Relasi ke Gedung
+     */
+    public function gedung(): BelongsTo
+    {
+        return $this->belongsTo(Gedung::class, 'gedung_id');
+    }
+
+    /**
+     * Relasi ke Aset
+     */
+    public function aset(): HasMany
+    {
+        return $this->hasMany(Aset::class, 'ruangan_id');
+    }
+
+    /**
+     * Relasi ke Peminjaman Ruangan
+     */
+    public function peminjaman(): HasMany
+    {
+        return $this->hasMany(PeminjamanRuangan::class, 'ruangan_id');
+    }
+
+    /**
+     * Relasi ke Maintenance Log
+     */
+    public function maintenanceLogs(): HasMany
+    {
+        return $this->hasMany(MaintenanceLog::class, 'ruangan_id');
+    }
+}

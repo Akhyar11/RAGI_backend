@@ -56,5 +56,14 @@ class ModuleSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        Module::updateOrCreate(
+            ['code' => 'sinapra'],
+            [
+                'name' => 'SINAPRA (Sarana & Prasarana)',
+                'description' => 'Sistem Informasi Management Sarana, Prasarana, Aset, & Pengadaan Kampus.',
+                'is_active' => true,
+            ]
+        );
     }
 }

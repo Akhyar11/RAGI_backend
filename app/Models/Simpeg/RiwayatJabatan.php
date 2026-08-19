@@ -24,9 +24,9 @@ class RiwayatJabatan extends Model
     ];
 
     protected $casts = [
-        'mulai_jabatan' => 'date',
-        'selesai_jabatan' => 'date',
-        'sk_tanggal' => 'date',
+        'mulai_jabatan' => 'date:Y-m-d',
+        'selesai_jabatan' => 'date:Y-m-d',
+        'sk_tanggal' => 'date:Y-m-d',
         'is_active' => 'boolean',
     ];
 

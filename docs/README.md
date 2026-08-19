@@ -80,6 +80,26 @@
 
 ---
 
+## 🏢 Modul SINAPRA (Sarana, Prasarana, & Aset)
+
+| Controller | Deskripsi | Dokumen |
+|---|---|---|
+| GedungRuanganController | Manajemen data master Gedung & Ruangan serta cek ketersediaan | [docs/api/SINAPRA/GedungRuanganController.md](api/SINAPRA/GedungRuanganController.md) |
+| AsetController | Inventaris barang/aset, kategori, & kalkulasi penyusutan nilai buku | [docs/api/SINAPRA/AsetController.md](api/SINAPRA/AsetController.md) |
+| PeminjamanController | Permohonan & persetujuan peminjaman ruangan & aset | [docs/api/SINAPRA/PeminjamanController.md](api/SINAPRA/PeminjamanController.md) |
+| MaintenanceController | Tiket pelaporan & pelacakan perawatan/perbaikan barang & ruang | [docs/api/SINAPRA/MaintenanceController.md](api/SINAPRA/MaintenanceController.md) |
+| PengadaanController | Pengajuan usulan pengadaan barang baru & rincian detail | [docs/api/SINAPRA/PengadaanController.md](api/SINAPRA/PengadaanController.md) |
+
+---
+
+## 🔬 Modul SIPPM
+
+| Controller | Deskripsi | Dokumen |
+|---|---|---|
+| StandarIku5ProdiController | CRUD Nilai Target IKU 5 per Program Studi | [docs/api/Sippm/StandarIku5ProdiController.md](api/Sippm/StandarIku5ProdiController.md) |
+
+---
+
 ## 📋 Referensi Cepat — Semua Endpoint IAM
 
 ### Authentication (Passport — OAuth2 Browser Flow)

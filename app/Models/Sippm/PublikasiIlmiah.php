@@ -25,10 +25,17 @@ class PublikasiIlmiah extends Model
         'url_artikel',
         'file_artikel',
         'is_verified_lppm',
+        'scopus_eid',
+        'sinta_article_id',
+        'citation_count',
+        'publisher',
+        'synced_at',
     ];
 
     protected $casts = [
         'is_verified_lppm' => 'boolean',
+        'citation_count' => 'integer',
+        'synced_at' => 'datetime:Y-m-d H:i:s',
     ];
 
     public function proposal()

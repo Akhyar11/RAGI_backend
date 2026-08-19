@@ -57,6 +57,19 @@ class ProposalKegiatanController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->has('periode_hibah_id') && !$request->has('periode_id')) {
+            $request->merge(['periode_id' => $request->input('periode_hibah_id')]);
+        }
+        if ($request->has('skema_kegiatan_id') && !$request->has('skema_id')) {
+            $request->merge(['skema_id' => $request->input('skema_kegiatan_id')]);
+        }
+        if ($request->has('dana_diusulkan') && !$request->has('anggaran_diajukan')) {
+            $request->merge(['anggaran_diajukan' => $request->input('dana_diusulkan')]);
+        }
+        if (!$request->has('file_proposal') || empty($request->input('file_proposal'))) {
+            $request->merge(['file_proposal' => 'dokumen_proposal_usulan.pdf']);
+        }
+
         $validated = $request->validate([
             'periode_id' => 'required|exists:periode_hibah,id',
             'skema_id' => 'required|exists:skema_kegiatan,id',
@@ -68,7 +81,7 @@ class ProposalKegiatanController extends Controller
             'rumpun_ilmu' => 'required|string|max:150',
             'target_tkt' => 'nullable|integer|min:1|max:9',
             'anggaran_diajukan' => 'required|numeric|min:0',
-            'file_proposal' => 'required|string',
+            'file_proposal' => 'nullable|string',
             'anggota' => 'nullable|array',
             'anggota.*.jenis_tim' => 'nullable|string|in:dosen,tendik,mahasiswa,dosen_eksternal,eksternal',
             'anggota.*.jenis_anggota' => 'nullable|string',
@@ -103,6 +116,7 @@ class ProposalKegiatanController extends Controller
             'anggaran_diajukan' => 'nullable|numeric|min:0',
             'file_proposal' => 'nullable|string',
             'mata_kuliah_id' => 'nullable|integer',
+            'status' => 'nullable|string',
         ]);
 
         $updated = $this->proposalService->updateProposal($proposal, $validated);

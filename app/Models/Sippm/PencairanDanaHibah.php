@@ -17,15 +17,17 @@ class PencairanDanaHibah extends Model
         'persen_pencairan',
         'nominal',
         'status',
+        'status_termin',
         'tgl_cair',
         'bukti_transfer',
+        'catatan_verifikasi',
     ];
 
     protected $casts = [
         'termin_ke' => 'integer',
         'persen_pencairan' => 'decimal:2',
         'nominal' => 'decimal:2',
-        'tgl_cair' => 'date',
+        'tgl_cair' => 'date:Y-m-d',
     ];
 
     public function kontrak()

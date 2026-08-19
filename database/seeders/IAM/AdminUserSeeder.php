@@ -17,9 +17,17 @@ class AdminUserSeeder extends Seeder
         DB::table('user_roles')->truncate();
         Schema::enableForeignKeyConstraints();
 
+        $createOrRestoreUser = function ($email, $attributes) {
+            $user = User::withTrashed()->updateOrCreate(['email' => $email], $attributes);
+            if ($user->trashed()) {
+                $user->restore();
+            }
+            return $user;
+        };
+
         // 1. Seed Super Admin
-        $superadmin = User::updateOrCreate(
-            ['email' => 'superadmin@kampus.ac.id'],
+        $superadmin = $createOrRestoreUser(
+            'superadmin@kampus.ac.id',
             [
                 'username'    => 'superadmin',
                 'password'    => Hash::make('password'),
@@ -29,8 +37,8 @@ class AdminUserSeeder extends Seeder
         );
 
         // 1b. Seed Admin
-        $admin = User::updateOrCreate(
-            ['email' => 'admin@kampus.ac.id'],
+        $admin = $createOrRestoreUser(
+            'admin@kampus.ac.id',
             [
                 'username'    => 'admin',
                 'password'    => Hash::make('password'),
@@ -40,8 +48,8 @@ class AdminUserSeeder extends Seeder
         );
 
         // 2. User Wasis (Multi-role: Dosen + Admin SIMPEG)
-        $wasis = User::updateOrCreate(
-            ['email' => 'wasis@kampus.ac.id'],
+        $wasis = $createOrRestoreUser(
+            'wasis@kampus.ac.id',
             [
                 'username'    => 'wasis',
                 'password'    => Hash::make('password'),
@@ -51,8 +59,8 @@ class AdminUserSeeder extends Seeder
         );
 
         // 3. User Admin SIMPEG
-        $adminSimpegUser = User::updateOrCreate(
-            ['email' => 'admin.simpeg@kampus.ac.id'],
+        $adminSimpegUser = $createOrRestoreUser(
+            'admin.simpeg@kampus.ac.id',
             [
                 'username'    => 'admin_simpeg',
                 'password'    => Hash::make('password'),
@@ -62,8 +70,8 @@ class AdminUserSeeder extends Seeder
         );
 
         // 4. User Dosen Murni
-        $dosenUser = User::updateOrCreate(
-            ['email' => 'dosen@kampus.ac.id'],
+        $dosenUser = $createOrRestoreUser(
+            'dosen@kampus.ac.id',
             [
                 'username'    => 'dosen',
                 'password'    => Hash::make('password'),
@@ -73,8 +81,8 @@ class AdminUserSeeder extends Seeder
         );
 
         // 5. User Tendik Murni
-        $tendikUser = User::updateOrCreate(
-            ['email' => 'tendik@kampus.ac.id'],
+        $tendikUser = $createOrRestoreUser(
+            'tendik@kampus.ac.id',
             [
                 'username'    => 'tendik',
                 'password'    => Hash::make('password'),
@@ -84,8 +92,8 @@ class AdminUserSeeder extends Seeder
         );
 
         // 6. User Mahasiswa
-        $mhsUser = User::updateOrCreate(
-            ['email' => 'mahasiswa@kampus.ac.id'],
+        $mhsUser = $createOrRestoreUser(
+            'mahasiswa@kampus.ac.id',
             [
                 'username'    => 'mahasiswa',
                 'password'    => Hash::make('password'),
@@ -102,93 +110,25 @@ class AdminUserSeeder extends Seeder
         $roleTendik = Role::where('slug', 'tendik')->first();
         $roleMhs = Role::where('slug', 'mahasiswa')->first();
 
-        // Super Admin -> Role Super Admin
-        if ($roleSuperAdmin) {
-            DB::table('user_roles')->insert([
-                'user_id' => $superadmin->id,
-                'role_id' => $roleSuperAdmin->id,
-                'assigned_by' => $superadmin->id,
-                'valid_from' => now()->toDateString(),
-                'created_at' => now(),
-            ]);
-        }
+        $assignRole = function ($userId, $roleId, $assignerId) {
+            if ($userId && $roleId) {
+                DB::table('user_roles')->updateOrInsert(
+                    ['user_id' => $userId, 'role_id' => $roleId],
+                    ['assigned_by' => $assignerId, 'valid_from' => now()->toDateString(), 'created_at' => now()]
+                );
+            }
+        };
 
-        // Admin -> Role Administrator
-        if ($roleAdmin) {
-            DB::table('user_roles')->insert([
-                'user_id' => $admin->id,
-                'role_id' => $roleAdmin->id,
-                'assigned_by' => $superadmin->id,
-                'valid_from' => now()->toDateString(),
-                'created_at' => now(),
-            ]);
-        }
-
-        // Wasis -> Role Dosen DAN Admin SIMPEG (Multi-role!)
+        if ($roleSuperAdmin) $assignRole($superadmin->id, $roleSuperAdmin->id, $superadmin->id);
+        if ($roleAdmin) $assignRole($admin->id, $roleAdmin->id, $superadmin->id);
         if ($wasis) {
-            if ($roleDosen) {
-                DB::table('user_roles')->insert([
-                    'user_id' => $wasis->id,
-                    'role_id' => $roleDosen->id,
-                    'assigned_by' => $admin->id,
-                    'valid_from' => now()->toDateString(),
-                    'created_at' => now(),
-                ]);
-            }
-            if ($roleAdminSimpeg) {
-                DB::table('user_roles')->insert([
-                    'user_id' => $wasis->id,
-                    'role_id' => $roleAdminSimpeg->id,
-                    'assigned_by' => $admin->id,
-                    'valid_from' => now()->toDateString(),
-                    'created_at' => now(),
-                ]);
-            }
+            if ($roleDosen) $assignRole($wasis->id, $roleDosen->id, $admin->id);
+            if ($roleAdminSimpeg) $assignRole($wasis->id, $roleAdminSimpeg->id, $admin->id);
         }
-
-        // Admin SIMPEG User -> Role Admin SIMPEG
-        if ($adminSimpegUser && $roleAdminSimpeg) {
-            DB::table('user_roles')->insert([
-                'user_id' => $adminSimpegUser->id,
-                'role_id' => $roleAdminSimpeg->id,
-                'assigned_by' => $admin->id,
-                'valid_from' => now()->toDateString(),
-                'created_at' => now(),
-            ]);
-        }
-
-        // Dosen -> Role Dosen
-        if ($dosenUser && $roleDosen) {
-            DB::table('user_roles')->insert([
-                'user_id' => $dosenUser->id,
-                'role_id' => $roleDosen->id,
-                'assigned_by' => $admin->id,
-                'valid_from' => now()->toDateString(),
-                'created_at' => now(),
-            ]);
-        }
-
-        // Tendik -> Role Tendik
-        if ($tendikUser && $roleTendik) {
-            DB::table('user_roles')->insert([
-                'user_id' => $tendikUser->id,
-                'role_id' => $roleTendik->id,
-                'assigned_by' => $admin->id,
-                'valid_from' => now()->toDateString(),
-                'created_at' => now(),
-            ]);
-        }
-
-        // Mahasiswa -> Role Mahasiswa
-        if ($mhsUser && $roleMhs) {
-            DB::table('user_roles')->insert([
-                'user_id' => $mhsUser->id,
-                'role_id' => $roleMhs->id,
-                'assigned_by' => $admin->id,
-                'valid_from' => now()->toDateString(),
-                'created_at' => now(),
-            ]);
-        }
+        if ($adminSimpegUser && $roleAdminSimpeg) $assignRole($adminSimpegUser->id, $roleAdminSimpeg->id, $admin->id);
+        if ($dosenUser && $roleDosen) $assignRole($dosenUser->id, $roleDosen->id, $admin->id);
+        if ($tendikUser && $roleTendik) $assignRole($tendikUser->id, $roleTendik->id, $admin->id);
+        if ($mhsUser && $roleMhs) $assignRole($mhsUser->id, $roleMhs->id, $admin->id);
 
         // 2. Seed Admin SPMB
         $adminSpmb = User::updateOrCreate(
@@ -201,20 +141,10 @@ class AdminUserSeeder extends Seeder
             ]
         );
 
-        $spmbAdminRole = Role::where('slug', 'admin-spmb')->first();
+        $spmbAdminRole = Role::where('slug', 'admin-spmb')->orWhere('slug', 'admin_spmb')->first();
         
         if ($spmbAdminRole) {
-            DB::table('user_roles')->updateOrInsert(
-                [
-                    'user_id' => $adminSpmb->id,
-                    'role_id' => $spmbAdminRole->id,
-                ],
-                [
-                    'assigned_by' => $admin->id, // Assigned by superadmin
-                    'valid_from' => now()->toDateString(),
-                    'created_at' => now(),
-                ]
-            );
+            $assignRole($adminSpmb->id, $spmbAdminRole->id, $admin->id);
         }
     }
 }

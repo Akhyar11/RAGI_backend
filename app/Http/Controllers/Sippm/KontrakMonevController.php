@@ -110,4 +110,54 @@ class KontrakMonevController extends Controller
             'data' => $laporan,
         ]);
     }
+
+    public function uploadSpkTtdBasah(Request $request, $kontrakId)
+    {
+        $kontrak = KontrakKegiatan::findOrFail($kontrakId);
+
+        $validated = $request->validate([
+            'file_spk_ttd' => 'required|string',
+        ]);
+
+        $updated = $this->kontrakMonevService->uploadSpkTtdBasah($kontrak, $validated['file_spk_ttd']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Dokumen SPK bertanda tangan basah berhasil di-upload oleh Ketua Pengusul.',
+            'data' => $updated,
+        ]);
+    }
+
+    public function approveSpk(Request $request, $kontrakId)
+    {
+        $kontrak = KontrakKegiatan::findOrFail($kontrakId);
+
+        $validated = $request->validate([
+            'catatan' => 'nullable|string',
+        ]);
+
+        $pencairan = $this->kontrakMonevService->approveSpkDokumen($kontrak, $validated['catatan'] ?? null);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Dokumen SPK telah disetujui Admin SIPPM. Status Termin 1 diperbarui menjadi Waiting to Disburse.',
+            'data' => $pencairan,
+        ]);
+    }
+
+    public function uploadResiSikeu(Request $request, $pencairanId)
+    {
+        $validated = $request->validate([
+            'bukti_transfer' => 'required|string',
+        ]);
+
+        $pencairan = $this->kontrakMonevService->uploadResiSikeu((int) $pencairanId, $validated['bukti_transfer']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Bukti resi transfer SIKEU berhasil diunggah. Status Termin 1 diperbarui menjadi Already Disburse.',
+            'data' => $pencairan,
+        ]);
+    }
 }
+

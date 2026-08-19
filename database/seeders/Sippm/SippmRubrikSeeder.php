@@ -12,29 +12,64 @@ class SippmRubrikSeeder extends Seeder
      */
     public function run(): void
     {
+        // Truncate existing kaprodi rubriks to ensure clean 7 criteria list
+        RubrikIndikator::where('tipe_reviewer', 'kaprodi')->delete();
+
         $rubriks = [
-            // Tahap 1: Kaprodi (Keilmuan & Linieritas)
+            // Tahap 1: Kaprodi (Integrasi Penelitian dan Pengabdian Kepada Masyarakat - 7 Kriteria)
             [
                 'tipe_reviewer' => 'kaprodi',
-                'nama_indikator' => 'Linieritas Topik Riset / Pengabdian dengan Program Studi',
-                'deskripsi' => 'Kesesuaian fokus riset/pengabdian yang diajukan dengan roadmap penelitian dan bidang keahlian di Program Studi.',
-                'bobot' => 35.00,
+                'nama_indikator' => 'Dosen memiliki roadmap PPM',
+                'deskripsi' => 'Ketersediaan roadmap PPM dosen pengusul (Pilihan: Sudah Memiliki / Belum Memiliki).',
+                'bobot' => 14.00,
                 'skor_minimal_default' => 80.00,
                 'is_active' => true,
             ],
             [
                 'tipe_reviewer' => 'kaprodi',
-                'nama_indikator' => 'Urgensi Kebijakan & Isu Strategis Keilmuan Prodi',
-                'deskripsi' => 'Tingkat urgensi, kebaruan (novelty), serta kontribusi solusi yang ditawarkan terhadap bidang keilmuan prodi.',
-                'bobot' => 35.00,
+                'nama_indikator' => 'Kesesuaian PPM dengan roadmap',
+                'deskripsi' => 'Kesesuaian topik usulan PPM dengan roadmap (Pilihan: Sudah Sesuai / Belum Sesuai).',
+                'bobot' => 14.00,
                 'skor_minimal_default' => 80.00,
                 'is_active' => true,
             ],
             [
                 'tipe_reviewer' => 'kaprodi',
-                'nama_indikator' => 'Kesesuaian Rekam Jejak / Kepakaran Dosen Pengusul',
-                'deskripsi' => 'Kesesuaian kepakaran dan publikasi terdahulu Ketua Pengusul dengan topik kegiatan.',
-                'bobot' => 30.00,
+                'nama_indikator' => 'Judul',
+                'deskripsi' => 'Judul usulan proposal (Terisi otomatis dari sistem).',
+                'bobot' => 14.00,
+                'skor_minimal_default' => 80.00,
+                'is_active' => true,
+            ],
+            [
+                'tipe_reviewer' => 'kaprodi',
+                'nama_indikator' => 'Bentuk integrasi hasil PPM dengan mata kuliah',
+                'deskripsi' => 'Bentuk/modalitas integrasi hasil PPM ke dalam kurikulum & bahan ajar mata kuliah.',
+                'bobot' => 14.00,
+                'skor_minimal_default' => 80.00,
+                'is_active' => true,
+            ],
+            [
+                'tipe_reviewer' => 'kaprodi',
+                'nama_indikator' => 'Luaran',
+                'deskripsi' => 'Rencana/target luaran hasil PPM (Pilihan: Publikasi, Buku, HKI, dll).',
+                'bobot' => 14.00,
+                'skor_minimal_default' => 80.00,
+                'is_active' => true,
+            ],
+            [
+                'tipe_reviewer' => 'kaprodi',
+                'nama_indikator' => 'Mata kuliah yang diintegrasikan',
+                'deskripsi' => 'Mata kuliah wadah integrasi (Pilihan dari daftar mata kuliah prodi).',
+                'bobot' => 15.00,
+                'skor_minimal_default' => 80.00,
+                'is_active' => true,
+            ],
+            [
+                'tipe_reviewer' => 'kaprodi',
+                'nama_indikator' => 'Bukti integrasi PPM dalam pembelajaran (RPS, PPT/ Buku Ajar/ Video, dll) *) berupa link drive',
+                'deskripsi' => 'Kelengkapan dan keabsahan tautan drive bukti fisik RPS/modul/video pembelajaran.',
+                'bobot' => 15.00,
                 'skor_minimal_default' => 80.00,
                 'is_active' => true,
             ],

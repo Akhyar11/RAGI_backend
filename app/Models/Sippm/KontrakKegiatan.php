@@ -19,13 +19,15 @@ class KontrakKegiatan extends Model
         'tgl_mulai',
         'tgl_selesai',
         'file_kontrak',
+        'file_spk_ttd',
+        'status_spk',
         'status',
     ];
 
     protected $casts = [
         'dana_disetujui' => 'decimal:2',
-        'tgl_mulai' => 'date',
-        'tgl_selesai' => 'date',
+        'tgl_mulai' => 'date:Y-m-d',
+        'tgl_selesai' => 'date:Y-m-d',
     ];
 
     public function proposal()

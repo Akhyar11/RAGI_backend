@@ -129,11 +129,11 @@ class SippmSampleDataSeeder extends Seeder
                 $kontrak = KontrakKegiatan::updateOrCreate(
                     ['proposal_id' => $proposal->id],
                     [
-                        'nomor_kontrak' => 'SPK/LPPM/2026/' . sprintf('%03d', $propCounter),
+                        'nomor_kontrak' => 'SPK/LPPM/2026/' . sprintf('%03d', $proposal->id),
                         'dana_disetujui' => $anggaranNominal * 0.9,
                         'tgl_mulai' => '2026-03-01',
                         'tgl_selesai' => '2026-11-30',
-                        'file_kontrak' => 'kontrak/2026/SPK-' . sprintf('%03d', $propCounter) . '_signed.pdf',
+                        'file_kontrak' => 'kontrak/2026/SPK-' . sprintf('%03d', $proposal->id) . '_signed.pdf',
                         'status' => 'aktif',
                     ]
                 );

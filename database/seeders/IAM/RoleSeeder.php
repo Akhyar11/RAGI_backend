@@ -82,6 +82,11 @@ class RoleSeeder extends Seeder
                 'slug' => 'kabag_keuangan',
                 'description' => 'Kepala Bagian Keuangan, penanggung jawab kas utama, verifikator pengeluaran & dispensasi',
             ],
+            [
+                'name' => 'Admin SINAPRA',
+                'slug' => 'admin_sarpras',
+                'description' => 'Administrator Sarana & Prasarana, pengelola aset, ruangan, maintenance, & pengadaan barang',
+            ],
         ];
 
         foreach ($roles as $role) {

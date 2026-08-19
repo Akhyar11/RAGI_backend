@@ -111,10 +111,11 @@ class MenuSeeder extends Seeder
                 'module' => 'sippm',
                 'order_index' => 2,
                 'children' => [
-                    ['name' => 'Proposal Usulan', 'url' => '/sippm/proposal', 'icon' => 'FaFileAlt', 'module' => 'sippm', 'permission_slug' => 'sippm.proposal.read', 'order_index' => 1],
-                    ['name' => 'Portal Reviewer', 'url' => '/sippm/reviewer', 'icon' => 'FaClipboardCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.reviewer.read', 'order_index' => 2],
-                    ['name' => 'Kontrak Hibah SPK', 'url' => '/sippm/kontrak', 'icon' => 'FaFileCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.kontrak.read', 'order_index' => 3],
-                    ['name' => 'Pencairan Dana & LPJ', 'url' => '/sippm/pencairan', 'icon' => 'FaCreditCard', 'module' => 'sippm', 'permission_slug' => 'sippm.pencairan.read', 'order_index' => 4],
+                    ['name' => 'Pengumuman Hibah Internal', 'url' => '/sippm/pengumuman', 'icon' => 'FaBullhorn', 'module' => 'sippm', 'permission_slug' => 'sippm.pengumuman.read', 'order_index' => 1],
+                    ['name' => 'Proposal Usulan', 'url' => '/sippm/proposal', 'icon' => 'FaFileAlt', 'module' => 'sippm', 'permission_slug' => 'sippm.proposal.read', 'order_index' => 2],
+                    ['name' => 'Portal Reviewer', 'url' => '/sippm/reviewer', 'icon' => 'FaClipboardCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.reviewer.read', 'order_index' => 3],
+                    ['name' => 'Kontrak Hibah SPK', 'url' => '/sippm/kontrak', 'icon' => 'FaFileCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.kontrak.read', 'order_index' => 4],
+                    ['name' => 'Pencairan Dana & LPJ', 'url' => '/sippm/pencairan', 'icon' => 'FaCreditCard', 'module' => 'sippm', 'permission_slug' => 'sippm.pencairan.read', 'order_index' => 5],
                 ]
             ],
             [
@@ -221,6 +222,7 @@ class MenuSeeder extends Seeder
                 ]
             ],
         ];
+
 
         foreach ($menus as $menuData) {
             $permissionId = null;

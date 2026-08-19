@@ -27,6 +27,17 @@ class AppServiceProvider extends ServiceProvider
         // SPMB Observers
         \App\Models\Spmb\PendaftaranCalonMhs::observe(\App\Observers\Spmb\PendaftaranCalonMhsObserver::class);
         \App\Models\Spmb\GelombangPenerimaan::observe(\App\Observers\Spmb\GelombangPenerimaanObserver::class);
+
+        // SINAPRA Policies
+        Gate::policy(\App\Models\Gedung::class, \App\Policies\Sinapra\GedungPolicy::class);
+        Gate::policy(\App\Models\Ruangan::class, \App\Policies\Sinapra\RuanganPolicy::class);
+        Gate::policy(\App\Models\KategoriAset::class, \App\Policies\Sinapra\KategoriAsetPolicy::class);
+        Gate::policy(\App\Models\Aset::class, \App\Policies\Sinapra\AsetPolicy::class);
+        Gate::policy(\App\Models\PeminjamanRuangan::class, \App\Policies\Sinapra\PeminjamanRuanganPolicy::class);
+        Gate::policy(\App\Models\PeminjamanAset::class, \App\Policies\Sinapra\PeminjamanAsetPolicy::class);
+        Gate::policy(\App\Models\MaintenanceLog::class, \App\Policies\Sinapra\MaintenanceLogPolicy::class);
+        Gate::policy(\App\Models\PengajuanPengadaan::class, \App\Policies\Sinapra\PengajuanPengadaanPolicy::class);
+
         Gate::before(function (User $user, string $ability) {
             // Super admin bypass semua permission
             if ($user->hasRole('admin') || $user->hasRole('superadmin')) {

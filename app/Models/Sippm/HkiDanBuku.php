@@ -26,7 +26,7 @@ class HkiDanBuku extends Model
     ];
 
     protected $casts = [
-        'tgl_terbit_catat' => 'date',
+        'tgl_terbit_catat' => 'date:Y-m-d',
         'is_verified_lppm' => 'boolean',
     ];
 

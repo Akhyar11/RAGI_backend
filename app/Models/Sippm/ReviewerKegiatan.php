@@ -20,7 +20,7 @@ class ReviewerKegiatan extends Model
     ];
 
     protected $casts = [
-        'tgl_penugasan' => 'date',
+        'tgl_penugasan' => 'date:Y-m-d',
     ];
 
     public function proposal()

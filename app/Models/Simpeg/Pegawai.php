@@ -30,12 +30,16 @@ class Pegawai extends Model
         'status',
         'alamat',
         'telepon',
+        'sinta_id',
+        'scopus_id',
+        'google_scholar_id',
+        'orcid_id',
     ];
 
     protected $casts = [
-        'tanggal_lahir' => 'date',
-        'tanggal_masuk' => 'date',
-        'tanggal_keluar' => 'date',
+        'tanggal_lahir' => 'date:Y-m-d',
+        'tanggal_masuk' => 'date:Y-m-d',
+        'tanggal_keluar' => 'date:Y-m-d',
     ];
 
     public function user()

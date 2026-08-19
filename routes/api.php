@@ -246,9 +246,15 @@ Route::middleware('auth:api')->prefix('sippm')->group(function () {
     // Master Skema, Periode & Rubrik Indikator Penilaian
     Route::get('skema', [App\Http\Controllers\Sippm\MasterSippmController::class, 'indexSkema']);
     Route::post('skema', [App\Http\Controllers\Sippm\MasterSippmController::class, 'storeSkema']);
+    Route::put('skema/{id}', [App\Http\Controllers\Sippm\MasterSippmController::class, 'updateSkema']);
+    Route::delete('skema/{id}', [App\Http\Controllers\Sippm\MasterSippmController::class, 'destroySkema']);
+
     Route::get('periode', [App\Http\Controllers\Sippm\MasterSippmController::class, 'indexPeriode']);
     Route::post('periode', [App\Http\Controllers\Sippm\MasterSippmController::class, 'storePeriode']);
+    Route::put('periode/{id}', [App\Http\Controllers\Sippm\MasterSippmController::class, 'updatePeriode']);
+    Route::delete('periode/{id}', [App\Http\Controllers\Sippm\MasterSippmController::class, 'destroyPeriode']);
     Route::apiResource('rubrik', App\Http\Controllers\Sippm\RubrikIndikatorController::class);
+    Route::apiResource('iku5-standards', App\Http\Controllers\Sippm\StandarIku5ProdiController::class);
 
     // Proposal Kegiatan
     Route::get('proposal', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'index']);
@@ -272,12 +278,17 @@ Route::middleware('auth:api')->prefix('sippm')->group(function () {
     Route::get('kontrak', [App\Http\Controllers\Sippm\KontrakMonevController::class, 'indexKontrak']);
     Route::post('proposal/{id}/kontrak', [App\Http\Controllers\Sippm\KontrakMonevController::class, 'storeKontrak']);
     Route::post('kontrak/{id}/pencairan', [App\Http\Controllers\Sippm\KontrakMonevController::class, 'requestPencairan']);
+    Route::post('kontrak/{id}/upload-spk-ttd', [App\Http\Controllers\Sippm\KontrakMonevController::class, 'uploadSpkTtdBasah']);
+    Route::post('kontrak/{id}/approve-spk', [App\Http\Controllers\Sippm\KontrakMonevController::class, 'approveSpk']);
+    Route::post('pencairan/{id}/upload-resi-sikeu', [App\Http\Controllers\Sippm\KontrakMonevController::class, 'uploadResiSikeu']);
     Route::post('kontrak/{id}/laporan', [App\Http\Controllers\Sippm\KontrakMonevController::class, 'submitLaporan']);
 
     // Portofolio Luaran (Publikasi & HKI)
     Route::get('luaran/publikasi', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'indexPublikasi']);
     Route::post('luaran/publikasi', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'storePublikasi']);
     Route::post('luaran/publikasi/{id}/verify', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'verifyPublikasi']);
+    Route::post('luaran/fetch-external', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'fetchExternalPublikasi']);
+    Route::post('luaran/import-external', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'importExternalPublikasi']);
 
     Route::get('luaran/hki', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'indexHki']);
     Route::post('luaran/hki', [App\Http\Controllers\Sippm\LuaranSippmController::class, 'storeHki']);
@@ -286,6 +297,14 @@ Route::middleware('auth:api')->prefix('sippm')->group(function () {
     // Cross-Module Integration Endpoints (UPM IKU & SIKEU Callback)
     Route::get('integration/upm-iku-metrics', [App\Http\Controllers\Sippm\MasterSippmController::class, 'getUpmMetrics']);
     Route::post('integration/sikeu-disbursement-callback/{id}', [App\Http\Controllers\Sippm\MasterSippmController::class, 'processDisbursementCallback']);
+
+    // Pengumuman & Periode Hibah Official Announcements
+    Route::get('pengumuman/active', [App\Http\Controllers\Sippm\PengumumanSippmController::class, 'getActive']);
+    Route::get('pengumuman', [App\Http\Controllers\Sippm\PengumumanSippmController::class, 'index']);
+    Route::post('pengumuman', [App\Http\Controllers\Sippm\PengumumanSippmController::class, 'store']);
+    Route::post('pengumuman/{id}/upload-signed', [App\Http\Controllers\Sippm\PengumumanSippmController::class, 'uploadSigned']);
+    Route::post('pengumuman/{id}/upload-template', [App\Http\Controllers\Sippm\PengumumanSippmController::class, 'uploadTemplate']);
+    Route::post('pengumuman/{id}/publish', [App\Http\Controllers\Sippm\PengumumanSippmController::class, 'publish']);
 });
 
 /*
@@ -402,6 +421,71 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::get('pajak', [App\Http\Controllers\Sikeu\PajakKampusController::class, 'index']);
     Route::post('pajak/{id}/setor', [App\Http\Controllers\Sikeu\PajakKampusController::class, 'setorPajak']);
 });
+
+// Public Printable Document Route (Accessible directly via browser link)
+Route::get('sippm/pengumuman/{id}/html-draft', [App\Http\Controllers\Sippm\PengumumanSippmController::class, 'renderDraftHtml']);
+
+/*
+|--------------------------------------------------------------------------
+| SINAPRA (Sarana, Prasarana, & Aset) Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth:api')->prefix('sinapra')->group(function () {
+    // Gedung & Ruangan
+    Route::get('gedung', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'index']);
+    Route::post('gedung', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'store']);
+    Route::get('gedung/{gedung}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'show']);
+    Route::put('gedung/{gedung}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'update']);
+    Route::delete('gedung/{gedung}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'destroy']);
+
+    Route::get('ruangan', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'indexRuangan']);
+    Route::post('ruangan', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'storeRuangan']);
+    Route::post('ruangan/check-ketersediaan', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'checkKetersediaanRuangan']);
+    Route::get('ruangan/{ruangan}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'showRuangan']);
+    Route::put('ruangan/{ruangan}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'updateRuangan']);
+    Route::delete('ruangan/{ruangan}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'destroyRuangan']);
+
+    // Kategori Aset & Aset
+    Route::get('kategori-aset', [App\Http\Controllers\Sinapra\AsetController::class, 'indexKategori']);
+    Route::post('kategori-aset', [App\Http\Controllers\Sinapra\AsetController::class, 'storeKategori']);
+    Route::get('kategori-aset/{kategori}', [App\Http\Controllers\Sinapra\AsetController::class, 'showKategori']);
+    Route::put('kategori-aset/{kategori}', [App\Http\Controllers\Sinapra\AsetController::class, 'updateKategori']);
+    Route::delete('kategori-aset/{kategori}', [App\Http\Controllers\Sinapra\AsetController::class, 'destroyKategori']);
+
+    Route::get('aset', [App\Http\Controllers\Sinapra\AsetController::class, 'index']);
+    Route::post('aset', [App\Http\Controllers\Sinapra\AsetController::class, 'store']);
+    Route::get('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'show']);
+    Route::get('aset/{aset}/hitung-penyusutan', [App\Http\Controllers\Sinapra\AsetController::class, 'hitungPenyusutan']);
+    Route::put('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'update']);
+    Route::delete('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'destroy']);
+
+    // Peminjaman Ruangan & Aset
+    Route::get('peminjaman-ruangan', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'indexRuangan']);
+    Route::post('peminjaman-ruangan', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'applyRuangan']);
+    Route::get('peminjaman-ruangan/{peminjaman}', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'showRuangan']);
+    Route::post('peminjaman-ruangan/{peminjaman}/approve', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'approveRuangan']);
+
+    Route::get('peminjaman-aset', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'indexAset']);
+    Route::post('peminjaman-aset', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'applyAset']);
+    Route::get('peminjaman-aset/{peminjaman}', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'showAset']);
+    Route::post('peminjaman-aset/{peminjaman}/approve', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'approveAset']);
+    Route::post('peminjaman-aset/{peminjaman}/kembalikan', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'kembalikanAset']);
+
+    // Maintenance / Perawatan
+    Route::get('maintenance', [App\Http\Controllers\Sinapra\MaintenanceController::class, 'index']);
+    Route::post('maintenance', [App\Http\Controllers\Sinapra\MaintenanceController::class, 'store']);
+    Route::get('maintenance/{maintenance}', [App\Http\Controllers\Sinapra\MaintenanceController::class, 'show']);
+    Route::put('maintenance/{maintenance}', [App\Http\Controllers\Sinapra\MaintenanceController::class, 'update']);
+    Route::delete('maintenance/{maintenance}', [App\Http\Controllers\Sinapra\MaintenanceController::class, 'destroy']);
+
+    // Pengajuan Pengadaan Barang
+    Route::get('pengadaan', [App\Http\Controllers\Sinapra\PengadaanController::class, 'index']);
+    Route::post('pengadaan', [App\Http\Controllers\Sinapra\PengadaanController::class, 'store']);
+    Route::get('pengadaan/{pengadaan}', [App\Http\Controllers\Sinapra\PengadaanController::class, 'show']);
+    Route::patch('pengadaan/{pengadaan}/status', [App\Http\Controllers\Sinapra\PengadaanController::class, 'updateStatus']);
+    Route::delete('pengadaan/{pengadaan}', [App\Http\Controllers\Sinapra\PengadaanController::class, 'destroy']);
+});
+
 
 
 

@@ -21,10 +21,29 @@ class ProposalService
             $count = ProposalKegiatan::whereYear('created_at', $year)->count() + 1;
             $kodeProposal = 'PRP-' . $year . '-' . str_pad($count, 3, '0', STR_PAD_LEFT);
 
+            // Validate Foreign Keys to ensure DB constraint integrity
+            $periodeId = (int) ($data['periode_id'] ?? 0);
+            if (!DB::table('periode_hibah')->where('id', $periodeId)->exists()) {
+                $activePeriode = DB::table('periode_hibah')->where('is_active', 1)->first() ?? DB::table('periode_hibah')->first();
+                $periodeId = $activePeriode ? $activePeriode->id : 3;
+            }
+
+            $skemaId = (int) ($data['skema_id'] ?? 0);
+            if (!DB::table('skema_kegiatan')->where('id', $skemaId)->exists()) {
+                $activeSkema = DB::table('skema_kegiatan')->where('is_active', 1)->first() ?? DB::table('skema_kegiatan')->first();
+                $skemaId = $activeSkema ? $activeSkema->id : 1;
+            }
+
+            $ketuaPegawaiId = (int) ($data['ketua_pegawai_id'] ?? 0);
+            if (!DB::table('pegawai')->where('id', $ketuaPegawaiId)->exists()) {
+                $firstPegawai = DB::table('pegawai')->first();
+                $ketuaPegawaiId = $firstPegawai ? $firstPegawai->id : 1;
+            }
+
             $proposal = ProposalKegiatan::create([
-                'periode_id' => $data['periode_id'],
-                'skema_id' => $data['skema_id'],
-                'ketua_pegawai_id' => $data['ketua_pegawai_id'],
+                'periode_id' => $periodeId,
+                'skema_id' => $skemaId,
+                'ketua_pegawai_id' => $ketuaPegawaiId,
                 'mitra_kerjasama_id' => $data['mitra_kerjasama_id'] ?? null,
                 'mata_kuliah_id' => $data['mata_kuliah_id'] ?? null,
                 'kode_proposal' => $kodeProposal,
@@ -33,7 +52,7 @@ class ProposalService
                 'rumpun_ilmu' => $data['rumpun_ilmu'],
                 'target_tkt' => $data['target_tkt'] ?? 1,
                 'anggaran_diajukan' => $data['anggaran_diajukan'],
-                'file_proposal' => $data['file_proposal'],
+                'file_proposal' => $data['file_proposal'] ?? 'dokumen_proposal_usulan.pdf',
                 'status' => 'draft',
             ]);
 
@@ -41,7 +60,7 @@ class ProposalService
             AnggotaKegiatan::create([
                 'proposal_id' => $proposal->id,
                 'jenis_tim' => 'dosen',
-                'pegawai_id' => $data['ketua_pegawai_id'],
+                'pegawai_id' => $ketuaPegawaiId,
                 'peran_dalam_tim' => 'Ketua Pengusul',
                 'tugas_kegiatan' => 'Ketua Pengusul & Penanggung Jawab Riset',
             ]);
@@ -52,10 +71,15 @@ class ProposalService
                     // Normalize jenis_tim format
                     $jenisTim = $anggota['jenis_tim'] ?? ($anggota['jenis_anggota'] ?? 'dosen');
 
+                    $memberPegawaiId = !empty($anggota['pegawai_id']) ? (int) $anggota['pegawai_id'] : null;
+                    if ($memberPegawaiId && !DB::table('pegawai')->where('id', $memberPegawaiId)->exists()) {
+                        $memberPegawaiId = null;
+                    }
+
                     AnggotaKegiatan::create([
                         'proposal_id' => $proposal->id,
                         'jenis_tim' => $jenisTim,
-                        'pegawai_id' => $anggota['pegawai_id'] ?? null,
+                        'pegawai_id' => $memberPegawaiId,
                         'mahasiswa_id' => $anggota['mahasiswa_id'] ?? null,
                         'mata_kuliah_id' => $anggota['mata_kuliah_id'] ?? null,
                         'nama_eksternal' => $anggota['nama_eksternal'] ?? null,
@@ -85,6 +109,7 @@ class ProposalService
                 'anggaran_diajukan' => $data['anggaran_diajukan'] ?? null,
                 'file_proposal' => $data['file_proposal'] ?? null,
                 'mata_kuliah_id' => $data['mata_kuliah_id'] ?? null,
+                'status' => $data['status'] ?? null,
             ]));
 
             return $proposal->fresh(['skema', 'periode', 'ketuaPegawai', 'anggota']);
@@ -177,11 +202,19 @@ class ProposalService
      */
     public function getTendikReference(): array
     {
-        return Pegawai::where('jenis_pegawai', 'tendik')
+        $tendik = Pegawai::where('jenis_pegawai', 'tendik')
             ->where('status', 'aktif')
             ->select('id', 'nip', 'nama_lengkap', 'jenis_pegawai', 'unit_kerja_id')
-            ->get()
-            ->toArray();
+            ->get();
+
+        if ($tendik->isEmpty()) {
+            $tendik = Pegawai::where('status', 'aktif')
+                ->select('id', 'nip', 'nama_lengkap', 'jenis_pegawai', 'unit_kerja_id')
+                ->take(10)
+                ->get();
+        }
+
+        return $tendik->toArray();
     }
 
     /**

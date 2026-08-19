@@ -69,4 +69,97 @@ class KontrakMonevService
             ]
         );
     }
+
+    /**
+     * Upload signed SPK (tanda tangan basah) by Ketua Pengusul.
+     */
+    public function uploadSpkTtdBasah(KontrakKegiatan $kontrak, string $filePath): KontrakKegiatan
+    {
+        return DB::transaction(function () use ($kontrak, $filePath) {
+            $kontrak->update([
+                'file_spk_ttd' => $filePath,
+                'status_spk' => 'uploaded',
+            ]);
+
+            // Ensure Termin 1 pencairan row exists with status_termin = 'waiting_document'
+            PencairanDanaHibah::updateOrCreate(
+                ['kontrak_id' => $kontrak->id, 'termin_ke' => 1],
+                [
+                    'persen_pencairan' => 70.00,
+                    'nominal' => ($kontrak->dana_disetujui * 0.70),
+                    'status' => 'pengajuan',
+                    'status_termin' => 'waiting_document',
+                ]
+            );
+
+            \App\Services\AuditLogService::record(
+                module: 'SIPPM',
+                action: 'update',
+                tableName: 'kontrak_kegiatan',
+                recordId: $kontrak->id,
+                newValues: ['file_spk_ttd' => $filePath, 'status_spk' => 'uploaded']
+            );
+
+            return $kontrak->fresh(['proposal', 'pencairanDana', 'laporan']);
+        });
+    }
+
+    /**
+     * Approve SPK document by Admin SIPPM -> Moves Termin 1 to waiting_disburse.
+     */
+    public function approveSpkDokumen(KontrakKegiatan $kontrak, ?string $catatan = null): PencairanDanaHibah
+    {
+        return DB::transaction(function () use ($kontrak, $catatan) {
+            $kontrak->update(['status_spk' => 'approved']);
+
+            $pencairan = PencairanDanaHibah::updateOrCreate(
+                ['kontrak_id' => $kontrak->id, 'termin_ke' => 1],
+                [
+                    'persen_pencairan' => 70.00,
+                    'nominal' => ($kontrak->dana_disetujui * 0.70),
+                    'status' => 'disetujui',
+                    'status_termin' => 'waiting_disburse',
+                    'catatan_verifikasi' => $catatan ?? 'Dokumen SPK resmi bertanda tangan basah telah diverifikasi & disetujui Admin SIPPM.',
+                ]
+            );
+
+            \App\Services\AuditLogService::record(
+                module: 'SIPPM',
+                action: 'approve',
+                tableName: 'pencairan_dana_hibah',
+                recordId: $pencairan->id,
+                newValues: ['status_termin' => 'waiting_disburse', 'catatan' => $catatan]
+            );
+
+            return $pencairan;
+        });
+    }
+
+    /**
+     * Upload transfer receipt by Admin SIKEU -> Moves Termin 1 to already_disburse.
+     */
+    public function uploadResiSikeu(int $pencairanId, string $buktiTransferPath): PencairanDanaHibah
+    {
+        return DB::transaction(function () use ($pencairanId, $buktiTransferPath) {
+            $pencairan = PencairanDanaHibah::findOrFail($pencairanId);
+
+            $pencairan->update([
+                'bukti_transfer' => $buktiTransferPath,
+                'status_termin' => 'already_disburse',
+                'status' => 'cair',
+                'tgl_cair' => now(),
+            ]);
+
+            \App\Services\AuditLogService::record(
+                module: 'SIKEU',
+                action: 'update',
+                tableName: 'pencairan_dana_hibah',
+                recordId: $pencairan->id,
+                newValues: ['bukti_transfer' => $buktiTransferPath, 'status_termin' => 'already_disburse']
+            );
+
+            return $pencairan;
+        });
+    }
 }
+

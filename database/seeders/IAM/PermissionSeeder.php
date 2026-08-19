@@ -87,6 +87,14 @@ class PermissionSeeder extends Seeder
             ['name' => 'Tambah Master Periode', 'slug' => 'sippm.periode.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menambah periode hibah baru'],
             ['name' => 'Ubah Master Periode', 'slug' => 'sippm.periode.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah jadwal & data periode hibah'],
             ['name' => 'Hapus Master Periode', 'slug' => 'sippm.periode.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus periode hibah'],
+            // Pengumuman Surat Hibah (CRUD)
+            ['name' => 'Lihat Pengumuman Hibah', 'slug' => 'sippm.pengumuman.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar pengumuman & penerimaan proposal hibah'],
+            ['name' => 'Tambah Pengumuman Hibah', 'slug' => 'sippm.pengumuman.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Membuat draf surat pengumuman hibah baru'],
+            ['name' => 'Ubah Pengumuman Hibah', 'slug' => 'sippm.pengumuman.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah data & mengunggah scan TTD basah/template proposal'],
+            ['name' => 'Publish Pengumuman Hibah', 'slug' => 'sippm.pengumuman.publish', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mempublish pengumuman & mengaktifkan gelombang periode hibah'],
+            ['name' => 'Hapus Pengumuman Hibah', 'slug' => 'sippm.pengumuman.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus pengumuman hibah'],
+
+            // Standar IKU 5 Prodi
             ['name' => 'Lihat Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar standar IKU 5 per program studi'],
             ['name' => 'Tambah Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menambah target standar IKU 5 prodi'],
             ['name' => 'Ubah Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah target standar IKU 5 prodi'],
@@ -141,6 +149,41 @@ class PermissionSeeder extends Seeder
             ['name' => 'Penutupan Periode Akuntansi', 'slug' => 'sikeu.akuntansi.closing', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Menutup periode buku akuntansi bulanan/tahunan'],
             ['name' => 'Lihat Laporan Keuangan & Pajak', 'slug' => 'sikeu.laporan.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat & mengunduh 4 Laporan Keuangan serta Rekap Pajak'],
             ['name' => 'Verifikasi Bukti LPJ', 'slug' => 'sikeu.lpj.verify', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Memverifikasi bukti pelaksanaan kuitansi/nota LPJ'],
+
+            // ── MODUL SINAPRA (SARANA, PRASARANA, & ASET) ─────────────────────────
+            ['name' => 'Lihat Dashboard SINAPRA', 'slug' => 'sinapra.dashboard.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat dashboard & ringkasan aset/ruangan'],
+            ['name' => 'Lihat Gedung', 'slug' => 'sinapra.gedung.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat daftar & detail data gedung'],
+            ['name' => 'Tambah Gedung', 'slug' => 'sinapra.gedung.create', 'module' => 'sinapra', 'action' => 'create', 'description' => 'Menambah data gedung baru'],
+            ['name' => 'Ubah Gedung', 'slug' => 'sinapra.gedung.update', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Mengubah data gedung'],
+            ['name' => 'Hapus Gedung', 'slug' => 'sinapra.gedung.delete', 'module' => 'sinapra', 'action' => 'delete', 'description' => 'Menghapus data gedung'],
+            ['name' => 'Lihat Ruangan', 'slug' => 'sinapra.ruangan.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat daftar & fasilitas ruangan'],
+            ['name' => 'Tambah Ruangan', 'slug' => 'sinapra.ruangan.create', 'module' => 'sinapra', 'action' => 'create', 'description' => 'Menambah ruangan baru'],
+            ['name' => 'Ubah Ruangan', 'slug' => 'sinapra.ruangan.update', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Mengubah data & fasilitas ruangan'],
+            ['name' => 'Hapus Ruangan', 'slug' => 'sinapra.ruangan.delete', 'module' => 'sinapra', 'action' => 'delete', 'description' => 'Menghapus data ruangan'],
+            ['name' => 'Lihat Kategori Aset', 'slug' => 'sinapra.kategori_aset.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat kategori aset & tarif penyusutan'],
+            ['name' => 'Tambah Kategori Aset', 'slug' => 'sinapra.kategori_aset.create', 'module' => 'sinapra', 'action' => 'create', 'description' => 'Menambah kategori aset baru'],
+            ['name' => 'Ubah Kategori Aset', 'slug' => 'sinapra.kategori_aset.update', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Mengubah data kategori aset'],
+            ['name' => 'Hapus Kategori Aset', 'slug' => 'sinapra.kategori_aset.delete', 'module' => 'sinapra', 'action' => 'delete', 'description' => 'Menghapus kategori aset'],
+            ['name' => 'Lihat Data Aset', 'slug' => 'sinapra.aset.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat daftar & detail inventaris aset'],
+            ['name' => 'Tambah Data Aset', 'slug' => 'sinapra.aset.create', 'module' => 'sinapra', 'action' => 'create', 'description' => 'Menambah barang/aset baru'],
+            ['name' => 'Ubah Data Aset', 'slug' => 'sinapra.aset.update', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Mengubah kondisi, status, & nilai aset'],
+            ['name' => 'Hapus Data Aset', 'slug' => 'sinapra.aset.delete', 'module' => 'sinapra', 'action' => 'delete', 'description' => 'Menghapus/menghapuskan data aset'],
+            ['name' => 'Lihat Peminjaman Ruangan', 'slug' => 'sinapra.peminjaman_ruangan.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat permohonan & riwayat peminjaman ruangan'],
+            ['name' => 'Ajukan Peminjaman Ruangan', 'slug' => 'sinapra.peminjaman_ruangan.create', 'module' => 'sinapra', 'action' => 'create', 'description' => 'Mengajukan peminjaman ruangan'],
+            ['name' => 'Approve Peminjaman Ruangan', 'slug' => 'sinapra.peminjaman_ruangan.approve', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Menyetujui/menolak peminjaman ruangan'],
+            ['name' => 'Hapus Peminjaman Ruangan', 'slug' => 'sinapra.peminjaman_ruangan.delete', 'module' => 'sinapra', 'action' => 'delete', 'description' => 'Batalkan/hapus peminjaman ruangan'],
+            ['name' => 'Lihat Peminjaman Aset', 'slug' => 'sinapra.peminjaman_aset.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat permohonan peminjaman aset'],
+            ['name' => 'Ajukan Peminjaman Aset', 'slug' => 'sinapra.peminjaman_aset.create', 'module' => 'sinapra', 'action' => 'create', 'description' => 'Mengajukan peminjaman barang/aset'],
+            ['name' => 'Approve Peminjaman Aset', 'slug' => 'sinapra.peminjaman_aset.approve', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Menyetujui & memproses pengembalian aset'],
+            ['name' => 'Hapus Peminjaman Aset', 'slug' => 'sinapra.peminjaman_aset.delete', 'module' => 'sinapra', 'action' => 'delete', 'description' => 'Batalkan/hapus peminjaman aset'],
+            ['name' => 'Lihat Maintenance Log', 'slug' => 'sinapra.maintenance.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat log tiket perawatan & perbaikan'],
+            ['name' => 'Buat Tiket Maintenance', 'slug' => 'sinapra.maintenance.create', 'module' => 'sinapra', 'action' => 'create', 'description' => 'Melaporkan kerusakan & buat tiket perbaikan'],
+            ['name' => 'Ubah Status Maintenance', 'slug' => 'sinapra.maintenance.update', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Mengubah status, biaya, & teknisi perbaikan'],
+            ['name' => 'Hapus Maintenance Log', 'slug' => 'sinapra.maintenance.delete', 'module' => 'sinapra', 'action' => 'delete', 'description' => 'Menghapus tiket maintenance'],
+            ['name' => 'Lihat Pengajuan Pengadaan', 'slug' => 'sinapra.pengadaan.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat usulan pengadaan barang baru'],
+            ['name' => 'Buat Pengajuan Pengadaan', 'slug' => 'sinapra.pengadaan.create', 'module' => 'sinapra', 'action' => 'create', 'description' => 'Mengajukan usulan pengadaan barang baru'],
+            ['name' => 'Ubah / Approve Pengadaan', 'slug' => 'sinapra.pengadaan.approve', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Memproses & menyetujui usulan pengadaan'],
+            ['name' => 'Hapus Pengajuan Pengadaan', 'slug' => 'sinapra.pengadaan.delete', 'module' => 'sinapra', 'action' => 'delete', 'description' => 'Menghapus usulan pengadaan barang'],
         ];
 
         // Insert semua permissions ke database
@@ -160,6 +203,7 @@ class PermissionSeeder extends Seeder
         $superAdminRole = Role::where('slug', 'superadmin')->first();
         $adminSimpegRole = Role::where('slug', 'admin_simpeg')->first();
         $adminLppmRole = Role::where('slug', 'admin_lppm')->first();
+        $adminSarprasRole = Role::where('slug', 'admin_sarpras')->first();
         $reviewerSippmRole = Role::where('slug', 'reviewer_sippm')->first();
         $operatorSdmRole = Role::where('slug', 'operator_sdm')->first();
         $dosenRole = Role::where('slug', 'dosen')->first();
@@ -207,6 +251,118 @@ class PermissionSeeder extends Seeder
             $perms = Permission::whereIn('slug', $mahasiswaSlugs)->get();
             foreach ($perms as $p) {
                 RolePermission::create(['role_id' => $mahasiswaRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 4. Reviewer SIPPM
+        if ($reviewerSippmRole) {
+            $reviewerSlugs = [
+                'sippm.dashboard.read',
+                'sippm.pengumuman.read',
+                'sippm.skema.read',
+                'sippm.periode.read',
+                'sippm.reviewer.read',
+                'sippm.reviewer.evaluate',
+                'sippm.rubrik.read',
+            ];
+            $perms = Permission::whereIn('slug', $reviewerSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::create(['role_id' => $reviewerSippmRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 5. Operator SDM -> Permission Operasional SIMPEG (CRUD Lengkap)
+        if ($operatorSdmRole) {
+            $simpegPerms = Permission::where('module', 'simpeg')->get();
+            foreach ($simpegPerms as $p) {
+                RolePermission::create(['role_id' => $operatorSdmRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 6. Dosen -> Portal Mandiri SIMPEG & Akses Pengusul SIPPM
+        if ($dosenRole) {
+            $dosenSlugs = [
+                // SIMPEG Mandiri
+                'simpeg.dashboard.read',
+                'simpeg.unit_kerja.read',
+                'simpeg.jabatan.read',
+                'simpeg.pegawai.read',
+                'simpeg.dokumen.read', 'simpeg.dokumen.create',
+                'simpeg.cuti.read', 'simpeg.cuti.create',
+                'simpeg.presensi.read', 'simpeg.presensi.create',
+                'simpeg.payroll.read',
+                'simpeg.usulan_jafung.read', 'simpeg.usulan_jafung.create',
+                'simpeg.kinerja.read',
+                // SIPPM Pengusul
+                'sippm.dashboard.read',
+                'sippm.pengumuman.read',
+                'sippm.skema.read',
+                'sippm.periode.read',
+                'sippm.proposal.read', 'sippm.proposal.create', 'sippm.proposal.update', 'sippm.proposal.submit',
+                'sippm.kontrak.read',
+                'sippm.pencairan.read', 'sippm.pencairan.request',
+                'sippm.luaran.read', 'sippm.luaran.create',
+            ];
+            $perms = Permission::whereIn('slug', $dosenSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::create(['role_id' => $dosenRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 8. Admin LPPM -> Semua permissions modul SIPPM
+        if ($adminLppmRole) {
+            foreach ($allPermissions as $p) {
+                if ($p->module === 'sippm' || str_starts_with($p->slug, 'iam.users.read')) {
+                    RolePermission::create(['role_id' => $adminLppmRole->id, 'permission_id' => $p->id]);
+                }
+            }
+        }
+
+        // 9. Admin SIMPEG -> Semua permissions modul SIMPEG
+        if ($adminSimpegRole) {
+            foreach ($allPermissions as $p) {
+                if ($p->module === 'simpeg' || str_starts_with($p->slug, 'iam.users.read')) {
+                    RolePermission::create(['role_id' => $adminSimpegRole->id, 'permission_id' => $p->id]);
+                }
+            }
+        }
+
+        // 9.b Admin SINAPRA -> Semua permissions modul SINAPRA
+        if ($adminSarprasRole) {
+            foreach ($allPermissions as $p) {
+                if ($p->module === 'sinapra' || str_starts_with($p->slug, 'iam.users.read')) {
+                    RolePermission::create(['role_id' => $adminSarprasRole->id, 'permission_id' => $p->id]);
+                }
+            }
+        }
+
+        // 10. Calon Mahasiswa -> Akses SPMB Pendaftaran & Dashboard
+        if ($calonMhsRole) {
+            foreach ($allPermissions as $p) {
+                if ($p->module === 'spmb') {
+                    RolePermission::create(['role_id' => $calonMhsRole->id, 'permission_id' => $p->id]);
+                }
+            }
+        }
+
+        // 11. Pimpinan -> Dashboard & Approvals Executive Summary
+        if ($pimpinanRole) {
+            $pimpinanSlugs = [
+                'iam.audit_logs.read',
+                'simpeg.dashboard.read',
+                'sippm.dashboard.read',
+                'sikeu.dashboard.read',
+                'sikeu.approval.read',
+                'sikeu.approval.approve',
+                'sikeu.approval.reject',
+                'sikeu.dispensasi.read',
+                'sikeu.dispensasi.approve',
+                'sikeu.dispensasi.reject',
+                'sikeu.laporan.read',
+            ];
+            $perms = Permission::whereIn('slug', $pimpinanSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::create(['role_id' => $pimpinanRole->id, 'permission_id' => $p->id]);
             }
         }
     }

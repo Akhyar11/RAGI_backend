@@ -191,5 +191,48 @@ class PegawaiSeeder extends Seeder
                 ]);
             }
         }
+
+        // 3. Data Pegawai Tendik (Tenaga Kependidikan)
+        $tendikData = [
+            ['id' => 101, 'nama' => 'Siti Rahmawati, A.Md.', 'nip' => '199002102015032001', 'jenis_kelamin' => 'P', 'jabatan' => 'Pranata Laboratorium Pendidikan'],
+            ['id' => 102, 'nama' => 'Supriyadi, S.ST.', 'nip' => '198805122014021002', 'jenis_kelamin' => 'L', 'jabatan' => 'Teknisi Laboratorium & Infrastruktur Riset'],
+            ['id' => 103, 'nama' => 'Ahmad Fauzi, S.E.', 'nip' => '199208152016041003', 'jenis_kelamin' => 'L', 'jabatan' => 'Administrasi Keuangan & Hibah Penelitian'],
+            ['id' => 104, 'nama' => 'Nuraini, S.Sos.', 'nip' => '199411202018012004', 'jenis_kelamin' => 'P', 'jabatan' => 'Staf Administrasi Publikasi & HKI'],
+            ['id' => 105, 'nama' => 'Rudi Hermawan, A.Md.T.', 'nip' => '199103052017031005', 'jenis_kelamin' => 'L', 'jabatan' => 'Operator Sistem Informasi & Data Riset'],
+        ];
+
+        foreach ($tendikData as $tData) {
+            $username = 'tendik_' . $tData['id'];
+            $email = $username . '@kampus.ac.id';
+
+            $user = User::updateOrCreate([
+                'email' => $email,
+            ], [
+                'username' => $username,
+                'password' => Hash::make('password'),
+                'is_active' => true,
+                'is_verified' => true,
+            ]);
+
+            Pegawai::updateOrCreate([
+                'id' => $tData['id'],
+            ], [
+                'user_id' => $user->id,
+                'unit_kerja_id' => $rektorat?->id,
+                'nip' => $tData['nip'],
+                'nik' => '3271' . sprintf('%04d', $tData['id'] * 23) . '0001',
+                'nama_lengkap' => $tData['nama'],
+                'tanggal_lahir' => '1990-05-15',
+                'tempat_lahir' => 'Bandung',
+                'jenis_kelamin' => $tData['jenis_kelamin'],
+                'agama' => 'Islam',
+                'jenis_pegawai' => 'tendik',
+                'status_kepegawaian' => 'tetap_yayasan',
+                'tanggal_masuk' => '2016-01-01',
+                'status' => 'aktif',
+                'telepon' => '0813' . sprintf('%08d', $tData['id'] * 999),
+                'alamat' => 'Jl. Laboratorium Terpadu No. ' . $tData['id'] . ', Bandung',
+            ]);
+        }
     }
 }

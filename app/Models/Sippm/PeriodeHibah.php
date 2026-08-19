@@ -24,10 +24,10 @@ class PeriodeHibah extends Model
 
     protected $casts = [
         'tahun_anggaran' => 'string',
-        'tgl_buka_proposal' => 'date',
-        'tgl_tutup_proposal' => 'date',
-        'tgl_tutup_monev' => 'date',
-        'tgl_tutup_laporan' => 'date',
+        'tgl_buka_proposal' => 'date:Y-m-d',
+        'tgl_tutup_proposal' => 'date:Y-m-d',
+        'tgl_tutup_monev' => 'date:Y-m-d',
+        'tgl_tutup_laporan' => 'date:Y-m-d',
         'is_active' => 'boolean',
     ];
 

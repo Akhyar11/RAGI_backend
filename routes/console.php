@@ -5,6 +5,8 @@ use App\Console\Commands\InstallModuleCommand;
 use App\Console\Commands\InstallDummyModuleCommand;
 use App\Console\Commands\InstallProdModuleCommand;
 
+use Illuminate\Support\Facades\Schedule;
+
 $modules = ['sikeu', 'simpeg', 'sippm', 'spmb', 'iam', 'all'];
 
 foreach ($modules as $mod) {
@@ -36,3 +38,7 @@ Artisan::command('module:install-dummy {modul=all}', function ($modul = 'all') {
 Artisan::command('module:install-prod {modul=all}', function ($modul = 'all') {
     $this->call(InstallProdModuleCommand::class, ['modul' => $modul]);
 })->purpose('Instalasi sekali jalan DB & master data murni PRODUCTION');
+
+Schedule::command('sippm:sync-publikasi')->weekly()->onSuccess(function () {
+    \Illuminate\Support\Facades\Log::info('Weekly SINTA & Scopus publication sync completed successfully.');
+});
