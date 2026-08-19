@@ -89,7 +89,10 @@ class CalonMahasiswaController extends Controller
         // Fetch tarif using SpmbSikeuService
         $sikeuService = app(\App\Services\Sikeu\SpmbSikeuService::class);
         $gelombang = \App\Models\Spmb\GelombangPenerimaan::find($validated['gelombang_id']);
-        $nominal = $sikeuService->getTarifPendaftaranSpmb($gelombang->jalur_masuk_id, $gelombang->id);
+        $nominal = $sikeuService->getTarifPendaftaranSpmb($gelombang->jalur_masuk_id ?? 1, $gelombang->id ?? 1);
+        if ($nominal <= 0) {
+            $nominal = ($gelombang && $gelombang->biaya_pendaftaran > 0) ? (float) $gelombang->biaya_pendaftaran : 250000.00;
+        }
 
         // Generate External Bill via internal Request
         $payload = [

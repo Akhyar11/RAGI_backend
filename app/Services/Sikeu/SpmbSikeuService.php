@@ -22,12 +22,22 @@ class SpmbSikeuService
             ->where('is_active', true)
             ->first();
 
-        if ($tarif) {
+        if ($tarif && $tarif->nominal > 0) {
             return (float) $tarif->nominal;
         }
 
         $jenisBiaya = JenisBiaya::where('tipe', 'spmb_adm')->first();
+        if ($jenisBiaya && $jenisBiaya->nominal_standar > 0) {
+            return (float) $jenisBiaya->nominal_standar;
+        }
 
-        return (float) ($jenisBiaya->nominal_standar ?? 0);
+        if ($gelombangId) {
+            $gelombang = \App\Models\Spmb\GelombangPenerimaan::find($gelombangId);
+            if ($gelombang && $gelombang->biaya_pendaftaran > 0) {
+                return (float) $gelombang->biaya_pendaftaran;
+            }
+        }
+
+        return 250000.00;
     }
 }

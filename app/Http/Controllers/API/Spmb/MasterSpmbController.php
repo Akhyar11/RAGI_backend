@@ -193,4 +193,26 @@ class MasterSpmbController extends Controller
             'message' => 'Gelombang penerimaan berhasil dihapus.'
         ]);
     }
+
+    /**
+     * Get all active Program Studi for SPMB
+     */
+    public function getProgramStudi(): JsonResponse
+    {
+        $prodi = \App\Models\Spmb\MasterProgramStudi::where('is_active', true)->get();
+        if ($prodi->isEmpty()) {
+            // Seed fallback if master prodi is empty
+            $prodi = collect([
+                ['id' => 1, 'kode_prodi' => 'TI-S1', 'nama' => 'S1 Teknik Informatika', 'jenjang' => 'S1'],
+                ['id' => 2, 'kode_prodi' => 'SI-S1', 'nama' => 'S1 Sistem Informasi', 'jenjang' => 'S1'],
+                ['id' => 3, 'kode_prodi' => 'DKV-S1', 'nama' => 'S1 Desain Komunikasi Visual', 'jenjang' => 'S1'],
+                ['id' => 4, 'kode_prodi' => 'MI-D3', 'nama' => 'D3 Manajemen Informatika', 'jenjang' => 'D3'],
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $prodi
+        ]);
+    }
 }
