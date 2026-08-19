@@ -82,7 +82,7 @@ return new class extends Migration
             $table->date('jatuh_tempo')->nullable();
             $table->timestamps();
 
-            $table->unique(['mahasiswa_id', 'tahun_akademik_id', 'nomor_tagihan']);
+            $table->unique(['mahasiswa_id', 'tahun_akademik_id', 'nomor_tagihan'], 'tagihan_mhs_ta_nomor_unique');
         });
 
         // 6. Detail Tagihan

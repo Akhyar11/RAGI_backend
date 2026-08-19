@@ -215,8 +215,9 @@ class MenuSeeder extends Seeder
                 'module' => 'spmb',
                 'order_index' => 2,
                 'children' => [
-                    ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 1],
-                    ['name' => 'Gelombang', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 2],
+                    ['name' => 'Data Pendaftar', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUsers', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 1],
+                    ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 2],
+                    ['name' => 'Gelombang', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 3],
                 ]
             ],
         ];

@@ -51,6 +51,25 @@ class SpmbPendaftaranService
     public function tetapkanKelulusan(PendaftaranCalonMhs $pendaftaran, array $dataSeleksi): HasilSeleksi
     {
         return DB::transaction(function () use ($pendaftaran, $dataSeleksi) {
+            
+            // Cek Kuota jika meluluskan
+            if ($dataSeleksi['status'] === 'lulus' && !empty($dataSeleksi['program_studi_diterima_id'])) {
+                $gelombang = $pendaftaran->gelombangPenerimaan;
+                $kuotaProdi = \App\Models\Spmb\SpmbKuotaProdi::where('tahun_akademik_id', $gelombang->tahun_akademik_id ?? 1)
+                    ->where('program_studi_id', $dataSeleksi['program_studi_diterima_id'])
+                    ->first();
+                
+                if ($kuotaProdi && $kuotaProdi->kuota_terisi >= $kuotaProdi->kuota_total) {
+                    throw ValidationException::withMessages([
+                        'status' => 'Kuota untuk Program Studi ini sudah penuh (' . $kuotaProdi->kuota_total . ').'
+                    ]);
+                }
+
+                if ($kuotaProdi) {
+                    $kuotaProdi->increment('kuota_terisi');
+                }
+            }
+
             $hasil = HasilSeleksi::updateOrCreate(
                 ['pendaftaran_id' => $pendaftaran->id],
                 [
@@ -58,15 +77,11 @@ class SpmbPendaftaranService
                     'nilai_total' => $dataSeleksi['nilai_total'],
                     'peringkat' => $dataSeleksi['peringkat'] ?? null,
                     'status' => $dataSeleksi['status'], // 'lulus', 'tidak_lulus', 'cadangan'
+                    'status_daftar_ulang' => $dataSeleksi['status'] === 'lulus' ? 'belum' : 'belum',
                     'catatan' => $dataSeleksi['catatan'] ?? null,
                     'diumumkan_at' => $dataSeleksi['diumumkan_at'] ?? now(),
                 ]
             );
-
-            // Jika status lulus, trigger event untuk konversi mahasiswa dan pembuatan akun (async)
-            if ($hasil->status === 'lulus') {
-                event(new MahasiswaDiterima($pendaftaran));
-            }
 
             return $hasil;
         });

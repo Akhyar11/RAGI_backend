@@ -18,13 +18,13 @@ class PendaftaranCalonMhsObserver
     public function created(PendaftaranCalonMhs $pendaftaranCalonMhs): void
     {
         try {
-            $this->auditLogService->log(
-                'SPMB',
-                'create',
-                $pendaftaranCalonMhs->getTable(),
-                $pendaftaranCalonMhs->id,
-                null,
-                $pendaftaranCalonMhs->toArray()
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'create',
+                tableName: $pendaftaranCalonMhs->getTable(),
+                recordId: $pendaftaranCalonMhs->id,
+                oldValues: null,
+                newValues: $pendaftaranCalonMhs->toArray()
             );
         } catch (\Exception $e) {
             Log::error("Failed to log creation for PendaftaranCalonMhs ID {$pendaftaranCalonMhs->id}: " . $e->getMessage());
@@ -34,13 +34,13 @@ class PendaftaranCalonMhsObserver
     public function updated(PendaftaranCalonMhs $pendaftaranCalonMhs): void
     {
         try {
-            $this->auditLogService->log(
-                'SPMB',
-                'update',
-                $pendaftaranCalonMhs->getTable(),
-                $pendaftaranCalonMhs->id,
-                $pendaftaranCalonMhs->getOriginal(),
-                $pendaftaranCalonMhs->getChanges()
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'update',
+                tableName: $pendaftaranCalonMhs->getTable(),
+                recordId: $pendaftaranCalonMhs->id,
+                oldValues: $pendaftaranCalonMhs->getOriginal(),
+                newValues: $pendaftaranCalonMhs->getChanges()
             );
         } catch (\Exception $e) {
             Log::error("Failed to log update for PendaftaranCalonMhs ID {$pendaftaranCalonMhs->id}: " . $e->getMessage());
@@ -50,13 +50,13 @@ class PendaftaranCalonMhsObserver
     public function deleted(PendaftaranCalonMhs $pendaftaranCalonMhs): void
     {
         try {
-            $this->auditLogService->log(
-                'SPMB',
-                'delete',
-                $pendaftaranCalonMhs->getTable(),
-                $pendaftaranCalonMhs->id,
-                $pendaftaranCalonMhs->toArray(),
-                null
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'delete',
+                tableName: $pendaftaranCalonMhs->getTable(),
+                recordId: $pendaftaranCalonMhs->id,
+                oldValues: $pendaftaranCalonMhs->toArray(),
+                newValues: null
             );
         } catch (\Exception $e) {
             Log::error("Failed to log deletion for PendaftaranCalonMhs ID {$pendaftaranCalonMhs->id}: " . $e->getMessage());

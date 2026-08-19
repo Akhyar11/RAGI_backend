@@ -27,9 +27,31 @@ class CalonMahasiswaController extends Controller
             ->where('user_id', $user->id)
             ->first();
 
+        $tagihanData = null;
+        if ($pendaftaran) {
+            $tagihan = \App\Models\Sikeu\TagihanMahasiswa::with('virtualAccount')
+                ->where('calon_mahasiswa_id', $pendaftaran->id)
+                ->where('source_system', 'SPMB')
+                ->first();
+                
+            if ($tagihan) {
+                $tagihanData = [
+                    'tagihan' => $tagihan,
+                    'virtual_account' => $tagihan->virtualAccount
+                ];
+            }
+        }
+
+        if ($pendaftaran && $tagihanData) {
+            $pendaftaran->tagihan_info = $tagihanData;
+        }
+
         return response()->json([
             'status' => 'success',
-            'data' => $pendaftaran
+            'data' => $pendaftaran ? [
+                'pendaftaran' => $pendaftaran,
+                'tagihan' => $tagihanData
+            ] : null
         ]);
     }
 
@@ -58,14 +80,45 @@ class CalonMahasiswaController extends Controller
             ['user_id' => $user->id, 'gelombang_id' => $validated['gelombang_id']],
             array_merge($validated, [
                 'no_pendaftaran' => 'REG-' . date('Ymd') . '-' . rand(1000, 9999),
-                'status' => 'draft'
+                'kewarganegaraan' => 'WNI',
+                'status' => 'draft',
+                'status_pembayaran' => 'belum_bayar'
             ])
         );
 
+        // Fetch tarif using SpmbSikeuService
+        $sikeuService = app(\App\Services\Sikeu\SpmbSikeuService::class);
+        $gelombang = \App\Models\Spmb\GelombangPenerimaan::find($validated['gelombang_id']);
+        $nominal = $sikeuService->getTarifPendaftaranSpmb($gelombang->jalur_masuk_id, $gelombang->id);
+
+        // Generate External Bill via internal Request
+        $payload = [
+            'calon_mahasiswa_id' => $pendaftaran->id,
+            'tipe_referensi' => 'calon_mahasiswa',
+            'tahun_akademik_id' => $gelombang->tahun_akademik_id ?? 1,
+            'source_system' => 'SPMB',
+            'requires_approval' => false,
+            'keterangan' => 'Pendaftaran SPMB - ' . $validated['nama_lengkap'],
+            'details' => [
+                [
+                    'jenis_biaya_kode' => 'SPMB_ADM',
+                    'nominal' => $nominal,
+                    'keterangan' => 'Biaya Formulir Pendaftaran SPMB'
+                ]
+            ]
+        ];
+
+        $externalReq = \Illuminate\Http\Request::create('/api/v1/sikeu/tagihan/external', 'POST', $payload);
+        $res = app(\App\Http\Controllers\Sikeu\ExternalTagihanController::class)->createExternalBill($externalReq);
+        $vaData = json_decode($res->getContent(), true);
+
         return response()->json([
             'status' => 'success',
-            'message' => 'Biodata berhasil disimpan.',
-            'data' => $pendaftaran
+            'message' => 'Biodata berhasil disimpan dan Tagihan diterbitkan.',
+            'data' => [
+                'pendaftaran' => $pendaftaran,
+                'tagihan' => $vaData['data'] ?? null
+            ]
         ]);
     }
 

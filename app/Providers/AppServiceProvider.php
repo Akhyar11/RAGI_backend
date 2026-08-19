@@ -11,7 +11,10 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Events\Sikeu\PembayaranSpmbLunas::class,
+            \App\Listeners\Spmb\UpdateStatusPembayaranSpmb::class
+        );
     }
 
     public function boot(): void

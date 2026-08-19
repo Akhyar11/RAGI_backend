@@ -23,6 +23,18 @@ class MasterSpmbController extends Controller
     }
 
     /**
+     * Show Jalur Masuk
+     */
+    public function showJalurMasuk($id): JsonResponse
+    {
+        $jalur = JalurMasuk::findOrFail($id);
+        return response()->json([
+            'status' => 'success',
+            'data' => $jalur
+        ]);
+    }
+
+    /**
      * Store Jalur Masuk
      */
     public function storeJalurMasuk(Request $request): JsonResponse
@@ -31,7 +43,7 @@ class MasterSpmbController extends Controller
             'kode' => 'required|string|unique:jalur_masuk,kode',
             'nama' => 'required|string',
             'deskripsi' => 'nullable|string',
-            'tipe' => 'required|in:reguler,mandiri,prestasi,kerjasama',
+            'tipe' => 'required|in:reguler,transfer,beasiswa,internasional,rpla',
             'ada_ujian_tulis' => 'required|boolean',
             'ada_ujian_praktik' => 'required|boolean',
             'ada_wawancara' => 'required|boolean',
@@ -58,7 +70,7 @@ class MasterSpmbController extends Controller
             'kode' => 'required|string|unique:jalur_masuk,kode,' . $jalur->id,
             'nama' => 'required|string',
             'deskripsi' => 'nullable|string',
-            'tipe' => 'required|in:reguler,mandiri,prestasi,kerjasama',
+            'tipe' => 'required|in:reguler,transfer,beasiswa,internasional,rpla',
             'ada_ujian_tulis' => 'required|boolean',
             'ada_ujian_praktik' => 'required|boolean',
             'ada_wawancara' => 'required|boolean',
@@ -94,6 +106,18 @@ class MasterSpmbController extends Controller
     public function getGelombang(): JsonResponse
     {
         $gelombang = GelombangPenerimaan::with('jalurMasuk')->orderBy('tanggal_buka', 'desc')->get();
+        return response()->json([
+            'status' => 'success',
+            'data' => $gelombang
+        ]);
+    }
+
+    /**
+     * Show Gelombang
+     */
+    public function showGelombang($id): JsonResponse
+    {
+        $gelombang = GelombangPenerimaan::with('jalurMasuk')->findOrFail($id);
         return response()->json([
             'status' => 'success',
             'data' => $gelombang
