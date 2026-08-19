@@ -38,10 +38,12 @@ class AuthController extends Controller
             'is_verified' => false,
         ]);
 
-        // Default assign role 'calon_mhs' to newly registered users
-        $roleCalonMhs = \App\Models\Role::where('slug', 'calon_mhs')->first();
-        if ($roleCalonMhs) {
-            $user->roles()->attach($roleCalonMhs->id);
+        $defaultRoleSetting = \App\Models\SystemSetting::where('key', 'default_register_role')->first();
+        $roleSlug = $defaultRoleSetting ? $defaultRoleSetting->value : 'calon_mhs';
+        
+        $defaultRole = \App\Models\Role::where('slug', $roleSlug)->first();
+        if ($defaultRole) {
+            $user->roles()->attach($defaultRole->id);
         }
 
         // Generate email verification token
@@ -54,11 +56,13 @@ class AuthController extends Controller
         // Send email
         Mail::to($user->email)->send(new VerifyEmailMail($verifyUrl, $user->username));
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $tokenResult = $user->createToken('auth_token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
 
         return response()->json([
-            'message' => 'User registered successfully. Silakan periksa email Anda untuk memverifikasi akun.',
-            'data' => $user,
+            'status' => 'success',
+            'message' => 'Pendaftaran berhasil. Silakan periksa email Anda untuk verifikasi akun.',
+            'data' => $user->load(['roles', 'roles.permissions']),
             'access_token' => $token,
             'token_type' => 'Bearer',
         ], 201);
@@ -102,22 +106,26 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|string|email',
+            'identifier' => 'required|string',
             'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $identifier = $request->identifier ?? $request->email ?? $request->username;
+
+        $user = User::where('email', $identifier)
+            ->orWhere('username', $identifier)
+            ->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
-            AuditLogService::record('IAM', 'login_failed', 'users', $user?->id, null, ['email' => $request->email]);
+            AuditLogService::record('IAM', 'login_failed', 'users', $user?->id, null, ['identifier' => $identifier]);
             throw ValidationException::withMessages([
-                'email' => ['Kredensial yang diberikan salah.'],
+                'identifier' => ['Kredensial yang diberikan salah.'],
             ]);
         }
 
         if (!$user->is_active) {
             throw ValidationException::withMessages([
-                'email' => ['Akun Anda tidak aktif.'],
+                'identifier' => ['Akun Anda tidak aktif.'],
             ]);
         }
 

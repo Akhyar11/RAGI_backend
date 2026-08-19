@@ -104,6 +104,10 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::get('audit-logs', [App\Http\Controllers\AuditLogController::class, 'index']);
     Route::get('audit-logs/{id}', [App\Http\Controllers\AuditLogController::class, 'show']);
 
+    // System Settings
+    Route::get('system-settings', [App\Http\Controllers\IAM\SystemSettingController::class, 'index']);
+    Route::post('system-settings', [App\Http\Controllers\IAM\SystemSettingController::class, 'update']);
+
     // Menus (Admin Management)
     Route::get('menus', [MenuController::class, 'index']);
     Route::post('menus', [MenuController::class, 'store']);
@@ -187,55 +191,11 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 |--------------------------------------------------------------------------
 | SPMB (Sistem Penerimaan Mahasiswa Baru) Routes
 |--------------------------------------------------------------------------
+| Route SPMB dipindah ke:
+|   - routes/spmb_core.php  (alur inti)
+|   - routes/spmb_ujian.php (ujian & seleksi)
+| Kedua file dimuat via bootstrap/app.php -> withRouting()->then()
 */
-Route::middleware('auth:api')->prefix('spmb')->group(function () {
-    // Master Data SPMB
-    Route::get('jalur', [\App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getJalurMasuk']);
-    Route::get('jalur/{id}', [\App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'showJalurMasuk']);
-    Route::post('jalur', [\App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'storeJalurMasuk']);
-    Route::put('jalur/{id}', [\App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'updateJalurMasuk']);
-    Route::delete('jalur/{id}', [\App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'destroyJalurMasuk']);
-
-    Route::get('gelombang', [\App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getGelombang']);
-    Route::get('gelombang/{id}', [\App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'showGelombang']);
-    Route::post('gelombang', [\App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'storeGelombang']);
-    Route::put('gelombang/{id}', [\App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'updateGelombang']);
-    Route::delete('gelombang/{id}', [\App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'destroyGelombang']);
-    
-    // Pendaftaran SPMB
-    Route::get('pendaftaran', [\App\Http\Controllers\API\Spmb\PendaftaranController::class, 'index']);
-    
-    // Calon Mahasiswa specific routes must be before {id} param route
-    Route::get('pendaftaran/me', [App\Http\Controllers\API\Spmb\CalonMahasiswaController::class, 'myPendaftaran']);
-    Route::post('pendaftaran/biodata', [App\Http\Controllers\API\Spmb\CalonMahasiswaController::class, 'storeBiodata']);
-    Route::post('pendaftaran/finalize', [App\Http\Controllers\API\Spmb\CalonMahasiswaController::class, 'finalize']);
-
-    Route::get('pendaftaran/{id}', [\App\Http\Controllers\API\Spmb\PendaftaranController::class, 'show']);
-    Route::post('pendaftaran/{id}/status', [\App\Http\Controllers\API\Spmb\PendaftaranController::class, 'updateStatus']);
-    Route::post('pendaftaran/berkas/{id}/verify', [\App\Http\Controllers\API\Spmb\PendaftaranController::class, 'verifyBerkas']);
-
-    // Seleksi & Verifikasi (Admin SPMB)
-    Route::get('pendaftar', [App\Http\Controllers\API\Spmb\AdminSeleksiController::class, 'getPendaftar']);
-    Route::post('pendaftar/{id}/verifikasi', [App\Http\Controllers\API\Spmb\AdminSeleksiController::class, 'verifikasi']);
-    Route::post('pendaftar/{id}/kelulusan', [App\Http\Controllers\API\Spmb\AdminSeleksiController::class, 'tetapkanKelulusan']);
-
-    // Kuota Program Studi
-    Route::apiResource('kuota-prodi', \App\Http\Controllers\API\Spmb\SpmbKuotaProdiController::class);
-
-    // Daftar Ulang
-    Route::post('daftar-ulang/{pendaftaran_id}/generate-tagihan', [\App\Http\Controllers\API\Spmb\DaftarUlangController::class, 'generateTagihan']);
-    Route::post('daftar-ulang/{pendaftaran_id}/konfirmasi', [\App\Http\Controllers\API\Spmb\DaftarUlangController::class, 'konfirmasi']);
-
-    // Ujian Masuk / CBT
-    Route::get('jadwal-ujian', [\App\Http\Controllers\API\Spmb\JadwalUjianController::class, 'index']);
-    Route::post('jadwal-ujian', [\App\Http\Controllers\API\Spmb\JadwalUjianController::class, 'store']);
-    Route::get('jadwal-ujian/{id}', [\App\Http\Controllers\API\Spmb\JadwalUjianController::class, 'show']);
-    Route::post('jadwal-ujian/{id}/assign-peserta', [\App\Http\Controllers\API\Spmb\JadwalUjianController::class, 'assignPeserta']);
-
-    // Laporan & Export Data
-    Route::get('laporan/statistik', [\App\Http\Controllers\API\Spmb\LaporanSpmbController::class, 'statistik']);
-    Route::get('laporan/export-csv', [\App\Http\Controllers\API\Spmb\LaporanSpmbController::class, 'exportCsv']);
-});
 
 /*
 |--------------------------------------------------------------------------

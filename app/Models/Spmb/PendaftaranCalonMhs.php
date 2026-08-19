@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\User;
-use App\Models\Siakad\ProgramStudi;
+use App\Models\Spmb\MasterProgramStudi;
 use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\Spmb\DokumenPendaftaran;
 use App\Models\Spmb\PembayaranSpmb;
@@ -14,10 +14,25 @@ use App\Models\Spmb\PesertaUjianSpmb;
 use App\Models\Spmb\JawabanKuesionerSpmb;
 use App\Models\Spmb\NilaiSeleksi;
 use App\Models\Spmb\HasilSeleksi;
+use App\Models\Spmb\SpmbStatusHistory;
 
 class PendaftaranCalonMhs extends Model
 {
     use HasFactory, SoftDeletes;
+
+    // ── Nilai status pendaftaran (kolom string, bukan enum) ──────────
+    public const STATUS_DRAFT = 'draft';
+    public const STATUS_SUBMITTED = 'submitted';
+    public const STATUS_VERIFIED = 'verified';
+    public const STATUS_LULUS_ADMINISTRASI = 'lulus_administrasi';
+    public const STATUS_GAGAL_ADMINISTRASI = 'gagal_administrasi';
+    public const STATUS_MAHASISWA_BARU = 'mahasiswa_baru';
+
+    // ── Nilai status pembayaran ──────────────────────────────────────
+    public const STATUS_PEMBAYARAN_BELUM = 'belum_bayar';
+    public const STATUS_PEMBAYARAN_SEBAGIAN = 'sebagian';
+    public const STATUS_PEMBAYARAN_LUNAS = 'lunas';
+    public const STATUS_PEMBAYARAN_GRATIS = 'gratis';
 
     protected $table = 'pendaftaran_calon_mhs';
 
@@ -27,6 +42,7 @@ class PendaftaranCalonMhs extends Model
         'program_studi_id',
         'program_studi_pilihan2_id',
         'no_pendaftaran',
+        'nim',
         'nama_lengkap',
         'nik',
         'tanggal_lahir',
@@ -65,12 +81,12 @@ class PendaftaranCalonMhs extends Model
 
     public function programStudi()
     {
-        return $this->belongsTo(ProgramStudi::class, 'program_studi_id');
+        return $this->belongsTo(MasterProgramStudi::class, 'program_studi_id');
     }
 
     public function programStudiPilihan2()
     {
-        return $this->belongsTo(ProgramStudi::class, 'program_studi_pilihan2_id');
+        return $this->belongsTo(MasterProgramStudi::class, 'program_studi_pilihan2_id');
     }
 
     public function verifikator()

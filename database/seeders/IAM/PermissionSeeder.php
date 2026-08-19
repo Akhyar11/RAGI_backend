@@ -241,6 +241,17 @@ class PermissionSeeder extends Seeder
                 }
             }
         }
+        if ($calonMhsRole) {
+            $calonSlugs = [
+                'spmb.dashboard.read',
+                'spmb.pendaftaran.create',
+            ];
+            $perms = Permission::whereIn('slug', $calonSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::create(['role_id' => $calonMhsRole->id, 'permission_id' => $p->id]);
+            }
+        }
+        
         if ($mahasiswaRole) {
             $mahasiswaSlugs = [
                 'sikeu.dashboard.read',
