@@ -23,7 +23,7 @@ class CalonMahasiswaController extends Controller
     public function myPendaftaran(Request $request): JsonResponse
     {
         $user = $request->user();
-        $pendaftaran = PendaftaranCalonMhs::with(['gelombangPenerimaan', 'pembayaranSpmb', 'hasilSeleksi'])
+        $pendaftaran = PendaftaranCalonMhs::with(['gelombangPenerimaan', 'pembayaranSpmb', 'hasilSeleksi', 'dokumenPendaftaran'])
             ->where('user_id', $user->id)
             ->first();
 
@@ -279,6 +279,61 @@ class CalonMahasiswaController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Draf pendaftaran dan VA lama berhasil direset. Silakan buat pendaftaran baru.'
+        ]);
+    }
+
+    /**
+     * Upload Berkas / Dokumen Pendaftaran Calon Mahasiswa
+     */
+    public function uploadBerkas(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'jenis_berkas' => 'required|string',
+        ]);
+
+        $user = $request->user();
+        $pendaftaran = PendaftaranCalonMhs::where('user_id', $user->id)->first();
+
+        if (!$pendaftaran) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Pendaftaran tidak ditemukan. Harap isi data registrasi terlebih dahulu.'
+            ], 404);
+        }
+
+        $file = $request->file('file');
+        $fileName = \Illuminate\Support\Str::uuid() . '.' . $file->getClientOriginalExtension();
+        $filePath = $file->storeAs('spmb/dokumen_pendaftaran/' . date('Y/m'), $fileName, 'public');
+
+        // Delete old file if existing berkas record exists
+        $existingBerkas = \App\Models\Spmb\PendaftaranBerkas::where('pendaftaran_id', $pendaftaran->id)
+            ->where('jenis_berkas', $request->jenis_berkas)
+            ->first();
+
+        if ($existingBerkas && !empty($existingBerkas->file_path)) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($existingBerkas->file_path);
+        }
+
+        $berkas = \App\Models\Spmb\PendaftaranBerkas::updateOrCreate(
+            [
+                'pendaftaran_id' => $pendaftaran->id,
+                'jenis_berkas' => $request->jenis_berkas,
+            ],
+            [
+                'file_path' => $filePath,
+                'is_verified' => false,
+            ]
+        );
+
+        $fileUrl = asset(\Illuminate\Support\Facades\Storage::url($filePath));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Dokumen ' . strtoupper($request->jenis_berkas) . ' berhasil diunggah.',
+            'data' => array_merge($berkas->toArray(), [
+                'file_url' => $fileUrl,
+            ])
         ]);
     }
 }

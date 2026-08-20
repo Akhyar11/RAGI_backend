@@ -39,6 +39,7 @@ Route::get('pendaftaran', [PendaftaranController::class, 'index']);
 // Calon Mahasiswa specific routes must be before {id} param route
 Route::get('pendaftaran/me', [CalonMahasiswaController::class, 'myPendaftaran']);
 Route::post('pendaftaran/biodata', [CalonMahasiswaController::class, 'storeBiodata']);
+Route::post('pendaftaran/berkas', [CalonMahasiswaController::class, 'uploadBerkas']);
 Route::post('pendaftaran/finalize', [CalonMahasiswaController::class, 'finalize']);
 Route::post('pendaftaran/reissue-va', [CalonMahasiswaController::class, 'reissueVa']);
 Route::post('pendaftaran/reset', [CalonMahasiswaController::class, 'resetPendaftaran']);

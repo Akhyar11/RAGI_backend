@@ -108,7 +108,7 @@ class PendaftaranCalonMhs extends Model
 
     public function dokumenPendaftaran()
     {
-        return $this->hasMany(DokumenPendaftaran::class, 'pendaftaran_id');
+        return $this->hasMany(PendaftaranBerkas::class, 'pendaftaran_id');
     }
 
     public function pembayaranSpmb()
