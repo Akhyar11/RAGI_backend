@@ -33,3 +33,14 @@ Sebelum mengeksekusi tugas apapun, Anda WAJIB memeriksa daftar skill di bawah in
 # Git Push Policy
 Agent **DILARANG KERAS** melakukan eksekusi perintah `git push` secara otomatis setelah menyelesaikan tugas atau setelah melakukan commit. Perintah `git push` HANYA boleh dieksekusi jika User memintanya secara eksplisit (misalnya: "push ke github").
 </RULE[github_push]>
+
+<RULE[no_hardcode_definition]>
+# Zero Hardcode & Dynamic Entity Reference Policy
+
+## Definisi Hardcode
+Hardcode adalah suatu metode atau cara pengambilan data, pengiriman data, atau pengaturan data dengan **menyebutkan/mengetik nama atau label string secara langsung** (misalnya menyebutkan `'spmb'`, `'sikeu'`, atau string nama spesifik lainnya) alih-alih merujuk pada identitas entitas database.
+
+## Aturan Pengkodean
+1. **Minimal Hardcode**: Sistem yang baik harus meminimalkan hardcode hingga 0%.
+2. **Referensi ID Wajib**: Seluruh relasi, filter, dan query wajib menggunakan **referensi ID entitas** (seperti `module.id`, `jenis_biaya.id`, dsb.) yang diambil dari database, bukan berupa label string atau hardcode nama.
+</RULE[no_hardcode_definition]>
