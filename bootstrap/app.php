@@ -15,9 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         then: function () {
-            // Protected SPMB module routes (auth:api + prefix api/spmb)
-            Route::middleware('auth:api')->prefix('api/spmb')->group(base_path('routes/spmb_core.php'));
-            Route::middleware('auth:api')->prefix('api/spmb')->group(base_path('routes/spmb_ujian.php'));
+            // Protected SPMB module routes (auth:api + CheckMenuAccess + prefix api/spmb)
+            Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->prefix('api/spmb')->group(base_path('routes/spmb_core.php'));
+            Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->prefix('api/spmb')->group(base_path('routes/spmb_ujian.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {

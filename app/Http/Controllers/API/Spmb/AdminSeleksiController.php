@@ -22,23 +22,6 @@ class AdminSeleksiController extends Controller
      */
     public function getPendaftar(Request $request): JsonResponse
     {
-        $user = $request->user();
-        if (!$user) {
-            return response()->json(['status' => 'error', 'message' => 'Unauthenticated.'], 401);
-        }
-
-        // Dynamic DB menu access check using Menu entity and menu_role pivot table
-        $menu = \App\Models\Menu::where('url', '/spmb/pendaftaran')->first();
-        $roleIds = $user->roles()->pluck('roles.id')->toArray();
-        $hasMenuAccess = $user->isSuperAdmin() || ($menu && $menu->roles()->whereIn('roles.id', $roleIds)->exists());
-
-        if (!$hasMenuAccess) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Unauthorized access. Menu ini belum diaktifkan untuk role Anda di database.'
-            ], 403);
-        }
-
         $query = PendaftaranCalonMhs::with(['gelombangPenerimaan', 'hasilSeleksi']);
         
         if ($request->has('status')) {

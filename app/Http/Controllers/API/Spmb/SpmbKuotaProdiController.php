@@ -12,14 +12,6 @@ class SpmbKuotaProdiController extends Controller
 {
     public function index(Request $request)
     {
-        $user = $request->user();
-        if (!MenuService::hasAccess($user, '/spmb/master/kuota')) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Unauthorized access. Menu ini belum diaktifkan untuk role Anda di database.'
-            ], 403);
-        }
-
         $query = SpmbKuotaProdi::query();
         
         if ($request->has('tahun_akademik_id')) {
