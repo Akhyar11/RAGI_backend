@@ -65,5 +65,14 @@ class ModuleSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        Module::updateOrCreate(
+            ['code' => 'siakad'],
+            [
+                'name' => 'SIAKAD (Akademik)',
+                'description' => 'Sistem Informasi Akademik dan Perkuliahan Kampus.',
+                'is_active' => true,
+            ]
+        );
     }
 }

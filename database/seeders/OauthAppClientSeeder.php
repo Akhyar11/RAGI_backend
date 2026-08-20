@@ -97,5 +97,23 @@ class OauthAppClientSeeder extends Seeder
 
             $this->command->info("✓ Client [{$app['client_app']}] registered — ID: {$passportClient->id}");
         }
+
+        // Pastikan Personal Access Client tersedia untuk provider 'users'
+        try {
+            $personalClient = $clientRepo->personalAccessClient('users');
+            if (!$personalClient) {
+                $createdClient = $clientRepo->createPersonalAccessGrantClient(
+                    name: 'Campus Personal Access Client',
+                    provider: 'users'
+                );
+                $this->command->info("✓ Personal Access Client registered — ID: {$createdClient->id}");
+            }
+        } catch (\Throwable $e) {
+            $createdClient = $clientRepo->createPersonalAccessGrantClient(
+                name: 'Campus Personal Access Client',
+                provider: 'users'
+            );
+            $this->command->info("✓ Personal Access Client created — ID: {$createdClient->id}");
+        }
     }
 }

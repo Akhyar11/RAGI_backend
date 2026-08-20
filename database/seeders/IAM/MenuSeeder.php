@@ -5,56 +5,52 @@ namespace Database\Seeders\IAM;
 use Illuminate\Database\Seeder;
 use App\Models\Menu;
 use App\Models\Permission;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class MenuSeeder extends Seeder
 {
     public function run(): void
     {
-        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
-        \Illuminate\Support\Facades\DB::table('menus')->truncate();
-        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
-
-        // Cari permission untuk dijadikan referensi
-        $dashboardPermission = Permission::where('slug', 'dashboard.read')->first();
-        $userPermission = Permission::where('slug', 'users.read')->first();
-        $rolePermission = Permission::where('slug', 'roles.read')->first();
+        Schema::disableForeignKeyConstraints();
+        DB::table('menus')->truncate();
+        Schema::enableForeignKeyConstraints();
 
         $menus = [
-            // Menu SSO (Core)
+            // ── MODUL SSO (IAM) ───────────────────────────────────
             [
                 'name' => 'Dashboard Utama',
                 'url' => '/dashboard',
-                'icon' => 'FaChartPie',
+                'icon' => 'FaHome',
                 'module' => 'sso',
-                'permission_slug' => 'dashboard.read',
                 'order_index' => 1,
             ],
             [
-                'name' => 'MASTER',
-                'url' => '#master',
-                'icon' => 'FaList',
+                'name' => 'KONTROL AKSES SSO',
+                'url' => '#iam_section',
+                'icon' => 'FaShieldAlt',
                 'module' => 'sso',
                 'order_index' => 2,
                 'children' => [
-                    ['name' => 'User', 'url' => '/admin/users', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.users.read', 'order_index' => 1],
-                    ['name' => 'Role', 'url' => '/admin/roles', 'icon' => 'FaShieldAlt', 'module' => 'sso', 'permission_slug' => 'iam.roles.read', 'order_index' => 2],
-                    ['name' => 'Module (Sistem)', 'url' => '/admin/modules', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.permissions.manage', 'order_index' => 3],
-                    ['name' => 'Menu', 'url' => '/admin/menus', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.permissions.manage', 'order_index' => 4],
+                    ['name' => 'Pengguna Portal', 'url' => '/admin/users', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.users.read', 'order_index' => 1],
+                    ['name' => 'Master Role', 'url' => '/admin/roles', 'icon' => 'FaShieldAlt', 'module' => 'sso', 'permission_slug' => 'iam.roles.read', 'order_index' => 2],
+                    ['name' => 'Hak Akses (Permissions)', 'url' => '/admin/permissions', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.permissions.read', 'order_index' => 3],
+                    ['name' => 'Plotting User Role', 'url' => '/admin/user-roles', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.user_roles.manage', 'order_index' => 4],
+                    ['name' => 'Plotting Role Permission', 'url' => '/admin/role-permissions', 'icon' => 'FaClipboardCheck', 'module' => 'sso', 'permission_slug' => 'iam.permissions.manage', 'order_index' => 5],
+                    ['name' => 'Plotting Role Menu', 'url' => '/admin/role-menus', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 6],
+                    ['name' => 'Master Menu', 'url' => '/admin/menus', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 7],
+                    ['name' => 'Master Modul', 'url' => '/admin/modules', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 8],
                 ]
             ],
             [
-                'name' => 'MENU',
-                'url' => '#menu',
-                'icon' => 'FaList',
+                'name' => 'LOG & AUDIT',
+                'url' => '#audit_section',
+                'icon' => 'FaFileAlt',
                 'module' => 'sso',
                 'order_index' => 3,
                 'children' => [
-                    ['name' => 'User Role', 'url' => '/admin/user-roles', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.user_roles.manage', 'order_index' => 1],
-                    ['name' => 'Role Permission', 'url' => '/admin/role-permissions', 'icon' => 'FaShieldAlt', 'module' => 'sso', 'permission_slug' => 'iam.permissions.manage', 'order_index' => 2],
-                    ['name' => 'Permission Akses', 'url' => '/admin/permissions', 'icon' => 'FaShieldAlt', 'module' => 'sso', 'permission_slug' => 'iam.permissions.read', 'order_index' => 3],
-                    ['name' => 'Akses Menu', 'url' => '/admin/role-menus', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.permissions.manage', 'order_index' => 4],
-                    ['name' => 'Monitor Aksi', 'url' => '/admin/sessions', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.sessions.read', 'order_index' => 5],
-                    ['name' => 'Audit Logs', 'url' => '/admin/audit-logs', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.audit_logs.read', 'order_index' => 6],
+                    ['name' => 'Sesi Login Aktif', 'url' => '/admin/sessions', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.sessions.read', 'order_index' => 1],
+                    ['name' => 'Audit Log Aktivitas', 'url' => '/admin/audit-logs', 'icon' => 'FaFileAlt', 'module' => 'sso', 'permission_slug' => 'iam.audit_logs.read', 'order_index' => 2],
                 ]
             ],
             [
@@ -70,150 +66,75 @@ class MenuSeeder extends Seeder
                 ]
             ],
 
-            // Menu SIMPEG
+            // ── MODUL SIAKAD (MENU DENGAN PEMBATASAN LEVEL ROLE & PERMISSION) ─────
             [
-                'name' => 'Dashboard SIMPEG',
-                'url' => '/simpeg',
-                'icon' => 'FaChartPie',
-                'module' => 'simpeg',
-                'permission_slug' => 'simpeg.pegawai.read',
+                'name' => 'Dashboard Akademik',
+                'url' => '/siakad',
+                'icon' => 'FaGraduationCap',
+                'module' => 'siakad',
+                'permission_slug' => 'siakad.dashboard.read',
                 'order_index' => 1,
             ],
             [
-                'name' => 'LAYANAN PEGAWAI',
-                'url' => '#layanan_pegawai',
-                'icon' => 'FaList',
-                'module' => 'simpeg',
+                'name' => 'KRS Semester Aktif',
+                'url' => '/siakad/krs',
+                'icon' => 'FaClipboardCheck',
+                'module' => 'siakad',
+                'permission_slug' => 'siakad.krs.read',
                 'order_index' => 2,
-                'children' => [
-                    ['name' => 'Data Pegawai', 'url' => '/simpeg/pegawai', 'icon' => 'FaUsers', 'module' => 'simpeg', 'permission_slug' => 'simpeg.pegawai.read', 'order_index' => 1],
-                    ['name' => 'Dokumen E-File Digital', 'url' => '/simpeg/dokumen', 'icon' => 'FaFileAlt', 'module' => 'simpeg', 'permission_slug' => 'simpeg.dokumen.read', 'order_index' => 2],
-                    ['name' => 'Layanan & Cuti Pegawai', 'url' => '/simpeg/cuti', 'icon' => 'FaCalendarCheck', 'module' => 'simpeg', 'permission_slug' => 'simpeg.cuti.read', 'order_index' => 3],
-                    ['name' => 'Monitoring Presensi', 'url' => '/simpeg/presensi', 'icon' => 'FaClock', 'module' => 'simpeg', 'permission_slug' => 'simpeg.presensi.read', 'order_index' => 4],
-                    ['name' => 'Payroll & Slip Gaji', 'url' => '/simpeg/payroll', 'icon' => 'FaMoneyBillWave', 'module' => 'simpeg', 'permission_slug' => 'simpeg.payroll.read', 'order_index' => 5],
-                    ['name' => 'Usulan Jafung (KUM)', 'url' => '/simpeg/usulan-jafung', 'icon' => 'FaAward', 'module' => 'simpeg', 'permission_slug' => 'simpeg.usulan_jafung.read', 'order_index' => 6],
-                    ['name' => 'Penilaian Kinerja SKP', 'url' => '/simpeg/kinerja', 'icon' => 'FaTrophy', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kinerja.read', 'order_index' => 7],
-                ]
             ],
             [
-                'name' => 'MASTER DATA',
-                'url' => '#master_simpeg',
-                'icon' => 'FaList',
-                'module' => 'simpeg',
+                'name' => 'Jadwal Kuliah & RPS',
+                'url' => '/siakad/perkuliahan/kelas',
+                'icon' => 'FaCalendarCheck',
+                'module' => 'siakad',
+                'permission_slug' => 'siakad.kelas.read',
                 'order_index' => 3,
-                'children' => [
-                    ['name' => 'Unit Kerja', 'url' => '/simpeg/unit-kerja', 'icon' => 'FaSitemap', 'module' => 'simpeg', 'permission_slug' => 'simpeg.unit_kerja.read', 'order_index' => 1],
-                    ['name' => 'Master Jabatan & Jafung', 'url' => '/simpeg/jabatan', 'icon' => 'FaBriefcase', 'module' => 'simpeg', 'permission_slug' => 'simpeg.jabatan.read', 'order_index' => 2],
-                ]
-            ],
-
-            // Menu SIPPM (Penelitian & PkM)
-            [
-                'name' => 'Dashboard SIPPM',
-                'url' => '/sippm',
-                'icon' => 'FaChartPie',
-                'module' => 'sippm',
-                'permission_slug' => 'sippm.dashboard.read',
-                'order_index' => 1,
             ],
             [
-                'name' => 'PENELITIAN & PKM',
-                'url' => '#layanan_sippm',
-                'icon' => 'FaList',
-                'module' => 'sippm',
-                'order_index' => 2,
-                'children' => [
-                    ['name' => 'Pengumuman Hibah Internal', 'url' => '/sippm/pengumuman', 'icon' => 'FaBullhorn', 'module' => 'sippm', 'permission_slug' => 'sippm.pengumuman.read', 'order_index' => 1],
-                    ['name' => 'Proposal Usulan', 'url' => '/sippm/proposal', 'icon' => 'FaFileAlt', 'module' => 'sippm', 'permission_slug' => 'sippm.proposal.read', 'order_index' => 2],
-                    ['name' => 'Portal Reviewer', 'url' => '/sippm/reviewer', 'icon' => 'FaClipboardCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.reviewer.read', 'order_index' => 3],
-                    ['name' => 'Kontrak Hibah SPK', 'url' => '/sippm/kontrak', 'icon' => 'FaFileCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.kontrak.read', 'order_index' => 4],
-                    ['name' => 'Pencairan Dana & LPJ', 'url' => '/sippm/pencairan', 'icon' => 'FaCreditCard', 'module' => 'sippm', 'permission_slug' => 'sippm.pencairan.read', 'order_index' => 5],
-                ]
-            ],
-            [
-                'name' => 'PORTOFOLIO LUARAN',
-                'url' => '#luaran_sippm',
-                'icon' => 'FaList',
-                'module' => 'sippm',
-                'order_index' => 3,
-                'children' => [
-                    ['name' => 'Publikasi Ilmiah', 'url' => '/sippm/luaran/publikasi', 'icon' => 'FaBookOpen', 'module' => 'sippm', 'permission_slug' => 'sippm.luaran.read', 'order_index' => 1],
-                    ['name' => 'HKI & Paten Kampus', 'url' => '/sippm/luaran/hki', 'icon' => 'FaAward', 'module' => 'sippm', 'permission_slug' => 'sippm.luaran.read', 'order_index' => 2],
-                ]
-            ],
-            [
-                'name' => 'MASTER DATA',
-                'url' => '#master_sippm',
-                'icon' => 'FaList',
-                'module' => 'sippm',
+                'name' => 'KHS & Transkrip Nilai',
+                'url' => '/siakad/nilai',
+                'icon' => 'FaAward',
+                'module' => 'siakad',
+                'permission_slug' => 'siakad.nilai.read',
                 'order_index' => 4,
-                'children' => [
-                    ['name' => 'Master Skema Kegiatan', 'url' => '/sippm/skema', 'icon' => 'FaLayers', 'module' => 'sippm', 'permission_slug' => 'sippm.skema.read', 'order_index' => 1],
-                    ['name' => 'Master Periode Hibah', 'url' => '/sippm/periode', 'icon' => 'FaCalendar', 'module' => 'sippm', 'permission_slug' => 'sippm.periode.read', 'order_index' => 2],
-                    ['name' => 'Standar IKU 5 Prodi', 'url' => '/sippm/iku5-standards', 'icon' => 'FaChartPie', 'module' => 'sippm', 'permission_slug' => 'sippm.iku5.read', 'order_index' => 3],
-                    ['name' => 'Rubrik Indikator Penilaian', 'url' => '/sippm/rubrik', 'icon' => 'FaClipboardCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.rubrik.read', 'order_index' => 4],
-                ]
-            ],
-
-            // Menu SIKEU (Keuangan & Akuntansi Kampus)
-            [
-                'name' => 'Dashboard SIKEU',
-                'url' => '/sikeu',
-                'icon' => 'FaChartPie',
-                'module' => 'sikeu',
-                'permission_slug' => 'sikeu.dashboard.read',
-                'order_index' => 1,
             ],
             [
-                'name' => 'TAGIHAN & PEMBAYARAN',
-                'url' => '#layanan_sikeu',
-                'icon' => 'FaList',
-                'module' => 'sikeu',
-                'order_index' => 2,
-                'children' => [
-                    ['name' => 'Tagihan & SPP', 'url' => '/sikeu/tagihan', 'icon' => 'FaReceipt', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 1],
-                    ['name' => 'Tagihan Saya (Mahasiswa)', 'url' => '/sikeu/mahasiswa/tagihan', 'icon' => 'FaFileInvoice', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 2],
-                    ['name' => 'Pembayaran Mahasiswa', 'url' => '/sikeu/pembayaran', 'icon' => 'FaCreditCard', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 3],
-                    ['name' => 'Dispensasi Pembayaran', 'url' => '/sikeu/dispensasi', 'icon' => 'FaCalendarCheck', 'module' => 'sikeu', 'permission_slug' => 'sikeu.dispensasi.read', 'order_index' => 4],
-                    ['name' => 'Approval Pimpinan', 'url' => '/sikeu/approval', 'icon' => 'FaShieldAlt', 'module' => 'sikeu', 'permission_slug' => 'sikeu.approval.read', 'order_index' => 5],
-                ]
-            ],
-            [
-                'name' => 'TRANSAKSI KAS & KEUANGAN',
-                'url' => '#transaksi_sikeu',
-                'icon' => 'FaList',
-                'module' => 'sikeu',
-                'order_index' => 3,
-                'children' => [
-                    ['name' => 'Pemasukan Kampus', 'url' => '/sikeu/pemasukan', 'icon' => 'FaMoneyBillWave', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pemasukan.manage', 'order_index' => 1],
-                    ['name' => 'Pengeluaran Operasional', 'url' => '/sikeu/pengeluaran', 'icon' => 'FaFileAlt', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pengeluaran.manage', 'order_index' => 2],
-                    ['name' => 'Kas Unit & Petty Cash', 'url' => '/sikeu/unit-kas', 'icon' => 'FaWallet', 'module' => 'sikeu', 'permission_slug' => 'sikeu.kas.manage', 'order_index' => 3],
-                ]
-            ],
-            [
-                'name' => 'AKUNTANSI & PELAPORAN',
-                'url' => '#akuntansi_sikeu',
-                'icon' => 'FaList',
-                'module' => 'sikeu',
-                'order_index' => 4,
-                'children' => [
-                    ['name' => 'Jurnal & Buku Besar', 'url' => '/sikeu/akuntansi', 'icon' => 'FaBookOpen', 'module' => 'sikeu', 'permission_slug' => 'sikeu.akuntansi.manage', 'order_index' => 1],
-                    ['name' => 'Laporan Keuangan & Pajak', 'url' => '/sikeu/pajak', 'icon' => 'FaChartLine', 'module' => 'sikeu', 'permission_slug' => 'sikeu.laporan.read', 'order_index' => 2],
-                ]
-            ],
-            [
-                'name' => 'MASTER DATA & SYSTEM',
-                'url' => '#master_sikeu',
-                'icon' => 'FaList',
-                'module' => 'sikeu',
+                'name' => 'MASTER AKADEMIK (BAAK)',
+                'url' => '#master_siakad',
+                'icon' => 'FaDatabase',
+                'module' => 'siakad',
                 'order_index' => 5,
                 'children' => [
-                    ['name' => 'Master Biaya & Delegasi', 'url' => '/sikeu/master', 'icon' => 'FaCogs', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
-                    ['name' => 'Konfigurasi Payment Gateway', 'url' => '/sikeu/payment-gateway', 'icon' => 'FaCreditCard', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 2],
+                    ['name' => 'Fakultas & Prodi', 'url' => '/siakad/master/fakultas', 'icon' => 'FaBuilding', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 1],
+                    ['name' => 'Kurikulum OBE', 'url' => '/siakad/master/kurikulum', 'icon' => 'FaBookOpen', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 2],
+                    ['name' => 'Mata Kuliah & Bobot', 'url' => '/siakad/master/matakuliah', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.matakuliah.manage', 'order_index' => 3],
+                ]
+            ],
+            [
+                'name' => 'CIVITAS AKADEMIKA (BAAK)',
+                'url' => '#civitas_siakad',
+                'icon' => 'FaUsers',
+                'module' => 'siakad',
+                'order_index' => 6,
+                'children' => [
+                    ['name' => 'Direktori Mahasiswa', 'url' => '/siakad/civitas/mahasiswa', 'icon' => 'FaUserGraduate', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 1],
+                    ['name' => 'Konversi Mahasiswa Transfer', 'url' => '/siakad/civitas/konversi', 'icon' => 'FaExchangeAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.konversi.manage', 'order_index' => 2],
+                    ['name' => 'Direktori Dosen Pengajar', 'url' => '/siakad/civitas/dosen', 'icon' => 'FaChalkboardTeacher', 'module' => 'siakad', 'permission_slug' => 'siakad.dosen.manage', 'order_index' => 3],
+                ]
+            ],
+            [
+                'name' => 'INTEGRASI DIKTI (BAAK)',
+                'url' => '#feeder_siakad',
+                'icon' => 'FaSyncAlt',
+                'module' => 'siakad',
+                'order_index' => 7,
+                'children' => [
+                    ['name' => 'Sinkronisasi Neo Feeder', 'url' => '/siakad/feeder-sync', 'icon' => 'FaCloudUploadAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.feeder.manage', 'order_index' => 1],
                 ]
             ],
 
-            // Menu SPMB (PenerIMAAN MAHASISWA BARU)
+            // Menu SPMB (Penerimaan Mahasiswa Baru)
             // A. Menu Portal Calon Mahasiswa
             [
                 'name' => 'Dashboard Saya',
@@ -272,8 +193,50 @@ class MenuSeeder extends Seeder
                     ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 3],
                 ]
             ],
-        ];
 
+            // ── MODUL SINAPRA ─────────────────────────────────────
+            [
+                'name' => 'Gedung & Ruangan',
+                'url' => '/sinapra/gedung-ruangan',
+                'icon' => 'FaBuilding',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.ruangan.read',
+                'order_index' => 1,
+            ],
+            [
+                'name' => 'Inventaris Aset',
+                'url' => '/sinapra/aset',
+                'icon' => 'FaBoxes',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.aset.read',
+                'order_index' => 2,
+            ],
+            [
+                'name' => 'Peminjaman',
+                'url' => '/sinapra/peminjaman',
+                'icon' => 'FaCalendarCheck',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.dashboard.read',
+                'order_index' => 3,
+            ],
+            [
+                'name' => 'Maintenance',
+                'url' => '/sinapra/maintenance',
+                'icon' => 'FaWrench',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.dashboard.read',
+                'order_index' => 4,
+            ],
+            [
+                'name' => 'Pengadaan Barang',
+                'url' => '/sinapra/pengadaan',
+                'icon' => 'FaShoppingCart',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.dashboard.read',
+                'order_index' => 5,
+            ],
+            ],
+        ];
 
         foreach ($menus as $menuData) {
             $permissionId = null;
@@ -282,16 +245,15 @@ class MenuSeeder extends Seeder
                 $permissionId = $permission ? $permission->id : null;
             }
 
-            $parent = Menu::updateOrCreate(
-                ['url' => $menuData['url'], 'module' => $menuData['module']],
-                [
-                    'name' => $menuData['name'],
-                    'icon' => $menuData['icon'],
-                    'permission_id' => $permissionId,
-                    'order_index' => $menuData['order_index'],
-                    'is_active' => true,
-                ]
-            );
+            $parent = Menu::create([
+                'name' => $menuData['name'],
+                'url' => $menuData['url'],
+                'icon' => $menuData['icon'],
+                'module' => $menuData['module'],
+                'permission_id' => $permissionId,
+                'order_index' => $menuData['order_index'],
+                'is_active' => true,
+            ]);
 
             if (isset($menuData['children'])) {
                 foreach ($menuData['children'] as $childData) {
@@ -301,17 +263,16 @@ class MenuSeeder extends Seeder
                         $childPermissionId = $childPermission ? $childPermission->id : null;
                     }
 
-                    Menu::updateOrCreate(
-                        ['url' => $childData['url'], 'module' => $childData['module']],
-                        [
-                            'parent_id' => $parent->id,
-                            'name' => $childData['name'],
-                            'icon' => $childData['icon'],
-                            'permission_id' => $childPermissionId,
-                            'order_index' => $childData['order_index'],
-                            'is_active' => true,
-                        ]
-                    );
+                    Menu::create([
+                        'parent_id' => $parent->id,
+                        'name' => $childData['name'],
+                        'url' => $childData['url'],
+                        'icon' => $childData['icon'],
+                        'module' => $childData['module'],
+                        'permission_id' => $childPermissionId,
+                        'order_index' => $childData['order_index'],
+                        'is_active' => true,
+                    ]);
                 }
             }
         }

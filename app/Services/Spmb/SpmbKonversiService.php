@@ -6,54 +6,79 @@ use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\KonversiMahasiswa;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
-// use App\Models\Siakad\Mahasiswa;
+use App\Models\Role;
+use App\Models\Siakad\Mahasiswa;
 
 class SpmbKonversiService
 {
     /**
-     * Konversi pendaftar yang lulus menjadi Mahasiswa (Generate NIM dan update Role).
-     * Service ini akan dipanggil oleh event listener.
+     * Konversi pendaftar yang lulus menjadi Mahasiswa (Generate NIM jika belum ada dan update Role).
      */
     public function prosesKonversi(PendaftaranCalonMhs $pendaftaran, int $diprosesOlehId = null): KonversiMahasiswa
     {
         return DB::transaction(function () use ($pendaftaran, $diprosesOlehId) {
-            // 1. Generate NIM
-            $nim = $this->generateNIM($pendaftaran);
+            $angkatan = (int)date('Y');
+            $prodiId = $pendaftaran->hasilSeleksi->program_studi_diterima_id ?? $pendaftaran->program_studi_id ?? 1;
 
-            // 2. Insert ke tabel siakad.mahasiswa (Placeholder untuk integrasi SIAKAD)
-            /*
-            $mahasiswa = Mahasiswa::create([
-                'user_id' => $pendaftaran->user_id,
-                'program_studi_id' => $pendaftaran->hasilSeleksi->program_studi_diterima_id,
-                'nim' => $nim,
-                'nama_lengkap' => $pendaftaran->nama_lengkap,
-                'nik' => $pendaftaran->nik,
-                'tanggal_lahir' => $pendaftaran->tanggal_lahir,
-                'tempat_lahir' => $pendaftaran->tempat_lahir,
-                'jenis_kelamin' => $pendaftaran->jenis_kelamin,
-                'alamat' => $pendaftaran->alamat,
-                'angkatan' => date('Y'),
-                'status' => 'aktif',
-            ]);
-            */
-            // Mocking Mahasiswa ID untuk sementara
-            $mahasiswaId = 1;
+            // 1. Gunakan NIM eksisting atau generate baru hanya jika belum ada
+            $nim = $pendaftaran->nim;
+            if (empty($nim)) {
+                $nim = $this->generateNIM($angkatan, $prodiId);
+                $pendaftaran->update(['nim' => $nim, 'status' => PendaftaranCalonMhs::STATUS_MAHASISWA_BARU]);
+            }
+
+            // 2. Insert / Update ke tabel siakad_mahasiswa
+            $mahasiswa = Mahasiswa::where('nim', $nim)
+                ->orWhere(function ($q) use ($pendaftaran) {
+                    if (!empty($pendaftaran->nik)) {
+                        $q->where('nik', $pendaftaran->nik);
+                    }
+                    if (!empty($pendaftaran->user_id)) {
+                        $q->orWhere('user_id', $pendaftaran->user_id);
+                    }
+                })->first();
+
+            if (!$mahasiswa) {
+                $mahasiswa = Mahasiswa::create([
+                    'user_id' => $pendaftaran->user_id,
+                    'program_studi_id' => $prodiId,
+                    'nim' => $nim,
+                    'nama_lengkap' => $pendaftaran->nama_lengkap,
+                    'nik' => $pendaftaran->nik,
+                    'tanggal_lahir' => $pendaftaran->tanggal_lahir,
+                    'tempat_lahir' => $pendaftaran->tempat_lahir,
+                    'jenis_kelamin' => $pendaftaran->jenis_kelamin ?? 'L',
+                    'alamat' => $pendaftaran->alamat,
+                    'telepon' => $pendaftaran->no_hp,
+                    'angkatan' => $angkatan,
+                    'tanggal_masuk' => now()->toDateString(),
+                    'status' => 'aktif',
+                ]);
+            } else {
+                if (empty($mahasiswa->nim)) {
+                    $mahasiswa->update(['nim' => $nim]);
+                }
+            }
 
             // 3. Catat di tabel konversi_mahasiswa
-            $konversi = KonversiMahasiswa::create([
-                'pendaftaran_id' => $pendaftaran->id,
-                'mahasiswa_id' => $mahasiswaId,
-                'nim_diterbitkan' => $nim,
-                'diproses_oleh' => $diprosesOlehId,
-            ]);
+            $konversi = KonversiMahasiswa::updateOrCreate(
+                ['pendaftaran_id' => $pendaftaran->id],
+                [
+                    'mahasiswa_id' => $mahasiswa->id,
+                    'nim_diterbitkan' => $nim,
+                    'diproses_oleh' => $diprosesOlehId,
+                ]
+            );
 
-            // 4. Update Role User di IAM dari 'calon_mhs' menjadi 'mahasiswa'
-            $user = User::find($pendaftaran->user_id);
-            if ($user) {
-                // Hapus role calon_mhs (opsional, tergantung kebijakan, misal role_id 5)
-                // $user->roles()->detach(5); 
-                // Tambah role mahasiswa (misal role_id 3)
-                // $user->roles()->attach(3);
+            // 4. Berikan role 'mahasiswa' ke User IAM jika user_id ada
+            if ($pendaftaran->user_id) {
+                $user = User::find($pendaftaran->user_id);
+                if ($user) {
+                    $mhsRole = Role::where('slug', 'mahasiswa')->first();
+                    if ($mhsRole && !$user->roles->contains('id', $mhsRole->id)) {
+                        $user->roles()->syncWithoutDetaching([$mhsRole->id]);
+                    }
+                }
             }
 
             return $konversi;
@@ -61,17 +86,21 @@ class SpmbKonversiService
     }
 
     /**
-     * Algoritma pembuatan NIM berdasarkan tahun, kode fakultas, prodi, dan nomor urut.
+     * Algoritma pembuatan NIM: {2-digit tahun}{2-digit kode prodi}{4-digit sequential}.
      */
-    private function generateNIM(PendaftaranCalonMhs $pendaftaran): string
+    public function generateNIM(int $angkatan, int $prodiId): string
     {
-        $tahun = date('y'); // 2 digit tahun
-        $kodeProdi = str_pad($pendaftaran->hasilSeleksi->program_studi_diterima_id ?? '00', 2, '0', STR_PAD_LEFT);
+        $prefix = substr((string)$angkatan, -2) . str_pad((string)$prodiId, 2, '0', STR_PAD_LEFT);
         
-        // Cari nomor urut terakhir di tahun dan prodi ini
-        // Simulasi auto-increment
-        $urut = str_pad(rand(1, 999), 3, '0', STR_PAD_LEFT);
+        $lastMhs = Mahasiswa::where('nim', 'like', "{$prefix}%")
+            ->orderBy('nim', 'desc')
+            ->first();
 
-        return $tahun . $kodeProdi . $urut;
+        $nextSeq = 1;
+        if ($lastMhs && preg_match('/^' . preg_quote($prefix, '/') . '(\d{4})$/', $lastMhs->nim, $matches)) {
+            $nextSeq = ((int)$matches[1]) + 1;
+        }
+
+        return $prefix . str_pad((string)$nextSeq, 4, '0', STR_PAD_LEFT);
     }
 }

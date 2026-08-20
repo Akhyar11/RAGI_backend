@@ -38,7 +38,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'Force Logout Sesi', 'slug' => 'iam.sessions.delete', 'module' => 'iam', 'action' => 'delete', 'description' => 'Memutus secara paksa sesi perangkat terhubung'],
             ['name' => 'Lihat Audit Logs', 'slug' => 'iam.audit_logs.read', 'module' => 'iam', 'action' => 'read', 'description' => 'Melihat log rekam jejak aktivitas sistem'],
 
-            // ── MODUL SIMPEG (GRANULAR CRUD UNTUK SETIAP FITUR) ──────────────────────
+            // ── MODUL SIMPEG ──────────────────────────────────────
             ['name' => 'Lihat Dashboard SIMPEG', 'slug' => 'simpeg.dashboard.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Membuka dashboard utama SIMPEG'],
             ['name' => 'Lihat Unit Kerja', 'slug' => 'simpeg.unit_kerja.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat daftar & hierarki unit kerja'],
             ['name' => 'Tambah Unit Kerja', 'slug' => 'simpeg.unit_kerja.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Menambah unit kerja baru'],
@@ -77,7 +77,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'Ubah Kinerja SKP & BKD', 'slug' => 'simpeg.kinerja.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah skor & predikat evaluasi kinerja'],
             ['name' => 'Hapus Kinerja SKP & BKD', 'slug' => 'simpeg.kinerja.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus laporan evaluasi kinerja'],
 
-            // ── MODUL SIPPM (PENELITIAN & PKM) ──────────────────────────────────
+            // ── MODUL SIPPM ───────────────────────────────────────
             ['name' => 'Lihat Dashboard SIPPM', 'slug' => 'sippm.dashboard.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat dashboard utama & metrik IKU SIPPM'],
             ['name' => 'Lihat Master Skema', 'slug' => 'sippm.skema.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar master skema kegiatan'],
             ['name' => 'Tambah Master Skema', 'slug' => 'sippm.skema.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menambah master skema kegiatan baru'],
@@ -87,21 +87,18 @@ class PermissionSeeder extends Seeder
             ['name' => 'Tambah Master Periode', 'slug' => 'sippm.periode.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menambah periode hibah baru'],
             ['name' => 'Ubah Master Periode', 'slug' => 'sippm.periode.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah jadwal & data periode hibah'],
             ['name' => 'Hapus Master Periode', 'slug' => 'sippm.periode.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus periode hibah'],
-            // Pengumuman Surat Hibah (CRUD)
-            ['name' => 'Lihat Pengumuman Hibah', 'slug' => 'sippm.pengumuman.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar pengumuman & penerimaan proposal hibah'],
+            ['name' => 'Lihat Pengumuman Hibah', 'slug' => 'sippm.pengumuman.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar pengumuman hibah'],
             ['name' => 'Tambah Pengumuman Hibah', 'slug' => 'sippm.pengumuman.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Membuat draf surat pengumuman hibah baru'],
-            ['name' => 'Ubah Pengumuman Hibah', 'slug' => 'sippm.pengumuman.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah data & mengunggah scan TTD basah/template proposal'],
-            ['name' => 'Publish Pengumuman Hibah', 'slug' => 'sippm.pengumuman.publish', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mempublish pengumuman & mengaktifkan gelombang periode hibah'],
+            ['name' => 'Ubah Pengumuman Hibah', 'slug' => 'sippm.pengumuman.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah data pengumuman hibah'],
+            ['name' => 'Publish Pengumuman Hibah', 'slug' => 'sippm.pengumuman.publish', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mempublish pengumuman hibah'],
             ['name' => 'Hapus Pengumuman Hibah', 'slug' => 'sippm.pengumuman.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus pengumuman hibah'],
-
-            // Standar IKU 5 Prodi
             ['name' => 'Lihat Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar standar IKU 5 per program studi'],
             ['name' => 'Tambah Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menambah target standar IKU 5 prodi'],
             ['name' => 'Ubah Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah target standar IKU 5 prodi'],
             ['name' => 'Hapus Standar IKU 5 Prodi', 'slug' => 'sippm.iku5.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus standar IKU 5 prodi'],
-            ['name' => 'Lihat Rubrik Indikator Penilaian', 'slug' => 'sippm.rubrik.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar indikator rubrik penilaian Kaprodi & Admin'],
+            ['name' => 'Lihat Rubrik Indikator Penilaian', 'slug' => 'sippm.rubrik.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar indikator rubrik penilaian'],
             ['name' => 'Tambah Rubrik Indikator Penilaian', 'slug' => 'sippm.rubrik.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menambah indikator rubrik penilaian baru'],
-            ['name' => 'Ubah Rubrik Indikator Penilaian', 'slug' => 'sippm.rubrik.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah indikator & minimal score rubrik penilaian'],
+            ['name' => 'Ubah Rubrik Indikator Penilaian', 'slug' => 'sippm.rubrik.update', 'module' => 'sippm', 'action' => 'update', 'description' => 'Mengubah indikator rubrik penilaian'],
             ['name' => 'Hapus Rubrik Indikator Penilaian', 'slug' => 'sippm.rubrik.delete', 'module' => 'sippm', 'action' => 'delete', 'description' => 'Menghapus indikator rubrik penilaian'],
             ['name' => 'Lihat Kontrak SPK', 'slug' => 'sippm.kontrak.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat daftar kontrak perjanjian kerja hibah'],
             ['name' => 'Tambah Kontrak SPK', 'slug' => 'sippm.kontrak.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Menerbitkan kontrak perjanjian hibah baru'],
@@ -123,32 +120,21 @@ class PermissionSeeder extends Seeder
             ['name' => 'Registrasi Luaran Baru', 'slug' => 'sippm.luaran.create', 'module' => 'sippm', 'action' => 'create', 'description' => 'Mendaftarkan artikel ilmiah atau HKI/paten baru'],
             ['name' => 'Verifikasi Luaran Riset', 'slug' => 'sippm.luaran.verify', 'module' => 'sippm', 'action' => 'update', 'description' => 'Memverifikasi keabsahan publikasi & HKI'],
 
-            // ── MODUL SPMB ──────────────────────────────────
+            // ── MODUL SPMB ────────────────────────────────────────
             ['name' => 'Lihat Dashboard SPMB', 'slug' => 'spmb.dashboard.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Melihat dashboard & pengumuman SPMB'],
             ['name' => 'Pendaftaran SPMB', 'slug' => 'spmb.pendaftaran.create', 'module' => 'spmb', 'action' => 'create', 'description' => 'Mengisi formulir pendaftaran mahasiswa baru'],
 
-            // ── MODUL SIKEU (KEUANGAN & AKUNTANSI) ──────────────────────────────────
-            ['name' => 'Lihat Dashboard SIKEU', 'slug' => 'sikeu.dashboard.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat dashboard utama & executive summary keuangan'],
+            // ── MODUL SIKEU ───────────────────────────────────────
+            ['name' => 'Lihat Dashboard SIKEU', 'slug' => 'sikeu.dashboard.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat dashboard utama keuangan'],
             ['name' => 'Lihat Tagihan', 'slug' => 'sikeu.tagihan.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat daftar & rincian tagihan mahasiswa'],
             ['name' => 'Generate Tagihan', 'slug' => 'sikeu.tagihan.create', 'module' => 'sikeu', 'action' => 'create', 'description' => 'Menerbitkan tagihan baru'],
-            ['name' => 'Buat Tagihan Eksternal API', 'slug' => 'sikeu.tagihan.create_external', 'module' => 'sikeu', 'action' => 'create', 'description' => 'Menerbitkan tagihan via API dari sistem eksternal'],
             ['name' => 'Lihat Dispensasi', 'slug' => 'sikeu.dispensasi.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat permohonan dispensasi pembayaran'],
             ['name' => 'Pengajuan Dispensasi', 'slug' => 'sikeu.dispensasi.create', 'module' => 'sikeu', 'action' => 'create', 'description' => 'Mengajukan dispensasi penundaan/cicilan'],
             ['name' => 'Approve Dispensasi', 'slug' => 'sikeu.dispensasi.approve', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Menyetujui pengajuan dispensasi'],
             ['name' => 'Reject Dispensasi', 'slug' => 'sikeu.dispensasi.reject', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Menolak pengajuan dispensasi'],
-            ['name' => 'Lihat Antrean Approval Pimpinan', 'slug' => 'sikeu.approval.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat daftar tagihan & dispensasi yang membutuhkan approval'],
-            ['name' => 'Approve Tagihan Eksternal', 'slug' => 'sikeu.approval.approve', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Menyetujui tagihan eksternal'],
-            ['name' => 'Reject Tagihan Eksternal', 'slug' => 'sikeu.approval.reject', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Menolak tagihan eksternal'],
-            ['name' => 'Kelola Master Biaya & UKT', 'slug' => 'sikeu.master.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengelola jenis biaya, tarif UKT, & beasiswa'],
+            ['name' => 'Kelola Master Biaya & UKT', 'slug' => 'sikeu.master.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengelola jenis biaya & tarif UKT'],
             ['name' => 'Kelola Unit Kas', 'slug' => 'sikeu.kas.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengelola kas unit & petty cash'],
-            ['name' => 'Pencairan Dana Kas', 'slug' => 'sikeu.pencairan.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengajukan & mencairkan dana kas unit'],
-            ['name' => 'Kelola Pemasukan Kampus', 'slug' => 'sikeu.pemasukan.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mencatat pemasukan dana hibah, donatur, & kerjasama'],
-            ['name' => 'Kelola Pengeluaran Kampus', 'slug' => 'sikeu.pengeluaran.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mencatat transaksi pengeluaran operasional kampus & pajak'],
-            ['name' => 'Kelola Akuntansi & Jurnal', 'slug' => 'sikeu.akuntansi.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengelola COA, Jurnal Umum, Penyesuaian, & Buku Besar'],
-            ['name' => 'Posting Jurnal Akuntansi', 'slug' => 'sikeu.akuntansi.posting', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Memposting draf jurnal ke buku besar'],
-            ['name' => 'Penutupan Periode Akuntansi', 'slug' => 'sikeu.akuntansi.closing', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Menutup periode buku akuntansi bulanan/tahunan'],
-            ['name' => 'Lihat Laporan Keuangan & Pajak', 'slug' => 'sikeu.laporan.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat & mengunduh 4 Laporan Keuangan serta Rekap Pajak'],
-            ['name' => 'Verifikasi Bukti LPJ', 'slug' => 'sikeu.lpj.verify', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Memverifikasi bukti pelaksanaan kuitansi/nota LPJ'],
+            ['name' => 'Kelola Akuntansi & Jurnal', 'slug' => 'sikeu.akuntansi.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengelola COA, Jurnal Umum, & Buku Besar'],
 
             // ── MODUL SINAPRA (SARANA, PRASARANA, & ASET) ─────────────────────────
             ['name' => 'Lihat Dashboard SINAPRA', 'slug' => 'sinapra.dashboard.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat dashboard & ringkasan aset/ruangan'],
@@ -188,9 +174,29 @@ class PermissionSeeder extends Seeder
             // ── MODUL SPMB (PENERIMAAN MAHASISWA BARU) ──────────────────────
             ['name' => 'Portal Calon Mahasiswa', 'slug' => 'spmb.student.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Akses dashboard & formulir registrasi calon mahasiswa'],
             ['name' => 'Kelola Admin SPMB', 'slug' => 'spmb.admin.manage', 'module' => 'spmb', 'action' => 'update', 'description' => 'Akses penuh pengelolaan data & administrasi SPMB'],
+
+            // ── MODUL SIAKAD (GRANULAR LEVEL PERMISSION) ──────────
+            ['name' => 'Lihat Dashboard Akademik', 'slug' => 'siakad.dashboard.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat dashboard akademik sesuai role'],
+            
+            // Level Mahasiswa & Dosen & Admin
+            ['name' => 'Lihat Jadwal Kuliah & RPS', 'slug' => 'siakad.kelas.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat jadwal kuliah & dokumen RPS'],
+            ['name' => 'Lihat KRS Mahasiswa', 'slug' => 'siakad.krs.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat kartu rencana studi'],
+            ['name' => 'Input KRS Mahasiswa', 'slug' => 'siakad.krs.create', 'module' => 'siakad', 'action' => 'create', 'description' => 'Mengisi rencana studi semester'],
+            ['name' => 'Setujui KRS Mahasiswa', 'slug' => 'siakad.krs.approve', 'module' => 'siakad', 'action' => 'approve', 'description' => 'Menyetujui KRS mahasiswa bimbingan wali'],
+            ['name' => 'Lihat KHS & Nilai', 'slug' => 'siakad.nilai.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat kartu hasil studi & transkrip nilai'],
+            ['name' => 'Input Nilai Mahasiswa', 'slug' => 'siakad.nilai.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Menginput bobot nilai mahasiswa pengampu'],
+            ['name' => 'Lihat Mahasiswa Bimbingan', 'slug' => 'siakad.mahasiswa.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat direktori mahasiswa wali'],
+
+            // Level Administrator / BAAK Only
+            ['name' => 'Kelola Master Fakultas & Prodi', 'slug' => 'siakad.master.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Mengelola fakultas, prodi, dan kurikulum OBE'],
+            ['name' => 'Kelola Master Mata Kuliah', 'slug' => 'siakad.matakuliah.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Mengelola mata kuliah dan prasyarat'],
+            ['name' => 'Kelola Data Mahasiswa & NIM', 'slug' => 'siakad.mahasiswa.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'CRUD data mahasiswa dan generate NIM'],
+            ['name' => 'Kelola Konversi Transfer', 'slug' => 'siakad.konversi.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Input dan persetujuan penyetaraan nilai transfer'],
+            ['name' => 'Kelola Data Dosen Pengajar', 'slug' => 'siakad.dosen.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'CRUD data dosen pengajar & NIDN'],
+            ['name' => 'Kelola Buka Kelas & Ruang', 'slug' => 'siakad.kelas.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Membuka kelas perkuliahan & alokasi ruang SINAPRA'],
+            ['name' => 'Kelola Integrasi Neo Feeder', 'slug' => 'siakad.feeder.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Sinkronisasi data ke Neo Feeder PDDIKTI'],
         ];
 
-        // Insert semua permissions ke database
         foreach ($permissions as $perm) {
             Permission::create([
                 'name' => $perm['name'],
@@ -205,18 +211,15 @@ class PermissionSeeder extends Seeder
         $allPermissions = Permission::all();
         $adminRole = Role::where('slug', 'admin')->first();
         $superAdminRole = Role::where('slug', 'superadmin')->first();
-        $adminSimpegRole = Role::where('slug', 'admin_simpeg')->first();
-        $adminLppmRole = Role::where('slug', 'admin_lppm')->first();
-        $adminSarprasRole = Role::where('slug', 'admin_sarpras')->first();
-        $reviewerSippmRole = Role::where('slug', 'reviewer_sippm')->first();
-        $operatorSdmRole = Role::where('slug', 'operator_sdm')->first();
         $dosenRole = Role::where('slug', 'dosen')->first();
-        $tendikRole = Role::where('slug', 'tendik')->first();
+        $mahasiswaRole = Role::where('slug', 'mahasiswa')->first();
+        $operatorSdmRole = Role::where('slug', 'operator_sdm')->first();
+        $operatorSikeuRole = Role::where('slug', 'operator_sikeu')->first();
+        $adminLppmRole = Role::where('slug', 'admin_lppm')->first();
+        $adminSimpegRole = Role::where('slug', 'admin_simpeg')->first();
+        $adminSarprasRole = Role::where('slug', 'admin_sarpras')->first();
         $calonMhsRole = Role::where('slug', 'calon_mhs')->first();
         $pimpinanRole = Role::where('slug', 'pimpinan')->first();
-        $operatorSikeuRole = Role::where('slug', 'operator_sikeu')->first();
-        $kabagKeuanganRole = Role::where('slug', 'kabag_keuangan')->first();
-        $mahasiswaRole = Role::where('slug', 'mahasiswa')->first();
 
         // 1. Super Admin & Admin -> Semua permissions
         if ($superAdminRole) {
@@ -230,93 +233,44 @@ class PermissionSeeder extends Seeder
             }
         }
 
-        // 2. Operator SIKEU & Kabag Keuangan -> Semua permissions SIKEU
-        if ($operatorSikeuRole) {
-            foreach ($allPermissions as $p) {
-                if ($p->module === 'sikeu' || str_starts_with($p->slug, 'iam.users.read')) {
-                    RolePermission::create(['role_id' => $operatorSikeuRole->id, 'permission_id' => $p->id]);
-                }
-            }
-        }
-        if ($kabagKeuanganRole) {
-            foreach ($allPermissions as $p) {
-                if ($p->module === 'sikeu' || str_starts_with($p->slug, 'iam.users.read')) {
-                    RolePermission::create(['role_id' => $kabagKeuanganRole->id, 'permission_id' => $p->id]);
-                }
-            }
-        }
-        if ($calonMhsRole) {
-            $calonSlugs = [
-                'spmb.dashboard.read',
-                'spmb.pendaftaran.create',
-            ];
-            $perms = Permission::whereIn('slug', $calonSlugs)->get();
-            foreach ($perms as $p) {
-                RolePermission::create(['role_id' => $calonMhsRole->id, 'permission_id' => $p->id]);
-            }
-        }
-        
+        // 2. Mahasiswa -> Hanya level mahasiswa mandiri
         if ($mahasiswaRole) {
-            $mahasiswaSlugs = [
-                'sikeu.dashboard.read',
+            $mhsSlugs = [
+                'siakad.dashboard.read',
+                'siakad.kelas.read',
+                'siakad.krs.read',
+                'siakad.krs.create',
+                'siakad.nilai.read',
                 'sikeu.tagihan.read',
                 'sikeu.dispensasi.read',
                 'sikeu.dispensasi.create',
             ];
-            $perms = Permission::whereIn('slug', $mahasiswaSlugs)->get();
+            $perms = Permission::whereIn('slug', $mhsSlugs)->get();
             foreach ($perms as $p) {
                 RolePermission::create(['role_id' => $mahasiswaRole->id, 'permission_id' => $p->id]);
             }
         }
 
-        // 4. Reviewer SIPPM
-        if ($reviewerSippmRole) {
-            $reviewerSlugs = [
-                'sippm.dashboard.read',
-                'sippm.pengumuman.read',
-                'sippm.skema.read',
-                'sippm.periode.read',
-                'sippm.reviewer.read',
-                'sippm.reviewer.evaluate',
-                'sippm.rubrik.read',
-            ];
-            $perms = Permission::whereIn('slug', $reviewerSlugs)->get();
-            foreach ($perms as $p) {
-                RolePermission::create(['role_id' => $reviewerSippmRole->id, 'permission_id' => $p->id]);
-            }
-        }
-
-        // 5. Operator SDM -> Permission Operasional SIMPEG (CRUD Lengkap)
-        if ($operatorSdmRole) {
-            $simpegPerms = Permission::where('module', 'simpeg')->get();
-            foreach ($simpegPerms as $p) {
-                RolePermission::create(['role_id' => $operatorSdmRole->id, 'permission_id' => $p->id]);
-            }
-        }
-
-        // 6. Dosen -> Portal Mandiri SIMPEG & Akses Pengusul SIPPM
+        // 3. Dosen -> Dosen Wali & Pengampu
         if ($dosenRole) {
             $dosenSlugs = [
-                // SIMPEG Mandiri
+                'siakad.dashboard.read',
+                'siakad.kelas.read',
+                'siakad.krs.read',
+                'siakad.krs.approve',
+                'siakad.nilai.read',
+                'siakad.nilai.manage',
+                'siakad.mahasiswa.read',
+                // SIMPEG mandiri
                 'simpeg.dashboard.read',
-                'simpeg.unit_kerja.read',
-                'simpeg.jabatan.read',
                 'simpeg.pegawai.read',
                 'simpeg.dokumen.read', 'simpeg.dokumen.create',
                 'simpeg.cuti.read', 'simpeg.cuti.create',
                 'simpeg.presensi.read', 'simpeg.presensi.create',
                 'simpeg.payroll.read',
-                'simpeg.usulan_jafung.read', 'simpeg.usulan_jafung.create',
-                'simpeg.kinerja.read',
-                // SIPPM Pengusul
+                // SIPPM mandiri
                 'sippm.dashboard.read',
-                'sippm.pengumuman.read',
-                'sippm.skema.read',
-                'sippm.periode.read',
                 'sippm.proposal.read', 'sippm.proposal.create', 'sippm.proposal.update', 'sippm.proposal.submit',
-                'sippm.kontrak.read',
-                'sippm.pencairan.read', 'sippm.pencairan.request',
-                'sippm.luaran.read', 'sippm.luaran.create',
             ];
             $perms = Permission::whereIn('slug', $dosenSlugs)->get();
             foreach ($perms as $p) {
@@ -324,30 +278,41 @@ class PermissionSeeder extends Seeder
             }
         }
 
-        // 8. Admin LPPM -> Semua permissions modul SIPPM
-        if ($adminLppmRole) {
-            foreach ($allPermissions as $p) {
-                if ($p->module === 'sippm' || str_starts_with($p->slug, 'iam.users.read')) {
-                    RolePermission::create(['role_id' => $adminLppmRole->id, 'permission_id' => $p->id]);
-                }
+        // 4. Operator SDM & Admin SIMPEG
+        if ($operatorSdmRole) {
+            $simpegPerms = Permission::where('module', 'simpeg')->get();
+            foreach ($simpegPerms as $p) {
+                RolePermission::create(['role_id' => $operatorSdmRole->id, 'permission_id' => $p->id]);
             }
         }
-
-        // 9. Admin SIMPEG -> Semua permissions modul SIMPEG
         if ($adminSimpegRole) {
-            foreach ($allPermissions as $p) {
-                if ($p->module === 'simpeg' || str_starts_with($p->slug, 'iam.users.read')) {
-                    RolePermission::create(['role_id' => $adminSimpegRole->id, 'permission_id' => $p->id]);
-                }
+            $simpegPerms = Permission::where('module', 'simpeg')->get();
+            foreach ($simpegPerms as $p) {
+                RolePermission::create(['role_id' => $adminSimpegRole->id, 'permission_id' => $p->id]);
             }
         }
 
-        // 9.b Admin SINAPRA -> Semua permissions modul SINAPRA
+        // 5. Operator SIKEU
+        if ($operatorSikeuRole) {
+            $sikeuPerms = Permission::where('module', 'sikeu')->get();
+            foreach ($sikeuPerms as $p) {
+                RolePermission::create(['role_id' => $operatorSikeuRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 6. Admin LPPM
+        if ($adminLppmRole) {
+            $sippmPerms = Permission::where('module', 'sippm')->get();
+            foreach ($sippmPerms as $p) {
+                RolePermission::create(['role_id' => $adminLppmRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 7. Admin SARPRAS
         if ($adminSarprasRole) {
-            foreach ($allPermissions as $p) {
-                if ($p->module === 'sinapra' || str_starts_with($p->slug, 'iam.users.read')) {
-                    RolePermission::create(['role_id' => $adminSarprasRole->id, 'permission_id' => $p->id]);
-                }
+            $sinapraPerms = Permission::where('module', 'sinapra')->get();
+            foreach ($sinapraPerms as $p) {
+                RolePermission::create(['role_id' => $adminSarprasRole->id, 'permission_id' => $p->id]);
             }
         }
 

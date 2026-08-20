@@ -43,6 +43,9 @@ class DatabaseSeeder extends Seeder
             // SPMB Seeders
             \Database\Seeders\SpmbMenuSeeder::class,
             \Database\Seeders\SPMB\SpmbPendaftarSeeder::class,
+
+            // SIAKAD Seeders
+            \Database\Seeders\Siakad\SiakadSampleDataSeeder::class,
         ]);
     }
 }
