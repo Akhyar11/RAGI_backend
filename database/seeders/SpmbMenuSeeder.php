@@ -114,11 +114,22 @@ class SpmbMenuSeeder extends Seeder
             }
         }
 
-        // Attach SPMB menus to Admin and Superadmin roles if role_menus pivot table exists
+        // Attach SPMB menus to Admin and Superadmin roles
         $rolesToAttach = Role::whereIn('slug', ['superadmin', 'admin', 'admin_spmb', 'super-admin'])->get();
         foreach ($rolesToAttach as $role) {
             if (method_exists($role, 'menus')) {
                 $role->menus()->syncWithoutDetaching($allMenuIds);
+            }
+        }
+
+        // Attach Student SPMB menus to Calon Mahasiswa & Mahasiswa roles
+        $studentMenuUrls = ['/spmb/dashboard', '#pendaftaran_spmb', '/spmb/registrasi', '#ujian_spmb', '/spmb/ujian/jadwal', '#seleksi_spmb', '/spmb/seleksi'];
+        $studentMenuIds = Menu::where('module', 'spmb')->whereIn('url', $studentMenuUrls)->pluck('id')->toArray();
+
+        $studentRoles = Role::whereIn('slug', ['calon_mhs', 'calon-mahasiswa', 'mahasiswa'])->get();
+        foreach ($studentRoles as $role) {
+            if (method_exists($role, 'menus')) {
+                $role->menus()->syncWithoutDetaching($studentMenuIds);
             }
         }
     }
