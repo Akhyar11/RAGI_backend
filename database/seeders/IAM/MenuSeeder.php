@@ -57,6 +57,18 @@ class MenuSeeder extends Seeder
                     ['name' => 'Audit Logs', 'url' => '/admin/audit-logs', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.audit_logs.read', 'order_index' => 6],
                 ]
             ],
+            [
+                'name' => 'AKUN & KEAMANAN',
+                'url' => '#akun_keamanan',
+                'icon' => 'FaShieldAlt',
+                'module' => 'sso',
+                'order_index' => 4,
+                'children' => [
+                    ['name' => 'Profil Saya', 'url' => '/profile', 'icon' => 'FaUser', 'module' => 'sso', 'order_index' => 1],
+                    ['name' => 'Sesi Perangkat', 'url' => '/profile/sessions', 'icon' => 'FaSmartphone', 'module' => 'sso', 'order_index' => 2],
+                    ['name' => 'Autentikasi 2FA', 'url' => '/profile/mfa', 'icon' => 'FaShieldCheck', 'module' => 'sso', 'order_index' => 3],
+                ]
+            ],
 
             // Menu SIMPEG
             [
@@ -300,6 +312,30 @@ class MenuSeeder extends Seeder
                             'is_active' => true,
                         ]
                     );
+                }
+            }
+        }
+
+        // Attach default role_menus
+        $allMenuIds = Menu::pluck('id')->toArray();
+        $roles = \App\Models\Role::all();
+        foreach ($roles as $role) {
+            if (in_array($role->slug, ['superadmin', 'admin'])) {
+                $role->menus()->sync($allMenuIds);
+            } else {
+                // Sync profile and module specific menus
+                $moduleSlug = str_replace('admin_', '', $role->slug);
+                $moduleSlug = str_replace('operator_', '', $role->slug);
+                $roleMenuIds = Menu::whereIn('module', ['sso', $moduleSlug])
+                    ->where(function($q) {
+                        $q->whereNull('permission_id')
+                          ->orWhere('url', 'like', '/profile%')
+                          ->orWhere('url', '/dashboard');
+                    })
+                    ->pluck('id')
+                    ->toArray();
+                if (!empty($roleMenuIds)) {
+                    $role->menus()->syncWithoutDetaching($roleMenuIds);
                 }
             }
         }

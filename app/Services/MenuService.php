@@ -40,7 +40,9 @@ class MenuService
                 $query->orderBy('order_index');
             }])
             ->whereNull('parent_id')
-            ->where('module', $module)
+            ->when($module !== 'all', function ($q) use ($module) {
+                $q->where('module', $module);
+            })
             ->where('is_active', true)
             ->when(!$isSuperAdmin, function ($query) use ($roleIds) {
                 $query->where(function($q) use ($roleIds) {
@@ -76,6 +78,16 @@ class MenuService
         }
 
         $menu = Menu::where('url', $menuUrl)->first();
+        if (!$menu) {
+            // Check if any parent URL matches
+            $menu = Menu::whereNotNull('url')
+                ->where('url', '!=', '#')
+                ->get()
+                ->first(function ($m) use ($menuUrl) {
+                    return str_starts_with($menuUrl, rtrim($m->url, '/'));
+                });
+        }
+
         if (!$menu) {
             return true;
         }
