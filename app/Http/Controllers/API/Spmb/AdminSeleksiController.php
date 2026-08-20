@@ -22,6 +22,16 @@ class AdminSeleksiController extends Controller
      */
     public function getPendaftar(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $isPanitiaAdmin = $user && $user->roles()->whereIn('slug', ['superadmin', 'admin', 'admin_spmb', 'panitia_spmb', 'operator_spmb'])->exists();
+
+        if (!$isPanitiaAdmin) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized access. Menu ini hanya untuk administrator/panitia SPMB.'
+            ], 403);
+        }
+
         $query = PendaftaranCalonMhs::with(['gelombangPenerimaan', 'hasilSeleksi']);
         
         if ($request->has('status')) {

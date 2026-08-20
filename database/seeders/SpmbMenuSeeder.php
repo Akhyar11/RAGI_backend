@@ -122,14 +122,14 @@ class SpmbMenuSeeder extends Seeder
             }
         }
 
-        // Attach Student SPMB menus to Calon Mahasiswa & Mahasiswa roles
-        $studentMenuUrls = ['/spmb/dashboard', '#pendaftaran_spmb', '/spmb/registrasi', '#ujian_spmb', '/spmb/ujian/jadwal', '#seleksi_spmb', '/spmb/seleksi'];
+        // Attach Student SPMB menus to Calon Mahasiswa role (Only Dashboard & Registrasi)
+        $studentMenuUrls = ['/spmb/dashboard', '/spmb/registrasi'];
         $studentMenuIds = Menu::where('module', 'spmb')->whereIn('url', $studentMenuUrls)->pluck('id')->toArray();
 
-        $studentRoles = Role::whereIn('slug', ['calon_mhs', 'calon-mahasiswa', 'mahasiswa'])->get();
+        $studentRoles = Role::whereIn('slug', ['calon_mhs', 'calon-mahasiswa'])->get();
         foreach ($studentRoles as $role) {
             if (method_exists($role, 'menus')) {
-                $role->menus()->syncWithoutDetaching($studentMenuIds);
+                $role->menus()->sync($studentMenuIds);
             }
         }
     }
