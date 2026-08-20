@@ -42,7 +42,6 @@ class SpmbMenuSeeder extends Seeder
                 'children' => [
                     ['name' => 'Formulir Registrasi', 'url' => '/spmb/registrasi', 'icon' => 'FaEdit', 'module' => 'spmb', 'order_index' => 1],
                     ['name' => 'Data Pendaftar SPMB', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUsers', 'module' => 'spmb', 'order_index' => 2],
-                    ['name' => 'Verifikasi Pembayaran', 'url' => '/spmb/pembayaran', 'icon' => 'FaCreditCard', 'module' => 'spmb', 'order_index' => 3],
                 ]
             ],
             [
