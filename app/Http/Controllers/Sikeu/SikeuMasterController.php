@@ -229,12 +229,24 @@ class SikeuMasterController extends Controller
     public function indexJenisBiaya(Request $request)
     {
         $query = JenisBiaya::with('moduleDelegations');
-        if ($request->filled('module_code')) {
-            $moduleCode = $request->module_code;
-            $query->whereHas('moduleDelegations', function ($q) use ($moduleCode) {
-                $q->where('module_code', $moduleCode);
-            });
+
+        if ($request->filled('module_id')) {
+            $mod = \App\Models\Module::find($request->module_id);
+            if ($mod) {
+                $moduleCode = $mod->code;
+                $query->whereHas('moduleDelegations', function ($q) use ($moduleCode) {
+                    $q->where('module_code', $moduleCode);
+                });
+            }
+        } else {
+            $moduleCode = $request->input('module_code', $request->input('module'));
+            if ($moduleCode) {
+                $query->whereHas('moduleDelegations', function ($q) use ($moduleCode) {
+                    $q->where('module_code', $moduleCode);
+                });
+            }
         }
+
         $biaya = $query->orderBy('id', 'asc')->get();
         return response()->json(['status' => 'success', 'data' => $biaya]);
     }
@@ -249,6 +261,8 @@ class SikeuMasterController extends Controller
             'deskripsi' => 'nullable|string',
             'module_codes' => 'nullable|array',
             'module_codes.*' => 'string',
+            'module_ids' => 'nullable|array',
+            'module_ids.*' => 'integer',
         ]);
 
         if ($validator->fails()) {
@@ -265,7 +279,15 @@ class SikeuMasterController extends Controller
             'is_active' => true,
         ]);
 
-        $moduleCodes = $request->input('module_codes', ['sikeu']);
+        $moduleCodes = [];
+        if ($request->has('module_ids') && is_array($request->module_ids)) {
+            $moduleCodes = \App\Models\Module::whereIn('id', $request->module_ids)->pluck('code')->toArray();
+        } elseif ($request->has('module_codes') && is_array($request->module_codes)) {
+            $moduleCodes = $request->module_codes;
+        } else {
+            $moduleCodes = ['sikeu'];
+        }
+
         if (!empty($moduleCodes) && is_array($moduleCodes)) {
             foreach ($moduleCodes as $code) {
                 \App\Models\Sikeu\JenisBiayaModule::create([
@@ -290,6 +312,8 @@ class SikeuMasterController extends Controller
             'is_active' => 'sometimes|boolean',
             'module_codes' => 'nullable|array',
             'module_codes.*' => 'string',
+            'module_ids' => 'nullable|array',
+            'module_ids.*' => 'integer',
         ]);
 
         if ($validator->fails()) {
@@ -298,9 +322,16 @@ class SikeuMasterController extends Controller
 
         $biaya->update($request->only(['nama', 'tipe', 'nominal_standar', 'deskripsi', 'is_active', 'is_recurring']));
 
-        if ($request->has('module_codes') && is_array($request->module_codes)) {
+        $moduleCodes = null;
+        if ($request->has('module_ids') && is_array($request->module_ids)) {
+            $moduleCodes = \App\Models\Module::whereIn('id', $request->module_ids)->pluck('code')->toArray();
+        } elseif ($request->has('module_codes') && is_array($request->module_codes)) {
+            $moduleCodes = $request->module_codes;
+        }
+
+        if ($moduleCodes !== null && is_array($moduleCodes)) {
             \App\Models\Sikeu\JenisBiayaModule::where('jenis_biaya_id', $biaya->id)->delete();
-            foreach ($request->module_codes as $code) {
+            foreach ($moduleCodes as $code) {
                 \App\Models\Sikeu\JenisBiayaModule::create([
                     'jenis_biaya_id' => $biaya->id,
                     'module_code' => strtolower($code),
