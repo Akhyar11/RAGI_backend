@@ -318,18 +318,27 @@ class MenuSeeder extends Seeder
 
         // Attach default role_menus
         $allMenuIds = Menu::pluck('id')->toArray();
+        $akunKeamananIds = Menu::where('url', '#akun_keamanan')
+            ->orWhere('url', 'like', '/profile%')
+            ->pluck('id')
+            ->toArray();
+
         $roles = \App\Models\Role::all();
         foreach ($roles as $role) {
             if (in_array($role->slug, ['superadmin', 'admin'])) {
                 $role->menus()->sync($allMenuIds);
             } else {
-                // Sync profile and module specific menus
+                // Ensure profile/security menus are attached for all roles
+                $role->menus()->syncWithoutDetaching($akunKeamananIds);
+
+                // Sync module specific menus
                 $moduleSlug = str_replace('admin_', '', $role->slug);
                 $moduleSlug = str_replace('operator_', '', $role->slug);
                 $roleMenuIds = Menu::whereIn('module', ['sso', $moduleSlug])
                     ->where(function($q) {
                         $q->whereNull('permission_id')
                           ->orWhere('url', 'like', '/profile%')
+                          ->orWhere('url', '#akun_keamanan')
                           ->orWhere('url', '/dashboard');
                     })
                     ->pluck('id')

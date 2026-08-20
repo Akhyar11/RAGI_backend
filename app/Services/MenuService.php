@@ -41,7 +41,10 @@ class MenuService
             }])
             ->whereNull('parent_id')
             ->when($module !== 'all', function ($q) use ($module) {
-                $q->where('module', $module);
+                $q->where(function ($subQ) use ($module) {
+                    $subQ->where('module', $module)
+                         ->orWhere('url', '#akun_keamanan');
+                });
             })
             ->where('is_active', true)
             ->when(!$isSuperAdmin, function ($query) use ($roleIds) {
