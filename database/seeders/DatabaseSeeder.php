@@ -39,6 +39,9 @@ class DatabaseSeeder extends Seeder
 
             // SINAPRA Seeders
             \Database\Seeders\Sinapra\SinapraSeeder::class,
+
+            // SPMB Seeders
+            \Database\Seeders\SpmbMenuSeeder::class,
         ]);
     }
 }
