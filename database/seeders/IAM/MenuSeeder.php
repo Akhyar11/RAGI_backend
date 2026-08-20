@@ -203,7 +203,7 @@ class MenuSeeder extends Seeder
             // Menu SPMB
             [
                 'name' => 'Dashboard SPMB',
-                'url' => '/spmb',
+                'url' => '/spmb/dashboard',
                 'icon' => 'FaChartPie',
                 'module' => 'spmb',
                 'permission_slug' => 'spmb.dashboard.read',
