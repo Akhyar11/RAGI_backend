@@ -26,7 +26,7 @@ class SpmbSikeuService
             return (float) $tarif->nominal;
         }
 
-        $jenisBiaya = JenisBiaya::where('tipe', 'spmb_adm')->first();
+        $jenisBiaya = JenisBiaya::where('tipe', 'spmb_adm')->first() ?? JenisBiaya::first();
         if ($jenisBiaya && $jenisBiaya->nominal_standar > 0) {
             return (float) $jenisBiaya->nominal_standar;
         }

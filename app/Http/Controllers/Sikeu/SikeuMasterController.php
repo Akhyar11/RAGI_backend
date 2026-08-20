@@ -695,10 +695,10 @@ class SikeuMasterController extends Controller
             ], 422);
         }
 
-        // Default jenis_biaya_id to SPMB Adm if null
+        // Default jenis_biaya_id to first available JenisBiaya if null
         $jenisBiayaId = $request->jenis_biaya_id;
         if (!$jenisBiayaId) {
-            $jenisBiayaDefault = JenisBiaya::where('tipe', 'spmb_adm')->first();
+            $jenisBiayaDefault = JenisBiaya::where('tipe', 'spmb_adm')->first() ?? JenisBiaya::first();
             $jenisBiayaId = $jenisBiayaDefault?->id;
         }
 
