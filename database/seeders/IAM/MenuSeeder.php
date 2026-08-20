@@ -201,7 +201,7 @@ class MenuSeeder extends Seeder
                 ]
             ],
 
-            // Menu SPMB
+            // Menu SPMB (Penerimaan Mahasiswa Baru)
             [
                 'name' => 'Dashboard SPMB',
                 'url' => '/spmb/dashboard',
@@ -211,15 +211,40 @@ class MenuSeeder extends Seeder
                 'order_index' => 1,
             ],
             [
-                'name' => 'MASTER DATA',
-                'url' => '#master_spmb',
+                'name' => 'PENDAFTARAN & VERIFIKASI',
+                'url' => '#layanan_spmb',
                 'icon' => 'FaList',
                 'module' => 'spmb',
                 'order_index' => 2,
                 'children' => [
-                    ['name' => 'Data Pendaftar', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUsers', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 1],
-                    ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 2],
-                    ['name' => 'Gelombang', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 3],
+                    ['name' => 'Data Pendaftar & Verifikasi', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUsers', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 1],
+                    ['name' => 'Formulir Registrasi Camaba', 'url' => '/spmb/registrasi', 'icon' => 'FaUserPlus', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 2],
+                ]
+            ],
+            [
+                'name' => 'SELEKSI & UJIAN',
+                'url' => '#seleksi_spmb',
+                'icon' => 'FaList',
+                'module' => 'spmb',
+                'order_index' => 3,
+                'children' => [
+                    ['name' => 'Master Tipe Ujian', 'url' => '/spmb/master/tipe-ujian', 'icon' => 'FaFileAlt', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 1],
+                    ['name' => 'Jadwal Ujian Seleksi', 'url' => '/spmb/ujian/jadwal', 'icon' => 'FaCalendarCheck', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 2],
+                    ['name' => 'Peserta Ujian & Nilai', 'url' => '/spmb/ujian/peserta', 'icon' => 'FaClipboardList', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 3],
+                    ['name' => 'Hasil Seleksi & Kelulusan', 'url' => '/spmb/seleksi', 'icon' => 'FaTrophy', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 4],
+                    ['name' => 'Daftar Ulang Mahasiswa Baru', 'url' => '/spmb/seleksi/daftar-ulang', 'icon' => 'FaUserCheck', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 5],
+                ]
+            ],
+            [
+                'name' => 'MASTER DATA SPMB',
+                'url' => '#master_spmb',
+                'icon' => 'FaList',
+                'module' => 'spmb',
+                'order_index' => 4,
+                'children' => [
+                    ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 1],
+                    ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 2],
+                    ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'module' => 'spmb', 'permission_slug' => 'spmb.dashboard.read', 'order_index' => 3],
                 ]
             ],
         ];
