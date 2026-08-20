@@ -75,7 +75,8 @@ class User extends Authenticatable
 
     public function hasPermission(string $permissionSlug): bool
     {
-        if ($this->hasRole('admin') || $this->hasRole('superadmin')) {
+        $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value') ?? 'superadmin';
+        if ($this->hasRole('admin') || $this->hasRole('superadmin') || $this->hasRole($superAdminRole)) {
             return true;
         }
 

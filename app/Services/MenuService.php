@@ -23,7 +23,8 @@ class MenuService
         }
 
         // Cek apakah user adalah superadmin atau admin
-        $isSuperAdmin = $user->roles()->whereIn('slug', ['superadmin', 'admin'])->exists();
+        $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value') ?? 'superadmin';
+        $isSuperAdmin = $user->roles()->whereIn('slug', ['superadmin', 'admin', $superAdminRole])->exists();
 
         // 1. Dapatkan daftar id role yang dimiliki user
         $roleIds = $user->roles()->pluck('roles.id')->toArray();
