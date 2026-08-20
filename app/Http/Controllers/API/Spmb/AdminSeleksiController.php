@@ -23,12 +23,19 @@ class AdminSeleksiController extends Controller
     public function getPendaftar(Request $request): JsonResponse
     {
         $user = $request->user();
-        $isPanitiaAdmin = $user && $user->roles()->whereIn('slug', ['superadmin', 'admin', 'admin_spmb', 'panitia_spmb', 'operator_spmb'])->exists();
+        if (!$user) {
+            return response()->json(['status' => 'error', 'message' => 'Unauthenticated.'], 401);
+        }
 
-        if (!$isPanitiaAdmin) {
+        // Dynamic DB menu access check using Menu entity and menu_role pivot table
+        $menu = \App\Models\Menu::where('url', '/spmb/pendaftaran')->first();
+        $roleIds = $user->roles()->pluck('roles.id')->toArray();
+        $hasMenuAccess = $user->isSuperAdmin() || ($menu && $menu->roles()->whereIn('roles.id', $roleIds)->exists());
+
+        if (!$hasMenuAccess) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Unauthorized access. Menu ini hanya untuk administrator/panitia SPMB.'
+                'message' => 'Unauthorized access. Menu ini belum diaktifkan untuk role Anda di database.'
             ], 403);
         }
 
