@@ -2,14 +2,17 @@
 
 echo "🤖 [AGY Agent Audit] Memeriksa staged changes terhadap aturan project (Zero Hardcode & RBAC)..."
 
-STAGED_DIFF=$(git diff --cached -- *.php *.js)
+STAGED_DIFF=$(git diff --cached)
 
 if [ -z "$STAGED_DIFF" ]; then
     echo "✅ [AGY Agent Audit] Tidak ada perubahan kode yang di-stage."
     exit 0
 fi
 
-PROMPT="Kamu adalah Agent Penilai Kualitas Kode (Code Auditor).
+PROMPT_FILE=$(mktemp)
+
+cat << EOF > "$PROMPT_FILE"
+Kamu adalah Agent Penilai Kualitas Kode (Code Auditor).
 Periksa Git Diff berikut terhadap aturan Zero Hardcode & RBAC Policy di AGENTS.md.
 
 Aturan Utama:
@@ -25,9 +28,10 @@ $STAGED_DIFF
 Jawab HANYA salah satu:
 - PASSED jika kode bersih dari hardcode dan sesuai standar.
 - REJECTED: [detail alasan pelanggaran] jika ditemukan hardcode/pelanggaran.
-"
+EOF
 
-RESULT=$(agy --print "$PROMPT" 2>&1)
+RESULT=$(agy --print "$(cat "$PROMPT_FILE")" 2>&1)
+rm -f "$PROMPT_FILE"
 
 if echo "$RESULT" | grep -qi "REJECTED"; then
     echo ""
