@@ -23,7 +23,14 @@ class CalonMahasiswaController extends Controller
     public function myPendaftaran(Request $request): JsonResponse
     {
         $user = $request->user();
-        $pendaftaran = PendaftaranCalonMhs::with(['gelombangPenerimaan', 'pembayaranSpmb', 'hasilSeleksi', 'dokumenPendaftaran'])
+        $pendaftaran = PendaftaranCalonMhs::with([
+            'gelombangPenerimaan',
+            'programStudi',
+            'programStudiPilihan2',
+            'pembayaranSpmb',
+            'hasilSeleksi',
+            'dokumenPendaftaran'
+        ])
             ->where('user_id', $user->id)
             ->first();
 
