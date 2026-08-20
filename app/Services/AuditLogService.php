@@ -62,6 +62,21 @@ class AuditLogService
     }
 
     /**
+     * Alias method log untuk kompatibilitas observer/controller
+     */
+    public static function log(
+        string $module,
+        string $action,
+        string $tableName,
+        ?int $recordId = null,
+        ?array $oldValues = null,
+        ?array $newValues = null,
+        ?Request $request = null
+    ): void {
+        self::record($module, $action, $tableName, $recordId, $oldValues, $newValues, $request);
+    }
+
+    /**
      * Menghilangkan field sensitif dari array sebelum disimpan
      */
     protected static function sanitize(?array $data): ?array

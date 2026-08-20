@@ -87,6 +87,11 @@ class RoleSeeder extends Seeder
                 'slug' => 'admin_sarpras',
                 'description' => 'Administrator Sarana & Prasarana, pengelola aset, ruangan, maintenance, & pengadaan barang',
             ],
+            [
+                'name' => 'Admin SPMB',
+                'slug' => 'admin_spmb',
+                'description' => 'Administrator Penerimaan Mahasiswa Baru (SPMB)',
+            ],
         ];
 
         foreach ($roles as $role) {

@@ -16,6 +16,7 @@ class JalurMasuk extends Model
         'kode',
         'nama',
         'deskripsi',
+        'master_tipe_jalur_id',
         'tipe',
         'ada_ujian_tulis',
         'ada_ujian_praktik',
