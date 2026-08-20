@@ -224,4 +224,31 @@ class MasterSpmbController extends Controller
             'data' => $prodi
         ]);
     }
+
+    /**
+     * Get all active Tahun Akademik for SPMB
+     */
+    public function getTahunAkademik(): JsonResponse
+    {
+        $tahun = collect();
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('master_tahun_akademik')) {
+                $tahun = \App\Models\Spmb\MasterTahunAkademik::orderBy('id', 'desc')->get();
+            }
+        } catch (\Throwable $e) {
+            // Graceful fallback if table not migrated yet
+        }
+
+        if ($tahun->isEmpty()) {
+            $tahun = collect([
+                ['id' => 1, 'nama' => '2026/2027 Ganjil', 'tahun_mulai' => 2026, 'tahun_selesai' => 2027, 'is_active' => true],
+                ['id' => 2, 'nama' => '2025/2026 Genap', 'tahun_mulai' => 2025, 'tahun_selesai' => 2026, 'is_active' => false],
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $tahun
+        ]);
+    }
 }

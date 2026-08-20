@@ -200,6 +200,7 @@ Route::prefix('spmb')->group(function () {
     Route::get('prodi', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getProgramStudi']);
     Route::get('jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getJalurMasuk']);
     Route::get('gelombang', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getGelombang']);
+    Route::get('tahun-akademik', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getTahunAkademik']);
     Route::get('tarif', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getTarifSpmb']);
 });
 
