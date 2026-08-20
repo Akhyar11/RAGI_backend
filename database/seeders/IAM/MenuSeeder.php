@@ -190,13 +190,14 @@ class MenuSeeder extends Seeder
                 ]
             ],
             [
-                'name' => 'MASTER DATA',
+                'name' => 'MASTER DATA & SYSTEM',
                 'url' => '#master_sikeu',
                 'icon' => 'FaList',
                 'module' => 'sikeu',
                 'order_index' => 5,
                 'children' => [
-                    ['name' => 'Master Tarif & Beasiswa', 'url' => '/sikeu/master', 'icon' => 'FaCogs', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
+                    ['name' => 'Master Biaya & Delegasi', 'url' => '/sikeu/master', 'icon' => 'FaCogs', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
+                    ['name' => 'Konfigurasi Payment Gateway', 'url' => '/sikeu/payment-gateway', 'icon' => 'FaCreditCard', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 2],
                 ]
             ],
 
