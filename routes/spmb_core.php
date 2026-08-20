@@ -8,6 +8,7 @@ use App\Http\Controllers\API\Spmb\MasterSpmbController;
 use App\Http\Controllers\API\Spmb\PendaftaranController;
 use App\Http\Controllers\API\Spmb\SpmbKuotaProdiController;
 use App\Http\Controllers\API\Spmb\SpmbSekolahMitraController;
+use App\Http\Controllers\API\Spmb\TipeUjianController;
 
 /*
 |--------------------------------------------------------------------------
@@ -15,7 +16,7 @@ use App\Http\Controllers\API\Spmb\SpmbSekolahMitraController;
 |--------------------------------------------------------------------------
 | File ini dimuat oleh bootstrap/app.php dengan middleware auth:api dan prefix spmb.
 | Agent pengembang: APPEND route baru di akhir file ini (jangan ubah route yang sudah ada).
-*/
+|*/
 
 // Master Data SPMB
 Route::get('jalur', [MasterSpmbController::class, 'getJalurMasuk']);
@@ -32,6 +33,9 @@ Route::get('gelombang/{id}', [MasterSpmbController::class, 'showGelombang']);
 Route::post('gelombang', [MasterSpmbController::class, 'storeGelombang']);
 Route::put('gelombang/{id}', [MasterSpmbController::class, 'updateGelombang']);
 Route::delete('gelombang/{id}', [MasterSpmbController::class, 'destroyGelombang']);
+
+Route::get('tipe-ujian', [TipeUjianController::class, 'index']);
+Route::apiResource('master/tipe-ujian', TipeUjianController::class);
 
 // Pendaftaran SPMB
 Route::get('pendaftaran', [PendaftaranController::class, 'index']);

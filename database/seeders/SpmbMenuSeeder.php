@@ -76,6 +76,7 @@ class SpmbMenuSeeder extends Seeder
                     ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => 'spmb', 'order_index' => 1],
                     ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'order_index' => 2],
                     ['name' => 'Kuota Prodi SPMB', 'url' => '/spmb/master/kuota', 'icon' => 'FaUsers', 'module' => 'spmb', 'order_index' => 3],
+                    ['name' => 'Master Tipe Ujian', 'url' => '/spmb/master/tipe-ujian', 'icon' => 'FaClipboardList', 'module' => 'spmb', 'order_index' => 4],
                 ]
             ],
         ];
