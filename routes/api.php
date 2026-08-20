@@ -196,6 +196,12 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 |   - routes/spmb_ujian.php (ujian & seleksi)
 | Kedua file dimuat via bootstrap/app.php -> withRouting()->then()
 */
+Route::prefix('spmb')->group(function () {
+    Route::get('prodi', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getProgramStudi']);
+    Route::get('jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getJalurMasuk']);
+    Route::get('gelombang', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getGelombang']);
+    Route::get('tarif', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getTarifSpmb']);
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -368,6 +374,7 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
 
     // SPMB Payment Callback / Webhook Integration
     Route::post('callback/spmb/{calonMahasiswaId}', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'handleSpmbPaymentCallback']);
+    Route::get('checkout/lookup-va', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'lookupVa']);
 
     // Dashboard Executive Summary & Live Xendit Balance
     Route::get('dashboard-summary', [App\Http\Controllers\Sikeu\SikeuDashboardController::class, 'summary']);

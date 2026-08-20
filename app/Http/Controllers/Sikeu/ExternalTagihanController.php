@@ -126,15 +126,48 @@ class ExternalTagihanController extends Controller
                 PotonganTagihan::create($pot);
             }
 
-            // If no approval required, generate VA automatically
+            // If no approval required, generate VA automatically (Xendit Integration or Local VA)
             $vaData = null;
             if (!$requiresApproval) {
+                $bankCode = 'BNI';
                 $vaNumber = '888' . date('ymd') . str_pad($tagihan->id, 5, '0', STR_PAD_LEFT);
+
+                // Check active Payment Gateway Config
+                $pgConfig = \App\Models\Sikeu\PaymentGatewayConfig::where('is_active', true)->first();
+                $apiKey = $pgConfig->api_key_encrypted ?? $pgConfig->public_key_encrypted ?? null;
+
+                if ($pgConfig && $pgConfig->gateway_name === 'xendit' && !empty($apiKey)) {
+                    try {
+                        $xenditRes = \Illuminate\Support\Facades\Http::withoutVerifying()
+                            ->withBasicAuth($apiKey, '')
+                            ->post('https://api.xendit.co/callback_virtual_accounts', [
+                                'external_id' => $tagihan->nomor_tagihan,
+                                'bank_code' => $bankCode,
+                                'name' => 'SPMB Calon Mhs #' . ($request->calon_mahasiswa_id ?? $tagihan->id),
+                                'expected_amount' => (int) $totalBayar,
+                                'is_closed' => true,
+                                'is_single_use' => true,
+                                'expiration_date' => date('c', strtotime('+30 days')),
+                            ]);
+
+                        if ($xenditRes->successful()) {
+                            $xData = $xenditRes->json();
+                            $vaNumber = $xData['account_number'] ?? $vaNumber;
+                            $bankCode = $xData['bank_code'] ?? $bankCode;
+                            \Illuminate\Support\Facades\Log::info("Xendit VA Created Successfully: VA {$vaNumber} for Tagihan {$tagihan->nomor_tagihan}");
+                        } else {
+                            \Illuminate\Support\Facades\Log::error("Xendit VA Creation Error ({$xenditRes->status()}): " . $xenditRes->body());
+                        }
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning("Xendit VA Creation Exception: " . $e->getMessage());
+                    }
+                }
+
                 $vaData = VirtualAccount::create([
                     'tagihan_id' => $tagihan->id,
                     'va_number' => $vaNumber,
-                    'bank_kode' => 'BNI',
-                    'bank_nama' => 'Bank BNI',
+                    'bank_kode' => $bankCode,
+                    'bank_nama' => 'Bank ' . $bankCode,
                     'nominal' => $totalBayar,
                     'expired_at' => date('Y-m-d H:i:s', strtotime('+30 days')),
                     'status' => 'aktif',

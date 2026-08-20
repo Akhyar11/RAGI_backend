@@ -15,7 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         then: function () {
-            // SPMB module routes (auth:api + prefix api/spmb)
+            // Protected SPMB module routes (auth:api + prefix api/spmb)
             Route::middleware('auth:api')->prefix('api/spmb')->group(base_path('routes/spmb_core.php'));
             Route::middleware('auth:api')->prefix('api/spmb')->group(base_path('routes/spmb_ujian.php'));
         },

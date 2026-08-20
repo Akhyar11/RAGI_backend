@@ -63,36 +63,67 @@ class CalonMahasiswaController extends Controller
         $user = $request->user();
         
         $validated = $request->validate([
-            'gelombang_id' => 'required|exists:gelombang_penerimaan,id',
-            'program_studi_id' => 'required|integer',
-            'program_studi_pilihan2_id' => 'nullable|integer',
-            'nama_lengkap' => 'required|string|max:255',
-            'nik' => 'required|string|size:16',
-            'tanggal_lahir' => 'required|date',
-            'tempat_lahir' => 'required|string',
-            'jenis_kelamin' => 'required|in:L,P',
-            'alamat' => 'required|string',
-            'asal_sekolah' => 'required|string',
-            'jurusan_sekolah' => 'required|string',
+            'gelombang_id' => 'sometimes|nullable|integer',
+            'program_studi_id' => 'sometimes|nullable|integer',
+            'program_studi_pilihan2_id' => 'sometimes|nullable|integer',
+            'nama_lengkap' => 'sometimes|nullable|string|max:255',
+            'nik' => 'sometimes|nullable|string|max:20',
+            'tanggal_lahir' => 'sometimes|nullable|date',
+            'tempat_lahir' => 'sometimes|nullable|string',
+            'jenis_kelamin' => 'sometimes|nullable|in:L,P',
+            'agama' => 'sometimes|nullable|string',
+            'kewarganegaraan' => 'sometimes|nullable|string',
+            'no_hp' => 'sometimes|nullable|string',
+            'alamat' => 'sometimes|nullable|string',
+            'provinsi' => 'sometimes|nullable|string',
+            'kota_kabupaten' => 'sometimes|nullable|string',
+            'kecamatan' => 'sometimes|nullable|string',
+            'kode_pos' => 'sometimes|nullable|string',
+            'asal_sekolah' => 'sometimes|nullable|string',
+            'npsn_sekolah' => 'sometimes|nullable|string',
+            'jurusan_sekolah' => 'sometimes|nullable|string',
+            'tahun_lulus' => 'sometimes|nullable|string',
+            'nilai_rata_rapor' => 'sometimes|nullable|numeric',
+            'nama_ayah' => 'sometimes|nullable|string',
+            'pekerjaan_ayah' => 'sometimes|nullable|string',
+            'nama_ibu' => 'sometimes|nullable|string',
+            'pekerjaan_ibu' => 'sometimes|nullable|string',
+            'penghasilan_ortu' => 'sometimes|nullable|string',
+            'nama_wali' => 'sometimes|nullable|string',
+            'telepon_wali' => 'sometimes|nullable|string',
         ]);
 
+        $existing = PendaftaranCalonMhs::where('user_id', $user->id)->first();
+        $noPendaftaran = ($existing && !empty($existing->no_pendaftaran)) 
+            ? $existing->no_pendaftaran 
+            : ('REG-' . date('Ymd') . '-' . rand(1000, 9999));
+
+        // GELOMBANG IMMUTABILITY PROTECTION:
+        // If candidate already registered/paid in a gelombang, lock gelombang_id so future admin gelombang changes won't affect them.
+        if ($existing && !empty($existing->gelombang_id)) {
+            $validated['gelombang_id'] = $existing->gelombang_id;
+        }
+
         $pendaftaran = PendaftaranCalonMhs::updateOrCreate(
-            ['user_id' => $user->id, 'gelombang_id' => $validated['gelombang_id']],
+            ['user_id' => $user->id],
             array_merge($validated, [
-                'no_pendaftaran' => 'REG-' . date('Ymd') . '-' . rand(1000, 9999),
-                'kewarganegaraan' => 'WNI',
-                'status' => 'draft',
-                'status_pembayaran' => 'belum_bayar'
+                'no_pendaftaran' => $noPendaftaran,
+                'kewarganegaraan' => $validated['kewarganegaraan'] ?? $existing->kewarganegaraan ?? 'WNI',
+                'status' => $existing ? $existing->status : 'draft',
+                'status_pembayaran' => $existing ? $existing->status_pembayaran : 'belum_bayar'
             ])
         );
 
         // Fetch tarif using SpmbSikeuService
         $sikeuService = app(\App\Services\Sikeu\SpmbSikeuService::class);
-        $gelombang = \App\Models\Spmb\GelombangPenerimaan::find($validated['gelombang_id']);
+        $gelombangId = $pendaftaran->gelombang_id ?? $validated['gelombang_id'] ?? 1;
+        $gelombang = \App\Models\Spmb\GelombangPenerimaan::find($gelombangId);
         $nominal = $sikeuService->getTarifPendaftaranSpmb($gelombang->jalur_masuk_id ?? 1, $gelombang->id ?? 1);
         if ($nominal <= 0) {
             $nominal = ($gelombang && $gelombang->biaya_pendaftaran > 0) ? (float) $gelombang->biaya_pendaftaran : 250000.00;
         }
+
+        $namaLengkap = $pendaftaran->nama_lengkap ?? $validated['nama_lengkap'] ?? $user->name ?? 'Calon Mahasiswa';
 
         // Generate External Bill via internal Request
         $payload = [
@@ -101,7 +132,7 @@ class CalonMahasiswaController extends Controller
             'tahun_akademik_id' => $gelombang->tahun_akademik_id ?? 1,
             'source_system' => 'SPMB',
             'requires_approval' => false,
-            'keterangan' => 'Pendaftaran SPMB - ' . $validated['nama_lengkap'],
+            'keterangan' => 'Pendaftaran SPMB - ' . $namaLengkap,
             'details' => [
                 [
                     'jenis_biaya_kode' => 'SPMB_ADM',
@@ -139,6 +170,115 @@ class CalonMahasiswaController extends Controller
             'status' => 'success',
             'message' => 'Pendaftaran berhasil disubmit.',
             'data' => $pendaftaran
+        ]);
+    }
+
+    /**
+     * Reissue / Generasi Ulang Nomor Virtual Account (Tanpa Menghapus Biodata)
+     */
+    public function reissueVa(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $pendaftaran = PendaftaranCalonMhs::where('user_id', $user->id)->first();
+        if (!$pendaftaran) {
+            return response()->json(['status' => 'error', 'message' => 'Pendaftaran tidak ditemukan.'], 404);
+        }
+
+        $tagihan = \App\Models\Sikeu\TagihanMahasiswa::where('calon_mahasiswa_id', $pendaftaran->id)
+            ->where('source_system', 'SPMB')
+            ->first();
+
+        if ($tagihan) {
+            // Reset status to belum_bayar
+            $pendaftaran->update(['status_pembayaran' => 'belum_bayar']);
+            $newNomorTagihan = 'INV-SPMB-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(5));
+            $tagihan->update([
+                'status' => 'belum_bayar',
+                'nomor_tagihan' => $newNomorTagihan,
+            ]);
+
+            // Delete old Virtual Account record
+            \App\Models\Sikeu\VirtualAccount::where('tagihan_id', $tagihan->id)->delete();
+
+            // Re-generate VA via Xendit or local fallback (Defaulting to BRI as active Xendit channel)
+            $bankCode = 'BRI';
+            $vaNumber = '13282' . date('ymd') . str_pad($tagihan->id, 5, '0', STR_PAD_LEFT);
+            $totalBayar = (float) $tagihan->total_bayar;
+
+            $pgConfig = \App\Models\Sikeu\PaymentGatewayConfig::where('is_active', true)->first();
+            $apiKey = $pgConfig->api_key_encrypted ?? $pgConfig->public_key_encrypted ?? null;
+
+            if ($pgConfig && $pgConfig->gateway_name === 'xendit' && !empty($apiKey)) {
+                try {
+                    $xenditRes = \Illuminate\Support\Facades\Http::withoutVerifying()
+                        ->withBasicAuth($apiKey, '')
+                        ->post('https://api.xendit.co/callback_virtual_accounts', [
+                            'external_id' => $newNomorTagihan,
+                            'bank_code' => $bankCode,
+                            'name' => 'SPMB Calon Mhs #' . $pendaftaran->id,
+                            'expected_amount' => (int) $totalBayar,
+                            'is_closed' => true,
+                            'expiration_date' => date('c', strtotime('+30 days')),
+                        ]);
+
+                    if ($xenditRes->successful()) {
+                        $xData = $xenditRes->json();
+                        $vaNumber = $xData['account_number'] ?? $vaNumber;
+                        $bankCode = $xData['bank_code'] ?? $bankCode;
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning("Xendit VA Reissue Exception: " . $e->getMessage());
+                }
+            }
+
+            $newVa = \App\Models\Sikeu\VirtualAccount::create([
+                'tagihan_id' => $tagihan->id,
+                'va_number' => $vaNumber,
+                'bank_kode' => $bankCode,
+                'bank_nama' => 'Bank ' . $bankCode,
+                'nominal' => $totalBayar,
+                'expired_at' => date('Y-m-d H:i:s', strtotime('+30 days')),
+                'status' => 'aktif',
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Nomor Virtual Account berhasil diperbarui.',
+                'data' => [
+                    'pendaftaran' => $pendaftaran,
+                    'tagihan' => [
+                        'tagihan' => $tagihan,
+                        'virtual_account' => $newVa
+                    ]
+                ]
+            ]);
+        }
+
+        return response()->json(['status' => 'error', 'message' => 'Tagihan tidak ditemukan.'], 404);
+    }
+
+    /**
+     * Reset / Hapus Draf Pendaftaran & Tagihan Lama (Untuk Pengujian Ulang)
+     */
+    public function resetPendaftaran(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $pendaftaran = PendaftaranCalonMhs::where('user_id', $user->id)->first();
+        if ($pendaftaran) {
+            $tagihan = \App\Models\Sikeu\TagihanMahasiswa::where('calon_mahasiswa_id', $pendaftaran->id)
+                ->where('source_system', 'SPMB')
+                ->first();
+            if ($tagihan) {
+                \App\Models\Sikeu\VirtualAccount::where('tagihan_id', $tagihan->id)->delete();
+                \App\Models\Sikeu\DetailTagihan::where('tagihan_id', $tagihan->id)->delete();
+                $tagihan->delete();
+            }
+            $pendaftaran->delete();
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Draf pendaftaran dan VA lama berhasil direset. Silakan buat pendaftaran baru.'
         ]);
     }
 }

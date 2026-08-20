@@ -15,19 +15,39 @@ class PendaftaranController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = PendaftaranCalonMhs::with(['gelombangPenerimaan', 'programStudi']);
+        $query = PendaftaranCalonMhs::with([
+            'gelombangPenerimaan.jalurMasuk',
+            'programStudi',
+            'programStudiPilihan2',
+            'user'
+        ]);
 
-        // Filter by Status
-        if ($request->has('status') && $request->status !== '') {
+        // Filter by Status Pendaftaran
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        // Search by Nama Lengkap or No Pendaftaran
-        if ($request->has('search') && $request->search !== '') {
+        // Filter by Status Pembayaran
+        if ($request->filled('status_pembayaran')) {
+            $query->where('status_pembayaran', $request->status_pembayaran);
+        }
+
+        // Filter by Gelombang
+        if ($request->filled('gelombang_id')) {
+            $query->where('gelombang_id', $request->gelombang_id);
+        }
+
+        // Search by Nama Lengkap, No Pendaftaran, NIK, or User Account
+        if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
                 $q->where('nama_lengkap', 'like', "%{$search}%")
-                  ->orWhere('no_pendaftaran', 'like', "%{$search}%");
+                  ->orWhere('no_pendaftaran', 'like', "%{$search}%")
+                  ->orWhere('nik', 'like', "%{$search}%")
+                  ->orWhereHas('user', function($uq) use ($search) {
+                      $uq->where('email', 'like', "%{$search}%")
+                         ->orWhere('username', 'like', "%{$search}%");
+                  });
             });
         }
 
@@ -36,7 +56,8 @@ class PendaftaranController extends Controller
         $orderDir = $request->input('order_dir', 'desc');
         $query->orderBy($orderBy, $orderDir);
 
-        $data = $query->paginate($request->input('per_page', 15));
+        $perPage = (int) $request->input('per_page', $request->input('limit', 15));
+        $data = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
@@ -53,7 +74,8 @@ class PendaftaranController extends Controller
             'gelombangPenerimaan',
             'programStudi',
             'programStudiPilihan2',
-            'dokumenPendaftaran'
+            'dokumenPendaftaran',
+            'user'
         ])->findOrFail($id);
 
         return response()->json([

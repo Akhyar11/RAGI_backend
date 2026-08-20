@@ -18,7 +18,6 @@ use App\Http\Controllers\API\Spmb\SpmbSekolahMitraController;
 */
 
 // Master Data SPMB
-Route::get('prodi', [MasterSpmbController::class, 'getProgramStudi']);
 Route::get('jalur', [MasterSpmbController::class, 'getJalurMasuk']);
 Route::get('jalur/{id}', [MasterSpmbController::class, 'showJalurMasuk']);
 Route::post('jalur', [MasterSpmbController::class, 'storeJalurMasuk']);
@@ -41,6 +40,8 @@ Route::get('pendaftaran', [PendaftaranController::class, 'index']);
 Route::get('pendaftaran/me', [CalonMahasiswaController::class, 'myPendaftaran']);
 Route::post('pendaftaran/biodata', [CalonMahasiswaController::class, 'storeBiodata']);
 Route::post('pendaftaran/finalize', [CalonMahasiswaController::class, 'finalize']);
+Route::post('pendaftaran/reissue-va', [CalonMahasiswaController::class, 'reissueVa']);
+Route::post('pendaftaran/reset', [CalonMahasiswaController::class, 'resetPendaftaran']);
 
 Route::get('pendaftaran/{id}', [PendaftaranController::class, 'show']);
 Route::post('pendaftaran/{id}/status', [PendaftaranController::class, 'updateStatus']);
