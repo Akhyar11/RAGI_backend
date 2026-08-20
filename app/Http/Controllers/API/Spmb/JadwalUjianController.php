@@ -7,10 +7,20 @@ use Illuminate\Http\Request;
 use App\Models\Spmb\JadwalUjianSpmb;
 use App\Models\Spmb\PesertaUjianSpmb;
 
+use App\Services\MenuService;
+
 class JadwalUjianController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+        if (!MenuService::hasAccess($user, '/spmb/ujian/jadwal')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized access. Menu ini belum diaktifkan untuk role Anda di database.'
+            ], 403);
+        }
+
         $query = JadwalUjianSpmb::with('gelombangPenerimaan');
         
         if ($request->has('gelombang_id')) {

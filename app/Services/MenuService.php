@@ -60,4 +60,27 @@ class MenuService
 
         return $menus;
     }
+
+    /**
+     * Check if a user has access to a specific menu URL based on their roles in DB menu_role pivot table.
+     */
+    public static function hasAccess($user, string $menuUrl): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value') ?? 'superadmin';
+        if ($user->roles()->whereIn('slug', ['superadmin', 'admin', $superAdminRole])->exists()) {
+            return true;
+        }
+
+        $menu = Menu::where('url', $menuUrl)->first();
+        if (!$menu) {
+            return true;
+        }
+
+        $roleIds = $user->roles()->pluck('roles.id')->toArray();
+        return $menu->roles()->whereIn('roles.id', $roleIds)->exists();
+    }
 }

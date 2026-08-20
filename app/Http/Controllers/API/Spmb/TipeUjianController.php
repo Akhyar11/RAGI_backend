@@ -7,6 +7,8 @@ use App\Models\Spmb\TipeUjianSpmb;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
+use App\Services\MenuService;
+
 class TipeUjianController extends Controller
 {
     /**
@@ -14,6 +16,14 @@ class TipeUjianController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+        if (!MenuService::hasAccess($user, '/spmb/master/tipe-ujian')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized access. Menu ini belum diaktifkan untuk role Anda di database.'
+            ], 403);
+        }
+
         $query = TipeUjianSpmb::query();
 
         if ($request->has('search') && !empty($request->search)) {
