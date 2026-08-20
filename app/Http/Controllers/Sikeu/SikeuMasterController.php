@@ -226,9 +226,16 @@ class SikeuMasterController extends Controller
     // 3. MASTER JENIS BIAYA PENDIDIKAN
     // ==========================================
 
-    public function indexJenisBiaya()
+    public function indexJenisBiaya(Request $request)
     {
-        $biaya = JenisBiaya::orderBy('id', 'asc')->get();
+        $query = JenisBiaya::with('moduleDelegations');
+        if ($request->filled('module_code')) {
+            $moduleCode = $request->module_code;
+            $query->whereHas('moduleDelegations', function ($q) use ($moduleCode) {
+                $q->where('module_code', $moduleCode);
+            });
+        }
+        $biaya = $query->orderBy('id', 'asc')->get();
         return response()->json(['status' => 'success', 'data' => $biaya]);
     }
 
@@ -237,9 +244,11 @@ class SikeuMasterController extends Controller
         $validator = Validator::make($request->all(), [
             'kode' => 'required|string|unique:jenis_biaya,kode',
             'nama' => 'required|string',
-            'tipe' => 'required|in:ukt,spp,sks,praktikum,wisuda,spmb_adm,lainnya',
+            'tipe' => 'required|string',
             'nominal_standar' => 'nullable|numeric|min:0',
             'deskripsi' => 'nullable|string',
+            'module_codes' => 'nullable|array',
+            'module_codes.*' => 'string',
         ]);
 
         if ($validator->fails()) {
@@ -256,7 +265,17 @@ class SikeuMasterController extends Controller
             'is_active' => true,
         ]);
 
-        return response()->json(['status' => 'success', 'message' => 'Jenis biaya berhasil ditambahkan.', 'data' => $biaya], 201);
+        $moduleCodes = $request->input('module_codes', ['sikeu']);
+        if (!empty($moduleCodes) && is_array($moduleCodes)) {
+            foreach ($moduleCodes as $code) {
+                \App\Models\Sikeu\JenisBiayaModule::create([
+                    'jenis_biaya_id' => $biaya->id,
+                    'module_code' => strtolower($code),
+                ]);
+            }
+        }
+
+        return response()->json(['status' => 'success', 'message' => 'Jenis biaya berhasil ditambahkan.', 'data' => $biaya->load('moduleDelegations')], 201);
     }
 
     public function updateJenisBiaya(Request $request, $id)
@@ -265,10 +284,12 @@ class SikeuMasterController extends Controller
 
         $validator = Validator::make($request->all(), [
             'nama' => 'sometimes|string',
-            'tipe' => 'sometimes|in:ukt,spp,sks,praktikum,wisuda,spmb_adm,lainnya',
+            'tipe' => 'sometimes|string',
             'nominal_standar' => 'sometimes|numeric|min:0',
             'deskripsi' => 'nullable|string',
             'is_active' => 'sometimes|boolean',
+            'module_codes' => 'nullable|array',
+            'module_codes.*' => 'string',
         ]);
 
         if ($validator->fails()) {
@@ -276,7 +297,18 @@ class SikeuMasterController extends Controller
         }
 
         $biaya->update($request->only(['nama', 'tipe', 'nominal_standar', 'deskripsi', 'is_active', 'is_recurring']));
-        return response()->json(['status' => 'success', 'message' => 'Komponen biaya & nominal standar berhasil diperbarui.', 'data' => $biaya]);
+
+        if ($request->has('module_codes') && is_array($request->module_codes)) {
+            \App\Models\Sikeu\JenisBiayaModule::where('jenis_biaya_id', $biaya->id)->delete();
+            foreach ($request->module_codes as $code) {
+                \App\Models\Sikeu\JenisBiayaModule::create([
+                    'jenis_biaya_id' => $biaya->id,
+                    'module_code' => strtolower($code),
+                ]);
+            }
+        }
+
+        return response()->json(['status' => 'success', 'message' => 'Komponen biaya & nominal standar berhasil diperbarui.', 'data' => $biaya->load('moduleDelegations')]);
     }
 
     // ==========================================
