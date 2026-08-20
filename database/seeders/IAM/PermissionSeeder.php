@@ -184,6 +184,10 @@ class PermissionSeeder extends Seeder
             ['name' => 'Buat Pengajuan Pengadaan', 'slug' => 'sinapra.pengadaan.create', 'module' => 'sinapra', 'action' => 'create', 'description' => 'Mengajukan usulan pengadaan barang baru'],
             ['name' => 'Ubah / Approve Pengadaan', 'slug' => 'sinapra.pengadaan.approve', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Memproses & menyetujui usulan pengadaan'],
             ['name' => 'Hapus Pengajuan Pengadaan', 'slug' => 'sinapra.pengadaan.delete', 'module' => 'sinapra', 'action' => 'delete', 'description' => 'Menghapus usulan pengadaan barang'],
+
+            // ── MODUL SPMB (PENERIMAAN MAHASISWA BARU) ──────────────────────
+            ['name' => 'Portal Calon Mahasiswa', 'slug' => 'spmb.student.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Akses dashboard & formulir registrasi calon mahasiswa'],
+            ['name' => 'Kelola Admin SPMB', 'slug' => 'spmb.admin.manage', 'module' => 'spmb', 'action' => 'update', 'description' => 'Akses penuh pengelolaan data & administrasi SPMB'],
         ];
 
         // Insert semua permissions ke database
@@ -347,12 +351,12 @@ class PermissionSeeder extends Seeder
             }
         }
 
-        // 10. Calon Mahasiswa -> Akses SPMB Pendaftaran & Dashboard
+        // 10. Calon Mahasiswa -> Akses Khusus Portal & Dashboard Calon Mahasiswa
         if ($calonMhsRole) {
-            foreach ($allPermissions as $p) {
-                if ($p->module === 'spmb') {
-                    RolePermission::create(['role_id' => $calonMhsRole->id, 'permission_id' => $p->id]);
-                }
+            $studentSlugs = ['spmb.student.read', 'spmb.dashboard.read', 'spmb.pendaftaran.read'];
+            $perms = Permission::whereIn('slug', $studentSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::create(['role_id' => $calonMhsRole->id, 'permission_id' => $p->id]);
             }
         }
 

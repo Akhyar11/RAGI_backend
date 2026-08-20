@@ -23,33 +23,42 @@ class SikeuMasterSeeder extends Seeder
         DB::table('periode_akuntansi')->truncate();
         Schema::enableForeignKeyConstraints();
 
-        // 1. Seed Jenis Biaya
+        // 1. Seed Jenis Biaya & Module Delegations
         $jbUkt = JenisBiaya::create([
             'kode' => 'UKT_REG',
             'nama' => 'Uang Kuliah Tunggal (UKT) Reguler',
             'tipe' => 'ukt',
+            'nominal_standar' => 3500000.00,
             'deskripsi' => 'Biaya pendidikan semesteran reguler mahasiswa',
             'is_recurring' => true,
             'is_active' => true,
         ]);
+        \App\Models\Sikeu\JenisBiayaModule::create(['jenis_biaya_id' => $jbUkt->id, 'module_code' => 'siakad']);
+        \App\Models\Sikeu\JenisBiayaModule::create(['jenis_biaya_id' => $jbUkt->id, 'module_code' => 'sikeu']);
 
         $jbSpmb = JenisBiaya::create([
             'kode' => 'SPMB_ADM',
             'nama' => 'Biaya Pendaftaran SPMB',
             'tipe' => 'spmb_adm',
+            'nominal_standar' => 250000.00,
             'deskripsi' => 'Biaya formulir & ujian seleksi penerimaan mahasiswa baru',
             'is_recurring' => false,
             'is_active' => true,
         ]);
+        \App\Models\Sikeu\JenisBiayaModule::create(['jenis_biaya_id' => $jbSpmb->id, 'module_code' => 'spmb']);
+        \App\Models\Sikeu\JenisBiayaModule::create(['jenis_biaya_id' => $jbSpmb->id, 'module_code' => 'sikeu']);
 
         $jbWisuda = JenisBiaya::create([
             'kode' => 'WISUDA_FEE',
             'nama' => 'Biaya Kelulusan & Wisuda',
             'tipe' => 'wisuda',
+            'nominal_standar' => 1500000.00,
             'deskripsi' => 'Biaya ijazah, toga, & upacara wisuda',
             'is_recurring' => false,
             'is_active' => true,
         ]);
+        \App\Models\Sikeu\JenisBiayaModule::create(['jenis_biaya_id' => $jbWisuda->id, 'module_code' => 'siakad']);
+        \App\Models\Sikeu\JenisBiayaModule::create(['jenis_biaya_id' => $jbWisuda->id, 'module_code' => 'sikeu']);
 
         // 2. Seed Tarif UKT
         TarifUkt::create([
