@@ -39,8 +39,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(\App\Models\PengajuanPengadaan::class, \App\Policies\Sinapra\PengajuanPengadaanPolicy::class);
 
         Gate::before(function (User $user, string $ability) {
-            // Super admin bypass semua permission
-            if ($user->hasRole('admin') || $user->hasRole('superadmin')) {
+            // Super admin bypass semua permission (dinamis berdasarkan system_settings superadmin_role)
+            if ($user->isSuperAdmin()) {
                 return true;
             }
         });

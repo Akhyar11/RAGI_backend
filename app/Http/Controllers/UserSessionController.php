@@ -113,7 +113,7 @@ class UserSessionController extends Controller
      */
     public function adminIndex(Request $request)
     {
-        if (!$request->user()->hasRole('admin') && !$request->user()->hasRole('superadmin')) abort(403);
+        if (!$request->user()->isSuperAdmin()) abort(403);
 
         $query = UserSessionIam::with('user:id,username,email')->orderBy('created_at', 'desc');
             
@@ -154,7 +154,7 @@ class UserSessionController extends Controller
             ], 404);
         }
 
-        if (!$request->user()->hasRole('admin') && !$request->user()->hasRole('superadmin')) abort(403);
+        if (!$request->user()->isSuperAdmin()) abort(403);
 
         DB::table('oauth_access_tokens')
             ->where('id', $session->token)

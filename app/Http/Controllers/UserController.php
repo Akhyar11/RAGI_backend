@@ -13,7 +13,7 @@ class UserController extends Controller
      */
     private function ensureAdmin()
     {
-        if (!auth()->user()->hasRole('admin') && !auth()->user()->hasRole('superadmin')) {
+        if (!auth()->user()->isSuperAdmin()) {
             abort(403, 'Anda tidak memiliki akses superadmin.');
         }
     }

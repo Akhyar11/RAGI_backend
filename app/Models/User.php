@@ -73,10 +73,32 @@ class User extends Authenticatable
             });
     }
 
-    public function hasPermission(string $permissionSlug): bool
+    protected $appends = ['is_superadmin', 'is_admin'];
+
+    public function isSuperAdmin(): bool
     {
         $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value') ?? 'superadmin';
-        if ($this->hasRole('admin') || $this->hasRole('superadmin') || $this->hasRole($superAdminRole)) {
+        return $this->hasRole('admin') || $this->hasRole('superadmin') || $this->hasRole($superAdminRole);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->isSuperAdmin() || $this->hasRole('admin_spmb') || $this->hasRole('admin_simpeg') || $this->hasRole('admin_sikeu') || $this->hasRole('admin_lppm');
+    }
+
+    public function getIsSuperadminAttribute(): bool
+    {
+        return $this->isSuperAdmin();
+    }
+
+    public function getIsAdminAttribute(): bool
+    {
+        return $this->isAdmin();
+    }
+
+    public function hasPermission(string $permissionSlug): bool
+    {
+        if ($this->isSuperAdmin()) {
             return true;
         }
 
