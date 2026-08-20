@@ -25,17 +25,10 @@ class CheckMenuAccess
             return $next($request);
         }
 
-        // Dynamically extract path and query matching menu in database
-        $path = '/' . ltrim($request->path(), 'api/');
-        
-        // Map API routes to frontend menu URLs if needed
-        $urlMap = [
-            '/spmb/jadwal-ujian' => '/spmb/ujian/jadwal',
-            '/spmb/pendaftar' => '/spmb/pendaftaran',
-        ];
+        // 1. Extract target URL from request path
+        $targetUrl = '/' . ltrim($request->path(), 'api/');
 
-        $targetUrl = $urlMap[$path] ?? $path;
-
+        // 2. Direct DB query to menus table by url column
         $menu = Menu::where('url', $targetUrl)->first();
         if ($menu) {
             $roleIds = $user->roles()->pluck('roles.id')->toArray();
