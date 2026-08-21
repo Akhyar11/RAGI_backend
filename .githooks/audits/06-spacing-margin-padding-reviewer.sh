@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🤖 [Audit 6/6: Spacing, Margin & Padding Standard] Memeriksa staged changes..."
+echo "🤖 [Audit 6/7: Spacing, Margin & Padding Standard] Memeriksa staged changes..."
 
 # Cek apakah ada file komponen/halaman/CSS yang di-stage
 STAGED_DIFF=$(git diff --cached -- "app/**" "components/**" "styles/**")
@@ -12,7 +12,7 @@ fi
 
 PROMPT_FILE=$(mktemp)
 
-cat << EOF > "$PROMPT_FILE"
+cat << 'EOF' > "$PROMPT_FILE"
 Kamu adalah Code Auditor khusus Spacing, Margin, Padding & Layout Alignment Standard.
 Periksa Git Diff berikut HANYA terhadap Aturan Spacing & Layout Alignment:
 
@@ -34,10 +34,13 @@ Aturan Spacing, Margin & Padding:
    - Dilarang menggunakan margin negatif acak (seperti `-mt-20`) tanpa kebutuhan overlay UI khusus.
 
 Git Diff yang di-stage:
-\`\`\`diff
-$STAGED_DIFF
-\`\`\`
+EOF
 
+echo '```diff' >> "$PROMPT_FILE"
+echo "$STAGED_DIFF" >> "$PROMPT_FILE"
+echo '```' >> "$PROMPT_FILE"
+
+cat << 'EOF' >> "$PROMPT_FILE"
 Jawab HANYA salah satu:
 - PASSED jika kode bersih dan memenuhi Spacing, Margin & Padding Standard.
 - REJECTED: [detail alasan pelanggaran] jika ditemukan penggunaan arbitrary pixel spacing / oversized padding / layout misalignment.

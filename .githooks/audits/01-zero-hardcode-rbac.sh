@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🤖 [Audit 1/2: Zero Hardcode & RBAC] Memeriksa staged changes..."
+echo "🤖 [Audit 1/7: Zero Hardcode & RBAC] Memeriksa staged changes..."
 
 STAGED_DIFF=$(git diff --cached)
 
@@ -10,7 +10,7 @@ fi
 
 PROMPT_FILE=$(mktemp)
 
-cat << EOF > "$PROMPT_FILE"
+cat << 'EOF' > "$PROMPT_FILE"
 Kamu adalah Code Auditor khusus Zero Hardcode & RBAC.
 Periksa Git Diff berikut HANYA terhadap aturan Zero Hardcode & RBAC Policy:
 
@@ -20,10 +20,13 @@ Aturan:
 3. Seluruh otorisasi dan relasi WAJIB berbasis ID entitas atau hook RBAC (seperti hasRole / hasPermission).
 
 Git Diff:
-\`\`\`diff
-$STAGED_DIFF
-\`\`\`
+EOF
 
+echo '```diff' >> "$PROMPT_FILE"
+echo "$STAGED_DIFF" >> "$PROMPT_FILE"
+echo '```' >> "$PROMPT_FILE"
+
+cat << 'EOF' >> "$PROMPT_FILE"
 Jawab HANYA salah satu:
 - PASSED jika kode bersih dari hardcode dan sesuai RBAC.
 - REJECTED: [detail alasan pelanggaran] jika ditemukan hardcode/pelanggaran RBAC.

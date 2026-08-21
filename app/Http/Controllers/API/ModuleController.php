@@ -32,6 +32,7 @@ class ModuleController extends Controller
             'name' => 'required|string|max:255',
             'code' => 'required|string|max:50|unique:modules,code',
             'description' => 'nullable|string',
+            'primary_color' => 'nullable|string|max:20',
             'is_active' => 'boolean'
         ]);
 
@@ -39,6 +40,7 @@ class ModuleController extends Controller
             'name' => $request->name,
             'code' => Str::slug($request->code),
             'description' => $request->description,
+            'primary_color' => $request->primary_color ?? '#3b82f6',
             'is_active' => $request->is_active ?? true,
         ]);
 
@@ -58,6 +60,7 @@ class ModuleController extends Controller
             'name' => 'required|string|max:255',
             'code' => 'required|string|max:50|unique:modules,code,' . $module->id,
             'description' => 'nullable|string',
+            'primary_color' => 'nullable|string|max:20',
             'is_active' => 'boolean'
         ]);
 
@@ -65,6 +68,7 @@ class ModuleController extends Controller
             'name' => $request->name,
             'code' => Str::slug($request->code),
             'description' => $request->description,
+            'primary_color' => $request->primary_color ?? $module->primary_color ?? '#3b82f6',
             'is_active' => $request->is_active ?? $module->is_active,
         ]);
 

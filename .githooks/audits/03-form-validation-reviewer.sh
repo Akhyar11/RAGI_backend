@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🤖 [Audit 3/4: Form & Input Validation Standard] Memeriksa staged changes..."
+echo "🤖 [Audit 3/7: Form & Input Validation Standard] Memeriksa staged changes..."
 
 # Cek apakah ada file form / input yang di-stage
 STAGED_DIFF=$(git diff --cached -- "app/(main)/**" "components/**")
@@ -12,7 +12,7 @@ fi
 
 PROMPT_FILE=$(mktemp)
 
-cat << EOF > "$PROMPT_FILE"
+cat << 'EOF' > "$PROMPT_FILE"
 Kamu adalah Code Auditor khusus Form Validation & Input Component Standard.
 Periksa Git Diff berikut HANYA terhadap Aturan Form & Input Validation:
 
@@ -30,10 +30,13 @@ Aturan Form & Validasi:
    - Error message wajib Bahasa Indonesia dan tampil di bawah field.
 
 Git Diff yang di-stage:
-\`\`\`diff
-$STAGED_DIFF
-\`\`\`
+EOF
 
+echo '```diff' >> "$PROMPT_FILE"
+echo "$STAGED_DIFF" >> "$PROMPT_FILE"
+echo '```' >> "$PROMPT_FILE"
+
+cat << 'EOF' >> "$PROMPT_FILE"
 Jawab HANYA salah satu:
 - PASSED jika kode bersih dan memenuhi Form Validation Standard.
 - REJECTED: [detail alasan pelanggaran] jika ditemukan pelanggaran Form Validation Standard.

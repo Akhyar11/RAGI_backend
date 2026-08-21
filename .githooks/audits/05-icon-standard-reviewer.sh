@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🤖 [Audit 5/5: Icon Standard] Memeriksa staged changes..."
+echo "🤖 [Audit 5/7: Icon Standard] Memeriksa staged changes..."
 
 # Cek apakah ada file komponen/halaman yang di-stage
 STAGED_DIFF=$(git diff --cached -- "app/**" "components/**")
@@ -12,7 +12,7 @@ fi
 
 PROMPT_FILE=$(mktemp)
 
-cat << EOF > "$PROMPT_FILE"
+cat << 'EOF' > "$PROMPT_FILE"
 Kamu adalah Code Auditor khusus Icon Standard.
 Periksa Git Diff berikut HANYA terhadap Aturan Penggunaan Ikon:
 
@@ -25,10 +25,13 @@ Aturan Penggunaan Ikon:
    - DILARANG KERAS menggunakan `<i className="fa ...">` (FontAwesome legacy) atau meng-import pustaka ikon pihak ketiga lainnya.
 
 Git Diff yang di-stage:
-\`\`\`diff
-$STAGED_DIFF
-\`\`\`
+EOF
 
+echo '```diff' >> "$PROMPT_FILE"
+echo "$STAGED_DIFF" >> "$PROMPT_FILE"
+echo '```' >> "$PROMPT_FILE"
+
+cat << 'EOF' >> "$PROMPT_FILE"
 Jawab HANYA salah satu:
 - PASSED jika kode bersih dan memenuhi Icon Standard.
 - REJECTED: [detail alasan pelanggaran] jika ditemukan penggunaan ikon non-standar / SVG mentah.

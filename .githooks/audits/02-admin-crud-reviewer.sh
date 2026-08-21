@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🤖 [Audit 2/2: Admin CRUD Standard] Memeriksa staged changes..."
+echo "🤖 [Audit 2/7: Admin CRUD Standard] Memeriksa staged changes..."
 
 # Cek apakah ada file halaman admin/CRUD yang di-stage
 STAGED_DIFF=$(git diff --cached -- "app/(main)/**" "components/**")
@@ -12,7 +12,7 @@ fi
 
 PROMPT_FILE=$(mktemp)
 
-cat << EOF > "$PROMPT_FILE"
+cat << 'EOF' > "$PROMPT_FILE"
 Kamu adalah Code Auditor khusus Admin CRUD Standard.
 Periksa Git Diff berikut HANYA terhadap Aturan Admin CRUD & Table Standard:
 
@@ -47,10 +47,13 @@ Aturan Admin CRUD:
    - Form > 5 inputs: Gunakan Halaman Terpisah dengan Tombol Kembali Berwarna Oranye (`bg-orange-500 text-white`) di `PageHeader`.
 
 Git Diff yang di-stage:
-\`\`\`diff
-$STAGED_DIFF
-\`\`\`
+EOF
 
+echo '```diff' >> "$PROMPT_FILE"
+echo "$STAGED_DIFF" >> "$PROMPT_FILE"
+echo '```' >> "$PROMPT_FILE"
+
+cat << 'EOF' >> "$PROMPT_FILE"
 Jawab HANYA salah satu:
 - PASSED jika kode bersih dan memenuhi Admin CRUD Standard.
 - REJECTED: [detail alasan pelanggaran] jika ditemukan pelanggaran Admin CRUD Standard.
