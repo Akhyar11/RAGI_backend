@@ -6,11 +6,28 @@ use App\Http\Controllers\Controller;
 use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\Spmb\MasterTipeJalur;
+use App\Models\System\MasterReferensi;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class MasterSpmbController extends Controller
 {
+    /**
+     * Get referensi by tipe
+     */
+    public function getReferensi($tipe): JsonResponse
+    {
+        $data = MasterReferensi::where('tipe', $tipe)
+            ->where('is_active', true)
+            ->orderBy('urutan')
+            ->get();
+            
+        return response()->json([
+            'status' => 'success',
+            'data' => $data
+        ]);
+    }
+
     /**
      * Get all Master Tipe Jalur
      */
