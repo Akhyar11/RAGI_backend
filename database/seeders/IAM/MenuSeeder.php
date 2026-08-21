@@ -231,7 +231,6 @@ class MenuSeeder extends Seeder
                 'permission_slug' => 'sinapra.dashboard.read',
                 'order_index' => 5,
             ],
-            ],
         ];
 
         foreach ($menus as $menuData) {
