@@ -9,14 +9,13 @@ use App\Models\Module;
 
 class SpmbMenuSeeder extends Seeder
 {
-    /**
-     * Run the SPMB Module Menu Seeder.
-     */
     public function run(): void
     {
-        // 1. Ensure SPMB module exists in `modules` table
+        $modSpmb = 'spmb';
+        Menu::where('module', $modSpmb)->delete();
+
         Module::updateOrCreate(
-            ['code' => 'spmb'],
+            ['code' => $modSpmb],
             [
                 'name' => 'SPMB (Penerimaan Mahasiswa)',
                 'description' => 'Sistem Penerimaan Mahasiswa Baru Kampus',
@@ -24,59 +23,51 @@ class SpmbMenuSeeder extends Seeder
             ]
         );
 
-        // 2. Comprehensive SPMB Menu Structure
         $spmbMenus = [
             [
-                'name' => 'Dashboard SPMB',
+                'name' => 'Dashboard Saya',
                 'url' => '/spmb/dashboard',
                 'icon' => 'FaChartPie',
-                'module' => 'spmb',
+                'module' => $modSpmb,
                 'order_index' => 1,
             ],
             [
-                'name' => 'PENDAFTARAN',
-                'url' => '#pendaftaran_spmb',
-                'icon' => 'FaUsers',
-                'module' => 'spmb',
+                'name' => 'Formulir Pendaftaran',
+                'url' => '/spmb/registrasi',
+                'icon' => 'FaUserPlus',
+                'module' => $modSpmb,
                 'order_index' => 2,
-                'children' => [
-                    ['name' => 'Formulir Registrasi', 'url' => '/spmb/registrasi', 'icon' => 'FaEdit', 'module' => 'spmb', 'order_index' => 1],
-                    ['name' => 'Data Pendaftar SPMB', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUsers', 'module' => 'spmb', 'order_index' => 2],
-                ]
             ],
             [
-                'name' => 'UJIAN MASUK',
-                'url' => '#ujian_spmb',
-                'icon' => 'FaClipboardCheck',
-                'module' => 'spmb',
+                'name' => 'PENDAFTARAN & VERIFIKASI',
+                'url' => '#pendaftaran_spmb',
+                'icon' => 'FaList',
+                'module' => $modSpmb,
                 'order_index' => 3,
                 'children' => [
-                    ['name' => 'Jadwal Ujian CAT', 'url' => '/spmb/ujian/jadwal', 'icon' => 'FaCalendar', 'module' => 'spmb', 'order_index' => 1],
-                    ['name' => 'Plotting Peserta Ujian', 'url' => '/spmb/ujian/peserta', 'icon' => 'FaUserCheck', 'module' => 'spmb', 'order_index' => 2],
+                    ['name' => 'Data Pendaftar & Verifikasi', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUsers', 'module' => $modSpmb, 'order_index' => 1],
                 ]
             ],
             [
-                'name' => 'SELEKSI & HASIL',
+                'name' => 'SELEKSI ADMINISTRASI',
                 'url' => '#seleksi_spmb',
                 'icon' => 'FaCheckSquare',
-                'module' => 'spmb',
+                'module' => $modSpmb,
                 'order_index' => 4,
                 'children' => [
-                    ['name' => 'Hasil & Nilai Seleksi', 'url' => '/spmb/seleksi', 'icon' => 'FaTrophy', 'module' => 'spmb', 'order_index' => 1],
-                    ['name' => 'Registrasi / Daftar Ulang', 'url' => '/spmb/seleksi/daftar-ulang', 'icon' => 'FaFileCheck', 'module' => 'spmb', 'order_index' => 2],
+                    ['name' => 'Hasil Seleksi Administrasi', 'url' => '/spmb/seleksi', 'icon' => 'FaTrophy', 'module' => $modSpmb, 'order_index' => 1],
                 ]
             ],
             [
                 'name' => 'MASTER DATA SPMB',
                 'url' => '#master_spmb',
                 'icon' => 'FaList',
-                'module' => 'spmb',
+                'module' => $modSpmb,
                 'order_index' => 5,
                 'children' => [
-                    ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => 'spmb', 'order_index' => 1],
-                    ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'order_index' => 2],
-                    ['name' => 'Kuota Prodi SPMB', 'url' => '/spmb/master/kuota', 'icon' => 'FaUsers', 'module' => 'spmb', 'order_index' => 3],
-                    ['name' => 'Master Tipe Ujian', 'url' => '/spmb/master/tipe-ujian', 'icon' => 'FaClipboardList', 'module' => 'spmb', 'order_index' => 4],
+                    ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => $modSpmb, 'order_index' => 1],
+                    ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => $modSpmb, 'order_index' => 2],
+                    ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'module' => $modSpmb, 'order_index' => 3],
                 ]
             ],
         ];
@@ -84,52 +75,38 @@ class SpmbMenuSeeder extends Seeder
         $allMenuIds = [];
 
         foreach ($spmbMenus as $menuData) {
-            $parent = Menu::updateOrCreate(
-                ['url' => $menuData['url'], 'module' => 'spmb'],
-                [
-                    'name' => $menuData['name'],
-                    'icon' => $menuData['icon'],
-                    'order_index' => $menuData['order_index'],
-                    'is_active' => true,
-                ]
-            );
+            $parent = Menu::create([
+                'name' => $menuData['name'],
+                'url' => $menuData['url'],
+                'icon' => $menuData['icon'],
+                'module' => $menuData['module'],
+                'order_index' => $menuData['order_index'],
+                'is_active' => true,
+            ]);
 
             $allMenuIds[] = $parent->id;
 
             if (isset($menuData['children'])) {
                 foreach ($menuData['children'] as $childData) {
-                    $child = Menu::updateOrCreate(
-                        ['url' => $childData['url'], 'module' => 'spmb'],
-                        [
-                            'parent_id' => $parent->id,
-                            'name' => $childData['name'],
-                            'icon' => $childData['icon'],
-                            'order_index' => $childData['order_index'],
-                            'is_active' => true,
-                        ]
-                    );
+                    $child = Menu::create([
+                        'parent_id' => $parent->id,
+                        'name' => $childData['name'],
+                        'url' => $childData['url'],
+                        'icon' => $childData['icon'],
+                        'module' => $childData['module'],
+                        'order_index' => $childData['order_index'],
+                        'is_active' => true,
+                    ]);
 
                     $allMenuIds[] = $child->id;
                 }
             }
         }
 
-        // Attach SPMB menus to Admin and Superadmin roles
-        $rolesToAttach = Role::whereIn('slug', ['superadmin', 'admin', 'admin_spmb', 'super-admin'])->get();
-        foreach ($rolesToAttach as $role) {
+        $roles = Role::all();
+        foreach ($roles as $role) {
             if (method_exists($role, 'menus')) {
                 $role->menus()->syncWithoutDetaching($allMenuIds);
-            }
-        }
-
-        // Attach Student SPMB menus to Calon Mahasiswa role (Only Dashboard & Registrasi)
-        $studentMenuUrls = ['/spmb/dashboard', '/spmb/registrasi'];
-        $studentMenuIds = Menu::where('module', 'spmb')->whereIn('url', $studentMenuUrls)->pluck('id')->toArray();
-
-        $studentRoles = Role::whereIn('slug', ['calon_mhs', 'calon-mahasiswa'])->get();
-        foreach ($studentRoles as $role) {
-            if (method_exists($role, 'menus')) {
-                $role->menus()->sync($studentMenuIds);
             }
         }
     }

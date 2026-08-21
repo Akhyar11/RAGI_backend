@@ -13,7 +13,7 @@ class MenuSeeder extends Seeder
     public function run(): void
     {
         Schema::disableForeignKeyConstraints();
-        DB::table('menus')->truncate();
+        Menu::truncate();
         Schema::enableForeignKeyConstraints();
 
         $menus = [
@@ -166,18 +166,14 @@ class MenuSeeder extends Seeder
                 ]
             ],
             [
-                'name' => 'SELEKSI & UJIAN',
+                'name' => 'SELEKSI ADMINISTRASI',
                 'url' => '#seleksi_spmb',
-                'icon' => 'FaList',
+                'icon' => 'FaCheckSquare',
                 'module' => 'spmb',
                 'permission_slug' => 'spmb.admin.manage',
                 'order_index' => 4,
                 'children' => [
-                    ['name' => 'Master Tipe Ujian', 'url' => '/spmb/master/tipe-ujian', 'icon' => 'FaFileAlt', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 1],
-                    ['name' => 'Jadwal Ujian Seleksi', 'url' => '/spmb/ujian/jadwal', 'icon' => 'FaCalendarCheck', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 2],
-                    ['name' => 'Peserta Ujian & Nilai', 'url' => '/spmb/ujian/peserta', 'icon' => 'FaClipboardList', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 3],
-                    ['name' => 'Hasil Seleksi & Kelulusan', 'url' => '/spmb/seleksi', 'icon' => 'FaTrophy', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 4],
-                    ['name' => 'Daftar Ulang Mahasiswa Baru', 'url' => '/spmb/seleksi/daftar-ulang', 'icon' => 'FaUserCheck', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 5],
+                    ['name' => 'Hasil Seleksi Administrasi', 'url' => '/spmb/seleksi', 'icon' => 'FaTrophy', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 1],
                 ]
             ],
             [
