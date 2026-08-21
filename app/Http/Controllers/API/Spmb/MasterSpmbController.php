@@ -284,15 +284,6 @@ class MasterSpmbController extends Controller
         ]);
     }
 
-    public function getMasterTipeJalur(): JsonResponse
-    {
-        $tipe = \App\Models\MasterTipeJalur::orderBy('nama', 'asc')->get();
-        return response()->json([
-            'status' => 'success',
-            'data' => $tipe
-        ]);
-    }
-
     /**
      * Get all active Tahun Akademik for SPMB
      */
