@@ -17,8 +17,6 @@ return Application::configure(basePath: dirname(__DIR__))
         then: function () {
             // Protected SPMB module routes (auth:api + CheckMenuAccess + prefix api/spmb)
             Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->prefix('api/spmb')->group(base_path('routes/spmb_core.php'));
-            Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->prefix('api/spmb')->group(base_path('routes/spmb_ujian.php'));
-
             // Protected SIAKAD module routes
             Route::middleware('auth:api')->prefix('api/v1/siakad')->group(base_path('routes/siakad.php'));
         },

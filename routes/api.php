@@ -191,10 +191,6 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 |--------------------------------------------------------------------------
 | SPMB (Sistem Penerimaan Mahasiswa Baru) Routes
 |--------------------------------------------------------------------------
-| Route SPMB dipindah ke:
-|   - routes/spmb_core.php  (alur inti)
-|   - routes/spmb_ujian.php (ujian & seleksi)
-| Kedua file dimuat via bootstrap/app.php -> withRouting()->then()
 */
 Route::prefix('spmb')->group(function () {
     Route::get('prodi', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getProgramStudi']);
