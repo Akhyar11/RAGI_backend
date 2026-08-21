@@ -86,6 +86,7 @@ Route::prefix('sso')->group(function () {
 Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::apiResource('users', App\Http\Controllers\UserController::class);
     Route::patch('users/{id}/status', [App\Http\Controllers\UserController::class, 'toggleStatus']);
+    Route::put('users/{id}/password', [App\Http\Controllers\UserController::class, 'changePassword']);
     
     Route::apiResource('roles', App\Http\Controllers\RoleController::class);
     Route::apiResource('permissions', App\Http\Controllers\PermissionController::class);

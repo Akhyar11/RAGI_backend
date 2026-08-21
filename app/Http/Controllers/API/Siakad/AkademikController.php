@@ -40,7 +40,27 @@ class AkademikController extends Controller
 
     public function listTahunAkademik(Request $request)
     {
-        $ta = MasterTahunAkademik::orderBy('kode', 'desc')->get();
+        $user = $request->user();
+        $query = MasterTahunAkademik::query();
+
+        // Jika request berasal dari mahasiswa (atau menyertakan mahasiswa_id)
+        $mhs = $user ? Mahasiswa::where('user_id', $user->id)->first() : null;
+        if (!$mhs && $request->filled('mahasiswa_id')) {
+            $mhs = Mahasiswa::find($request->mahasiswa_id);
+        }
+
+        if ($mhs && (!$user || !$user->roles()->whereIn('slug', ['superadmin', 'admin'])->exists())) {
+            $angkatan = (int) ($mhs->angkatan ?: 2026);
+            $krsTaIds = \App\Models\Siakad\Krs::where('mahasiswa_id', $mhs->id)->pluck('tahun_akademik_id')->toArray();
+
+            $query->where(function($q) use ($angkatan, $krsTaIds) {
+                $q->where('tahun_mulai', '>=', $angkatan)
+                  ->orWhere('kode', '>=', (string)$angkatan . '1')
+                  ->orWhereIn('id', $krsTaIds);
+            });
+        }
+
+        $ta = $query->orderBy('kode', 'desc')->get();
         return response()->json([
             'status' => 'success',
             'data' => $ta

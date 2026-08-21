@@ -376,12 +376,70 @@ class PerkuliahanController extends Controller
             ['status' => 'draft', 'total_sks_diambil' => 0, 'locked_by_keuangan' => false]
         );
 
+        // Hitung nilai IPK, IPS, dan Total SKS Lulus riil
+        $transkripNilai = NilaiMahasiswa::with(['krsDetail.kelas.mataKuliah'])
+            ->whereHas('krsDetail.krs', fn($q) => $q->where('mahasiswa_id', $mhs->id))
+            ->where('is_final', true)
+            ->get();
+
+        $totalSksLulus = 0;
+        $totalMutu = 0;
+
+        if ($mhs->konversiTransfer && $mhs->konversiTransfer->details) {
+            foreach ($mhs->konversiTransfer->details as $konv) {
+                $mk = $konv->mataKuliahDiakui;
+                $sks = $mk ? $mk->total_sks : $konv->sks_asal;
+                $huruf = $konv->nilai_huruf_asal;
+                $mutu = 4.0;
+                if ($huruf === 'A-') $mutu = 3.75;
+                elseif ($huruf === 'B+') $mutu = 3.25;
+                elseif ($huruf === 'B') $mutu = 3.00;
+                elseif ($huruf === 'B-') $mutu = 2.75;
+                elseif ($huruf === 'C+') $mutu = 2.25;
+                elseif ($huruf === 'C') $mutu = 2.00;
+
+                $totalSksLulus += $sks;
+                $totalMutu += ($mutu * $sks);
+            }
+        }
+
+        foreach ($transkripNilai as $tn) {
+            $sks = $tn->krsDetail?->kelas?->mataKuliah?->total_sks ?? 3;
+            $mutu = (float) $tn->bobot_mutu;
+            if ($tn->nilai_huruf !== 'E' && $tn->nilai_huruf !== 'D') {
+                $totalSksLulus += $sks;
+            }
+            $totalMutu += ($mutu * $sks);
+        }
+
+        $ipk = $totalSksLulus > 0 ? round($totalMutu / $totalSksLulus, 2) : 0.00;
+
+        // Hitung IPS semester ini (jika ada nilai final di KRS ini)
+        $krsNilai = NilaiMahasiswa::whereHas('krsDetail', fn($q) => $q->where('krs_id', $krs->id))
+            ->where('is_final', true)
+            ->get();
+        $krsSks = 0;
+        $krsMutu = 0;
+        foreach ($krsNilai as $kn) {
+            $sks = $kn->krsDetail?->kelas?->mataKuliah?->total_sks ?? 3;
+            $mutu = (float) $kn->bobot_mutu;
+            $krsSks += $sks;
+            $krsMutu += ($mutu * $sks);
+        }
+        $ips = $krsSks > 0 ? round($krsMutu / $krsSks, 2) : 0.00;
+
         return response()->json([
             'status' => 'success',
             'data' => [
                 'mahasiswa' => $mhs,
                 'krs' => $krs,
                 'max_sks' => 24,
+                'akademik_summary' => [
+                    'ipk' => number_format($ipk, 2),
+                    'ips' => number_format($ips, 2),
+                    'total_sks_lulus' => $totalSksLulus,
+                    'total_sks_diambil' => $krs->total_sks_diambil,
+                ]
             ]
         ]);
     }

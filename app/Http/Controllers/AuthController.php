@@ -151,6 +151,32 @@ class AuthController extends Controller
             ->orWhere('username', $identifier)
             ->first();
 
+        // 1. Dukung login menggunakan NIM Mahasiswa (SIAKAD)
+        if (!$user) {
+            $mahasiswa = \App\Models\Siakad\Mahasiswa::where('nim', $identifier)->first();
+            if ($mahasiswa && $mahasiswa->user_id) {
+                $user = User::find($mahasiswa->user_id);
+            }
+        }
+
+        // 2. Dukung login menggunakan NIDN atau NIP Dosen (SIAKAD)
+        if (!$user) {
+            $dosen = \App\Models\Siakad\Dosen::where('nidn', $identifier)
+                ->orWhere('nip', $identifier)
+                ->first();
+            if ($dosen && $dosen->user_id) {
+                $user = User::find($dosen->user_id);
+            }
+        }
+
+        // 3. Dukung login menggunakan NIP Pegawai (SIMPEG)
+        if (!$user && class_exists(\App\Models\Simpeg\Pegawai::class)) {
+            $pegawai = \App\Models\Simpeg\Pegawai::where('nip', $identifier)->first();
+            if ($pegawai && $pegawai->user_id) {
+                $user = User::find($pegawai->user_id);
+            }
+        }
+
         if (!$user || !Hash::check($request->password, $user->password)) {
             AuditLogService::record('IAM', 'login_failed', 'users', $user?->id, null, ['identifier' => $identifier]);
             throw ValidationException::withMessages([

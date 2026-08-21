@@ -182,4 +182,28 @@ class UserController extends Controller
             'data' => $user
         ]);
     }
+
+    /**
+     * Change user password by admin.
+     */
+    public function changePassword(Request $request, $id)
+    {
+        $this->ensureAdmin();
+
+        $user = User::findOrFail($id);
+
+        $request->validate([
+            'password' => 'required|string|min:6|confirmed',
+        ]);
+
+        $user->update([
+            'password' => Hash::make($request->password),
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Password pengguna {$user->username} berhasil diperbarui.",
+            'data' => $user,
+        ]);
+    }
 }
