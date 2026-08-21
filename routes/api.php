@@ -304,6 +304,7 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::delete('master/tarif-ukt/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'destroyTarif']);
 
     // Master Jalur Kelas & Tipe Mahasiswa
+    Route::get('master/tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getMasterTipeJalur']);
     Route::get('master/jalur-kelas', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexJalurKelas']);
     Route::post('master/jalur-kelas', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'storeJalurKelas']);
     Route::put('master/jalur-kelas/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateJalurKelas']);

@@ -5,11 +5,24 @@ namespace App\Http\Controllers\API\Spmb;
 use App\Http\Controllers\Controller;
 use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\GelombangPenerimaan;
+use App\Models\Spmb\MasterTipeJalur;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class MasterSpmbController extends Controller
 {
+    /**
+     * Get all Master Tipe Jalur
+     */
+    public function getMasterTipeJalur(): JsonResponse
+    {
+        $tipeJalur = MasterTipeJalur::all();
+        return response()->json([
+            'status' => 'success',
+            'data' => $tipeJalur
+        ]);
+    }
+
     /**
      * Get all Jalur Masuk
      */
