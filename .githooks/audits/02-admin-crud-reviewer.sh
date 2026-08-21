@@ -46,6 +46,10 @@ Aturan Admin CRUD:
    - Form <= 5 inputs: Gunakan Modal (`<Modal />`) dengan grid maksimal 2 kolom (`grid grid-cols-1 md:grid-cols-2 gap-4`).
    - Form > 5 inputs: Gunakan Halaman Terpisah dengan Tombol Kembali Berwarna Oranye (`bg-orange-500 text-white`) di `PageHeader`.
 
+9. WAJIB 3-DOTS ACTION DROPDOWN MENU (<DropdownMenu />):
+   - Seluruh aksi tabel (Edit, Hapus, Detail, dll.) WAJIB menggunakan menu titik 3 (`<DropdownMenu />` dari `@/components/ui/DropdownMenu`).
+   - DILARANG KERAS menyejajarkan tombol-tombol aksi secara horizontal di sel tabel (*inefficient space*).
+
 Git Diff yang di-stage:
 EOF
 
