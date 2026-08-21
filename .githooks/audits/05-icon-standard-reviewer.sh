@@ -37,7 +37,17 @@ Jawab HANYA salah satu:
 - REJECTED: [detail alasan pelanggaran] jika ditemukan penggunaan ikon non-standar / SVG mentah.
 EOF
 
-RESULT=$(agy --print "$(cat "$PROMPT_FILE")" 2>&1)
+if command -v agy &> /dev/null; then
+    RESULT=$(agy --print "$(cat "$PROMPT_FILE")" 2>&1)
+    AGY_EXIT_CODE=$?
+else
+    AGY_EXIT_CODE=127
+fi
+
+if [ $AGY_EXIT_CODE -ne 0 ]; then
+    echo "⚠️ [Fallback] agy gagal atau tidak ditemukan. Beralih ke opencode (9router/combo)..."
+    RESULT=$(opencode run -m 9router/combo "$(cat "$PROMPT_FILE")" 2>&1)
+fi
 rm -f "$PROMPT_FILE"
 
 if echo "$RESULT" | grep -qi "REJECTED"; then
