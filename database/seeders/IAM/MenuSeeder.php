@@ -58,7 +58,7 @@ class MenuSeeder extends Seeder
                 'url' => '#akun_keamanan',
                 'icon' => 'FaShieldAlt',
                 'module' => 'sso',
-                'order_index' => 4,
+                'order_index' => 999,
                 'children' => [
                     ['name' => 'Profil Saya', 'url' => '/profile', 'icon' => 'FaUser', 'module' => 'sso', 'order_index' => 1],
                     ['name' => 'Sesi Perangkat', 'url' => '/profile/sessions', 'icon' => 'FaSmartphone', 'module' => 'sso', 'order_index' => 2],
