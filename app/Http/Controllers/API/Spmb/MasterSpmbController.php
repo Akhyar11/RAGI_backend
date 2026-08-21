@@ -43,12 +43,45 @@ class MasterSpmbController extends Controller
     /**
      * Get all Jalur Masuk
      */
-    public function getJalurMasuk(): JsonResponse
+    public function getJalurMasuk(Request $request): JsonResponse
     {
-        $jalur = JalurMasuk::with('masterTipeJalur')->orderBy('created_at', 'desc')->get();
+        $query = JalurMasuk::with('masterTipeJalur');
+
+        if ($request->filled('name')) {
+            $name = $request->input('name');
+            $query->where(function ($q) use ($name) {
+                $q->where('nama', 'like', "%{$name}%")
+                  ->orWhere('kode', 'like', "%{$name}%");
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('is_active', filter_var($request->input('status'), FILTER_VALIDATE_BOOLEAN));
+        }
+
+        $sortBy = $request->input('sort_by', $request->input('orderBy', 'created_at'));
+        $sortDir = $request->input('sort_dir', $request->input('orderDir', 'desc'));
+        $allowedSorts = ['id', 'kode', 'nama', 'created_at'];
+        if (in_array($sortBy, $allowedSorts)) {
+            $query->orderBy($sortBy, $sortDir === 'asc' ? 'asc' : 'desc');
+        } else {
+            $query->orderBy('created_at', 'desc');
+        }
+
+        $limit = $request->input('limit', 10);
+        $paginated = $query->paginate($limit);
+
         return response()->json([
             'status' => 'success',
-            'data' => $jalur
+            'data' => $paginated->items(),
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'from' => $paginated->firstItem(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'to' => $paginated->lastItem(),
+                'total' => $paginated->total(),
+            ]
         ]);
     }
 
