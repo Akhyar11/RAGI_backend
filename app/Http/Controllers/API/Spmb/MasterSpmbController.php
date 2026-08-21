@@ -5,7 +5,7 @@ namespace App\Http\Controllers\API\Spmb;
 use App\Http\Controllers\Controller;
 use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\GelombangPenerimaan;
-use App\Models\Spmb\MasterTipeJalur;
+use App\Models\MasterTipeJalur;
 use App\Models\System\MasterReferensi;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
