@@ -32,7 +32,7 @@ class PerkuliahanController extends Controller
         $user = $request->user();
         $taId = $request->input('tahun_akademik_id') ?? MasterTahunAkademik::where('is_active', true)->value('id');
 
-        $query = Kelas::with(['mataKuliah', 'ruangan', 'programStudi', 'dosenPengampu.dosen'])
+        $query = Kelas::with(['mataKuliah', 'ruangan.gedung', 'programStudi', 'dosenPengampu.dosen'])
             ->when($taId, fn($q) => $q->where('tahun_akademik_id', $taId));
 
         // Jika user adalah dosen, filter jadwal mengajar mereka
@@ -64,6 +64,14 @@ class PerkuliahanController extends Controller
             $query->where('hari', $request->hari);
         }
 
+        if ($request->filled('program_studi_id')) {
+            $prodiId = $request->program_studi_id;
+            $query->where(function ($q) use ($prodiId) {
+                $q->where('program_studi_id', $prodiId)
+                  ->orWhereHas('mataKuliah.kurikulum', fn($kq) => $kq->where('program_studi_id', $prodiId));
+            });
+        }
+
         $data = $query->paginate($request->integer('per_page', 25));
 
         return response()->json([
@@ -85,6 +93,8 @@ class PerkuliahanController extends Controller
             'program_studi_id' => 'required|exists:master_program_studi,id',
             'ruangan_id' => 'nullable|exists:ruangan,id',
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
+            'team_teaching_dosen_ids' => 'nullable|array',
+            'team_teaching_dosen_ids.*' => 'exists:siakad_dosen,id',
             'kode_kelas' => 'required|string|max:20',
             'nama_kelas' => 'required|string|max:255',
             'kapasitas' => 'required|integer|min:1',
@@ -95,6 +105,8 @@ class PerkuliahanController extends Controller
         ]);
 
         return DB::transaction(function () use ($request) {
+            $mk = MataKuliah::find($request->mata_kuliah_id);
+
             $kelas = Kelas::create([
                 'mata_kuliah_id' => $request->mata_kuliah_id,
                 'tahun_akademik_id' => $request->tahun_akademik_id,
@@ -110,17 +122,35 @@ class PerkuliahanController extends Controller
                 'status' => 'aktif',
             ]);
 
+            // Dosen Pengampu Utama (yang dilaporkan resmi ke Feeder)
             if ($request->filled('dosen_id')) {
                 DosenPengampu::create([
                     'kelas_id' => $kelas->id,
                     'dosen_id' => $request->dosen_id,
                     'peran' => 'pengampu_utama',
+                    'sks_substansi_total' => $mk?->total_sks ?? 3,
+                    'rencana_tatap_muka' => 16,
                 ]);
+            }
+
+            // Dosen Team Teaching (Anggota Pengajar Tambahan)
+            if ($request->filled('team_teaching_dosen_ids') && is_array($request->team_teaching_dosen_ids)) {
+                foreach ($request->team_teaching_dosen_ids as $ttDosenId) {
+                    if ($ttDosenId && $ttDosenId != $request->dosen_id) {
+                        DosenPengampu::create([
+                            'kelas_id' => $kelas->id,
+                            'dosen_id' => $ttDosenId,
+                            'peran' => 'anggota_team_teaching',
+                            'sks_substansi_total' => $mk?->total_sks ?? 3,
+                            'rencana_tatap_muka' => 16,
+                        ]);
+                    }
+                }
             }
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Kelas perkuliahan berhasil dibuat',
+                'message' => 'Kelas perkuliahan berhasil dibuat dengan tim pengajar terdaftar',
                 'data' => $kelas->load(['mataKuliah', 'ruangan', 'dosenPengampu.dosen'])
             ], 201);
         });
@@ -132,6 +162,9 @@ class PerkuliahanController extends Controller
         $request->validate([
             'nama_kelas' => 'required|string|max:255',
             'ruangan_id' => 'nullable|exists:ruangan,id',
+            'dosen_id' => 'nullable|exists:siakad_dosen,id',
+            'team_teaching_dosen_ids' => 'nullable|array',
+            'team_teaching_dosen_ids.*' => 'exists:siakad_dosen,id',
             'kapasitas' => 'required|integer|min:1',
             'kuota_krs' => 'required|integer|min:1',
             'hari' => 'required|in:senin,selasa,rabu,kamis,jumat,sabtu,minggu',
@@ -139,13 +172,52 @@ class PerkuliahanController extends Controller
             'jam_selesai' => 'required|string',
         ]);
 
-        $kelas->update($request->all());
+        return DB::transaction(function () use ($request, $kelas) {
+            $kelas->update($request->only([
+                'nama_kelas',
+                'ruangan_id',
+                'kapasitas',
+                'kuota_krs',
+                'hari',
+                'jam_mulai',
+                'jam_selesai',
+            ]));
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Kelas perkuliahan berhasil diperbarui',
-            'data' => $kelas
-        ]);
+            if ($request->has('dosen_id') || $request->has('team_teaching_dosen_ids')) {
+                DosenPengampu::where('kelas_id', $kelas->id)->delete();
+                $mk = $kelas->mataKuliah;
+
+                if ($request->filled('dosen_id')) {
+                    DosenPengampu::create([
+                        'kelas_id' => $kelas->id,
+                        'dosen_id' => $request->dosen_id,
+                        'peran' => 'pengampu_utama',
+                        'sks_substansi_total' => $mk?->total_sks ?? 3,
+                        'rencana_tatap_muka' => 16,
+                    ]);
+                }
+
+                if ($request->filled('team_teaching_dosen_ids') && is_array($request->team_teaching_dosen_ids)) {
+                    foreach ($request->team_teaching_dosen_ids as $ttDosenId) {
+                        if ($ttDosenId && $ttDosenId != $request->dosen_id) {
+                            DosenPengampu::create([
+                                'kelas_id' => $kelas->id,
+                                'dosen_id' => $ttDosenId,
+                                'peran' => 'anggota_team_teaching',
+                                'sks_substansi_total' => $mk?->total_sks ?? 3,
+                                'rencana_tatap_muka' => 16,
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Kelas perkuliahan berhasil diperbarui',
+                'data' => $kelas->load(['mataKuliah', 'ruangan', 'dosenPengampu.dosen'])
+            ]);
+        });
     }
 
     public function destroyKelas($id)
@@ -170,6 +242,7 @@ class PerkuliahanController extends Controller
             'tahunAkademik',
             'krsDetails.kelas.mataKuliah',
             'krsDetails.kelas.ruangan',
+            'krsDetails.kelas.dosenPengampu.dosen',
             'krsDetails.nilaiMahasiswa'
         ]);
 
@@ -778,6 +851,36 @@ class PerkuliahanController extends Controller
                     'tanggal_cetak' => now()->translatedFormat('d F Y'),
                 ]
             ]
+        ]);
+    }
+
+    /**
+     * Mengambil daftar ruangan aktif dari modul SINAPRA beserta informasi Gedung & Fasilitas
+     */
+    public function getRefRuanganSinapra(Request $request)
+    {
+        $query = \App\Models\Ruangan::with('gedung')
+            ->where('status', 'aktif');
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('nama', 'like', "%{$s}%")
+                  ->orWhere('kode', 'like', "%{$s}%")
+                  ->orWhereHas('gedung', fn($gq) => $gq->where('nama', 'like', "%{$s}%"));
+            });
+        }
+
+        if ($request->filled('tipe')) {
+            $query->where('tipe', $request->tipe);
+        }
+
+        $ruangan = $query->orderBy('gedung_id')->orderBy('nama')->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $ruangan,
+            'message' => 'Daftar ruangan SINAPRA berhasil dimuat'
         ]);
     }
 }

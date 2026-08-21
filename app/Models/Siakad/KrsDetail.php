@@ -43,4 +43,9 @@ class KrsDetail extends Model
     {
         return $this->hasMany(KetercapaianCpmkMahasiswa::class, 'krs_detail_id');
     }
+
+    public function ketercapaianCpmk()
+    {
+        return $this->hasMany(KetercapaianCpmkMahasiswa::class, 'krs_detail_id');
+    }
 }

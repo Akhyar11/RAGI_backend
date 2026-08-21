@@ -78,6 +78,7 @@ Route::prefix('akademik')->group(function () {
 
 // --- Perkuliahan (Kelas, KRS, Nilai, Transkrip) ---
 Route::prefix('perkuliahan')->group(function () {
+    Route::get('/ref/ruangan', [PerkuliahanController::class, 'getRefRuanganSinapra']);
     Route::get('/kelas', [PerkuliahanController::class, 'listKelas']);
     Route::post('/kelas', [PerkuliahanController::class, 'storeKelas']);
     Route::put('/kelas/{id}', [PerkuliahanController::class, 'updateKelas']);
@@ -120,5 +121,6 @@ Route::prefix('obe')->group(function () {
     Route::get('/kelas/{kelasId}/nilai', [ObeController::class, 'getKelasNilaiObe']);
     Route::post('/kelas/{kelasId}/nilai', [ObeController::class, 'saveKelasNilaiObe']);
 
+    Route::get('/mahasiswa/portofolio', [ObeController::class, 'getMahasiswaPortofolioObe']);
     Route::get('/mahasiswa/{mahasiswaId}/portofolio', [ObeController::class, 'getMahasiswaPortofolioObe']);
 });
