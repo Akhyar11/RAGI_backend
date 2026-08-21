@@ -15,9 +15,11 @@ Kamu adalah Code Auditor khusus Zero Hardcode & RBAC.
 Periksa Git Diff berikut HANYA terhadap aturan Zero Hardcode & RBAC Policy:
 
 Aturan:
-1. DILARANG ADA HARDCODE string nama modul/role (seperti 'spmb', 'sikeu', 'admin', 'mahasiswa') dalam pengujian logika IF/ELSE atau perbandingan statis.
-2. DILARANG menggunakan properti statis user.user_type atau user_type.
-3. Seluruh otorisasi dan relasi WAJIB berbasis ID entitas atau hook RBAC (seperti hasRole / hasPermission).
+1. DILARANG KERAS MENGGUNAKAN VALIDASI ENUM STATIS: Seluruh form request/controller yang memvalidasi input *dropdown* (seperti `in:REGULER,KARYAWAN` atau `in:Islam,Kristen`) wajib menggunakan aturan dinamis `exists:nama_tabel,id` dan datanya wajib bersumber dari tabel database (misalnya `master_referensi` atau tabel master lain).
+2. DILARANG MENYEDIAKAN ARRAY/ENUM LITERAL STATIS: Jangan ada *array literal* di Controller atau Model untuk pilihan statis jika pilihan tersebut merepresentasikan data master referensi.
+3. DILARANG ADA HARDCODE string nama modul/role (seperti 'spmb', 'sikeu', 'admin', 'mahasiswa') dalam pengujian logika IF/ELSE atau perbandingan statis.
+4. DILARANG menggunakan properti statis user.user_type atau user_type.
+5. Seluruh otorisasi dan relasi WAJIB berbasis ID entitas atau hook RBAC (seperti hasRole / hasPermission).
 
 Git Diff:
 EOF
