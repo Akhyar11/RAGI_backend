@@ -1,0 +1,42 @@
+#!/bin/bash
+
+echo "🤖 [Audit 1/2: Zero Hardcode & RBAC] Memeriksa staged changes..."
+
+STAGED_DIFF=$(git diff --cached)
+
+if [ -z "$STAGED_DIFF" ]; then
+    exit 0
+fi
+
+PROMPT_FILE=$(mktemp)
+
+cat << EOF > "$PROMPT_FILE"
+Kamu adalah Code Auditor khusus Zero Hardcode & RBAC.
+Periksa Git Diff berikut HANYA terhadap aturan Zero Hardcode & RBAC Policy:
+
+Aturan:
+1. DILARANG ADA HARDCODE string nama modul/role (seperti 'spmb', 'sikeu', 'admin', 'mahasiswa') dalam pengujian logika IF/ELSE atau perbandingan statis.
+2. DILARANG menggunakan properti statis user.user_type atau user_type.
+3. Seluruh otorisasi dan relasi WAJIB berbasis ID entitas atau hook RBAC (seperti hasRole / hasPermission).
+
+Git Diff:
+\`\`\`diff
+$STAGED_DIFF
+\`\`\`
+
+Jawab HANYA salah satu:
+- PASSED jika kode bersih dari hardcode dan sesuai RBAC.
+- REJECTED: [detail alasan pelanggaran] jika ditemukan hardcode/pelanggaran RBAC.
+EOF
+
+RESULT=$(agy --print "$(cat "$PROMPT_FILE")" 2>&1)
+rm -f "$PROMPT_FILE"
+
+if echo "$RESULT" | grep -qi "REJECTED"; then
+    echo "❌ [Audit Zero Hardcode & RBAC] REJECTED!"
+    echo "$RESULT" | grep -i "REJECTED"
+    exit 1
+else
+    echo "✅ [Audit Zero Hardcode & RBAC] PASSED."
+    exit 0
+fi
