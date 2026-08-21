@@ -185,10 +185,9 @@ class MenuSeeder extends Seeder
                 'order_index' => 5,
                 'children' => [
                     ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 1],
-                    ['name' => 'Jalur Masuk (Legacy)', 'url' => '/spmb/master/jalur-masuk', 'icon' => 'FaCogs', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 2],
-                    ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 3],
-                    ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 4],
-                    ['name' => 'Persyaratan Berkas', 'url' => '/spmb/master/berkas-requirement', 'icon' => 'FaFileAlt', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 5],
+                    ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 2],
+                    ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 3],
+                    ['name' => 'Persyaratan Berkas', 'url' => '/spmb/master/berkas-requirement', 'icon' => 'FaFileAlt', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 4],
                 ]
             ],
 
