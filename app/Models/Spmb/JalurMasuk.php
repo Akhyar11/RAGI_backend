@@ -17,16 +17,11 @@ class JalurMasuk extends Model
         'nama',
         'deskripsi',
         'master_tipe_jalur_id',
-        'tipe',
-        'ada_ujian_tulis',
-        'ada_ujian_praktik',
         'ada_wawancara',
         'is_active',
     ];
 
     protected $casts = [
-        'ada_ujian_tulis' => 'boolean',
-        'ada_ujian_praktik' => 'boolean',
         'ada_wawancara' => 'boolean',
         'is_active' => 'boolean',
     ];
@@ -34,5 +29,10 @@ class JalurMasuk extends Model
     public function gelombangPenerimaan()
     {
         return $this->hasMany(GelombangPenerimaan::class, 'jalur_masuk_id');
+    }
+
+    public function masterTipeJalur()
+    {
+        return $this->belongsTo(\App\Models\MasterTipeJalur::class, 'master_tipe_jalur_id');
     }
 }

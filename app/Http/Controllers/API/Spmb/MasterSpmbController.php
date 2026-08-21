@@ -45,7 +45,7 @@ class MasterSpmbController extends Controller
      */
     public function getJalurMasuk(): JsonResponse
     {
-        $jalur = JalurMasuk::all();
+        $jalur = JalurMasuk::with('masterTipeJalur')->orderBy('created_at', 'desc')->get();
         return response()->json([
             'status' => 'success',
             'data' => $jalur
@@ -73,9 +73,7 @@ class MasterSpmbController extends Controller
             'kode' => 'required|string|unique:jalur_masuk,kode',
             'nama' => 'required|string',
             'deskripsi' => 'nullable|string',
-            'tipe' => 'required|in:reguler,transfer,beasiswa,internasional,rpla',
-            'ada_ujian_tulis' => 'required|boolean',
-            'ada_ujian_praktik' => 'required|boolean',
+            'master_tipe_jalur_id' => 'required|exists:master_tipe_jalur,id',
             'ada_wawancara' => 'required|boolean',
             'is_active' => 'required|boolean',
         ]);
@@ -100,9 +98,7 @@ class MasterSpmbController extends Controller
             'kode' => 'required|string|unique:jalur_masuk,kode,' . $jalur->id,
             'nama' => 'required|string',
             'deskripsi' => 'nullable|string',
-            'tipe' => 'required|in:reguler,transfer,beasiswa,internasional,rpla',
-            'ada_ujian_tulis' => 'required|boolean',
-            'ada_ujian_praktik' => 'required|boolean',
+            'master_tipe_jalur_id' => 'required|exists:master_tipe_jalur,id',
             'ada_wawancara' => 'required|boolean',
             'is_active' => 'required|boolean',
         ]);
@@ -252,6 +248,15 @@ class MasterSpmbController extends Controller
         return response()->json([
             'status' => 'success',
             'data' => $prodi
+        ]);
+    }
+
+    public function getMasterTipeJalur(): JsonResponse
+    {
+        $tipe = \App\Models\MasterTipeJalur::orderBy('nama', 'asc')->get();
+        return response()->json([
+            'status' => 'success',
+            'data' => $tipe
         ]);
     }
 
