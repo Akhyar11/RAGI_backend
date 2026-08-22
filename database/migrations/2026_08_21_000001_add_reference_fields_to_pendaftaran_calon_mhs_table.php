@@ -9,11 +9,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
-            $table->string('status_sipil')->nullable()->after('agama');
+            $table->string('agama')->nullable()->after('jenis_kelamin');
+            $table->string('status_sipil')->nullable()->after('jenis_kelamin');
             $table->string('jenis_daftar')->nullable()->after('program_studi_pilihan2_id');
             $table->string('kelas')->nullable()->after('jenis_daftar');
             $table->string('info_daftar')->nullable()->after('kelas');
             $table->string('ket_info_daftar')->nullable()->after('info_daftar');
+            $table->string('nama_ayah')->nullable()->after('telepon_wali');
+            $table->string('nama_ibu')->nullable()->after('nama_ayah');
+            $table->string('penghasilan_ortu')->nullable()->after('nama_ibu');
             $table->string('nama_ortu')->nullable()->after('penghasilan_ortu');
             $table->text('alamat_ortu')->nullable()->after('nama_ortu');
             $table->string('telp_ortu')->nullable()->after('alamat_ortu');

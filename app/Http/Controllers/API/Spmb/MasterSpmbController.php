@@ -31,12 +31,102 @@ class MasterSpmbController extends Controller
     /**
      * Get all Master Tipe Jalur
      */
-    public function getMasterTipeJalur(): JsonResponse
+    public function getMasterTipeJalur(Request $request): JsonResponse
     {
-        $tipeJalur = MasterTipeJalur::all();
+        $query = MasterTipeJalur::query();
+
+        if ($request->filled('name') || $request->filled('search')) {
+            $search = $request->input('name', $request->input('search'));
+            $query->where(function ($q) use ($search) {
+                $q->where('nama', 'like', "%{$search}%")
+                  ->orWhere('kode', 'like', "%{$search}%");
+            });
+        }
+
+        $sortBy = $request->input('sort_by', $request->input('orderBy', 'nama'));
+        $sortDir = $request->input('sort_dir', $request->input('orderDir', 'asc'));
+        $allowedSorts = ['id', 'kode', 'nama', 'created_at'];
+        if (!in_array($sortBy, $allowedSorts)) {
+            $sortBy = 'nama';
+        }
+        $sortDir = strtolower($sortDir) === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sortBy, $sortDir);
+
+        if ($request->has('page')) {
+            $limit = (int) $request->input('limit', 10);
+            $paginated = $query->paginate($limit);
+            return response()->json([
+                'status' => 'success',
+                'data' => $paginated->items(),
+                'meta' => [
+                    'current_page' => $paginated->currentPage(),
+                    'last_page' => $paginated->lastPage(),
+                    'per_page' => $paginated->perPage(),
+                    'total' => $paginated->total(),
+                    'from' => $paginated->firstItem(),
+                    'to' => $paginated->lastItem(),
+                ]
+            ]);
+        }
+
+        $tipeJalur = $query->get();
         return response()->json([
             'status' => 'success',
             'data' => $tipeJalur
+        ]);
+    }
+
+    /**
+     * Store Master Tipe Jalur
+     */
+    public function storeMasterTipeJalur(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'kode' => 'required|string|max:50|unique:master_tipe_jalur,kode',
+            'nama' => 'required|string|max:255',
+        ]);
+
+        $item = MasterTipeJalur::create($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Tipe jalur berhasil ditambahkan',
+            'data' => $item
+        ], 201);
+    }
+
+    /**
+     * Update Master Tipe Jalur
+     */
+    public function updateMasterTipeJalur(Request $request, $id): JsonResponse
+    {
+        $item = MasterTipeJalur::findOrFail($id);
+
+        $validated = $request->validate([
+            'kode' => 'required|string|max:50|unique:master_tipe_jalur,kode,' . $id,
+            'nama' => 'required|string|max:255',
+        ]);
+
+        $item->update($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Tipe jalur berhasil diperbarui',
+            'data' => $item
+        ]);
+    }
+
+    /**
+     * Delete Master Tipe Jalur
+     */
+    public function destroyMasterTipeJalur($id): JsonResponse
+    {
+        $item = MasterTipeJalur::findOrFail($id);
+        $item->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Tipe jalur berhasil dihapus'
         ]);
     }
 

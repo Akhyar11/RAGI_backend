@@ -49,9 +49,11 @@ return new class extends Migration
             $table->string('status', 30)->default('pending')->change();
         });
 
-        Schema::table('jadwal_ujian_spmb', function (Blueprint $table) {
-            $table->string('tipe_ujian', 50)->change();
-        });
+        if (Schema::hasTable('jadwal_ujian_spmb')) {
+            Schema::table('jadwal_ujian_spmb', function (Blueprint $table) {
+                $table->string('tipe_ujian', 50)->change();
+            });
+        }
 
         Schema::table('pertanyaan_kuesioner_spmb', function (Blueprint $table) {
             $table->string('tipe', 30)->change();

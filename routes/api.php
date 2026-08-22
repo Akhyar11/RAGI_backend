@@ -203,6 +203,14 @@ Route::prefix('spmb')->group(function () {
     Route::get('master-jalur-kelas', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexJalurKelas']);
 });
 
+Route::middleware('auth:api')->prefix('spmb')->group(function () {
+    Route::apiResource('master/berkas-requirement', \App\Http\Controllers\API\Spmb\BerkasRequirementController::class);
+    Route::apiResource('master/tarif-ukt', \App\Http\Controllers\API\Spmb\TarifUktSpmbController::class);
+    Route::post('master-tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'storeMasterTipeJalur']);
+    Route::put('master-tipe-jalur/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'updateMasterTipeJalur']);
+    Route::delete('master-tipe-jalur/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'destroyMasterTipeJalur']);
+});
+
 /*
 |--------------------------------------------------------------------------
 | SIPPM (Penelitian & PkM) Routes
@@ -307,7 +315,6 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
 
     // Master Jalur Kelas & Tipe Mahasiswa
     Route::get('master/referensi/{tipe}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getReferensi']);
-    Route::apiResource('master/berkas-requirement', \App\Http\Controllers\API\Spmb\BerkasRequirementController::class);
     Route::get('master/tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getMasterTipeJalur']);
     Route::get('master/jalur-kelas', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexJalurKelas']);
     Route::post('master/jalur-kelas', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'storeJalurKelas']);

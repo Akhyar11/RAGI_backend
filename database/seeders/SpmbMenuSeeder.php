@@ -39,6 +39,13 @@ class SpmbMenuSeeder extends Seeder
                 'order_index' => 2,
             ],
             [
+                'name' => 'Daftar Ulang',
+                'url' => '/spmb/daftar-ulang',
+                'icon' => 'FaCreditCard',
+                'module' => $modSpmb,
+                'order_index' => 3,
+            ],
+            [
                 'name' => 'PENDAFTARAN & VERIFIKASI',
                 'url' => '#pendaftaran_spmb',
                 'icon' => 'FaList',
@@ -65,10 +72,12 @@ class SpmbMenuSeeder extends Seeder
                 'module' => $modSpmb,
                 'order_index' => 5,
                 'children' => [
-                    ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => $modSpmb, 'order_index' => 1],
-                    ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => $modSpmb, 'order_index' => 2],
-                    ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'module' => $modSpmb, 'order_index' => 3],
-                    ['name' => 'Persyaratan Berkas', 'url' => '/spmb/master/berkas-requirement', 'icon' => 'FaFileAlt', 'module' => $modSpmb, 'order_index' => 4],
+                    ['name' => 'Tipe Jalur Masuk', 'url' => '/spmb/master/tipe-jalur', 'icon' => 'FaList', 'module' => $modSpmb, 'order_index' => 1],
+                    ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => $modSpmb, 'order_index' => 2],
+                    ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => $modSpmb, 'order_index' => 3],
+                    ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'module' => $modSpmb, 'order_index' => 4],
+                    ['name' => 'Persyaratan Berkas', 'url' => '/spmb/master/berkas-requirement', 'icon' => 'FaFileAlt', 'module' => $modSpmb, 'order_index' => 5],
+                    ['name' => 'Tarif UKT / Daftar Ulang', 'url' => '/spmb/master/tarif-ukt', 'icon' => 'FaMoneyBillWave', 'module' => $modSpmb, 'order_index' => 6],
                 ]
             ],
         ];

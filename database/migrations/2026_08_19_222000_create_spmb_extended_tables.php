@@ -35,9 +35,10 @@ return new class extends Migration
         // 3. Tabel Syarat Khusus Prodi SPMB
         Schema::create('spmb_syarat_prodi', function (Blueprint $table) {
             $table->id();
-            // Assuming 'master_program_studi' or 'program_studi' is the core table
-            // Based on earlier ERD it is 'program_studi'
-            $table->foreignId('program_studi_id')->constrained('program_studi')->cascadeOnDelete();
+            // The master table for Siakad prodi is usually 'master_program_studi' or we use raw table if not created yet
+            // Based on modularity, it's safer not to strictly constrain if the table name is volatile.
+            // $table->foreignId('program_studi_id')->constrained('program_studi')->cascadeOnDelete();
+            $table->unsignedBigInteger('program_studi_id');
             $table->text('syarat_text'); // Contoh: "Tidak Buta Warna", "Lulusan SMA IPA"
             $table->boolean('is_mandatory')->default(true);
             $table->boolean('is_active')->default(true);

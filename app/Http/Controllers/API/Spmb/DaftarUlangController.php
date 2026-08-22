@@ -13,19 +13,44 @@ class DaftarUlangController extends Controller
 {
     public function generateTagihan(Request $request, $pendaftaran_id): JsonResponse
     {
+        $pendaftaran = PendaftaranCalonMhs::with(['gelombang_penerimaan', 'hasilSeleksi'])->findOrFail($pendaftaran_id);
         $hasil = HasilSeleksi::where('pendaftaran_id', $pendaftaran_id)->firstOrFail();
         
         if ($hasil->status !== 'lulus') {
-            return response()->json(['message' => 'Peserta belum lulus.'], 400);
+            return response()->json(['message' => 'Peserta belum lulus seleksi.'], 400);
         }
 
-        // Hitung UKT statis untuk demo (Bisa dari SIKEU Master)
-        $nominalUKT = 5000000;
+        if ($hasil->status_daftar_ulang === 'lunas') {
+            return response()->json(['message' => 'Sudah menyelesaikan daftar ulang.'], 400);
+        }
+
+        if ($hasil->status_daftar_ulang === 'menunggu_pembayaran') {
+            return response()->json(['message' => 'Tagihan daftar ulang sudah dibuat, silakan lanjutkan pembayaran.'], 400);
+        }
+
+        // Cari Tarif UKT untuk Prodi dan Tahun Akademik bersangkutan
+        $prodiId = $hasil->program_studi_diterima_id ?? $pendaftaran->program_studi_id;
+        $tahunAkademikId = $pendaftaran->gelombang_penerimaan->tahun_akademik_id ?? 1;
+
+        $tarifUkt = \App\Models\Spmb\TarifUktSpmb::where('program_studi_id', $prodiId)
+                        ->where('tahun_akademik_id', $tahunAkademikId)
+                        ->where('is_active', true)
+                        ->orderBy('nominal', 'asc') // Ambil UKT kelompok terendah jika tidak ada data spesifik mahasiswa
+                        ->first();
+
+        // Jika UKT di SPMB tidak ada, maka cek ke Master Tarif SIKEU
+        if (!$tarifUkt) {
+            $tarifUkt = \App\Models\Sikeu\TarifSpmb::where('jenis_biaya_kode', 'UKT')
+                            ->orWhere('deskripsi', 'like', '%UKT%')
+                            ->first(); 
+        }
+
+        $nominalUKT = $tarifUkt ? $tarifUkt->nominal : 5000000;
 
         $payload = [
             'calon_mahasiswa_id' => $pendaftaran_id,
             'tipe_referensi' => 'calon_mahasiswa',
-            'tahun_akademik_id' => 1,
+            'tahun_akademik_id' => $tahunAkademikId,
             'source_system' => 'SPMB',
             'requires_approval' => false,
             'keterangan' => 'Tagihan Daftar Ulang (UKT) - Pendaftaran ID ' . $pendaftaran_id,

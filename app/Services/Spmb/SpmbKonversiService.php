@@ -70,13 +70,33 @@ class SpmbKonversiService
                 ]
             );
 
-            // 4. Berikan role 'mahasiswa' ke User IAM jika user_id ada
+            // 4. Update Email Kampus dan Berikan role 'mahasiswa' ke User IAM jika user_id ada
             if ($pendaftaran->user_id) {
                 $user = User::find($pendaftaran->user_id);
                 if ($user) {
                     $mhsRole = Role::where('slug', 'mahasiswa')->first();
                     if ($mhsRole && !$user->roles->contains('id', $mhsRole->id)) {
                         $user->roles()->syncWithoutDetaching([$mhsRole->id]);
+                    }
+
+                    // Generate email kampus dan update username jika belum ada
+                    if (empty($user->email_kampus)) {
+                        $domainKampus = config('app.domain_kampus', 'student.campus.ac.id');
+                        $firstName = strtolower(preg_replace('/[^a-zA-Z]/', '', explode(' ', trim($pendaftaran->nama_lengkap))[0]));
+                        $emailKampus = $firstName . '.' . strtolower($nim) . '@' . $domainKampus;
+
+                        // Pastikan email kampus unik
+                        $counter = 1;
+                        $baseEmail = $emailKampus;
+                        while (User::where('email_kampus', $emailKampus)->exists()) {
+                            $emailKampus = $firstName . $counter . '.' . strtolower($nim) . '@' . $domainKampus;
+                            $counter++;
+                        }
+
+                        $user->update([
+                            'email_kampus' => $emailKampus,
+                            'username' => $nim,
+                        ]);
                     }
                 }
             }

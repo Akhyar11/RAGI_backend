@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
+            $table->string('kewarganegaraan')->nullable()->after('agama');
             $table->enum('asal_lulusan', ['sekolah', 'pt'])->default('sekolah')->after('kewarganegaraan');
+            $table->string('npsn_sekolah')->nullable()->after('asal_sekolah');
             $table->string('asal_pt')->nullable()->after('npsn_sekolah');
             $table->string('jenis_pt')->nullable()->after('asal_pt');
             $table->string('alamat_pt')->nullable()->after('jenis_pt');
@@ -31,6 +33,8 @@ return new class extends Migration
     {
         Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->dropColumn([
+                'kewarganegaraan',
+                'npsn_sekolah',
                 'asal_lulusan',
                 'asal_pt',
                 'jenis_pt',
