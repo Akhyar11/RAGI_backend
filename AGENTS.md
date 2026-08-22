@@ -46,3 +46,8 @@ Termasuk juga merespons API dengan **enum string statis** (seperti `'REGULER'`, 
 2. **Dilarang Keras Array/Enum Literal Statis**: DILARANG KERAS meng-hardcode opsi pilihan atau melakukan validasi backend menggunakan `in:VALUE1,VALUE2` jika nilai tersebut semestinya berasal dari tabel master database (contoh: `master_tipe_jalur`, `master_jalur_kelas`). Validasi WAJIB menggunakan rule `exists:nama_tabel,id`.
 3. **Referensi ID Wajib**: Seluruh relasi, filter, dan query wajib menggunakan **referensi ID entitas** (seperti `module.id`, `tipe_jalur_id`, `jalur_kelas_id`, dsb.) yang diambil dari database, bukan berupa label string atau hardcode nama.
 </RULE[no_hardcode_definition]>
+
+<RULE[no_ujian_spmb]>
+# No Ujian/CBT Policy for SPMB
+Agent **DILARANG KERAS** menyarankan, merancang, atau membuat tabel, API, controller, maupun fitur yang berkaitan dengan "Ujian", "Seleksi Ujian", "CBT (Computer Based Test)", atau "Jadwal Ujian" di dalam modul SPMB (Penerimaan Mahasiswa Baru). Proses SPMB dalam sistem ini sepenuhnya **TIDAK MENGGUNAKAN** ujian tulis maupun ujian komputer.
+</RULE[no_ujian_spmb]>

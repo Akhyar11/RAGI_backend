@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\PendaftaranCalonMhs;
-use App\Models\Spmb\JadwalUjianSpmb;
 use App\Models\Spmb\KuesionerSpmb;
 use App\Models\Spmb\PengumumanSpmb;
 use App\Models\Siakad\TahunAkademik;
@@ -23,7 +22,6 @@ class GelombangPenerimaan extends Model
         'nama',
         'tanggal_buka',
         'tanggal_tutup',
-        'tanggal_ujian',
         'tanggal_pengumuman',
         'kuota_total',
         'kuota_terisi',
@@ -34,7 +32,6 @@ class GelombangPenerimaan extends Model
     protected $casts = [
         'tanggal_buka' => 'date',
         'tanggal_tutup' => 'date',
-        'tanggal_ujian' => 'date',
         'tanggal_pengumuman' => 'date',
         'biaya_pendaftaran' => 'decimal:2',
     ];
@@ -53,11 +50,6 @@ class GelombangPenerimaan extends Model
     public function pendaftaranCalonMhs()
     {
         return $this->hasMany(PendaftaranCalonMhs::class, 'gelombang_id');
-    }
-
-    public function jadwalUjianSpmb()
-    {
-        return $this->hasMany(JadwalUjianSpmb::class, 'gelombang_id');
     }
 
     public function kuesionerSpmb()
