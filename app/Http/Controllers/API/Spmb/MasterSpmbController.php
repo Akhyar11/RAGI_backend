@@ -33,7 +33,7 @@ class MasterSpmbController extends Controller
      */
     public function getMasterTipeJalur(Request $request): JsonResponse
     {
-        $query = MasterTipeJalur::query();
+        $query = MasterTipeJalur::with('alur');
 
         if ($request->filled('name') || $request->filled('search')) {
             $search = $request->input('name', $request->input('search'));
@@ -84,9 +84,26 @@ class MasterSpmbController extends Controller
         $validated = $request->validate([
             'kode' => 'required|string|max:50|unique:master_tipe_jalur,kode',
             'nama' => 'required|string|max:255',
+            'alur' => 'nullable|array',
+            'alur.*.nama_tahap' => 'required|string|max:255',
+            'alur.*.urutan' => 'nullable|integer',
         ]);
 
-        $item = MasterTipeJalur::create($validated);
+        $item = MasterTipeJalur::create([
+            'kode' => $validated['kode'],
+            'nama' => $validated['nama']
+        ]);
+
+        if (!empty($validated['alur'])) {
+            foreach ($validated['alur'] as $idx => $alurItem) {
+                $item->alur()->create([
+                    'nama_tahap' => $alurItem['nama_tahap'],
+                    'urutan' => $alurItem['urutan'] ?? ($idx + 1),
+                ]);
+            }
+        }
+
+        $item->load('alur');
 
         return response()->json([
             'status' => 'success',
@@ -105,9 +122,27 @@ class MasterSpmbController extends Controller
         $validated = $request->validate([
             'kode' => 'required|string|max:50|unique:master_tipe_jalur,kode,' . $id,
             'nama' => 'required|string|max:255',
+            'alur' => 'nullable|array',
+            'alur.*.nama_tahap' => 'required|string|max:255',
+            'alur.*.urutan' => 'nullable|integer',
         ]);
 
-        $item->update($validated);
+        $item->update([
+            'kode' => $validated['kode'],
+            'nama' => $validated['nama']
+        ]);
+
+        if (isset($validated['alur'])) {
+            $item->alur()->delete();
+            foreach ($validated['alur'] as $idx => $alurItem) {
+                $item->alur()->create([
+                    'nama_tahap' => $alurItem['nama_tahap'],
+                    'urutan' => $alurItem['urutan'] ?? ($idx + 1),
+                ]);
+            }
+        }
+
+        $item->load('alur');
 
         return response()->json([
             'status' => 'success',
