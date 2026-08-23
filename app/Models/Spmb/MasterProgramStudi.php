@@ -18,6 +18,7 @@ class MasterProgramStudi extends Model
 
     protected $fillable = [
         'fakultas_id',
+        'kaprodi_id',
         'kode_prodi',
         'kode_prodi_dikti',
         'nama',
@@ -35,6 +36,11 @@ class MasterProgramStudi extends Model
     public function fakultas()
     {
         return $this->belongsTo(Fakultas::class, 'fakultas_id');
+    }
+
+    public function kaprodi()
+    {
+        return $this->belongsTo(Dosen::class, 'kaprodi_id');
     }
 
     public function kurikulums()

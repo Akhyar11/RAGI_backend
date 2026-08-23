@@ -28,6 +28,10 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Spmb\PendaftaranCalonMhs::observe(\App\Observers\Spmb\PendaftaranCalonMhsObserver::class);
         \App\Models\Spmb\GelombangPenerimaan::observe(\App\Observers\Spmb\GelombangPenerimaanObserver::class);
 
+        // SIAKAD Observers
+        \App\Models\Siakad\Mahasiswa::observe(\App\Observers\MahasiswaObserver::class);
+        \App\Models\Siakad\KonversiTransfer::observe(\App\Observers\KonversiTransferObserver::class);
+
         // SINAPRA Policies
         Gate::policy(\App\Models\Gedung::class, \App\Policies\Sinapra\GedungPolicy::class);
         Gate::policy(\App\Models\Ruangan::class, \App\Policies\Sinapra\RuanganPolicy::class);

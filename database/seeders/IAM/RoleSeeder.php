@@ -58,9 +58,9 @@ class RoleSeeder extends Seeder
                 'description' => 'Tim penilai desk evaluation & verifikator kelayakan proposal riset serta luaran',
             ],
             [
-                'name' => 'Mahasiswa Reguler',
+                'name' => 'Mahasiswa',
                 'slug' => 'mahasiswa',
-                'description' => 'Pengguna SSO Portal Mahasiswa (Tidak memiliki akses ke sistem SIMPEG)',
+                'description' => 'Pengguna SSO Portal Mahasiswa (Akses SIAKAD, KRS, KHS, & Portofolio OBE)',
             ],
             [
                 'name' => 'Calon Mahasiswa',

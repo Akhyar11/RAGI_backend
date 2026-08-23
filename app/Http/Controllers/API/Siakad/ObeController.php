@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Models\Siakad\Cpl;
 use App\Models\Siakad\Cpmk;
 use App\Models\Siakad\SubCpmk;
+use App\Models\Siakad\ProfilLulusan;
+use App\Models\Siakad\BahanKajian;
 use App\Models\Siakad\Kelas;
 use App\Models\Siakad\KomponenPenilaian;
 use App\Models\Siakad\NilaiKomponenMahasiswa;
@@ -153,6 +155,39 @@ class ObeController extends Controller
 
     public function storeKelasKomponen(Request $request, $kelasId)
     {
+        $kelas = Kelas::with(['mataKuliah', 'tahunAkademik'])->findOrFail($kelasId);
+        $mode = $kelas->tahunAkademik?->mode_penilaian ?? 'semi_obe';
+
+        if ($mode === 'full_obe') {
+            $request->validate([
+                'nama_komponen' => 'required|string|max:255',
+                'bobot' => 'required|numeric|min:1|max:100',
+                'id' => 'nullable|exists:siakad_cpmk,id',
+            ]);
+
+            if ($request->filled('id')) {
+                $cpmk = Cpmk::findOrFail($request->id);
+                $cpmk->update([
+                    'kode_cpmk' => $request->nama_komponen,
+                    'bobot_persentase' => $request->bobot,
+                ]);
+            } else {
+                $count = Cpmk::where('mata_kuliah_id', $kelas->mata_kuliah_id)->count();
+                $cpmk = Cpmk::create([
+                    'mata_kuliah_id' => $kelas->mata_kuliah_id,
+                    'kode_cpmk' => $request->nama_komponen ?: ('CPMK-' . ($count + 1)),
+                    'deskripsi' => $request->nama_komponen,
+                    'bobot_persentase' => $request->bobot,
+                ]);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'CPMK penilaian OBE berhasil disimpan',
+                'data' => $cpmk
+            ]);
+        }
+
         $request->validate([
             'nama_komponen' => 'required|string|max:255',
             'bobot' => 'required|numeric|min:1|max:100',
@@ -180,27 +215,59 @@ class ObeController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Komponen penilaian OBE berhasil disimpan',
+            'message' => 'Komponen penilaian berhasil disimpan',
             'data' => $comp
         ]);
     }
 
     public function deleteKelasKomponen($id)
     {
-        $comp = KomponenPenilaian::findOrFail($id);
-        $comp->delete();
+        $comp = KomponenPenilaian::find($id);
+        if ($comp) {
+            $comp->delete();
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Komponen penilaian berhasil dihapus'
+            ]);
+        }
+
+        // If not in KomponenPenilaian, check if it's a CPMK (Pure OBE mode)
+        $cpmk = Cpmk::find($id);
+        if ($cpmk) {
+            $cpmk->delete();
+            return response()->json([
+                'status' => 'success',
+                'message' => 'CPMK penilaian berhasil dihapus'
+            ]);
+        }
 
         return response()->json([
-            'status' => 'success',
-            'message' => 'Komponen penilaian berhasil dihapus'
-        ]);
+            'status' => 'error',
+            'message' => 'Komponen/CPMK penilaian tidak ditemukan'
+        ], 404);
     }
 
     // --- Matriks Penilaian OBE Kelas & Rekap Capaian ---
     public function getKelasNilaiObe(Request $request, $kelasId)
     {
-        $kelas = Kelas::with(['mataKuliah.cpmks.cpl', 'programStudi', 'dosenPengampu.dosen'])->findOrFail($kelasId);
-        $komponenList = KomponenPenilaian::with('cpmk')->where('kelas_id', $kelasId)->orderBy('urutan')->get();
+        $kelas = Kelas::with(['mataKuliah.cpmks.cpl', 'programStudi', 'dosenPengampu.dosen', 'tahunAkademik'])->findOrFail($kelasId);
+        $mode = $kelas->tahunAkademik?->mode_penilaian ?? 'semi_obe';
+        
+        // 1. Define the components list based on the active mode
+        if ($mode === 'full_obe') {
+            // In Full OBE, components are the CPMKs themselves
+            $komponenList = $kelas->mataKuliah->cpmks->map(function ($cpmk) {
+                return (object) [
+                    'id' => $cpmk->id,
+                    'nama_komponen' => $cpmk->kode_cpmk,
+                    'bobot' => $cpmk->bobot_persentase,
+                    'cpmk_id' => $cpmk->id,
+                ];
+            });
+        } else {
+            // For Semi-OBE and Conventional, use traditional components
+            $komponenList = KomponenPenilaian::with('cpmk')->where('kelas_id', $kelasId)->orderBy('urutan')->get();
+        }
 
         // Ambil semua mahasiswa yang terdaftar di kelas ini via KRS
         $krsDetails = KrsDetail::with([
@@ -213,56 +280,98 @@ class ObeController extends Controller
         ->where('status', 'aktif')
         ->get();
 
-        $peserta = $krsDetails->map(function ($kd) use ($komponenList, $kelas) {
+        $peserta = $krsDetails->map(function ($kd) use ($kelas, $komponenList, $mode) {
             $mhs = $kd->krs?->mahasiswa;
-            $nilaiRecords = $kd->nilaiKomponens->keyBy('komponen_penilaian_id');
-            
-            $scores = [];
             $totalAkhir = 0;
+            $scores = [];
+            $cpmkAttainment = [];
 
-            foreach ($komponenList as $comp) {
-                $rec = $nilaiRecords->get($comp->id);
-                $skor = $rec ? (float)$rec->nilai_angka : 0.0;
-                $bobot = (float)$comp->bobot;
-                $kontribusi = ($skor * $bobot) / 100;
-                $totalAkhir += $kontribusi;
+            if ($mode === 'full_obe') {
+                $cpmkRecords = $kd->ketercapaianCpmks->keyBy('cpmk_id');
+                foreach ($kelas->mataKuliah->cpmks as $cpmk) {
+                    $rec = $cpmkRecords->get($cpmk->id);
+                    $skor = $rec ? (float)$rec->skor_ketercapaian : 0.0;
+                    $bobot = (float)$cpmk->bobot_persentase;
+                    $kontribusi = ($skor * $bobot) / 100;
+                    $totalAkhir += $kontribusi;
 
-                $scores[$comp->id] = [
-                    'komponen_id' => $comp->id,
-                    'nama_komponen' => $comp->nama_komponen,
-                    'bobot' => $bobot,
-                    'nilai_angka' => $skor,
-                    'kontribusi' => round($kontribusi, 2),
-                    'cpmk_id' => $comp->cpmk_id,
-                ];
+                    $scores[$cpmk->id] = [
+                        'komponen_id' => $cpmk->id,
+                        'nama_komponen' => $cpmk->kode_cpmk,
+                        'bobot' => $bobot,
+                        'nilai_angka' => $skor,
+                        'kontribusi' => round($kontribusi, 2),
+                        'cpmk_id' => $cpmk->id,
+                    ];
+                }
+            } else {
+                // semi_obe or konvensional
+                $nilaiRecords = $kd->nilaiKomponens->keyBy('komponen_penilaian_id');
+                foreach ($komponenList as $comp) {
+                    $rec = $nilaiRecords->get($comp->id);
+                    $skor = $rec ? (float)$rec->nilai_angka : 0.0;
+                    $bobot = (float)$comp->bobot;
+                    $kontribusi = ($skor * $bobot) / 100;
+                    $totalAkhir += $kontribusi;
+
+                    $scores[$comp->id] = [
+                        'komponen_id' => $comp->id,
+                        'nama_komponen' => $comp->nama_komponen,
+                        'bobot' => $bobot,
+                        'nilai_angka' => $skor,
+                        'kontribusi' => round($kontribusi, 2),
+                        'cpmk_id' => $comp->cpmk_id,
+                    ];
+                }
             }
 
-            // Hitung Ketercapaian per CPMK
-            $cpmkAttainment = [];
-            foreach ($kelas->mataKuliah->cpmks as $cpmk) {
-                // Komponen yang mengukur CPMK ini
-                $relatedComps = $komponenList->where('cpmk_id', $cpmk->id);
-                $totalCompWeight = $relatedComps->sum('bobot');
-                
-                $cpmkScore = 0;
-                if ($totalCompWeight > 0) {
-                    $weightedSum = 0;
-                    foreach ($relatedComps as $rc) {
-                        $s = $scores[$rc->id]['nilai_angka'] ?? 0;
-                        $weightedSum += ($s * (float)$rc->bobot);
-                    }
-                    $cpmkScore = round($weightedSum / $totalCompWeight, 2);
-                } else {
-                    $cpmkScore = round($totalAkhir, 2);
+            // 2. Map CPMK attainment depending on the mode
+            if ($mode === 'full_obe') {
+                foreach ($kelas->mataKuliah->cpmks as $cpmk) {
+                    $skor = isset($scores[$cpmk->id]) ? $scores[$cpmk->id]['nilai_angka'] : 0.0;
+                    $cpmkAttainment[$cpmk->id] = [
+                        'cpmk_id' => $cpmk->id,
+                        'kode_cpmk' => $cpmk->kode_cpmk,
+                        'deskripsi' => $cpmk->deskripsi,
+                        'skor' => $skor,
+                        'is_tercapai' => $skor >= 65.0,
+                    ];
                 }
+            } elseif ($mode === 'semi_obe') {
+                foreach ($kelas->mataKuliah->cpmks as $cpmk) {
+                    $relatedComps = $komponenList->where('cpmk_id', $cpmk->id);
+                    $totalCompWeight = $relatedComps->sum('bobot');
+                    $cpmkScore = 0;
+                    if ($totalCompWeight > 0) {
+                        $weightedSum = 0;
+                        foreach ($relatedComps as $rc) {
+                            $s = $scores[$rc->id]['nilai_angka'] ?? 0;
+                            $weightedSum += ($s * (float)$rc->bobot);
+                        }
+                        $cpmkScore = round($weightedSum / $totalCompWeight, 2);
+                    } else {
+                        $cpmkScore = round($totalAkhir, 2);
+                    }
 
-                $cpmkAttainment[$cpmk->id] = [
-                    'cpmk_id' => $cpmk->id,
-                    'kode_cpmk' => $cpmk->kode_cpmk,
-                    'deskripsi' => $cpmk->deskripsi,
-                    'skor' => $cpmkScore,
-                    'is_tercapai' => $cpmkScore >= 65.0, // Passing threshold standard OBE
-                ];
+                    $cpmkAttainment[$cpmk->id] = [
+                        'cpmk_id' => $cpmk->id,
+                        'kode_cpmk' => $cpmk->kode_cpmk,
+                        'deskripsi' => $cpmk->deskripsi,
+                        'skor' => $cpmkScore,
+                        'is_tercapai' => $cpmkScore >= 65.0,
+                    ];
+                }
+            } else {
+                // konvensional: CPMK attainment is empty/not measured
+                foreach ($kelas->mataKuliah->cpmks as $cpmk) {
+                    $cpmkAttainment[$cpmk->id] = [
+                        'cpmk_id' => $cpmk->id,
+                        'kode_cpmk' => $cpmk->kode_cpmk,
+                        'deskripsi' => $cpmk->deskripsi,
+                        'skor' => 0.0,
+                        'is_tercapai' => true,
+                    ];
+                }
             }
 
             // Nilai Huruf & Mutu
@@ -294,9 +403,139 @@ class ObeController extends Controller
             'data' => [
                 'kelas' => $kelas,
                 'komponen' => $komponenList,
-                'cpmks' => $kelas->mataKuliah->cpmks,
+                'cpmks' => $mode === 'konvensional' ? [] : $kelas->mataKuliah->cpmks,
                 'peserta' => $peserta,
+                'mode_penilaian' => $mode,
             ]
+        ]);
+    }
+
+    public function saveBulkNilaiObe(Request $request, $kelasId)
+    {
+        $request->validate([
+            'is_final' => 'nullable|boolean',
+            'grades' => 'required|array',
+            'grades.*.krs_detail_id' => 'required|exists:siakad_krs_detail,id',
+            'grades.*.scores' => 'required|array',
+        ]);
+
+        $kelas = Kelas::with(['mataKuliah.cpmks', 'tahunAkademik'])->findOrFail($kelasId);
+        $mode = $kelas->tahunAkademik?->mode_penilaian ?? 'semi_obe';
+        $komponenList = KomponenPenilaian::where('kelas_id', $kelasId)->get();
+        $isFinalInput = $request->boolean('is_final', false);
+
+        DB::transaction(function () use ($request, $kelas, $komponenList, $isFinalInput, $mode) {
+            foreach ($request->grades as $g) {
+                $kd = KrsDetail::with(['krs', 'kelas.mataKuliah.cpmks'])->findOrFail($g['krs_detail_id']);
+                $scoresInput = $g['scores'];
+                $totalAkhir = 0;
+
+                if ($mode === 'full_obe') {
+                    foreach ($kelas->mataKuliah->cpmks as $cpmk) {
+                        $val = isset($scoresInput[$cpmk->id]) ? (float)$scoresInput[$cpmk->id] : 0.0;
+                        $val = min(100, max(0, $val));
+
+                        KetercapaianCpmkMahasiswa::updateOrCreate(
+                            [
+                                'krs_detail_id' => $kd->id,
+                                'cpmk_id' => $cpmk->id,
+                            ],
+                            [
+                                'skor_ketercapaian' => $val,
+                                'status_ketercapaian' => $val >= 65.0 ? 'tercapai' : 'belum_tercapai',
+                            ]
+                        );
+
+                        $totalAkhir += ($val * (float)$cpmk->bobot_persentase) / 100;
+                    }
+                } else {
+                    // semi_obe or konvensional
+                    foreach ($komponenList as $comp) {
+                        $val = isset($scoresInput[$comp->id]) ? (float)$scoresInput[$comp->id] : 0.0;
+                        $val = min(100, max(0, $val));
+
+                        NilaiKomponenMahasiswa::updateOrCreate(
+                            [
+                                'krs_detail_id' => $kd->id,
+                                'komponen_penilaian_id' => $comp->id,
+                            ],
+                            [
+                                'nilai_angka' => $val,
+                                'diinput_oleh' => $request->user()?->id,
+                            ]
+                        );
+
+                        $totalAkhir += ($val * (float)$comp->bobot) / 100;
+                    }
+
+                    // For Semi-OBE, calculate and sync CPMK attainment based on components
+                    if ($mode === 'semi_obe') {
+                        foreach ($kd->kelas->mataKuliah->cpmks as $cpmk) {
+                            $relatedComps = $komponenList->where('cpmk_id', $cpmk->id);
+                            $totalW = $relatedComps->sum('bobot');
+                            $cpmkScore = 0;
+                            if ($totalW > 0) {
+                                $wSum = 0;
+                                foreach ($relatedComps as $rc) {
+                                    $s = isset($scoresInput[$rc->id]) ? (float)$scoresInput[$rc->id] : 0.0;
+                                    $wSum += ($s * (float)$rc->bobot);
+                                }
+                                $cpmkScore = round($wSum / $totalW, 2);
+                            } else {
+                                $cpmkScore = round($totalAkhir, 2);
+                            }
+
+                            KetercapaianCpmkMahasiswa::updateOrCreate(
+                                [
+                                    'krs_detail_id' => $kd->id,
+                                    'cpmk_id' => $cpmk->id,
+                                ],
+                                [
+                                    'skor_ketercapaian' => $cpmkScore,
+                                    'status_ketercapaian' => $cpmkScore >= 65.0 ? 'tercapai' : 'belum_tercapai',
+                                ]
+                            );
+                        }
+                    }
+                }
+
+                // Sync ke siakad_nilai_mahasiswa
+                $huruf = 'E';
+                $mutu = 0.00;
+                if ($totalAkhir >= 85) { $huruf = 'A'; $mutu = 4.00; }
+                elseif ($totalAkhir >= 80) { $huruf = 'A-'; $mutu = 3.75; }
+                elseif ($totalAkhir >= 75) { $huruf = 'B+'; $mutu = 3.25; }
+                elseif ($totalAkhir >= 70) { $huruf = 'B'; $mutu = 3.00; }
+                elseif ($totalAkhir >= 65) { $huruf = 'B-'; $mutu = 2.75; }
+                elseif ($totalAkhir >= 60) { $huruf = 'C+'; $mutu = 2.25; }
+                elseif ($totalAkhir >= 55) { $huruf = 'C'; $mutu = 2.00; }
+                elseif ($totalAkhir >= 40) { $huruf = 'D'; $mutu = 1.00; }
+
+                NilaiMahasiswa::updateOrCreate(
+                    ['krs_detail_id' => $kd->id],
+                    [
+                        'nilai_akhir' => round($totalAkhir, 2),
+                        'nilai_huruf' => $huruf,
+                        'bobot_mutu' => $mutu,
+                        'is_final' => $isFinalInput,
+                        'diinput_oleh' => $request->user()?->id,
+                    ]
+                );
+
+                if ($isFinalInput && $kd->krs) {
+                    $this->akademikService->hitungKhsDanIpk(
+                        $kd->krs->mahasiswa_id,
+                        $kd->krs->tahun_akademik_id
+                    );
+                }
+            }
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $isFinalInput 
+                ? 'Seluruh nilai mahasiswa berhasil disimpan dan dipublikasikan (Final).'
+                : 'Nilai mahasiswa berhasil disimpan sebagai Draft.',
         ]);
     }
 
@@ -304,61 +543,84 @@ class ObeController extends Controller
     {
         $request->validate([
             'krs_detail_id' => 'required|exists:siakad_krs_detail,id',
-            'scores' => 'required|array', // key: komponen_id => value: score (0-100)
+            'scores' => 'required|array',
             'is_final' => 'nullable|boolean',
         ]);
 
-        $kd = KrsDetail::with(['krs.mahasiswa', 'kelas.mataKuliah.cpmks'])->findOrFail($request->krs_detail_id);
+        $kd = KrsDetail::with(['krs.mahasiswa', 'kelas.mataKuliah.cpmks', 'kelas.tahunAkademik'])->findOrFail($request->krs_detail_id);
+        $mode = $kd->kelas->tahunAkademik?->mode_penilaian ?? 'semi_obe';
         $komponenList = KomponenPenilaian::where('kelas_id', $kelasId)->get();
-
+        $isFinalInput = $request->boolean('is_final', false);
         $totalAkhir = 0;
         $scoresInput = $request->scores;
 
-        DB::transaction(function () use ($kd, $komponenList, $scoresInput, $request, &$totalAkhir) {
-            foreach ($komponenList as $comp) {
-                $val = isset($scoresInput[$comp->id]) ? (float)$scoresInput[$comp->id] : 0.0;
-                $val = min(100, max(0, $val));
+        DB::transaction(function () use ($kd, $scoresInput, $request, $isFinalInput, $komponenList, $mode, &$totalAkhir) {
+            if ($mode === 'full_obe') {
+                foreach ($kd->kelas->mataKuliah->cpmks as $cpmk) {
+                    $val = isset($scoresInput[$cpmk->id]) ? (float)$scoresInput[$cpmk->id] : 0.0;
+                    $val = min(100, max(0, $val));
 
-                NilaiKomponenMahasiswa::updateOrCreate(
-                    [
-                        'krs_detail_id' => $kd->id,
-                        'komponen_penilaian_id' => $comp->id,
-                    ],
-                    [
-                        'nilai_angka' => $val,
-                        'diinput_oleh' => $request->user()?->id,
-                    ]
-                );
+                    KetercapaianCpmkMahasiswa::updateOrCreate(
+                        [
+                            'krs_detail_id' => $kd->id,
+                            'cpmk_id' => $cpmk->id,
+                        ],
+                        [
+                            'skor_ketercapaian' => $val,
+                            'status_ketercapaian' => $val >= 65.0 ? 'tercapai' : 'belum_tercapai',
+                        ]
+                    );
 
-                $totalAkhir += ($val * (float)$comp->bobot) / 100;
-            }
+                    $totalAkhir += ($val * (float)$cpmk->bobot_persentase) / 100;
+                }
+            } else {
+                // semi_obe or konvensional
+                foreach ($komponenList as $comp) {
+                    $val = isset($scoresInput[$comp->id]) ? (float)$scoresInput[$comp->id] : 0.0;
+                    $val = min(100, max(0, $val));
 
-            // Hitung & Simpan Ketercapaian per CPMK
-            foreach ($kd->kelas->mataKuliah->cpmks as $cpmk) {
-                $relatedComps = $komponenList->where('cpmk_id', $cpmk->id);
-                $totalW = $relatedComps->sum('bobot');
-                $cpmkScore = 0;
-                if ($totalW > 0) {
-                    $wSum = 0;
-                    foreach ($relatedComps as $rc) {
-                        $s = isset($scoresInput[$rc->id]) ? (float)$scoresInput[$rc->id] : 0.0;
-                        $wSum += ($s * (float)$rc->bobot);
-                    }
-                    $cpmkScore = round($wSum / $totalW, 2);
-                } else {
-                    $cpmkScore = round($totalAkhir, 2);
+                    NilaiKomponenMahasiswa::updateOrCreate(
+                        [
+                            'krs_detail_id' => $kd->id,
+                            'komponen_penilaian_id' => $comp->id,
+                        ],
+                        [
+                            'nilai_angka' => $val,
+                            'diinput_oleh' => $request->user()?->id,
+                        ]
+                    );
+
+                    $totalAkhir += ($val * (float)$comp->bobot) / 100;
                 }
 
-                KetercapaianCpmkMahasiswa::updateOrCreate(
-                    [
-                        'krs_detail_id' => $kd->id,
-                        'cpmk_id' => $cpmk->id,
-                    ],
-                    [
-                        'skor_ketercapaian' => $cpmkScore,
-                        'status_ketercapaian' => $cpmkScore >= 65.0 ? 'tercapai' : 'belum_tercapai',
-                    ]
-                );
+                if ($mode === 'semi_obe') {
+                    foreach ($kd->kelas->mataKuliah->cpmks as $cpmk) {
+                        $relatedComps = $komponenList->where('cpmk_id', $cpmk->id);
+                        $totalW = $relatedComps->sum('bobot');
+                        $cpmkScore = 0;
+                        if ($totalW > 0) {
+                            $wSum = 0;
+                            foreach ($relatedComps as $rc) {
+                                $s = isset($scoresInput[$rc->id]) ? (float)$scoresInput[$rc->id] : 0.0;
+                                $wSum += ($s * (float)$rc->bobot);
+                            }
+                            $cpmkScore = round($wSum / $totalW, 2);
+                        } else {
+                            $cpmkScore = round($totalAkhir, 2);
+                        }
+
+                        KetercapaianCpmkMahasiswa::updateOrCreate(
+                            [
+                                'krs_detail_id' => $kd->id,
+                                'cpmk_id' => $cpmk->id,
+                            ],
+                            [
+                                'skor_ketercapaian' => $cpmkScore,
+                                'status_ketercapaian' => $cpmkScore >= 65.0 ? 'tercapai' : 'belum_tercapai',
+                            ]
+                        );
+                    }
+                }
             }
 
             // Sync ke siakad_nilai_mahasiswa
@@ -373,20 +635,18 @@ class ObeController extends Controller
             elseif ($totalAkhir >= 55) { $huruf = 'C'; $mutu = 2.00; }
             elseif ($totalAkhir >= 40) { $huruf = 'D'; $mutu = 1.00; }
 
-            $isFinal = $request->boolean('is_final', false);
-
             NilaiMahasiswa::updateOrCreate(
                 ['krs_detail_id' => $kd->id],
                 [
                     'nilai_akhir' => round($totalAkhir, 2),
                     'nilai_huruf' => $huruf,
                     'bobot_mutu' => $mutu,
-                    'is_final' => $isFinal,
+                    'is_final' => $isFinalInput,
                     'diinput_oleh' => $request->user()?->id,
                 ]
             );
 
-            if ($isFinal && $kd->krs) {
+            if ($isFinalInput && $kd->krs) {
                 $this->akademikService->hitungKhsDanIpk(
                     $kd->krs->mahasiswa_id,
                     $kd->krs->tahun_akademik_id
@@ -627,11 +887,8 @@ class ObeController extends Controller
                 }
             }
 
-            // Baseline evaluasi ketercapaian CPL
-            $baseScore = $mahasiswa->ipk ? min(100, round(($mahasiswa->ipk / 4.0) * 85 + 5, 1)) : 82.5;
-            $avgScore = count($attainedList) > 0 
-                ? round(array_sum($attainedList) / count($attainedList), 1)
-                : $baseScore;
+            $hasAssessment = count($attainedList) > 0;
+            $avgScore = $hasAssessment ? round(array_sum($attainedList) / count($attainedList), 1) : 0.0;
 
             $cplSummary[] = [
                 'cpl_id' => $cpl->id,
@@ -639,8 +896,8 @@ class ObeController extends Controller
                 'kategori' => $cpl->kategori,
                 'deskripsi' => $cpl->deskripsi,
                 'skor_rata_rata' => $avgScore,
-                'status' => $avgScore >= 65.0 ? 'Memenuhi Standar' : 'Belum Memenuhi',
-                'total_mata_kuliah_diukur' => max(1, count($cpl->cpmks ?? [])),
+                'status' => $hasAssessment ? ($avgScore >= 65.0 ? 'Memenuhi Standar' : 'Belum Memenuhi') : 'Belum Dinilai (0%)',
+                'total_mata_kuliah_diukur' => $hasAssessment ? count($attainedList) : 0,
             ];
 
             if (isset($kategoriScores[$cpl->kategori])) {
@@ -652,7 +909,7 @@ class ObeController extends Controller
         foreach ($kategoriScores as $kat => $scores) {
             $radarKategori[$kat] = count($scores) > 0 
                 ? round(array_sum($scores) / count($scores), 1)
-                : 82.5;
+                : 0.0;
         }
 
         return response()->json([
@@ -662,7 +919,7 @@ class ObeController extends Controller
                 'cpl_summary' => $cplSummary,
                 'radar_kategori' => $radarKategori,
                 'total_cpl' => count($cplSummary),
-                'total_cpl_tercapai' => count(array_filter($cplSummary, fn($c) => $c['skor_rata_rata'] >= 65.0)),
+                'total_cpl_tercapai' => count(array_filter($cplSummary, fn($c) => $c['skor_rata_rata'] >= 65.0 && $c['total_mata_kuliah_diukur'] > 0)),
             ]
         ]);
     }
@@ -689,8 +946,15 @@ class ObeController extends Controller
             'catatan_revisi' => 'nullable|string',
         ]);
 
-        $rps = \App\Models\Siakad\Rps::findOrFail($id);
         $user = $request->user();
+        if (!$user->isSuperAdmin() && !$user->isAdmin() && !$user->hasRole('kaprodi') && !$user->hasRole('wakil_prodi')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses (Kaprodi / Wakil Kaprodi) untuk melakukan verifikasi RPS.'
+            ], 403);
+        }
+
+        $rps = \App\Models\Siakad\Rps::findOrFail($id);
         $dosen = \App\Models\Siakad\Dosen::where('user_id', $user?->id)->first();
 
         $rps->update([
@@ -758,6 +1022,146 @@ class ObeController extends Controller
                 'cpl_kategori_stats' => $cplStats,
                 'cpl_list' => $cpls,
             ]
+        ]);
+    }
+
+    // --- Profil Lulusan (PL) ---
+    public function getProfilLulusan(Request $request)
+    {
+        $query = ProfilLulusan::with(['programStudi', 'cpls']);
+        if ($request->filled('program_studi_id')) {
+            $query->where('program_studi_id', $request->program_studi_id);
+        }
+        return response()->json([
+            'status' => 'success',
+            'data' => $query->get()
+        ]);
+    }
+
+    public function storeProfilLulusan(Request $request)
+    {
+        $request->validate([
+            'program_studi_id' => 'required|exists:master_program_studi,id',
+            'kode_pl' => 'required|string|max:50',
+            'nama' => 'required|string|max:255',
+            'deskripsi' => 'required|string',
+            'urutan' => 'nullable|integer',
+        ]);
+
+        $pl = ProfilLulusan::updateOrCreate(
+            [
+                'program_studi_id' => $request->program_studi_id,
+                'kode_pl' => $request->kode_pl
+            ],
+            [
+                'nama' => $request->nama,
+                'deskripsi' => $request->deskripsi,
+                'urutan' => $request->urutan ?? 1,
+            ]
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Profil Lulusan berhasil disimpan',
+            'data' => $pl
+        ]);
+    }
+
+    public function deleteProfilLulusan($id)
+    {
+        $pl = ProfilLulusan::findOrFail($id);
+        $pl->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Profil Lulusan berhasil dihapus'
+        ]);
+    }
+
+    public function mapProfilLulusanCpl(Request $request)
+    {
+        $request->validate([
+            'profil_lulusan_id' => 'required|exists:siakad_profil_lulusan,id',
+            'cpl_ids' => 'required|array',
+            'cpl_ids.*' => 'exists:siakad_cpl,id',
+        ]);
+
+        $pl = ProfilLulusan::findOrFail($request->profil_lulusan_id);
+        $pl->cpls()->sync($request->cpl_ids);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pemetaan Profil Lulusan ke CPL berhasil disimpan',
+            'data' => $pl->load('cpls')
+        ]);
+    }
+
+    // --- Bahan Kajian (BK) ---
+    public function getBahanKajian(Request $request)
+    {
+        $query = BahanKajian::with(['programStudi', 'mataKuliahs']);
+        if ($request->filled('program_studi_id')) {
+            $query->where('program_studi_id', $request->program_studi_id);
+        }
+        return response()->json([
+            'status' => 'success',
+            'data' => $query->get()
+        ]);
+    }
+
+    public function storeBahanKajian(Request $request)
+    {
+        $request->validate([
+            'program_studi_id' => 'required|exists:master_program_studi,id',
+            'kode_bk' => 'required|string|max:50',
+            'nama_bk' => 'required|string|max:255',
+            'deskripsi' => 'nullable|string',
+        ]);
+
+        $bk = BahanKajian::updateOrCreate(
+            [
+                'program_studi_id' => $request->program_studi_id,
+                'kode_bk' => $request->kode_bk
+            ],
+            [
+                'nama_bk' => $request->nama_bk,
+                'deskripsi' => $request->deskripsi,
+            ]
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Bahan Kajian berhasil disimpan',
+            'data' => $bk
+        ]);
+    }
+
+    public function deleteBahanKajian($id)
+    {
+        $bk = BahanKajian::findOrFail($id);
+        $bk->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Bahan Kajian berhasil dihapus'
+        ]);
+    }
+
+    public function mapMataKuliahBahanKajian(Request $request)
+    {
+        $request->validate([
+            'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
+            'bahan_kajian_ids' => 'required|array',
+            'bahan_kajian_ids.*' => 'exists:siakad_bahan_kajian,id',
+        ]);
+
+        $mk = MataKuliah::findOrFail($request->mata_kuliah_id);
+        $mk->bahanKajians()->sync($request->bahan_kajian_ids);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pemetaan Mata Kuliah ke Bahan Kajian berhasil disimpan',
+            'data' => $mk->load('bahanKajians')
         ]);
     }
 }

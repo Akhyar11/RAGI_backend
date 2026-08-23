@@ -20,16 +20,38 @@ class Mahasiswa extends Model
         'nim',
         'nama_lengkap',
         'nik',
+        'nisn',
         'tanggal_lahir',
         'tempat_lahir',
         'jenis_kelamin',
         'agama',
         'alamat',
+        'rt',
+        'rw',
+        'dusun',
+        'kelurahan',
+        'kecamatan',
+        'kota',
+        'provinsi',
+        'kode_pos',
+        'jenis_tinggal',
+        'alat_transportasi',
         'telepon',
+        'email',
+        'nama_ibu_kandung',
+        'nik_ibu',
+        'nama_ayah',
+        'nik_ayah',
+        'nama_wali',
         'angkatan',
         'tanggal_masuk',
+        'jalur_masuk',
+        'jenis_pendaftaran',
         'status',
         'dosen_wali_id',
+        'id_feeder',
+        'id_feeder_biodata',
+        'id_feeder_riwayat',
     ];
 
     protected $casts = [
@@ -37,6 +59,8 @@ class Mahasiswa extends Model
         'tanggal_masuk' => 'date',
         'angkatan' => 'integer',
     ];
+
+    protected $appends = ['ipk'];
 
     public function user()
     {
@@ -66,5 +90,39 @@ class Mahasiswa extends Model
     public function khs()
     {
         return $this->hasMany(Khs::class, 'mahasiswa_id');
+    }
+
+    public function getIpkAttribute()
+    {
+        $latestKhs = $this->khs()->latest('id')->first();
+        if ($latestKhs) {
+            return (float) $latestKhs->ipk;
+        }
+
+        if ($this->konversi_id) {
+            $konvTransfer = $this->konversiTransfer;
+            if ($konvTransfer && $konvTransfer->status === 'disetujui' && $konvTransfer->details && count($konvTransfer->details) > 0) {
+                $totalSks = 0;
+                $totalMutu = 0;
+                foreach ($konvTransfer->details as $konv) {
+                    $mk = $konv->mataKuliahDiakui;
+                    $sks = $mk ? $mk->total_sks : $konv->sks_asal;
+                    $huruf = $konv->nilai_huruf_asal;
+                    $mutu = 4.0;
+                    if ($huruf === 'A-') $mutu = 3.75;
+                    elseif ($huruf === 'B+') $mutu = 3.25;
+                    elseif ($huruf === 'B') $mutu = 3.00;
+                    elseif ($huruf === 'B-') $mutu = 2.75;
+                    elseif ($huruf === 'C+') $mutu = 2.25;
+                    elseif ($huruf === 'C') $mutu = 2.00;
+
+                    $totalSks += $sks;
+                    $totalMutu += ($mutu * $sks);
+                }
+                return $totalSks > 0 ? round($totalMutu / $totalSks, 2) : 0.00;
+            }
+        }
+
+        return 0.00;
     }
 }

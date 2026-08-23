@@ -18,6 +18,7 @@ class MasterTahunAkademik extends Model
         'tahun_mulai',
         'tahun_selesai',
         'is_active',
+        'mode_penilaian',
     ];
 
     protected $casts = [

@@ -41,4 +41,9 @@ class Cpl extends Model
             ->withPivot('bobot_kontribusi')
             ->withTimestamps();
     }
+
+    public function profilLulusans()
+    {
+        return $this->belongsToMany(ProfilLulusan::class, 'siakad_profil_lulusan_cpl', 'cpl_id', 'profil_lulusan_id');
+    }
 }

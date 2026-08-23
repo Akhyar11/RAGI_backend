@@ -385,7 +385,7 @@ class PerkuliahanController extends Controller
         $totalSksLulus = 0;
         $totalMutu = 0;
 
-        if ($mhs->konversiTransfer && $mhs->konversiTransfer->details) {
+        if ($mhs->konversiTransfer && $mhs->konversiTransfer->status === 'disetujui' && $mhs->konversiTransfer->details) {
             foreach ($mhs->konversiTransfer->details as $konv) {
                 $mk = $konv->mataKuliahDiakui;
                 $sks = $mk ? $mk->total_sks : $konv->sks_asal;
@@ -460,7 +460,7 @@ class PerkuliahanController extends Controller
 
         // Dapatkan daftar ID MK yang sudah diakui konversi transfer
         $convertedMkIds = [];
-        if ($mhs && $mhs->konversiTransfer) {
+        if ($mhs && $mhs->konversiTransfer && $mhs->konversiTransfer->status === 'disetujui') {
             $convertedMkIds = $mhs->konversiTransfer->details->pluck('mata_kuliah_diakui_id')->toArray();
         }
 
@@ -723,12 +723,20 @@ class PerkuliahanController extends Controller
                 ->latest()
                 ->first();
 
+            $totalSksTransfer = 0;
+            if (!$khs && $mhs->konversiTransfer && $mhs->konversiTransfer->status === 'disetujui' && $mhs->konversiTransfer->details) {
+                foreach ($mhs->konversiTransfer->details as $konv) {
+                    $mk = $konv->mataKuliahDiakui;
+                    $totalSksTransfer += $mk ? $mk->total_sks : $konv->sks_asal;
+                }
+            }
+
             $summary = [
                 'mahasiswa' => $mhs->load('programStudi.fakultas', 'dosenWali'),
-                'ips' => (float) ($khs?->ips ?? 3.85),
-                'ipk' => (float) ($khs?->ipk ?? 3.85),
-                'sks_semester' => (int) ($khs?->total_sks_semester ?? 20),
-                'sks_total' => (int) ($khs?->sks_kumulatif ?? 20),
+                'ips' => (float) ($khs?->ips ?? 0.00),
+                'ipk' => (float) ($khs?->ipk ?? $mhs->ipk),
+                'sks_semester' => (int) ($khs?->total_sks_semester ?? 0),
+                'sks_total' => (int) ($khs?->sks_kumulatif ?? $totalSksTransfer),
             ];
         }
 
@@ -832,7 +840,7 @@ class PerkuliahanController extends Controller
         $totalBobotMutu = 0;
 
         // Masukkan data konversi transfer jika ada
-        if ($mhs->konversiTransfer && $mhs->konversiTransfer->details) {
+        if ($mhs->konversiTransfer && $mhs->konversiTransfer->status === 'disetujui' && $mhs->konversiTransfer->details) {
             foreach ($mhs->konversiTransfer->details as $konv) {
                 $mk = $konv->mataKuliahDiakui;
                 $sks = $mk ? $mk->total_sks : $konv->sks_asal;
@@ -939,6 +947,112 @@ class PerkuliahanController extends Controller
             'status' => 'success',
             'data' => $ruangan,
             'message' => 'Daftar ruangan SINAPRA berhasil dimuat'
+        ]);
+    }
+
+    private function checkRpsApproved(Kelas $kelas)
+    {
+        $hasApprovedRps = \App\Models\Siakad\Rps::where('mata_kuliah_id', $kelas->mata_kuliah_id)
+            ->where('status', 'disetujui')
+            ->exists();
+
+        if (!$hasApprovedRps) {
+            abort(response()->json([
+                'status' => 'error',
+                'message' => 'Aksi ditolak. Rencana Pembelajaran Semester (RPS) mata kuliah ini belum disetujui oleh Kaprodi/Wakil Kaprodi.'
+            ], 403));
+        }
+    }
+
+    public function listPertemuan(Request $request, $kelasId)
+    {
+        $kelas = Kelas::findOrFail($kelasId);
+        $pertemuans = \App\Models\Siakad\Pertemuan::where('kelas_id', $kelasId)
+            ->orderBy('pertemuan_ke')
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $pertemuans
+        ]);
+    }
+
+    public function storePertemuan(Request $request, $kelasId)
+    {
+        $kelas = Kelas::findOrFail($kelasId);
+        $this->checkRpsApproved($kelas);
+
+        $request->validate([
+            'pertemuan_ke' => 'required|integer|min:1|max:16',
+            'tanggal' => 'required|date',
+            'materi' => 'nullable|string|max:255',
+            'jam_mulai' => 'nullable|string',
+            'jam_selesai' => 'nullable|string',
+        ]);
+
+        $pertemuan = \App\Models\Siakad\Pertemuan::updateOrCreate(
+            ['kelas_id' => $kelasId, 'pertemuan_ke' => $request->pertemuan_ke],
+            $request->only(['tanggal', 'materi', 'jam_mulai', 'jam_selesai'])
+        );
+
+        // Auto create attendance logs for all enrolled students
+        $enrolledStudents = \App\Models\Siakad\KrsDetail::where('kelas_id', $kelasId)
+            ->whereHas('krs', fn($q) => $q->where('status', 'disetujui'))
+            ->pluck('mahasiswa_id');
+
+        foreach ($enrolledStudents as $mhsId) {
+            \App\Models\Siakad\AbsensiMahasiswa::firstOrCreate(
+                ['pertemuan_id' => $pertemuan->id, 'mahasiswa_id' => $mhsId],
+                ['status' => 'hadir']
+            );
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pertemuan berhasil disimpan dan daftar absensi mahasiswa telah digenerate.',
+            'data' => $pertemuan
+        ]);
+    }
+
+    public function listAbsensi(Request $request, $pertemuanId)
+    {
+        $pertemuan = \App\Models\Siakad\Pertemuan::with('kelas.mataKuliah')->findOrFail($pertemuanId);
+        $absensi = \App\Models\Siakad\AbsensiMahasiswa::with('mahasiswa')
+            ->where('pertemuan_id', $pertemuanId)
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'pertemuan' => $pertemuan,
+                'absensi' => $absensi
+            ]
+        ]);
+    }
+
+    public function storeAbsensi(Request $request, $pertemuanId)
+    {
+        $pertemuan = \App\Models\Siakad\Pertemuan::findOrFail($pertemuanId);
+        $kelas = Kelas::findOrFail($pertemuan->kelas_id);
+        $this->checkRpsApproved($kelas);
+
+        $request->validate([
+            'absensi' => 'required|array',
+            'absensi.*.mahasiswa_id' => 'required|exists:siakad_mahasiswa,id',
+            'absensi.*.status' => 'required|in:hadir,sakit,izin,alfa',
+            'absensi.*.catatan' => 'nullable|string|max:255',
+        ]);
+
+        foreach ($request->absensi as $item) {
+            \App\Models\Siakad\AbsensiMahasiswa::updateOrCreate(
+                ['pertemuan_id' => $pertemuanId, 'mahasiswa_id' => $item['mahasiswa_id']],
+                ['status' => $item['status'], 'catatan' => $item['catatan'] ?? null]
+            );
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data absensi mahasiswa berhasil disimpan.'
         ]);
     }
 }

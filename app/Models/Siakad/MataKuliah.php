@@ -50,4 +50,9 @@ class MataKuliah extends Model
     {
         return $this->hasMany(Cpmk::class, 'mata_kuliah_id');
     }
+
+    public function bahanKajians()
+    {
+        return $this->belongsToMany(BahanKajian::class, 'siakad_mata_kuliah_bahan_kajian', 'mata_kuliah_id', 'bahan_kajian_id');
+    }
 }

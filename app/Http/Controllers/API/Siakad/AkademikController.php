@@ -174,7 +174,7 @@ class AkademikController extends Controller
     // --- PROGRAM STUDI CRUD ---
     public function listProgramStudi(Request $request)
     {
-        $query = ProgramStudi::with('fakultas');
+        $query = ProgramStudi::with(['fakultas', 'kaprodi.user']);
         if ($request->filled('fakultas_id')) {
             $query->where('fakultas_id', $request->fakultas_id);
         }
@@ -193,6 +193,7 @@ class AkademikController extends Controller
     {
         $request->validate([
             'fakultas_id' => 'required|exists:siakad_fakultas,id',
+            'kaprodi_id' => 'nullable|exists:siakad_dosen,id',
             'kode_prodi' => 'required|string|unique:master_program_studi,kode_prodi',
             'kode_prodi_dikti' => 'nullable|string|max:50',
             'nama' => 'required|string|max:255',
@@ -205,7 +206,7 @@ class AkademikController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Program Studi berhasil ditambahkan',
-            'data' => $prodi->load('fakultas')
+            'data' => $prodi->load(['fakultas', 'kaprodi.user'])
         ], 201);
     }
 
@@ -214,6 +215,7 @@ class AkademikController extends Controller
         $prodi = ProgramStudi::findOrFail($id);
         $request->validate([
             'fakultas_id' => 'required|exists:siakad_fakultas,id',
+            'kaprodi_id' => 'nullable|exists:siakad_dosen,id',
             'nama' => 'required|string|max:255',
             'kode_prodi_dikti' => 'nullable|string|max:50',
             'jenjang' => 'required|string|max:10',
@@ -225,7 +227,7 @@ class AkademikController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Program Studi berhasil diperbarui',
-            'data' => $prodi->load('fakultas')
+            'data' => $prodi->load(['fakultas', 'kaprodi.user'])
         ]);
     }
 
@@ -325,6 +327,12 @@ class AkademikController extends Controller
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(fn($q) => $q->where('nama', 'like', "%{$s}%")->orWhere('kode_mk', 'like', "%{$s}%"));
+        }
+
+        if ($request->filled('program_studi_id')) {
+            $query->whereHas('kurikulum', function ($q) use ($request) {
+                $q->where('program_studi_id', $request->program_studi_id);
+            });
         }
 
         if ($request->filled('kurikulum_id')) {
@@ -516,6 +524,21 @@ class AkademikController extends Controller
             'data' => [
                 'total_synced' => $syncedCount,
             ]
+        ]);
+    }
+
+    public function updateModePenilaian(Request $request, $id)
+    {
+        $request->validate([
+            'mode_penilaian' => 'required|in:full_obe,semi_obe,konvensional',
+        ]);
+        
+        $ta = \App\Models\Spmb\MasterTahunAkademik::findOrFail($id);
+        $ta->update(['mode_penilaian' => $request->mode_penilaian]);
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Mode penilaian periode akademik berhasil diperbarui.',
         ]);
     }
 }

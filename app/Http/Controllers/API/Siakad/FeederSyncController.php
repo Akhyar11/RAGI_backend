@@ -73,7 +73,7 @@ class FeederSyncController extends Controller
     public function triggerSync(Request $request)
     {
         $request->validate([
-            'entity_type' => 'required|in:mahasiswa,dosen,mata_kuliah,kelas,penugasan_dosen',
+            'entity_type' => 'required|in:mahasiswa,biodata_mahasiswa,riwayat_pendidikan_mahasiswa,dosen,mata_kuliah,kelas,penugasan_dosen',
         ]);
 
         $entity = $request->entity_type;
@@ -82,6 +82,8 @@ class FeederSyncController extends Controller
         try {
             $log = match ($entity) {
                 'mahasiswa' => $this->syncService->syncBatchMahasiswa($userId),
+                'biodata_mahasiswa' => $this->syncService->syncBatchBiodataMahasiswa($userId),
+                'riwayat_pendidikan_mahasiswa' => $this->syncService->syncBatchRiwayatPendidikanMahasiswa($userId),
                 'dosen' => $this->syncService->syncBatchDosen($userId),
                 'mata_kuliah' => $this->syncService->syncBatchMataKuliah($userId),
                 'kelas' => $this->syncService->syncBatchKelasNilai($userId),
@@ -90,7 +92,7 @@ class FeederSyncController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'message' => "Sinkronisasi {$entity} selesai",
+                'message' => "Sinkronisasi {$entity} ke Neo Feeder PDDikti selesai",
                 'data' => $log
             ]);
         } catch (\Exception $e) {
