@@ -14,7 +14,7 @@ class AdminUserSeeder extends Seeder
     public function run(): void
     {
         Schema::disableForeignKeyConstraints();
-        DB::table('user_roles')->truncate();
+        DB::table('core_user_roles')->truncate();
         Schema::enableForeignKeyConstraints();
 
         $createOrRestoreUser = function ($email, $attributes) {
@@ -112,7 +112,7 @@ class AdminUserSeeder extends Seeder
 
         $assignRole = function ($userId, $roleId, $assignerId) {
             if ($userId && $roleId) {
-                DB::table('user_roles')->updateOrInsert(
+                DB::table('core_user_roles')->updateOrInsert(
                     ['user_id' => $userId, 'role_id' => $roleId],
                     ['assigned_by' => $assignerId, 'valid_from' => now()->toDateString(), 'created_at' => now()]
                 );

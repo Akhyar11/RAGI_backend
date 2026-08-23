@@ -7,5 +7,6 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 #[Fillable(['role_id', 'permission_id'])]
 class RolePermission extends Model
 {
+    protected $table = 'core_role_permissions';
     const UPDATED_AT = null;
 }

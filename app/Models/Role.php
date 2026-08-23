@@ -10,18 +10,20 @@ class Role extends Model
 {
     use HasFactory;
 
+    protected $table = 'core_roles';
+
     public function permissions()
     {
-        return $this->belongsToMany(Permission::class, 'role_permissions', 'role_id', 'permission_id');
+        return $this->belongsToMany(Permission::class, 'core_role_permissions', 'role_id', 'permission_id');
     }
 
     public function users()
     {
-        return $this->belongsToMany(User::class, 'user_roles', 'role_id', 'user_id');
+        return $this->belongsToMany(User::class, 'core_user_roles', 'role_id', 'user_id');
     }
 
     public function menus()
     {
-        return $this->belongsToMany(Menu::class, 'menu_role');
+        return $this->belongsToMany(Menu::class, 'core_menu_role');
     }
 }

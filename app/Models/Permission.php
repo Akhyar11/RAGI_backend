@@ -10,5 +10,7 @@ class Permission extends Model
 {
     use HasFactory;
 
+    protected $table = 'core_permissions';
+
     const UPDATED_AT = null;
 }

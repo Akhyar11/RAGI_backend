@@ -12,8 +12,8 @@ class RoleSeeder extends Seeder
     public function run(): void
     {
         Schema::disableForeignKeyConstraints();
-        DB::table('role_permissions')->truncate();
-        DB::table('roles')->truncate();
+        DB::table('core_role_permissions')->truncate();
+        DB::table('core_roles')->truncate();
         Schema::enableForeignKeyConstraints();
 
         $roles = [

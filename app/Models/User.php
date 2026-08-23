@@ -27,6 +27,8 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
+    protected $table = 'core_users';
+
     /**
      * Get the attributes that should be cast.
      *
@@ -65,11 +67,11 @@ class User extends Authenticatable
 
     public function roles()
     {
-        return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id')
+        return $this->belongsToMany(Role::class, 'core_user_roles', 'user_id', 'role_id')
             ->withPivot(['valid_from', 'valid_until'])
             ->where(function ($q) {
-                $q->whereNull('user_roles.valid_until')
-                  ->orWhere('user_roles.valid_until', '>=', now()->toDateString());
+                $q->whereNull('core_user_roles.valid_until')
+                  ->orWhere('core_user_roles.valid_until', '>=', now()->toDateString());
             });
     }
 
@@ -77,13 +79,24 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value') ?? 'superadmin';
-        return $this->hasRole('admin') || $this->hasRole('superadmin') || $this->hasRole($superAdminRole);
+        if (!\Illuminate\Support\Facades\Schema::hasTable('system_settings')) {
+            return false;
+        }
+
+        $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value');
+        return $superAdminRole ? $this->hasRole($superAdminRole) : false;
     }
 
     public function isAdmin(): bool
     {
-        return $this->isSuperAdmin() || $this->hasRole('admin_spmb') || $this->hasRole('admin_simpeg') || $this->hasRole('admin_sikeu') || $this->hasRole('admin_lppm');
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+        
+        // Admin adalah user yang memiliki setidaknya satu permission "update", "delete", atau "manage" (tindakan di atas read/create biasa)
+        return $this->roles()->whereHas('permissions', function($q) {
+            $q->whereIn('action', ['update', 'delete', 'approve', 'manage']);
+        })->exists();
     }
 
     public function getIsSuperadminAttribute(): bool

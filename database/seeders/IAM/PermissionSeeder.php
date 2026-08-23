@@ -14,8 +14,8 @@ class PermissionSeeder extends Seeder
     public function run(): void
     {
         Schema::disableForeignKeyConstraints();
-        DB::table('role_permissions')->truncate();
-        DB::table('permissions')->truncate();
+        DB::table('core_role_permissions')->truncate();
+        DB::table('core_permissions')->truncate();
         Schema::enableForeignKeyConstraints();
 
         $permissions = [
