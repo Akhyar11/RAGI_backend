@@ -9,7 +9,7 @@ class ApprovalHistoryPencairan extends Model
 {
     use HasFactory;
 
-    protected $table = 'approval_history_pencairan';
+    protected $table = 'sikeu_approval_history_pencairan';
 
     protected $fillable = [
         'pengajuan_id',

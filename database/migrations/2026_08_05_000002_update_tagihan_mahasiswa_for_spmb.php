@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (Schema::hasTable('tagihan_mahasiswa')) {
-            Schema::table('tagihan_mahasiswa', function (Blueprint $table) {
+        if (Schema::hasTable('sikeu_tagihan_mahasiswa')) {
+            Schema::table('sikeu_tagihan_mahasiswa', function (Blueprint $table) {
                 if (Schema::hasColumn('tagihan_mahasiswa', 'mahasiswa_id')) {
                     $table->unsignedBigInteger('mahasiswa_id')->nullable()->change();
                 }
@@ -33,8 +33,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        if (Schema::hasTable('tagihan_mahasiswa')) {
-            Schema::table('tagihan_mahasiswa', function (Blueprint $table) {
+        if (Schema::hasTable('sikeu_tagihan_mahasiswa')) {
+            Schema::table('sikeu_tagihan_mahasiswa', function (Blueprint $table) {
                 if (Schema::hasColumn('tagihan_mahasiswa', 'tipe_referensi')) {
                     $table->dropColumn('tipe_referensi');
                 }

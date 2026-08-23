@@ -23,7 +23,7 @@ return new class extends Migration
         });
 
         // Modifikasi tabel master_program_studi
-        Schema::table('master_program_studi', function (Blueprint $table) {
+        Schema::table('spmb_master_program_studi', function (Blueprint $table) {
             if (!Schema::hasColumn('master_program_studi', 'fakultas_id')) {
                 $table->foreignId('fakultas_id')->nullable()->constrained('siakad_fakultas')->nullOnDelete();
             }
@@ -39,7 +39,7 @@ return new class extends Migration
         // 2. Kurikulum
         Schema::create('siakad_kurikulum', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('program_studi_id')->constrained('master_program_studi')->cascadeOnDelete();
+            $table->foreignId('program_studi_id')->constrained('spmb_master_program_studi')->cascadeOnDelete();
             $table->string('kode', 50)->unique();
             $table->string('nama');
             $table->integer('tahun_berlaku');
@@ -82,7 +82,7 @@ return new class extends Migration
             $table->string('no_transaksi', 50)->unique();
             $table->string('kampus_asal');
             $table->string('prodi_asal');
-            $table->foreignId('diproses_oleh')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('diproses_oleh')->nullable()->constrained('core_users')->nullOnDelete();
             $table->enum('status', ['draft', 'disetujui'])->default('draft');
             $table->text('catatan')->nullable();
             $table->timestamps();
@@ -92,8 +92,8 @@ return new class extends Migration
         // 6. Mahasiswa
         Schema::create('siakad_mahasiswa', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('program_studi_id')->constrained('master_program_studi');
+            $table->foreignId('user_id')->nullable()->constrained('core_users')->nullOnDelete();
+            $table->foreignId('program_studi_id')->constrained('spmb_master_program_studi');
             $table->foreignId('konversi_id')->nullable()->constrained('siakad_konversi_transfer')->nullOnDelete();
             $table->string('nim', 30)->unique();
             $table->string('nama_lengkap');
@@ -133,14 +133,14 @@ return new class extends Migration
         // 8. Dosen
         Schema::create('siakad_dosen', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('user_id')->nullable()->constrained('core_users')->nullOnDelete();
             $table->foreignId('pegawai_id')->nullable(); // FK ke simpeg_pegawai
             $table->string('nidn', 30)->nullable()->unique();
             $table->string('nip', 30)->nullable();
             $table->string('nama_lengkap');
             $table->string('gelar_depan')->nullable();
             $table->string('gelar_belakang')->nullable();
-            $table->foreignId('program_studi_id')->nullable()->constrained('master_program_studi');
+            $table->foreignId('program_studi_id')->nullable()->constrained('spmb_master_program_studi');
             $table->string('jabatan_akademik')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
@@ -156,8 +156,8 @@ return new class extends Migration
         Schema::create('siakad_kelas', function (Blueprint $table) {
             $table->id();
             $table->foreignId('mata_kuliah_id')->constrained('siakad_mata_kuliah');
-            $table->foreignId('tahun_akademik_id')->constrained('master_tahun_akademik');
-            $table->foreignId('program_studi_id')->constrained('master_program_studi');
+            $table->foreignId('tahun_akademik_id')->constrained('spmb_master_tahun_akademik');
+            $table->foreignId('program_studi_id')->constrained('spmb_master_program_studi');
             $table->foreignId('ruangan_id')->nullable(); // FK ke sinapra
             $table->string('kode_kelas', 20);
             $table->string('nama_kelas');
@@ -186,7 +186,7 @@ return new class extends Migration
         Schema::create('siakad_krs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('mahasiswa_id')->constrained('siakad_mahasiswa')->cascadeOnDelete();
-            $table->foreignId('tahun_akademik_id')->constrained('master_tahun_akademik');
+            $table->foreignId('tahun_akademik_id')->constrained('spmb_master_tahun_akademik');
             $table->integer('total_sks_diambil')->default(0);
             $table->enum('status', ['draft', 'diajukan', 'disetujui', 'dikunci', 'dibatalkan'])->default('draft');
             $table->foreignId('disetujui_oleh')->nullable()->constrained('siakad_dosen')->nullOnDelete();
@@ -219,7 +219,7 @@ return new class extends Migration
             $table->string('nilai_huruf', 2)->nullable();
             $table->decimal('bobot_mutu', 3, 2)->default(0);
             $table->boolean('is_final')->default(false);
-            $table->foreignId('diinput_oleh')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('diinput_oleh')->nullable()->constrained('core_users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -228,7 +228,7 @@ return new class extends Migration
         Schema::create('siakad_khs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('mahasiswa_id')->constrained('siakad_mahasiswa')->cascadeOnDelete();
-            $table->foreignId('tahun_akademik_id')->constrained('master_tahun_akademik');
+            $table->foreignId('tahun_akademik_id')->constrained('spmb_master_tahun_akademik');
             $table->decimal('ips', 5, 2)->default(0);
             $table->integer('total_sks_semester')->default(0);
             $table->integer('sks_kumulatif')->default(0);
@@ -244,7 +244,7 @@ return new class extends Migration
             $table->string('status_lama', 50);
             $table->string('status_baru', 50);
             $table->text('alasan')->nullable();
-            $table->foreignId('diubah_oleh')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('diubah_oleh')->nullable()->constrained('core_users')->nullOnDelete();
             $table->timestamps();
         });
 
@@ -252,11 +252,11 @@ return new class extends Migration
         Schema::create('siakad_cuti_mahasiswa', function (Blueprint $table) {
             $table->id();
             $table->foreignId('mahasiswa_id')->constrained('siakad_mahasiswa')->cascadeOnDelete();
-            $table->foreignId('tahun_akademik_id')->constrained('master_tahun_akademik');
+            $table->foreignId('tahun_akademik_id')->constrained('spmb_master_tahun_akademik');
             $table->text('alasan');
             $table->string('file_surat')->nullable();
             $table->enum('status', ['pending', 'disetujui', 'ditolak'])->default('pending');
-            $table->foreignId('diproses_oleh')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('diproses_oleh')->nullable()->constrained('core_users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -265,7 +265,7 @@ return new class extends Migration
         Schema::create('siakad_kelulusan', function (Blueprint $table) {
             $table->id();
             $table->foreignId('mahasiswa_id')->constrained('siakad_mahasiswa')->cascadeOnDelete();
-            $table->foreignId('tahun_akademik_id')->constrained('master_tahun_akademik');
+            $table->foreignId('tahun_akademik_id')->constrained('spmb_master_tahun_akademik');
             $table->date('tanggal_sidang')->nullable();
             $table->decimal('ipk_akhir', 5, 2);
             $table->integer('total_sks');
@@ -300,7 +300,7 @@ return new class extends Migration
         Schema::dropIfExists('siakad_mata_kuliah');
         Schema::dropIfExists('siakad_kurikulum');
         
-        Schema::table('master_program_studi', function (Blueprint $table) {
+        Schema::table('spmb_master_program_studi', function (Blueprint $table) {
             $table->dropForeign(['fakultas_id']);
             $table->dropColumn(['fakultas_id', 'kode_prodi_dikti', 'akreditasi', 'akreditasi_berlaku_sampai']);
         });

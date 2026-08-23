@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('penilaian_proposal', function (Blueprint $table) {
+        Schema::create('sippm_penilaian_proposal', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('reviewer_kegiatan_id')->constrained('reviewer_kegiatan')->cascadeOnDelete();
+            $table->foreignId('reviewer_kegiatan_id')->constrained('sippm_reviewer_kegiatan')->cascadeOnDelete();
             $table->decimal('skor_rekam_jejak', 5, 2)->default(0.00);
             $table->decimal('skor_substansi', 5, 2)->default(0.00);
             $table->decimal('skor_rencana_anggaran', 5, 2)->default(0.00);
@@ -31,6 +31,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('penilaian_proposal');
+        Schema::dropIfExists('sippm_penilaian_proposal');
     }
 };

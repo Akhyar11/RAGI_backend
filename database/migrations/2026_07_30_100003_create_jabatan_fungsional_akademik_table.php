@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('jabatan_fungsional_akademik', function (Blueprint $table) {
+        Schema::create('simpeg_jabatan_fungsional_akademik', function (Blueprint $table) {
             $table->id();
             $table->string('nama')->unique();
             $table->integer('angka_kredit_min')->nullable();
@@ -26,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('jabatan_fungsional_akademik');
+        Schema::dropIfExists('simpeg_jabatan_fungsional_akademik');
     }
 };

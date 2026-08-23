@@ -379,13 +379,40 @@ class MasterSpmbController extends Controller
     /**
      * Get all active Program Studi for SPMB
      */
-    public function getProgramStudi(): JsonResponse
+    public function getProgramStudi(Request $request): JsonResponse
     {
-        $prodi = \App\Models\Spmb\MasterProgramStudi::where('is_active', true)->get();
+        $query = \App\Models\Spmb\MasterProgramStudi::where('is_active', true);
 
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($builder) use ($search) {
+                $builder->where('nama', 'like', "%{$search}%")
+                    ->orWhere('kode_prodi', 'like', "%{$search}%");
+            });
+        }
+
+        $sortBy = in_array($request->input('sort_by'), ['id', 'nama', 'kode_prodi'], true)
+            ? $request->input('sort_by')
+            : 'id';
+        $sortDir = $request->input('sort_dir') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sortBy, $sortDir);
+
+        if (!$request->has('page')) {
+            return response()->json(['status' => 'success', 'data' => $query->get()]);
+        }
+
+        $paginated = $query->paginate((int) $request->input('limit', 15));
         return response()->json([
             'status' => 'success',
-            'data' => $prodi
+            'data' => $paginated->items(),
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+                'total' => $paginated->total(),
+                'per_page' => $paginated->perPage(),
+                'from' => $paginated->firstItem(),
+                'to' => $paginated->lastItem(),
+            ],
         ]);
     }
 

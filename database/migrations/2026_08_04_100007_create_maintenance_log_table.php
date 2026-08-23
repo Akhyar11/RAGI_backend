@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('maintenance_log', function (Blueprint $table) {
+        Schema::create('sinapra_maintenance_log', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('aset_id')->nullable()->constrained('aset')->onDelete('set null');
-            $table->foreignId('ruangan_id')->nullable()->constrained('ruangan')->onDelete('set null');
+            $table->foreignId('aset_id')->nullable()->constrained('sinapra_aset')->onDelete('set null');
+            $table->foreignId('ruangan_id')->nullable()->constrained('sinapra_ruangan')->onDelete('set null');
             $table->string('judul', 150);
             $table->text('deskripsi_kerusakan')->nullable();
             $table->enum('prioritas', ['rendah', 'sedang', 'tinggi', 'darurat'])->default('sedang');
@@ -24,11 +24,11 @@ return new class extends Migration
             $table->decimal('biaya', 15, 2)->default(0.00);
             $table->text('hasil_perbaikan')->nullable();
             $table->enum('status', ['dilaporkan', 'dijadwalkan', 'dalam_proses', 'selesai'])->default('dilaporkan');
-            $table->foreignId('teknisi_id')->nullable()->constrained('users')->onDelete('set null');
+            $table->foreignId('teknisi_id')->nullable()->constrained('core_users')->onDelete('set null');
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index(['aset_id', 'ruangan_id', 'status', 'prioritas']);
+            $table->index(['aset_id', 'ruangan_id', 'status', 'prioritas'], 'idx_maintenance_log_status');
         });
     }
 
@@ -37,6 +37,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('maintenance_log');
+        Schema::dropIfExists('sinapra_maintenance_log');
     }
 };

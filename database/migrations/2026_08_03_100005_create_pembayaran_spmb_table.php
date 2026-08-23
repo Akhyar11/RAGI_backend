@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('pembayaran_spmb', function (Blueprint $table) {
+        Schema::create('spmb_pembayaran', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pendaftaran_id')->constrained('pendaftaran_calon_mhs')->cascadeOnDelete();
+            $table->foreignId('pendaftaran_id')->constrained('spmb_pendaftaran_calon_mhs')->cascadeOnDelete();
             $table->string('kode_bayar')->unique();
             $table->decimal('jumlah_tagihan', 15, 2)->default(0);
             $table->decimal('jumlah_bayar', 15, 2)->default(0);
@@ -26,6 +26,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('pembayaran_spmb');
+        Schema::dropIfExists('spmb_pembayaran');
     }
 };

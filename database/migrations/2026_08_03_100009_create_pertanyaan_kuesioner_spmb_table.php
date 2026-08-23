@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('pertanyaan_kuesioner_spmb', function (Blueprint $table) {
+        Schema::create('spmb_pertanyaan_kuesioner', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('kuesioner_id')->constrained('kuesioner_spmb')->cascadeOnDelete();
+            $table->foreignId('kuesioner_id')->constrained('spmb_kuesioner')->cascadeOnDelete();
             $table->text('pertanyaan');
             $table->enum('tipe', ['text', 'radio', 'checkbox', 'scale']);
             $table->json('opsi_jawaban')->nullable();
@@ -21,6 +21,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('pertanyaan_kuesioner_spmb');
+        Schema::dropIfExists('spmb_pertanyaan_kuesioner');
     }
 };

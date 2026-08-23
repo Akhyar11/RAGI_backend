@@ -10,7 +10,7 @@ class PeriodeHibah extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'periode_hibah';
+    protected $table = 'sippm_periode_hibah';
 
     protected $fillable = [
         'tahun_anggaran',

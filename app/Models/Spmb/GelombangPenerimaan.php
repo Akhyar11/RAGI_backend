@@ -14,7 +14,7 @@ class GelombangPenerimaan extends Model
 {
     use HasFactory;
 
-    protected $table = 'gelombang_penerimaan';
+    protected $table = 'spmb_gelombang_penerimaan';
 
     protected $fillable = [
         'jalur_masuk_id',

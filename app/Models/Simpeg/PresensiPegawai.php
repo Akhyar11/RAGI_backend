@@ -10,7 +10,7 @@ class PresensiPegawai extends Model
 {
     use HasFactory;
 
-    protected $table = 'presensi_pegawai';
+    protected $table = 'simpeg_presensi_pegawai';
 
     protected $fillable = [
         'pegawai_id',

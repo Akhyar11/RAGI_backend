@@ -11,14 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
+        Schema::table('spmb_pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->string('nim', 20)->nullable()->unique()->after('no_pendaftaran');
         });
     }
 
     public function down(): void
     {
-        Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
+        Schema::table('spmb_pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->dropUnique(['nim']);
             $table->dropColumn('nim');
         });

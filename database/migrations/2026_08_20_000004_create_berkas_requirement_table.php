@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('berkas_requirement', function (Blueprint $table) {
+        Schema::create('spmb_berkas_requirement', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('jalur_masuk_id')->constrained('jalur_masuk')->cascadeOnDelete();
+            $table->foreignId('jalur_masuk_id')->constrained('spmb_jalur_masuk')->cascadeOnDelete();
             $table->string('jenis_dokumen', 100);
             $table->string('label');
             $table->boolean('wajib')->default(false);
@@ -28,6 +28,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('berkas_requirement');
+        Schema::dropIfExists('spmb_berkas_requirement');
     }
 };

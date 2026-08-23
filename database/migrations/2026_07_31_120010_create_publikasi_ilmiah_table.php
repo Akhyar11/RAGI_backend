@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('publikasi_ilmiah', function (Blueprint $table) {
+        Schema::create('sippm_publikasi_ilmiah', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('proposal_id')->nullable()->constrained('proposal_kegiatan')->nullOnDelete();
-            $table->foreignId('pegawai_id')->constrained('pegawai')->cascadeOnDelete();
+            $table->foreignId('proposal_id')->nullable()->constrained('sippm_proposal_kegiatan')->nullOnDelete();
+            $table->foreignId('pegawai_id')->constrained('simpeg_pegawai')->cascadeOnDelete();
             $table->text('judul_artikel');
             $table->enum('jenis_publikasi', [
                 'jurnal_internasional_bereputasi', 
@@ -44,6 +44,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('publikasi_ilmiah');
+        Schema::dropIfExists('sippm_publikasi_ilmiah');
     }
 };

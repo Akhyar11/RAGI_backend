@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('dokumen_pendaftaran', function (Blueprint $table) {
+        Schema::create('spmb_dokumen_pendaftaran', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pendaftaran_id')->constrained('pendaftaran_calon_mhs')->cascadeOnDelete();
+            $table->foreignId('pendaftaran_id')->constrained('spmb_pendaftaran_calon_mhs')->cascadeOnDelete();
             $table->enum('jenis_dokumen', ['ijazah', 'rapor', 'ktp', 'foto', 'lainnya']);
             $table->string('file_path');
             $table->boolean('is_verified')->default(false);
@@ -21,6 +21,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('dokumen_pendaftaran');
+        Schema::dropIfExists('spmb_dokumen_pendaftaran');
     }
 };

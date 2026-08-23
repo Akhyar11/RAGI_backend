@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('pendaftaran_calon_mhs', function (Blueprint $table) {
+        Schema::create('spmb_pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('gelombang_id')->constrained('gelombang_penerimaan')->cascadeOnDelete();
+            $table->foreignId('gelombang_id')->constrained('spmb_gelombang_penerimaan')->cascadeOnDelete();
             $table->foreignId('user_id'); 
             $table->foreignId('program_studi_id');
             $table->foreignId('program_studi_pilihan2_id')->nullable();
@@ -38,6 +38,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('pendaftaran_calon_mhs');
+        Schema::dropIfExists('spmb_pendaftaran_calon_mhs');
     }
 };

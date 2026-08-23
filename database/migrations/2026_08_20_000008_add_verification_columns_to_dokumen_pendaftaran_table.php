@@ -12,18 +12,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('dokumen_pendaftaran', function (Blueprint $table) {
+        Schema::table('spmb_dokumen_pendaftaran', function (Blueprint $table) {
             $table->foreignId('berkas_requirement_id')->nullable()->after('pendaftaran_id')
-                ->constrained('berkas_requirement')->nullOnDelete();
+                ->constrained('spmb_berkas_requirement')->nullOnDelete();
             $table->foreignId('verified_by')->nullable()->after('is_verified')
-                ->constrained('users')->nullOnDelete();
+                ->constrained('core_users')->nullOnDelete();
             $table->timestamp('verified_at')->nullable()->after('verified_by');
         });
     }
 
     public function down(): void
     {
-        Schema::table('dokumen_pendaftaran', function (Blueprint $table) {
+        Schema::table('spmb_dokumen_pendaftaran', function (Blueprint $table) {
             $table->dropConstrainedForeignId('berkas_requirement_id');
             $table->dropConstrainedForeignId('verified_by');
             $table->dropColumn('verified_at');

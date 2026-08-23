@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class UserSessionIam extends Model
 {
-    protected $table = 'user_sessions_iam';
+    protected $table = 'core_user_sessions_iam';
 
     const UPDATED_AT = null;
 

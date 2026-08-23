@@ -17,8 +17,8 @@ return new class extends Migration
             });
         }
 
-        if (Schema::hasTable('unit_kas') && !Schema::hasColumn('unit_kas', 'is_kabag_kas')) {
-            Schema::table('unit_kas', function (Blueprint $table) {
+        if (Schema::hasTable('sikeu_unit_kas') && !Schema::hasColumn('unit_kas', 'is_kabag_kas')) {
+            Schema::table('sikeu_unit_kas', function (Blueprint $table) {
                 $table->boolean('is_kabag_kas')->default(false)->after('status');
             });
         }
@@ -35,8 +35,8 @@ return new class extends Migration
             });
         }
 
-        if (Schema::hasTable('unit_kas') && Schema::hasColumn('unit_kas', 'is_kabag_kas')) {
-            Schema::table('unit_kas', function (Blueprint $table) {
+        if (Schema::hasTable('sikeu_unit_kas') && Schema::hasColumn('unit_kas', 'is_kabag_kas')) {
+            Schema::table('sikeu_unit_kas', function (Blueprint $table) {
                 $table->dropColumn('is_kabag_kas');
             });
         }

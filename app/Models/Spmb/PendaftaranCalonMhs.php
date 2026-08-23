@@ -34,7 +34,7 @@ class PendaftaranCalonMhs extends Model
     public const STATUS_PEMBAYARAN_LUNAS = 'lunas';
     public const STATUS_PEMBAYARAN_GRATIS = 'gratis';
 
-    protected $table = 'pendaftaran_calon_mhs';
+    protected $table = 'spmb_pendaftaran_calon_mhs';
 
     protected $fillable = [
         'gelombang_id',

@@ -9,7 +9,7 @@ class AkunKeuangan extends Model
 {
     use HasFactory;
 
-    protected $table = 'akun_keuangan';
+    protected $table = 'sikeu_akun_keuangan';
 
     protected $fillable = [
         'kode_akun',

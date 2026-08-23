@@ -25,10 +25,10 @@ return new class extends Migration
 
         Schema::create('sippm_penilaian_rubrik_detail', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('proposal_id')->constrained('proposal_kegiatan')->cascadeOnDelete();
+            $table->foreignId('proposal_id')->constrained('sippm_proposal_kegiatan')->cascadeOnDelete();
             $table->foreignId('rubrik_id')->constrained('sippm_rubrik_indikator')->cascadeOnDelete();
             $table->enum('tipe_reviewer', ['kaprodi', 'admin']);
-            $table->foreignId('reviewer_pegawai_id')->nullable()->constrained('pegawai')->nullOnDelete();
+            $table->foreignId('reviewer_pegawai_id')->nullable()->constrained('simpeg_pegawai')->nullOnDelete();
             $table->decimal('skor', 5, 2)->default(0.00); // Skor 0 - 100
             $table->text('catatan')->nullable();
             $table->timestamps();

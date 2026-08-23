@@ -12,7 +12,7 @@ class PengajuanPengadaan extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'pengajuan_pengadaan';
+    protected $table = 'sinapra_pengajuan_pengadaan';
 
     protected $fillable = [
         'unit_kerja_id',

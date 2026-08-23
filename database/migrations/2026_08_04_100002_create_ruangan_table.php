@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('ruangan', function (Blueprint $table) {
+        Schema::create('sinapra_ruangan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('gedung_id')->constrained('gedung')->onDelete('restrict');
+            $table->foreignId('gedung_id')->constrained('sinapra_gedung')->onDelete('restrict');
             $table->string('kode', 50)->unique();
             $table->string('nama', 100);
             $table->integer('lantai')->default(1);
@@ -35,6 +35,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('ruangan');
+        Schema::dropIfExists('sinapra_ruangan');
     }
 };

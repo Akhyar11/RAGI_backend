@@ -11,7 +11,7 @@ class PengajuanCuti extends Model
 {
     use HasFactory;
 
-    protected $table = 'pengajuan_cuti';
+    protected $table = 'simpeg_pengajuan_cuti';
 
     protected $fillable = [
         'pegawai_id',

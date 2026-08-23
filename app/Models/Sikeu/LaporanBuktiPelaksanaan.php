@@ -9,7 +9,7 @@ class LaporanBuktiPelaksanaan extends Model
 {
     use HasFactory;
 
-    protected $table = 'laporan_bukti_pelaksanaan';
+    protected $table = 'sikeu_laporan_bukti_pelaksanaan';
 
     protected $fillable = [
         'sumber_tipe',

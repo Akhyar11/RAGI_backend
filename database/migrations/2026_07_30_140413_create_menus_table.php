@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('menus', function (Blueprint $table) {
+        Schema::create('core_menus', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('parent_id')->nullable();
             $table->string('name');
@@ -24,8 +24,8 @@ return new class extends Migration
             $table->timestamps();
 
             // Foreign keys
-            $table->foreign('parent_id')->references('id')->on('menus')->onDelete('cascade');
-            $table->foreign('permission_id')->references('id')->on('permissions')->onDelete('set null');
+            $table->foreign('parent_id')->references('id')->on('core_menus')->onDelete('cascade');
+            $table->foreign('permission_id')->references('id')->on('core_permissions')->onDelete('set null');
         });
     }
 
@@ -34,6 +34,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('menus');
+        Schema::dropIfExists('core_menus');
     }
 };

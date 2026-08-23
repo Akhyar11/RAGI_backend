@@ -11,14 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
+        Schema::table('core_users', function (Blueprint $table) {
             $table->string('email_kampus')->nullable()->unique()->after('email');
         });
     }
 
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
+        Schema::table('core_users', function (Blueprint $table) {
             $table->dropColumn('email_kampus');
         });
     }

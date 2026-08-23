@@ -9,7 +9,7 @@ class MasterJalurKelas extends Model
 {
     use HasFactory;
 
-    protected $table = 'master_jalur_kelas';
+    protected $table = 'core_master_jalur_kelas';
 
     protected $fillable = [
         'kode',

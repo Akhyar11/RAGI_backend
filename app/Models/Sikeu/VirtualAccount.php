@@ -9,7 +9,7 @@ class VirtualAccount extends Model
 {
     use HasFactory;
 
-    protected $table = 'virtual_account';
+    protected $table = 'sikeu_virtual_account';
 
     protected $fillable = [
         'tagihan_id',

@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('periode_hibah', function (Blueprint $table) {
+        Schema::create('sippm_periode_hibah', function (Blueprint $table) {
             $table->id();
             $table->string('tahun_anggaran', 20); // Format TA, misal 2025/2026
             $table->string('nama_gelombang', 100);
@@ -30,6 +30,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('periode_hibah');
+        Schema::dropIfExists('sippm_periode_hibah');
     }
 };

@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('aset', function (Blueprint $table) {
+        Schema::create('sinapra_aset', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('kategori_id')->constrained('kategori_aset')->onDelete('restrict');
-            $table->foreignId('ruangan_id')->nullable()->constrained('ruangan')->onDelete('set null');
+            $table->foreignId('kategori_id')->constrained('sinapra_kategori_aset')->onDelete('restrict');
+            $table->foreignId('ruangan_id')->nullable()->constrained('sinapra_ruangan')->onDelete('set null');
             $table->string('kode_aset', 100)->unique();
             $table->string('nama', 150);
             $table->string('merk', 100)->nullable();
@@ -37,6 +37,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('aset');
+        Schema::dropIfExists('sinapra_aset');
     }
 };

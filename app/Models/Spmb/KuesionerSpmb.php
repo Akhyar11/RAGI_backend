@@ -11,7 +11,7 @@ class KuesionerSpmb extends Model
 {
     use HasFactory;
 
-    protected $table = 'kuesioner_spmb';
+    protected $table = 'spmb_kuesioner';
 
     protected $fillable = [
         'gelombang_id',

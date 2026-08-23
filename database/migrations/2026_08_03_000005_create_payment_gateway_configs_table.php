@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('payment_gateway_configs', function (Blueprint $table) {
+        Schema::create('sikeu_payment_gateway_configs', function (Blueprint $table) {
             $table->id();
             $table->string('gateway_name', 50)->default('xendit')->unique(); // xendit, duitku, midtrans
             $table->enum('environment', ['sandbox', 'production'])->default('sandbox');
@@ -32,6 +32,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('payment_gateway_configs');
+        Schema::dropIfExists('sikeu_payment_gateway_configs');
     }
 };

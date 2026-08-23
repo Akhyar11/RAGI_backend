@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('detail_pengadaan', function (Blueprint $table) {
+        Schema::create('sinapra_detail_pengadaan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pengajuan_id')->constrained('pengajuan_pengadaan')->onDelete('cascade');
-            $table->foreignId('kategori_aset_id')->nullable()->constrained('kategori_aset')->onDelete('set null');
+            $table->foreignId('pengajuan_id')->constrained('sinapra_pengajuan_pengadaan')->onDelete('cascade');
+            $table->foreignId('kategori_aset_id')->nullable()->constrained('sinapra_kategori_aset')->onDelete('set null');
             $table->string('nama_barang', 150);
             $table->text('spesifikasi')->nullable();
             $table->integer('jumlah')->default(1);
@@ -32,6 +32,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('detail_pengadaan');
+        Schema::dropIfExists('sinapra_detail_pengadaan');
     }
 };

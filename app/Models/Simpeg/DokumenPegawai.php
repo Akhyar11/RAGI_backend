@@ -10,7 +10,7 @@ class DokumenPegawai extends Model
 {
     use HasFactory;
 
-    protected $table = 'dokumen_pegawai';
+    protected $table = 'simpeg_dokumen_pegawai';
 
     protected $fillable = [
         'pegawai_id',

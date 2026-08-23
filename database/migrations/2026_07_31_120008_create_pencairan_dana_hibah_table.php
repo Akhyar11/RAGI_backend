@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('pencairan_dana_hibah', function (Blueprint $table) {
+        Schema::create('sippm_pencairan_dana_hibah', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('kontrak_id')->constrained('kontrak_kegiatan')->cascadeOnDelete();
+            $table->foreignId('kontrak_id')->constrained('sippm_kontrak_kegiatan')->cascadeOnDelete();
             $table->integer('termin_ke');
             $table->decimal('persen_pencairan', 5, 2);
             $table->decimal('nominal', 15, 2);
@@ -29,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('pencairan_dana_hibah');
+        Schema::dropIfExists('sippm_pencairan_dana_hibah');
     }
 };

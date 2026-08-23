@@ -24,7 +24,7 @@ return new class extends Migration
         // 2. Tabel Riwayat Rapor (Untuk Jalur Rapor / Prestasi)
         Schema::create('spmb_riwayat_rapor', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pendaftaran_id')->constrained('pendaftaran_calon_mhs')->cascadeOnDelete();
+            $table->foreignId('pendaftaran_id')->constrained('spmb_pendaftaran_calon_mhs')->cascadeOnDelete();
             $table->integer('semester'); // 1, 2, 3, 4, 5
             $table->string('mata_pelajaran');
             $table->decimal('nilai', 5, 2);
@@ -48,7 +48,7 @@ return new class extends Migration
         // 4. Tabel Tahapan Seleksi (Multi-stage Selection)
         Schema::create('spmb_tahapan_seleksi', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('gelombang_id')->constrained('gelombang_penerimaan')->cascadeOnDelete();
+            $table->foreignId('gelombang_id')->constrained('spmb_gelombang_penerimaan')->cascadeOnDelete();
             $table->string('nama_tahap'); // e.g. "Ujian Tulis", "Wawancara", "Kesehatan"
             $table->integer('urutan')->default(1);
             $table->boolean('is_active')->default(true);
@@ -58,11 +58,11 @@ return new class extends Migration
         // 5. Tabel Nilai Per Tahapan
         Schema::create('spmb_nilai_tahapan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pendaftaran_id')->constrained('pendaftaran_calon_mhs')->cascadeOnDelete();
+            $table->foreignId('pendaftaran_id')->constrained('spmb_pendaftaran_calon_mhs')->cascadeOnDelete();
             $table->foreignId('tahapan_id')->constrained('spmb_tahapan_seleksi')->cascadeOnDelete();
             $table->decimal('nilai', 5, 2)->nullable();
             $table->string('status_lulus', 30)->nullable(); // e.g., 'lulus', 'tidak_lulus' (string not enum)
-            $table->foreignId('dinilai_oleh')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('dinilai_oleh')->nullable()->constrained('core_users')->nullOnDelete();
             $table->text('catatan')->nullable();
             $table->timestamps();
         });
@@ -70,12 +70,12 @@ return new class extends Migration
         // 6. Tabel Pengajuan Beasiswa
         Schema::create('spmb_pengajuan_beasiswa', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pendaftaran_id')->constrained('pendaftaran_calon_mhs')->cascadeOnDelete();
+            $table->foreignId('pendaftaran_id')->constrained('spmb_pendaftaran_calon_mhs')->cascadeOnDelete();
             $table->string('jenis_beasiswa'); // e.g. "KIP-K", "Prestasi", "Tahfidz"
             $table->text('alasan')->nullable();
             $table->string('file_pendukung_path')->nullable(); // Dokumen bukti beasiswa
             $table->string('status_pengajuan', 30)->default('pending'); // 'pending', 'disetujui', 'ditolak'
-            $table->foreignId('diproses_oleh')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('diproses_oleh')->nullable()->constrained('core_users')->nullOnDelete();
             $table->timestamp('diproses_at')->nullable();
             $table->text('catatan_reviewer')->nullable();
             $table->timestamps();

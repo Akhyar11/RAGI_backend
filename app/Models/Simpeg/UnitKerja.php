@@ -9,7 +9,7 @@ class UnitKerja extends Model
 {
     use HasFactory;
 
-    protected $table = 'unit_kerja';
+    protected $table = 'simpeg_unit_kerja';
 
     protected $fillable = [
         'induk_id',

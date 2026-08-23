@@ -11,7 +11,7 @@ class Pegawai extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'pegawai';
+    protected $table = 'simpeg_pegawai';
 
     protected $fillable = [
         'user_id',

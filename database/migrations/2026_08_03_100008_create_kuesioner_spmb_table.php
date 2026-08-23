@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('kuesioner_spmb', function (Blueprint $table) {
+        Schema::create('spmb_kuesioner', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('gelombang_id')->constrained('gelombang_penerimaan')->cascadeOnDelete();
+            $table->foreignId('gelombang_id')->constrained('spmb_gelombang_penerimaan')->cascadeOnDelete();
             $table->string('judul');
             $table->text('deskripsi')->nullable();
             $table->boolean('is_required')->default(false);
@@ -21,6 +21,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('kuesioner_spmb');
+        Schema::dropIfExists('spmb_kuesioner');
     }
 };

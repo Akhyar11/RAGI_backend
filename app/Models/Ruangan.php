@@ -12,7 +12,7 @@ class Ruangan extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'ruangan';
+    protected $table = 'sinapra_ruangan';
 
     protected $fillable = [
         'gedung_id',

@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         // 1. Jenis Biaya (Master Kategori Biaya)
-        Schema::create('jenis_biaya', function (Blueprint $table) {
+        Schema::create('sikeu_jenis_biaya', function (Blueprint $table) {
             $table->id();
             $table->string('kode')->unique();
             $table->string('nama');
@@ -23,47 +23,10 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // 2. Tarif UKT / Biaya
-        Schema::create('tarif_ukt', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('program_studi_id')->nullable();
-            $table->foreignId('jenis_biaya_id')->constrained('jenis_biaya')->onDelete('cascade');
-            $table->unsignedBigInteger('tahun_akademik_id')->nullable();
-            $table->integer('kelompok_ukt')->default(1);
-            $table->decimal('nominal', 15, 2)->default(0);
-            $table->boolean('is_active')->default(true);
-            $table->timestamps();
-        });
 
-        // 3. Master Beasiswa
-        Schema::create('beasiswa', function (Blueprint $table) {
-            $table->id();
-            $table->string('kode')->unique();
-            $table->string('nama');
-            $table->enum('sumber', ['internal', 'eksternal', 'pemerintah'])->default('internal');
-            $table->enum('tipe_potongan', ['persen', 'nominal'])->default('nominal');
-            $table->decimal('nilai_potongan', 15, 2)->default(0);
-            $table->text('deskripsi')->nullable();
-            $table->boolean('is_active')->default(true);
-            $table->timestamps();
-        });
-
-        // 4. Mahasiswa Beasiswa
-        Schema::create('mahasiswa_beasiswa', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('mahasiswa_id');
-            $table->foreignId('beasiswa_id')->constrained('beasiswa')->onDelete('cascade');
-            $table->unsignedBigInteger('tahun_akademik_id')->nullable();
-            $table->date('berlaku_mulai')->nullable();
-            $table->date('berlaku_sampai')->nullable();
-            $table->enum('status', ['aktif', 'nonaktif', 'berakhir'])->default('aktif');
-            $table->unsignedBigInteger('ditetapkan_oleh')->nullable();
-            $table->string('file_sk')->nullable();
-            $table->timestamps();
-        });
 
         // 5. Tagihan Mahasiswa
-        Schema::create('tagihan_mahasiswa', function (Blueprint $table) {
+        Schema::create('sikeu_tagihan_mahasiswa', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('mahasiswa_id');
             $table->unsignedBigInteger('tahun_akademik_id')->nullable();
@@ -86,10 +49,10 @@ return new class extends Migration
         });
 
         // 6. Detail Tagihan
-        Schema::create('detail_tagihan', function (Blueprint $table) {
+        Schema::create('sikeu_detail_tagihan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('tagihan_id')->constrained('tagihan_mahasiswa')->onDelete('cascade');
-            $table->foreignId('jenis_biaya_id')->constrained('jenis_biaya')->onDelete('cascade');
+            $table->foreignId('tagihan_id')->constrained('sikeu_tagihan_mahasiswa')->onDelete('cascade');
+            $table->foreignId('jenis_biaya_id')->constrained('sikeu_jenis_biaya')->onDelete('cascade');
             $table->decimal('nominal', 15, 2)->default(0);
             $table->decimal('potongan', 15, 2)->default(0);
             $table->decimal('nominal_bersih', 15, 2)->default(0);
@@ -98,10 +61,10 @@ return new class extends Migration
         });
 
         // 7. Potongan Tagihan
-        Schema::create('potongan_tagihan', function (Blueprint $table) {
+        Schema::create('sikeu_potongan_tagihan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('tagihan_id')->constrained('tagihan_mahasiswa')->onDelete('cascade');
-            $table->foreignId('beasiswa_id')->nullable()->constrained('beasiswa')->onDelete('set null');
+            $table->foreignId('tagihan_id')->constrained('sikeu_tagihan_mahasiswa')->onDelete('cascade');
+            $table->unsignedBigInteger('beasiswa_id')->nullable();
             $table->enum('tipe', ['beasiswa', 'diskon', 'subsidi', 'lainnya'])->default('diskon');
             $table->decimal('nominal_potongan', 15, 2)->default(0);
             $table->text('keterangan')->nullable();
@@ -110,9 +73,9 @@ return new class extends Migration
         });
 
         // 8. Denda Tagihan
-        Schema::create('denda_tagihan', function (Blueprint $table) {
+        Schema::create('sikeu_denda_tagihan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('tagihan_id')->constrained('tagihan_mahasiswa')->onDelete('cascade');
+            $table->foreignId('tagihan_id')->constrained('sikeu_tagihan_mahasiswa')->onDelete('cascade');
             $table->enum('tipe_denda', ['keterlambatan', 'lainnya'])->default('keterlambatan');
             $table->decimal('nominal_denda', 15, 2)->default(0);
             $table->date('tanggal_denda')->nullable();
@@ -121,9 +84,9 @@ return new class extends Migration
         });
 
         // 9. Dispensasi Tagihan
-        Schema::create('dispensasi_tagihan', function (Blueprint $table) {
+        Schema::create('sikeu_dispensasi_tagihan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('tagihan_id')->constrained('tagihan_mahasiswa')->onDelete('cascade');
+            $table->foreignId('tagihan_id')->constrained('sikeu_tagihan_mahasiswa')->onDelete('cascade');
             $table->unsignedBigInteger('mahasiswa_id');
             $table->enum('tipe_dispensasi', ['penundaan_jatuh_tempo', 'cicilan', 'keringanan_khusus'])->default('penundaan_jatuh_tempo');
             $table->date('jatuh_tempo_baru')->nullable();
@@ -140,9 +103,9 @@ return new class extends Migration
         });
 
         // 10. Virtual Account
-        Schema::create('virtual_account', function (Blueprint $table) {
+        Schema::create('sikeu_virtual_account', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('tagihan_id')->constrained('tagihan_mahasiswa')->onDelete('cascade');
+            $table->foreignId('tagihan_id')->constrained('sikeu_tagihan_mahasiswa')->onDelete('cascade');
             $table->string('va_number')->unique();
             $table->string('bank_kode')->default('BNI');
             $table->string('bank_nama')->default('Bank BNI');
@@ -153,10 +116,10 @@ return new class extends Migration
         });
 
         // 11. Pembayaran
-        Schema::create('pembayaran', function (Blueprint $table) {
+        Schema::create('sikeu_pembayaran', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('tagihan_id')->constrained('tagihan_mahasiswa')->onDelete('cascade');
-            $table->foreignId('virtual_account_id')->nullable()->constrained('virtual_account')->onDelete('set null');
+            $table->foreignId('tagihan_id')->constrained('sikeu_tagihan_mahasiswa')->onDelete('cascade');
+            $table->foreignId('virtual_account_id')->nullable()->constrained('sikeu_virtual_account')->onDelete('set null');
             $table->string('kode_transaksi')->unique();
             $table->decimal('jumlah_bayar', 15, 2)->default(0);
             $table->timestamp('waktu_bayar')->nullable();
@@ -168,20 +131,20 @@ return new class extends Migration
         });
 
         // 12. Callback Payment Gateway
-        Schema::create('callback_payment_gateway', function (Blueprint $table) {
+        Schema::create('sikeu_callback_payment_gateway', function (Blueprint $table) {
             $table->id();
             $table->string('order_id')->unique();
             $table->string('payment_type')->nullable();
             $table->json('raw_payload')->nullable();
             $table->enum('status', ['received', 'processed', 'failed'])->default('received');
-            $table->foreignId('pembayaran_id')->nullable()->constrained('pembayaran')->onDelete('set null');
+            $table->foreignId('pembayaran_id')->nullable()->constrained('sikeu_pembayaran')->onDelete('set null');
             $table->timestamp('received_at')->nullable();
             $table->timestamp('processed_at')->nullable();
             $table->timestamps();
         });
 
         // 13. Rekonsiliasi Pembayaran
-        Schema::create('rekonsiliasi_pembayaran', function (Blueprint $table) {
+        Schema::create('sikeu_rekonsiliasi_pembayaran', function (Blueprint $table) {
             $table->id();
             $table->date('tanggal_rekonsiliasi');
             $table->string('bank_kode')->default('BNI');
@@ -196,7 +159,7 @@ return new class extends Migration
         });
 
         // 14. Unit Kas (Petty Cash & Kas Utama)
-        Schema::create('unit_kas', function (Blueprint $table) {
+        Schema::create('sikeu_unit_kas', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('unit_kerja_id')->nullable();
             $table->string('nama_kas');
@@ -209,7 +172,7 @@ return new class extends Migration
         });
 
         // 15. Akun Keuangan (Chart of Accounts / COA)
-        Schema::create('akun_keuangan', function (Blueprint $table) {
+        Schema::create('sikeu_akun_keuangan', function (Blueprint $table) {
             $table->id();
             $table->string('kode_akun')->unique();
             $table->string('nama_akun');
@@ -220,7 +183,7 @@ return new class extends Migration
         });
 
         // 16. Periode Akuntansi (Penguncian Periode Akuntansi)
-        Schema::create('periode_akuntansi', function (Blueprint $table) {
+        Schema::create('sikeu_periode_akuntansi', function (Blueprint $table) {
             $table->id();
             $table->string('nama_periode');
             $table->integer('tahun');
@@ -234,12 +197,12 @@ return new class extends Migration
         });
 
         // 17. Pemasukan Kampus (Hibah SIPPM, Donatur, Kerjasama)
-        Schema::create('pemasukan_kampus', function (Blueprint $table) {
+        Schema::create('sikeu_pemasukan_kampus', function (Blueprint $table) {
             $table->id();
             $table->string('nomor_transaksi')->unique();
             $table->enum('sumber_pemasukan', ['hibah_sippm', 'donatur', 'kerjasama', 'pendapatan_lainnya'])->default('pendapatan_lainnya');
-            $table->foreignId('unit_kas_id')->nullable()->constrained('unit_kas')->onDelete('set null');
-            $table->foreignId('akun_pendapatan_id')->nullable()->constrained('akun_keuangan')->onDelete('set null');
+            $table->foreignId('unit_kas_id')->nullable()->constrained('sikeu_unit_kas')->onDelete('set null');
+            $table->foreignId('akun_pendapatan_id')->nullable()->constrained('sikeu_akun_keuangan')->onDelete('set null');
             $table->decimal('nominal', 15, 2)->default(0);
             $table->date('tanggal_terima');
             $table->string('nama_donor_instansi')->nullable();
@@ -251,11 +214,11 @@ return new class extends Migration
         });
 
         // 18. Pengajuan Pencairan Kas Unit
-        Schema::create('pengajuan_pencairan_kas', function (Blueprint $table) {
+        Schema::create('sikeu_pengajuan_pencairan_kas', function (Blueprint $table) {
             $table->id();
             $table->string('nomor_pengajuan')->unique();
             $table->unsignedBigInteger('unit_kerja_id')->nullable();
-            $table->foreignId('unit_kas_id')->constrained('unit_kas')->onDelete('cascade');
+            $table->foreignId('unit_kas_id')->constrained('sikeu_unit_kas')->onDelete('cascade');
             $table->unsignedBigInteger('pemohon_id')->nullable();
             $table->string('judul_pengajuan');
             $table->text('deskripsi')->nullable();
@@ -272,10 +235,10 @@ return new class extends Migration
         });
 
         // 19. Transaksi Kas Unit (Log Mutasi Debet / Kredit)
-        Schema::create('transaksi_kas_unit', function (Blueprint $table) {
+        Schema::create('sikeu_transaksi_kas_unit', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('unit_kas_id')->constrained('unit_kas')->onDelete('cascade');
-            $table->foreignId('pengajuan_pencairan_id')->nullable()->constrained('pengajuan_pencairan_kas')->onDelete('set null');
+            $table->foreignId('unit_kas_id')->constrained('sikeu_unit_kas')->onDelete('cascade');
+            $table->foreignId('pengajuan_pencairan_id')->nullable()->constrained('sikeu_pengajuan_pencairan_kas')->onDelete('set null');
             $table->string('kode_transaksi')->unique();
             $table->enum('jenis_transaksi', ['debet_pemasukan', 'kredit_pengeluaran'])->default('kredit_pengeluaran');
             $table->decimal('nominal', 15, 2)->default(0);
@@ -288,9 +251,9 @@ return new class extends Migration
         });
 
         // 20. Approval History Pencairan
-        Schema::create('approval_history_pencairan', function (Blueprint $table) {
+        Schema::create('sikeu_approval_history_pencairan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pengajuan_id')->constrained('pengajuan_pencairan_kas')->onDelete('cascade');
+            $table->foreignId('pengajuan_id')->constrained('sikeu_pengajuan_pencairan_kas')->onDelete('cascade');
             $table->unsignedBigInteger('user_id');
             $table->string('role_approver')->default('pimpinan');
             $table->enum('status_action', ['approved', 'rejected', 'revision_requested'])->default('approved');
@@ -299,11 +262,11 @@ return new class extends Migration
         });
 
         // 21. Jurnal Umum Header
-        Schema::create('jurnal_umum', function (Blueprint $table) {
+        Schema::create('sikeu_jurnal_umum', function (Blueprint $table) {
             $table->id();
             $table->string('nomor_jurnal')->unique();
             $table->date('tanggal_jurnal');
-            $table->foreignId('periode_id')->nullable()->constrained('periode_akuntansi')->onDelete('set null');
+            $table->foreignId('periode_id')->nullable()->constrained('sikeu_periode_akuntansi')->onDelete('set null');
             $table->enum('jenis_sumber', ['pembayaran_mahasiswa', 'pemasukan_hibah', 'pencairan_kas', 'pengeluaran_manual', 'penyesuaian', 'penutupan'])->default('penyesuaian');
             $table->unsignedBigInteger('referensi_id')->nullable();
             $table->text('keterangan')->nullable();
@@ -317,10 +280,10 @@ return new class extends Migration
         });
 
         // 22. Detail Jurnal Umum
-        Schema::create('detail_jurnal_umum', function (Blueprint $table) {
+        Schema::create('sikeu_detail_jurnal_umum', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('jurnal_id')->constrained('jurnal_umum')->onDelete('cascade');
-            $table->foreignId('akun_id')->constrained('akun_keuangan')->onDelete('cascade');
+            $table->foreignId('jurnal_id')->constrained('sikeu_jurnal_umum')->onDelete('cascade');
+            $table->foreignId('akun_id')->constrained('sikeu_akun_keuangan')->onDelete('cascade');
             $table->decimal('debet', 15, 2)->default(0);
             $table->decimal('kredit', 15, 2)->default(0);
             $table->text('keterangan')->nullable();
@@ -328,12 +291,12 @@ return new class extends Migration
         });
 
         // 23. Pengeluaran Kampus Manual (Dengan Pajak PPh/PPN)
-        Schema::create('pengeluaran_kampus', function (Blueprint $table) {
+        Schema::create('sikeu_pengeluaran_kampus', function (Blueprint $table) {
             $table->id();
             $table->string('nomor_transaksi')->unique();
             $table->string('kategori')->default('operasional');
-            $table->foreignId('akun_beban_id')->nullable()->constrained('akun_keuangan')->onDelete('set null');
-            $table->foreignId('akun_kas_id')->nullable()->constrained('akun_keuangan')->onDelete('set null');
+            $table->foreignId('akun_beban_id')->nullable()->constrained('sikeu_akun_keuangan')->onDelete('set null');
+            $table->foreignId('akun_kas_id')->nullable()->constrained('sikeu_akun_keuangan')->onDelete('set null');
             $table->decimal('nominal', 15, 2)->default(0);
             $table->text('keterangan')->nullable();
             $table->date('tanggal_transaksi');
@@ -350,7 +313,7 @@ return new class extends Migration
         });
 
         // 24. Laporan Bukti Pelaksanaan (LPJ / Nota Realisasi)
-        Schema::create('laporan_bukti_pelaksanaan', function (Blueprint $table) {
+        Schema::create('sikeu_laporan_bukti_pelaksanaan', function (Blueprint $table) {
             $table->id();
             $table->enum('sumber_tipe', ['pengajuan_pencairan', 'pengeluaran_kampus'])->default('pengajuan_pencairan');
             $table->unsignedBigInteger('sumber_id');
@@ -371,29 +334,27 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('laporan_bukti_pelaksanaan');
-        Schema::dropIfExists('pengeluaran_kampus');
-        Schema::dropIfExists('detail_jurnal_umum');
-        Schema::dropIfExists('jurnal_umum');
-        Schema::dropIfExists('approval_history_pencairan');
-        Schema::dropIfExists('transaksi_kas_unit');
-        Schema::dropIfExists('pengajuan_pencairan_kas');
-        Schema::dropIfExists('pemasukan_kampus');
-        Schema::dropIfExists('periode_akuntansi');
-        Schema::dropIfExists('akun_keuangan');
-        Schema::dropIfExists('unit_kas');
-        Schema::dropIfExists('rekonsiliasi_pembayaran');
-        Schema::dropIfExists('callback_payment_gateway');
-        Schema::dropIfExists('pembayaran');
-        Schema::dropIfExists('virtual_account');
-        Schema::dropIfExists('dispensasi_tagihan');
-        Schema::dropIfExists('denda_tagihan');
-        Schema::dropIfExists('potongan_tagihan');
-        Schema::dropIfExists('detail_tagihan');
-        Schema::dropIfExists('tagihan_mahasiswa');
-        Schema::dropIfExists('mahasiswa_beasiswa');
-        Schema::dropIfExists('beasiswa');
-        Schema::dropIfExists('tarif_ukt');
-        Schema::dropIfExists('jenis_biaya');
+        Schema::dropIfExists('sikeu_laporan_bukti_pelaksanaan');
+        Schema::dropIfExists('sikeu_pengeluaran_kampus');
+        Schema::dropIfExists('sikeu_detail_jurnal_umum');
+        Schema::dropIfExists('sikeu_jurnal_umum');
+        Schema::dropIfExists('sikeu_approval_history_pencairan');
+        Schema::dropIfExists('sikeu_transaksi_kas_unit');
+        Schema::dropIfExists('sikeu_pengajuan_pencairan_kas');
+        Schema::dropIfExists('sikeu_pemasukan_kampus');
+        Schema::dropIfExists('sikeu_periode_akuntansi');
+        Schema::dropIfExists('sikeu_akun_keuangan');
+        Schema::dropIfExists('sikeu_unit_kas');
+        Schema::dropIfExists('sikeu_rekonsiliasi_pembayaran');
+        Schema::dropIfExists('sikeu_callback_payment_gateway');
+        Schema::dropIfExists('sikeu_pembayaran');
+        Schema::dropIfExists('sikeu_virtual_account');
+        Schema::dropIfExists('sikeu_dispensasi_tagihan');
+        Schema::dropIfExists('sikeu_denda_tagihan');
+        Schema::dropIfExists('sikeu_potongan_tagihan');
+        Schema::dropIfExists('sikeu_detail_tagihan');
+        Schema::dropIfExists('sikeu_tagihan_mahasiswa');
+
+        Schema::dropIfExists('sikeu_jenis_biaya');
     }
 };

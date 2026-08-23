@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('dokumen_pegawai', function (Blueprint $table) {
+        Schema::create('simpeg_dokumen_pegawai', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pegawai_id')->constrained('pegawai')->onDelete('cascade');
+            $table->foreignId('pegawai_id')->constrained('simpeg_pegawai')->onDelete('cascade');
             $table->string('nama_dokumen');
             $table->enum('jenis_dokumen', ['ktp', 'kk', 'ijazah', 'sk', 'serdos', 'sertifikat', 'lainnya']);
             $table->string('file_path');
@@ -23,6 +23,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('dokumen_pegawai');
+        Schema::dropIfExists('simpeg_dokumen_pegawai');
     }
 };

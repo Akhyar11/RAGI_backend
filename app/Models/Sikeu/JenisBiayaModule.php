@@ -9,7 +9,7 @@ class JenisBiayaModule extends Model
 {
     use HasFactory;
 
-    protected $table = 'jenis_biaya_modules';
+    protected $table = 'core_jenis_biaya_modules';
 
     protected $fillable = [
         'jenis_biaya_id',

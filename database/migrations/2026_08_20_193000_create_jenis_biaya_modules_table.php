@@ -8,10 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (!Schema::hasTable('jenis_biaya_modules')) {
-            Schema::create('jenis_biaya_modules', function (Blueprint $table) {
+        if (!Schema::hasTable('core_jenis_biaya_modules')) {
+            Schema::create('core_jenis_biaya_modules', function (Blueprint $table) {
                 $table->id();
-                $table->foreignId('jenis_biaya_id')->constrained('jenis_biaya')->onDelete('cascade');
+                $table->foreignId('jenis_biaya_id')->constrained('sikeu_jenis_biaya')->onDelete('cascade');
                 $table->string('module_code', 50)->index();
                 $table->timestamps();
 
@@ -22,6 +22,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('jenis_biaya_modules');
+        Schema::dropIfExists('core_jenis_biaya_modules');
     }
 };

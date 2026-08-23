@@ -14,7 +14,7 @@ class MasterProgramStudi extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'master_program_studi';
+    protected $table = 'spmb_master_program_studi';
 
     protected $fillable = [
         'fakultas_id',

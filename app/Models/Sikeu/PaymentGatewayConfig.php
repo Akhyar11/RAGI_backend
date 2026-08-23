@@ -9,7 +9,7 @@ class PaymentGatewayConfig extends Model
 {
     use HasFactory;
 
-    protected $table = 'payment_gateway_configs';
+    protected $table = 'sikeu_payment_gateway_configs';
 
     protected $fillable = [
         'gateway_name',

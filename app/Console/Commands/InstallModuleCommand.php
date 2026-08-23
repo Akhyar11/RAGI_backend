@@ -31,23 +31,29 @@ class InstallModuleCommand extends Command
         $this->call('db:seed', ['--class' => '\Database\Seeders\OauthAppClientSeeder', '--force' => true]);
 
         // 3. Specific Module Master Data Seeding
-        if (in_array($modul, ['simpeg', 'all'])) {
-            $this->info("▸ Seed Master Data SIMPEG...");
-            $this->call('db:seed', ['--class' => '\Database\Seeders\Simpeg\UnitKerjaSeeder', '--force' => true]);
-            $this->call('db:seed', ['--class' => '\Database\Seeders\Simpeg\JabatanFungsionalSeeder', '--force' => true]);
-            $this->call('db:seed', ['--class' => '\Database\Seeders\Simpeg\JabatanSeeder', '--force' => true]);
-        }
+        $seeders = [
+            'simpeg' => [
+                '\Database\Seeders\Simpeg\UnitKerjaSeeder',
+                '\Database\Seeders\Simpeg\JabatanFungsionalSeeder',
+                '\Database\Seeders\Simpeg\JabatanSeeder'
+            ],
+            'sippm' => [
+                '\Database\Seeders\Sippm\SippmSkemaSeeder',
+                '\Database\Seeders\Sippm\SippmPeriodeSeeder'
+            ],
+            'sikeu' => [
+                '\Database\Seeders\Sikeu\SikeuAkuntansiSeeder',
+                '\Database\Seeders\Sikeu\SikeuMasterSeeder'
+            ]
+        ];
 
-        if (in_array($modul, ['sippm', 'all'])) {
-            $this->info("▸ Seed Master Data SIPPM...");
-            $this->call('db:seed', ['--class' => '\Database\Seeders\Sippm\SippmSkemaSeeder', '--force' => true]);
-            $this->call('db:seed', ['--class' => '\Database\Seeders\Sippm\SippmPeriodeSeeder', '--force' => true]);
-        }
-
-        if (in_array($modul, ['sikeu', 'all'])) {
-            $this->info("▸ Seed Master Data SIKEU (Akuntansi COA, UKT, Kas)...");
-            $this->call('db:seed', ['--class' => '\Database\Seeders\Sikeu\SikeuAkuntansiSeeder', '--force' => true]);
-            $this->call('db:seed', ['--class' => '\Database\Seeders\Sikeu\SikeuMasterSeeder', '--force' => true]);
+        foreach ($seeders as $modKey => $seederList) {
+            if ($modul === $modKey || $modul === 'all') {
+                $this->info("▸ Seed Master Data " . strtoupper($modKey) . "...");
+                foreach ($seederList as $seeder) {
+                    $this->call('db:seed', ['--class' => $seeder, '--force' => true]);
+                }
+            }
         }
 
         $this->newLine();

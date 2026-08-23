@@ -11,7 +11,7 @@ class ProposalKegiatan extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'proposal_kegiatan';
+    protected $table = 'sippm_proposal_kegiatan';
 
     protected $fillable = [
         'periode_id',

@@ -10,7 +10,7 @@ class PeminjamanRuangan extends Model
 {
     use HasFactory;
 
-    protected $table = 'peminjaman_ruangan';
+    protected $table = 'sinapra_peminjaman_ruangan';
 
     protected $fillable = [
         'ruangan_id',

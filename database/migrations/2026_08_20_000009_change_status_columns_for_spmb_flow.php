@@ -14,23 +14,23 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
+        Schema::table('spmb_pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->string('status', 50)->default('draft')->change();
         });
 
-        Schema::table('dokumen_pendaftaran', function (Blueprint $table) {
+        Schema::table('spmb_dokumen_pendaftaran', function (Blueprint $table) {
             $table->string('jenis_dokumen', 100)->change();
         });
     }
 
     public function down(): void
     {
-        Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
+        Schema::table('spmb_pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->enum('status', ['draft', 'submitted', 'verified', 'lulus_administrasi', 'gagal_administrasi'])
                 ->default('draft')->change();
         });
 
-        Schema::table('dokumen_pendaftaran', function (Blueprint $table) {
+        Schema::table('spmb_dokumen_pendaftaran', function (Blueprint $table) {
             $table->enum('jenis_dokumen', ['ijazah', 'rapor', 'ktp', 'foto', 'lainnya'])->change();
         });
     }

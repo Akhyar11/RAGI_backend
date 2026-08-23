@@ -10,7 +10,7 @@ class SkemaKegiatan extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'skema_kegiatan';
+    protected $table = 'sippm_skema_kegiatan';
 
     protected $fillable = [
         'kode',

@@ -11,11 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('anggota_kegiatan', function (Blueprint $table) {
+        Schema::create('sippm_anggota_kegiatan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('proposal_id')->constrained('proposal_kegiatan')->cascadeOnDelete();
+            $table->foreignId('proposal_id')->constrained('sippm_proposal_kegiatan')->cascadeOnDelete();
             $table->enum('jenis_tim', ['dosen', 'tendik', 'mahasiswa', 'dosen_eksternal', 'eksternal'])->default('dosen');
-            $table->foreignId('pegawai_id')->nullable()->constrained('pegawai')->nullOnDelete(); // Dosen or Tendik from SIMPEG
+            $table->foreignId('pegawai_id')->nullable()->constrained('simpeg_pegawai')->nullOnDelete(); // Dosen or Tendik from SIMPEG
             $table->unsignedBigInteger('mahasiswa_id')->nullable(); // FK to SIAKAD mahasiswa
             $table->unsignedBigInteger('mata_kuliah_id')->nullable(); // FK to SIAKAD mata_kuliah for Grade Conversion (Konversi Nilai)
             $table->string('nama_eksternal', 255)->nullable();
@@ -32,6 +32,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('anggota_kegiatan');
+        Schema::dropIfExists('sippm_anggota_kegiatan');
     }
 };

@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
+        Schema::table('spmb_pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->string('kewarganegaraan')->nullable()->after('agama');
             $table->enum('asal_lulusan', ['sekolah', 'pt'])->default('sekolah')->after('kewarganegaraan');
             $table->string('npsn_sekolah')->nullable()->after('asal_sekolah');
@@ -31,7 +31,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
+        Schema::table('spmb_pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->dropColumn([
                 'kewarganegaraan',
                 'npsn_sekolah',

@@ -14,7 +14,7 @@ return new class extends Migration
         // 1. Capaian Pembelajaran Lulusan (CPL) per Program Studi
         Schema::create('siakad_cpl', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('program_studi_id')->constrained('master_program_studi')->cascadeOnDelete();
+            $table->foreignId('program_studi_id')->constrained('spmb_master_program_studi')->cascadeOnDelete();
             $table->string('kode_cpl', 50); // e.g. CPL-01, S-1, P-1, KU-1, KK-1
             $table->enum('kategori', ['sikap', 'pengetahuan', 'keterampilan_umum', 'keterampilan_khusus'])->default('pengetahuan');
             $table->text('deskripsi');
@@ -95,7 +95,7 @@ return new class extends Migration
             $table->foreignId('komponen_penilaian_id')->constrained('siakad_komponen_penilaian')->cascadeOnDelete();
             $table->decimal('nilai_angka', 5, 2)->default(0); // 0.00 - 100.00
             $table->text('catatan_feedback')->nullable();
-            $table->foreignId('diinput_oleh')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('diinput_oleh')->nullable()->constrained('core_users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
 

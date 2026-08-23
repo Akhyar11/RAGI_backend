@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('master_referensi', function (Blueprint $table) {
+        Schema::create('spmb_master_referensi', function (Blueprint $table) {
             $table->id();
             $table->string('tipe', 50)->index();
             $table->string('kode', 50)->nullable();
@@ -27,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('master_referensi');
+        Schema::dropIfExists('spmb_master_referensi');
     }
 };

@@ -11,7 +11,7 @@ class Gedung extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'gedung';
+    protected $table = 'sinapra_gedung';
 
     protected $fillable = [
         'kode',

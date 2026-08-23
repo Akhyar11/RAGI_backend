@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('modules', function (Blueprint $table) {
+        Schema::table('core_modules', function (Blueprint $table) {
             $table->string('primary_color', 20)->default('#3b82f6')->nullable()->after('description');
         });
     }
@@ -21,7 +21,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('modules', function (Blueprint $table) {
+        Schema::table('core_modules', function (Blueprint $table) {
             $table->dropColumn('primary_color');
         });
     }

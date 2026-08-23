@@ -9,7 +9,7 @@ class MasterReferensi extends Model
 {
     use HasFactory;
 
-    protected $table = 'master_referensi';
+    protected $table = 'spmb_master_referensi';
 
     protected $fillable = [
         'tipe',

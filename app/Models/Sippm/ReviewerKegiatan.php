@@ -10,7 +10,7 @@ class ReviewerKegiatan extends Model
 {
     use HasFactory;
 
-    protected $table = 'reviewer_kegiatan';
+    protected $table = 'sippm_reviewer_kegiatan';
 
     protected $fillable = [
         'proposal_id',

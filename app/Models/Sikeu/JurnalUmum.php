@@ -9,7 +9,7 @@ class JurnalUmum extends Model
 {
     use HasFactory;
 
-    protected $table = 'jurnal_umum';
+    protected $table = 'sikeu_jurnal_umum';
 
     protected $fillable = [
         'nomor_jurnal',

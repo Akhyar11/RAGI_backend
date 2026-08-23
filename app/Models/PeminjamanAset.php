@@ -10,7 +10,7 @@ class PeminjamanAset extends Model
 {
     use HasFactory;
 
-    protected $table = 'peminjaman_aset';
+    protected $table = 'sinapra_peminjaman_aset';
 
     protected $fillable = [
         'aset_id',

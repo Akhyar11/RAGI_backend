@@ -9,7 +9,7 @@ class DetailTagihan extends Model
 {
     use HasFactory;
 
-    protected $table = 'detail_tagihan';
+    protected $table = 'sikeu_detail_tagihan';
 
     protected $fillable = [
         'tagihan_id',

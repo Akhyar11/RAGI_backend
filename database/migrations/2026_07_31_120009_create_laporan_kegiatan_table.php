@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('laporan_kegiatan', function (Blueprint $table) {
+        Schema::create('sippm_laporan_kegiatan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('kontrak_id')->constrained('kontrak_kegiatan')->cascadeOnDelete();
+            $table->foreignId('kontrak_id')->constrained('sippm_kontrak_kegiatan')->cascadeOnDelete();
             $table->enum('jenis_laporan', ['kemajuan', 'akhir']);
             $table->string('file_laporan', 255);
             $table->string('file_logbook', 255)->nullable();
@@ -31,6 +31,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('laporan_kegiatan');
+        Schema::dropIfExists('sippm_laporan_kegiatan');
     }
 };

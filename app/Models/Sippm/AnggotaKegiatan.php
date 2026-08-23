@@ -10,7 +10,7 @@ class AnggotaKegiatan extends Model
 {
     use HasFactory;
 
-    protected $table = 'anggota_kegiatan';
+    protected $table = 'sippm_anggota_kegiatan';
 
     protected $fillable = [
         'proposal_id',

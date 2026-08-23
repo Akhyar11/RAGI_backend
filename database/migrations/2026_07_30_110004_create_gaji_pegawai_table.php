@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('gaji_pegawai', function (Blueprint $table) {
+        Schema::create('simpeg_gaji_pegawai', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pegawai_id')->constrained('pegawai')->onDelete('cascade');
+            $table->foreignId('pegawai_id')->constrained('simpeg_pegawai')->onDelete('cascade');
             $table->string('periode_bulan_tahun'); // e.g. "2026-07"
             $table->decimal('gaji_pokok', 12, 2)->default(0);
             $table->decimal('total_tunjangan', 12, 2)->default(0);
@@ -26,6 +26,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('gaji_pegawai');
+        Schema::dropIfExists('simpeg_gaji_pegawai');
     }
 };

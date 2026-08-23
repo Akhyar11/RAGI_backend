@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('nilai_seleksi', function (Blueprint $table) {
+        Schema::create('spmb_nilai_seleksi', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pendaftaran_id')->constrained('pendaftaran_calon_mhs')->cascadeOnDelete();
+            $table->foreignId('pendaftaran_id')->constrained('spmb_pendaftaran_calon_mhs')->cascadeOnDelete();
             $table->enum('komponen_nilai', ['tulis', 'praktik', 'wawancara', 'rapor']);
             $table->decimal('nilai', 5, 2)->default(0);
             $table->text('catatan')->nullable();
@@ -21,6 +21,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('nilai_seleksi');
+        Schema::dropIfExists('spmb_nilai_seleksi');
     }
 };

@@ -11,7 +11,7 @@ class HkiDanBuku extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'hki_dan_buku';
+    protected $table = 'sippm_hki_dan_buku';
 
     protected $fillable = [
         'proposal_id',

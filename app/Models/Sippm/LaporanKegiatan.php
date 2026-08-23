@@ -9,7 +9,7 @@ class LaporanKegiatan extends Model
 {
     use HasFactory;
 
-    protected $table = 'laporan_kegiatan';
+    protected $table = 'sippm_laporan_kegiatan';
 
     protected $fillable = [
         'kontrak_id',

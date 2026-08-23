@@ -16,9 +16,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('user_sessions_iam', function (Blueprint $table) {
+        Schema::create('core_user_sessions_iam', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('core_users')->onDelete('cascade');
 
             // Token sesi unik (berbeda dengan SSO token)
             $table->string('token', 128)->unique();
@@ -40,6 +40,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('user_sessions_iam');
+        Schema::dropIfExists('core_user_sessions_iam');
     }
 };

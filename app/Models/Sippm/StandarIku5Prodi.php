@@ -11,7 +11,7 @@ class StandarIku5Prodi extends Model
 {
     use HasFactory;
 
-    protected $table = 'standar_iku5_prodi';
+    protected $table = 'sippm_standar_iku5_prodi';
 
     protected $fillable = [
         'unit_kerja_id',

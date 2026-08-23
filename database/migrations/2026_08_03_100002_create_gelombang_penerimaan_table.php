@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('gelombang_penerimaan', function (Blueprint $table) {
+        Schema::create('spmb_gelombang_penerimaan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('jalur_masuk_id')->constrained('jalur_masuk')->cascadeOnDelete();
+            $table->foreignId('jalur_masuk_id')->constrained('spmb_jalur_masuk')->cascadeOnDelete();
             $table->foreignId('tahun_akademik_id'); // Assuming table exists or will be created
             $table->string('nama');
             $table->date('tanggal_buka');
@@ -27,6 +27,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('gelombang_penerimaan');
+        Schema::dropIfExists('spmb_gelombang_penerimaan');
     }
 };

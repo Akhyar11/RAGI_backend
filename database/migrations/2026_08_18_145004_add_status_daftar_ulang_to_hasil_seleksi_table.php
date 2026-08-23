@@ -11,14 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('hasil_seleksi', function (Blueprint $table) {
+        Schema::table('spmb_hasil_seleksi', function (Blueprint $table) {
             $table->enum('status_daftar_ulang', ['belum', 'menunggu_pembayaran', 'lunas'])->default('belum')->after('status');
         });
     }
 
     public function down(): void
     {
-        Schema::table('hasil_seleksi', function (Blueprint $table) {
+        Schema::table('spmb_hasil_seleksi', function (Blueprint $table) {
             $table->dropColumn('status_daftar_ulang');
         });
     }

@@ -11,7 +11,7 @@ class PublikasiIlmiah extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'publikasi_ilmiah';
+    protected $table = 'sippm_publikasi_ilmiah';
 
     protected $fillable = [
         'proposal_id',

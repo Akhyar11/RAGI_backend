@@ -10,7 +10,7 @@ class BerkasRequirement extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'berkas_requirement';
+    protected $table = 'spmb_berkas_requirement';
 
     protected $fillable = [
         'jalur_masuk_id',

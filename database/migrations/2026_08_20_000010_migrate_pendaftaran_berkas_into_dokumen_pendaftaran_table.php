@@ -46,7 +46,7 @@ return new class extends Migration
     {
         Schema::create('pendaftaran_berkas', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pendaftaran_id')->constrained('pendaftaran_calon_mhs')->cascadeOnDelete();
+            $table->foreignId('pendaftaran_id')->constrained('spmb_pendaftaran_calon_mhs')->cascadeOnDelete();
             $table->string('jenis_berkas'); // foto, ijazah, kk, rapor
             $table->string('file_path');
             $table->boolean('is_verified')->default(false);

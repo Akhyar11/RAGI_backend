@@ -11,7 +11,7 @@ class MaintenanceLog extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'maintenance_log';
+    protected $table = 'sinapra_maintenance_log';
 
     protected $fillable = [
         'aset_id',

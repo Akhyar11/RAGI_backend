@@ -10,7 +10,7 @@ class MasterTahunAkademik extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'master_tahun_akademik';
+    protected $table = 'spmb_master_tahun_akademik';
 
     protected $fillable = [
         'kode',

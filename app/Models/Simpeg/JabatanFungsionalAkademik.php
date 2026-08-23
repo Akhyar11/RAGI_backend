@@ -9,7 +9,7 @@ class JabatanFungsionalAkademik extends Model
 {
     use HasFactory;
 
-    protected $table = 'jabatan_fungsional_akademik';
+    protected $table = 'simpeg_jabatan_fungsional_akademik';
 
     protected $fillable = [
         'nama',

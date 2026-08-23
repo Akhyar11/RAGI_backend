@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('jalur_masuk', function (Blueprint $table) {
+        Schema::create('spmb_jalur_masuk', function (Blueprint $table) {
             $table->id();
             $table->string('kode')->unique();
             $table->string('nama');
@@ -24,6 +24,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('jalur_masuk');
+        Schema::dropIfExists('spmb_jalur_masuk');
     }
 };

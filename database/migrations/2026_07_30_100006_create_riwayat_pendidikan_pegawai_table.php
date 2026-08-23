@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('riwayat_pendidikan_pegawai', function (Blueprint $table) {
+        Schema::create('simpeg_riwayat_pendidikan_pegawai', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pegawai_id')->constrained('pegawai')->cascadeOnDelete();
+            $table->foreignId('pegawai_id')->constrained('simpeg_pegawai')->cascadeOnDelete();
             $table->enum('jenjang', ['sma', 'd3', 'd4', 's1', 's2', 's3']);
             $table->string('nama_institusi');
             $table->string('program_studi')->nullable();
@@ -32,6 +32,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('riwayat_pendidikan_pegawai');
+        Schema::dropIfExists('simpeg_riwayat_pendidikan_pegawai');
     }
 };

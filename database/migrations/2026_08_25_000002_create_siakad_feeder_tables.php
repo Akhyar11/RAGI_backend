@@ -18,7 +18,7 @@ return new class extends Migration
             $table->integer('failed_count')->default(0);
             $table->enum('status', ['pending', 'processing', 'success', 'failed', 'partial'])->default('pending');
             $table->json('details')->nullable()->comment('Menyimpan pesan sukses/error per record');
-            $table->foreignId('synced_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('synced_by')->nullable()->constrained('core_users')->nullOnDelete();
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();
         });

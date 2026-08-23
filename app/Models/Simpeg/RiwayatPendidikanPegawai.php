@@ -9,7 +9,7 @@ class RiwayatPendidikanPegawai extends Model
 {
     use HasFactory;
 
-    protected $table = 'riwayat_pendidikan_pegawai';
+    protected $table = 'simpeg_riwayat_pendidikan_pegawai';
 
     protected $fillable = [
         'pegawai_id',

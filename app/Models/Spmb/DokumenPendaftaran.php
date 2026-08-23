@@ -10,7 +10,7 @@ class DokumenPendaftaran extends Model
 {
     use HasFactory;
 
-    protected $table = 'dokumen_pendaftaran';
+    protected $table = 'spmb_dokumen_pendaftaran';
 
     protected $fillable = [
         'pendaftaran_id',

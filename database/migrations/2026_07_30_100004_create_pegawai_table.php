@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('pegawai', function (Blueprint $table) {
+        Schema::create('simpeg_pegawai', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('unit_kerja_id')->nullable()->constrained('unit_kerja')->nullOnDelete();
+            $table->foreignId('user_id')->nullable()->constrained('core_users')->nullOnDelete();
+            $table->foreignId('unit_kerja_id')->nullable()->constrained('simpeg_unit_kerja')->nullOnDelete();
             $table->string('nip')->unique()->nullable();
             $table->string('nik')->unique()->nullable();
             $table->string('nama_lengkap');
@@ -39,6 +39,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('pegawai');
+        Schema::dropIfExists('simpeg_pegawai');
     }
 };

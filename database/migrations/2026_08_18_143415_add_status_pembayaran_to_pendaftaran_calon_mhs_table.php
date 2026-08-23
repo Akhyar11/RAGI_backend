@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
+        Schema::table('spmb_pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->enum('status_pembayaran', ['belum_bayar', 'sebagian', 'lunas', 'gratis'])->default('belum_bayar')->after('status');
         });
     }
@@ -21,7 +21,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
+        Schema::table('spmb_pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->dropColumn('status_pembayaran');
         });
     }

@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('standar_iku5_prodi', function (Blueprint $table) {
+        Schema::create('sippm_standar_iku5_prodi', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('unit_kerja_id')->constrained('unit_kerja')->onDelete('cascade');
+            $table->foreignId('unit_kerja_id')->constrained('simpeg_unit_kerja')->onDelete('cascade');
             $table->string('tahun_akademik', 10)->default('2025/2026')->index();
             $table->integer('target_publikasi_scopus')->default(5);
             $table->integer('target_publikasi_sinta')->default(10);
@@ -30,6 +30,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('standar_iku5_prodi');
+        Schema::dropIfExists('sippm_standar_iku5_prodi');
     }
 };

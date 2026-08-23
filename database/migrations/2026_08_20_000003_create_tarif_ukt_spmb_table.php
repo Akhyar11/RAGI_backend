@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('tarif_ukt_spmb', function (Blueprint $table) {
+        Schema::create('spmb_tarif_ukt', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('program_studi_id')->constrained('master_program_studi')->onDelete('restrict');
-            $table->foreignId('tahun_akademik_id')->constrained('master_tahun_akademik')->onDelete('restrict');
+            $table->foreignId('program_studi_id')->constrained('spmb_master_program_studi')->onDelete('restrict');
+            $table->foreignId('tahun_akademik_id')->constrained('spmb_master_tahun_akademik')->onDelete('restrict');
             $table->string('kelompok_ukt', 20)->default('I');
             $table->decimal('nominal', 15, 2);
             $table->boolean('is_active')->default(true);
@@ -27,6 +27,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('tarif_ukt_spmb');
+        Schema::dropIfExists('spmb_tarif_ukt');
     }
 };

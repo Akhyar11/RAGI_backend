@@ -11,7 +11,7 @@ class PengumumanHibah extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'pengumuman_hibah';
+    protected $table = 'sippm_pengumuman_hibah';
 
     protected $fillable = [
         'periode_id',

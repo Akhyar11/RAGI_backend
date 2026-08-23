@@ -10,7 +10,7 @@ class UsulanJafung extends Model
 {
     use HasFactory;
 
-    protected $table = 'usulan_jafung';
+    protected $table = 'simpeg_usulan_jafung';
 
     protected $fillable = [
         'pegawai_id',

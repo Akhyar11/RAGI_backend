@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('kategori_aset', function (Blueprint $table) {
+        Schema::create('sinapra_kategori_aset', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('induk_id')->nullable()->constrained('kategori_aset')->onDelete('set null');
+            $table->foreignId('induk_id')->nullable()->constrained('sinapra_kategori_aset')->onDelete('set null');
             $table->string('kode', 50)->unique();
             $table->string('nama', 100);
             $table->integer('masa_manfaat_tahun')->nullable();
@@ -29,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('kategori_aset');
+        Schema::dropIfExists('sinapra_kategori_aset');
     }
 };

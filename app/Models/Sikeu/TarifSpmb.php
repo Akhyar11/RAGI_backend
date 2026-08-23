@@ -9,7 +9,7 @@ class TarifSpmb extends Model
 {
     use HasFactory;
 
-    protected $table = 'tarif_spmb';
+    protected $table = 'sikeu_tarif_spmb';
 
     protected $fillable = [
         'jenis_biaya_id',

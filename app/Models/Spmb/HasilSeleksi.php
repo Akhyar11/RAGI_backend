@@ -12,7 +12,7 @@ class HasilSeleksi extends Model
 {
     use HasFactory;
 
-    protected $table = 'hasil_seleksi';
+    protected $table = 'spmb_hasil_seleksi';
 
     public const STATUS_LULUS = 'lulus';
     public const STATUS_CADANGAN = 'cadangan';

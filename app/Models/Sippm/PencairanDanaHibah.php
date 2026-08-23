@@ -9,7 +9,7 @@ class PencairanDanaHibah extends Model
 {
     use HasFactory;
 
-    protected $table = 'pencairan_dana_hibah';
+    protected $table = 'sippm_pencairan_dana_hibah';
 
     protected $fillable = [
         'kontrak_id',

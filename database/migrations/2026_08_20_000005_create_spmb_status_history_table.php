@@ -13,10 +13,10 @@ return new class extends Migration
     {
         Schema::create('spmb_status_history', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pendaftaran_id')->constrained('pendaftaran_calon_mhs')->cascadeOnDelete()->index();
+            $table->foreignId('pendaftaran_id')->constrained('spmb_pendaftaran_calon_mhs')->cascadeOnDelete()->index();
             $table->string('status_lama', 50)->nullable();
             $table->string('status_baru', 50);
-            $table->foreignId('actor_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('actor_id')->nullable()->constrained('core_users')->nullOnDelete();
             $table->text('catatan')->nullable();
             $table->timestamp('created_at')->nullable();
 

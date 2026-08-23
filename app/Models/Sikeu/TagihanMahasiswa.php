@@ -9,7 +9,7 @@ class TagihanMahasiswa extends Model
 {
     use HasFactory;
 
-    protected $table = 'tagihan_mahasiswa';
+    protected $table = 'sikeu_tagihan_mahasiswa';
 
     protected $fillable = [
         'mahasiswa_id',

@@ -21,20 +21,29 @@ class InstallDummyModuleCommand extends Command
         $this->call(InstallModuleCommand::class, ['modul' => $modul]);
 
         // 2. Dummy Data Seeding
-        if (in_array($modul, ['simpeg', 'all'])) {
-            $this->info("▸ Seed Dummy Data SIMPEG (Pegawai & Enterprise Sample)...");
-            $this->call('db:seed', ['--class' => '\Database\Seeders\Simpeg\PegawaiSeeder', '--force' => true]);
-            $this->call('db:seed', ['--class' => '\Database\Seeders\Simpeg\EnterpriseSimpegSeeder', '--force' => true]);
-        }
+        $seeders = [
+            'simpeg' => [
+                '\Database\Seeders\Simpeg\PegawaiSeeder',
+                '\Database\Seeders\Simpeg\EnterpriseSimpegSeeder'
+            ],
+            'sippm' => [
+                '\Database\Seeders\Sippm\SippmSampleDataSeeder'
+            ],
+            'sikeu' => [
+                '\Database\Seeders\Sikeu\SikeuDummySeeder'
+            ],
+            'spmb' => [
+                '\Database\Seeders\Spmb\MasterProgramStudiSeeder'
+            ]
+        ];
 
-        if (in_array($modul, ['sippm', 'all'])) {
-            $this->info("▸ Seed Dummy Data SIPPM (Sample Proposal & Reviewer)...");
-            $this->call('db:seed', ['--class' => '\Database\Seeders\Sippm\SippmSampleDataSeeder', '--force' => true]);
-        }
-
-        if (in_array($modul, ['sikeu', 'all'])) {
-            $this->info("▸ Seed Dummy Data SIKEU (Sample Tagihan, Dispensasi, Pemasukan, Pengeluaran & Jurnal)...");
-            $this->call('db:seed', ['--class' => '\Database\Seeders\Sikeu\SikeuDummySeeder', '--force' => true]);
+        foreach ($seeders as $modKey => $seederList) {
+            if ($modul === $modKey || $modul === 'all') {
+                $this->info("▸ Seed Dummy Data " . strtoupper($modKey) . "...");
+                foreach ($seederList as $seeder) {
+                    $this->call('db:seed', ['--class' => $seeder, '--force' => true]);
+                }
+            }
         }
 
         $this->newLine();

@@ -9,7 +9,7 @@ class PeriodeAkuntansi extends Model
 {
     use HasFactory;
 
-    protected $table = 'periode_akuntansi';
+    protected $table = 'sikeu_periode_akuntansi';
 
     protected $fillable = [
         'nama_periode',

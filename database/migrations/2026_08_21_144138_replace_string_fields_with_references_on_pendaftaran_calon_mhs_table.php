@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
+        Schema::table('spmb_pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->dropColumn(['jenis_daftar', 'kelas']);
-            $table->foreignId('master_tipe_jalur_id')->nullable()->after('program_studi_pilihan2_id')->constrained('master_tipe_jalur')->nullOnDelete();
-            $table->foreignId('master_jalur_kelas_id')->nullable()->after('master_tipe_jalur_id')->constrained('master_jalur_kelas')->nullOnDelete();
+            $table->foreignId('master_tipe_jalur_id')->nullable()->after('program_studi_pilihan2_id')->constrained('core_master_tipe_jalur')->nullOnDelete();
+            $table->foreignId('master_jalur_kelas_id')->nullable()->after('master_tipe_jalur_id')->constrained('core_master_jalur_kelas')->nullOnDelete();
         });
     }
 
@@ -23,7 +23,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('pendaftaran_calon_mhs', function (Blueprint $table) {
+        Schema::table('spmb_pendaftaran_calon_mhs', function (Blueprint $table) {
             $table->dropForeign(['master_tipe_jalur_id']);
             $table->dropForeign(['master_jalur_kelas_id']);
             $table->dropColumn(['master_tipe_jalur_id', 'master_jalur_kelas_id']);

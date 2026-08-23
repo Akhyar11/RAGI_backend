@@ -9,7 +9,7 @@ class RekonsiliasiPembayaran extends Model
 {
     use HasFactory;
 
-    protected $table = 'rekonsiliasi_pembayaran';
+    protected $table = 'sikeu_rekonsiliasi_pembayaran';
 
     protected $fillable = [
         'tanggal_rekonsiliasi',

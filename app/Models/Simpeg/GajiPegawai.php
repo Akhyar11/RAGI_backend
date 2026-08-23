@@ -10,7 +10,7 @@ class GajiPegawai extends Model
 {
     use HasFactory;
 
-    protected $table = 'gaji_pegawai';
+    protected $table = 'simpeg_gaji_pegawai';
 
     protected $fillable = [
         'pegawai_id',

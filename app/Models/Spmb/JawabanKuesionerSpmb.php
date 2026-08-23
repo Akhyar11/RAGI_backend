@@ -11,7 +11,7 @@ class JawabanKuesionerSpmb extends Model
 {
     use HasFactory;
 
-    protected $table = 'jawaban_kuesioner_spmb';
+    protected $table = 'spmb_jawaban_kuesioner';
     
     const UPDATED_AT = null;
 

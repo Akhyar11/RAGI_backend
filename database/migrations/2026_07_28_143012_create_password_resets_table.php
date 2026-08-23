@@ -16,7 +16,7 @@ return new class extends Migration
     {
         Schema::create('password_resets', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('core_users')->onDelete('cascade');
 
             // Token reset: dikirim via email, hashed sebelum disimpan
             $table->string('token', 128)->unique();

@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('pengumuman_hibah', function (Blueprint $table) {
+        Schema::create('sippm_pengumuman_hibah', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('periode_id')->nullable()->constrained('periode_hibah')->nullOnDelete();
+            $table->foreignId('periode_id')->nullable()->constrained('sippm_periode_hibah')->nullOnDelete();
             $table->string('nomor_surat', 100);
             $table->date('tgl_surat');
             $table->string('hal_surat', 255);
@@ -34,7 +34,7 @@ return new class extends Migration
             $table->enum('status', ['draft', 'pending_scan', 'published'])->default('draft');
             $table->json('lampiran_jadwal')->nullable();
             $table->timestamp('published_at')->nullable();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('created_by')->nullable()->constrained('core_users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
 
@@ -47,6 +47,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('pengumuman_hibah');
+        Schema::dropIfExists('sippm_pengumuman_hibah');
     }
 };

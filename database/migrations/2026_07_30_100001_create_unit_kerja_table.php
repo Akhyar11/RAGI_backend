@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('unit_kerja', function (Blueprint $table) {
+        Schema::create('simpeg_unit_kerja', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('induk_id')->nullable()->constrained('unit_kerja')->nullOnDelete();
+            $table->foreignId('induk_id')->nullable()->constrained('simpeg_unit_kerja')->nullOnDelete();
             $table->string('kode')->unique();
             $table->string('nama');
             $table->enum('tipe', ['rektorat', 'fakultas', 'prodi', 'lp3m', 'biro', 'unit']);
@@ -27,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('unit_kerja');
+        Schema::dropIfExists('simpeg_unit_kerja');
     }
 };

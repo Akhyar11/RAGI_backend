@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('menu_role', function (Blueprint $table) {
+        Schema::create('core_menu_role', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('menu_id')->constrained()->onDelete('cascade');
-            $table->foreignId('role_id')->constrained()->onDelete('cascade');
+            $table->foreignId('menu_id')->constrained('core_menus')->onDelete('cascade');
+            $table->foreignId('role_id')->constrained('core_roles')->onDelete('cascade');
             $table->timestamps();
 
             // Ensure a role can't have duplicate menus
@@ -27,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('menu_role');
+        Schema::dropIfExists('core_menu_role');
     }
 };

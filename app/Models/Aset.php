@@ -12,7 +12,7 @@ class Aset extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'aset';
+    protected $table = 'sinapra_aset';
 
     protected $fillable = [
         'kategori_id',

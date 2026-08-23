@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('master_tipe_jalur_alur', function (Blueprint $table) {
+        Schema::create('spmb_master_tipe_jalur_alur', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('master_tipe_jalur_id')->constrained('master_tipe_jalur')->cascadeOnDelete();
+            $table->foreignId('master_tipe_jalur_id')->constrained('core_master_tipe_jalur')->cascadeOnDelete();
             $table->string('nama_tahap');
             $table->integer('urutan')->default(1);
             $table->timestamps();
@@ -25,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('master_tipe_jalur_alur');
+        Schema::dropIfExists('spmb_master_tipe_jalur_alur');
     }
 };

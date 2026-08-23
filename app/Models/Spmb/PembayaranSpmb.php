@@ -10,7 +10,7 @@ class PembayaranSpmb extends Model
 {
     use HasFactory;
 
-    protected $table = 'pembayaran_spmb';
+    protected $table = 'spmb_pembayaran';
 
     protected $fillable = [
         'pendaftaran_id',

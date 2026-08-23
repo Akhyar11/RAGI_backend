@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('presensi_pegawai', function (Blueprint $table) {
+        Schema::create('simpeg_presensi_pegawai', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pegawai_id')->constrained('pegawai')->onDelete('cascade');
+            $table->foreignId('pegawai_id')->constrained('simpeg_pegawai')->onDelete('cascade');
             $table->date('tanggal');
             $table->time('jam_masuk')->nullable();
             $table->time('jam_keluar')->nullable();
@@ -24,6 +24,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('presensi_pegawai');
+        Schema::dropIfExists('simpeg_presensi_pegawai');
     }
 };

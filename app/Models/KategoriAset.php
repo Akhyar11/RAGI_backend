@@ -11,7 +11,7 @@ class KategoriAset extends Model
 {
     use HasFactory;
 
-    protected $table = 'kategori_aset';
+    protected $table = 'sinapra_kategori_aset';
 
     protected $fillable = [
         'induk_id',

@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (!Schema::hasTable('tarif_spmb')) {
-            Schema::create('tarif_spmb', function (Blueprint $table) {
+        if (!Schema::hasTable('sikeu_tarif_spmb')) {
+            Schema::create('sikeu_tarif_spmb', function (Blueprint $table) {
                 $table->id();
-                $table->foreignId('jenis_biaya_id')->nullable()->constrained('jenis_biaya')->onDelete('cascade');
+                $table->foreignId('jenis_biaya_id')->nullable()->constrained('sikeu_jenis_biaya')->onDelete('cascade');
                 $table->string('jalur_id', 50)->index();
                 $table->string('gelombang_id', 50)->index();
                 $table->decimal('nominal', 15, 2)->default(0);
@@ -31,6 +31,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('tarif_spmb');
+        Schema::dropIfExists('sikeu_tarif_spmb');
     }
 };

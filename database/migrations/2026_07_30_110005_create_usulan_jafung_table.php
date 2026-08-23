@@ -8,11 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('usulan_jafung', function (Blueprint $table) {
+        Schema::create('simpeg_usulan_jafung', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pegawai_id')->constrained('pegawai')->onDelete('cascade');
-            $table->foreignId('jafung_asal_id')->nullable()->constrained('jabatan_fungsional_akademik')->nullOnDelete();
-            $table->foreignId('jafung_tujuan_id')->constrained('jabatan_fungsional_akademik')->onDelete('cascade');
+            $table->foreignId('pegawai_id')->constrained('simpeg_pegawai')->onDelete('cascade');
+            $table->foreignId('jafung_asal_id')->nullable()->constrained('simpeg_jabatan_fungsional_akademik')->nullOnDelete();
+            $table->foreignId('jafung_tujuan_id')->constrained('simpeg_jabatan_fungsional_akademik')->onDelete('cascade');
             $table->integer('angka_kredit_usulan');
             $table->enum('status_usulan', ['draft', 'submitted', 'diverifikasi', 'disetujui', 'ditolak'])->default('draft');
             $table->string('file_sk_hasil')->nullable();
@@ -23,6 +23,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('usulan_jafung');
+        Schema::dropIfExists('simpeg_usulan_jafung');
     }
 };

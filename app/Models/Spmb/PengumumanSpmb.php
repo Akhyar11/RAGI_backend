@@ -10,7 +10,7 @@ class PengumumanSpmb extends Model
 {
     use HasFactory;
 
-    protected $table = 'pengumuman_spmb';
+    protected $table = 'spmb_pengumuman';
     
     const UPDATED_AT = null;
 

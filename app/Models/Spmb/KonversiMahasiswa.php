@@ -12,7 +12,7 @@ class KonversiMahasiswa extends Model
 {
     use HasFactory;
 
-    protected $table = 'konversi_mahasiswa';
+    protected $table = 'spmb_konversi_mahasiswa';
     
     const UPDATED_AT = null;
 

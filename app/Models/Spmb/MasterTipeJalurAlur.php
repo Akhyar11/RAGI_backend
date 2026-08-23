@@ -10,7 +10,7 @@ class MasterTipeJalurAlur extends Model
 {
     use HasFactory;
 
-    protected $table = 'master_tipe_jalur_alur';
+    protected $table = 'spmb_master_tipe_jalur_alur';
 
     protected $fillable = [
         'master_tipe_jalur_id',

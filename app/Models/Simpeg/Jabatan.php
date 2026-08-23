@@ -9,7 +9,7 @@ class Jabatan extends Model
 {
     use HasFactory;
 
-    protected $table = 'jabatan';
+    protected $table = 'simpeg_jabatan';
 
     protected $fillable = [
         'unit_kerja_id',

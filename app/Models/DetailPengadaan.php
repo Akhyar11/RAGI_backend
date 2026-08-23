@@ -10,7 +10,7 @@ class DetailPengadaan extends Model
 {
     use HasFactory;
 
-    protected $table = 'detail_pengadaan';
+    protected $table = 'sinapra_detail_pengadaan';
 
     protected $fillable = [
         'pengajuan_id',

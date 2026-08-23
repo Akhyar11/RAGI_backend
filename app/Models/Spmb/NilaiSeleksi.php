@@ -11,7 +11,7 @@ class NilaiSeleksi extends Model
 {
     use HasFactory;
 
-    protected $table = 'nilai_seleksi';
+    protected $table = 'spmb_nilai_seleksi';
 
     protected $fillable = [
         'pendaftaran_id',

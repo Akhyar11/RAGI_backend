@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('hki_dan_buku', function (Blueprint $table) {
+        Schema::create('sippm_hki_dan_buku', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('proposal_id')->nullable()->constrained('proposal_kegiatan')->nullOnDelete();
-            $table->foreignId('pegawai_id')->constrained('pegawai')->cascadeOnDelete();
+            $table->foreignId('proposal_id')->nullable()->constrained('sippm_proposal_kegiatan')->nullOnDelete();
+            $table->foreignId('pegawai_id')->constrained('simpeg_pegawai')->cascadeOnDelete();
             $table->enum('jenis_luaran', [
                 'paten', 'hak_cipta', 'desain_industri', 
                 'rahasia_dagang', 'buku_ajar', 'buku_monograf', 'book_chapter'
@@ -35,6 +35,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('hki_dan_buku');
+        Schema::dropIfExists('sippm_hki_dan_buku');
     }
 };

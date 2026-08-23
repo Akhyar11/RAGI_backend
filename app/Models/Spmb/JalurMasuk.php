@@ -10,7 +10,7 @@ class JalurMasuk extends Model
 {
     use HasFactory;
 
-    protected $table = 'jalur_masuk';
+    protected $table = 'spmb_jalur_masuk';
 
     protected $fillable = [
         'kode',

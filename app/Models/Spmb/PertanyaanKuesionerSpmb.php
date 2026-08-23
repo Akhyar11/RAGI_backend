@@ -11,7 +11,7 @@ class PertanyaanKuesionerSpmb extends Model
 {
     use HasFactory;
 
-    protected $table = 'pertanyaan_kuesioner_spmb';
+    protected $table = 'spmb_pertanyaan_kuesioner';
     
     public $timestamps = false;
 

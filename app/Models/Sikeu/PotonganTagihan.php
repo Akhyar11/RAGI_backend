@@ -9,7 +9,7 @@ class PotonganTagihan extends Model
 {
     use HasFactory;
 
-    protected $table = 'potongan_tagihan';
+    protected $table = 'sikeu_potongan_tagihan';
 
     protected $fillable = [
         'tagihan_id',

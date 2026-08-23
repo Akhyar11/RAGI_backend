@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('master_program_studi', function (Blueprint $table) {
+        Schema::create('spmb_master_program_studi', function (Blueprint $table) {
             $table->id();
             $table->string('kode_prodi', 20)->unique();
             $table->string('nama');
@@ -24,6 +24,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('master_program_studi');
+        Schema::dropIfExists('spmb_master_program_studi');
     }
 };

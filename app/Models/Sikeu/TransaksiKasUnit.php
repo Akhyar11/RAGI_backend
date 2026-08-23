@@ -9,7 +9,7 @@ class TransaksiKasUnit extends Model
 {
     use HasFactory;
 
-    protected $table = 'transaksi_kas_unit';
+    protected $table = 'sikeu_transaksi_kas_unit';
 
     protected $fillable = [
         'unit_kas_id',

@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (!Schema::hasTable('mahasiswa_tipe_tagihan')) {
-            Schema::create('mahasiswa_tipe_tagihan', function (Blueprint $table) {
+        if (!Schema::hasTable('sikeu_mahasiswa_tipe_tagihan')) {
+            Schema::create('sikeu_mahasiswa_tipe_tagihan', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('mahasiswa_id');
                 $table->string('nim')->nullable();
@@ -20,7 +20,6 @@ return new class extends Migration
                 $table->integer('tahun_angkatan')->default(2025);
                 $table->string('jalur_kelas')->default('Reguler');
                 $table->integer('kelompok_ukt')->default(3);
-                $table->foreignId('beasiswa_id')->nullable()->constrained('beasiswa')->onDelete('set null');
                 $table->string('status_pendaftaran')->default('SPMB_DITERIMA');
                 $table->text('catatan_perubahan')->nullable();
                 $table->unsignedBigInteger('updated_by')->nullable();
@@ -36,6 +35,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('mahasiswa_tipe_tagihan');
+        Schema::dropIfExists('sikeu_mahasiswa_tipe_tagihan');
     }
 };

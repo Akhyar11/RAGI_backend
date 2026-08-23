@@ -11,7 +11,7 @@ class PenilaianKinerja extends Model
 {
     use HasFactory;
 
-    protected $table = 'penilaian_kinerja';
+    protected $table = 'simpeg_penilaian_kinerja';
 
     protected $fillable = [
         'pegawai_id',

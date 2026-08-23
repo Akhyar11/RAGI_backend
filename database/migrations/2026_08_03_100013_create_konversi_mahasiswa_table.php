@@ -8,9 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('konversi_mahasiswa', function (Blueprint $table) {
+        Schema::create('spmb_konversi_mahasiswa', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pendaftaran_id')->constrained('pendaftaran_calon_mhs')->cascadeOnDelete();
+            $table->foreignId('pendaftaran_id')->constrained('spmb_pendaftaran_calon_mhs')->cascadeOnDelete();
             $table->foreignId('mahasiswa_id')->nullable(); // Assuming nullable if created simultaneously or later
             $table->string('nim_diterbitkan')->unique()->nullable();
             $table->foreignId('diproses_oleh')->nullable();
@@ -20,6 +20,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('konversi_mahasiswa');
+        Schema::dropIfExists('spmb_konversi_mahasiswa');
     }
 };

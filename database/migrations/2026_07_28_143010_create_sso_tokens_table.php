@@ -13,9 +13,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('sso_tokens', function (Blueprint $table) {
+        Schema::create('core_sso_tokens', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('core_users')->onDelete('cascade');
 
             // Token akses berumur pendek (15 menit)
             $table->string('access_token', 128)->unique();
@@ -41,6 +41,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('sso_tokens');
+        Schema::dropIfExists('core_sso_tokens');
     }
 };

@@ -9,7 +9,7 @@ class CallbackPaymentGateway extends Model
 {
     use HasFactory;
 
-    protected $table = 'callback_payment_gateway';
+    protected $table = 'sikeu_callback_payment_gateway';
 
     protected $fillable = [
         'order_id',

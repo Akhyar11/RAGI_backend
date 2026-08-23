@@ -11,11 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('riwayat_jabatan', function (Blueprint $table) {
+        Schema::create('simpeg_riwayat_jabatan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pegawai_id')->constrained('pegawai')->cascadeOnDelete();
-            $table->foreignId('jabatan_id')->nullable()->constrained('jabatan')->nullOnDelete();
-            $table->foreignId('jabatan_fungsional_id')->nullable()->constrained('jabatan_fungsional_akademik')->nullOnDelete();
+            $table->foreignId('pegawai_id')->constrained('simpeg_pegawai')->cascadeOnDelete();
+            $table->foreignId('jabatan_id')->nullable()->constrained('simpeg_jabatan')->nullOnDelete();
+            $table->foreignId('jabatan_fungsional_id')->nullable()->constrained('simpeg_jabatan_fungsional_akademik')->nullOnDelete();
             $table->date('mulai_jabatan')->nullable();
             $table->date('selesai_jabatan')->nullable();
             $table->string('sk_nomor')->nullable();
@@ -31,6 +31,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('riwayat_jabatan');
+        Schema::dropIfExists('simpeg_riwayat_jabatan');
     }
 };

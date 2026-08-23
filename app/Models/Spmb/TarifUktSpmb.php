@@ -10,7 +10,7 @@ class TarifUktSpmb extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'tarif_ukt_spmb';
+    protected $table = 'spmb_tarif_ukt';
 
     protected $fillable = [
         'program_studi_id',

@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('pegawai', function (Blueprint $table) {
+        Schema::table('simpeg_pegawai', function (Blueprint $table) {
             if (!Schema::hasColumn('pegawai', 'sinta_id')) {
                 $table->string('sinta_id', 50)->nullable()->after('telepon');
             }
@@ -26,7 +26,7 @@ return new class extends Migration
             }
         });
 
-        Schema::table('publikasi_ilmiah', function (Blueprint $table) {
+        Schema::table('sippm_publikasi_ilmiah', function (Blueprint $table) {
             if (!Schema::hasColumn('publikasi_ilmiah', 'scopus_eid')) {
                 $table->string('scopus_eid', 100)->nullable()->index()->after('doi');
             }
@@ -50,11 +50,11 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('pegawai', function (Blueprint $table) {
+        Schema::table('simpeg_pegawai', function (Blueprint $table) {
             $table->dropColumn(['sinta_id', 'scopus_id', 'google_scholar_id', 'orcid_id']);
         });
 
-        Schema::table('publikasi_ilmiah', function (Blueprint $table) {
+        Schema::table('sippm_publikasi_ilmiah', function (Blueprint $table) {
             $table->dropColumn(['scopus_eid', 'sinta_article_id', 'citation_count', 'publisher', 'synced_at']);
         });
     }

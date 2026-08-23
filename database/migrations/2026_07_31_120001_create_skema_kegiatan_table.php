@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('skema_kegiatan', function (Blueprint $table) {
+        Schema::create('sippm_skema_kegiatan', function (Blueprint $table) {
             $table->id();
             $table->string('kode', 50)->unique();
             $table->string('nama', 255);
@@ -30,6 +30,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('skema_kegiatan');
+        Schema::dropIfExists('sippm_skema_kegiatan');
     }
 };

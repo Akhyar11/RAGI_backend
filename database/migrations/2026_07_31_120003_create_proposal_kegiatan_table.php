@@ -11,11 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('proposal_kegiatan', function (Blueprint $table) {
+        Schema::create('sippm_proposal_kegiatan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('periode_id')->constrained('periode_hibah')->cascadeOnDelete();
-            $table->foreignId('skema_id')->constrained('skema_kegiatan')->cascadeOnDelete();
-            $table->foreignId('ketua_pegawai_id')->constrained('pegawai')->cascadeOnDelete();
+            $table->foreignId('periode_id')->constrained('sippm_periode_hibah')->cascadeOnDelete();
+            $table->foreignId('skema_id')->constrained('sippm_skema_kegiatan')->cascadeOnDelete();
+            $table->foreignId('ketua_pegawai_id')->constrained('simpeg_pegawai')->cascadeOnDelete();
             $table->unsignedBigInteger('mitra_kerjasama_id')->nullable(); // FK to KERJASAMA mitra
             $table->unsignedBigInteger('mata_kuliah_id')->nullable(); // FK to SIAKAD mata_kuliah (Integrasi konversi nilai)
             $table->string('kode_proposal', 100)->unique();
@@ -37,6 +37,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('proposal_kegiatan');
+        Schema::dropIfExists('sippm_proposal_kegiatan');
     }
 };

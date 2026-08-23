@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('roles', function (Blueprint $table) {
+        Schema::create('core_roles', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
             $table->string('slug')->unique();
@@ -20,7 +20,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('permissions', function (Blueprint $table) {
+        Schema::create('core_permissions', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
             $table->string('slug')->unique();
@@ -30,20 +30,20 @@ return new class extends Migration
             $table->timestamp('created_at')->nullable();
         });
 
-        Schema::create('user_roles', function (Blueprint $table) {
+        Schema::create('core_user_roles', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->foreignId('role_id')->constrained()->onDelete('cascade');
-            $table->foreignId('assigned_by')->nullable()->constrained('users')->onDelete('set null');
+            $table->foreignId('user_id')->constrained('core_users')->onDelete('cascade');
+            $table->foreignId('role_id')->constrained('core_roles')->onDelete('cascade');
+            $table->foreignId('assigned_by')->nullable()->constrained('core_users')->onDelete('set null');
             $table->date('valid_from')->nullable();
             $table->date('valid_until')->nullable();
             $table->timestamp('created_at')->nullable();
         });
 
-        Schema::create('role_permissions', function (Blueprint $table) {
+        Schema::create('core_role_permissions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('role_id')->constrained()->onDelete('cascade');
-            $table->foreignId('permission_id')->constrained()->onDelete('cascade');
+            $table->foreignId('role_id')->constrained('core_roles')->onDelete('cascade');
+            $table->foreignId('permission_id')->constrained('core_permissions')->onDelete('cascade');
             $table->timestamp('created_at')->nullable();
         });
     }
@@ -53,9 +53,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('role_permissions');
-        Schema::dropIfExists('user_roles');
-        Schema::dropIfExists('permissions');
-        Schema::dropIfExists('roles');
+        Schema::dropIfExists('core_role_permissions');
+        Schema::dropIfExists('core_user_roles');
+        Schema::dropIfExists('core_permissions');
+        Schema::dropIfExists('core_roles');
     }
 };

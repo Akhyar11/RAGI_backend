@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('reviewer_kegiatan', function (Blueprint $table) {
+        Schema::create('sippm_reviewer_kegiatan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('proposal_id')->constrained('proposal_kegiatan')->cascadeOnDelete();
-            $table->foreignId('reviewer_pegawai_id')->constrained('pegawai')->cascadeOnDelete();
+            $table->foreignId('proposal_id')->constrained('sippm_proposal_kegiatan')->cascadeOnDelete();
+            $table->foreignId('reviewer_pegawai_id')->constrained('simpeg_pegawai')->cascadeOnDelete();
             $table->date('tgl_penugasan');
             $table->enum('status_review', ['pending', 'proses', 'selesai'])->default('pending');
             $table->timestamps();
@@ -26,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('reviewer_kegiatan');
+        Schema::dropIfExists('sippm_reviewer_kegiatan');
     }
 };
