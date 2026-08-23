@@ -37,21 +37,29 @@ class PengumumanLulusNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $statusMessage = '';
-        if ($this->hasilSeleksi->status == 'lulus') {
-            $statusMessage = 'SELAMAT! Anda dinyatakan LULUS pada program studi pilihan Anda.';
-        } elseif ($this->hasilSeleksi->status == 'cadangan') {
+        if ($this->hasilSeleksi->status === \App\Models\Spmb\HasilSeleksi::STATUS_LULUS) {
+            $statusMessage = 'SELAMAT! Anda dinyatakan LULUS seleksi administrasi SPMB pada program studi pilihan Anda.';
+        } elseif ($this->hasilSeleksi->status === \App\Models\Spmb\HasilSeleksi::STATUS_CADANGAN) {
             $statusMessage = 'Anda masuk dalam daftar CADANGAN. Harap menunggu informasi selanjutnya.';
         } else {
-            $statusMessage = 'Mohon maaf, Anda dinyatakan TIDAK LULUS. Jangan patah semangat dan coba lagi di gelombang berikutnya.';
+            $statusMessage = 'Mohon maaf, Anda dinyatakan TIDAK LULUS pada periode ini. Anda dapat mencoba kembali pada gelombang berikutnya.';
         }
 
-        return (new MailMessage)
+        $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+        $message = (new MailMessage)
                     ->subject('Pengumuman Hasil Seleksi SPMB')
-                    ->greeting('Halo, ' . $notifiable->name)
-                    ->line('Berdasarkan hasil evaluasi dan seleksi yang telah dilakukan, berikut adalah pengumuman hasil ujian Anda:')
-                    ->line($statusMessage)
-                    ->action('Cek Detail Pengumuman', url('/spmb/pengumuman'))
-                    ->line('Terima kasih telah berpartisipasi dalam proses seleksi ini.');
+                    ->greeting('Halo, ' . ($notifiable->name ?? $this->hasilSeleksi->pendaftaran->nama_lengkap ?? 'Calon Mahasiswa'))
+                    ->line('Berikut hasil seleksi administrasi SPMB Anda:')
+                    ->line($statusMessage);
+
+        if ($this->hasilSeleksi->status === \App\Models\Spmb\HasilSeleksi::STATUS_LULUS) {
+            $message->line('Silakan login ke portal untuk melanjutkan proses daftar ulang sesuai jadwal yang tersedia.')
+                ->action('Lanjutkan Daftar Ulang', url($frontendUrl . '/spmb/daftar-ulang'));
+        } else {
+            $message->action('Cek Pengumuman', url($frontendUrl . '/spmb/dashboard'));
+        }
+
+        return $message->line('Terima kasih telah mengikuti proses penerimaan mahasiswa baru.');
     }
 
     /**

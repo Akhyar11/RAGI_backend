@@ -36,13 +36,17 @@ class PendaftaranSuksesNotification extends Notification implements ShouldQueue
      */
     public function toMail(object $notifiable): MailMessage
     {
+        $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+
         return (new MailMessage)
                     ->subject('Pendaftaran SPMB Berhasil')
                     ->greeting('Halo, ' . $this->pendaftaran->nama_lengkap)
-                    ->line('Selamat! Akun pendaftaran SPMB Anda telah berhasil dibuat.')
-                    ->line('Nomor Pendaftaran Anda: ' . $this->pendaftaran->no_pendaftaran)
-                    ->action('Login ke Portal', url('/spmb/login'))
-                    ->line('Terima kasih telah mendaftar di kampus kami.');
+                    ->line('Selamat! Registrasi pendaftaran SPMB Anda telah berhasil diterima sistem.')
+                    ->line('Nomor Pendaftaran Anda: **' . $this->pendaftaran->no_pendaftaran . '**')
+                    ->line('Jalur: ' . ($this->pendaftaran->gelombangPenerimaan->jalurMasuk->nama ?? 'Jalur SPMB'))
+                    ->line('Silakan login ke portal untuk melengkapi berkas dan melanjutkan tahapan berikutnya.')
+                    ->action('Login ke Dashboard SPMB', url($frontendUrl . '/login'))
+                    ->line('Terima kasih telah mendaftar.');
     }
 
     /**

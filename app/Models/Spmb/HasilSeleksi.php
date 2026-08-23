@@ -14,6 +14,10 @@ class HasilSeleksi extends Model
 
     protected $table = 'hasil_seleksi';
 
+    public const STATUS_LULUS = 'lulus';
+    public const STATUS_CADANGAN = 'cadangan';
+    public const STATUS_TIDAK_LULUS = 'tidak_lulus';
+
     protected $fillable = [
         'pendaftaran_id',
         'program_studi_diterima_id',

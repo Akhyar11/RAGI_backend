@@ -80,6 +80,16 @@ class SpmbMenuSeeder extends Seeder
                     ['name' => 'Tarif UKT / Daftar Ulang', 'url' => '/spmb/master/tarif-ukt', 'icon' => 'FaMoneyBillWave', 'module' => $modSpmb, 'order_index' => 6],
                 ]
             ],
+            [
+                'name' => 'LAPORAN & STATISTIK',
+                'url' => '#laporan_spmb',
+                'icon' => 'FaChartBar',
+                'module' => $modSpmb,
+                'order_index' => 6,
+                'children' => [
+                    ['name' => 'Statistik Pendaftaran', 'url' => '/spmb/laporan/statistik', 'icon' => 'FaChartPie', 'module' => $modSpmb, 'order_index' => 1],
+                ]
+            ],
         ];
 
         $allMenuIds = [];

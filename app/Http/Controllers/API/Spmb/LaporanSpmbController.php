@@ -12,23 +12,47 @@ class LaporanSpmbController extends Controller
 {
     public function statistik(Request $request)
     {
-        // Pendaftar per Status
+        // 1. Pendaftar per Status
         $perStatus = PendaftaranCalonMhs::select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
             ->get();
 
-        // Lulus per Prodi
+        // 2. Lulus per Prodi (Tabel Relasi Join ke program_studi agar dapat nama)
         $perProdi = DB::table('hasil_seleksi')
-            ->where('status', 'lulus')
-            ->select('program_studi_diterima_id', DB::raw('count(*) as total_lulus'))
-            ->groupBy('program_studi_diterima_id')
+            ->join('program_studi', 'hasil_seleksi.program_studi_diterima_id', '=', 'program_studi.id')
+            ->where('hasil_seleksi.status', 'lulus')
+            ->select('program_studi.nama as nama_prodi', 'program_studi_diterima_id', DB::raw('count(*) as total_lulus'))
+            ->groupBy('program_studi_diterima_id', 'program_studi.nama')
             ->get();
+
+        // 3. Pendaftar per Gelombang
+        $perGelombang = PendaftaranCalonMhs::join('gelombang_penerimaan', 'pendaftaran_calon_mhs.gelombang_id', '=', 'gelombang_penerimaan.id')
+            ->select('gelombang_penerimaan.nama as nama_gelombang', DB::raw('count(pendaftaran_calon_mhs.id) as total'))
+            ->groupBy('gelombang_penerimaan.nama')
+            ->get();
+
+        // 4. Data Funnel Pendaftar (Funneling conversion)
+        $totalPendaftar = PendaftaranCalonMhs::count();
+        $totalBayar = PendaftaranCalonMhs::where('status_pembayaran', 'lunas')->count();
+        $totalVerifikasi = PendaftaranCalonMhs::where('status', 'lulus_administrasi')->count();
+        $totalLulus = DB::table('hasil_seleksi')->where('status', 'lulus')->count();
+        $totalDaftarUlang = DB::table('hasil_seleksi')->where('status_daftar_ulang', 'lunas')->count();
+
+        $funnelData = [
+            ['label' => 'Total Pendaftar', 'value' => $totalPendaftar],
+            ['label' => 'Sudah Membayar', 'value' => $totalBayar],
+            ['label' => 'Lolos Administrasi', 'value' => $totalVerifikasi],
+            ['label' => 'Lolos Seleksi', 'value' => $totalLulus],
+            ['label' => 'Daftar Ulang Lunas', 'value' => $totalDaftarUlang],
+        ];
 
         return response()->json([
             'status' => 'success',
             'data' => [
                 'per_status' => $perStatus,
-                'lulus_per_prodi' => $perProdi
+                'lulus_per_prodi' => $perProdi,
+                'per_gelombang' => $perGelombang,
+                'funnel_data' => $funnelData
             ]
         ]);
     }
