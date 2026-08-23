@@ -163,4 +163,9 @@ class PendaftaranCalonMhs extends Model
     {
         return $this->hasOne(HasilSeleksi::class, 'pendaftaran_id');
     }
+
+    public function progressAlur()
+    {
+        return $this->hasMany(PendaftaranAlur::class, 'pendaftaran_id');
+    }
 }

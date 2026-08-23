@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\Siakad\Mahasiswa;
+use App\Services\IAM\GoogleWorkspaceService;
+use Illuminate\Support\Facades\Log;
 
 class SpmbKonversiService
 {
@@ -16,7 +18,9 @@ class SpmbKonversiService
      */
     public function prosesKonversi(PendaftaranCalonMhs $pendaftaran, int $diprosesOlehId = null): KonversiMahasiswa
     {
-        return DB::transaction(function () use ($pendaftaran, $diprosesOlehId) {
+        // Karena ada call eksternal (Google API), kita pisahkan dari DB Transaction jika tidak ingin transaction menggantung
+        // Namun demi konsistensi data internal, DB Transaction dijalankan terlebih dahulu
+        $konversi = DB::transaction(function () use ($pendaftaran, $diprosesOlehId, &$userToUpdateEmail, &$nimGenerate) {
             $angkatan = (int)date('Y');
             $prodiId = $pendaftaran->hasilSeleksi->program_studi_diterima_id ?? $pendaftaran->program_studi_id ?? 1;
 
@@ -26,6 +30,7 @@ class SpmbKonversiService
                 $nim = $this->generateNIM($angkatan, $prodiId);
                 $pendaftaran->update(['nim' => $nim, 'status' => PendaftaranCalonMhs::STATUS_MAHASISWA_BARU]);
             }
+            $nimGenerate = $nim;
 
             // 2. Insert / Update ke tabel siakad_mahasiswa
             $mahasiswa = Mahasiswa::where('nim', $nim)
@@ -61,7 +66,7 @@ class SpmbKonversiService
             }
 
             // 3. Catat di tabel konversi_mahasiswa
-            $konversi = KonversiMahasiswa::updateOrCreate(
+            $konversiData = KonversiMahasiswa::updateOrCreate(
                 ['pendaftaran_id' => $pendaftaran->id],
                 [
                     'mahasiswa_id' => $mahasiswa->id,
@@ -70,7 +75,7 @@ class SpmbKonversiService
                 ]
             );
 
-            // 4. Update Email Kampus dan Berikan role 'mahasiswa' ke User IAM jika user_id ada
+            // 4. Update Role IAM
             if ($pendaftaran->user_id) {
                 $user = User::find($pendaftaran->user_id);
                 if ($user) {
@@ -78,31 +83,72 @@ class SpmbKonversiService
                     if ($mhsRole && !$user->roles->contains('id', $mhsRole->id)) {
                         $user->roles()->syncWithoutDetaching([$mhsRole->id]);
                     }
-
-                    // Generate email kampus dan update username jika belum ada
+                    
+                    // Kita oper object user keluar dari closure untuk dikerjakan API external
                     if (empty($user->email_kampus)) {
-                        $domainKampus = config('app.domain_kampus', 'student.campus.ac.id');
-                        $firstName = strtolower(preg_replace('/[^a-zA-Z]/', '', explode(' ', trim($pendaftaran->nama_lengkap))[0]));
-                        $emailKampus = $firstName . '.' . strtolower($nim) . '@' . $domainKampus;
-
-                        // Pastikan email kampus unik
-                        $counter = 1;
-                        $baseEmail = $emailKampus;
-                        while (User::where('email_kampus', $emailKampus)->exists()) {
-                            $emailKampus = $firstName . $counter . '.' . strtolower($nim) . '@' . $domainKampus;
-                            $counter++;
-                        }
-
-                        $user->update([
-                            'email_kampus' => $emailKampus,
-                            'username' => $nim,
-                        ]);
+                        $userToUpdateEmail = $user;
                     }
                 }
             }
 
-            return $konversi;
+            return $konversiData;
         });
+
+        // 5. Eksekusi API External Google Workspace di luar DB Transaction
+        if (isset($userToUpdateEmail) && isset($nimGenerate)) {
+            $this->assignGoogleWorkspaceEmail($userToUpdateEmail, $pendaftaran->nama_lengkap, $nimGenerate);
+        }
+
+        return $konversi;
+    }
+
+    /**
+     * Memproses pembuatan Email Kampus menggunakan Google Workspace API
+     */
+    protected function assignGoogleWorkspaceEmail(User $user, string $namaLengkap, string $nim): void
+    {
+        $domainKampus = config('services.google_workspace.domain', 'student.campus.ac.id');
+        $namaParts = explode(' ', trim($namaLengkap));
+        $firstNameRaw = $namaParts[0];
+        $lastNameRaw = count($namaParts) > 1 ? end($namaParts) : $firstNameRaw;
+
+        $firstName = strtolower(preg_replace('/[^a-zA-Z]/', '', $firstNameRaw));
+        $lastName = preg_replace('/[^a-zA-Z]/', '', $lastNameRaw);
+        
+        $emailPrefix = $firstName . '.' . strtolower($nim);
+        
+        $googleService = new GoogleWorkspaceService();
+        $emailKampus = null;
+
+        $counter = 0;
+        $maxRetries = 3;
+        $finalPrefix = $emailPrefix;
+
+        // Coba memanggil API, retry dengan angka jika duplicate
+        while ($counter < $maxRetries && !$emailKampus) {
+            try {
+                $emailKampus = $googleService->createUser($firstName, $lastName, $finalPrefix);
+                // Jika null (misal karena service di-mock/tidak ada credentials), kita set manual by string saja di lokal.
+                if (!$emailKampus && !config('services.google_workspace.credentials_json')) {
+                    $emailKampus = $finalPrefix . '@' . $domainKampus;
+                }
+            } catch (\Exception $e) {
+                if ($e->getMessage() === 'EmailAlreadyExists') {
+                    $counter++;
+                    $finalPrefix = $firstName . $counter . '.' . strtolower($nim);
+                } else {
+                    Log::error("Failed Google Workspace Assignment: " . $e->getMessage());
+                    break;
+                }
+            }
+        }
+
+        if ($emailKampus) {
+            $user->update([
+                'email_kampus' => $emailKampus,
+                'username' => $nim, // username diganti menjadi nim mahasiswa
+            ]);
+        }
     }
 
     /**

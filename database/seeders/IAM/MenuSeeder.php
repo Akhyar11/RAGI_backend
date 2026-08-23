@@ -51,6 +51,7 @@ class MenuSeeder extends Seeder
                 'children' => [
                     ['name' => 'Sesi Login Aktif', 'url' => '/admin/sessions', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.sessions.read', 'order_index' => 1],
                     ['name' => 'Audit Log Aktivitas', 'url' => '/admin/audit-logs', 'icon' => 'FaFileAlt', 'module' => 'sso', 'permission_slug' => 'iam.audit_logs.read', 'order_index' => 2],
+                    ['name' => 'Pengaturan Sistem', 'url' => '/iam/settings', 'icon' => 'FaCogs', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 3],
                 ]
             ],
             [

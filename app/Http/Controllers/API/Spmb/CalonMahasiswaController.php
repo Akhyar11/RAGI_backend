@@ -29,7 +29,8 @@ class CalonMahasiswaController extends Controller
             'programStudiPilihan2',
             'pembayaranSpmb',
             'hasilSeleksi',
-            'dokumenPendaftaran'
+            'dokumenPendaftaran',
+            'progressAlur.masterAlur'
         ])
             ->where('user_id', $user->id)
             ->first();

@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\DB;
 use App\Events\Spmb\MahasiswaDiterima;
 use Illuminate\Validation\ValidationException;
 
+use App\Models\Spmb\PendaftaranAlur;
+use App\Models\Spmb\MasterTipeJalurAlur;
+
 class SpmbPendaftaranService
 {
     /**
@@ -43,6 +46,37 @@ class SpmbPendaftaranService
             'diverifikasi_oleh' => $adminId,
             'diverifikasi_at' => now(),
         ]);
+    }
+
+    public function generateProgressAlur(PendaftaranCalonMhs $pendaftaran): void
+    {
+        // Pastikan tidak menduplikasi jika sudah ada
+        if (PendaftaranAlur::where('pendaftaran_id', $pendaftaran->id)->exists()) {
+            return;
+        }
+
+        if (!$pendaftaran->master_tipe_jalur_id) {
+            return;
+        }
+
+        $masterAlurs = MasterTipeJalurAlur::where('master_tipe_jalur_id', $pendaftaran->master_tipe_jalur_id)
+            ->orderBy('urutan', 'asc')
+            ->get();
+
+        $alursData = [];
+        foreach ($masterAlurs as $index => $masterAlur) {
+            $alursData[] = [
+                'pendaftaran_id' => $pendaftaran->id,
+                'master_tipe_jalur_alur_id' => $masterAlur->id,
+                'status' => $index === 0 ? PendaftaranAlur::STATUS_IN_PROGRESS : PendaftaranAlur::STATUS_PENDING,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
+
+        if (!empty($alursData)) {
+            PendaftaranAlur::insert($alursData);
+        }
     }
 
     /**

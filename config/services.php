@@ -43,4 +43,12 @@ return [
         'api_token' => env('SINTA_API_TOKEN'),
     ],
 
+    'google_workspace' => [
+        'credentials_json' => env('GOOGLE_WORKSPACE_CREDENTIALS'), // Path to JSON file (e.g. storage/app/google-credentials.json)
+        'admin_email' => env('GOOGLE_WORKSPACE_ADMIN_EMAIL'),      // Email of the G Suite admin user to impersonate
+        'domain' => env('GOOGLE_WORKSPACE_DOMAIN'),
+        'default_password' => env('GOOGLE_WORKSPACE_DEFAULT_PASSWORD'),
+        'org_unit_path' => env('GOOGLE_WORKSPACE_OU_PATH'),
+    ],
+
 ];
