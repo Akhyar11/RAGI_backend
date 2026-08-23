@@ -28,6 +28,24 @@ class PendaftaranServiceTest extends TestCase
                                     ->willReturn(new \App\Models\Spmb\PembayaranSpmb());
 
         $this->pendaftaranService = new PendaftaranService($this->pembayaranServiceMock);
+
+        \Illuminate\Support\Facades\DB::table('gelombang_penerimaan')->insert([
+            'jalur_masuk_id' => \Illuminate\Support\Facades\DB::table('jalur_masuk')->insertGetId([
+                'kode' => 'TEST',
+                'nama' => 'Jalur Test',
+                'is_active' => true,
+            ]),
+            'tahun_akademik_id' => 1,
+            'nama' => 'Gelombang Test',
+            'tanggal_buka' => now()->toDateString(),
+            'tanggal_tutup' => now()->addMonth()->toDateString(),
+            'kuota_total' => 100,
+            'kuota_terisi' => 0,
+            'biaya_pendaftaran' => 0,
+            'status' => 'aktif',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     public function test_can_create_pendaftaran_and_trigger_notification()
@@ -52,7 +70,7 @@ class PendaftaranServiceTest extends TestCase
         $pendaftaran = $this->pendaftaranService->create($data, $user);
 
         // Assert Database
-        $this->assertDatabaseHas('spmb_pendaftaran', [
+        $this->assertDatabaseHas('pendaftaran_calon_mhs', [
             'user_id' => $user->id,
             'gelombang_id' => 1,
             'program_studi_id' => 101,
@@ -77,7 +95,7 @@ class PendaftaranServiceTest extends TestCase
         $admin = User::factory()->create();
         
         // Create dummy Pendaftaran directly (or via factory)
-        $pendaftaranId = \Illuminate\Support\Facades\DB::table('spmb_pendaftaran')->insertGetId([
+        $pendaftaranId = \Illuminate\Support\Facades\DB::table('pendaftaran_calon_mhs')->insertGetId([
             'user_id' => $user->id,
             'gelombang_id' => 1,
             'program_studi_id' => 101,
@@ -102,7 +120,7 @@ class PendaftaranServiceTest extends TestCase
         $this->assertEquals('lulus_administrasi', $updated->status);
         $this->assertEquals('Berkas lengkap dan sesuai', $updated->catatan_verifikasi);
         
-        $this->assertDatabaseHas('spmb_pendaftaran', [
+        $this->assertDatabaseHas('pendaftaran_calon_mhs', [
             'id' => $pendaftaranId,
             'status' => 'lulus_administrasi',
             'diverifikasi_oleh' => $admin->id

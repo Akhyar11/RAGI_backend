@@ -150,6 +150,7 @@ class SpmBSikeuCallbackController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'Pembayaran SPMB berhasil diproses dan dicatat ke jurnal keuangan.',
+                'spmb_unlock' => true,
                 'data' => [
                     'tagihan' => $tagihan,
                     'pembayaran' => $pembayaran,

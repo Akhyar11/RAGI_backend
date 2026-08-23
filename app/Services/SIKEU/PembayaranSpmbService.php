@@ -2,7 +2,7 @@
 
 namespace App\Services\SIKEU;
 
-use App\Models\PendaftaranCalonMhs;
+use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\PembayaranSpmb;
 use App\Notifications\TagihanVaNotification;
 use Illuminate\Support\Facades\DB;

@@ -37,6 +37,8 @@ class PermissionSeeder extends Seeder
             ['name' => 'Monitor Sesi Perangkat', 'slug' => 'iam.sessions.read', 'module' => 'iam', 'action' => 'read', 'description' => 'Memantau sesi login & perangkat aktif'],
             ['name' => 'Force Logout Sesi', 'slug' => 'iam.sessions.delete', 'module' => 'iam', 'action' => 'delete', 'description' => 'Memutus secara paksa sesi perangkat terhubung'],
             ['name' => 'Lihat Audit Logs', 'slug' => 'iam.audit_logs.read', 'module' => 'iam', 'action' => 'read', 'description' => 'Melihat log rekam jejak aktivitas sistem'],
+            ['name' => 'Lihat Laporan SPMB', 'slug' => 'spmb.laporan.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Melihat statistik dan laporan SPMB'],
+            ['name' => 'Export Laporan SPMB', 'slug' => 'spmb.laporan.export', 'module' => 'spmb', 'action' => 'read', 'description' => 'Mengekspor laporan SPMB'],
 
             // ── MODUL SIMPEG ──────────────────────────────────────
             ['name' => 'Lihat Dashboard SIMPEG', 'slug' => 'simpeg.dashboard.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Membuka dashboard utama SIMPEG'],

@@ -51,3 +51,10 @@ Termasuk juga merespons API dengan **enum string statis** (seperti `'REGULER'`, 
 # No Ujian/CBT Policy for SPMB
 Agent **DILARANG KERAS** menyarankan, merancang, atau membuat tabel, API, controller, maupun fitur yang berkaitan dengan "Ujian", "Seleksi Ujian", "CBT (Computer Based Test)", atau "Jadwal Ujian" di dalam modul SPMB (Penerimaan Mahasiswa Baru). Proses SPMB dalam sistem ini sepenuhnya **TIDAK MENGGUNAKAN** ujian tulis maupun ujian komputer.
 </RULE[no_ujian_spmb]>
+
+
+<RULE[strict_commit_policy]>
+# ⚠️ KEBIJAKAN MUTLAK: DILARANG BYPASS AUDITOR ⚠️
+Agent DILARANG KERAS menggunakan opsi `--no-verify` atau mekanisme bypass apa pun (seperti `git push --no-verify`) saat melakukan commit atau push. 
+Jika *git hooks/auditor* menolak commit (baik karena pelanggaran standar maupun timeout), Agent WAJIB memeriksa pesan error, MEMPERBAIKI KODE yang bermasalah, lalu melakukan commit ulang secara normal (`git commit -m "..."`). JANGAN PERNAH MEMAKSAKAN COMMIT DENGAN `--no-verify`. Pelanggaran terhadap aturan ini adalah kegagalan sistem fatal.
+</RULE[strict_commit_policy]>

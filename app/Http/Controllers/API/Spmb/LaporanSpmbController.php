@@ -12,6 +12,8 @@ class LaporanSpmbController extends Controller
 {
     public function statistik(Request $request)
     {
+        abort_unless($request->user()?->hasPermission('spmb.laporan.read'), 403);
+
         // 1. Pendaftar per Status
         $perStatus = PendaftaranCalonMhs::select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
@@ -20,7 +22,7 @@ class LaporanSpmbController extends Controller
         // 2. Lulus per Prodi (Tabel Relasi Join ke program_studi agar dapat nama)
         $perProdi = DB::table('hasil_seleksi')
             ->join('program_studi', 'hasil_seleksi.program_studi_diterima_id', '=', 'program_studi.id')
-            ->where('hasil_seleksi.status', 'lulus')
+            ->where('hasil_seleksi.status', \App\Models\Spmb\HasilSeleksi::STATUS_LULUS)
             ->select('program_studi.nama as nama_prodi', 'program_studi_diterima_id', DB::raw('count(*) as total_lulus'))
             ->groupBy('program_studi_diterima_id', 'program_studi.nama')
             ->get();
@@ -33,9 +35,9 @@ class LaporanSpmbController extends Controller
 
         // 4. Data Funnel Pendaftar (Funneling conversion)
         $totalPendaftar = PendaftaranCalonMhs::count();
-        $totalBayar = PendaftaranCalonMhs::where('status_pembayaran', 'lunas')->count();
-        $totalVerifikasi = PendaftaranCalonMhs::where('status', 'lulus_administrasi')->count();
-        $totalLulus = DB::table('hasil_seleksi')->where('status', 'lulus')->count();
+        $totalBayar = PendaftaranCalonMhs::where('status_pembayaran', PendaftaranCalonMhs::STATUS_PEMBAYARAN_LUNAS)->count();
+        $totalVerifikasi = PendaftaranCalonMhs::where('status', PendaftaranCalonMhs::STATUS_LULUS_ADMINISTRASI)->count();
+        $totalLulus = DB::table('hasil_seleksi')->where('status', \App\Models\Spmb\HasilSeleksi::STATUS_LULUS)->count();
         $totalDaftarUlang = DB::table('hasil_seleksi')->where('status_daftar_ulang', 'lunas')->count();
 
         $funnelData = [
@@ -59,6 +61,8 @@ class LaporanSpmbController extends Controller
 
     public function exportCsv(Request $request)
     {
+        abort_unless($request->user()?->hasPermission('spmb.laporan.export'), 403);
+
         $response = new StreamedResponse(function() {
             $handle = fopen('php://output', 'w');
             

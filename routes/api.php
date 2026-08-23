@@ -203,7 +203,7 @@ Route::prefix('spmb')->group(function () {
     Route::get('master-jalur-kelas', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexJalurKelas']);
 });
 
-Route::middleware(['auth:api', 'role:admin|superadmin|panitia_spmb'])->prefix('spmb')->group(function () {
+Route::middleware('auth:api')->prefix('spmb')->group(function () {
     Route::get('laporan/statistik', [App\Http\Controllers\API\Spmb\LaporanSpmbController::class, 'statistik']);
     Route::get('laporan/export', [App\Http\Controllers\API\Spmb\LaporanSpmbController::class, 'exportCsv']);
 });

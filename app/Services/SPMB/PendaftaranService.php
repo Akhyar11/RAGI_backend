@@ -2,7 +2,7 @@
 
 namespace App\Services\SPMB;
 
-use App\Models\PendaftaranCalonMhs;
+use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\User;
 use App\Notifications\PendaftaranSuksesNotification;
 use App\Services\SIKEU\PembayaranSpmbService;
