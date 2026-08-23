@@ -10,4 +10,6 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 class Module extends Model
 {
     use HasFactory;
+
+    protected $table = 'core_modules';
 }
