@@ -19,12 +19,12 @@ class LaporanSpmbController extends Controller
             ->groupBy('status')
             ->get();
 
-        // 2. Lulus per Prodi (Tabel Relasi Join ke program_studi agar dapat nama)
+        // 2. Lulus per Prodi (Tabel Relasi Join ke master program studi)
         $perProdi = DB::table('hasil_seleksi')
-            ->join('program_studi', 'hasil_seleksi.program_studi_diterima_id', '=', 'program_studi.id')
+            ->join('master_program_studi', 'hasil_seleksi.program_studi_diterima_id', '=', 'master_program_studi.id')
             ->where('hasil_seleksi.status', \App\Models\Spmb\HasilSeleksi::STATUS_LULUS)
-            ->select('program_studi.nama as nama_prodi', 'program_studi_diterima_id', DB::raw('count(*) as total_lulus'))
-            ->groupBy('program_studi_diterima_id', 'program_studi.nama')
+            ->select('master_program_studi.nama as nama_prodi', 'program_studi_diterima_id', DB::raw('count(*) as total_lulus'))
+            ->groupBy('program_studi_diterima_id', 'master_program_studi.nama')
             ->get();
 
         // 3. Pendaftar per Gelombang

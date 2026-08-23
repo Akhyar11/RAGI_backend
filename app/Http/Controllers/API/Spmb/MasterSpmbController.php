@@ -381,25 +381,7 @@ class MasterSpmbController extends Controller
      */
     public function getProgramStudi(): JsonResponse
     {
-        $prodi = collect();
-        try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('master_program_studi')) {
-                $prodi = \App\Models\Spmb\MasterProgramStudi::where('is_active', true)->get();
-            } elseif (\Illuminate\Support\Facades\Schema::hasTable('program_studi')) {
-                $prodi = \Illuminate\Support\Facades\DB::table('program_studi')->get();
-            }
-        } catch (\Throwable $e) {
-            // Graceful fallback to static collection if table not migrated yet
-        }
-
-        if ($prodi->isEmpty()) {
-            $prodi = collect([
-                ['id' => 1, 'kode_prodi' => 'TI-S1', 'nama' => 'S1 Teknik Informatika', 'jenjang' => 'S1'],
-                ['id' => 2, 'kode_prodi' => 'SI-S1', 'nama' => 'S1 Sistem Informasi', 'jenjang' => 'S1'],
-                ['id' => 3, 'kode_prodi' => 'DKV-S1', 'nama' => 'S1 Desain Komunikasi Visual', 'jenjang' => 'S1'],
-                ['id' => 4, 'kode_prodi' => 'MI-D3', 'nama' => 'D3 Manajemen Informatika', 'jenjang' => 'D3'],
-            ]);
-        }
+        $prodi = \App\Models\Spmb\MasterProgramStudi::where('is_active', true)->get();
 
         return response()->json([
             'status' => 'success',
