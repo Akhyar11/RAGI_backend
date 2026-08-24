@@ -318,10 +318,11 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::get('master/tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getMasterTipeJalur']);
 
 
-    // Master Jenis Biaya Pendidikan
-    Route::get('master/jenis-biaya', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexJenisBiaya']);
-    Route::post('master/jenis-biaya', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'storeJenisBiaya']);
-    Route::put('master/jenis-biaya/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateJenisBiaya']);
+    // Master Biaya Pendidikan (sebelumnya Jenis Biaya)
+    Route::get('master/master-biaya', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexMasterBiaya']);
+    Route::post('master/master-biaya', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'storeMasterBiaya']);
+    Route::put('master/master-biaya/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateMasterBiaya']);
+    Route::delete('master/master-biaya/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'destroyMasterBiaya']);
 
 
 

@@ -138,7 +138,21 @@ class SikeuMasterController extends Controller
 
         return response()->json(['status' => 'success', 'message' => 'Master biaya berhasil diperbarui.', 'data' => $biaya->load('moduleDelegations')]);
     }
+    public function destroyMasterBiaya($id)
+    {
+        $biaya = MasterBiaya::findOrFail($id);
+        
+        // Prevent deletion if used in tags/billing
+        $hasUsage = \App\Models\Sikeu\TagihanMahasiswaDetail::where('master_biaya_id', $id)->exists();
+        if ($hasUsage) {
+            return response()->json(['status' => 'error', 'message' => 'Master biaya tidak dapat dihapus karena sudah digunakan dalam tagihan.'], 400);
+        }
 
+        MasterBiayaModule::where('master_biaya_id', $id)->delete();
+        $biaya->delete();
+
+        return response()->json(['status' => 'success', 'message' => 'Master biaya berhasil dihapus.']);
+    }
 
 
     // ==========================================
