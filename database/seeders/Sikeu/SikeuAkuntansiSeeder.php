@@ -12,7 +12,7 @@ class SikeuAkuntansiSeeder extends Seeder
     public function run(): void
     {
         Schema::disableForeignKeyConstraints();
-        DB::table('akun_keuangan')->truncate();
+        DB::table('sikeu_akun_keuangan')->truncate();
         Schema::enableForeignKeyConstraints();
 
         $akuns = [

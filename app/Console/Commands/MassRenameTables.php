@@ -22,7 +22,7 @@ class MassRenameTables extends Command
      */
     protected $tableMap = [
         // SIKEU
-        'jenis_biaya' => 'sikeu_jenis_biaya',
+        'master_biaya' => 'sikeu_master_biaya',
         'tagihan_mahasiswa' => 'sikeu_tagihan_mahasiswa',
         'detail_tagihan' => 'sikeu_detail_tagihan',
         'potongan_tagihan' => 'sikeu_potongan_tagihan',
@@ -120,7 +120,7 @@ class MassRenameTables extends Command
         'menu_role' => 'core_menu_role',
         'modules' => 'core_modules',
         'system_settings' => 'core_system_settings',
-        'jenis_biaya_modules' => 'core_jenis_biaya_modules',
+        'master_biaya_modules' => 'core_master_biaya_modules',
         'master_tipe_jalur' => 'core_master_tipe_jalur',
         'master_jalur_kelas' => 'core_master_jalur_kelas',
     ];

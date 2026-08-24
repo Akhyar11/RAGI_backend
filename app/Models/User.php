@@ -79,7 +79,7 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        if (!\Illuminate\Support\Facades\Schema::hasTable('system_settings')) {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('core_system_settings')) {
             return false;
         }
 

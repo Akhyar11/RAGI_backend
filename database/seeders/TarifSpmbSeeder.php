@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Sikeu\TarifSpmb;
-use App\Models\Sikeu\JenisBiaya;
+use App\Models\Sikeu\MasterBiaya;
 use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\GelombangPenerimaan;
 
@@ -12,10 +12,10 @@ class TarifSpmbSeeder extends Seeder
 {
     public function run(): void
     {
-        $jenisSpmb = JenisBiaya::where('kode', 'SPMB_ADM')->first();
+        $jenisSpmb = MasterBiaya::where('kode', 'SPMB_ADM')->first();
 
         if (!$jenisSpmb) {
-            $jenisSpmb = JenisBiaya::create([
+            $jenisSpmb = MasterBiaya::create([
                 'kode' => 'SPMB_ADM',
                 'nama' => 'Biaya Pendaftaran SPMB',
                 'tipe' => 'spmb_adm',
@@ -34,7 +34,7 @@ class TarifSpmbSeeder extends Seeder
 
         TarifSpmb::updateOrCreate(
             [
-                'jenis_biaya_id' => $jenisSpmb->id,
+                'master_biaya_id' => $jenisSpmb->id,
                 'jalur_id' => $jalurId,
                 'gelombang_id' => $gelId,
             ],

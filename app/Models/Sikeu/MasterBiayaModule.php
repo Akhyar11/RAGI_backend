@@ -5,19 +5,19 @@ namespace App\Models\Sikeu;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class JenisBiayaModule extends Model
+class MasterBiayaModule extends Model
 {
     use HasFactory;
 
-    protected $table = 'core_jenis_biaya_modules';
+    protected $table = 'core_master_biaya_modules';
 
     protected $fillable = [
-        'jenis_biaya_id',
+        'master_biaya_id',
         'module_code',
     ];
 
-    public function jenisBiaya()
+    public function masterBiaya()
     {
-        return $this->belongsTo(JenisBiaya::class, 'jenis_biaya_id');
+        return $this->belongsTo(MasterBiaya::class, 'master_biaya_id');
     }
 }

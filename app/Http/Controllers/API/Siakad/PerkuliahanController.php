@@ -89,7 +89,7 @@ class PerkuliahanController extends Controller
     {
         $request->validate([
             'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
-            'tahun_akademik_id' => 'required|exists:master_tahun_akademik,id',
+            'tahun_akademik_id' => 'required|exists:spmb_master_tahun_akademik,id',
             'program_studi_id' => 'required|exists:master_program_studi,id',
             'ruangan_id' => 'nullable|exists:ruangan,id',
             'dosen_id' => 'nullable|exists:siakad_dosen,id',

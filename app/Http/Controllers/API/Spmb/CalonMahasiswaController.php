@@ -74,7 +74,7 @@ class CalonMahasiswaController extends Controller
             'gelombang_id' => 'sometimes|nullable|integer',
             'program_studi_id' => 'sometimes|nullable|integer',
             'program_studi_pilihan2_id' => 'sometimes|nullable|integer',
-            'master_tipe_jalur_id' => 'sometimes|nullable|exists:master_tipe_jalur,id',
+            'master_tipe_jalur_id' => 'sometimes|nullable|exists:core_master_tipe_jalur,id',
             'master_jalur_kelas_id' => 'sometimes|nullable|exists:master_jalur_kelas,id',
             'nama_lengkap' => 'sometimes|nullable|string|max:255',
             'nik' => 'sometimes|nullable|string|max:20',
@@ -159,7 +159,7 @@ class CalonMahasiswaController extends Controller
             'keterangan' => 'Pendaftaran SPMB - ' . $namaLengkap,
             'details' => [
                 [
-                    'jenis_biaya_kode' => 'SPMB_ADM',
+                    'master_biaya_kode' => 'SPMB_ADM',
                     'nominal' => $nominal,
                     'keterangan' => 'Biaya Formulir Pendaftaran SPMB'
                 ]

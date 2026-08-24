@@ -18,7 +18,7 @@ class MahasiswaTagihanController extends Controller
     {
         $mahasiswaId = $request->query('mahasiswa_id', auth()->id() ?? 1);
 
-        $tagihans = TagihanMahasiswa::with(['details.jenisBiaya', 'virtualAccount', 'dispensasis'])
+        $tagihans = TagihanMahasiswa::with(['details.masterBiaya', 'virtualAccount', 'dispensasis'])
             ->where('mahasiswa_id', $mahasiswaId)
             ->orderBy('id', 'desc')
             ->get();
@@ -40,7 +40,7 @@ class MahasiswaTagihanController extends Controller
                 'details' => $t->details->map(function ($d) {
                     return [
                         'id' => $d->id,
-                        'nama_biaya' => $d->jenisBiaya->nama ?? 'Biaya Kuliah',
+                        'nama_biaya' => $d->masterBiaya->nama ?? 'Biaya Kuliah',
                         'nominal' => (float)$d->nominal,
                         'potongan' => (float)$d->potongan,
                         'nominal_bersih' => (float)$d->nominal_bersih,
@@ -62,7 +62,7 @@ class MahasiswaTagihanController extends Controller
      */
     public function generateInvoice($id)
     {
-        $tagihan = TagihanMahasiswa::with(['details.jenisBiaya', 'virtualAccount'])->findOrFail($id);
+        $tagihan = TagihanMahasiswa::with(['details.masterBiaya', 'virtualAccount'])->findOrFail($id);
 
         // Auto create Virtual Account if not exist
         if (!$tagihan->virtualAccount) {
@@ -105,7 +105,7 @@ class MahasiswaTagihanController extends Controller
             ],
             'items' => $tagihan->details->map(function ($d) {
                 return [
-                    'deskripsi' => $d->jenisBiaya->nama ?? 'Komponen Biaya Pendidikan',
+                    'deskripsi' => $d->masterBiaya->nama ?? 'Komponen Biaya Pendidikan',
                     'nominal' => (float)$d->nominal,
                     'potongan' => (float)$d->potongan,
                     'nominal_bersih' => (float)$d->nominal_bersih,

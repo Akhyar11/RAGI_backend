@@ -20,8 +20,8 @@ class SpmbPendaftarSeeder extends Seeder
 {
     public function run(): void
     {
-        $tipeReguler = DB::table('master_tipe_jalur')->where('kode', 'reguler')->first();
-        $tipeBeasiswa = DB::table('master_tipe_jalur')->where('kode', 'beasiswa')->first();
+        $tipeReguler = DB::table('core_master_tipe_jalur')->where('kode', 'reguler')->first();
+        $tipeBeasiswa = DB::table('core_master_tipe_jalur')->where('kode', 'beasiswa')->first();
 
         // 1. Data Master Jalur Masuk
         $jalurReguler = JalurMasuk::updateOrCreate(
@@ -90,9 +90,9 @@ class SpmbPendaftarSeeder extends Seeder
         );
 
         // 2b. Data Master Tahun Akademik
-        $ta2026 = DB::table('master_tahun_akademik')->where('kode', '20261')->first();
+        $ta2026 = DB::table('spmb_master_tahun_akademik')->where('kode', '20261')->first();
         if (!$ta2026) {
-            $taId = DB::table('master_tahun_akademik')->insertGetId([
+            $taId = DB::table('spmb_master_tahun_akademik')->insertGetId([
                 'kode' => '20261',
                 'nama' => 'Tahun Akademik 2026/2027 Ganjil',
                 'tahun_mulai' => 2026,
@@ -319,7 +319,7 @@ class SpmbPendaftarSeeder extends Seeder
             }
 
             if ($roleCalonMhs) {
-                DB::table('user_roles')->updateOrInsert(
+                DB::table('core_user_roles')->updateOrInsert(
                     ['user_id' => $user->id, 'role_id' => $roleCalonMhs->id],
                     ['assigned_by' => $adminUser ? $adminUser->id : $user->id, 'valid_from' => now()->toDateString(), 'created_at' => now()]
                 );

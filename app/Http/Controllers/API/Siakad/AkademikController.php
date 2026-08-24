@@ -70,7 +70,7 @@ class AkademikController extends Controller
     public function storeTahunAkademik(Request $request)
     {
         $request->validate([
-            'kode' => 'required|string|unique:master_tahun_akademik,kode',
+            'kode' => 'required|string|unique:spmb_master_tahun_akademik,kode',
             'nama' => 'required|string|max:255',
             'tahun_mulai' => 'nullable|integer',
             'tahun_selesai' => 'nullable|integer',

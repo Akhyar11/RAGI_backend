@@ -15,13 +15,14 @@ return new class extends Migration
             $table->id();
             $table->foreignId('program_studi_id')->constrained('spmb_master_program_studi')->onDelete('restrict');
             $table->foreignId('tahun_akademik_id')->constrained('spmb_master_tahun_akademik')->onDelete('restrict');
+            $table->foreignId('master_biaya_id')->nullable()->constrained('sikeu_master_biaya')->onDelete('restrict');
             $table->string('kelompok_ukt', 20)->default('I');
             $table->decimal('nominal', 15, 2);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
             $table->softDeletes();
 
-            $table->unique(['program_studi_id', 'tahun_akademik_id', 'kelompok_ukt'], 'tarif_ukt_spmb_unique');
+            $table->unique(['program_studi_id', 'tahun_akademik_id', 'kelompok_ukt', 'master_biaya_id'], 'tarif_ukt_spmb_unique_idx');
         });
     }
 

@@ -13,7 +13,7 @@ class PotonganTagihan extends Model
 
     protected $fillable = [
         'tagihan_id',
-        'beasiswa_id',
+
         'tipe',
         'nominal_potongan',
         'keterangan',
@@ -29,8 +29,5 @@ class PotonganTagihan extends Model
         return $this->belongsTo(TagihanMahasiswa::class, 'tagihan_id');
     }
 
-    public function beasiswa()
-    {
-        return $this->belongsTo(Beasiswa::class, 'beasiswa_id');
-    }
+
 }

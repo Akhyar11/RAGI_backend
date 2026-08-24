@@ -12,11 +12,11 @@ return new class extends Migration
     public function up(): void
     {
         // 1. Jenis Biaya (Master Kategori Biaya)
-        Schema::create('sikeu_jenis_biaya', function (Blueprint $table) {
+        Schema::create('sikeu_master_biaya', function (Blueprint $table) {
             $table->id();
             $table->string('kode')->unique();
             $table->string('nama');
-            $table->enum('tipe', ['ukt', 'spp', 'sks', 'praktikum', 'wisuda', 'spmb_adm', 'lainnya'])->default('lainnya');
+            $table->enum('tipe', ['spp', 'sks', 'praktikum', 'wisuda', 'spmb_adm', 'lainnya'])->default('lainnya');
             $table->text('deskripsi')->nullable();
             $table->boolean('is_recurring')->default(true);
             $table->boolean('is_active')->default(true);
@@ -52,7 +52,7 @@ return new class extends Migration
         Schema::create('sikeu_detail_tagihan', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tagihan_id')->constrained('sikeu_tagihan_mahasiswa')->onDelete('cascade');
-            $table->foreignId('jenis_biaya_id')->constrained('sikeu_jenis_biaya')->onDelete('cascade');
+            $table->foreignId('master_biaya_id')->constrained('sikeu_master_biaya')->onDelete('cascade');
             $table->decimal('nominal', 15, 2)->default(0);
             $table->decimal('potongan', 15, 2)->default(0);
             $table->decimal('nominal_bersih', 15, 2)->default(0);
@@ -64,8 +64,7 @@ return new class extends Migration
         Schema::create('sikeu_potongan_tagihan', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tagihan_id')->constrained('sikeu_tagihan_mahasiswa')->onDelete('cascade');
-            $table->unsignedBigInteger('beasiswa_id')->nullable();
-            $table->enum('tipe', ['beasiswa', 'diskon', 'subsidi', 'lainnya'])->default('diskon');
+            $table->enum('tipe', ['diskon', 'subsidi', 'lainnya'])->default('diskon');
             $table->decimal('nominal_potongan', 15, 2)->default(0);
             $table->text('keterangan')->nullable();
             $table->unsignedBigInteger('diinput_oleh')->nullable();
@@ -355,6 +354,6 @@ return new class extends Migration
         Schema::dropIfExists('sikeu_detail_tagihan');
         Schema::dropIfExists('sikeu_tagihan_mahasiswa');
 
-        Schema::dropIfExists('sikeu_jenis_biaya');
+        Schema::dropIfExists('sikeu_master_biaya');
     }
 };

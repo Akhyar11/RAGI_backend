@@ -13,7 +13,7 @@ class DetailTagihan extends Model
 
     protected $fillable = [
         'tagihan_id',
-        'jenis_biaya_id',
+        'master_biaya_id',
         'nominal',
         'potongan',
         'nominal_bersih',
@@ -31,8 +31,8 @@ class DetailTagihan extends Model
         return $this->belongsTo(TagihanMahasiswa::class, 'tagihan_id');
     }
 
-    public function jenisBiaya()
+    public function masterBiaya()
     {
-        return $this->belongsTo(JenisBiaya::class, 'jenis_biaya_id');
+        return $this->belongsTo(MasterBiaya::class, 'master_biaya_id');
     }
 }

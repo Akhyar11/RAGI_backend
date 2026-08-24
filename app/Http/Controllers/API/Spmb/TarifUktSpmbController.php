@@ -11,7 +11,7 @@ class TarifUktSpmbController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = TarifUktSpmb::with(['programStudi', 'tahunAkademik']);
+        $query = TarifUktSpmb::with(['programStudi', 'tahunAkademik', 'masterBiaya']);
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -29,6 +29,10 @@ class TarifUktSpmbController extends Controller
 
         if ($request->filled('is_active')) {
             $query->where('is_active', filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN));
+        }
+
+        if ($request->filled('master_biaya_id')) {
+            $query->where('master_biaya_id', $request->input('master_biaya_id'));
         }
 
         $sortBy  = in_array($request->input('sort_by'), ['id', 'kelompok_ukt', 'nominal', 'created_at']) ? $request->input('sort_by') : 'created_at';
@@ -56,14 +60,15 @@ class TarifUktSpmbController extends Controller
     {
         $validated = $request->validate([
             'program_studi_id'  => 'required|exists:master_program_studi,id',
-            'tahun_akademik_id' => 'required|exists:master_tahun_akademik,id',
+            'tahun_akademik_id' => 'required|exists:spmb_master_tahun_akademik,id',
+            'master_biaya_id'   => 'required|exists:sikeu_master_biaya,id',
             'kelompok_ukt'      => 'required|string|max:100',
             'nominal'           => 'required|numeric|min:0',
             'is_active'         => 'boolean',
         ]);
 
         $tarif = TarifUktSpmb::create($validated);
-        $tarif->load(['programStudi', 'tahunAkademik']);
+        $tarif->load(['programStudi', 'tahunAkademik', 'masterBiaya']);
 
         return response()->json([
             'status'  => 'success',
@@ -74,7 +79,7 @@ class TarifUktSpmbController extends Controller
 
     public function show($id): JsonResponse
     {
-        $tarif = TarifUktSpmb::with(['programStudi', 'tahunAkademik'])->findOrFail($id);
+        $tarif = TarifUktSpmb::with(['programStudi', 'tahunAkademik', 'masterBiaya'])->findOrFail($id);
         return response()->json(['status' => 'success', 'data' => $tarif]);
     }
 
@@ -84,14 +89,15 @@ class TarifUktSpmbController extends Controller
 
         $validated = $request->validate([
             'program_studi_id'  => 'required|exists:master_program_studi,id',
-            'tahun_akademik_id' => 'required|exists:master_tahun_akademik,id',
+            'tahun_akademik_id' => 'required|exists:spmb_master_tahun_akademik,id',
+            'master_biaya_id'   => 'required|exists:sikeu_master_biaya,id',
             'kelompok_ukt'      => 'required|string|max:100',
             'nominal'           => 'required|numeric|min:0',
             'is_active'         => 'boolean',
         ]);
 
         $tarif->update($validated);
-        $tarif->load(['programStudi', 'tahunAkademik']);
+        $tarif->load(['programStudi', 'tahunAkademik', 'masterBiaya']);
 
         return response()->json([
             'status'  => 'success',

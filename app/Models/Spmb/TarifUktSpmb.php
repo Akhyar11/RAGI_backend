@@ -15,6 +15,7 @@ class TarifUktSpmb extends Model
     protected $fillable = [
         'program_studi_id',
         'tahun_akademik_id',
+        'master_biaya_id',
         'kelompok_ukt',
         'nominal',
         'is_active',
@@ -33,5 +34,10 @@ class TarifUktSpmb extends Model
     public function tahunAkademik()
     {
         return $this->belongsTo(MasterTahunAkademik::class, 'tahun_akademik_id');
+    }
+
+    public function masterBiaya()
+    {
+        return $this->belongsTo(\App\Models\Sikeu\MasterBiaya::class, 'master_biaya_id');
     }
 }

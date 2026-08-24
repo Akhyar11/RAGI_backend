@@ -32,7 +32,8 @@ class DaftarUlangController extends Controller
         $prodiId = $hasil->program_studi_diterima_id ?? $pendaftaran->program_studi_id;
         $tahunAkademikId = $pendaftaran->gelombang_penerimaan->tahun_akademik_id ?? 1;
 
-        $tarifUkt = \App\Models\Spmb\TarifUktSpmb::where('program_studi_id', $prodiId)
+        $tarifUkt = \App\Models\Spmb\TarifUktSpmb::with('masterBiaya')
+                        ->where('program_studi_id', $prodiId)
                         ->where('tahun_akademik_id', $tahunAkademikId)
                         ->where('is_active', true)
                         ->orderBy('nominal', 'asc') // Ambil UKT kelompok terendah jika tidak ada data spesifik mahasiswa
@@ -40,12 +41,14 @@ class DaftarUlangController extends Controller
 
         // Jika UKT di SPMB tidak ada, maka cek ke Master Tarif SIKEU
         if (!$tarifUkt) {
-            $tarifUkt = \App\Models\Sikeu\TarifSpmb::where('jenis_biaya_kode', 'UKT')
-                            ->orWhere('deskripsi', 'like', '%UKT%')
-                            ->first(); 
+            $tarifUkt = \App\Models\Sikeu\TarifSpmb::with('masterBiaya')
+                            ->whereHas('masterBiaya', function($q) {
+                                $q->where('kode', 'like', '%UKT%')->orWhere('nama', 'like', '%UKT%');
+                            })->first(); 
         }
 
         $nominalUKT = $tarifUkt ? $tarifUkt->nominal : 5000000;
+        $kodeBiaya = ($tarifUkt && $tarifUkt->masterBiaya) ? $tarifUkt->masterBiaya->kode : 'UKT_SMT1';
 
         $payload = [
             'calon_mahasiswa_id' => $pendaftaran_id,
@@ -56,7 +59,7 @@ class DaftarUlangController extends Controller
             'keterangan' => 'Tagihan Daftar Ulang (UKT) - Pendaftaran ID ' . $pendaftaran_id,
             'details' => [
                 [
-                    'jenis_biaya_kode' => 'UKT_SMT1',
+                    'master_biaya_kode' => $kodeBiaya,
                     'nominal' => $nominalUKT,
                     'keterangan' => 'Biaya UKT Semester 1'
                 ]

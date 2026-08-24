@@ -12,7 +12,7 @@ class TarifSpmb extends Model
     protected $table = 'sikeu_tarif_spmb';
 
     protected $fillable = [
-        'jenis_biaya_id',
+        'master_biaya_id',
         'jalur_id',
         'gelombang_id',
         'nominal',
@@ -24,8 +24,8 @@ class TarifSpmb extends Model
         'is_active' => 'boolean',
     ];
 
-    public function jenisBiaya()
+    public function masterBiaya()
     {
-        return $this->belongsTo(JenisBiaya::class, 'jenis_biaya_id');
+        return $this->belongsTo(MasterBiaya::class, 'master_biaya_id');
     }
 }

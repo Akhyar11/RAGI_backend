@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\DetailTagihan;
 use App\Models\Sikeu\PotonganTagihan;
-use App\Models\Sikeu\JenisBiaya;
+use App\Models\Sikeu\MasterBiaya;
 use App\Models\Sikeu\VirtualAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +31,7 @@ class ExternalTagihanController extends Controller
             'jatuh_tempo' => 'nullable|date',
             'keterangan' => 'nullable|string',
             'details' => 'required|array|min:1',
-            'details.*.jenis_biaya_kode' => 'required|string',
+            'details.*.master_biaya_kode' => 'required|string',
             'details.*.nominal' => 'required|numeric|min:0',
             'details.*.keterangan' => 'nullable|string',
             'potongan' => 'nullable|array',
@@ -61,17 +61,17 @@ class ExternalTagihanController extends Controller
             // Compute details
             $detailsData = [];
             foreach ($request->details as $item) {
-                $jenisBiaya = JenisBiaya::where('kode', $item['jenis_biaya_kode'])->first();
-                $jenisBiayaId = $jenisBiaya ? $jenisBiaya->id : 1;
+                $masterBiaya = MasterBiaya::where('kode', $item['master_biaya_kode'])->first();
+                $masterBiayaId = $masterBiaya ? $masterBiaya->id : 1;
                 $nominal = (float) $item['nominal'];
                 $totalNominal += $nominal;
 
                 $detailsData[] = [
-                    'jenis_biaya_id' => $jenisBiayaId,
+                    'master_biaya_id' => $masterBiayaId,
                     'nominal' => $nominal,
                     'potongan' => 0,
                     'nominal_bersih' => $nominal,
-                    'keterangan' => $item['keterangan'] ?? 'Komponen tagihan ' . $item['jenis_biaya_kode'],
+                    'keterangan' => $item['keterangan'] ?? 'Komponen tagihan ' . $item['master_biaya_kode'],
                 ];
             }
 
@@ -82,7 +82,6 @@ class ExternalTagihanController extends Controller
                     $nomPot = (float) $pot['nominal_potongan'];
                     $totalPotongan += $nomPot;
                     $potonganData[] = [
-                        'beasiswa_id' => null,
                         'tipe' => $pot['tipe'] ?? 'diskon',
                         'nominal_potongan' => $nomPot,
                         'keterangan' => $pot['keterangan'] ?? 'Potongan khusus eksternal',

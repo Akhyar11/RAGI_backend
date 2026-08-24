@@ -134,7 +134,7 @@ class DispensasiTagihanController extends Controller
      */
     public function show($id)
     {
-        $dispensasi = DispensasiTagihan::with(['tagihan.details.jenisBiaya'])->findOrFail($id);
+        $dispensasi = DispensasiTagihan::with(['tagihan.details.masterBiaya'])->findOrFail($id);
 
         $hasUnpaidPrev = DispensasiTagihan::where('mahasiswa_id', $dispensasi->mahasiswa_id)
             ->where('id', '!=', $dispensasi->id)
@@ -161,7 +161,7 @@ class DispensasiTagihanController extends Controller
      */
     public function cetakBukti($id)
     {
-        $dispensasi = DispensasiTagihan::with(['tagihan.details.jenisBiaya'])->findOrFail($id);
+        $dispensasi = DispensasiTagihan::with(['tagihan.details.masterBiaya'])->findOrFail($id);
 
         $bukti = [
             'nomor_dispensasi' => 'DISP-' . date('Y') . '-' . str_pad($dispensasi->id, 5, '0', STR_PAD_LEFT),

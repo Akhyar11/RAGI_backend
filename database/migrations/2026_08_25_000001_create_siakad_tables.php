@@ -22,16 +22,16 @@ return new class extends Migration
             $table->softDeletes();
         });
 
-        // Modifikasi tabel master_program_studi
+        // Modifikasi tabel spmb_master_program_studi
         Schema::table('spmb_master_program_studi', function (Blueprint $table) {
-            if (!Schema::hasColumn('master_program_studi', 'fakultas_id')) {
+            if (!Schema::hasColumn('spmb_master_program_studi', 'fakultas_id')) {
                 $table->foreignId('fakultas_id')->nullable()->constrained('siakad_fakultas')->nullOnDelete();
             }
-            if (!Schema::hasColumn('master_program_studi', 'kode_prodi_dikti')) {
+            if (!Schema::hasColumn('spmb_master_program_studi', 'kode_prodi_dikti')) {
                 $table->string('kode_prodi_dikti', 50)->nullable()->after('kode_prodi');
             }
-            if (!Schema::hasColumn('master_program_studi', 'akreditasi')) {
-                $table->string('akreditasi', 10)->nullable();
+            if (!Schema::hasColumn('spmb_master_program_studi', 'akreditasi')) {
+                $table->string('akreditasi', 20)->nullable();
                 $table->date('akreditasi_berlaku_sampai')->nullable();
             }
         });

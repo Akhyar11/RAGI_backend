@@ -82,7 +82,7 @@ class MasterSpmbController extends Controller
     public function storeMasterTipeJalur(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'kode' => 'required|string|max:50|unique:master_tipe_jalur,kode',
+            'kode' => 'required|string|max:50|unique:core_master_tipe_jalur,kode',
             'nama' => 'required|string|max:255',
             'alur' => 'nullable|array',
             'alur.*.nama_tahap' => 'required|string|max:255',
@@ -120,7 +120,7 @@ class MasterSpmbController extends Controller
         $item = MasterTipeJalur::findOrFail($id);
 
         $validated = $request->validate([
-            'kode' => 'required|string|max:50|unique:master_tipe_jalur,kode,' . $id,
+            'kode' => 'required|string|max:50|unique:core_master_tipe_jalur,kode,' . $id,
             'nama' => 'required|string|max:255',
             'alur' => 'nullable|array',
             'alur.*.nama_tahap' => 'required|string|max:255',
@@ -231,7 +231,7 @@ class MasterSpmbController extends Controller
             'kode' => 'required|string|unique:jalur_masuk,kode',
             'nama' => 'required|string',
             'deskripsi' => 'nullable|string',
-            'master_tipe_jalur_id' => 'required|exists:master_tipe_jalur,id',
+            'master_tipe_jalur_id' => 'required|exists:core_master_tipe_jalur,id',
             'ada_wawancara' => 'required|boolean',
             'is_active' => 'required|boolean',
         ]);
@@ -256,7 +256,7 @@ class MasterSpmbController extends Controller
             'kode' => 'required|string|unique:jalur_masuk,kode,' . $jalur->id,
             'nama' => 'required|string',
             'deskripsi' => 'nullable|string',
-            'master_tipe_jalur_id' => 'required|exists:master_tipe_jalur,id',
+            'master_tipe_jalur_id' => 'required|exists:core_master_tipe_jalur,id',
             'ada_wawancara' => 'required|boolean',
             'is_active' => 'required|boolean',
         ]);
@@ -423,8 +423,11 @@ class MasterSpmbController extends Controller
     {
         $tahun = collect();
         try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('master_tahun_akademik')) {
-                $tahun = \App\Models\Spmb\MasterTahunAkademik::orderBy('id', 'desc')->get();
+            if (\Illuminate\Support\Facades\Schema::hasTable('spmb_master_tahun_akademik')) {
+                $tahun = \Illuminate\Support\Facades\DB::table('spmb_master_tahun_akademik')
+                    ->select('id', 'kode', 'nama', 'is_active', 'is_current')
+                    ->orderBy('kode', 'desc')
+                    ->get();
             }
         } catch (\Throwable $e) {
             // Graceful fallback if table not migrated yet

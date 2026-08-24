@@ -3,10 +3,9 @@
 namespace App\Http\Controllers\Sikeu;
 
 use App\Http\Controllers\Controller;
-use App\Models\Sikeu\TarifUkt;
 use App\Models\Sikeu\TarifSpmb;
-use App\Models\Sikeu\JenisBiaya;
-use App\Models\Sikeu\Beasiswa;
+use App\Models\Sikeu\MasterBiaya;
+use App\Models\Sikeu\MasterBiayaModule;
 use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\DispensasiTagihan;
 use App\Services\Sikeu\SpmbSikeuService;
@@ -24,9 +23,9 @@ class SikeuMasterController extends Controller
     // 3. MASTER JENIS BIAYA PENDIDIKAN
     // ==========================================
 
-    public function indexJenisBiaya(Request $request)
+    public function indexMasterBiaya(Request $request)
     {
-        $query = JenisBiaya::with('moduleDelegations');
+        $query = MasterBiaya::with('moduleDelegations');
 
         if ($request->filled('module_id')) {
             $mod = \App\Models\Module::find($request->module_id);
@@ -49,10 +48,10 @@ class SikeuMasterController extends Controller
         return response()->json(['status' => 'success', 'data' => $biaya]);
     }
 
-    public function storeJenisBiaya(Request $request)
+    public function storeMasterBiaya(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'kode' => 'required|string|unique:jenis_biaya,kode',
+            'kode' => 'required|string|unique:sikeu_master_biaya,kode',
             'nama' => 'required|string',
             'tipe' => 'required|string',
             'nominal_standar' => 'nullable|numeric|min:0',
@@ -67,7 +66,7 @@ class SikeuMasterController extends Controller
             return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
         }
 
-        $biaya = JenisBiaya::create([
+        $biaya = MasterBiaya::create([
             'kode' => strtoupper($request->kode),
             'nama' => $request->nama,
             'tipe' => $request->tipe,
@@ -88,19 +87,19 @@ class SikeuMasterController extends Controller
 
         if (!empty($moduleCodes) && is_array($moduleCodes)) {
             foreach ($moduleCodes as $code) {
-                \App\Models\Sikeu\JenisBiayaModule::create([
-                    'jenis_biaya_id' => $biaya->id,
+                MasterBiayaModule::create([
+                    'master_biaya_id' => $biaya->id,
                     'module_code' => strtolower($code),
                 ]);
             }
         }
 
-        return response()->json(['status' => 'success', 'message' => 'Jenis biaya berhasil ditambahkan.', 'data' => $biaya->load('moduleDelegations')], 201);
+        return response()->json(['status' => 'success', 'message' => 'Master biaya berhasil ditambahkan.', 'data' => $biaya->load('moduleDelegations')], 201);
     }
 
-    public function updateJenisBiaya(Request $request, $id)
+    public function updateMasterBiaya(Request $request, $id)
     {
-        $biaya = JenisBiaya::findOrFail($id);
+        $biaya = MasterBiaya::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
             'nama' => 'sometimes|string',
@@ -128,16 +127,16 @@ class SikeuMasterController extends Controller
         }
 
         if ($moduleCodes !== null && is_array($moduleCodes)) {
-            \App\Models\Sikeu\JenisBiayaModule::where('jenis_biaya_id', $biaya->id)->delete();
+            MasterBiayaModule::where('master_biaya_id', $biaya->id)->delete();
             foreach ($moduleCodes as $code) {
-                \App\Models\Sikeu\JenisBiayaModule::create([
-                    'jenis_biaya_id' => $biaya->id,
+                MasterBiayaModule::create([
+                    'master_biaya_id' => $biaya->id,
                     'module_code' => strtolower($code),
                 ]);
             }
         }
 
-        return response()->json(['status' => 'success', 'message' => 'Komponen biaya & nominal standar berhasil diperbarui.', 'data' => $biaya->load('moduleDelegations')]);
+        return response()->json(['status' => 'success', 'message' => 'Master biaya berhasil diperbarui.', 'data' => $biaya->load('moduleDelegations')]);
     }
 
 
@@ -146,159 +145,7 @@ class SikeuMasterController extends Controller
     // 5. PENETAPAN TIPE TAGIHAN MAHASISWA & INTEGRASI SPMB/SIAKAD
     // ==========================================
 
-    /**
-     * GET /api/v1/sikeu/master/student-billing-categories
-     * API untuk SPMB/SIAKAD mengambil daftar kategori & paket tarif tagihan mahasiswa yang tersedia
-     */
-    public function getStudentBillingCategories()
-    {
-        $tarifs = TarifUkt::with('jenisBiaya')->where('is_active', true)->get();
-        $beasiswas = Beasiswa::where('is_active', true)->get();
 
-        $categories = [
-          'tahun_angkatan_tersedia' => [2023, 2024, 2025, 2026, 2027],
-          'jalur_kelas_tersedia' => ['Reguler', 'Karyawan', 'Internasional'],
-          'kelompok_ukt_tersedia' => [1, 2, 3, 4],
-          'master_beasiswa' => $beasiswas,
-          'paket_tarif' => $tarifs,
-        ];
-
-        return response()->json(['status' => 'success', 'data' => $categories]);
-    }
-
-    /**
-     * GET /api/v1/sikeu/master/student-billing-types
-     * List penetapan tipe tagihan mahasiswa untuk pengelolaan admin SIKEU
-     */
-    public function indexStudentBillingTypes(Request $request)
-    {
-        $perPage = (int) $request->get('per_page', 10);
-        $page = (int) $request->get('page', 1);
-
-        $query = \App\Models\Sikeu\MahasiswaTipeTagihan::with('beasiswa');
-
-        if ($request->filled('q')) {
-            $q = $request->q;
-            $query->where(function($b) use ($q) {
-                $b->where('nama_mahasiswa', 'like', "%{$q}%")
-                  ->orWhere('nim', 'like', "%{$q}%")
-                  ->orWhere('mahasiswa_id', 'like', "%{$q}%");
-            });
-        }
-
-        $total = $query->count();
-
-        if ($total === 0 && !$request->filled('q')) {
-            // Seed initial sample data for demonstration
-            $samples = [
-                ['mahasiswa_id' => 101, 'nim' => '2024010042', 'nama_mahasiswa' => 'Budi Santoso', 'tahun_angkatan' => 2024, 'jalur_kelas' => 'Reguler', 'kelompok_ukt' => 3, 'beasiswa_id' => 1, 'status_pendaftaran' => 'SIAKAD_AKTIF', 'catatan_perubahan' => 'Penetapan awal dari SPMB (Penerima KIP-Kuliah)'],
-                ['mahasiswa_id' => 102, 'nim' => '2025010018', 'nama_mahasiswa' => 'Siti Rahmawati', 'tahun_angkatan' => 2025, 'jalur_kelas' => 'Reguler', 'kelompok_ukt' => 3, 'beasiswa_id' => null, 'status_pendaftaran' => 'SPMB_DITERIMA', 'catatan_perubahan' => 'Pendaftaran Jalur Mandiri SPMB'],
-                ['mahasiswa_id' => 103, 'nim' => '2023010088', 'nama_mahasiswa' => 'Ahmad Fauzi', 'tahun_angkatan' => 2023, 'jalur_kelas' => 'Karyawan', 'kelompok_ukt' => 4, 'beasiswa_id' => null, 'status_pendaftaran' => 'PENGATURAN_ADMIN', 'catatan_perubahan' => 'Pindah jalur dari Reguler ke Kelas Karyawan pada Semester 3'],
-            ];
-
-            foreach ($samples as $s) {
-                \App\Models\Sikeu\MahasiswaTipeTagihan::create($s);
-            }
-
-            $query = \App\Models\Sikeu\MahasiswaTipeTagihan::with('beasiswa');
-            $total = $query->count();
-        }
-
-        $types = $query->orderBy('updated_at', 'desc')
-            ->offset(($page - 1) * $perPage)
-            ->limit($perPage)
-            ->get();
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $types,
-            'meta' => [
-                'current_page' => $page,
-                'last_page' => (int) ceil($total / max(1, $perPage)),
-                'per_page' => $perPage,
-                'total' => $total,
-            ]
-        ]);
-    }
-
-    /**
-     * POST /api/v1/sikeu/master/assign-student-billing-type
-     * Endpoint integrasi SPMB / Admin untuk menetapkan tipe tagihan mahasiswa saat pendaftaran atau update
-     */
-    public function assignStudentBillingType(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'mahasiswa_id' => 'required|integer',
-            'nim' => 'nullable|string',
-            'nama_mahasiswa' => 'nullable|string',
-            'tahun_angkatan' => 'required|integer',
-            'jalur_kelas' => 'required|string',
-            'kelompok_ukt' => 'required|integer',
-            'beasiswa_id' => 'nullable|exists:beasiswa,id',
-            'status_pendaftaran' => 'nullable|string',
-            'catatan_perubahan' => 'nullable|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
-        }
-
-        $record = \App\Models\Sikeu\MahasiswaTipeTagihan::updateOrCreate(
-            ['mahasiswa_id' => $request->mahasiswa_id],
-            [
-                'nim' => $request->nim ?? '2024' . str_pad($request->mahasiswa_id, 4, '0', STR_PAD_LEFT),
-                'nama_mahasiswa' => $request->nama_mahasiswa ?? 'Mahasiswa #' . $request->mahasiswa_id,
-                'tahun_angkatan' => $request->tahun_angkatan,
-                'jalur_kelas' => $request->jalur_kelas,
-                'kelompok_ukt' => $request->kelompok_ukt,
-                'beasiswa_id' => $request->beasiswa_id,
-                'status_pendaftaran' => $request->status_pendaftaran ?? 'PENGATURAN_ADMIN',
-                'catatan_perubahan' => $request->catatan_perubahan ?? 'Pembaruan tipe tagihan oleh admin',
-                'updated_by' => auth()->id() ?? 1,
-            ]
-        );
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Penetapan tipe tagihan mahasiswa berhasil disimpan.',
-            'data' => $record->load('beasiswa')
-        ], 201);
-    }
-
-    /**
-     * PUT /api/v1/sikeu/master/update-student-billing-type/{id}
-     * Admin update status / tipe tagihan mahasiswa (misal: pindah kelas dari Reguler ke Karyawan)
-     */
-    public function updateStudentBillingType(Request $request, $id)
-    {
-        $record = \App\Models\Sikeu\MahasiswaTipeTagihan::findOrFail($id);
-
-        $validator = Validator::make($request->all(), [
-            'jalur_kelas' => 'sometimes|string',
-            'kelompok_ukt' => 'sometimes|integer',
-            'beasiswa_id' => 'nullable|exists:beasiswa,id',
-            'catatan_perubahan' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
-        }
-
-        $record->update([
-            'jalur_kelas' => $request->jalur_kelas ?? $record->jalur_kelas,
-            'kelompok_ukt' => $request->kelompok_ukt ?? $record->kelompok_ukt,
-            'beasiswa_id' => $request->has('beasiswa_id') ? $request->beasiswa_id : $record->beasiswa_id,
-            'status_pendaftaran' => 'PENGATURAN_ADMIN',
-            'catatan_perubahan' => $request->catatan_perubahan,
-            'updated_by' => auth()->id() ?? 1,
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Perubahan tipe tagihan mahasiswa berhasil disimpan.',
-            'data' => $record->load('beasiswa')
-        ]);
-    }
 
     // ==========================================
     // 6. SEARCH MAHASISWA SEARCH & TAGIHAN LOOKUP
@@ -327,14 +174,6 @@ class SikeuMasterController extends Controller
                 })
                 ->exists();
 
-            // Fetch assigned scholarship for this student
-            $beasiswa = DB::table('mahasiswa_beasiswa')
-                ->join('beasiswa', 'mahasiswa_beasiswa.beasiswa_id', '=', 'beasiswa.id')
-                ->where('mahasiswa_beasiswa.mahasiswa_id', $t->mahasiswa_id)
-                ->where('mahasiswa_beasiswa.status', 'aktif')
-                ->select('beasiswa.nama', 'beasiswa.tipe_potongan', 'beasiswa.nilai_potongan')
-                ->first();
-
             return [
                 'tagihan_id' => $t->id,
                 'nomor_tagihan' => $t->nomor_tagihan,
@@ -348,12 +187,11 @@ class SikeuMasterController extends Controller
                 'total_bayar' => (float)$t->total_bayar,
                 'sisa_tagihan' => (float)($t->total_tagihan - $t->total_bayar),
                 'status' => $t->status,
-                'beasiswa_aktif' => $beasiswa ? $beasiswa->nama . ' (' . ($beasiswa->tipe_potongan === 'persen' ? $beasiswa->nilai_potongan . '%' : 'Rp ' . number_format($beasiswa->nilai_potongan, 0, ',', '.')) . ')' : null,
                 'has_unpaid_previous_dispensation' => $hasUnpaidDispensation,
                 'details' => $t->details->map(function ($d) {
                     return [
                         'detail_id' => $d->id,
-                        'jenis_biaya' => $d->jenisBiaya->nama ?? 'Biaya Pendidikan',
+                        'master_biaya' => $d->masterBiaya->nama ?? 'Biaya Pendidikan',
                         'nominal' => (float)$d->nominal,
                         'potongan' => (float)$d->potongan,
                         'nominal_bersih' => (float)$d->nominal_bersih,
@@ -378,7 +216,7 @@ class SikeuMasterController extends Controller
      */
     public function indexTarifSpmb(Request $request)
     {
-        $query = TarifSpmb::with('jenisBiaya');
+        $query = TarifSpmb::with('masterBiaya');
 
         if ($request->filled('jalur_id')) {
             $query->where('jalur_id', $request->jalur_id);
@@ -409,7 +247,7 @@ class SikeuMasterController extends Controller
     public function storeTarifSpmb(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'jenis_biaya_id' => 'nullable|exists:jenis_biaya,id',
+            'master_biaya_id' => 'nullable|exists:sikeu_master_biaya,id',
             'jalur_id' => 'required|string|max:50',
             'gelombang_id' => 'required|string|max:50',
             'nominal' => 'required|numeric|min:0',
@@ -423,15 +261,15 @@ class SikeuMasterController extends Controller
             ], 422);
         }
 
-        // Default jenis_biaya_id to first available JenisBiaya if null
-        $jenisBiayaId = $request->jenis_biaya_id;
-        if (!$jenisBiayaId) {
-            $jenisBiayaDefault = JenisBiaya::where('tipe', 'spmb_adm')->first() ?? JenisBiaya::first();
-            $jenisBiayaId = $jenisBiayaDefault?->id;
+        // Default master_biaya_id to first available MasterBiaya if null
+        $masterBiayaId = $request->master_biaya_id;
+        if (!$masterBiayaId) {
+            $masterBiayaDefault = MasterBiaya::where('tipe', 'spmb_adm')->first() ?? MasterBiaya::first();
+            $masterBiayaId = $masterBiayaDefault?->id;
         }
 
         $tarif = TarifSpmb::create([
-            'jenis_biaya_id' => $jenisBiayaId,
+            'master_biaya_id' => $masterBiayaId,
             'jalur_id' => $request->jalur_id,
             'gelombang_id' => $request->gelombang_id,
             'nominal' => $request->nominal,
@@ -441,7 +279,7 @@ class SikeuMasterController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Tarif SPMB berhasil ditambahkan.',
-            'data' => $tarif->load('jenisBiaya')
+            'data' => $tarif->load('masterBiaya')
         ], 201);
     }
 
@@ -454,7 +292,7 @@ class SikeuMasterController extends Controller
         $tarif = TarifSpmb::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
-            'jenis_biaya_id' => 'nullable|exists:jenis_biaya,id',
+            'master_biaya_id' => 'nullable|exists:sikeu_master_biaya,id',
             'jalur_id' => 'sometimes|required|string|max:50',
             'gelombang_id' => 'sometimes|required|string|max:50',
             'nominal' => 'sometimes|required|numeric|min:0',
@@ -469,7 +307,7 @@ class SikeuMasterController extends Controller
         }
 
         $tarif->update($request->only([
-            'jenis_biaya_id',
+            'master_biaya_id',
             'jalur_id',
             'gelombang_id',
             'nominal',
@@ -479,7 +317,7 @@ class SikeuMasterController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Tarif SPMB berhasil diperbarui.',
-            'data' => $tarif->load('jenisBiaya')
+            'data' => $tarif->load('masterBiaya')
         ]);
     }
 

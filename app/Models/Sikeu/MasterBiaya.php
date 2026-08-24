@@ -5,11 +5,11 @@ namespace App\Models\Sikeu;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class JenisBiaya extends Model
+class MasterBiaya extends Model
 {
     use HasFactory;
 
-    protected $table = 'sikeu_jenis_biaya';
+    protected $table = 'sikeu_master_biaya';
 
     protected $fillable = [
         'kode',
@@ -29,24 +29,19 @@ class JenisBiaya extends Model
 
     protected $appends = ['module_codes'];
 
-    public function moduleDelegations()
+    public function modules()
     {
-        return $this->hasMany(JenisBiayaModule::class, 'jenis_biaya_id');
+        return $this->hasMany(MasterBiayaModule::class, 'master_biaya_id');
     }
 
     public function getModuleCodesAttribute()
     {
-        $codes = $this->moduleDelegations->pluck('module_code')->toArray();
+        $codes = $this->modules->pluck('module_code')->toArray();
         return !empty($codes) ? $codes : ['sikeu'];
-    }
-
-    public function tarifUkt()
-    {
-        return $this->hasMany(TarifUkt::class, 'jenis_biaya_id');
     }
 
     public function detailTagihan()
     {
-        return $this->hasMany(DetailTagihan::class, 'jenis_biaya_id');
+        return $this->hasMany(DetailTagihan::class, 'master_biaya_id');
     }
 }
