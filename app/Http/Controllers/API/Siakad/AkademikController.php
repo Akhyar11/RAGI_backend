@@ -49,7 +49,7 @@ class AkademikController extends Controller
             $mhs = Mahasiswa::find($request->mahasiswa_id);
         }
 
-        if ($mhs && (!$user || !$user->roles()->whereIn('slug', ['superadmin', 'admin'])->exists())) {
+        if ($mhs && (!$user || !$user->isAdmin())) {
             $angkatan = (int) ($mhs->angkatan ?: 2026);
             $krsTaIds = \App\Models\Siakad\Krs::where('mahasiswa_id', $mhs->id)->pluck('tahun_akademik_id')->toArray();
 

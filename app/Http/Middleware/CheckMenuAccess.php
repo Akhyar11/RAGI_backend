@@ -20,8 +20,7 @@ class CheckMenuAccess
         }
 
         // Superadmin & Admin bypass
-        $superAdminRole = SystemSetting::where('key', 'superadmin_role')->value('value') ?? 'superadmin';
-        if ($user->roles()->whereIn('slug', ['superadmin', 'admin', $superAdminRole])->exists()) {
+        if ($user->isAdmin() || $user->isSuperAdmin()) {
             return $next($request);
         }
 

@@ -105,7 +105,8 @@ class RoleController extends Controller
     {
         $this->authorize('delete', clone $role);
 
-        if ($role->slug === 'superadmin' || $role->slug === 'admin' || $role->users()->exists()) {
+        // Protect root roles and roles with associated users
+        if ($role->id === 1 || $role->id === 2 || $role->users()->exists()) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Role tidak dapat dihapus karena sedang digunakan atau merupakan role bawaan sistem.'

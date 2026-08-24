@@ -84,7 +84,13 @@ class User extends Authenticatable
         }
 
         $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value');
-        return $superAdminRole ? $this->hasRole($superAdminRole) : false;
+        
+        if ($superAdminRole) {
+            return $this->hasRole($superAdminRole);
+        }
+
+        // Fallback for bootstrap / missing settings
+        return $this->id === 1;
     }
 
     public function isAdmin(): bool

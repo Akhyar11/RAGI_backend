@@ -102,5 +102,12 @@ class RoleSeeder extends Seeder
                 'is_active' => true,
             ]);
         }
+
+        if (Schema::hasTable('core_system_settings')) {
+            DB::table('core_system_settings')->updateOrInsert(
+                ['key' => 'superadmin_role'],
+                ['value' => 'superadmin', 'description' => 'Role slug for Super Administrator']
+            );
+        }
     }
 }

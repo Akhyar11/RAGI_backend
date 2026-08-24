@@ -24,15 +24,17 @@ class RolePolicy
 
     public function update(User $user, Role $role): bool
     {
-        $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value') ?? 'superadmin';
-        if ($role->slug === 'admin' || $role->slug === 'superadmin' || $role->slug === $superAdminRole) return false;
+        $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value');
+        if ($superAdminRole && $role->slug === $superAdminRole) return false;
+        if ($role->id === 1 || $role->id === 2) return false; // Protect root roles
         return $user->isSuperAdmin() || $user->hasPermission('iam.roles.update') || $user->hasPermission('roles.update');
     }
 
     public function delete(User $user, Role $role): bool
     {
-        $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value') ?? 'superadmin';
-        if ($role->slug === 'admin' || $role->slug === 'superadmin' || $role->slug === $superAdminRole) return false;
+        $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value');
+        if ($superAdminRole && $role->slug === $superAdminRole) return false;
+        if ($role->id === 1 || $role->id === 2) return false; // Protect root roles
         return $user->isSuperAdmin() || $user->hasPermission('iam.roles.delete') || $user->hasPermission('roles.delete');
     }
 }

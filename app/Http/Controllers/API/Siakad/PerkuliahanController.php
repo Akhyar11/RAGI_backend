@@ -248,13 +248,13 @@ class PerkuliahanController extends Controller
 
         // Cek jika login sebagai Mahasiswa
         $mhs = $user ? Mahasiswa::where('user_id', $user->id)->first() : null;
-        if ($mhs && !$user->roles()->whereIn('slug', ['superadmin', 'admin'])->exists()) {
+        if ($mhs && !$user->isAdmin()) {
             $query->where('mahasiswa_id', $mhs->id);
         }
 
         // Cek jika login sebagai Dosen Wali
         $dosen = $user ? Dosen::where('user_id', $user->id)->first() : null;
-        if ($dosen && !$user->roles()->whereIn('slug', ['superadmin', 'admin'])->exists() && $request->boolean('advisees_only')) {
+        if ($dosen && !$user->isAdmin() && $request->boolean('advisees_only')) {
             $query->whereHas('mahasiswa', fn($mq) => $mq->where('dosen_wali_id', $dosen->id));
         }
 
@@ -688,13 +688,13 @@ class PerkuliahanController extends Controller
 
         // Cek jika login sebagai Mahasiswa
         $mhs = $user ? Mahasiswa::where('user_id', $user->id)->first() : null;
-        if ($mhs && !$user->roles()->whereIn('slug', ['superadmin', 'admin'])->exists()) {
+        if ($mhs && !$user->isAdmin()) {
             $query->whereHas('krsDetail.krs', fn($kq) => $kq->where('mahasiswa_id', $mhs->id));
         }
 
         // Cek jika login sebagai Dosen
         $dosen = $user ? Dosen::where('user_id', $user->id)->first() : null;
-        if ($dosen && !$user->roles()->whereIn('slug', ['superadmin', 'admin'])->exists() && $request->boolean('my_classes_only')) {
+        if ($dosen && !$user->isAdmin() && $request->boolean('my_classes_only')) {
             $query->whereHas('krsDetail.kelas.dosenPengampu', fn($dq) => $dq->where('dosen_id', $dosen->id));
         }
 
