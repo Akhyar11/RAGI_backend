@@ -57,6 +57,6 @@ class Menu extends Model
      */
     public function roles()
     {
-        return $this->belongsToMany(Role::class, 'menu_role');
+        return $this->belongsToMany(Role::class, 'core_menu_role');
     }
 }
