@@ -26,7 +26,7 @@ class MenuController extends Controller
      */
     public function getMyMenus(Request $request): JsonResponse
     {
-        $module = $request->query('module', 'sso');
+        $module = $request->query('module', '');
         
         $menus = $this->menuService->getMyMenus($module);
 

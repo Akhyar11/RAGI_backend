@@ -14,7 +14,7 @@ class MenuService
      * @param string $module
      * @return Collection
      */
-    public function getMyMenus(string $module = 'sso'): Collection
+    public function getMyMenus(string $module): Collection
     {
         $user = Auth::user();
         
@@ -22,12 +22,11 @@ class MenuService
             return collect();
         }
 
-        // Cek apakah user adalah superadmin atau admin
-        $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value') ?? 'superadmin';
-        $isSuperAdmin = $user->roles()->whereIn('slug', ['superadmin', 'admin', $superAdminRole])->exists();
+        $isSuperAdmin = $user->isSuperAdmin();
+        $isAdmin = $user->isAdmin();
 
         // 1. Dapatkan daftar id role dan slug permissions yang dimiliki user
-        $roleIds = $user->roles()->pluck('roles.id')->toArray();
+        $roleIds = $user->roles()->pluck('core_roles.id')->toArray();
         $permissionSlugs = $user->roles()
             ->with('permissions')
             ->get()
@@ -46,7 +45,7 @@ class MenuService
                         $pq->whereIn('slug', $permissionSlugs);
                     })
                     ->orWhereHas('roles', function($rq) use ($roleIds) {
-                        $rq->whereIn('roles.id', $roleIds);
+                        $rq->whereIn('core_roles.id', $roleIds);
                     })
                     ->orWhere(function($pub) {
                         $pub->whereNull('permission_id')->whereDoesntHave('roles');
@@ -69,7 +68,7 @@ class MenuService
                 })
                 // 2. ATAU root menu memiliki role yang cocok
                 ->orWhereHas('roles', function($rq) use ($roleIds) {
-                    $rq->whereIn('roles.id', $roleIds);
+                    $rq->whereIn('core_roles.id', $roleIds);
                 })
                 // 3. ATAU root menu adalah header grup '#' yang memiliki child yang berizin
                 ->orWhere(function($grp) use ($roleIds, $permissionSlugs) {
@@ -81,7 +80,7 @@ class MenuService
                                        $pq->whereIn('slug', $permissionSlugs);
                                    })
                                    ->orWhereHas('roles', function($rq) use ($roleIds) {
-                                       $rq->whereIn('roles.id', $roleIds);
+                                       $rq->whereIn('core_roles.id', $roleIds);
                                    });
                                });
                         });

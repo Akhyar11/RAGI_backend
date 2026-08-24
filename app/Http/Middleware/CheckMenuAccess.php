@@ -44,8 +44,8 @@ class CheckMenuAccess
         }
 
         if ($menu) {
-            $roleIds = $user->roles()->pluck('roles.id')->toArray();
-            $hasAccess = $menu->roles()->whereIn('roles.id', $roleIds)->exists();
+            $roleIds = $user->roles()->pluck('core_roles.id')->toArray();
+            $hasAccess = $menu->roles()->whereIn('core_roles.id', $roleIds)->exists();
 
             if (!$hasAccess) {
                 return response()->json([
