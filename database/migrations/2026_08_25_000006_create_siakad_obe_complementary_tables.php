@@ -14,7 +14,7 @@ return new class extends Migration
         // 1. Profil Lulusan (PL)
         Schema::create('siakad_profil_lulusan', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('program_studi_id')->constrained('master_program_studi')->cascadeOnDelete();
+            $table->foreignId('program_studi_id')->constrained('spmb_master_program_studi')->cascadeOnDelete();
             $table->string('kode_pl', 50); // e.g. PL-01
             $table->string('nama');
             $table->text('deskripsi');
@@ -28,7 +28,7 @@ return new class extends Migration
         // 2. Bahan Kajian (BK)
         Schema::create('siakad_bahan_kajian', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('program_studi_id')->constrained('master_program_studi')->cascadeOnDelete();
+            $table->foreignId('program_studi_id')->constrained('spmb_master_program_studi')->cascadeOnDelete();
             $table->string('kode_bk', 50); // e.g. BK-01
             $table->string('nama_bk');
             $table->text('deskripsi')->nullable();

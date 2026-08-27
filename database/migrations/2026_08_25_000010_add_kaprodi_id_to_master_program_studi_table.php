@@ -8,8 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('master_program_studi', function (Blueprint $table) {
-            if (!Schema::hasColumn('master_program_studi', 'kaprodi_id')) {
+        Schema::table('spmb_master_program_studi', function (Blueprint $table) {
+            if (!Schema::hasColumn('spmb_master_program_studi', 'kaprodi_id')) {
                 $table->foreignId('kaprodi_id')->nullable()->after('fakultas_id')->constrained('siakad_dosen')->nullOnDelete();
             }
         });
@@ -17,8 +17,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('master_program_studi', function (Blueprint $table) {
-            if (Schema::hasColumn('master_program_studi', 'kaprodi_id')) {
+        Schema::table('spmb_master_program_studi', function (Blueprint $table) {
+            if (Schema::hasColumn('spmb_master_program_studi', 'kaprodi_id')) {
                 $table->dropConstrainedForeignId('kaprodi_id');
             }
         });

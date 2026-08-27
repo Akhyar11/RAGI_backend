@@ -30,14 +30,14 @@ return new class extends Migration
         ];
 
         foreach ($roles as $role) {
-            if (!DB::table('roles')->where('slug', $role['slug'])->exists()) {
-                DB::table('roles')->insert($role);
+            if (!DB::table('core_roles')->where('slug', $role['slug'])->exists()) {
+                DB::table('core_roles')->insert($role);
             }
         }
     }
 
     public function down(): void
     {
-        DB::table('roles')->whereIn('slug', ['kaprodi', 'wakil_prodi'])->delete();
+        DB::table('core_roles')->whereIn('slug', ['kaprodi', 'wakil_prodi'])->delete();
     }
 };
