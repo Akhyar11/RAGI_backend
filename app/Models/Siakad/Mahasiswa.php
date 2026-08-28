@@ -92,6 +92,11 @@ class Mahasiswa extends Model
         return $this->hasMany(Khs::class, 'mahasiswa_id');
     }
 
+    public function tagihans()
+    {
+        return $this->hasMany(\App\Models\Sikeu\TagihanMahasiswa::class, 'mahasiswa_id');
+    }
+
     public function getIpkAttribute()
     {
         $latestKhs = $this->khs()->latest('id')->first();

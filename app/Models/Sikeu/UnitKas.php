@@ -14,6 +14,11 @@ class UnitKas extends Model
     protected $fillable = [
         'unit_kerja_id',
         'nama_kas',
+        'tipe_kas',
+        'bank_name',
+        'bank_account_number',
+        'bank_account_name',
+        'penanggung_jawab',
         'saldo_awal',
         'saldo_saat_ini',
         'penanggung_jawab_id',

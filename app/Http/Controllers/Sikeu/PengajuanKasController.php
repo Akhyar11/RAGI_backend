@@ -88,6 +88,14 @@ class PengajuanKasController extends Controller
                     'keterangan' => 'Pencairan: ' . $pengajuan->judul_pengajuan,
                     'tanggal_transaksi' => now()->toDateString(),
                 ]);
+                // Trigger Auto Journal (Debet Beban Operasional Unit, Kredit Kas Utama Rektorat)
+                \App\Services\Sikeu\AutoJournalService::recordDisbursementJournal(
+                    'KAS_UNIT',
+                    $pengajuan->id,
+                    (float)$pengajuan->nominal_disetujui,
+                    'Pencairan Kas Unit: ' . $pengajuan->judul_pengajuan,
+                    '502.01'
+                );
             }
 
             DB::commit();

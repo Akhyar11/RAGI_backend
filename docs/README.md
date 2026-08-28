@@ -54,6 +54,7 @@
 | SpmBSikeuCallbackController | Webhook Callback Integrasi Pelunasan Biaya SPMB | [docs/api/Sikeu/SpmBSikeuCallbackController.md](api/Sikeu/SpmBSikeuCallbackController.md) |
 | SpmbIntegration | Rangkuman Integrasi Tarif & Callback SPMB | [docs/api/Sikeu/SpmbIntegration.md](api/Sikeu/SpmbIntegration.md) |
 | MahasiswaTagihanController | Portal Tagihan Mahasiswa Mandiri & Invoice | [docs/api/Sikeu/MahasiswaTagihanController.md](api/Sikeu/MahasiswaTagihanController.md) |
+| PiutangMahasiswaController | Rekapitulasi Piutang Mahasiswa & Export Excel | [docs/api/Sikeu/PiutangMahasiswaController.md](api/Sikeu/PiutangMahasiswaController.md) |
 | DispensasiTagihanController | Permohonan Dispensasi Tagihan & Cetak Bukti | [docs/api/Sikeu/DispensasiTagihanController.md](api/Sikeu/DispensasiTagihanController.md) |
 | TagihanApprovalController | Approval Pimpinan untuk Tagihan & Dispensasi | [docs/api/Sikeu/TagihanApprovalController.md](api/Sikeu/TagihanApprovalController.md) |
 | UnitKasController | Master Unit Kas & Saldo Operasional | [docs/api/Sikeu/UnitKasController.md](api/Sikeu/UnitKasController.md) |

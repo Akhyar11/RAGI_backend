@@ -380,4 +380,95 @@ class SikeuMasterController extends Controller
             ]
         ]);
     }
+
+    // ==========================================
+    // 9. STUDENT BILLING TYPES & CATEGORIES
+    // ==========================================
+
+    public function getStudentBillingCategories(Request $request)
+    {
+        $categories = [
+            ['id' => 1, 'nama' => 'UKT Reguler', 'kode' => 'UKT_REG'],
+            ['id' => 2, 'nama' => 'UKT Eksekutif / Karyawan', 'kode' => 'UKT_EKS'],
+            ['id' => 3, 'nama' => 'UKT Internasional', 'kode' => 'UKT_INT'],
+        ];
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $categories
+        ]);
+    }
+
+    public function indexStudentBillingTypes(Request $request)
+    {
+        $perPage = min(100, $request->integer('per_page', 15));
+        $query = \App\Models\Sikeu\MahasiswaTipeTagihan::query();
+
+        if ($request->filled('q')) {
+            $search = $request->q;
+            $query->where('nama_mahasiswa', 'like', "%{$search}%")
+                  ->orWhere('nim', 'like', "%{$search}%");
+        }
+
+        $data = $query->orderBy('id', 'desc')->paginate($perPage);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $data->items(),
+            'meta' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+            ]
+        ]);
+    }
+
+    public function assignStudentBillingType(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'mahasiswa_id' => 'required|integer',
+            'tahun_angkatan' => 'required|integer',
+            'jalur_kelas' => 'required|string',
+            'kelompok_ukt' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+        }
+
+        $item = \App\Models\Sikeu\MahasiswaTipeTagihan::updateOrCreate(
+            ['mahasiswa_id' => $request->mahasiswa_id],
+            [
+                'nim' => $request->nim ?? ('NIM-' . $request->mahasiswa_id),
+                'nama_mahasiswa' => $request->nama_mahasiswa ?? ('Mahasiswa #' . $request->mahasiswa_id),
+                'tahun_angkatan' => $request->tahun_angkatan,
+                'jalur_kelas' => $request->jalur_kelas,
+                'kelompok_ukt' => $request->kelompok_ukt,
+                'catatan_perubahan' => $request->catatan_perubahan ?? 'Penetapan tipe tagihan',
+            ]
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Tipe tagihan mahasiswa berhasil ditetapkan',
+            'data' => $item
+        ]);
+    }
+
+    public function updateStudentBillingType(Request $request, $id)
+    {
+        $item = \App\Models\Sikeu\MahasiswaTipeTagihan::findOrFail($id);
+        $item->update($request->only([
+            'jalur_kelas',
+            'kelompok_ukt',
+            'catatan_perubahan'
+        ]));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Tipe tagihan mahasiswa berhasil diperbarui',
+            'data' => $item
+        ]);
+    }
 }

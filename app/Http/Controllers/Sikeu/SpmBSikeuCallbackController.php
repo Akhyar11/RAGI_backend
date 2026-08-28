@@ -61,7 +61,8 @@ class SpmBSikeuCallbackController extends Controller
                     'status' => 'lunas',
                     'total_bayar' => $validated['nominal'],
                 ]);
-            }
+            // Trigger Auto Journal (Debet Kas Bank, Kredit Pendapatan SPMB)
+            \App\Services\Sikeu\AutoJournalService::recordStudentPaymentJournal($tagihan, (float)$validated['nominal']);
 
             // Trigger Xendit Server API to record transaction and update Xendit balance in Xendit Dashboard!
             $pgConfig = \App\Models\Sikeu\PaymentGatewayConfig::where('is_active', true)->where('gateway_name', 'xendit')->first();

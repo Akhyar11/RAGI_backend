@@ -41,6 +41,16 @@ class TagihanMahasiswa extends Model
         'jatuh_tempo' => 'date',
     ];
 
+    public function mahasiswa()
+    {
+        return $this->belongsTo(\App\Models\Siakad\Mahasiswa::class, 'mahasiswa_id');
+    }
+
+    public function tipeTagihanMahasiswa()
+    {
+        return $this->belongsTo(MahasiswaTipeTagihan::class, 'mahasiswa_id', 'mahasiswa_id');
+    }
+
     public function detailTagihan()
     {
         return $this->hasMany(DetailTagihan::class, 'tagihan_id');

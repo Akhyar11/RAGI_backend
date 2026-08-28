@@ -34,6 +34,11 @@ class MasterBiaya extends Model
         return $this->hasMany(MasterBiayaModule::class, 'master_biaya_id');
     }
 
+    public function moduleDelegations()
+    {
+        return $this->hasMany(MasterBiayaModule::class, 'master_biaya_id');
+    }
+
     public function getModuleCodesAttribute()
     {
         $codes = $this->modules->pluck('module_code')->toArray();

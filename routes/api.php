@@ -324,6 +324,12 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::put('master/master-biaya/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateMasterBiaya']);
     Route::delete('master/master-biaya/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'destroyMasterBiaya']);
 
+    // Alias master/jenis-biaya for frontend compatibility
+    Route::get('master/jenis-biaya', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexMasterBiaya']);
+    Route::post('master/jenis-biaya', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'storeMasterBiaya']);
+    Route::put('master/jenis-biaya/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateMasterBiaya']);
+    Route::delete('master/jenis-biaya/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'destroyMasterBiaya']);
+
 
 
     // Penetapan & Integrasi Tipe Tagihan Mahasiswa (SPMB / SIAKAD / Admin Change)
@@ -338,6 +344,10 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     // Portal Tagihan & Invoice Mahasiswa Mandiri
     Route::get('mahasiswa/tagihan', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'myBills']);
     Route::get('mahasiswa/invoice/{id}', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'generateInvoice']);
+
+    // Piutang Mahasiswa & Export Excel
+    Route::get('piutang', [App\Http\Controllers\Sikeu\PiutangMahasiswaController::class, 'index']);
+    Route::get('piutang/export-excel', [App\Http\Controllers\Sikeu\PiutangMahasiswaController::class, 'exportExcel']);
 
     // Dispensasi Pembayaran & Cetak Bukti Resmi
     Route::get('dispensasi', [App\Http\Controllers\Sikeu\DispensasiTagihanController::class, 'index']);

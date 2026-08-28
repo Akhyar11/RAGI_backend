@@ -25,23 +25,32 @@ class UnitKasController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'nama_kas' => 'required|string',
+            'tipe_kas' => 'nullable|string',
             'deskripsi' => 'nullable|string',
             'status' => 'nullable|boolean',
             'is_kabag_kas' => 'nullable|boolean',
             'bank_name' => 'nullable|string',
             'bank_account_name' => 'nullable|string',
             'bank_account_number' => 'nullable|string',
+            'penanggung_jawab' => 'nullable|string',
+            'saldo_awal' => 'nullable|numeric',
+            'saldo_saat_ini' => 'nullable|numeric',
         ]);
 
-        // Note: Adding support for extra fields if needed, or just keeping it simple
         $unitKas = UnitKas::create([
-            'nama_kas' => $request->nama_kas,
-            'deskripsi' => $request->deskripsi,
-            'status' => $request->status ?? true,
-            'is_kabag_kas' => $request->is_kabag_kas ?? false,
-            // You can add logic for storing bank details in a related table if necessary
+            'nama_kas' => $validated['nama_kas'],
+            'tipe_kas' => $validated['tipe_kas'] ?? 'operasional',
+            'deskripsi' => $validated['deskripsi'] ?? null,
+            'status' => $validated['status'] ?? true,
+            'is_kabag_kas' => $validated['is_kabag_kas'] ?? false,
+            'bank_name' => $validated['bank_name'] ?? null,
+            'bank_account_name' => $validated['bank_account_name'] ?? null,
+            'bank_account_number' => $validated['bank_account_number'] ?? null,
+            'penanggung_jawab' => $validated['penanggung_jawab'] ?? null,
+            'saldo_awal' => $validated['saldo_awal'] ?? 0,
+            'saldo_saat_ini' => $validated['saldo_saat_ini'] ?? ($validated['saldo_awal'] ?? 0),
         ]);
 
         return response()->json([
@@ -61,13 +70,19 @@ class UnitKasController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Not found'], 404);
         }
 
-        $request->validate([
+        $validated = $request->validate([
             'nama_kas' => 'required|string',
+            'tipe_kas' => 'nullable|string',
             'deskripsi' => 'nullable|string',
-            'status' => 'required|boolean',
+            'status' => 'nullable|boolean',
+            'bank_name' => 'nullable|string',
+            'bank_account_name' => 'nullable|string',
+            'bank_account_number' => 'nullable|string',
+            'penanggung_jawab' => 'nullable|string',
+            'saldo_saat_ini' => 'nullable|numeric',
         ]);
 
-        $unitKas->update($request->all());
+        $unitKas->update($validated);
 
         return response()->json([
             'status' => 'success',
