@@ -50,8 +50,8 @@ else
 fi
 
 if [ $AGY_EXIT_CODE -ne 0 ]; then
-    echo "⚠️ [Fallback] agy gagal atau tidak ditemukan. Beralih ke opencode (9router/combo)..."
-    RESULT=$(opencode run -m 9router/combo "$(cat "$PROMPT_FILE")" 2>&1)
+    echo "⚠️ [Fallback] agy gagal atau tidak ditemukan. Beralih ke opencode (opencode-go/deepseek-v4-flash)..."
+    RESULT=$(opencode run -m opencode-go/deepseek-v4-flash "$(cat "$PROMPT_FILE")" 2>&1)
 fi
 rm -f "$PROMPT_FILE"
 
