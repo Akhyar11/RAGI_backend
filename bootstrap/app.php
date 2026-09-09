@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(\App\Http\Middleware\DynamicDatabaseMiddleware::class);
         $middleware->redirectTo(
             guests: fn (Request $request) => $request->is('api/*') ? null : '/login'
         );
