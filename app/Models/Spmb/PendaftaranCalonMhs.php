@@ -42,7 +42,6 @@ class PendaftaranCalonMhs extends Model
         'program_studi_id',
         'program_studi_pilihan2_id',
         'master_tipe_jalur_id',
-        'master_jalur_kelas_id',
         'info_daftar',
         'ket_info_daftar',
         'no_pendaftaran',
@@ -127,11 +126,6 @@ class PendaftaranCalonMhs extends Model
     public function tipe_jalur()
     {
         return $this->belongsTo(App\Models\Spmb\MasterTipeJalur::class, 'master_tipe_jalur_id');
-    }
-
-    public function jalur_kelas()
-    {
-        return $this->belongsTo(App\Models\Sikeu\MasterJalurKelas::class, 'master_jalur_kelas_id');
     }
 
     public function dokumen_pendaftaran()

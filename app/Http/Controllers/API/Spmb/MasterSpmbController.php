@@ -7,7 +7,6 @@ use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\MasterTipeJalur;
 use App\Models\System\MasterReferensi;
-use App\Models\Core\MasterJalurKelas;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -482,121 +481,6 @@ class MasterSpmbController extends Controller
         return response()->json([
             'status' => 'success',
             'data' => $tahun
-        ]);
-    }
-
-    /**
-     * Get all Master Jalur Kelas
-     */
-    public function getMasterJalurKelas(Request $request): JsonResponse
-    {
-        $query = MasterJalurKelas::query();
-
-        if ($request->filled('search') || $request->filled('name')) {
-            $search = $request->input('search', $request->input('name'));
-            $query->where(function ($q) use ($search) {
-                $q->where('nama_jalur', 'like', "%{$search}%")
-                  ->orWhere('kode', 'like', "%{$search}%");
-            });
-        }
-
-        if ($request->filled('is_active')) {
-            $query->where('is_active', filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN));
-        }
-
-        $sortBy = $request->input('sort_by', 'id');
-        $sortDir = $request->input('sort_dir', 'asc');
-        $allowedSorts = ['id', 'kode', 'nama_jalur', 'created_at'];
-        if (!in_array($sortBy, $allowedSorts)) {
-            $sortBy = 'id';
-        }
-        $sortDir = strtolower($sortDir) === 'desc' ? 'desc' : 'asc';
-        $query->orderBy($sortBy, $sortDir);
-
-        if ($request->has('page')) {
-            $limit = (int) $request->input('limit', 10);
-            $paginated = $query->paginate($limit);
-            return response()->json([
-                'status' => 'success',
-                'data' => $paginated->items(),
-                'meta' => [
-                    'current_page' => $paginated->currentPage(),
-                    'last_page' => $paginated->lastPage(),
-                    'per_page' => $paginated->perPage(),
-                    'total' => $paginated->total(),
-                    'from' => $paginated->firstItem(),
-                    'to' => $paginated->lastItem(),
-                ]
-            ]);
-        }
-
-        $jalurKelas = $query->get();
-        return response()->json([
-            'status' => 'success',
-            'data' => $jalurKelas
-        ]);
-    }
-
-    /**
-     * Store Master Jalur Kelas
-     */
-    public function storeMasterJalurKelas(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'kode' => 'required|string|max:50|unique:core_master_jalur_kelas,kode',
-            'nama_jalur' => 'required|string|max:255',
-            'deskripsi' => 'nullable|string',
-            'is_active' => 'nullable|boolean',
-        ]);
-
-        $jalurKelas = MasterJalurKelas::create([
-            'kode' => $validated['kode'],
-            'nama_jalur' => $validated['nama_jalur'],
-            'deskripsi' => $validated['deskripsi'] ?? null,
-            'is_active' => $validated['is_active'] ?? true,
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Master jalur kelas berhasil ditambahkan',
-            'data' => $jalurKelas
-        ], 201);
-    }
-
-    /**
-     * Update Master Jalur Kelas
-     */
-    public function updateMasterJalurKelas(Request $request, $id): JsonResponse
-    {
-        $jalurKelas = MasterJalurKelas::findOrFail($id);
-
-        $validated = $request->validate([
-            'kode' => 'required|string|max:50|unique:core_master_jalur_kelas,kode,' . $id,
-            'nama_jalur' => 'required|string|max:255',
-            'deskripsi' => 'nullable|string',
-            'is_active' => 'nullable|boolean',
-        ]);
-
-        $jalurKelas->update($validated);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Master jalur kelas berhasil diperbarui',
-            'data' => $jalurKelas
-        ]);
-    }
-
-    /**
-     * Delete Master Jalur Kelas
-     */
-    public function destroyMasterJalurKelas($id): JsonResponse
-    {
-        $jalurKelas = MasterJalurKelas::findOrFail($id);
-        $jalurKelas->delete();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Master jalur kelas berhasil dihapus'
         ]);
     }
 }

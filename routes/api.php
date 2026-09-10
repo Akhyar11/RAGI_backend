@@ -225,7 +225,6 @@ Route::prefix('spmb')->group(function () {
     Route::get('tahun-akademik', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getTahunAkademik']);
     Route::get('tarif', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getTarifSpmb']);
     Route::get('master-tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getMasterTipeJalur']);
-    Route::get('master-jalur-kelas', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getMasterJalurKelas']);
 });
 
 Route::middleware('auth:api')->prefix('spmb')->group(function () {
@@ -239,9 +238,6 @@ Route::middleware('auth:api')->prefix('spmb')->group(function () {
     Route::post('master-tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'storeMasterTipeJalur']);
     Route::put('master-tipe-jalur/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'updateMasterTipeJalur']);
     Route::delete('master-tipe-jalur/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'destroyMasterTipeJalur']);
-    Route::post('master-jalur-kelas', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'storeMasterJalurKelas']);
-    Route::put('master-jalur-kelas/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'updateMasterJalurKelas']);
-    Route::delete('master-jalur-kelas/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'destroyMasterJalurKelas']);
 });
 
 /*

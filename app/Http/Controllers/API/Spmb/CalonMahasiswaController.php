@@ -75,7 +75,6 @@ class CalonMahasiswaController extends Controller
             'program_studi_id' => 'sometimes|nullable|integer',
             'program_studi_pilihan2_id' => 'sometimes|nullable|integer',
             'master_tipe_jalur_id' => 'sometimes|nullable|exists:core_master_tipe_jalur,id',
-            'master_jalur_kelas_id' => 'sometimes|nullable|exists:master_jalur_kelas,id',
             'nama_lengkap' => 'sometimes|nullable|string|max:255',
             'nik' => 'sometimes|nullable|string|max:20',
             'tanggal_lahir' => 'sometimes|nullable|date',
