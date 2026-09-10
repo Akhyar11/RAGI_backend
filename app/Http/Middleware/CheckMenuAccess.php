@@ -5,10 +5,35 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use App\Models\Menu;
-use App\Models\SystemSetting;
 
 class CheckMenuAccess
 {
+    /**
+     * Path SPMB self-service (calon mahasiswa) & publik yang tidak
+     * memerlukan pengecekan menu. Auth tetap diperlukan (middleware auth:api).
+     */
+    private const PUBLIC_PATHS = [
+        // Data master publik untuk form registrasi
+        'GET /spmb/prodi',
+        'GET /spmb/jalur',
+        'GET /spmb/gelombang',
+        'GET /spmb/tahun-akademik',
+        'GET /spmb/master-tipe-jalur',
+        'GET /spmb/master-jalur-kelas',
+        'GET /spmb/tarif',
+        'GET /spmb/sekolah-mitra',
+        // Pendaftaran mandiri calon mahasiswa
+        'GET /spmb/pendaftaran/me',
+        'POST /spmb/pendaftaran/biodata',
+        'POST /spmb/pendaftaran/berkas',
+        'POST /spmb/pendaftaran/finalize',
+        'POST /spmb/pendaftaran/reissue-va',
+        'POST /spmb/pendaftaran/reset',
+        // Daftar ulang mandiri
+        'POST /spmb/daftar-ulang/{pendaftaran_id}/generate-tagihan',
+        'POST /spmb/daftar-ulang/{pendaftaran_id}/konfirmasi',
+    ];
+
     /**
      * Handle an incoming request dynamically based on DB menu_role relation.
      */
@@ -27,11 +52,20 @@ class CheckMenuAccess
         // 1. Extract target URL from request path (stripping api/ and api/v1/ prefixes)
         $rawPath = $request->path();
         $targetUrl = '/' . ltrim(preg_replace('#^api/(v\d+/)?#', '', $rawPath), '/');
+        $method = $request->method();
 
-        // 2. Query database Menu model directly by URL
+        // 2. Self-service & public paths tidak dicek menu (hanya perlu login)
+        foreach (self::PUBLIC_PATHS as $publicPath) {
+            [$pubMethod, $pubUrl] = explode(' ', $publicPath, 2);
+            if ($method === $pubMethod && $this->pathMatches($targetUrl, $pubUrl)) {
+                return $next($request);
+            }
+        }
+
+        // 3. Query database Menu model directly by URL
         $menu = Menu::where('url', $targetUrl)->first();
 
-        // 3. Dynamic DB Menu entity matching fallback
+        // 4. Dynamic DB Menu entity matching fallback
         if (!$menu) {
             $lastSegment = basename($targetUrl);
             $menu = Menu::whereNotNull('url')
@@ -55,5 +89,33 @@ class CheckMenuAccess
         }
 
         return $next($request);
+    }
+
+    /**
+     * Cocokkan path target dengan pola menu URL, termasuk parameter {id}.
+     */
+    private function pathMatches(string $targetUrl, string $pattern): bool
+    {
+        if ($targetUrl === $pattern) {
+            return true;
+        }
+
+        $patternSegments = explode('/', trim($pattern, '/'));
+        $targetSegments = explode('/', trim($targetUrl, '/'));
+
+        if (count($patternSegments) !== count($targetSegments)) {
+            return false;
+        }
+
+        foreach ($patternSegments as $i => $seg) {
+            if (str_starts_with($seg, '{') && str_ends_with($seg, '}')) {
+                continue;
+            }
+            if ($seg !== $targetSegments[$i]) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

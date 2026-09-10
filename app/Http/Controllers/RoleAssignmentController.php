@@ -17,7 +17,7 @@ class RoleAssignmentController extends Controller
 
         $request->validate([
             'roles' => 'required|array',
-            'roles.*' => 'exists:roles,id'
+            'roles.*' => 'exists:core_roles,id'
         ]);
 
         $user->roles()->sync($request->roles);
@@ -37,7 +37,7 @@ class RoleAssignmentController extends Controller
 
         $request->validate([
             'permissions' => 'required|array',
-            'permissions.*' => 'exists:permissions,id'
+            'permissions.*' => 'exists:core_permissions,id'
         ]);
 
         $role->permissions()->sync($request->permissions);

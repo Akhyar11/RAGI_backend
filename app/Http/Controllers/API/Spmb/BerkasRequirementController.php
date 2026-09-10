@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Spmb\BerkasRequirement;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 
 class BerkasRequirementController extends Controller
 {
@@ -47,19 +47,20 @@ class BerkasRequirementController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'jalur_masuk_id' => 'required|exists:jalur_masuk,id',
-            'jenis_dokumen' => [
-                'required',
-                'string',
-                Rule::exists('master_referensi', 'kode')->where(function ($query) {
-                    return $query->where('tipe', 'jenis_dokumen');
-                }),
-            ],
+            'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
             'label' => 'required|string|max:255',
             'wajib' => 'required|boolean',
-            'urutan' => 'required|integer',
+            'urutan' => 'nullable|integer|min:0',
             'is_active' => 'required|boolean',
         ]);
+
+        // Auto-generate jenis_dokumen dari label jika tidak dikirim
+        $validated['jenis_dokumen'] = $request->input('jenis_dokumen') ?: Str::slug($validated['label']);
+
+        // Auto-fill urutan tampil jika tidak dikirim: max urutan pada jalur + 1
+        if (!isset($validated['urutan']) || $validated['urutan'] === null) {
+            $validated['urutan'] = (BerkasRequirement::where('jalur_masuk_id', $validated['jalur_masuk_id'])->max('urutan') ?? 0) + 1;
+        }
 
         $berkas = BerkasRequirement::create($validated);
 
@@ -91,19 +92,15 @@ class BerkasRequirementController extends Controller
         $berkas = BerkasRequirement::findOrFail($id);
 
         $validated = $request->validate([
-            'jalur_masuk_id' => 'required|exists:jalur_masuk,id',
-            'jenis_dokumen' => [
-                'required',
-                'string',
-                Rule::exists('master_referensi', 'kode')->where(function ($query) {
-                    return $query->where('tipe', 'jenis_dokumen');
-                }),
-            ],
+            'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
             'label' => 'required|string|max:255',
             'wajib' => 'required|boolean',
-            'urutan' => 'required|integer',
+            'urutan' => 'sometimes|integer|min:0',
             'is_active' => 'required|boolean',
         ]);
+
+        // Auto-generate jenis_dokumen dari label jika tidak dikirim
+        $validated['jenis_dokumen'] = $request->input('jenis_dokumen') ?: Str::slug($validated['label']);
 
         $berkas->update($validated);
 

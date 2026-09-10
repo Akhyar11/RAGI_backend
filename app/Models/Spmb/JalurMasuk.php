@@ -16,7 +16,6 @@ class JalurMasuk extends Model
         'kode',
         'nama',
         'deskripsi',
-        'master_tipe_jalur_id',
         'ada_wawancara',
         'is_active',
     ];
@@ -29,10 +28,5 @@ class JalurMasuk extends Model
     public function gelombangPenerimaan()
     {
         return $this->hasMany(GelombangPenerimaan::class, 'jalur_masuk_id');
-    }
-
-    public function masterTipeJalur()
-    {
-        return $this->belongsTo(\App\Models\MasterTipeJalur::class, 'master_tipe_jalur_id');
     }
 }

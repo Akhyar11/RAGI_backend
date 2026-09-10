@@ -28,27 +28,33 @@ class DaftarUlangController extends Controller
             return response()->json(['message' => 'Tagihan daftar ulang sudah dibuat, silakan lanjutkan pembayaran.'], 400);
         }
 
-        // Cari Tarif UKT untuk Prodi dan Tahun Akademik bersangkutan
+        // Cari Biaya Daftar Ulang untuk Prodi bersangkutan
         $prodiId = $hasil->program_studi_diterima_id ?? $pendaftaran->program_studi_id;
         $tahunAkademikId = $pendaftaran->gelombang_penerimaan->tahun_akademik_id ?? 1;
 
-        $tarifUkt = \App\Models\Spmb\TarifUktSpmb::with('masterBiaya')
-                        ->where('program_studi_id', $prodiId)
-                        ->where('tahun_akademik_id', $tahunAkademikId)
-                        ->where('is_active', true)
-                        ->orderBy('nominal', 'asc') // Ambil UKT kelompok terendah jika tidak ada data spesifik mahasiswa
+        $biayaDaftarUlang = \App\Models\Spmb\TarifUktSpmb::with('masterSikeuBiaya')
+                        ->where('master_program_studi_id', $prodiId)
                         ->first();
 
-        // Jika UKT di SPMB tidak ada, maka cek ke Master Tarif SIKEU
-        if (!$tarifUkt) {
-            $tarifUkt = \App\Models\Sikeu\TarifSpmb::with('masterBiaya')
+        // Jika biaya daftar ulang di SPMB tidak ada, maka cek ke Master Tarif SIKEU
+        if (!$biayaDaftarUlang) {
+            $biayaDaftarUlang = \App\Models\Sikeu\TarifSpmb::with('masterBiaya')
                             ->whereHas('masterBiaya', function($q) {
                                 $q->where('kode', 'like', '%UKT%')->orWhere('nama', 'like', '%UKT%');
-                            })->first(); 
+                            })->first();
         }
 
-        $nominalUKT = $tarifUkt ? $tarifUkt->nominal : 5000000;
-        $kodeBiaya = ($tarifUkt && $tarifUkt->masterBiaya) ? $tarifUkt->masterBiaya->kode : 'UKT_SMT1';
+        // Nominal diambil dari SIKEU master biaya (nominal_standar),
+        // fallback ke nominal TarifSpmb jika memakai sumber SIKEU.
+        if ($biayaDaftarUlang instanceof \App\Models\Spmb\TarifUktSpmb) {
+            $masterBiaya = $biayaDaftarUlang->masterSikeuBiaya;
+            $nominalUKT = $masterBiaya->nominal_standar ?? 5000000;
+            $kodeBiaya = $masterBiaya->kode ?? 'UKT_SMT1';
+        } else {
+            $masterBiaya = $biayaDaftarUlang->masterBiaya ?? null;
+            $nominalUKT = $biayaDaftarUlang->nominal ?? 5000000;
+            $kodeBiaya = $masterBiaya->kode ?? 'UKT_SMT1';
+        }
 
         $payload = [
             'calon_mahasiswa_id' => $pendaftaran_id,

@@ -17,11 +17,11 @@ class UpdateRoleRequest extends FormRequest
         
         return [
             'name' => 'required|string|max:255',
-            'slug' => 'required|string|max:255|unique:roles,slug,' . $roleId,
+            'slug' => 'required|string|max:255|unique:core_roles,slug,' . $roleId,
             'description' => 'nullable|string',
             'is_active' => 'boolean',
             'permissions' => 'nullable|array',
-            'permissions.*' => 'integer|exists:permissions,id',
+            'permissions.*' => 'integer|exists:core_permissions,id',
         ];
     }
 }

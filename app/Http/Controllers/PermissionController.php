@@ -62,7 +62,7 @@ class PermissionController extends Controller
             'module' => 'required|string|max:100',
             'action' => 'required|string|max:50',
             'name' => 'required|string|max:150',
-            'slug' => 'required|string|max:150|unique:permissions',
+            'slug' => 'required|string|max:150|unique:core_permissions',
             'description' => 'nullable|string',
         ]);
 
@@ -84,7 +84,7 @@ class PermissionController extends Controller
             'module' => 'required|string|max:100',
             'action' => 'required|string|max:50',
             'name' => 'required|string|max:150',
-            'slug' => 'required|string|max:150|unique:permissions,slug,' . $id,
+            'slug' => 'required|string|max:150|unique:core_permissions,slug,' . $id,
             'description' => 'nullable|string',
         ]);
 

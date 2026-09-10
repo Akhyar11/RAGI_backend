@@ -15,11 +15,11 @@ class StoreRoleRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:255',
-            'slug' => 'required|string|max:255|unique:roles,slug',
+            'slug' => 'required|string|max:255|unique:core_roles,slug',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
             'permissions' => 'nullable|array',
-            'permissions.*' => 'integer|exists:permissions,id',
+            'permissions.*' => 'integer|exists:core_permissions,id',
         ];
     }
 }

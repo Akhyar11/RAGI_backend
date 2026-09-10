@@ -1,10 +1,10 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\Siakad\FeederSyncController;
-use App\Http\Controllers\Api\Siakad\MahasiswaController;
-use App\Http\Controllers\Api\Siakad\AkademikController;
-use App\Http\Controllers\Api\Siakad\PerkuliahanController;
+use App\Http\Controllers\API\Siakad\FeederSyncController;
+use App\Http\Controllers\API\Siakad\MahasiswaController;
+use App\Http\Controllers\API\Siakad\AkademikController;
+use App\Http\Controllers\API\Siakad\PerkuliahanController;
 use App\Http\Controllers\API\Siakad\ObeController;
 
 /*

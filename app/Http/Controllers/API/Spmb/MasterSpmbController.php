@@ -7,6 +7,7 @@ use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\MasterTipeJalur;
 use App\Models\System\MasterReferensi;
+use App\Models\Core\MasterJalurKelas;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -170,7 +171,7 @@ class MasterSpmbController extends Controller
      */
     public function getJalurMasuk(Request $request): JsonResponse
     {
-        $query = JalurMasuk::with('masterTipeJalur');
+        $query = JalurMasuk::query();
 
         if ($request->filled('name')) {
             $name = $request->input('name');
@@ -228,10 +229,9 @@ class MasterSpmbController extends Controller
     public function storeJalurMasuk(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'kode' => 'required|string|unique:jalur_masuk,kode',
+            'kode' => 'required|string|unique:spmb_jalur_masuk,kode',
             'nama' => 'required|string',
             'deskripsi' => 'nullable|string',
-            'master_tipe_jalur_id' => 'required|exists:core_master_tipe_jalur,id',
             'ada_wawancara' => 'required|boolean',
             'is_active' => 'required|boolean',
         ]);
@@ -253,10 +253,9 @@ class MasterSpmbController extends Controller
         $jalur = JalurMasuk::findOrFail($id);
 
         $validated = $request->validate([
-            'kode' => 'required|string|unique:jalur_masuk,kode,' . $jalur->id,
+            'kode' => 'required|string|unique:spmb_jalur_masuk,kode,' . $jalur->id,
             'nama' => 'required|string',
             'deskripsi' => 'nullable|string',
-            'master_tipe_jalur_id' => 'required|exists:core_master_tipe_jalur,id',
             'ada_wawancara' => 'required|boolean',
             'is_active' => 'required|boolean',
         ]);
@@ -314,7 +313,7 @@ class MasterSpmbController extends Controller
     public function storeGelombang(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'jalur_masuk_id' => 'required|exists:jalur_masuk,id',
+            'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
             'tahun_akademik_id' => 'required|integer', // assuming it exists
             'nama' => 'required|string',
             'tanggal_buka' => 'required|date',
@@ -324,6 +323,10 @@ class MasterSpmbController extends Controller
             'biaya_pendaftaran' => 'required|numeric|min:0',
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
+
+        if ($validated['status'] === 'aktif') {
+            $this->deactivateOtherActiveGelombang($validated['jalur_masuk_id']);
+        }
 
         $gelombang = GelombangPenerimaan::create($validated);
 
@@ -342,7 +345,7 @@ class MasterSpmbController extends Controller
         $gelombang = GelombangPenerimaan::findOrFail($id);
 
         $validated = $request->validate([
-            'jalur_masuk_id' => 'required|exists:jalur_masuk,id',
+            'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
             'tahun_akademik_id' => 'required|integer',
             'nama' => 'required|string',
             'tanggal_buka' => 'required|date',
@@ -352,6 +355,10 @@ class MasterSpmbController extends Controller
             'biaya_pendaftaran' => 'required|numeric|min:0',
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
+
+        if ($validated['status'] === 'aktif') {
+            $this->deactivateOtherActiveGelombang($validated['jalur_masuk_id'], $id);
+        }
 
         $gelombang->update($validated);
 
@@ -374,6 +381,24 @@ class MasterSpmbController extends Controller
             'status' => 'success',
             'message' => 'Gelombang penerimaan berhasil dihapus.'
         ]);
+    }
+
+    /**
+     * Pastikan hanya satu gelombang yang berstatus 'aktif' per jalur masuk.
+     * Saat sebuah gelombang di-set aktif, gelombang lain di jalur yang sama
+     * otomatis diubah ke 'ditutup'.
+     *
+     * @param int $jalurMasukId
+     * @param int|null $exceptId Abaikan gelombang dengan id ini (saat update).
+     */
+    private function deactivateOtherActiveGelombang(int $jalurMasukId, ?int $exceptId = null): void
+    {
+        GelombangPenerimaan::where('jalur_masuk_id', $jalurMasukId)
+            ->where('status', 'aktif')
+            ->when($exceptId !== null, function ($q) use ($exceptId) {
+                $q->where('id', '!=', $exceptId);
+            })
+            ->update(['status' => 'ditutup']);
     }
 
     /**
@@ -443,6 +468,121 @@ class MasterSpmbController extends Controller
         return response()->json([
             'status' => 'success',
             'data' => $tahun
+        ]);
+    }
+
+    /**
+     * Get all Master Jalur Kelas
+     */
+    public function getMasterJalurKelas(Request $request): JsonResponse
+    {
+        $query = MasterJalurKelas::query();
+
+        if ($request->filled('search') || $request->filled('name')) {
+            $search = $request->input('search', $request->input('name'));
+            $query->where(function ($q) use ($search) {
+                $q->where('nama_jalur', 'like', "%{$search}%")
+                  ->orWhere('kode', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('is_active')) {
+            $query->where('is_active', filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN));
+        }
+
+        $sortBy = $request->input('sort_by', 'id');
+        $sortDir = $request->input('sort_dir', 'asc');
+        $allowedSorts = ['id', 'kode', 'nama_jalur', 'created_at'];
+        if (!in_array($sortBy, $allowedSorts)) {
+            $sortBy = 'id';
+        }
+        $sortDir = strtolower($sortDir) === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sortBy, $sortDir);
+
+        if ($request->has('page')) {
+            $limit = (int) $request->input('limit', 10);
+            $paginated = $query->paginate($limit);
+            return response()->json([
+                'status' => 'success',
+                'data' => $paginated->items(),
+                'meta' => [
+                    'current_page' => $paginated->currentPage(),
+                    'last_page' => $paginated->lastPage(),
+                    'per_page' => $paginated->perPage(),
+                    'total' => $paginated->total(),
+                    'from' => $paginated->firstItem(),
+                    'to' => $paginated->lastItem(),
+                ]
+            ]);
+        }
+
+        $jalurKelas = $query->get();
+        return response()->json([
+            'status' => 'success',
+            'data' => $jalurKelas
+        ]);
+    }
+
+    /**
+     * Store Master Jalur Kelas
+     */
+    public function storeMasterJalurKelas(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'kode' => 'required|string|max:50|unique:core_master_jalur_kelas,kode',
+            'nama_jalur' => 'required|string|max:255',
+            'deskripsi' => 'nullable|string',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        $jalurKelas = MasterJalurKelas::create([
+            'kode' => $validated['kode'],
+            'nama_jalur' => $validated['nama_jalur'],
+            'deskripsi' => $validated['deskripsi'] ?? null,
+            'is_active' => $validated['is_active'] ?? true,
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Master jalur kelas berhasil ditambahkan',
+            'data' => $jalurKelas
+        ], 201);
+    }
+
+    /**
+     * Update Master Jalur Kelas
+     */
+    public function updateMasterJalurKelas(Request $request, $id): JsonResponse
+    {
+        $jalurKelas = MasterJalurKelas::findOrFail($id);
+
+        $validated = $request->validate([
+            'kode' => 'required|string|max:50|unique:core_master_jalur_kelas,kode,' . $id,
+            'nama_jalur' => 'required|string|max:255',
+            'deskripsi' => 'nullable|string',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        $jalurKelas->update($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Master jalur kelas berhasil diperbarui',
+            'data' => $jalurKelas
+        ]);
+    }
+
+    /**
+     * Delete Master Jalur Kelas
+     */
+    public function destroyMasterJalurKelas($id): JsonResponse
+    {
+        $jalurKelas = MasterJalurKelas::findOrFail($id);
+        $jalurKelas->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Master jalur kelas berhasil dihapus'
         ]);
     }
 }

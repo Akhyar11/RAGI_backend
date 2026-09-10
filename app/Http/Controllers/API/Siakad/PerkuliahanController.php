@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api\Siakad;
+namespace App\Http\Controllers\API\Siakad;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;

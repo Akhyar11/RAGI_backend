@@ -68,8 +68,8 @@ class MenuController extends Controller
             'url' => 'required|string|max:255',
             'icon' => 'nullable|string|max:255',
             'module' => 'required|string|in:sso,simpeg,sippm,sikeu,spmb,SPMB,sinapra,siakad',
-            'parent_id' => 'nullable|exists:menus,id',
-            'permission_id' => 'nullable|exists:permissions,id',
+            'parent_id' => 'nullable|exists:core_menus,id',
+            'permission_id' => 'nullable|exists:core_permissions,id',
             'order_index' => 'integer',
             'is_active' => 'boolean'
         ]);
@@ -101,8 +101,8 @@ class MenuController extends Controller
             'url' => 'required|string|max:255',
             'icon' => 'nullable|string|max:255',
             'module' => 'required|string|in:sso,simpeg,sippm,sikeu,spmb,SPMB,sinapra,siakad',
-            'parent_id' => 'nullable|exists:menus,id',
-            'permission_id' => 'nullable|exists:permissions,id',
+            'parent_id' => 'nullable|exists:core_menus,id',
+            'permission_id' => 'nullable|exists:core_permissions,id',
             'order_index' => 'integer',
             'is_active' => 'boolean'
         ]);

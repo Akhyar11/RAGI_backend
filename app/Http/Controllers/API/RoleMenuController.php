@@ -30,7 +30,7 @@ class RoleMenuController extends Controller
     {
         $request->validate([
             'menu_ids' => 'present|array',
-            'menu_ids.*' => 'exists:menus,id'
+            'menu_ids.*' => 'exists:core_menus,id'
         ]);
 
         $role = Role::findOrFail($roleId);
