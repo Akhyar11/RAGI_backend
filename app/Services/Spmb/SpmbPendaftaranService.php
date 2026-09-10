@@ -32,7 +32,7 @@ class SpmbPendaftaranService
     /**
      * Verifikasi administrasi oleh Admin
      */
-    public function verifikasiAdministrasi(PendaftaranCalonMhs $pendaftaran, bool $isLulus, ?string $catatan = null, int $adminId): void
+    public function verifikasiAdministrasi(PendaftaranCalonMhs $pendaftaran, bool $isLulus, ?string $catatan, int $adminId): void
     {
         if ($pendaftaran->status !== 'submitted') {
             throw ValidationException::withMessages([

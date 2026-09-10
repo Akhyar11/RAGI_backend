@@ -123,14 +123,24 @@ class PendaftaranCalonMhs extends Model
         return $this->belongsTo(User::class, 'diverifikasi_oleh');
     }
 
+    public function tipeJalur()
+    {
+        return $this->belongsTo(\App\Models\Spmb\MasterTipeJalur::class, 'master_tipe_jalur_id');
+    }
+
     public function tipe_jalur()
     {
-        return $this->belongsTo(App\Models\Spmb\MasterTipeJalur::class, 'master_tipe_jalur_id');
+        return $this->tipeJalur();
+    }
+
+    public function dokumenPendaftaran()
+    {
+        return $this->hasMany(DokumenPendaftaran::class, 'pendaftaran_id');
     }
 
     public function dokumen_pendaftaran()
     {
-        return $this->hasMany(PendaftaranBerkas::class, 'pendaftaran_id');
+        return $this->dokumenPendaftaran();
     }
 
     public function pembayaranSpmb()
