@@ -9,6 +9,7 @@ use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\KuesionerSpmb;
 use App\Models\Spmb\PengumumanSpmb;
 use App\Models\Siakad\TahunAkademik;
+use App\Models\Sikeu\MasterBiaya;
 
 class GelombangPenerimaan extends Model
 {
@@ -19,6 +20,7 @@ class GelombangPenerimaan extends Model
     protected $fillable = [
         'jalur_masuk_id',
         'tahun_akademik_id',
+        'master_biaya_id',
         'nama',
         'tanggal_buka',
         'tanggal_tutup',
@@ -45,6 +47,11 @@ class GelombangPenerimaan extends Model
     {
         // Add related method even if Siakad\TahunAkademik not yet created
         return $this->belongsTo(TahunAkademik::class, 'tahun_akademik_id');
+    }
+
+    public function masterBiaya()
+    {
+        return $this->belongsTo(MasterBiaya::class, 'master_biaya_id');
     }
 
     public function pendaftaranCalonMhs()

@@ -141,13 +141,15 @@ class CalonMahasiswaController extends Controller
         // Fetch tarif using SpmbSikeuService
         $sikeuService = app(\App\Services\Sikeu\SpmbSikeuService::class);
         $gelombangId = $pendaftaran->gelombang_id ?? $validated['gelombang_id'] ?? 1;
-        $gelombang = \App\Models\Spmb\GelombangPenerimaan::find($gelombangId);
+        $gelombang = \App\Models\Spmb\GelombangPenerimaan::with('masterBiaya')->find($gelombangId);
         $nominal = $sikeuService->getTarifPendaftaranSpmb($gelombang->jalur_masuk_id ?? 1, $gelombang->id ?? 1);
         if ($nominal <= 0) {
             $nominal = ($gelombang && $gelombang->biaya_pendaftaran > 0) ? (float) $gelombang->biaya_pendaftaran : 250000.00;
         }
 
         $namaLengkap = $pendaftaran->nama_lengkap ?? $validated['nama_lengkap'] ?? $user->name ?? 'Calon Mahasiswa';
+        $biayaKode = ($gelombang && $gelombang->masterBiaya) ? $gelombang->masterBiaya->kode : 'SPMB_ADM';
+        $biayaNama = ($gelombang && $gelombang->masterBiaya) ? $gelombang->masterBiaya->nama : 'Biaya Formulir Pendaftaran SPMB';
 
         // Generate External Bill via internal Request
         $payload = [
@@ -159,9 +161,9 @@ class CalonMahasiswaController extends Controller
             'keterangan' => 'Pendaftaran SPMB - ' . $namaLengkap,
             'details' => [
                 [
-                    'master_biaya_kode' => 'SPMB_ADM',
+                    'master_biaya_kode' => $biayaKode,
                     'nominal' => $nominal,
-                    'keterangan' => 'Biaya Formulir Pendaftaran SPMB'
+                    'keterangan' => $biayaNama
                 ]
             ]
         ];

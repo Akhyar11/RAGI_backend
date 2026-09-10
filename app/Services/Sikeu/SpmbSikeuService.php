@@ -17,6 +17,23 @@ class SpmbSikeuService
      */
     public function getTarifPendaftaranSpmb($jalurId, $gelombangId): float
     {
+        if ($gelombangId) {
+            $gelombang = \App\Models\Spmb\GelombangPenerimaan::with('masterBiaya')->find($gelombangId);
+            if ($gelombang) {
+                if ($gelombang->masterBiaya && $gelombang->masterBiaya->nominal_standar > 0) {
+                    return (float) $gelombang->masterBiaya->nominal_standar;
+                }
+                if ($gelombang->biaya_pendaftaran > 0) {
+                    return (float) $gelombang->biaya_pendaftaran;
+                }
+            }
+        }
+
+        $masterBiaya = MasterBiaya::where('kode', 'SPMB_ADM')->orWhere('tipe', 'spmb_adm')->first() ?? MasterBiaya::first();
+        if ($masterBiaya && $masterBiaya->nominal_standar > 0) {
+            return (float) $masterBiaya->nominal_standar;
+        }
+
         $tarif = TarifSpmb::where('jalur_id', $jalurId)
             ->where('gelombang_id', $gelombangId)
             ->where('is_active', true)
@@ -24,18 +41,6 @@ class SpmbSikeuService
 
         if ($tarif && $tarif->nominal > 0) {
             return (float) $tarif->nominal;
-        }
-
-        $masterBiaya = MasterBiaya::where('tipe', 'spmb_adm')->first() ?? MasterBiaya::first();
-        if ($masterBiaya && $masterBiaya->nominal_standar > 0) {
-            return (float) $masterBiaya->nominal_standar;
-        }
-
-        if ($gelombangId) {
-            $gelombang = \App\Models\Spmb\GelombangPenerimaan::find($gelombangId);
-            if ($gelombang && $gelombang->biaya_pendaftaran > 0) {
-                return (float) $gelombang->biaya_pendaftaran;
-            }
         }
 
         return 250000.00;

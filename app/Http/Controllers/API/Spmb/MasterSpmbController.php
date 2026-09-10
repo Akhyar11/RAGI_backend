@@ -288,7 +288,7 @@ class MasterSpmbController extends Controller
      */
     public function getGelombang(): JsonResponse
     {
-        $gelombang = GelombangPenerimaan::with('jalurMasuk')->orderBy('tanggal_buka', 'desc')->get();
+        $gelombang = GelombangPenerimaan::with(['jalurMasuk', 'masterBiaya'])->orderBy('tanggal_buka', 'desc')->get();
         return response()->json([
             'status' => 'success',
             'data' => $gelombang
@@ -300,7 +300,7 @@ class MasterSpmbController extends Controller
      */
     public function showGelombang($id): JsonResponse
     {
-        $gelombang = GelombangPenerimaan::with('jalurMasuk')->findOrFail($id);
+        $gelombang = GelombangPenerimaan::with(['jalurMasuk', 'masterBiaya'])->findOrFail($id);
         return response()->json([
             'status' => 'success',
             'data' => $gelombang
@@ -315,20 +315,27 @@ class MasterSpmbController extends Controller
         $validated = $request->validate([
             'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
             'tahun_akademik_id' => 'required|integer', // assuming it exists
+            'master_biaya_id' => 'nullable|exists:sikeu_master_biaya,id',
             'nama' => 'required|string',
             'tanggal_buka' => 'required|date',
             'tanggal_tutup' => 'required|date|after_or_equal:tanggal_buka',
             'tanggal_pengumuman' => 'nullable|date',
             'kuota_total' => 'required|integer|min:1',
-            'biaya_pendaftaran' => 'required|numeric|min:0',
+            'biaya_pendaftaran' => 'nullable|numeric|min:0',
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
+
+        if (empty($validated['biaya_pendaftaran']) && !empty($validated['master_biaya_id'])) {
+            $mb = \App\Models\Sikeu\MasterBiaya::find($validated['master_biaya_id']);
+            $validated['biaya_pendaftaran'] = $mb ? (float)$mb->nominal_standar : 0;
+        }
 
         if ($validated['status'] === 'aktif') {
             $this->deactivateOtherActiveGelombang($validated['jalur_masuk_id']);
         }
 
         $gelombang = GelombangPenerimaan::create($validated);
+        $gelombang->load(['jalurMasuk', 'masterBiaya']);
 
         return response()->json([
             'status' => 'success',
@@ -347,20 +354,27 @@ class MasterSpmbController extends Controller
         $validated = $request->validate([
             'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
             'tahun_akademik_id' => 'required|integer',
+            'master_biaya_id' => 'nullable|exists:sikeu_master_biaya,id',
             'nama' => 'required|string',
             'tanggal_buka' => 'required|date',
             'tanggal_tutup' => 'required|date|after_or_equal:tanggal_buka',
             'tanggal_pengumuman' => 'nullable|date',
             'kuota_total' => 'required|integer|min:1',
-            'biaya_pendaftaran' => 'required|numeric|min:0',
+            'biaya_pendaftaran' => 'nullable|numeric|min:0',
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
+
+        if (!isset($validated['biaya_pendaftaran']) && !empty($validated['master_biaya_id'])) {
+            $mb = \App\Models\Sikeu\MasterBiaya::find($validated['master_biaya_id']);
+            $validated['biaya_pendaftaran'] = $mb ? (float)$mb->nominal_standar : 0;
+        }
 
         if ($validated['status'] === 'aktif') {
             $this->deactivateOtherActiveGelombang($validated['jalur_masuk_id'], $id);
         }
 
         $gelombang->update($validated);
+        $gelombang->load(['jalurMasuk', 'masterBiaya']);
 
         return response()->json([
             'status' => 'success',
