@@ -288,7 +288,7 @@ class MasterSpmbController extends Controller
      */
     public function getGelombang(): JsonResponse
     {
-        $gelombang = GelombangPenerimaan::with(['jalurMasuk', 'masterBiaya'])->orderBy('tanggal_buka', 'desc')->get();
+        $gelombang = GelombangPenerimaan::with(['jalurMasuk', 'masterBiaya', 'tahunAkademik'])->orderBy('tanggal_buka', 'desc')->get();
         return response()->json([
             'status' => 'success',
             'data' => $gelombang
@@ -300,7 +300,7 @@ class MasterSpmbController extends Controller
      */
     public function showGelombang($id): JsonResponse
     {
-        $gelombang = GelombangPenerimaan::with(['jalurMasuk', 'masterBiaya'])->findOrFail($id);
+        $gelombang = GelombangPenerimaan::with(['jalurMasuk', 'masterBiaya', 'tahunAkademik'])->findOrFail($id);
         return response()->json([
             'status' => 'success',
             'data' => $gelombang

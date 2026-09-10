@@ -8,7 +8,7 @@ use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\KuesionerSpmb;
 use App\Models\Spmb\PengumumanSpmb;
-use App\Models\Siakad\TahunAkademik;
+use App\Models\Spmb\MasterTahunAkademik;
 use App\Models\Sikeu\MasterBiaya;
 
 class GelombangPenerimaan extends Model
@@ -45,8 +45,7 @@ class GelombangPenerimaan extends Model
 
     public function tahunAkademik()
     {
-        // Add related method even if Siakad\TahunAkademik not yet created
-        return $this->belongsTo(TahunAkademik::class, 'tahun_akademik_id');
+        return $this->belongsTo(MasterTahunAkademik::class, 'tahun_akademik_id');
     }
 
     public function masterBiaya()
