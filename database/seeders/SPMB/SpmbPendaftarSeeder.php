@@ -29,9 +29,6 @@ class SpmbPendaftarSeeder extends Seeder
             [
                 'nama' => 'Jalur Reguler Rapor',
                 'deskripsi' => 'Penerimaan berdasarkan nilai rata-rata rapor SMA/SMK/MA semester 1-5',
-                'master_tipe_jalur_id' => $tipeReguler ? $tipeReguler->id : 1,
-                'ada_ujian_tulis' => false,
-                'ada_ujian_praktik' => false,
                 'ada_wawancara' => false,
                 'is_active' => true,
             ]
@@ -42,9 +39,6 @@ class SpmbPendaftarSeeder extends Seeder
             [
                 'nama' => 'Jalur Prestasi Akademik & Non-Akademik',
                 'deskripsi' => 'Penerimaan berdasarkan sertifikat kejuaraan dan capaian akademik',
-                'master_tipe_jalur_id' => $tipeBeasiswa ? $tipeBeasiswa->id : 3,
-                'ada_ujian_tulis' => false,
-                'ada_ujian_praktik' => false,
                 'ada_wawancara' => true,
                 'is_active' => true,
             ]
@@ -55,9 +49,6 @@ class SpmbPendaftarSeeder extends Seeder
             [
                 'nama' => 'Jalur Ujian Masuk (CBT)',
                 'deskripsi' => 'Penerimaan melalui ujian Computer Based Test (CBT) secara online/offline',
-                'master_tipe_jalur_id' => $tipeReguler ? $tipeReguler->id : 1,
-                'ada_ujian_tulis' => true,
-                'ada_ujian_praktik' => false,
                 'ada_wawancara' => false,
                 'is_active' => true,
             ]

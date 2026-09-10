@@ -13,10 +13,51 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $isMysql = DB::getDriverName() === 'mysql';
+        $driver = DB::getDriverName();
+        $isMysql = $driver === 'mysql';
+        $isSqlite = $driver === 'sqlite';
 
-        // 1. Drop foreign keys lama yang mengikat program_studi_id, tahun_akademik_id, master_biaya_id terlebih dahulu
-        // (MySQL InnoDB memerlukan foreign key di-drop sebelum unique index yang mendukungnya bisa di-drop)
+        // Penanganan Khusus SQLite:
+        // Di SQLite, drop column pada tabel yang memiliki foreign key constraint akan gagal karena
+        // SQLite menduplikasi tabel dengan definisi foreign key lama.
+        if ($isSqlite) {
+            Schema::disableForeignKeyConstraints();
+
+            // Buat tabel temporary baru dengan struktur akhir
+            Schema::create('spmb_tarif_ukt_new', function (Blueprint $table) {
+                $table->id();
+                $table->string('nama')->nullable();
+                $table->text('deskripsi')->nullable();
+                $table->foreignId('master_program_studi_id')->nullable()->constrained('spmb_master_program_studi')->onDelete('restrict');
+                $table->foreignId('master_sikeu_biaya_id')->nullable()->constrained('sikeu_master_biaya')->onDelete('set null');
+                $table->timestamps();
+                $table->softDeletes();
+                $table->unique(['master_program_studi_id', 'master_sikeu_biaya_id'], 'biaya_daftar_ulang_unique_idx');
+            });
+
+            // Salin data lama jika ada
+            if (Schema::hasTable('spmb_tarif_ukt')) {
+                $hasOldProdi = Schema::hasColumn('spmb_tarif_ukt', 'program_studi_id');
+                $hasOldBiaya = Schema::hasColumn('spmb_tarif_ukt', 'master_biaya_id');
+
+                $prodiCol = $hasOldProdi ? 'program_studi_id' : (Schema::hasColumn('spmb_tarif_ukt', 'master_program_studi_id') ? 'master_program_studi_id' : 'NULL');
+                $biayaCol = $hasOldBiaya ? 'master_biaya_id' : (Schema::hasColumn('spmb_tarif_ukt', 'master_sikeu_biaya_id') ? 'master_sikeu_biaya_id' : 'NULL');
+
+                DB::statement("
+                    INSERT OR IGNORE INTO spmb_tarif_ukt_new (id, master_program_studi_id, master_sikeu_biaya_id, created_at, updated_at, deleted_at)
+                    SELECT id, {$prodiCol}, {$biayaCol}, created_at, updated_at, deleted_at
+                    FROM spmb_tarif_ukt
+                ");
+
+                Schema::drop('spmb_tarif_ukt');
+            }
+
+            Schema::rename('spmb_tarif_ukt_new', 'spmb_tarif_ukt');
+            Schema::enableForeignKeyConstraints();
+            return;
+        }
+
+        // 1. Drop foreign keys lama yang mengikat program_studi_id, tahun_akademik_id, master_biaya_id terlebih dahulu (MySQL)
         if ($isMysql) {
             $foreignKeys = DB::select("
                 SELECT CONSTRAINT_NAME 
@@ -32,7 +73,7 @@ return new class extends Migration
             }
         }
 
-        // 2. Sekarang drop unique index lama dengan aman jika ada
+        // 2. Drop unique index lama dengan aman jika ada
         if ($isMysql) {
             $uniqueIndexes = DB::select("
                 SELECT DISTINCT INDEX_NAME 
@@ -47,12 +88,6 @@ return new class extends Migration
                     $table->dropUnique('tarif_ukt_spmb_unique_idx');
                 });
             }
-        } else {
-            try {
-                Schema::table('spmb_tarif_ukt', function (Blueprint $table) {
-                    $table->dropUnique('tarif_ukt_spmb_unique_idx');
-                });
-            } catch (\Throwable $e) {}
         }
 
         // 3. Rename kolom program_studi_id -> master_program_studi_id
@@ -120,14 +155,6 @@ return new class extends Migration
                     $table->unique(['master_program_studi_id', 'master_sikeu_biaya_id'], 'biaya_daftar_ulang_unique_idx');
                 });
             }
-        } else {
-            try {
-                Schema::table('spmb_tarif_ukt', function (Blueprint $table) {
-                    $table->foreign('master_program_studi_id')->references('id')->on('spmb_master_program_studi')->onDelete('restrict');
-                    $table->foreign('master_sikeu_biaya_id')->references('id')->on('sikeu_master_biaya')->onDelete('set null');
-                    $table->unique(['master_program_studi_id', 'master_sikeu_biaya_id'], 'biaya_daftar_ulang_unique_idx');
-                });
-            } catch (\Throwable $e) {}
         }
     }
 

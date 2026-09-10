@@ -62,6 +62,8 @@
 | PemasukanKampusController | Pencatatan Pemasukan Hibah, Donatur, & Kerjasama | [docs/api/Sikeu/PemasukanKampusController.md](api/Sikeu/PemasukanKampusController.md) |
 | AkuntansiController | Chart of Accounts (COA), Jurnal Umum, & Buku Besar | [docs/api/Sikeu/AkuntansiController.md](api/Sikeu/AkuntansiController.md) |
 | PaymentGatewayConfigController | Pengaturan Provider Payment Gateway (Midtrans/Xendit) | [docs/api/Sikeu/PaymentGatewayConfigController.md](api/Sikeu/PaymentGatewayConfigController.md) |
+| SettingTarifController | Konfigurasi Tarif Biaya per Angkatan, Prodi, & Semester | [docs/api/Sikeu/SettingTarifController.md](api/Sikeu/SettingTarifController.md) |
+| PembayaranKasirController | Pembayaran Kasir/Loket Tunai & Non-Tunai, Koreksi Transaksi, & Tagihan Masal | [docs/api/Sikeu/PembayaranKasirController.md](api/Sikeu/PembayaranKasirController.md) |
 
 ---
 

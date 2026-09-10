@@ -146,5 +146,56 @@ class AdminUserSeeder extends Seeder
         if ($spmbAdminRole) {
             $assignRole($adminSpmb->id, $spmbAdminRole->id, $admin->id);
         }
+
+        // ── SIKEU TEST USERS ────────────────────────────────────────
+        $kasirSikeu = $createOrRestoreUser(
+            'kasir.sikeu@kampus.ac.id',
+            [
+                'username'    => 'kasir_sikeu',
+                'password'    => Hash::make('password'),
+                'is_active'   => true,
+                'is_verified' => true,
+            ]
+        );
+
+        $kabagKeuangan = $createOrRestoreUser(
+            'kabag.keuangan@kampus.ac.id',
+            [
+                'username'    => 'kabag_keuangan',
+                'password'    => Hash::make('password'),
+                'is_active'   => true,
+                'is_verified' => true,
+            ]
+        );
+
+        $pimpinanUser = $createOrRestoreUser(
+            'pimpinan@kampus.ac.id',
+            [
+                'username'    => 'pimpinan',
+                'password'    => Hash::make('password'),
+                'is_active'   => true,
+                'is_verified' => true,
+            ]
+        );
+
+        $mhsTestUser = $createOrRestoreUser(
+            'mahasiswa.test@kampus.ac.id',
+            [
+                'username'    => 'mahasiswa_test',
+                'password'    => Hash::make('password'),
+                'is_active'   => true,
+                'is_verified' => true,
+            ]
+        );
+
+        // Assign SIKEU Roles
+        $roleOperatorSikeu = Role::where('slug', 'operator_sikeu')->first();
+        $roleKabagKeuangan = Role::where('slug', 'kabag_keuangan')->first();
+        $rolePimpinan = Role::where('slug', 'pimpinan')->first();
+
+        if ($kasirSikeu && $roleOperatorSikeu) $assignRole($kasirSikeu->id, $roleOperatorSikeu->id, $admin->id);
+        if ($kabagKeuangan && $roleKabagKeuangan) $assignRole($kabagKeuangan->id, $roleKabagKeuangan->id, $admin->id);
+        if ($pimpinanUser && $rolePimpinan) $assignRole($pimpinanUser->id, $rolePimpinan->id, $admin->id);
+        if ($mhsTestUser && $roleMhs) $assignRole($mhsTestUser->id, $roleMhs->id, $admin->id);
     }
 }

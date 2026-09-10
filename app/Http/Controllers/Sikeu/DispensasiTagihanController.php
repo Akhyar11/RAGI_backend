@@ -77,8 +77,8 @@ class DispensasiTagihanController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'tagihan_id' => 'required|exists:tagihan_mahasiswa,id',
-            'tipe_dispensasi' => 'required|in:penundaan_jatuh_tempo,cicilan,keringanan_khusus',
+            'tagihan_id' => 'required|exists:sikeu_tagihan_mahasiswa,id',
+            'tipe_dispensasi' => 'required|in:penundaan_jatuh_tempo,pembayaran_cicilan,cicilan,keringanan_khusus,keringanan_potongan',
             'jatuh_tempo_baru' => 'nullable|date',
             'jumlah_cicilan' => 'nullable|integer|min:1',
             'nominal_per_cicilan' => 'nullable|numeric|min:0',

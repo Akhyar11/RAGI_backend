@@ -317,7 +317,37 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
 
 
 
-    // Master Jalur Kelas & Tipe Mahasiswa
+    // Tagihan Mahasiswa List & Detail
+    Route::get('tagihan', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'indexTagihan']);
+    Route::get('tagihan/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'showTagihan']);
+
+    // Master Tarif Gaji & Transport Pegawai (SIKEU)
+    Route::get('master/gaji-pegawai', [App\Http\Controllers\Sikeu\MasterGajiPegawaiController::class, 'index']);
+    Route::post('master/gaji-pegawai', [App\Http\Controllers\Sikeu\MasterGajiPegawaiController::class, 'store']);
+
+    // Master Jalur Kelas
+    Route::get('master/jalur-kelas', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'indexJalurKelas']);
+    Route::post('master/jalur-kelas', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'storeJalurKelas']);
+    Route::put('master/jalur-kelas/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'updateJalurKelas']);
+    Route::delete('master/jalur-kelas/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'destroyJalurKelas']);
+
+    // Master Tarif UKT Kelompok
+    Route::get('master/tarif-ukt', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'indexTarifUkt']);
+    Route::post('master/tarif-ukt', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'storeTarifUkt']);
+    Route::put('master/tarif-ukt/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'updateTarifUkt']);
+    Route::delete('master/tarif-ukt/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'destroyTarifUkt']);
+
+    // Master Program Beasiswa
+    Route::get('master/beasiswa', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'indexBeasiswa']);
+    Route::post('master/beasiswa', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'storeBeasiswa']);
+    Route::put('master/beasiswa/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'updateBeasiswa']);
+    Route::delete('master/beasiswa/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'destroyBeasiswa']);
+
+    // Mapping Mahasiswa Penerima Beasiswa
+    Route::get('master/mahasiswa-beasiswa', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'indexMahasiswaBeasiswa']);
+    Route::post('master/mahasiswa-beasiswa', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'storeMahasiswaBeasiswa']);
+
+    // Master Jalur Kelas & Tipe Mahasiswa (Referensi SPMB)
     Route::get('master/referensi/{tipe}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getReferensi']);
     Route::get('master/tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getMasterTipeJalur']);
 
@@ -389,6 +419,19 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     // Endpoint Integrasi SPMB (Get Tarif Real-Time)
     Route::get('spmb/tarif', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getTarifSpmb']);
 
+    // Setting Tarif per Angkatan/Prodi/Semester
+    Route::get('master/setting-tarif', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'index']);
+    Route::post('master/setting-tarif', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'store']);
+    Route::put('master/setting-tarif/{id}', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'update']);
+    Route::delete('master/setting-tarif/{id}', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'destroy']);
+
+    // Pembayaran Kasir Kampus (Offline) & Koreksi
+    Route::post('pembayaran/kasir', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'processPayment']);
+    Route::post('pembayaran/{id}/koreksi', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'koreksiPayment']);
+
+    // Generate Tagihan Semester Masal
+    Route::post('tagihan/generate-mass', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'generateMassTagihan']);
+
     // SPMB Payment Callback / Webhook Integration
     Route::post('callback/spmb/{calonMahasiswaId}', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'handleSpmbPaymentCallback']);
     Route::get('checkout/lookup-va', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'lookupVa']);
@@ -404,6 +447,12 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     // Pajak Kampus (PPh 21, PPh 23, PPN 11%) & Setor NTPN
     Route::get('pajak', [App\Http\Controllers\Sikeu\PajakKampusController::class, 'index']);
     Route::post('pajak/{id}/setor', [App\Http\Controllers\Sikeu\PajakKampusController::class, 'setorPajak']);
+});
+
+// Alias for direct non-v1 calls (backward compatibility with axios client baseURL)
+Route::middleware('auth:api')->prefix('sikeu')->group(function () {
+    Route::get('master/gaji-pegawai', [App\Http\Controllers\Sikeu\MasterGajiPegawaiController::class, 'index']);
+    Route::post('master/gaji-pegawai', [App\Http\Controllers\Sikeu\MasterGajiPegawaiController::class, 'store']);
 });
 
 // Public Printable Document Route (Accessible directly via browser link)
