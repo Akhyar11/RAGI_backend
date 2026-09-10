@@ -17,17 +17,25 @@ class BerkasRequirementController extends Controller
     {
         $query = BerkasRequirement::with('jalurMasuk');
 
-        if ($request->has('jalur_masuk_id') && $request->jalur_masuk_id) {
+        if ($request->filled('jalur_masuk_id')) {
             $query->where('jalur_masuk_id', $request->jalur_masuk_id);
         }
 
-        if ($request->has('search') && $request->search) {
+        if ($request->has('is_active') && $request->is_active !== '') {
+            $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
+        }
+
+        if ($request->filled('search')) {
             $query->where('label', 'like', '%' . $request->search . '%');
         }
 
-        $limit = $request->input('limit', 10);
-        
-        $data = $query->orderBy('jalur_masuk_id')->orderBy('urutan')->paginate($limit);
+        $perPage = min(100, $request->integer('per_page', $request->integer('limit', 10)));
+
+        $allowedSortColumns = ['label', 'jalur_masuk_id', 'urutan', 'is_active', 'created_at'];
+        $sortBy = in_array($request->sort_by, $allowedSortColumns) ? $request->sort_by : 'urutan';
+        $sortDir = strtolower((string) ($request->sort_dir ?? $request->sort_order)) === 'desc' ? 'desc' : 'asc';
+
+        $data = $query->orderBy($sortBy, $sortDir)->paginate($perPage);
 
         return response()->json([
             'status' => 'success',

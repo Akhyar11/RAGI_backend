@@ -61,6 +61,7 @@ class SpmBSikeuCallbackController extends Controller
                     'status' => 'lunas',
                     'total_bayar' => $validated['nominal'],
                 ]);
+            }
             // Trigger Auto Journal (Debet Kas Bank, Kredit Pendapatan SPMB)
             \App\Services\Sikeu\AutoJournalService::recordStudentPaymentJournal($tagihan, (float)$validated['nominal']);
 

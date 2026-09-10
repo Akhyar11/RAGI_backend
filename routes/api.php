@@ -226,6 +226,8 @@ Route::prefix('spmb')->group(function () {
     Route::get('tarif', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getTarifSpmb']);
     Route::get('master-tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getMasterTipeJalur']);
     Route::get('referensi/{tipe}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getReferensi']);
+    Route::get('berkas-requirement', [\App\Http\Controllers\API\Spmb\BerkasRequirementController::class, 'index']);
+    Route::get('master/berkas-requirement', [\App\Http\Controllers\API\Spmb\BerkasRequirementController::class, 'index']);
 });
 
 Route::middleware('auth:api')->prefix('spmb')->group(function () {
@@ -234,7 +236,7 @@ Route::middleware('auth:api')->prefix('spmb')->group(function () {
 });
 
 Route::middleware('auth:api')->prefix('spmb')->group(function () {
-    Route::apiResource('master/berkas-requirement', \App\Http\Controllers\API\Spmb\BerkasRequirementController::class);
+    Route::apiResource('master/berkas-requirement', \App\Http\Controllers\API\Spmb\BerkasRequirementController::class)->except(['index']);
     Route::apiResource('master/tarif-ukt', \App\Http\Controllers\API\Spmb\TarifUktSpmbController::class);
     Route::post('master-tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'storeMasterTipeJalur']);
     Route::put('master-tipe-jalur/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'updateMasterTipeJalur']);

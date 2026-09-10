@@ -341,7 +341,9 @@ class CalonMahasiswaController extends Controller
     {
         $request->validate([
             'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'jenis_berkas' => 'required|string',
+            'jenis_berkas' => 'nullable|string',
+            'jenis_dokumen' => 'nullable|string',
+            'berkas_requirement_id' => 'nullable|integer|exists:spmb_berkas_requirement,id',
         ]);
 
         $user = $request->user();
@@ -354,37 +356,78 @@ class CalonMahasiswaController extends Controller
             ], 404);
         }
 
+        $jenisDokumen = $request->jenis_dokumen ?: $request->jenis_berkas;
+        $requirementId = $request->berkas_requirement_id;
+
+        if ($requirementId && empty($jenisDokumen)) {
+            $req = \App\Models\Spmb\BerkasRequirement::find($requirementId);
+            if ($req) {
+                $jenisDokumen = $req->jenis_dokumen;
+            }
+        }
+
+        if (empty($jenisDokumen) && empty($requirementId)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Jenis dokumen atau berkas requirement ID wajib diisi.'
+            ], 422);
+        }
+
         $file = $request->file('file');
         $fileName = \Illuminate\Support\Str::uuid() . '.' . $file->getClientOriginalExtension();
         $filePath = $file->storeAs('spmb/dokumen_pendaftaran/' . date('Y/m'), $fileName, 'public');
 
-        // Delete old file if existing berkas record exists
-        $existingBerkas = \App\Models\Spmb\PendaftaranBerkas::where('pendaftaran_id', $pendaftaran->id)
-            ->where('jenis_berkas', $request->jenis_berkas)
-            ->first();
-
-        if ($existingBerkas && !empty($existingBerkas->file_path)) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($existingBerkas->file_path);
+        // Delete old file if existing record exists
+        $query = \App\Models\Spmb\DokumenPendaftaran::where('pendaftaran_id', $pendaftaran->id);
+        if ($requirementId) {
+            $query->where(function ($q) use ($requirementId, $jenisDokumen) {
+                $q->where('berkas_requirement_id', $requirementId);
+                if ($jenisDokumen) {
+                    $q->orWhere('jenis_dokumen', $jenisDokumen);
+                }
+            });
+        } else {
+            $query->where('jenis_dokumen', $jenisDokumen);
         }
 
-        $berkas = \App\Models\Spmb\PendaftaranBerkas::updateOrCreate(
-            [
+        $existingDoc = $query->first();
+
+        if ($existingDoc && !empty($existingDoc->file_path)) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($existingDoc->file_path);
+        }
+
+        $docData = [
+            'file_path' => $filePath,
+            'is_verified' => false,
+            'catatan' => null,
+        ];
+
+        if ($requirementId) {
+            $docData['berkas_requirement_id'] = $requirementId;
+        }
+        if ($jenisDokumen) {
+            $docData['jenis_dokumen'] = $jenisDokumen;
+        }
+
+        if ($existingDoc) {
+            $existingDoc->update($docData);
+            $dokumen = $existingDoc;
+        } else {
+            $dokumen = \App\Models\Spmb\DokumenPendaftaran::create(array_merge([
                 'pendaftaran_id' => $pendaftaran->id,
-                'jenis_berkas' => $request->jenis_berkas,
-            ],
-            [
-                'file_path' => $filePath,
-                'is_verified' => false,
-            ]
-        );
+                'jenis_dokumen' => $jenisDokumen ?: 'dokumen',
+                'berkas_requirement_id' => $requirementId,
+            ], $docData));
+        }
 
         $fileUrl = asset(\Illuminate\Support\Facades\Storage::url($filePath));
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Dokumen ' . strtoupper($request->jenis_berkas) . ' berhasil diunggah.',
-            'data' => array_merge($berkas->toArray(), [
+            'message' => 'Dokumen ' . strtoupper($jenisDokumen ?: 'pendaftaran') . ' berhasil diunggah.',
+            'data' => array_merge($dokumen->toArray(), [
                 'file_url' => $fileUrl,
+                'jenis_berkas' => $dokumen->jenis_dokumen,
             ])
         ]);
     }
