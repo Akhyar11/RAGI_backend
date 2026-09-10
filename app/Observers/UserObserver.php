@@ -15,7 +15,7 @@ class UserObserver
         AuditLogService::record(
             module: 'IAM',
             action: 'create',
-            tableName: 'users',
+            tableName: 'core_users',
             recordId: $user->id,
             newValues: $user->toArray()
         );
@@ -31,7 +31,7 @@ class UserObserver
             AuditLogService::record(
                 module: 'IAM',
                 action: 'update',
-                tableName: 'users',
+                tableName: 'core_users',
                 recordId: $user->id,
                 oldValues: $user->getOriginal(),
                 newValues: $user->getChanges()
@@ -47,7 +47,7 @@ class UserObserver
         AuditLogService::record(
             module: 'IAM',
             action: 'delete',
-            tableName: 'users',
+            tableName: 'core_users',
             recordId: $user->id,
             oldValues: $user->toArray()
         );
@@ -61,7 +61,7 @@ class UserObserver
         AuditLogService::record(
             module: 'IAM',
             action: 'restore',
-            tableName: 'users',
+            tableName: 'core_users',
             recordId: $user->id
         );
     }

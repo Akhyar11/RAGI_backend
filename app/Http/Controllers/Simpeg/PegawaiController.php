@@ -75,7 +75,7 @@ class PegawaiController extends Controller
         }
 
         $request->validate([
-            'user_id' => 'nullable|exists:users,id|unique:pegawai,user_id',
+            'user_id' => 'nullable|exists:core_users,id|unique:pegawai,user_id',
             'unit_kerja_id' => 'nullable|exists:unit_kerja,id',
             'nip' => 'nullable|string|unique:pegawai,nip',
             'nik' => 'nullable|string|unique:pegawai,nik',
@@ -138,7 +138,7 @@ class PegawaiController extends Controller
         }
 
         $request->validate([
-            'user_id' => 'nullable|exists:users,id|unique:pegawai,user_id,' . $id,
+            'user_id' => 'nullable|exists:core_users,id|unique:pegawai,user_id,' . $id,
             'unit_kerja_id' => 'nullable|exists:unit_kerja,id',
             'nip' => 'nullable|string|unique:pegawai,nip,' . $id,
             'nik' => 'nullable|string|unique:pegawai,nik,' . $id,

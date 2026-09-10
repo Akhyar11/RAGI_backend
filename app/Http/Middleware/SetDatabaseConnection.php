@@ -20,7 +20,13 @@ class SetDatabaseConnection
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->header('X-Environment') === 'demo') {
+        $host = strtolower($request->getHost());
+
+        // Otomatis: semua host dengan awalan "demo" (mis. demo-sso.polinus.cloud,
+        // demo-spmb.polinus.cloud) diarahkan ke koneksi database demo.
+        $isDemoHost = (bool) preg_match('/^demo([.-]|$)/', $host);
+
+        if ($request->header('X-Environment') === 'demo' || $isDemoHost) {
             DB::setDefaultConnection('mysql_demo');
             config(['database.default' => 'mysql_demo']);
         }

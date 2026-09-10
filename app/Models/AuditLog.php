@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 #[Fillable(['user_id', 'module', 'action', 'table_name', 'record_id', 'old_values', 'new_values', 'ip_address', 'user_agent'])]
 class AuditLog extends Model
 {
+    protected $table = 'core_audit_logs';
+
     const UPDATED_AT = null;
     
     protected function casts(): array
