@@ -25,7 +25,7 @@ class MaintenanceLogRequest extends FormRequest
             'biaya' => 'nullable|numeric|min:0',
             'hasil_perbaikan' => 'nullable|string',
             'status' => 'required|in:dilaporkan,dalam_perbaikan,selesai,dibatalkan',
-            'teknisi_id' => 'nullable|exists:users,id',
+            'teknisi_id' => 'nullable|exists:core_users,id',
         ];
     }
 }

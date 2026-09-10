@@ -11,7 +11,7 @@ return new class extends Migration
         if (!Schema::hasTable('jadwal_ujian_spmb')) {
             Schema::create('jadwal_ujian_spmb', function (Blueprint $table) {
                 $table->id();
-                $table->foreignId('gelombang_id')->constrained('gelombang_penerimaan')->cascadeOnDelete();
+                $table->foreignId('gelombang_id')->constrained('spmb_gelombang_penerimaan')->cascadeOnDelete();
                 $table->unsignedBigInteger('ruangan_id')->nullable();
                 $table->string('nama_sesi');
                 $table->date('tanggal');
@@ -26,7 +26,7 @@ return new class extends Migration
         if (!Schema::hasTable('peserta_ujian_spmb')) {
             Schema::create('peserta_ujian_spmb', function (Blueprint $table) {
                 $table->id();
-                $table->foreignId('pendaftaran_id')->constrained('pendaftaran_calon_mhs')->cascadeOnDelete();
+                $table->foreignId('pendaftaran_id')->constrained('spmb_pendaftaran_calon_mhs')->cascadeOnDelete();
                 $table->foreignId('jadwal_ujian_id')->constrained('jadwal_ujian_spmb')->cascadeOnDelete();
                 $table->string('no_peserta')->unique();
                 $table->string('nomor_kursi')->nullable();

@@ -81,8 +81,8 @@ class UserController extends Controller
         $this->ensureAdmin();
         
         $request->validate([
-            'username' => 'required|string|unique:users',
-            'email' => 'required|string|email|unique:users',
+            'username' => 'required|string|unique:core_users',
+            'email' => 'required|string|email|unique:core_users',
             'password' => 'required|string|min:8|confirmed',
             'phone' => 'nullable|string',
             // user_type removed
@@ -123,8 +123,8 @@ class UserController extends Controller
         $this->ensureAdmin();
 
         $request->validate([
-            'username' => 'sometimes|string|unique:users,username,'.$user->id,
-            'email' => 'sometimes|string|email|unique:users,email,'.$user->id,
+            'username' => 'sometimes|string|unique:core_users,username,'.$user->id,
+            'email' => 'sometimes|string|email|unique:core_users,email,'.$user->id,
             'password' => 'sometimes|string|min:8|confirmed',
             'phone' => 'nullable|string',
             // user_type removed

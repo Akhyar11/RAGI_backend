@@ -66,13 +66,13 @@ return [
 
         'mysql_demo' => [
             'driver' => 'mysql',
-            'url' => env('DB_URL_DEMO'),
+            'url' => env('DB_URL'),
             'host' => env('DB_HOST_DEMO', env('DB_HOST', '127.0.0.1')),
             'port' => env('DB_PORT_DEMO', env('DB_PORT', '3306')),
-            'database' => env('DB_DATABASE_DEMO', env('DB_DATABASE', 'laravel') . '_demo'),
+            'database' => env('DB_DATABASE_DEMO', 'laravel'),
             'username' => env('DB_USERNAME_DEMO', env('DB_USERNAME', 'root')),
             'password' => env('DB_PASSWORD_DEMO', env('DB_PASSWORD', '')),
-            'unix_socket' => env('DB_SOCKET_DEMO', env('DB_SOCKET', '')),
+            'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
             'prefix' => '',

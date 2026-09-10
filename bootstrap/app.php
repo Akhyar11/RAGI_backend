@@ -22,9 +22,15 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->prepend(\App\Http\Middleware\DynamicDatabaseMiddleware::class);
         $middleware->redirectTo(
             guests: fn (Request $request) => $request->is('api/*') ? null : '/login'
+        );
+
+        // Dual-Environment (Produksi vs Demo) — switch DB berdasarkan header.
+        // Didaftarkan GLOBAL agar berlaku juga untuk rute terproteksi (auth:api),
+        // karena guard Passport memvalidasi token sebelum rute middleware dijalankan.
+        $middleware->append(
+            \App\Http\Middleware\SetDatabaseConnection::class,
         );
     })
     ->withProviders([

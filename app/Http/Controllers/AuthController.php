@@ -22,8 +22,8 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $request->validate([
-            'username' => 'required|string|unique:users',
-            'email' => 'required|string|email|unique:users',
+            'username' => 'required|string|unique:core_users',
+            'email' => 'required|string|email|unique:core_users',
             'password' => 'required|string|min:8|confirmed',
             'phone' => 'nullable|string',
 // user_type removed

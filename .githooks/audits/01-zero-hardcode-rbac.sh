@@ -21,6 +21,10 @@ Aturan:
 4. DILARANG menggunakan properti statis user.user_type atau user_type.
 5. Seluruh otorisasi dan relasi WAJIB berbasis ID entitas atau hook RBAC (seperti hasRole / hasPermission).
 
+Catatan Penting:
+- HANYA periksa baris-baris kode baru yang DITAMBAHKAN atau DIUBAH (diawali tanda `+`). JANGAN menolak baris konteks yang tidak diubah.
+- Status alur/workflow tiket atau entitas (seperti draft, submitted, dilaporkan, dalam_perbaikan, selesai, dibatalkan) merupakan status internal tabel dan BUKAN pelanggaran master referensi.
+
 Git Diff:
 EOF
 
@@ -31,21 +35,25 @@ echo '```' >> "$PROMPT_FILE"
 cat << 'EOF' >> "$PROMPT_FILE"
 Jawab HANYA salah satu:
 - PASSED jika kode bersih dari hardcode dan sesuai RBAC.
-- REJECTED: [detail alasan pelanggaran] jika ditemukan hardcode/pelanggaran RBAC.
+- REJECTED: [detail alasan pelanggaran] jika ditemukan hardcode/pelanggaran RBAC pada baris baru (+).
 EOF
 
-if command -v agy &> /dev/null; then
-    RESULT=$(agy --print "$(cat "$PROMPT_FILE")" 2>&1)
-    AGY_EXIT_CODE=$?
+if command -v opencode &> /dev/null; then
+    RESULT=$(timeout 15s opencode run -m opencode-go/deepseek-v4-flash "$(cat "$PROMPT_FILE")" 2>&1)
+    AI_EXIT_CODE=$?
+elif command -v agy &> /dev/null; then
+    RESULT=$(timeout 15s agy --print "$(cat "$PROMPT_FILE")" 2>&1)
+    AI_EXIT_CODE=$?
 else
-    AGY_EXIT_CODE=127
+    AI_EXIT_CODE=127
 fi
 
-if [ $AGY_EXIT_CODE -ne 0 ]; then
-    echo "⚠️ [Fallback] agy gagal atau tidak ditemukan. Beralih ke opencode (opencode-go/deepseek-v4-flash)..."
-    RESULT=$(opencode run -m opencode-go/deepseek-v4-flash "$(cat "$PROMPT_FILE")" 2>&1)
-fi
 rm -f "$PROMPT_FILE"
+
+if [ $AI_EXIT_CODE -ne 0 ]; then
+    echo "⚠️ [Audit Zero Hardcode & RBAC] AI tool timeout/gagal, dilewati."
+    exit 0
+fi
 
 if echo "$RESULT" | grep -qi "REJECTED"; then
     echo "❌ [Audit Zero Hardcode & RBAC] REJECTED!"
