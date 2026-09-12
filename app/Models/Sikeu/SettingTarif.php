@@ -31,4 +31,9 @@ class SettingTarif extends Model
     {
         return $this->belongsTo(MasterBiaya::class, 'master_biaya_id');
     }
+
+    public function programStudi()
+    {
+        return $this->belongsTo(\App\Models\Spmb\MasterProgramStudi::class, 'program_studi_id');
+    }
 }

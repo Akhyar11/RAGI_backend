@@ -6,12 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\Pembayaran;
 use App\Models\Sikeu\SettingTarif;
+use App\Models\Sikeu\MasterBiaya;
 use App\Models\Sikeu\DetailTagihan;
 use App\Models\Sikeu\MahasiswaTipeTagihan;
 use App\Models\Sikeu\JurnalUmum;
 use App\Models\Sikeu\DetailJurnalUmum;
 use App\Models\Sikeu\AkunKeuangan;
 use App\Models\Sikeu\PeriodeAkuntansi;
+use App\Models\Sikeu\PotonganTagihan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -21,14 +23,18 @@ class PembayaranKasirController extends Controller
 {
     /**
      * POST /api/v1/sikeu/pembayaran/kasir
-     * Process an offline payment at the campus cashier counter.
+     * Process an offline payment at the campus cashier counter (supports single and multi-bill batch).
      */
     public function processPayment(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'tagihan_id' => 'required|integer|exists:sikeu_tagihan_mahasiswa,id',
-            'jumlah_bayar' => 'required|numeric|min:1',
+            'tagihan_id' => 'nullable|integer|exists:sikeu_tagihan_mahasiswa,id',
+            'tagihan_ids' => 'nullable|array',
+            'tagihan_ids.*' => 'integer|exists:sikeu_tagihan_mahasiswa,id',
+            'jumlah_bayar' => 'required|numeric|min:0',
             'channel_bayar' => 'required|in:LOKET_TUNAI,LOKET_TRANSFER',
+            'potongan' => 'nullable|numeric|min:0',
+            'alasan_potongan' => 'nullable|string|max:255',
             'catatan' => 'nullable|string|max:500',
         ]);
 
@@ -40,20 +46,34 @@ class PembayaranKasirController extends Controller
             ], 422);
         }
 
+        // Tentukan daftar target tagihan
+        $targetTagihanIds = [];
+        if ($request->has('tagihan_ids') && is_array($request->tagihan_ids) && count($request->tagihan_ids) > 0) {
+            $targetTagihanIds = $request->tagihan_ids;
+        } elseif ($request->filled('tagihan_id')) {
+            $targetTagihanIds = [(int)$request->tagihan_id];
+        }
+
+        if (empty($targetTagihanIds)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Pilih minimal 1 tagihan untuk diproses.',
+            ], 422);
+        }
+
         try {
             DB::beginTransaction();
 
-            $tagihan = TagihanMahasiswa::with('details')->findOrFail($request->tagihan_id);
+            $tagihans = TagihanMahasiswa::with('details')
+                ->whereIn('id', $targetTagihanIds)
+                ->orderBy('id', 'asc')
+                ->get();
 
-            // Hitung sisa tagihan
-            $totalBersih = (float)($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan);
-            $sisa = max(0, $totalBersih - (float)$tagihan->total_bayar);
-
-            if ($request->jumlah_bayar > $sisa) {
+            if ($tagihans->isEmpty()) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => "Jumlah bayar (Rp " . number_format($request->jumlah_bayar, 0, ',', '.') . ") melebihi sisa tagihan (Rp " . number_format($sisa, 0, ',', '.') . ").",
-                ], 422);
+                    'message' => 'Tagihan tidak ditemukan.',
+                ], 404);
             }
 
             // Validasi Tutup Buku
@@ -70,48 +90,115 @@ class PembayaranKasirController extends Controller
                 ], 403);
             }
 
-            // Generate kode transaksi unik
+            // Hitung total sisa seluruh tagihan terpilih
+            $totalSisaAll = 0;
+            $billBalances = [];
+            foreach ($tagihans as $t) {
+                $totalBersih = (float)($t->total_tagihan + $t->total_denda - $t->total_potongan);
+                $sisa = max(0, $totalBersih - (float)$t->total_bayar);
+                $billBalances[$t->id] = [
+                    'tagihan' => $t,
+                    'sisa' => $sisa,
+                    'bersih' => $totalBersih,
+                ];
+                $totalSisaAll += $sisa;
+            }
+
+            $potonganTambahanTotal = (float)($request->potongan ?? 0);
+            $totalSisaSetelahDiskon = max(0, $totalSisaAll - $potonganTambahanTotal);
+
+            if ($request->jumlah_bayar > ($totalSisaAll + 100)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Jumlah bayar (Rp " . number_format($request->jumlah_bayar, 0, ',', '.') . ") melebihi total sisa seluruh tagihan terpilih (Rp " . number_format($totalSisaAll, 0, ',', '.') . ").",
+                ], 422);
+            }
+
+            // Generate kode transaksi unik kasir loket
             $kodeTransaksi = 'TRX-LOKET-' . date('Ymd') . '-' . strtoupper(Str::random(5));
 
-            // Create Pembayaran record
-            $pembayaran = Pembayaran::create([
-                'tagihan_id' => $tagihan->id,
-                'jumlah_bayar' => $request->jumlah_bayar,
-                'waktu_bayar' => now(),
-                'channel_bayar' => $request->channel_bayar,
-                'status' => 'success',
-                'kode_transaksi' => $kodeTransaksi,
-                'diverifikasi_oleh' => auth()->id(),
-            ]);
+            $remainingBayar = (float)$request->jumlah_bayar;
+            $remainingPotongan = $potonganTambahanTotal;
+            $processedPembayarans = [];
+            $paidBillNumbers = [];
+            $totalSisaAkhir = 0;
 
-            // Update total_bayar & status pada TagihanMahasiswa
-            $newTotalBayar = (float)$tagihan->total_bayar + (float)$request->jumlah_bayar;
-            $newStatus = $newTotalBayar >= $totalBersih ? 'lunas' : 'sebagian';
+            foreach ($tagihans as $tagihan) {
+                $currentSisa = $billBalances[$tagihan->id]['sisa'];
 
-            $tagihan->update([
-                'total_bayar' => $newTotalBayar,
-                'status' => $newStatus,
-            ]);
+                // 1. Alokasikan potongan diskon tambahan jika ada
+                if ($remainingPotongan > 0 && $currentSisa > 0) {
+                    $potonganItem = min($remainingPotongan, $currentSisa);
+                    PotonganTagihan::create([
+                        'tagihan_id' => $tagihan->id,
+                        'tipe' => 'diskon',
+                        'nominal_potongan' => $potonganItem,
+                        'keterangan' => $request->alasan_potongan ?? 'Potongan Kasir Loket',
+                        'diinput_oleh' => auth()->id(),
+                    ]);
+                    $tagihan->total_potongan = (float)$tagihan->total_potongan + $potonganItem;
+                    $tagihan->save();
+                    $remainingPotongan -= $potonganItem;
+                    $currentSisa = max(0, $currentSisa - $potonganItem);
+                }
 
-            // Auto Jurnal Akuntansi
-            $this->createAutoJurnal($pembayaran, $request->channel_bayar, $tagihan);
+                // 2. Alokasikan pembayaran kasir
+                $alokasiBayar = min($remainingBayar, $currentSisa);
+                if ($alokasiBayar > 0 || (count($tagihans) === 1 && $remainingBayar >= 0)) {
+                    $pembayaran = Pembayaran::create([
+                        'tagihan_id' => $tagihan->id,
+                        'jumlah_bayar' => $alokasiBayar,
+                        'waktu_bayar' => now(),
+                        'channel_bayar' => $request->channel_bayar,
+                        'status' => 'success',
+                        'kode_transaksi' => $kodeTransaksi,
+                        'diverifikasi_oleh' => auth()->id(),
+                    ]);
+
+                    $newTotalBayar = (float)$tagihan->total_bayar + $alokasiBayar;
+                    $totalBersihBaru = (float)($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan);
+                    $newStatus = $newTotalBayar >= $totalBersihBaru ? 'lunas' : ($newTotalBayar > 0 ? 'sebagian' : 'belum_bayar');
+
+                    $tagihan->update([
+                        'total_bayar' => $newTotalBayar,
+                        'status' => $newStatus,
+                    ]);
+
+                    // Auto Jurnal Akuntansi
+                    if ($alokasiBayar > 0) {
+                        $this->createAutoJurnal($pembayaran, $request->channel_bayar, $tagihan);
+                    }
+
+                    $remainingBayar -= $alokasiBayar;
+                    $processedPembayarans[] = $pembayaran;
+                    $paidBillNumbers[] = $tagihan->nomor_tagihan;
+                }
+
+                $totalBersihFinal = (float)($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan);
+                $totalSisaAkhir += max(0, $totalBersihFinal - (float)$tagihan->total_bayar);
+            }
 
             DB::commit();
 
+            $primaryTagihan = $tagihans->first();
+
             return response()->json([
                 'status' => 'success',
-                'message' => 'Pembayaran kasir berhasil diproses.',
+                'message' => 'Pembayaran kasir loket berhasil diproses untuk ' . count($tagihans) . ' tagihan.',
                 'data' => [
-                    'pembayaran' => $pembayaran,
+                    'pembayaran' => $processedPembayarans[0] ?? null,
+                    'pembayarans' => $processedPembayarans,
                     'kuitansi' => [
                         'kode_transaksi' => $kodeTransaksi,
                         'tanggal' => now()->format('Y-m-d H:i:s'),
-                        'mahasiswa_id' => $tagihan->mahasiswa_id,
-                        'nomor_tagihan' => $tagihan->nomor_tagihan,
+                        'mahasiswa_id' => $primaryTagihan->mahasiswa_id,
+                        'nomor_tagihan' => implode(', ', $paidBillNumbers),
+                        'nomor_tagihan_list' => $paidBillNumbers,
                         'jumlah_bayar' => (float)$request->jumlah_bayar,
+                        'potongan_tambahan' => $potonganTambahanTotal,
                         'channel' => $request->channel_bayar,
-                        'sisa_setelah_bayar' => max(0, $sisa - (float)$request->jumlah_bayar),
-                        'status_tagihan' => $newStatus,
+                        'sisa_setelah_bayar' => $totalSisaAkhir,
+                        'status_tagihan' => $totalSisaAkhir <= 0 ? 'lunas' : 'sebagian',
                         'kasir' => auth()->user()->username ?? 'SYSTEM',
                     ],
                 ],
@@ -218,7 +305,7 @@ class PembayaranKasirController extends Controller
 
     /**
      * POST /api/v1/sikeu/tagihan/generate-mass
-     * Generate semester bills in bulk for all matching students.
+     * Generate semester bills in bulk for all matching students with auto-beasiswa and Virtual Account.
      */
     public function generateMassTagihan(Request $request)
     {
@@ -262,12 +349,16 @@ class PembayaranKasirController extends Controller
                 });
             }
 
+            if ($request->filled('master_biaya_ids') && is_array($request->master_biaya_ids) && count($request->master_biaya_ids) > 0) {
+                $tarifQuery->whereIn('master_biaya_id', $request->master_biaya_ids);
+            }
+
             $settings = $tarifQuery->get();
 
             if ($settings->isEmpty()) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Tidak ditemukan setting tarif yang cocok untuk kombinasi Angkatan ' . $request->tahun_angkatan . ' / ' . $request->jalur_kelas . '. Silakan atur setting tarif terlebih dahulu di menu Master.',
+                    'message' => 'Tidak ditemukan setting tarif yang cocok untuk kombinasi Angkatan ' . $request->tahun_angkatan . ' / ' . $request->jalur_kelas . ($request->filled('semester') ? (' / Semester ' . $request->semester) : '') . '. Silakan atur setting tarif terlebih dahulu di menu Master.',
                 ], 404);
             }
 
@@ -284,49 +375,107 @@ class PembayaranKasirController extends Controller
                 ], 404);
             }
 
-            $semesterLabel = $request->semester_label ?? ('Semester ' . ($request->semester ?? 'Aktif') . ' ' . $request->tahun_angkatan);
+            $semesterNum = $request->semester ?? 1;
+            $semesterLabel = $request->semester_label ?? ('Semester ' . $semesterNum . ' Angkatan ' . $request->tahun_angkatan);
             $generatedCount = 0;
             $skippedCount = 0;
 
-            // 3. Generate tagihan per mahasiswa
+            // 3. Generate tagihan per mahasiswa dengan auto-potongan beasiswa dan VA
             foreach ($mahasiswaList as $mhs) {
-                // Cek apakah sudah ada tagihan yang sama (prevent duplikat)
-                $nomorTagihan = 'INV-SIAKAD-' . date('Ymd') . '-' . str_pad($mhs->mahasiswa_id, 5, '0', STR_PAD_LEFT);
+                // Cek apakah sudah ada tagihan yang sama untuk semester ini (mencegah penumpukan / double billing)
+                $nomorTagihan = 'INV-SIAKAD-' . $request->tahun_angkatan . '-SMT' . $semesterNum . '-' . str_pad($mhs->mahasiswa_id, 5, '0', STR_PAD_LEFT);
 
-                $existingTagihan = TagihanMahasiswa::where('nomor_tagihan', $nomorTagihan)->exists();
-                if ($existingTagihan) {
+                $alreadyBilled = TagihanMahasiswa::where('mahasiswa_id', $mhs->mahasiswa_id)
+                    ->where(function ($q) use ($nomorTagihan, $semesterLabel, $request, $semesterNum) {
+                        $q->where('nomor_tagihan', $nomorTagihan)
+                          ->orWhere('catatan_approval', 'like', "%{$semesterLabel}%")
+                          ->orWhere('nomor_tagihan', 'like', "%-{$request->tahun_angkatan}-SMT{$semesterNum}-%");
+                    })
+                    ->exists();
+
+                if ($alreadyBilled) {
                     $skippedCount++;
                     continue;
                 }
 
+                // Cek beasiswa aktif mahasiswa
+                $beasiswaMhs = \App\Models\Sikeu\MahasiswaBeasiswa::with('beasiswa')
+                    ->where('mahasiswa_id', $mhs->mahasiswa_id)
+                    ->where(function ($q) {
+                        $q->where('status', 'aktif')
+                          ->orWhereNull('status');
+                    })
+                    ->first();
+
                 // Hitung total dari setting tarif
-                $totalNominal = $settings->sum('nominal');
+                $totalNominal = (float)$settings->sum('nominal');
+                $totalPotonganBeasiswa = 0;
+
+                if ($beasiswaMhs && $beasiswaMhs->beasiswa) {
+                    $b = $beasiswaMhs->beasiswa;
+                    if ($b->tipe_potongan === 'persentase') {
+                        $totalPotonganBeasiswa = ($totalNominal * (float)$b->nilai_potongan) / 100;
+                    } elseif ($b->tipe_potongan === 'nominal') {
+                        $totalPotonganBeasiswa = min($totalNominal, (float)$b->nilai_potongan);
+                    } else {
+                        $totalPotonganBeasiswa = $totalNominal; // full scholarship
+                    }
+                }
 
                 $tagihan = TagihanMahasiswa::create([
                     'mahasiswa_id' => $mhs->mahasiswa_id,
                     'tahun_akademik_id' => 1,
                     'nomor_tagihan' => $nomorTagihan,
                     'total_tagihan' => $totalNominal,
-                    'total_potongan' => 0,
+                    'total_potongan' => $totalPotonganBeasiswa,
                     'total_denda' => 0,
                     'total_bayar' => 0,
-                    'status' => 'belum_bayar',
+                    'status' => $totalPotonganBeasiswa >= $totalNominal ? 'lunas' : 'belum_bayar',
                     'source_system' => 'SIAKAD',
                     'jatuh_tempo' => $request->jatuh_tempo,
-                    'catatan_approval' => 'Tagihan masal ' . $semesterLabel,
+                    'catatan_approval' => 'Tagihan masal ' . $semesterLabel . ($beasiswaMhs ? " (Beasiswa: {$beasiswaMhs->beasiswa->nama})" : ''),
                 ]);
 
                 // Insert detail per komponen biaya
                 foreach ($settings as $st) {
+                    $detailPotongan = 0;
+                    if ($totalNominal > 0 && $totalPotonganBeasiswa > 0) {
+                        $detailPotongan = round(($st->nominal / $totalNominal) * $totalPotonganBeasiswa, 2);
+                    }
+
                     DetailTagihan::create([
                         'tagihan_id' => $tagihan->id,
                         'master_biaya_id' => $st->master_biaya_id,
                         'nominal' => $st->nominal,
-                        'potongan' => 0,
-                        'nominal_bersih' => $st->nominal,
+                        'potongan' => $detailPotongan,
+                        'nominal_bersih' => max(0, (float)$st->nominal - $detailPotongan),
                         'keterangan' => ($st->masterBiaya->nama ?? 'Biaya Pendidikan') . ' - ' . $semesterLabel,
                     ]);
                 }
+
+                // Catat potongan beasiswa di PotonganTagihan jika ada
+                if ($totalPotonganBeasiswa > 0 && $beasiswaMhs) {
+                    PotonganTagihan::create([
+                        'tagihan_id' => $tagihan->id,
+                        'tipe' => 'beasiswa',
+                        'nominal_potongan' => $totalPotonganBeasiswa,
+                        'keterangan' => 'Pemotongan otomatis beasiswa: ' . ($beasiswaMhs->beasiswa->nama ?? 'Beasiswa'),
+                        'diinput_oleh' => auth()->id(),
+                    ]);
+                }
+
+                // Auto-generate BNI Virtual Account untuk tagihan ini
+                \App\Models\Sikeu\VirtualAccount::updateOrCreate(
+                    ['tagihan_id' => $tagihan->id],
+                    [
+                        'va_number' => '88012' . str_pad($mhs->nim ? preg_replace('/[^0-9]/', '', $mhs->nim) : $mhs->mahasiswa_id, 10, '0', STR_PAD_LEFT),
+                        'bank_kode' => 'BNI',
+                        'bank_nama' => 'Bank BNI',
+                        'nominal' => max(0, $totalNominal - $totalPotonganBeasiswa),
+                        'expired_at' => $request->jatuh_tempo . ' 23:59:59',
+                        'status' => 'pending',
+                    ]
+                );
 
                 $generatedCount++;
             }
@@ -449,5 +598,240 @@ class PembayaranKasirController extends Controller
             'kredit' => $pembayaran->jumlah_bayar,
             'keterangan' => "Pengembalian kas - koreksi " . $pembayaran->kode_transaksi,
         ]);
+    }
+
+    /**
+     * GET /api/v1/sikeu/mahasiswa/{id}/unpaid-bills
+     * Get all active/unpaid bills for a specific student.
+     */
+    public function getStudentUnpaidBills($id)
+    {
+        $mhs = \App\Models\Siakad\Mahasiswa::with('programStudi')->find($id);
+        $tipeMhs = MahasiswaTipeTagihan::where('mahasiswa_id', $id)->first();
+
+        $bills = TagihanMahasiswa::with(['details.masterBiaya', 'potonganTagihan', 'dendaTagihan', 'virtualAccount'])
+            ->where('mahasiswa_id', $id)
+            ->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi'])
+            ->orderBy('id', 'asc')
+            ->get();
+
+        $mappedBills = $bills->map(function ($b) {
+            $totalBersih = (float)($b->total_tagihan + $b->total_denda - $b->total_potongan);
+            $sisa = max(0, $totalBersih - (float)$b->total_bayar);
+            
+            $namaKomponen = $b->details->map(function ($d) {
+                return !empty($d->keterangan) ? $d->keterangan : ($d->masterBiaya->nama ?? 'Komponen Biaya');
+            })->filter()->implode(', ');
+
+            if (empty($namaKomponen)) {
+                $namaKomponen = !empty($b->catatan_approval) ? str_replace('Tagihan masal ', '', $b->catatan_approval) : 'Tagihan Semester';
+            }
+
+            $jt = null;
+            if ($b->jatuh_tempo) {
+                $jt = (is_object($b->jatuh_tempo) && method_exists($b->jatuh_tempo, 'format'))
+                    ? $b->jatuh_tempo->format('Y-m-d')
+                    : (string)$b->jatuh_tempo;
+            }
+
+            return [
+                'id' => $b->id,
+                'nomor_tagihan' => $b->nomor_tagihan,
+                'jenis' => $namaKomponen,
+                'periode_label' => !empty($b->catatan_approval) ? str_replace('Tagihan masal ', '', $b->catatan_approval) : 'Semester Ganjil 2026/2027',
+                'total_tagihan' => (float)$b->total_tagihan,
+                'total_potongan' => (float)$b->total_potongan,
+                'total_denda' => (float)$b->total_denda,
+                'total_bayar' => (float)$b->total_bayar,
+                'sisa' => $sisa,
+                'status' => $b->status,
+                'jatuh_tempo' => $jt,
+                'details' => $b->details->map(fn($d) => [
+                    'id' => $d->id,
+                    'master_biaya' => $d->masterBiaya->nama ?? 'Komponen Biaya',
+                    'nominal' => (float)$d->nominal,
+                    'potongan' => (float)$d->potongan,
+                    'nominal_bersih' => (float)$d->nominal_bersih,
+                    'keterangan' => $d->keterangan ?? ($d->masterBiaya->nama ?? 'Biaya Kuliah'),
+                ]),
+            ];
+        });
+
+        $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($id, 4, '0', STR_PAD_LEFT));
+        $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $id);
+        $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika';
+        $angkatan = (int)($mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? 2025);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'mahasiswa' => [
+                    'id' => (int)$id,
+                    'nim' => $nim,
+                    'nama_mahasiswa' => $nama,
+                    'program_studi' => $prodi,
+                    'tahun_angkatan' => $angkatan,
+                    'jalur_kelas' => $tipeMhs?->jalur_kelas ?? 'Reguler',
+                    'kelompok_ukt' => (int)($tipeMhs?->kelompok_ukt ?? 3),
+                ],
+                'bills' => $mappedBills,
+                'total_unpaid' => $mappedBills->sum('sisa'),
+                'count_unpaid' => $mappedBills->count(),
+            ],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/sikeu/pembayaran/direct-cashier
+     * Direct cashier billing & immediate payment on-the-spot.
+     */
+    public function directCashierPayment(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'mahasiswa_id' => 'required|integer',
+            'items' => 'required|array|min:1',
+            'items.*.master_biaya_id' => 'nullable|integer',
+            'items.*.master_biaya_kode' => 'nullable|string',
+            'items.*.nominal' => 'required|numeric|min:0',
+            'items.*.keterangan' => 'nullable|string',
+            'jumlah_bayar' => 'required|numeric|min:1',
+            'potongan' => 'nullable|numeric|min:0',
+            'alasan_potongan' => 'nullable|string',
+            'channel_bayar' => 'required|in:LOKET_TUNAI,LOKET_TRANSFER',
+            'catatan' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validasi pembayaran langsung kasir gagal',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $mhsId = $request->mahasiswa_id;
+            $siakad = null;
+            try {
+                $siakad = \App\Models\Siakad\Mahasiswa::with('programStudi')->find($mhsId);
+            } catch (\Throwable $e) {}
+
+            $tipe = MahasiswaTipeTagihan::where('mahasiswa_id', $mhsId)->first();
+            $nim = $siakad?->nim ?? $tipe?->nim ?? ('2024' . str_pad($mhsId, 4, '0', STR_PAD_LEFT));
+            $nama = $siakad?->nama_lengkap ?? $tipe?->nama_mahasiswa ?? ('Mahasiswa #' . $mhsId);
+            $prodi = $siakad?->programStudi?->nama ?? $siakad?->programStudi?->nama_prodi ?? 'Teknik Informatika';
+
+            $totalNominal = collect($request->items)->sum('nominal');
+            $potongan = (float)$request->input('potongan', 0);
+            $totalBersih = max(0, $totalNominal - $potongan);
+            $jumlahBayar = (float)$request->jumlah_bayar;
+
+            $nomorTagihan = 'INV-LOKET-' . date('Ymd') . '-' . strtoupper(Str::random(4));
+            $catatanTransaksi = $request->catatan ?: ('Pembayaran Kasir Loket ' . date('d/m/Y'));
+
+            // 1. Create Tagihan
+            $tagihan = TagihanMahasiswa::create([
+                'mahasiswa_id' => $mhsId,
+                'tahun_akademik_id' => 1,
+                'nomor_tagihan' => $nomorTagihan,
+                'total_tagihan' => $totalNominal,
+                'total_potongan' => $potongan,
+                'total_denda' => 0,
+                'total_bayar' => $jumlahBayar,
+                'status' => $jumlahBayar >= $totalBersih ? 'lunas' : 'sebagian',
+                'source_system' => 'SIKEU_LOKET',
+                'jatuh_tempo' => now()->toDateString(),
+                'catatan_approval' => 'Pembayaran kasir: ' . $catatanTransaksi,
+            ]);
+
+            // 2. Insert Detail Tagihan
+            foreach ($request->items as $item) {
+                $mbId = $item['master_biaya_id'] ?? null;
+                if (!$mbId && !empty($item['master_biaya_kode'])) {
+                    $mb = MasterBiaya::where('kode', $item['master_biaya_kode'])->first();
+                    $mbId = $mb?->id;
+                }
+                if (!$mbId) {
+                    $mb = MasterBiaya::first();
+                    $mbId = $mb?->id ?? 1;
+                } else {
+                    $mb = MasterBiaya::find($mbId);
+                }
+
+                $itemDesc = $item['keterangan'] ?? (($mb?->nama ?? 'Komponen Biaya') . ' - ' . $catatanTransaksi);
+
+                DetailTagihan::create([
+                    'tagihan_id' => $tagihan->id,
+                    'master_biaya_id' => $mbId,
+                    'nominal' => $item['nominal'],
+                    'potongan' => 0,
+                    'nominal_bersih' => $item['nominal'],
+                    'keterangan' => $itemDesc,
+                ]);
+            }
+
+            // 3. Potongan jika ada
+            if ($potongan > 0) {
+                PotonganTagihan::create([
+                    'tagihan_id' => $tagihan->id,
+                    'tipe' => 'diskon_khusus',
+                    'nominal_potongan' => $potongan,
+                    'keterangan' => $request->alasan_potongan ?? 'Diskon khusus kasir loket',
+                    'diinput_oleh' => auth()->id() ?? 1,
+                ]);
+            }
+
+            // 4. Create Pembayaran
+            $kodeTransaksi = 'TRX-LOKET-' . date('Ymd') . '-' . strtoupper(Str::random(5));
+            $pembayaran = Pembayaran::create([
+                'tagihan_id' => $tagihan->id,
+                'kode_transaksi' => $kodeTransaksi,
+                'jumlah_bayar' => $jumlahBayar,
+                'waktu_bayar' => now(),
+                'channel_bayar' => $request->channel_bayar,
+                'status' => 'success',
+                'diverifikasi_oleh' => auth()->id() ?? 1,
+                'catatan' => $catatanTransaksi,
+            ]);
+
+            // 5. Auto Jurnal
+            $this->createAutoJurnal($pembayaran, $request->channel_bayar, $tagihan);
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Pembayaran langsung loket kasir berhasil diproses!',
+                'data' => [
+                    'pembayaran' => $pembayaran,
+                    'tagihan' => $tagihan,
+                    'kuitansi' => [
+                        'kode_transaksi' => $kodeTransaksi,
+                        'nomor_tagihan' => $nomorTagihan,
+                        'nama_mahasiswa' => $nama,
+                        'nim' => $nim,
+                        'program_studi' => $prodi,
+                        'periode_label' => $catatanTransaksi,
+                        'total_tagihan' => $totalNominal,
+                        'potongan' => $potongan,
+                        'total_bersih' => $totalBersih,
+                        'jumlah_dibayar' => $jumlahBayar,
+                        'sisa_setelah_bayar' => max(0, $totalBersih - $jumlahBayar),
+                        'channel_bayar' => $request->channel_bayar,
+                        'waktu_transaksi' => now()->format('d M Y H:i:s'),
+                        'petugas_kasir' => auth()->user()?->username ?? 'Kasir Loket',
+                    ]
+                ]
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Direct Cashier Payment Error: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal memproses pembayaran langsung kasir: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

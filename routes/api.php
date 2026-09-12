@@ -371,6 +371,7 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::get('master/student-billing-types', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexStudentBillingTypes']);
     Route::post('master/assign-student-billing-type', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'assignStudentBillingType']);
     Route::put('master/update-student-billing-type/{id}', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateStudentBillingType']);
+    Route::post('master/sync-students', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'syncStudentsFromSiakad']);
 
     // Pencarian Mahasiswa untuk Tagihan & Dispensasi
     Route::get('mahasiswa-search', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'searchMahasiswa']);
@@ -378,6 +379,9 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     // Portal Tagihan & Invoice Mahasiswa Mandiri
     Route::get('mahasiswa/tagihan', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'myBills']);
     Route::get('mahasiswa/invoice/{id}', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'generateInvoice']);
+    Route::post('mahasiswa/invoice-batch', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'generateBatchInvoice']);
+    Route::get('mahasiswa/riwayat-pembayaran', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'myPaymentHistory']);
+    Route::post('mahasiswa/pay-bills', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'payBills']);
 
     // Piutang Mahasiswa & Export Excel
     Route::get('piutang', [App\Http\Controllers\Sikeu\PiutangMahasiswaController::class, 'index']);
@@ -409,6 +413,7 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::get('akuntansi/jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'indexJurnal']);
     Route::post('akuntansi/jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'storeJurnal']);
     Route::get('akuntansi/buku-besar', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'bukuBesar']);
+    Route::get('akuntansi/laporan', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'laporanKeuangan']);
 
     // Master Tarif SPMB (Jalur & Gelombang)
     Route::get('master/tarif-spmb', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexTarifSpmb']);
@@ -424,9 +429,16 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::post('master/setting-tarif', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'store']);
     Route::put('master/setting-tarif/{id}', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'update']);
     Route::delete('master/setting-tarif/{id}', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'destroy']);
+    Route::get('master/program-studi', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'getProgramStudiList']);
+
+    // Pengaturan On/Off Skema Golongan UKT
+    Route::get('settings/golongan-ukt', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getUktSetting']);
+    Route::post('settings/golongan-ukt', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateUktSetting']);
 
     // Pembayaran Kasir Kampus (Offline) & Koreksi
+    Route::get('mahasiswa/{id}/unpaid-bills', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'getStudentUnpaidBills']);
     Route::post('pembayaran/kasir', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'processPayment']);
+    Route::post('pembayaran/direct-cashier', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'directCashierPayment']);
     Route::post('pembayaran/{id}/koreksi', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'koreksiPayment']);
 
     // Generate Tagihan Semester Masal

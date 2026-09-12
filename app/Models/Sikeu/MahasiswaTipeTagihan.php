@@ -22,4 +22,14 @@ class MahasiswaTipeTagihan extends Model
         'catatan_perubahan',
         'updated_by',
     ];
+
+    public function mahasiswa()
+    {
+        return $this->belongsTo(\App\Models\Siakad\Mahasiswa::class, 'mahasiswa_id');
+    }
+
+    public function beasiswa()
+    {
+        return $this->hasOne(MahasiswaBeasiswa::class, 'mahasiswa_id', 'mahasiswa_id');
+    }
 }

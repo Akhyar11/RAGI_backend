@@ -64,6 +64,7 @@ class PajakKampusController extends Controller
                 'jenis_raw' => $item->jenis_pajak,
                 'deskripsi' => "Pajak atas {$item->kategori} - {$item->nama_vendor}",
                 'nominal' => (float) $item->nominal_pajak,
+                'nominal_pajak' => (float) $item->nominal_pajak,
                 'status' => $isDisetor ? 'disetor' : 'terutang',
                 'jatuhTempo' => date('Y-m-10', strtotime($item->tanggal_transaksi . ' +1 month')),
                 'ntpn' => $isDisetor ? ($item->file_bukti_bayar ?? 'NTPN-' . $item->id) : '-',

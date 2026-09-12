@@ -376,6 +376,26 @@ class PerkuliahanController extends Controller
             ['status' => 'draft', 'total_sks_diambil' => 0, 'locked_by_keuangan' => false]
         );
 
+        // Evaluasi sinkronisasi penguncian keuangan riil vs dispensasi
+        $hasUnpaidBills = \App\Models\Sikeu\TagihanMahasiswa::where('mahasiswa_id', $mhs->id)
+            ->whereIn('status', ['belum_bayar', 'sebagian'])
+            ->exists();
+
+        $hasApprovedKrsDispensasi = false;
+        if ($hasUnpaidBills) {
+            $hasApprovedKrsDispensasi = \App\Models\Sikeu\DispensasiTagihan::where('mahasiswa_id', $mhs->id)
+                ->where('status', 'approved')
+                ->where('allow_krs', true)
+                ->whereHas('tagihan', fn($q) => $q->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi']))
+                ->exists();
+        }
+
+        $shouldLock = $hasUnpaidBills && !$hasApprovedKrsDispensasi;
+        if ((bool)$krs->locked_by_keuangan !== $shouldLock) {
+            $krs->locked_by_keuangan = $shouldLock;
+            $krs->save();
+        }
+
         // Hitung nilai IPK, IPS, dan Total SKS Lulus riil
         $transkripNilai = NilaiMahasiswa::with(['krsDetail.kelas.mataKuliah'])
             ->whereHas('krsDetail.krs', fn($q) => $q->where('mahasiswa_id', $mhs->id))
@@ -434,6 +454,11 @@ class PerkuliahanController extends Controller
                 'mahasiswa' => $mhs,
                 'krs' => $krs,
                 'max_sks' => 24,
+                'keuangan_status' => [
+                    'has_unpaid_bills' => $hasUnpaidBills,
+                    'has_approved_dispensasi' => $hasApprovedKrsDispensasi,
+                    'is_locked' => $shouldLock,
+                ],
                 'akademik_summary' => [
                     'ipk' => number_format($ipk, 2),
                     'ips' => number_format($ips, 2),
@@ -539,8 +564,34 @@ class PerkuliahanController extends Controller
                 ['status' => 'draft', 'total_sks_diambil' => 0]
             );
 
-            if ($krs->locked_by_keuangan) {
-                return response()->json(['status' => 'error', 'message' => 'KRS terkunci karena tagihan SPP di SIKEU belum diselesaikan.'], 422);
+            // Evaluasi kewajiban keuangan & bypass dispensasi
+            $hasUnpaidBills = \App\Models\Sikeu\TagihanMahasiswa::where('mahasiswa_id', $mhs->id)
+                ->whereIn('status', ['belum_bayar', 'sebagian'])
+                ->exists();
+
+            if ($hasUnpaidBills) {
+                $hasApprovedKrsDispensasi = \App\Models\Sikeu\DispensasiTagihan::where('mahasiswa_id', $mhs->id)
+                    ->where('status', 'approved')
+                    ->where('allow_krs', true)
+                    ->whereHas('tagihan', fn($q) => $q->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi']))
+                    ->exists();
+
+                if (!$hasApprovedKrsDispensasi) {
+                    $krs->locked_by_keuangan = true;
+                    $krs->save();
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'KRS terkunci karena Anda memiliki tagihan pembayaran SPP/UKT di SIKEU yang belum diselesaikan. Silakan lunasi tagihan atau ajukan dispensasi keuangan dengan izin bypass KRS.'
+                    ], 422);
+                } else {
+                    $krs->locked_by_keuangan = false;
+                    $krs->save();
+                }
+            } else {
+                if ($krs->locked_by_keuangan) {
+                    $krs->locked_by_keuangan = false;
+                    $krs->save();
+                }
             }
 
             // Jika sebelumnya sudah disetujui, kembalikan ke draft saat ada revisi/penambahan

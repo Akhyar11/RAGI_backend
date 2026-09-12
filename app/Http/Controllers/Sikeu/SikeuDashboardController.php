@@ -38,7 +38,12 @@ class SikeuDashboardController extends Controller
             $saldoKasUtama = $kasUtama ? (float) $kasUtama->saldo_saat_ini : 0.0;
             $saldoTotalSemuaKas = (float) UnitKas::sum('saldo_saat_ini');
 
-            // 4. Pajak Terutang (PPh 21, PPh 23, PPN)
+            // 4. Total Piutang Mahasiswa (Sisa Tagihan Belum Lunas + Dispensasi)
+            $totalPiutangMahasiswa = (float) (TagihanMahasiswa::whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi'])
+                ->selectRaw('SUM(total_tagihan + total_denda - total_potongan - total_bayar) as sisa')
+                ->value('sisa') ?? 0.0);
+
+            // 5. Pajak Terutang (PPh 21, PPh 23, PPN)
             $pajakTerutang = (float) PengeluaranKampus::where('jenis_pajak', '!=', 'tanpa_pajak')
                 ->where('status_pembayaran', '!=', 'disetor')
                 ->sum('nominal_pajak');
@@ -111,6 +116,7 @@ class SikeuDashboardController extends Controller
                         'total_penerimaan' => $totalPenerimaan,
                         'penerimaan_mahasiswa' => $penerimaanMahasiswa,
                         'penerimaan_eksternal' => $penerimaanEksternal,
+                        'total_piutang_mahasiswa' => $totalPiutangMahasiswa,
                         'total_pengeluaran' => $totalPengeluaran,
                         'saldo_kas_utama' => $saldoKasUtama,
                         'saldo_total_kas' => $saldoTotalSemuaKas,

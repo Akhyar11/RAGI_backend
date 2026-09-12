@@ -75,56 +75,56 @@ Setting Tarif menentukan **berapa nominal biaya** yang dikenakan untuk kombinasi
 
 ---
 
-## 4. Panduan Generate Tagihan Masal
+## 4. Panduan Generate Tagihan Masal & Paket Semester ("Wajib Bayar")
 
-Tagihan masal digunakan untuk menerbitkan tagihan semester sekaligus untuk seluruh mahasiswa dalam satu angkatan/jalur.
+Tagihan masal digunakan untuk menerbitkan tagihan semester sekaligus untuk seluruh mahasiswa dalam satu angkatan/jalur berdasarkan paket komponen biaya yang telah ditetapkan.
 
 ### Prasyarat:
-- ✅ Setting Tarif sudah dikonfigurasi untuk angkatan & jalur yang ditargetkan
-- ✅ Tipe Tagihan Mahasiswa sudah ditetapkan (tab "Student Types" di Master)
+- ✅ **Setting Tarif** sudah dikonfigurasi untuk Angkatan, Semester (1-8), dan Jalur Kelas target di menu Master.
+- ✅ **Tipe Tagihan Mahasiswa** sudah tersinkron dari SPMB/SIAKAD (dapat diklik tombol *"Sinkronisasi SIAKAD/SPMB"* di tab Student Types).
 
 ### Langkah-langkah:
 1. Buka **`/sikeu/tagihan`**
 2. Klik tombol **"Aktifkan Tagihan Masal"** (ikon Sparkles ✨)
 3. Isi formulir:
-   - **Target Angkatan**: `2025`
-   - **Target Jalur Kelas**: `Reguler`
+   - **Target Angkatan**: `2024` / `2025`
+   - **Target Jalur Kelas**: `Reguler` / `Karyawan` / `Internasional`
+   - **Target Program Studi**: Pilih prodi spesifik atau kosongkan untuk semua prodi
    - **Semester Aktif**: `Semester Ganjil 2026/2027`
    - **Batas Jatuh Tempo**: `2026-08-31`
 4. Klik **"Terbitkan Tagihan Masal"**
 5. Sistem akan:
-   - Mengambil semua setting tarif yang cocok
-   - Membuat tagihan (`sikeu_tagihan_mahasiswa`) + detail per komponen
-   - Menampilkan jumlah tagihan yang ter-generate
-
-### Catatan:
-- Jika mahasiswa **sudah memiliki tagihan** dengan nomor yang sama, sistem akan melewatinya (tidak duplikat)
-- Hasil bisa dilihat di tabel tagihan atau di halaman **Piutang**
+   - Mengambil seluruh paket setting tarif yang cocok (contoh Semester 5: UKT 5 + Uji Kompetensi + Biaya Magang).
+   - Mengecek apakah mahasiswa memiliki beasiswa aktif di `sikeu_mahasiswa_beasiswa`, lalu otomatis memotong nominal tagihan secara proporsional.
+   - Menerbitkan Nomor Virtual Account Bank BNI otomatis (`88012` + NIM) untuk setiap tagihan.
+   - Melewati mahasiswa yang tagihannya sudah pernah diterbitkan (mencegah duplikasi invoice).
 
 ---
 
-## 5. Panduan Pembayaran Kasir / Loket
+## 5. Panduan Pembayaran Kasir / Loket (Pelunasan Multi-Bill)
 
-Menu ini digunakan oleh **Kasir Kampus** untuk memproses pembayaran langsung di loket.
+Menu ini digunakan oleh **Kasir Kampus** untuk memproses pembayaran langsung di loket (offline).
 
 ### Langkah-langkah:
 1. Buka **`/sikeu/tagihan/create`**
 2. **Step 1 — Cari Mahasiswa**: Ketik NIM atau nama mahasiswa di kolom pencarian
 3. Pilih mahasiswa dari dropdown autocomplete
-4. **Step 2 — Pilih Komponen**: Centang komponen tagihan yang akan dilunasi
+4. **Step 2 — Pilih Komponen Tagihan**:
+   - Sistem akan menampilkan seluruh daftar tagihan tertunggak dari mahasiswa tersebut.
+   - Kasir dapat mencentang **satu atau lebih tagihan** (misal: UKT + Uji Kompetensi) untuk dilunasi sekaligus.
+   - Total tagihan gabungan terhitung otomatis secara real-time.
+   - Kasir dapat menginput potongan/keringanan tambahan khusus kasir jika ada memo pimpinan.
 5. **Step 3 — Metode Pembayaran**:
-   - **Virtual Account BNI**: Terbitkan nomor VA untuk transfer ATM/Mobile Banking
-   - **Bayar Tunai Loket Kasir**: Pelunasan tunai langsung di tempat
+   - **Virtual Account BNI**: Terbitkan nomor VA untuk transfer ATM/Mobile Banking.
+   - **Bayar Tunai Loket Kasir**: Pelunasan tunai langsung di tempat.
 6. Isi **Catatan Transaksi** (opsional)
-7. Klik **"Proses Pembayaran Loket"** atau **"Terbitkan Nomor VA"**
+7. Klik **"Proses Pembayaran Loket"**
 8. Setelah berhasil:
-   - Sistem menampilkan **kode transaksi** atau **nomor VA**
-   - Klik **"Cetak Kuitansi"** untuk mencetak bukti
-
-### Validasi Otomatis:
-- ✅ Jumlah bayar tidak boleh melebihi sisa tagihan
-- ✅ Periode akuntansi harus berstatus **Terbuka** (bukan Ditutup)
-- ✅ Jurnal akuntansi (Debet Kas / Kredit Pendapatan) ter-generate otomatis
+   - Sistem mengalokasikan pembayaran ke seluruh tagihan terpilih secara proporsional tanpa error kelebihan sisa.
+   - Mengupdate status tagihan menjadi `lunas` atau `sebagian`.
+   - Men-generate jurnal akuntansi otomatis (Debet Kas / Kredit Pendapatan).
+   - Menampilkan kuitansi resmi lengkap dengan rincian seluruh komponen yang dilunasi.
+   - Klik **"Cetak Kuitansi"** untuk mencetak bukti kuitansi loket.
 
 ### Koreksi Pembayaran:
 Jika terjadi salah input, gunakan fitur **Koreksi Transaksi**:
@@ -159,47 +159,48 @@ Jika terjadi salah input, gunakan fitur **Koreksi Transaksi**:
 
 ---
 
-## 7. Panduan Dispensasi Pembayaran
+## 7. Panduan Dispensasi Pembayaran & Bypass Lock SIAKAD
 
-Dispensasi diberikan kepada mahasiswa yang belum bisa melunasi tagihan tepat waktu.
+Dispensasi diberikan kepada mahasiswa yang belum bisa melunasi tagihan tepat waktu namun memerlukan izin untuk pengisian KRS di SIAKAD.
 
 ### Pengajuan:
 1. Buka **`/sikeu/dispensasi`**
-2. Klik **"Ajukan Dispensasi Baru"**
+2. Klik **"Pengajuan Dispensasi Baru"**
 3. Cari mahasiswa (NIM/Nama)
-4. Pilih tagihan yang akan didispensasi
-5. Isi:
-   - **Tipe Dispensasi**: Penundaan Jatuh Tempo / Cicilan / Keringanan Khusus
-   - **Jatuh Tempo Baru**: Tanggal perpanjangan
-   - **Alasan**: Deskripsi alasan dispensasi
-   - **Dokumen Pendukung**: Upload jika ada
-6. Klik **"Ajukan"**
-
-> ⚠️ **Peringatan Otomatis**: Jika mahasiswa masih memiliki **dispensasi lama yang belum lunas**, sistem akan menampilkan peringatan. Hal ini wajib diperhatikan oleh Pimpinan sebelum menyetujui.
+4. ⚠️ **Validasi Tunggakan Lama**: Sistem secara otomatis mengecek dan menampilkan peringatan jika mahasiswa masih memiliki riwayat tunggakan dispensasi sebelumnya yang belum dilunasi.
+5. Isi formulir:
+   - **Tipe Dispensasi**: Penundaan Tanggal Jatuh Tempo / Skema Pembayaran Cicilan / Permohonan Keringanan Khusus
+   - **Batas Tanggal Jatuh Tempo Baru**: Tanggal perpanjangan
+   - **Nominal Per Cicilan**: Besaran nominal cicilan yang disepakati
+   - **Bypass KRS SIAKAD**: Centang *"Izinkan Pengisian KRS di SIAKAD"* agar kunci akademik mahasiswa dibuka otomatis di sistem SIAKAD
+   - **Alasan**: Deskripsi kendala finansial/pertimbangan dispensasi
+6. Klik **"Kirim Pengajuan"**
 
 ### Approval oleh Pimpinan:
-1. Login sebagai **pimpinan**
+1. Login sebagai **pimpinan** / **kabag_keuangan**
 2. Buka **`/sikeu/approval`**
 3. Lihat daftar dispensasi pending
 4. Klik **"Approve"** atau **"Reject"** + catatan
 
-### Cetak Bukti Dispensasi:
-- Di halaman `/sikeu/dispensasi`, klik **"Cetak Bukti"** pada dispensasi yang sudah approved
+### Cetak Surat Keterangan Dispensasi Resmi:
+- Di halaman `/sikeu/dispensasi`, klik **"Lihat & Cetak"**
+- Sistem menampilkan **Surat Keterangan Dispensasi Resmi** lengkap dengan Kop Universitas, Nomor Surat, Rincian Tangguhan, Klausul Bypass Lock SIAKAD, dan Tanda Tangan Digital Pejabat Keuangan.
 
 ---
 
-## 8. Panduan Piutang & Export Laporan
+## 8. Panduan Piutang & Export Laporan Excel (.XLS / .XLSX)
 
 1. Buka **`/sikeu/piutang`**
 2. Gunakan filter:
-   - **Angkatan**: Filter per tahun angkatan
+   - **Angkatan**: Filter per tahun angkatan (2023, 2024, 2025, 2026)
+   - **Program Studi**: Filter per program studi
+   - **Cutoff Date**: Filter rincian tagihan dan pembayaran hingga tanggal cutoff tertentu
    - **Status**: Piutang (belum lunas), Belum Bayar, Sebagian, Dispensasi, Lunas, Semua
-   - **Program Studi**: Filter per prodi
    - **Pencarian**: NIM atau nama mahasiswa
-3. Lihat ringkasan di atas tabel:
-   - Total Tagihan, Total Potongan, Total Denda, Total Bayar, Total Piutang
+3. Lihat ringkasan KPI di atas tabel:
+   - Total Tagihan, Total Potongan, Total Denda, Total Bayar, Total Sisa Piutang
    - Total Mahasiswa Tunggakan
-4. Klik **"Export Excel"** untuk mengunduh laporan dalam format CSV
+4. Klik **"Download Excel"** untuk mengunduh laporan dalam format **Spreadsheet Excel terformat rapi (.xls)** lengkap dengan border, header korporat, format mata uang standar akuntansi, dan baris summary total.
 
 ---
 
@@ -226,31 +227,30 @@ Tutup buku mengunci periode akuntansi sehingga transaksi pada periode tersebut *
 | Menu / Halaman | Operator SIKEU | Kabag Keuangan | Pimpinan | Mahasiswa |
 |---|:---:|:---:|:---:|:---:|
 | Dashboard SIKEU | ✅ | ✅ | ✅ | ❌ |
-| Master Biaya | ✅ | ✅ | ❌ | ❌ |
-| Setting Tarif | ✅ | ✅ | ❌ | ❌ |
+| Master Biaya & Gaji | ✅ | ✅ | ❌ | ❌ |
+| Setting Tarif & Matriks Semester | ✅ | ✅ | ❌ | ❌ |
 | Jalur Kelas & Beasiswa | ✅ | ✅ | ❌ | ❌ |
-| Student Billing Types | ✅ | ✅ | ❌ | ❌ |
+| Student Billing Types & Sync | ✅ | ✅ | ❌ | ❌ |
 | Tarif SPMB | ✅ | ✅ | ❌ | ❌ |
-| Unit Kas | ❌ | ✅ | ❌ | ❌ |
+| Unit Kas & Mutasi | ❌ | ✅ | ❌ | ❌ |
 | Set Tagihan & Invoice | ✅ | ✅ | ❌ | ❌ |
 | Generate Tagihan Masal | ✅ | ✅ | ❌ | ❌ |
-| Pembayaran Kasir/VA | ✅ | ✅ | ❌ | ❌ |
-| Riwayat Pembayaran | ✅ | ✅ | ❌ | ❌ |
-| Piutang Mahasiswa | ✅ | ✅ | ❌ | ❌ |
-| Export Piutang Excel | ✅ | ✅ | ❌ | ❌ |
-| Dispensasi | ✅ | ✅ | ❌ | ❌ |
-| Approval Tagihan | ❌ | ⚠️ | ✅ | ❌ |
-| Approval Dispensasi | ❌ | ⚠️ | ✅ | ❌ |
+| Pembayaran Kasir Loket (Multi-Bill) | ✅ | ✅ | ❌ | ❌ |
+| Riwayat Pembayaran & Koreksi | ✅ | ✅ | ❌ | ❌ |
+| Piutang Mahasiswa & Cutoff | ✅ | ✅ | ❌ | ❌ |
+| Export Piutang Excel (.xls) | ✅ | ✅ | ❌ | ❌ |
+| Dispensasi & Bypass KRS SIAKAD | ✅ | ✅ | ❌ | ❌ |
+| Approval Tagihan & Dispensasi | ❌ | ⚠️ | ✅ | ❌ |
 | Akuntansi (COA, Jurnal, Buku Besar) | ❌ | ✅ | ❌ | ❌ |
 | Pemasukan Kampus | ❌ | ✅ | ❌ | ❌ |
 | Pengeluaran Kampus | ❌ | ✅ | ❌ | ❌ |
 | Pajak Kampus | ❌ | ✅ | ❌ | ❌ |
-| Payment Gateway | ❌ | ✅ | ❌ | ❌ |
+| Payment Gateway (Xendit) | ❌ | ✅ | ❌ | ❌ |
 | Kas Kabag Keuangan | ❌ | ✅ | ❌ | ❌ |
 | Portal Tagihan Mandiri | ❌ | ❌ | ❌ | ✅ |
 | Cetak Invoice & VA | ❌ | ❌ | ❌ | ✅ |
 
-> ⚠️ = Akses terbatas / kondisional (bisa lihat tapi fungsi utama di Pimpinan)
+> ⚠️ = Akses terbatas / kondisional (bisa review tapi approval utama di Pimpinan)
 
 ---
 
@@ -259,35 +259,17 @@ Tutup buku mengunci periode akuntansi sehingga transaksi pada periode tersebut *
 ### Q1: Kenapa tidak bisa input pembayaran di kasir?
 **A**: Pastikan periode akuntansi untuk bulan berjalan berstatus **Terbuka**. Cek di `/sikeu/akuntansi` → Periode. Jika sudah ditutup, hubungi Kabag Keuangan untuk membuka kembali.
 
-### Q2: Mahasiswa tidak bisa mengisi KRS, kenapa?
-**A**: Sistem SIAKAD melakukan pengecekan ke SIKEU. Pastikan mahasiswa sudah melunasi tagihan atau memiliki dispensasi aktif. Cek di `/sikeu/piutang`.
+### Q2: Mahasiswa tidak bisa mengisi KRS di SIAKAD, kenapa?
+**A**: Sistem SIAKAD melakukan pengecekan ke SIKEU. Mahasiswa yang memiliki tunggakan tidak dapat mengisi KRS kecuali memiliki surat dispensasi aktif dengan opsi *"Bypass KRS SIAKAD"* yang telah disetujui. Cek di `/sikeu/dispensasi` atau `/sikeu/piutang`.
 
-### Q3: Bagaimana koreksi pembayaran yang salah input?
-**A**: Buka `/sikeu/pembayaran` → Cari transaksi → Klik "Koreksi" → Isi alasan (min. 10 karakter). Sistem akan membuat jurnal koreksi pembalik.
+### Q3: Bagaimana kasir melunasi lebih dari 1 tagihan mahasiswa sekaligus?
+**A**: Buka `/sikeu/tagihan/create`, cari mahasiswa, centang seluruh tagihan yang ingin dilunasi di Step 2, lalu pilih metode Tunai Loket Kasir dan klik *"Proses Pembayaran Loket"*. Sistem akan secara otomatis membagi pembayaran ke seluruh tagihan terpilih dan mencetak kuitansi gabungan.
 
-### Q4: Apakah tagihan bisa dibatalkan setelah diterbitkan?
-**A**: Ya, status tagihan bisa diubah ke `batal` oleh Kabag Keuangan. Namun tagihan yang sudah memiliki pembayaran harus dikoreksi terlebih dahulu.
+### Q4: Apakah admin keuangan harus input tipe tagihan mahasiswa satu per satu?
+**A**: Tidak. Mahasiswa baru yang lulus SPMB otomatis tersinkron ke SIKEU saat konversi mahasiswa baru. Anda juga dapat menekan tombol *"Sinkronisasi SIAKAD / SPMB"* di menu Master → Tab Student Types untuk menyinkronkan seluruh mahasiswa secara masal.
 
-### Q5: Bagaimana cara menambah potongan/beasiswa ke tagihan mahasiswa?
-**A**: Buka `/sikeu/master` → Tab "Beasiswa" → Tambah beasiswa, lalu mapping ke mahasiswa di tab "Mapping Beasiswa".
+### Q5: Bagaimana cara menerapkan beasiswa mahasiswa?
+**A**: Buka `/sikeu/master` → Tab "Beasiswa" → Daftarkan program beasiswa, lalu mapping ke mahasiswa di tab "Mapping Beasiswa". Saat tagihan masal diterbitkan, sistem otomatis memotong total tagihan mahasiswa sesuai nilai beasiswa.
 
-### Q6: Tagihan masal tidak ter-generate, kenapa?
-**A**: Periksa:
-1. Setting Tarif sudah ada untuk angkatan + jalur yang dipilih
-2. Tipe Tagihan Mahasiswa sudah ditetapkan (tab "Student Types")
-3. Belum ada tagihan dengan nomor yang sama (duplikat)
-
-### Q7: Nomor Virtual Account tidak muncul, kenapa?
-**A**: Periksa konfigurasi Payment Gateway di `/sikeu/payment-gateway`. Pastikan API Key Xendit sudah diisi dan statusnya aktif. Jika gateway tidak aktif, sistem menggunakan VA lokal (dummy).
-
-### Q8: Bagaimana cara melihat jurnal akuntansi yang ter-generate dari pembayaran?
-**A**: Buka `/sikeu/akuntansi/jurnal`. Cari jurnal dengan keterangan yang memuat kode transaksi pembayaran.
-
-### Q9: Apakah dispensasi otomatis membuka akses KRS?
-**A**: Ya, selama tanggal berjalan masih dalam jangka dispensasi (sebelum jatuh tempo baru), sistem SIAKAD akan menganggap syarat pembayaran terpenuhi.
-
-### Q10: Bagaimana cara mencetak laporan piutang per angkatan?
-**A**: Buka `/sikeu/piutang` → Set filter Angkatan → Klik "Export Excel". File CSV akan otomatis terunduh.
-
-### Q11: Saya login sebagai mahasiswa tapi tidak melihat tagihan?
-**A**: Pastikan tagihan sudah diterbitkan untuk mahasiswa tersebut. Cek apakah `mahasiswa_id` pada tagihan sesuai dengan ID user yang login.
+### Q6: Bagaimana cara mengekspor piutang mahasiswa dalam format spreadsheet Excel?
+**A**: Buka `/sikeu/piutang` → Atur filter (Angkatan, Prodi, Cutoff Tanggal, Status) → Klik tombol **"Download Excel"**. File `.xls` berformat spreadsheet Excel profesional akan otomatis terunduh.

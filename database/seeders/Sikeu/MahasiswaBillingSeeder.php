@@ -31,6 +31,16 @@ class MahasiswaBillingSeeder extends Seeder
         // 2. Sample Penetapan Tipe Tagihan Mahasiswa (SPMB / SIAKAD / Admin Change)
         $samples = [
             [
+                'mahasiswa_id' => 1,
+                'nim' => '2301001001',
+                'nama_mahasiswa' => 'Ahmad Fadillah',
+                'tahun_angkatan' => 2023,
+                'jalur_kelas' => 'Reguler',
+                'kelompok_ukt' => 3,
+                'status_pendaftaran' => 'SIAKAD_AKTIF',
+                'catatan_perubahan' => 'Mahasiswa Aktif SIAKAD Prodi Teknik Informatika Angkatan 2023',
+            ],
+            [
                 'mahasiswa_id' => 101,
                 'nim' => '2024010042',
                 'nama_mahasiswa' => 'Budi Santoso',
@@ -179,6 +189,115 @@ class MahasiswaBillingSeeder extends Seeder
                 'bank_nama' => 'Bank BNI (Virtual Account)',
                 'nominal' => 5500000,
                 'expired_at' => now()->addDays(25),
+                'status' => 'aktif',
+            ]
+        );
+
+        // ── AHMAD FADILLAH (NIM: 2301001001) SAMPLE BILLS & PAYMENTS ──
+        // Semester 1 (Gasal 2023/2024 - LUNAS)
+        $tagihanAhmad1 = TagihanMahasiswa::updateOrCreate(
+            ['nomor_tagihan' => 'INV-SIAKAD-2023-SMT1-00001'],
+            [
+                'mahasiswa_id' => 1,
+                'tahun_akademik_id' => 1,
+                'total_tagihan' => 3500000,
+                'total_potongan' => 0,
+                'total_denda' => 0,
+                'total_bayar' => 3500000,
+                'status' => 'lunas',
+                'requires_approval' => false,
+                'status_approval' => 'approved',
+                'source_system' => 'SIAKAD',
+                'jatuh_tempo' => '2023-09-30',
+                'catatan_approval' => 'Tagihan masal UKT Semester 1 (Gasal 2023/2024)',
+            ]
+        );
+
+        DetailTagihan::firstOrCreate(
+            ['tagihan_id' => $tagihanAhmad1->id, 'master_biaya_id' => $jenisBiayaUkt->id],
+            ['nominal' => 3500000, 'potongan' => 0, 'nominal_bersih' => 3500000, 'keterangan' => 'Uang Kuliah Tunggal (UKT) - Semester 1 (Gasal 2023/2024)']
+        );
+
+        \App\Models\Sikeu\Pembayaran::firstOrCreate(
+            ['kode_transaksi' => 'TRX-LOKET-20230910-001'],
+            [
+                'tagihan_id' => $tagihanAhmad1->id,
+                'jumlah_bayar' => 3500000,
+                'waktu_bayar' => '2023-09-10 10:15:00',
+                'channel_bayar' => 'BNI_VA',
+                'status' => 'success',
+                'catatan' => 'Pelunasan UKT Semester 1 (Gasal 2023/2024)',
+            ]
+        );
+
+        // Semester 2 (Genap 2023/2024 - LUNAS)
+        $tagihanAhmad2 = TagihanMahasiswa::updateOrCreate(
+            ['nomor_tagihan' => 'INV-SIAKAD-2023-SMT2-00001'],
+            [
+                'mahasiswa_id' => 1,
+                'tahun_akademik_id' => 2,
+                'total_tagihan' => 3500000,
+                'total_potongan' => 0,
+                'total_denda' => 0,
+                'total_bayar' => 3500000,
+                'status' => 'lunas',
+                'requires_approval' => false,
+                'status_approval' => 'approved',
+                'source_system' => 'SIAKAD',
+                'jatuh_tempo' => '2024-02-28',
+                'catatan_approval' => 'Tagihan masal UKT Semester 2 (Genap 2023/2024)',
+            ]
+        );
+
+        DetailTagihan::firstOrCreate(
+            ['tagihan_id' => $tagihanAhmad2->id, 'master_biaya_id' => $jenisBiayaUkt->id],
+            ['nominal' => 3500000, 'potongan' => 0, 'nominal_bersih' => 3500000, 'keterangan' => 'Uang Kuliah Tunggal (UKT) - Semester 2 (Genap 2023/2024)']
+        );
+
+        \App\Models\Sikeu\Pembayaran::firstOrCreate(
+            ['kode_transaksi' => 'TRX-LOKET-20240215-001'],
+            [
+                'tagihan_id' => $tagihanAhmad2->id,
+                'jumlah_bayar' => 3500000,
+                'waktu_bayar' => '2024-02-15 14:20:00',
+                'channel_bayar' => 'LOKET_TUNAI',
+                'status' => 'success',
+                'catatan' => 'Pelunasan UKT Semester 2 (Genap 2023/2024)',
+            ]
+        );
+
+        // Semester 3 (Gasal 2024/2025 - BELUM BAYAR / AKTIF)
+        $tagihanAhmad3 = TagihanMahasiswa::updateOrCreate(
+            ['nomor_tagihan' => 'INV-SIAKAD-2023-SMT3-00001'],
+            [
+                'mahasiswa_id' => 1,
+                'tahun_akademik_id' => 3,
+                'total_tagihan' => 3500000,
+                'total_potongan' => 0,
+                'total_denda' => 0,
+                'total_bayar' => 0,
+                'status' => 'belum_bayar',
+                'requires_approval' => false,
+                'status_approval' => 'approved',
+                'source_system' => 'SIAKAD',
+                'jatuh_tempo' => now()->addDays(30)->toDateString(),
+                'catatan_approval' => 'Tagihan masal UKT Semester 3 (Gasal 2024/2025)',
+            ]
+        );
+
+        DetailTagihan::firstOrCreate(
+            ['tagihan_id' => $tagihanAhmad3->id, 'master_biaya_id' => $jenisBiayaUkt->id],
+            ['nominal' => 3500000, 'potongan' => 0, 'nominal_bersih' => 3500000, 'keterangan' => 'Uang Kuliah Tunggal (UKT) - Semester 3 (Gasal 2024/2025)']
+        );
+
+        VirtualAccount::updateOrCreate(
+            ['tagihan_id' => $tagihanAhmad3->id],
+            [
+                'va_number' => '880122301001001',
+                'bank_kode' => 'BNI',
+                'bank_nama' => 'Bank BNI (Virtual Account)',
+                'nominal' => 3500000,
+                'expired_at' => now()->addDays(30),
                 'status' => 'aktif',
             ]
         );

@@ -19,6 +19,7 @@ class DispensasiTagihan extends Model
         'jumlah_cicilan',
         'nominal_per_cicilan',
         'alasan',
+        'allow_krs',
         'dokumen_pendukung',
         'status',
         'diajukan_oleh',
@@ -28,6 +29,7 @@ class DispensasiTagihan extends Model
     ];
 
     protected $casts = [
+        'allow_krs' => 'boolean',
         'jatuh_tempo_baru' => 'date',
         'nominal_per_cicilan' => 'decimal:2',
         'tanggal_persetujuan' => 'datetime',

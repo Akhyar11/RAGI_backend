@@ -11,15 +11,42 @@ use Illuminate\Support\Facades\Validator;
 class MasterGajiPegawaiController extends Controller
 {
     /**
-     * GET /api/sikeu/master/gaji-pegawai
-     * List all employees with their salary configuration
+     * GET /api/v1/sikeu/master/gaji-pegawai
+     * List all employees with their salary configuration, supporting search, filters & pagination
      */
     public function index(Request $request)
     {
-        $pegawaiList = Pegawai::orderBy('nama_lengkap', 'asc')->get();
+        $perPage = min(100, $request->integer('per_page', 15));
+        $search = $request->query('search');
+        $jenisPegawai = $request->query('jenis_pegawai');
 
-        $data = $pegawaiList->map(function ($p) {
-            $master = MasterGajiPegawai::where('pegawai_id', $p->id)->first();
+        $query = Pegawai::query();
+
+        if ($request->filled('search')) {
+            $s = $request->query('search');
+            $query->where(function ($q) use ($s) {
+                $q->where('nama_lengkap', 'like', "%{$s}%")
+                  ->orWhere('nip', 'like', "%{$s}%")
+                  ->orWhere('email', 'like', "%{$s}%");
+            });
+        }
+
+        if ($request->filled('jenis_pegawai') && $request->jenis_pegawai !== 'all') {
+            $query->where('jenis_pegawai', $request->jenis_pegawai);
+        }
+
+        $allowedSort = ['nama_lengkap', 'nip', 'jenis_pegawai', 'created_at'];
+        $sortBy = in_array($request->query('sort_by'), $allowedSort) ? $request->query('sort_by') : 'nama_lengkap';
+        $sortOrder = strtolower($request->query('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        $paginated = $query->paginate($perPage);
+
+        $pegawaiIds = collect($paginated->items())->pluck('id');
+        $masters = MasterGajiPegawai::whereIn('pegawai_id', $pegawaiIds)->get()->keyBy('pegawai_id');
+
+        $data = collect($paginated->items())->map(function ($p) use ($masters) {
+            $master = $masters->get($p->id);
             return [
                 'pegawai_id' => $p->id,
                 'nama_lengkap' => $p->nama_lengkap,
@@ -36,7 +63,22 @@ class MasterGajiPegawaiController extends Controller
 
         return response()->json([
             'status' => 'success',
+            'message' => 'Data master gaji pegawai berhasil dimuat',
             'data' => $data,
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'last_page' => $paginated->lastPage(),
+                'from' => $paginated->firstItem(),
+                'to' => $paginated->lastItem(),
+            ],
+            'filters' => [
+                'search' => $search,
+                'jenis_pegawai' => $jenisPegawai,
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+            ],
         ]);
     }
 

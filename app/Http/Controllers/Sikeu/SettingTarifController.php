@@ -16,7 +16,7 @@ class SettingTarifController extends Controller
     public function index(Request $request)
     {
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = SettingTarif::with('masterBiaya');
+        $query = SettingTarif::with(['masterBiaya', 'programStudi']);
 
         // Filter Tahun Angkatan
         if ($request->filled('tahun_angkatan')) {
@@ -142,7 +142,7 @@ class SettingTarifController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Setting tarif berhasil ditambahkan.',
-            'data' => $setting->load('masterBiaya'),
+            'data' => $setting->load(['masterBiaya', 'programStudi']),
         ], 201);
     }
 
@@ -181,7 +181,7 @@ class SettingTarifController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Setting tarif berhasil diperbarui.',
-            'data' => $setting->load('masterBiaya'),
+            'data' => $setting->load(['masterBiaya', 'programStudi']),
         ]);
     }
 
@@ -197,6 +197,22 @@ class SettingTarifController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Setting tarif berhasil dihapus.',
+        ]);
+    }
+
+    /**
+     * GET /api/v1/sikeu/master/program-studi
+     * Get reference list of active Study Programs from database for tariff setting dropdown.
+     */
+    public function getProgramStudiList(Request $request)
+    {
+        $prodis = \App\Models\Spmb\MasterProgramStudi::orderBy('nama', 'asc')->get([
+            'id', 'kode_prodi', 'nama', 'jenjang', 'is_active'
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $prodis
         ]);
     }
 }

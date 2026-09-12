@@ -104,7 +104,7 @@ class ExternalTagihanController extends Controller
                 'total_tagihan' => $totalNominal,
                 'total_potongan' => $totalPotongan,
                 'total_denda' => 0,
-                'total_bayar' => $totalBayar,
+                'total_bayar' => 0,
                 'status' => $initialStatus,
                 'requires_approval' => $requiresApproval,
                 'status_approval' => $statusApproval,
@@ -201,7 +201,13 @@ class ExternalTagihanController extends Controller
      */
     public function indexPembayaran(Request $request)
     {
-        $query = \App\Models\Sikeu\Pembayaran::with(['tagihan', 'virtualAccount']);
+        $perPage = min(100, $request->integer('per_page', 15));
+        $query = \App\Models\Sikeu\Pembayaran::with([
+            'tagihan.details.masterBiaya',
+            'tagihan.mahasiswa.programStudi',
+            'tagihan.tipeTagihanMahasiswa',
+            'virtualAccount'
+        ]);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -225,18 +231,70 @@ class ExternalTagihanController extends Controller
                 $q->where('kode_transaksi', 'like', "%{$search}%")
                   ->orWhereHas('tagihan', function ($tq) use ($search) {
                       $tq->where('nomor_tagihan', 'like', "%{$search}%")
-                         ->orWhere('mahasiswa_id', 'like', "%{$search}%");
+                         ->orWhere('mahasiswa_id', 'like', "%{$search}%")
+                         ->orWhereHas('mahasiswa', fn($m) => $m->where('nim', 'like', "%{$search}%")->orWhere('nama_lengkap', 'like', "%{$search}%"))
+                         ->orWhereHas('tipeTagihanMahasiswa', fn($tm) => $tm->where('nim', 'like', "%{$search}%")->orWhere('nama_mahasiswa', 'like', "%{$search}%"));
                   });
             });
         }
 
         $pembayaran = $query->orderBy('waktu_bayar', 'desc')
             ->orderBy('id', 'desc')
-            ->paginate($request->input('per_page', 15));
+            ->paginate($perPage);
+
+        $mappedItems = collect($pembayaran->items())->map(function ($p) {
+            $t = $p->tagihan;
+            $mhs = $t?->mahasiswa;
+            $tipeMhs = $t?->tipeTagihanMahasiswa;
+
+            $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($t?->mahasiswa_id ?? 1, 4, '0', STR_PAD_LEFT));
+            $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . ($t?->mahasiswa_id ?? 1));
+            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika';
+
+            $rincian = $t?->details?->map(function ($d) {
+                return $d->keterangan ?: ($d->masterBiaya->nama ?? 'Komponen Biaya');
+            })->filter()->implode(', ') ?: ($t?->catatan_approval ?? 'Tagihan Semester');
+
+            return [
+                'id' => $p->id,
+                'kode_transaksi' => $p->kode_transaksi,
+                'nim' => $nim,
+                'nama_mahasiswa' => $nama,
+                'program_studi' => $prodi,
+                'rincian_pembayaran' => $rincian,
+                'tagihan_id' => $p->tagihan_id,
+                'tagihan' => [
+                    'id' => $t?->id,
+                    'nomor_tagihan' => $t?->nomor_tagihan,
+                    'mahasiswa_id' => $t?->mahasiswa_id,
+                    'total_tagihan' => (float)($t?->total_tagihan ?? 0),
+                    'total_bayar' => (float)($t?->total_bayar ?? 0),
+                    'status' => $t?->status,
+                    'rincian' => $rincian,
+                ],
+                'virtual_account' => $p->virtualAccount ? [
+                    'va_number' => $p->virtualAccount->va_number,
+                    'bank_nama' => $p->virtualAccount->bank_nama,
+                ] : null,
+                'jumlah_bayar' => (float)$p->jumlah_bayar,
+                'waktu_bayar' => $p->waktu_bayar ? (is_object($p->waktu_bayar) && method_exists($p->waktu_bayar, 'format') ? $p->waktu_bayar->format('Y-m-d H:i:s') : (string)$p->waktu_bayar) : null,
+                'channel_bayar' => $p->channel_bayar,
+                'status' => $p->status,
+                'catatan' => $p->catatan,
+            ];
+        });
 
         return response()->json([
             'status' => 'success',
-            'data' => $pembayaran
+            'data' => $mappedItems,
+            'meta' => [
+                'current_page' => $pembayaran->currentPage(),
+                'per_page' => $pembayaran->perPage(),
+                'total' => $pembayaran->total(),
+                'last_page' => $pembayaran->lastPage(),
+                'from' => $pembayaran->firstItem(),
+                'to' => $pembayaran->lastItem(),
+            ]
         ]);
     }
 }

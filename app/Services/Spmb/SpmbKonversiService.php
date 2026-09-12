@@ -75,6 +75,20 @@ class SpmbKonversiService
                 ]
             );
 
+            // 3b. Sinkronisasi otomatis ke Modul SIKEU (MahasiswaTipeTagihan)
+            \App\Models\Sikeu\MahasiswaTipeTagihan::updateOrCreate(
+                ['mahasiswa_id' => $mahasiswa->id],
+                [
+                    'nim' => $nim,
+                    'nama_mahasiswa' => $pendaftaran->nama_lengkap,
+                    'tahun_angkatan' => $angkatan,
+                    'jalur_kelas' => $pendaftaran->jalur_masuk ?? 'Reguler',
+                    'kelompok_ukt' => 3, // Default Golongan UKT 3
+                    'status_pendaftaran' => 'SPMB_DITERIMA',
+                    'catatan_perubahan' => 'Auto-sync otomatis dari konversi SPMB',
+                ]
+            );
+
             // 4. Update Role IAM
             if ($pendaftaran->user_id) {
                 $user = User::find($pendaftaran->user_id);

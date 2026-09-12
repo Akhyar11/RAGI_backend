@@ -50,11 +50,16 @@ class DispensasiTagihanController extends Controller
                 })
                 ->count();
 
+            $mhs = \App\Models\Siakad\Mahasiswa::with('programStudi')->find($d->mahasiswa_id);
+            $tipeMhs = \App\Models\Sikeu\MahasiswaTipeTagihan::where('mahasiswa_id', $d->mahasiswa_id)->first();
+
             $dArray = $d->toArray();
             $dArray['has_unpaid_previous_dispensation'] = $prevUnpaidCount > 0;
             $dArray['unpaid_previous_dispensation_count'] = $prevUnpaidCount;
-            $dArray['nama_mahasiswa'] = 'Mahasiswa #' . $d->mahasiswa_id;
-            $dArray['nim'] = '2024' . str_pad($d->mahasiswa_id, 4, '0', STR_PAD_LEFT);
+            $dArray['nama_mahasiswa'] = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $d->mahasiswa_id);
+            $dArray['nim'] = $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($d->mahasiswa_id, 4, '0', STR_PAD_LEFT));
+            $dArray['prodi'] = $mhs?->programStudi?->nama ?? 'Teknik Informatika';
+            $dArray['allow_krs'] = (bool)($d->allow_krs ?? true);
             return $dArray;
         });
 
@@ -83,6 +88,7 @@ class DispensasiTagihanController extends Controller
             'jumlah_cicilan' => 'nullable|integer|min:1',
             'nominal_per_cicilan' => 'nullable|numeric|min:0',
             'alasan' => 'required|string',
+            'allow_krs' => 'nullable|boolean',
             'dokumen_pendukung' => 'nullable|string',
             'selected_detail_ids' => 'nullable|array',
         ]);
@@ -113,6 +119,7 @@ class DispensasiTagihanController extends Controller
             'jumlah_cicilan' => $request->jumlah_cicilan ?? 1,
             'nominal_per_cicilan' => $request->nominal_per_cicilan ?? ($tagihan->total_tagihan - $tagihan->total_bayar),
             'alasan' => $request->alasan,
+            'allow_krs' => $request->has('allow_krs') ? (bool)$request->allow_krs : true,
             'dokumen_pendukung' => $request->dokumen_pendukung,
             'status' => 'pending',
             'diajukan_oleh' => auth()->id() ?? $tagihan->mahasiswa_id,
