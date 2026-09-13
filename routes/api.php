@@ -377,6 +377,7 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::get('mahasiswa-search', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'searchMahasiswa']);
 
     // Portal Tagihan & Invoice Mahasiswa Mandiri
+    Route::get('mahasiswa/payment-channels', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'paymentChannels']);
     Route::get('mahasiswa/tagihan', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'myBills']);
     Route::get('mahasiswa/invoice/{id}', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'generateInvoice']);
     Route::post('mahasiswa/invoice-batch', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'generateBatchInvoice']);

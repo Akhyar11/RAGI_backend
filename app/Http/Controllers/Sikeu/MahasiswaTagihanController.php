@@ -24,6 +24,14 @@ class MahasiswaTagihanController extends Controller
     {
         $user = $request->user();
         $mahasiswaId = $request->query('mahasiswa_id', $request->input('mahasiswa_id'));
+        $nimQuery = $request->query('nim', $request->input('nim'));
+
+        if ($nimQuery) {
+            $mhsByQuery = \App\Models\Siakad\Mahasiswa::where('nim', $nimQuery)->first();
+            if ($mhsByQuery) return $mhsByQuery->id;
+            $tipeByQuery = MahasiswaTipeTagihan::where('nim', $nimQuery)->first();
+            if ($tipeByQuery) return $tipeByQuery->mahasiswa_id;
+        }
 
         if (!$mahasiswaId && $user) {
             // 1. Check Siakad Mahasiswa linked by user_id
@@ -34,6 +42,15 @@ class MahasiswaTagihanController extends Controller
 
             // 2. Check by NIM / username
             if (!empty($user->username)) {
+                // If username is generic 'mahasiswa', look for Ahmad Fadillah (NIM 2301001001) as primary seeded student
+                if ($user->username === 'mahasiswa') {
+                    $mhsAhmad = \App\Models\Siakad\Mahasiswa::where('nim', '2301001001')->first();
+                    if ($mhsAhmad) return $mhsAhmad->id;
+                    $tipeAhmad = MahasiswaTipeTagihan::where('nim', '2301001001')->first();
+                    if ($tipeAhmad) return $tipeAhmad->mahasiswa_id;
+                    return 1;
+                }
+
                 $mhsByNim = \App\Models\Siakad\Mahasiswa::where('nim', $user->username)->first();
                 if ($mhsByNim) return $mhsByNim->id;
 
@@ -43,6 +60,14 @@ class MahasiswaTagihanController extends Controller
 
             // 3. Check by Email
             if (!empty($user->email)) {
+                if ($user->email === 'mahasiswa@kampus.ac.id') {
+                    $mhsAhmad = \App\Models\Siakad\Mahasiswa::where('nim', '2301001001')->first();
+                    if ($mhsAhmad) return $mhsAhmad->id;
+                    $tipeAhmad = MahasiswaTipeTagihan::where('nim', '2301001001')->first();
+                    if ($tipeAhmad) return $tipeAhmad->mahasiswa_id;
+                    return 1;
+                }
+
                 $tipeByEmail = MahasiswaTipeTagihan::where('nama_mahasiswa', 'like', "%{$user->username}%")->first();
                 if ($tipeByEmail) return $tipeByEmail->mahasiswa_id;
             }
@@ -58,9 +83,14 @@ class MahasiswaTagihanController extends Controller
             return (int)$mahasiswaId;
         }
 
-        // Fallback to first active student record (Ahmad Fadillah ID: 1)
-        $firstTagihan = TagihanMahasiswa::orderBy('id', 'asc')->first();
-        return $firstTagihan ? $firstTagihan->mahasiswa_id : 1;
+        // Fallback to Ahmad Fadillah (NIM: 2301001001 / ID: 1)
+        $ahmadSiakad = \App\Models\Siakad\Mahasiswa::where('nim', '2301001001')->first();
+        if ($ahmadSiakad) return $ahmadSiakad->id;
+
+        $ahmadTipe = MahasiswaTipeTagihan::where('nim', '2301001001')->first();
+        if ($ahmadTipe) return $ahmadTipe->mahasiswa_id;
+
+        return 1;
     }
 
     protected function extractSemesterLabel($tagihan)
@@ -102,6 +132,9 @@ class MahasiswaTagihanController extends Controller
 
         if ($request->filled('status') && $request->status !== 'all') {
             $query->where('status', $request->status);
+        } else if (!$request->boolean('include_lunas')) {
+            // Default: hanya tampilkan tagihan berjalan yang belum lunas
+            $query->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi']);
         }
 
         $tagihans = $query->orderBy('id', 'desc')->get();
@@ -156,6 +189,21 @@ class MahasiswaTagihanController extends Controller
             $data = $data->filter(fn($item) => $item['semester'] === $sem)->values();
         }
 
+        // Filter by search keyword if requested
+        if ($request->filled('search')) {
+            $keyword = strtolower(trim($request->search));
+            $data = $data->filter(function ($item) use ($keyword) {
+                if (str_contains(strtolower($item['nomor_tagihan']), $keyword)) return true;
+                if (str_contains(strtolower($item['periode_label']), $keyword)) return true;
+                if (!empty($item['catatan']) && str_contains(strtolower($item['catatan']), $keyword)) return true;
+                foreach ($item['details'] as $d) {
+                    if (str_contains(strtolower($d['nama_biaya']), $keyword)) return true;
+                    if (str_contains(strtolower($d['keterangan']), $keyword)) return true;
+                }
+                return false;
+            })->values();
+        }
+
         return response()->json([
             'status' => 'success',
             'data' => $data
@@ -163,32 +211,157 @@ class MahasiswaTagihanController extends Controller
     }
 
     /**
+     * GET /api/v1/sikeu/mahasiswa/payment-channels
+     * List available payment channels for student from Xendit gateway
+     */
+    public function paymentChannels()
+    {
+        $channels = [
+            [
+                'id' => 'BNI',
+                'name' => 'Bank BNI (Virtual Account)',
+                'code' => 'BNI',
+                'type' => 'VIRTUAL_ACCOUNT',
+                'category' => 'va',
+                'prefix' => '88012',
+                'logo_color' => 'from-orange-600 to-amber-600',
+                'badge' => 'Otomatis Realtime',
+                'description' => 'Transfer ATM BNI, BNI Mobile Banking, SMS Banking, & Agen 46',
+                'fee' => 0,
+                'is_active' => true,
+            ],
+            [
+                'id' => 'MANDIRI',
+                'name' => 'Bank Mandiri (Virtual Account)',
+                'code' => 'MANDIRI',
+                'type' => 'VIRTUAL_ACCOUNT',
+                'category' => 'va',
+                'prefix' => '88800',
+                'logo_color' => 'from-blue-700 to-indigo-800',
+                'badge' => 'Otomatis Realtime',
+                'description' => 'Livin\' by Mandiri, ATM Mandiri, & Internet Banking',
+                'fee' => 0,
+                'is_active' => true,
+            ],
+            [
+                'id' => 'BRI',
+                'name' => 'Bank BRI (BRIVA)',
+                'code' => 'BRI',
+                'type' => 'VIRTUAL_ACCOUNT',
+                'category' => 'va',
+                'prefix' => '70012',
+                'logo_color' => 'from-blue-600 to-cyan-600',
+                'badge' => 'Otomatis Realtime',
+                'description' => 'BRImo, ATM BRI, & Agen BRILink',
+                'fee' => 0,
+                'is_active' => true,
+            ],
+            [
+                'id' => 'BCA',
+                'name' => 'Bank BCA (Virtual Account)',
+                'code' => 'BCA',
+                'type' => 'VIRTUAL_ACCOUNT',
+                'category' => 'va',
+                'prefix' => '10204',
+                'logo_color' => 'from-blue-800 to-blue-950',
+                'badge' => 'Otomatis Realtime',
+                'description' => 'myBCA, BCA mobile, KlikBCA, & ATM BCA',
+                'fee' => 0,
+                'is_active' => true,
+            ],
+            [
+                'id' => 'PERMATA',
+                'name' => 'Bank Permata (Virtual Account)',
+                'code' => 'PERMATA',
+                'type' => 'VIRTUAL_ACCOUNT',
+                'category' => 'va',
+                'prefix' => '85220',
+                'logo_color' => 'from-emerald-700 to-teal-800',
+                'badge' => 'Otomatis Realtime',
+                'description' => 'PermataMobile X, PermataNet, & ATM Permata',
+                'fee' => 0,
+                'is_active' => true,
+            ],
+            [
+                'id' => 'QRIS',
+                'name' => 'QRIS Realtime (Semua E-Wallet / Mobile Banking)',
+                'code' => 'QRIS',
+                'type' => 'QR_CODE',
+                'category' => 'instant',
+                'prefix' => 'QRIS',
+                'logo_color' => 'from-rose-600 to-red-600',
+                'badge' => 'Scan & Bayar',
+                'description' => 'GoPay, OVO, ShopeePay, DANA, LinkAja, BCA, Mandiri, dll.',
+                'fee' => 0,
+                'is_active' => true,
+            ],
+        ];
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $channels
+        ]);
+    }
+
+    /**
+     * Helper to compute VA Number based on Bank Code and Student identifier
+     */
+    protected function computeVaNumber($bankCode, $identifier)
+    {
+        $cleanId = preg_replace('/[^0-9]/', '', (string)$identifier);
+        if (empty($cleanId)) {
+            $cleanId = '20240001';
+        }
+
+        switch (strtoupper($bankCode)) {
+            case 'MANDIRI':
+                return '88800' . str_pad($cleanId, 8, '0', STR_PAD_LEFT);
+            case 'BRI':
+                return '70012' . str_pad($cleanId, 8, '0', STR_PAD_LEFT);
+            case 'BCA':
+                return '10204' . str_pad($cleanId, 8, '0', STR_PAD_LEFT);
+            case 'PERMATA':
+                return '85220' . str_pad($cleanId, 8, '0', STR_PAD_LEFT);
+            case 'QRIS':
+                return 'QRIS-' . date('ymd') . '-' . str_pad($cleanId, 6, '0', STR_PAD_LEFT);
+            case 'BNI':
+            default:
+                return '88012' . $cleanId;
+        }
+    }
+
+    /**
      * GET /api/v1/sikeu/mahasiswa/invoice/{id}
      * Generate or view official invoice and Virtual Account details for a bill
      */
-    public function generateInvoice($id)
+    public function generateInvoice(Request $request, $id)
     {
         $tagihan = TagihanMahasiswa::with(['details.masterBiaya', 'virtualAccount', 'mahasiswa.programStudi', 'tipeTagihanMahasiswa'])->findOrFail($id);
 
         $sisa = max(0, ($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan) - $tagihan->total_bayar);
-
-        // Auto create Virtual Account if not exist
-        if (!$tagihan->virtualAccount) {
-            $vaNumber = '8801' . str_pad($tagihan->id, 8, '0', STR_PAD_LEFT);
-            $va = VirtualAccount::create([
-                'tagihan_id' => $tagihan->id,
-                'va_number' => $vaNumber,
-                'bank_kode' => 'BNI',
-                'bank_nama' => 'Bank BNI (Virtual Account)',
-                'nominal' => $sisa,
-                'expired_at' => now()->addDays(30),
-                'status' => 'aktif',
-            ]);
-            $tagihan->load('virtualAccount');
-        }
+        $bankCode = strtoupper($request->query('bank_kode', $tagihan->virtualAccount->bank_kode ?? 'BNI'));
 
         $mhs = $tagihan->mahasiswa;
         $tipeMhs = $tagihan->tipeTagihanMahasiswa;
+        $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($tagihan->mahasiswa_id, 4, '0', STR_PAD_LEFT));
+
+        $expectedVaNumber = $this->computeVaNumber($bankCode, $nim);
+
+        // Update or create Virtual Account with chosen bank
+        if (!$tagihan->virtualAccount || $tagihan->virtualAccount->bank_kode !== $bankCode) {
+            $va = VirtualAccount::updateOrCreate(
+                ['tagihan_id' => $tagihan->id],
+                [
+                    'va_number' => $expectedVaNumber,
+                    'bank_kode' => $bankCode,
+                    'bank_nama' => $bankCode === 'QRIS' ? 'QRIS Indonesia' : ('Bank ' . $bankCode . ' (Virtual Account)'),
+                    'nominal' => $sisa,
+                    'expired_at' => now()->addDays(30),
+                    'status' => 'aktif',
+                ]
+            );
+            $tagihan->load('virtualAccount');
+        }
 
         $periode = $this->extractSemesterLabel($tagihan);
 
@@ -199,13 +372,14 @@ class MahasiswaTagihanController extends Controller
             'periode' => $periode,
             'mahasiswa' => [
                 'nama' => $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $tagihan->mahasiswa_id),
-                'nim' => $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($tagihan->mahasiswa_id, 4, '0', STR_PAD_LEFT)),
+                'nim' => $nim,
                 'prodi' => $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika',
                 'angkatan' => $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? 2024,
             ],
             'virtual_account' => [
-                'bank' => $tagihan->virtualAccount->bank_nama ?? 'Bank BNI',
-                'va_number' => $tagihan->virtualAccount->va_number,
+                'bank' => $tagihan->virtualAccount->bank_nama ?? ('Bank ' . $bankCode),
+                'bank_kode' => $bankCode,
+                'va_number' => $tagihan->virtualAccount->va_number ?? $expectedVaNumber,
                 'nominal_instruksi' => (float)$sisa,
                 'expired_at' => $tagihan->virtualAccount->expired_at ? (is_string($tagihan->virtualAccount->expired_at) ? $tagihan->virtualAccount->expired_at : $tagihan->virtualAccount->expired_at->format('Y-m-d H:i:s')) : date('Y-m-d H:i:s', strtotime('+30 days')),
             ],
@@ -242,6 +416,7 @@ class MahasiswaTagihanController extends Controller
     {
         $mahasiswaId = $this->resolveMahasiswaId($request);
         $tagihanIds = $request->input('tagihan_ids', []);
+        $bankCode = strtoupper($request->input('bank_kode', 'BNI'));
 
         if (empty($tagihanIds) && $request->filled('tagihan_id')) {
             $tagihanIds = [(int)$request->tagihan_id];
@@ -304,8 +479,8 @@ class MahasiswaTagihanController extends Controller
 
         $totalSisa = max(0, ($totalTagihan + $totalDenda - $totalPotongan) - $totalBayar);
 
-        // Dynamic Virtual Account Number for student
-        $vaNumber = '88012' . $nim;
+        // Dynamic Virtual Account Number for student according to selected bank
+        $vaNumber = $this->computeVaNumber($bankCode, $nim);
 
         $invoiceNumber = count($tagihans) === 1
             ? 'INV-' . $firstTagihan->nomor_tagihan
@@ -323,7 +498,8 @@ class MahasiswaTagihanController extends Controller
                 'angkatan' => $angkatan,
             ],
             'virtual_account' => [
-                'bank' => 'Bank BNI (Virtual Account)',
+                'bank' => $bankCode === 'QRIS' ? 'QRIS Indonesia' : ('Bank ' . $bankCode . ' (Virtual Account)'),
+                'bank_kode' => $bankCode,
                 'va_number' => $vaNumber,
                 'nominal_instruksi' => (float)$totalSisa,
                 'expired_at' => date('Y-m-d H:i:s', strtotime('+30 days')),
@@ -356,6 +532,7 @@ class MahasiswaTagihanController extends Controller
             'tagihan_ids' => 'required|array|min:1',
             'tagihan_ids.*' => 'integer|exists:sikeu_tagihan_mahasiswa,id',
             'channel_bayar' => 'nullable|string',
+            'bank_kode' => 'nullable|string',
             'catatan' => 'nullable|string|max:255',
         ]);
 
@@ -382,7 +559,8 @@ class MahasiswaTagihanController extends Controller
         try {
             DB::beginTransaction();
 
-            $channel = $request->input('channel_bayar', 'BNI_VA');
+            $bankKode = strtoupper($request->input('bank_kode', 'BNI'));
+            $channel = $request->input('channel_bayar', 'VA_' . $bankKode);
             $createdPayments = [];
             $totalPaidAll = 0;
 
@@ -394,7 +572,28 @@ class MahasiswaTagihanController extends Controller
                     continue; // Already paid
                 }
 
-                $trxCode = 'TRX-' . ($channel === 'BNI_VA' ? 'VA' : 'ONL') . '-' . date('Ymd') . '-' . Str::upper(Str::random(5));
+                $prefixTrx = str_starts_with($channel, 'VA_') ? 'VA' : (str_starts_with($channel, 'QRIS') ? 'QRS' : 'XND');
+                $trxCode = 'TRX-' . $prefixTrx . '-' . date('Ymd') . '-' . Str::upper(Str::random(5));
+
+                // Update / create Virtual Account if matched
+                if (!$tagihan->virtualAccount || $tagihan->virtualAccount->bank_kode !== $bankKode) {
+                    $mhsNim = $tagihan->mahasiswa?->nim ?? $tagihan->tipeTagihanMahasiswa?->nim ?? $tagihan->mahasiswa_id;
+                    $expectedVaNumber = $this->computeVaNumber($bankKode, $mhsNim);
+                    $va = VirtualAccount::updateOrCreate(
+                        ['tagihan_id' => $tagihan->id],
+                        [
+                            'va_number' => $expectedVaNumber,
+                            'bank_kode' => $bankKode,
+                            'bank_nama' => $bankKode === 'QRIS' ? 'QRIS Indonesia' : ('Bank ' . $bankKode),
+                            'nominal' => $sisa,
+                            'expired_at' => now()->addDays(30),
+                            'status' => 'dibayar',
+                        ]
+                    );
+                    $tagihan->load('virtualAccount');
+                } else {
+                    $tagihan->virtualAccount->update(['status' => 'dibayar']);
+                }
 
                 $pembayaran = Pembayaran::create([
                     'tagihan_id' => $tagihan->id,
@@ -403,6 +602,7 @@ class MahasiswaTagihanController extends Controller
                     'jumlah_bayar' => $sisa,
                     'waktu_bayar' => now(),
                     'channel_bayar' => $channel,
+                    'bank_pengirim' => $bankKode,
                     'status' => 'success',
                     'diverifikasi_oleh' => auth()->id() ?? 1,
                     'catatan' => $request->input('catatan', 'Pelunasan Mandiri Mahasiswa via ' . $channel),
@@ -439,7 +639,7 @@ class MahasiswaTagihanController extends Controller
                             'akun_keuangan_id' => $akunKas->id,
                             'debet' => $sisa,
                             'kredit' => 0,
-                            'keterangan' => 'Kas/Bank Penerimaan VA ' . $tagihan->nomor_tagihan,
+                            'keterangan' => 'Kas/Bank Penerimaan ' . $channel . ' Tagihan ' . $tagihan->nomor_tagihan,
                         ]);
 
                         DetailJurnalUmum::create([
@@ -460,6 +660,8 @@ class MahasiswaTagihanController extends Controller
                     'tagihan_id' => $tagihan->id,
                     'nomor_tagihan' => $tagihan->nomor_tagihan,
                     'jumlah_bayar' => $sisa,
+                    'channel' => $channel,
+                    'bank_kode' => $bankKode,
                 ];
             }
 
@@ -467,10 +669,11 @@ class MahasiswaTagihanController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Pembayaran tagihan berhasil diproses dan diverifikasi lunas!',
+                'message' => 'Pembayaran tagihan via ' . $channel . ' berhasil diproses dan diverifikasi lunas!',
                 'data' => [
                     'total_paid' => $totalPaidAll,
                     'channel' => $channel,
+                    'bank_kode' => $bankKode,
                     'payments' => $createdPayments,
                 ]
             ]);

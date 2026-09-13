@@ -314,14 +314,14 @@ class PembayaranKasirController extends Controller
             'jalur_kelas' => 'required|string',
             'semester' => 'nullable|integer|min:1|max:14',
             'program_studi_id' => 'nullable|integer',
-            'jatuh_tempo' => 'required|date|after:today',
+            'jatuh_tempo' => 'required|date|after_or_equal:today',
             'semester_label' => 'nullable|string|max:100',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Validasi generate tagihan masal gagal',
+                'message' => 'Validasi generate tagihan masal gagal: ' . implode(', ', $validator->errors()->all()),
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -362,33 +362,75 @@ class PembayaranKasirController extends Controller
                 ], 404);
             }
 
-            // 2. Load mahasiswa yang cocok
-            $mahasiswaQuery = MahasiswaTipeTagihan::where('tahun_angkatan', $request->tahun_angkatan)
+            // 2. Load mahasiswa yang cocok (dari MahasiswaTipeTagihan atau SIAKAD Mahasiswa)
+            $mahasiswaList = collect();
+
+            $tipeQuery = MahasiswaTipeTagihan::where('tahun_angkatan', $request->tahun_angkatan)
                 ->where('jalur_kelas', $request->jalur_kelas);
 
-            $mahasiswaList = $mahasiswaQuery->get();
+            if ($request->filled('program_studi_id')) {
+                $tipeQuery->whereHas('mahasiswa', function ($mq) use ($request) {
+                    $mq->where('program_studi_id', $request->program_studi_id);
+                });
+            }
+
+            $tipeList = $tipeQuery->get();
+
+            if ($tipeList->isNotEmpty()) {
+                $mahasiswaList = $tipeList->map(function ($item) {
+                    return (object)[
+                        'mahasiswa_id' => $item->mahasiswa_id,
+                        'nim' => $item->nim,
+                        'nama_mahasiswa' => $item->nama_mahasiswa,
+                    ];
+                });
+            } else {
+                // Fallback: Cari langsung ke tabel siakad_mahasiswa untuk angkatan tersebut
+                $siakadQuery = \App\Models\Siakad\Mahasiswa::where('angkatan', $request->tahun_angkatan)
+                    ->where('status', 'aktif');
+
+                if ($request->filled('program_studi_id')) {
+                    $siakadQuery->where('program_studi_id', $request->program_studi_id);
+                }
+
+                $siakadList = $siakadQuery->get();
+                if ($siakadList->isNotEmpty()) {
+                    $mahasiswaList = $siakadList->map(function ($item) {
+                        return (object)[
+                            'mahasiswa_id' => $item->id,
+                            'nim' => $item->nim,
+                            'nama_mahasiswa' => $item->nama_lengkap,
+                        ];
+                    });
+                }
+            }
 
             if ($mahasiswaList->isEmpty()) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Tidak ditemukan mahasiswa dengan Angkatan ' . $request->tahun_angkatan . ' dan Jalur ' . $request->jalur_kelas . '. Pastikan tipe tagihan mahasiswa sudah ditetapkan.',
+                    'message' => 'Tidak ditemukan mahasiswa aktif untuk Angkatan ' . $request->tahun_angkatan . ' dan Jalur ' . $request->jalur_kelas . '. Pastikan data mahasiswa / penetapan tipe tagihan sudah tersedia.',
                 ], 404);
             }
 
             $semesterNum = $request->semester ?? 1;
-            $semesterLabel = $request->semester_label ?? ('Semester ' . $semesterNum . ' Angkatan ' . $request->tahun_angkatan);
+            $rawLabel = $request->semester_label;
+            if ($rawLabel && !str_contains(strtolower($rawLabel), 'semester ' . $semesterNum)) {
+                $semesterLabel = 'Semester ' . $semesterNum . ' (' . $rawLabel . ')';
+            } else {
+                $semesterLabel = $rawLabel ?? ('Semester ' . $semesterNum . ' Angkatan ' . $request->tahun_angkatan);
+            }
             $generatedCount = 0;
             $skippedCount = 0;
 
             // 3. Generate tagihan per mahasiswa dengan auto-potongan beasiswa dan VA
             foreach ($mahasiswaList as $mhs) {
-                // Cek apakah sudah ada tagihan yang sama untuk semester ini (mencegah penumpukan / double billing)
+                // Cek apakah sudah ada tagihan yang sama untuk semester ini (mencegah double billing baik status lunas maupun belum lunas)
                 $nomorTagihan = 'INV-SIAKAD-' . $request->tahun_angkatan . '-SMT' . $semesterNum . '-' . str_pad($mhs->mahasiswa_id, 5, '0', STR_PAD_LEFT);
 
                 $alreadyBilled = TagihanMahasiswa::where('mahasiswa_id', $mhs->mahasiswa_id)
                     ->where(function ($q) use ($nomorTagihan, $semesterLabel, $request, $semesterNum) {
                         $q->where('nomor_tagihan', $nomorTagihan)
-                          ->orWhere('catatan_approval', 'like', "%{$semesterLabel}%")
+                          ->orWhere('catatan_approval', 'like', "%Semester {$semesterNum}%")
                           ->orWhere('nomor_tagihan', 'like', "%-{$request->tahun_angkatan}-SMT{$semesterNum}-%");
                     })
                     ->exists();
@@ -413,7 +455,7 @@ class PembayaranKasirController extends Controller
 
                 if ($beasiswaMhs && $beasiswaMhs->beasiswa) {
                     $b = $beasiswaMhs->beasiswa;
-                    if ($b->tipe_potongan === 'persentase') {
+                    if ($b->tipe_potongan === 'persen' || $b->tipe_potongan === 'persentase') {
                         $totalPotonganBeasiswa = ($totalNominal * (float)$b->nilai_potongan) / 100;
                     } elseif ($b->tipe_potongan === 'nominal') {
                         $totalPotonganBeasiswa = min($totalNominal, (float)$b->nilai_potongan);
@@ -457,14 +499,14 @@ class PembayaranKasirController extends Controller
                 if ($totalPotonganBeasiswa > 0 && $beasiswaMhs) {
                     PotonganTagihan::create([
                         'tagihan_id' => $tagihan->id,
-                        'tipe' => 'beasiswa',
+                        'tipe' => 'subsidi',
                         'nominal_potongan' => $totalPotonganBeasiswa,
                         'keterangan' => 'Pemotongan otomatis beasiswa: ' . ($beasiswaMhs->beasiswa->nama ?? 'Beasiswa'),
                         'diinput_oleh' => auth()->id(),
                     ]);
                 }
 
-                // Auto-generate BNI Virtual Account untuk tagihan ini
+                // Auto-generate BNI Virtual Account untuk tagihan ini (status 'aktif' sesuai enum database)
                 \App\Models\Sikeu\VirtualAccount::updateOrCreate(
                     ['tagihan_id' => $tagihan->id],
                     [
@@ -473,7 +515,7 @@ class PembayaranKasirController extends Controller
                         'bank_nama' => 'Bank BNI',
                         'nominal' => max(0, $totalNominal - $totalPotonganBeasiswa),
                         'expired_at' => $request->jatuh_tempo . ' 23:59:59',
-                        'status' => 'pending',
+                        'status' => 'aktif',
                     ]
                 );
 

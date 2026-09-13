@@ -23,14 +23,30 @@ class SettingTarifController extends Controller
             $query->where('tahun_angkatan', $request->tahun_angkatan);
         }
 
-        // Filter Program Studi
+        // Filter Program Studi (dukung include_global / null fallback)
         if ($request->filled('program_studi_id')) {
-            $query->where('program_studi_id', $request->program_studi_id);
+            $prodiId = $request->program_studi_id;
+            if ($request->boolean('include_global', false)) {
+                $query->where(function ($q) use ($prodiId) {
+                    $q->where('program_studi_id', $prodiId)
+                      ->orWhereNull('program_studi_id');
+                });
+            } else {
+                $query->where('program_studi_id', $prodiId);
+            }
         }
 
-        // Filter Semester
+        // Filter Semester (dukung include_all_semester / null fallback)
         if ($request->filled('semester')) {
-            $query->where('semester', $request->semester);
+            $sem = $request->semester;
+            if ($request->boolean('include_global', false)) {
+                $query->where(function ($q) use ($sem) {
+                    $q->where('semester', $sem)
+                      ->orWhereNull('semester');
+                });
+            } else {
+                $query->where('semester', $sem);
+            }
         }
 
         // Filter Jalur Kelas
@@ -39,7 +55,7 @@ class SettingTarifController extends Controller
         }
 
         // Filter aktif
-        if ($request->filled('is_active')) {
+        if ($request->has('is_active')) {
             $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
         }
 

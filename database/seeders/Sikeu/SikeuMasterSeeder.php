@@ -161,5 +161,93 @@ class SikeuMasterSeeder extends Seeder
         foreach ($beasiswas as $b) {
             \App\Models\Sikeu\Beasiswa::firstOrCreate(['kode' => $b['kode']], $b);
         }
+
+        // 9. Seed Setting Tarif (Matriks Tarif per Angkatan, Jalur, & Prodi)
+        $prodiTI = \App\Models\Spmb\MasterProgramStudi::where('kode_prodi', '55201')
+            ->orWhere('nama', 'like', '%Teknik Informatika%')
+            ->first();
+        $prodiTIId = $prodiTI ? $prodiTI->id : null;
+
+        $jbPraktikum = MasterBiaya::firstOrCreate(
+            ['kode' => 'PRAKTIKUM'],
+            [
+                'nama' => 'Biaya Laboratorium & Praktikum',
+                'tipe' => 'praktikum',
+                'nominal_standar' => 750000.00,
+                'deskripsi' => 'Biaya laboratorium dan sertifikasi kompetensi praktikum',
+                'is_recurring' => true,
+                'is_active' => true,
+            ]
+        );
+
+        $settingTarifs = [
+            // Angkatan 2023 - TI - Reguler (Semester null = berlaku semua semester)
+            [
+                'master_biaya_id' => $jbUkt->id,
+                'tahun_angkatan' => 2023,
+                'program_studi_id' => $prodiTIId,
+                'semester' => null,
+                'jalur_kelas' => 'Reguler',
+                'nominal' => 3500000.00,
+                'is_active' => true,
+                'keterangan' => 'UKT Reguler Angkatan 2023 Prodi Teknik Informatika',
+            ],
+            [
+                'master_biaya_id' => $jbPraktikum->id,
+                'tahun_angkatan' => 2023,
+                'program_studi_id' => $prodiTIId,
+                'semester' => null,
+                'jalur_kelas' => 'Reguler',
+                'nominal' => 750000.00,
+                'is_active' => true,
+                'keterangan' => 'Praktikum & Lab Komputer Prodi Teknik Informatika',
+            ],
+            // Angkatan 2023 - TI - Karyawan
+            [
+                'master_biaya_id' => $jbUkt->id,
+                'tahun_angkatan' => 2023,
+                'program_studi_id' => $prodiTIId,
+                'semester' => null,
+                'jalur_kelas' => 'Karyawan',
+                'nominal' => 4500000.00,
+                'is_active' => true,
+                'keterangan' => 'UKT Kelas Karyawan Angkatan 2023 Teknik Informatika',
+            ],
+            // Angkatan 2024 - Global Kampus - Reguler
+            [
+                'master_biaya_id' => $jbUkt->id,
+                'tahun_angkatan' => 2024,
+                'program_studi_id' => null,
+                'semester' => null,
+                'jalur_kelas' => 'Reguler',
+                'nominal' => 3750000.00,
+                'is_active' => true,
+                'keterangan' => 'UKT Standar Angkatan 2024 (Semua Prodi)',
+            ],
+            // Angkatan 2025 - Global Kampus - Reguler
+            [
+                'master_biaya_id' => $jbUkt->id,
+                'tahun_angkatan' => 2025,
+                'program_studi_id' => null,
+                'semester' => null,
+                'jalur_kelas' => 'Reguler',
+                'nominal' => 4000000.00,
+                'is_active' => true,
+                'keterangan' => 'UKT Standar Angkatan 2025 (Semua Prodi)',
+            ],
+        ];
+
+        foreach ($settingTarifs as $st) {
+            \App\Models\Sikeu\SettingTarif::updateOrCreate(
+                [
+                    'master_biaya_id' => $st['master_biaya_id'],
+                    'tahun_angkatan' => $st['tahun_angkatan'],
+                    'program_studi_id' => $st['program_studi_id'],
+                    'semester' => $st['semester'],
+                    'jalur_kelas' => $st['jalur_kelas'],
+                ],
+                $st
+            );
+        }
     }
 }
