@@ -17,18 +17,29 @@ class Dosen extends Model
         'user_id',
         'pegawai_id',
         'nidn',
+        'nuptk',
         'nip',
+        'nik',
         'nama_lengkap',
         'gelar_depan',
         'gelar_belakang',
+        'jenis_kelamin',
+        'tempat_lahir',
+        'tanggal_lahir',
+        'agama',
         'program_studi_id',
         'jabatan_akademik',
+        'telepon',
+        'handphone',
+        'email',
+        'status_aktif',
         'is_active',
         'id_feeder',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'tanggal_lahir' => 'date',
     ];
 
     public function user()

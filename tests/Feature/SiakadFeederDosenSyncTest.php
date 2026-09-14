@@ -308,8 +308,13 @@ class SiakadFeederDosenSyncTest extends TestCase
                         'id_dosen' => 'UUID-PULL-DOSEN-BARU',
                         'nama_dosen' => 'Dosen Baru Impor Dikti',
                         'nidn' => '0611223344',
+                        'nuptk' => '3560763664230999',
                         'nip' => '199501012025011002',
-                        'id_status_aktif' => 'A',
+                        'jenis_kelamin' => 'L',
+                        'nama_agama' => 'Islam',
+                        'tanggal_lahir' => '15-05-1995',
+                        'id_status_aktif' => '1',
+                        'nama_status_aktif' => 'Aktif',
                     ],
                 ]
             ]);
@@ -325,11 +330,16 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals('UUID-PULL-DOSEN-EXISTING', $dosenExisting->id_feeder);
         $this->assertEquals('NIP-KAMPUS-TETAP-999', $dosenExisting->nip);
 
-        // Verifikasi dosen baru dari Feeder berhasil di-create
+        // Verifikasi dosen baru dari Feeder berhasil di-create beserta biodatanya
         $dosenBaru = Dosen::where('nidn', '0611223344')->first();
         $this->assertNotNull($dosenBaru);
         $this->assertEquals('UUID-PULL-DOSEN-BARU', $dosenBaru->id_feeder);
         $this->assertEquals('Dosen Baru Impor Dikti', $dosenBaru->nama_lengkap);
+        $this->assertEquals('3560763664230999', $dosenBaru->nuptk);
+        $this->assertEquals('L', $dosenBaru->jenis_kelamin);
+        $this->assertEquals('Islam', $dosenBaru->agama);
+        $this->assertEquals('Aktif', $dosenBaru->status_aktif);
+        $this->assertEquals('1995-05-15', $dosenBaru->tanggal_lahir?->format('Y-m-d'));
     }
 
     public function test_sync_batch_ajar_dosen_gracefully_handles_non_nidn_lecturers()

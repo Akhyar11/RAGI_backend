@@ -468,9 +468,28 @@ class NeoFeederSyncService
                 try {
                     $idDosen = $item['id_dosen'] ?? $item['id_feeder'] ?? null;
                     $nidn = !empty($item['nidn']) ? trim($item['nidn']) : null;
+                    $nuptk = !empty($item['nuptk']) ? trim($item['nuptk']) : null;
                     $namaDosen = $item['nama_dosen'] ?? 'Dosen Feeder';
-                    $nipDikti = $item['nip'] ?? null;
-                    $isActive = in_array((string)($item['id_status_aktif'] ?? '1'), ['1', 'A'], true) || ($item['nama_status_aktif'] ?? '') === 'Aktif';
+                    $nipDikti = !empty($item['nip']) ? trim($item['nip']) : null;
+                    $jenisKelamin = !empty($item['jenis_kelamin']) ? trim($item['jenis_kelamin']) : null;
+                    $agama = !empty($item['nama_agama']) ? trim($item['nama_agama']) : ($item['agama'] ?? null);
+                    $statusAktif = !empty($item['nama_status_aktif']) ? trim($item['nama_status_aktif']) : (($item['id_status_aktif'] ?? '1') == '1' ? 'Aktif' : 'Tidak Aktif');
+                    $isActive = in_array((string)($item['id_status_aktif'] ?? '1'), ['1', 'A'], true) || $statusAktif === 'Aktif';
+
+                    $tanggalLahir = null;
+                    if (!empty($item['tanggal_lahir'])) {
+                        try {
+                            $tanggalLahir = \Carbon\Carbon::parse($item['tanggal_lahir'])->format('Y-m-d');
+                        } catch (\Exception $e) {
+                            $tanggalLahir = null;
+                        }
+                    }
+
+                    $tempatLahir = !empty($item['tempat_lahir']) ? trim($item['tempat_lahir']) : null;
+                    $nik = !empty($item['nik']) ? trim($item['nik']) : null;
+                    $telepon = !empty($item['telepon']) ? trim($item['telepon']) : null;
+                    $handphone = !empty($item['handphone']) ? trim($item['handphone']) : null;
+                    $email = !empty($item['email']) ? trim($item['email']) : null;
 
                     if (empty($idDosen)) {
                         throw new \Exception("Record dosen tidak memiliki id_dosen");
@@ -485,24 +504,33 @@ class NeoFeederSyncService
                         $dosenLokal = Dosen::where('id_feeder', $idDosen)->first();
                     }
 
+                    $dataToSave = [
+                        'nama_lengkap' => $namaDosen,
+                        'nidn' => $nidn,
+                        'nuptk' => $nuptk,
+                        'jenis_kelamin' => $jenisKelamin,
+                        'tanggal_lahir' => $tanggalLahir,
+                        'agama' => $agama,
+                        'status_aktif' => $statusAktif,
+                        'is_active' => $isActive,
+                        'id_feeder' => $idDosen,
+                    ];
+                    if (!empty($tempatLahir)) $dataToSave['tempat_lahir'] = $tempatLahir;
+                    if (!empty($nik)) $dataToSave['nik'] = $nik;
+                    if (!empty($telepon)) $dataToSave['telepon'] = $telepon;
+                    if (!empty($handphone)) $dataToSave['handphone'] = $handphone;
+                    if (!empty($email)) $dataToSave['email'] = $email;
+
                     if ($dosenLokal) {
                         // Update data dosen lokal (pertahankan NIP lokal jika sudah ada)
-                        $dosenLokal->update([
-                            'id_feeder' => $idDosen,
-                            'is_active' => $isActive,
-                            // Hanya isi NIP jika lokal belum memiliki NIP sama sekali
-                            'nip' => $dosenLokal->nip ?: $nipDikti,
-                            'nidn' => $dosenLokal->nidn ?: $nidn,
-                        ]);
+                        if (empty($dosenLokal->nip) && !empty($nipDikti)) {
+                            $dataToSave['nip'] = $nipDikti;
+                        }
+                        $dosenLokal->update($dataToSave);
                     } else {
                         // Buat data dosen baru di database lokal
-                        $dosenLokal = Dosen::create([
-                            'nama_lengkap' => $namaDosen,
-                            'nidn' => $nidn,
-                            'nip' => $nipDikti,
-                            'id_feeder' => $idDosen,
-                            'is_active' => $isActive,
-                        ]);
+                        $dataToSave['nip'] = $nipDikti;
+                        $dosenLokal = Dosen::create($dataToSave);
                     }
 
                     FeederMapping::updateOrCreate(
