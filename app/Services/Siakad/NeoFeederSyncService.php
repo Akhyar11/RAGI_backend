@@ -533,6 +533,47 @@ class NeoFeederSyncService
                         $dosenLokal = Dosen::create($dataToSave);
                     }
 
+                    // Sinkronisasi otomatis ke Modul SIMPEG (simpeg_pegawai)
+                    $invalidPlaceholders = ['-', '--', '0', 'N/A', 'none', '', ' '];
+                    $nipFinal = (!empty($dosenLokal->nip) && !in_array(trim($dosenLokal->nip), $invalidPlaceholders, true)) ? trim($dosenLokal->nip) : null;
+                    $nikFinal = (!empty($dosenLokal->nik) && !in_array(trim($dosenLokal->nik), $invalidPlaceholders, true)) ? trim($dosenLokal->nik) : null;
+
+                    $pegawai = null;
+                    if (!empty($dosenLokal->pegawai_id)) {
+                        $pegawai = \App\Models\Simpeg\Pegawai::find($dosenLokal->pegawai_id);
+                    }
+                    if (!$pegawai && $nipFinal) {
+                        $pegawai = \App\Models\Simpeg\Pegawai::where('nip', $nipFinal)->first();
+                    }
+                    if (!$pegawai && $nikFinal) {
+                        $pegawai = \App\Models\Simpeg\Pegawai::where('nik', $nikFinal)->first();
+                    }
+
+                    $pegawaiData = [
+                        'nama_lengkap' => $namaDosen,
+                        'jenis_pegawai' => 'dosen',
+                        'status_kepegawaian' => 'tetap_yayasan',
+                        'status' => $isActive ? 'aktif' : 'non_aktif',
+                    ];
+                    if ($nipFinal) $pegawaiData['nip'] = $nipFinal;
+                    if ($nikFinal) $pegawaiData['nik'] = $nikFinal;
+                    if ($jenisKelamin) $pegawaiData['jenis_kelamin'] = in_array($jenisKelamin, ['L', 'P']) ? $jenisKelamin : 'L';
+                    if ($tanggalLahir) $pegawaiData['tanggal_lahir'] = $tanggalLahir;
+                    if (!empty($tempatLahir)) $pegawaiData['tempat_lahir'] = $tempatLahir;
+                    if ($agama) $pegawaiData['agama'] = $agama;
+                    if (!empty($handphone)) $pegawaiData['telepon'] = $handphone;
+                    elseif (!empty($telepon)) $pegawaiData['telepon'] = $telepon;
+
+                    if ($pegawai) {
+                        $pegawai->update($pegawaiData);
+                    } else {
+                        $pegawai = \App\Models\Simpeg\Pegawai::create($pegawaiData);
+                    }
+
+                    if ($pegawai && $dosenLokal->pegawai_id !== $pegawai->id) {
+                        $dosenLokal->update(['pegawai_id' => $pegawai->id]);
+                    }
+
                     FeederMapping::updateOrCreate(
                         ['entity_type' => 'dosen', 'local_id' => $dosenLokal->id],
                         [

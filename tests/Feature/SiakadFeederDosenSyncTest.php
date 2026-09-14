@@ -340,6 +340,14 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals('Islam', $dosenBaru->agama);
         $this->assertEquals('Aktif', $dosenBaru->status_aktif);
         $this->assertEquals('1995-05-15', $dosenBaru->tanggal_lahir?->format('Y-m-d'));
+
+        // Verifikasi terhubung ke modul SIMPEG (simpeg_pegawai)
+        $this->assertNotNull($dosenBaru->pegawai_id);
+        $pegawai = \App\Models\Simpeg\Pegawai::find($dosenBaru->pegawai_id);
+        $this->assertNotNull($pegawai);
+        $this->assertEquals('Dosen Baru Impor Dikti', $pegawai->nama_lengkap);
+        $this->assertEquals('dosen', $pegawai->jenis_pegawai);
+        $this->assertEquals('aktif', $pegawai->status);
     }
 
     public function test_sync_batch_ajar_dosen_gracefully_handles_non_nidn_lecturers()

@@ -47,6 +47,11 @@ class Dosen extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function pegawai()
+    {
+        return $this->belongsTo(\App\Models\Simpeg\Pegawai::class, 'pegawai_id');
+    }
+
     public function programStudi()
     {
         return $this->belongsTo(MasterProgramStudi::class, 'program_studi_id');
