@@ -27,6 +27,7 @@ class Kelas extends Model
         'jam_mulai',
         'jam_selesai',
         'status',
+        'id_feeder',
     ];
 
     protected $casts = [

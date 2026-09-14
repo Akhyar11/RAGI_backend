@@ -75,7 +75,7 @@ class FeederSyncController extends Controller
     public function triggerSync(Request $request)
     {
         $request->validate([
-            'entity_type' => 'required|in:mahasiswa,biodata_mahasiswa,riwayat_pendidikan_mahasiswa,dosen,mata_kuliah,kelas,penugasan_dosen',
+            'entity_type' => 'required|in:mahasiswa,biodata_mahasiswa,riwayat_pendidikan_mahasiswa,dosen,pull_dosen,mata_kuliah,kelas,penugasan_dosen,ajar_dosen',
         ]);
 
         $entity = $request->entity_type;
@@ -87,9 +87,11 @@ class FeederSyncController extends Controller
                 'biodata_mahasiswa' => $this->syncService->syncBatchBiodataMahasiswa($userId),
                 'riwayat_pendidikan_mahasiswa' => $this->syncService->syncBatchRiwayatPendidikanMahasiswa($userId),
                 'dosen' => $this->syncService->syncBatchDosen($userId),
+                'pull_dosen' => $this->syncService->pullBatchDosenFromFeeder($userId),
+                'penugasan_dosen' => $this->syncService->syncBatchPenugasanDosen($userId),
+                'ajar_dosen' => $this->syncService->syncBatchAjarDosen($userId),
                 'mata_kuliah' => $this->syncService->syncBatchMataKuliah($userId),
                 'kelas' => $this->syncService->syncBatchKelasNilai($userId),
-                'penugasan_dosen' => $this->syncService->syncBatchPenugasanDosen($userId),
             };
 
             return response()->json([

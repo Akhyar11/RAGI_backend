@@ -11,7 +11,7 @@ return new class extends Migration
         // 1. Tabel Penampungan & Riwayat Log Sinkronisasi Neo Feeder
         Schema::create('siakad_feeder_sync_logs', function (Blueprint $table) {
             $table->id();
-            $table->enum('entity_type', ['mahasiswa', 'dosen', 'mata_kuliah', 'kurikulum', 'kelas', 'krs', 'nilai']);
+            $table->string('entity_type', 50)->comment('mahasiswa, dosen, penugasan_dosen, ajar_dosen, kelas, dll');
             $table->enum('sync_type', ['push', 'pull']);
             $table->integer('total_records')->default(0);
             $table->integer('success_count')->default(0);

@@ -24,6 +24,7 @@ class Dosen extends Model
         'program_studi_id',
         'jabatan_akademik',
         'is_active',
+        'id_feeder',
     ];
 
     protected $casts = [
@@ -38,6 +39,11 @@ class Dosen extends Model
     public function programStudi()
     {
         return $this->belongsTo(MasterProgramStudi::class, 'program_studi_id');
+    }
+
+    public function penugasan()
+    {
+        return $this->hasMany(DosenPenugasan::class, 'dosen_id');
     }
 
     public function kelasPengampu()

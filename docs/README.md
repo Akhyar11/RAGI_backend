@@ -41,7 +41,7 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
-| — | *Belum diimplementasikan* | — |
+| FeederSyncController | Sinkronisasi Neo Feeder PDDikti (Dosen, Penugasan, Ajar, Mahasiswa, Kelas) | [docs/api/SIAKAD/FeederSyncController.md](api/SIAKAD/FeederSyncController.md) |
 
 ---
 

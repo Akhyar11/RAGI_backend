@@ -4,6 +4,9 @@ namespace App\Services\Siakad;
 
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\Dosen;
+use App\Models\Siakad\DosenPenugasan;
+use App\Models\Siakad\DosenPengampu;
+use App\Models\Spmb\MasterTahunAkademik;
 use App\Models\Siakad\Kurikulum;
 use App\Models\Siakad\MataKuliah;
 use App\Models\Siakad\Kelas;
@@ -311,7 +314,9 @@ class NeoFeederSyncService
     }
 
     /**
-     * Batch Push Data Dosen ke Neo Feeder
+     * Batch Pencocokan Biodata Dosen ke Neo Feeder (DetailBiodataDosen by NIDN)
+     * Catatan: Sesuai regulasi PDDikti, penambahan dosen baru dilarang via Web Service (Error 300).
+     * Dosen harus didaftarkan di SISTER/PDDikti pusat, lalu dicocokkan NIDN-nya di sini untuk mengambil id_dosen (UUID).
      */
     public function syncBatchDosen($userId = null)
     {
@@ -323,7 +328,7 @@ class NeoFeederSyncService
 
         $log = FeederSyncLog::create([
             'entity_type' => 'dosen',
-            'sync_type' => 'push',
+            'sync_type' => 'pull',
             'total_records' => $total,
             'status' => 'processing',
             'synced_by' => $userId,
@@ -331,15 +336,46 @@ class NeoFeederSyncService
 
         foreach ($dosens as $d) {
             try {
-                $record = [
-                    'nama_dosen' => $d->nama_lengkap,
-                    'nidn' => $d->nidn,
-                    'nip' => $d->nip,
-                    'id_prodi' => $d->programStudi?->kode_prodi_dikti ?? '55201',
-                ];
+                if (empty($d->nidn)) {
+                    // Dosen baru ber-NIP lokal yang belum memiliki NIDN: lewati secara aman tanpa error
+                    $details[] = [
+                        'nip' => $d->nip ?: '-',
+                        'nama' => $d->nama_lengkap,
+                        'status' => 'skipped',
+                        'message' => 'Belum memiliki NIDN (hanya aktif lokal dengan NIP: ' . ($d->nip ?: '-') . '). Dilewati dari sinkronisasi Feeder.'
+                    ];
+                    continue;
+                }
 
-                $res = $this->feederService->request('InsertDosen', ['record' => $record]);
-                $feederId = $res['data']['id_feeder'] ?? 'FE-DSN-' . $d->id;
+                $res = $this->feederService->request('DetailBiodataDosen', [
+                    'filter' => "nidn = '{$d->nidn}'",
+                    'order' => 'nidn',
+                    'limit' => 1,
+                    'offset' => 0,
+                ]);
+
+                $feederId = null;
+                if (isset($res['data'])) {
+                    if (is_array($res['data']) && isset($res['data'][0])) {
+                        $feederId = $res['data'][0]['id_dosen'] ?? $res['data'][0]['id_ptk'] ?? null;
+                    } elseif (is_array($res['data'])) {
+                        $feederId = $res['data']['id_dosen'] ?? $res['data']['id_feeder'] ?? null;
+                    }
+                }
+
+                // Fallback simulation support jika server standalone mock
+                if (empty($feederId) && isset($res['data']['id_feeder'])) {
+                    $feederId = $res['data']['id_feeder'];
+                }
+
+                if (empty($feederId) && (!isset($res['error_code']) || $res['error_code'] != 0)) {
+                    $errMsg = $res['error_desc'] ?? 'Tidak ditemukan ID Dosen di PDDikti Feeder';
+                    throw new \Exception($errMsg);
+                }
+
+                if (empty($feederId)) {
+                    throw new \Exception("NIDN {$d->nidn} tidak ditemukan di PDDikti Feeder. Pastikan dosen sudah terdaftar di SISTER.");
+                }
 
                 $d->update(['id_feeder' => $feederId]);
 
@@ -349,13 +385,22 @@ class NeoFeederSyncService
                         'feeder_id' => $feederId,
                         'sync_status' => 'synced',
                         'last_synced_at' => now(),
+                        'error_message' => null,
                     ]
                 );
 
                 $success++;
-                $details[] = ['nidn' => $d->nidn, 'nama' => $d->nama_lengkap, 'status' => 'success'];
+                $details[] = ['nidn' => $d->nidn, 'nama' => $d->nama_lengkap, 'status' => 'success', 'feeder_id' => $feederId];
             } catch (\Exception $e) {
                 $failed++;
+                FeederMapping::updateOrCreate(
+                    ['entity_type' => 'dosen', 'local_id' => $d->id],
+                    [
+                        'sync_status' => 'failed',
+                        'last_synced_at' => now(),
+                        'error_message' => $e->getMessage(),
+                    ]
+                );
                 $details[] = ['nidn' => $d->nidn, 'nama' => $d->nama_lengkap, 'status' => 'failed', 'error' => $e->getMessage()];
             }
         }
@@ -363,12 +408,147 @@ class NeoFeederSyncService
         $log->update([
             'success_count' => $success,
             'failed_count' => $failed,
-            'status' => $failed === 0 ? 'success' : 'partial',
+            'status' => $failed === 0 ? 'success' : ($success > 0 ? 'partial' : 'failed'),
             'details' => $details,
             'completed_at' => now(),
         ]);
 
         return $log;
+    }
+
+    /**
+     * Tarik / Import Seluruh Data Dosen dari Neo Feeder (GetListDosen)
+     * Mengambil daftar dosen resmi kampus yang tercatat di PDDikti dan menyimpannya ke database lokal.
+     * Jika dosen sudah ada (berdasarkan NIDN), update id_feeder tanpa menimpa NIP lokal yang sudah ada.
+     */
+    public function pullBatchDosenFromFeeder($userId = null)
+    {
+        $log = FeederSyncLog::create([
+            'entity_type' => 'dosen',
+            'sync_type' => 'pull',
+            'total_records' => 0,
+            'status' => 'processing',
+            'synced_by' => $userId,
+        ]);
+
+        $success = 0;
+        $failed = 0;
+        $details = [];
+
+        try {
+            $res = $this->feederService->request('GetListDosen', [
+                'order' => 'nama_dosen',
+                'limit' => 500,
+                'offset' => 0,
+            ]);
+
+            $dosenItems = [];
+            if (isset($res['data'])) {
+                if (is_array($res['data'])) {
+                    $dosenItems = isset($res['data'][0]) ? $res['data'] : [$res['data']];
+                }
+            }
+
+            // Fallback simulation jika server standalone mock
+            if (empty($dosenItems) && isset($res['data']['id_feeder'])) {
+                $dosenItems = [
+                    [
+                        'id_dosen' => $res['data']['id_feeder'],
+                        'nama_dosen' => 'Dosen Simulasi Feeder',
+                        'nidn' => '0699887766',
+                        'nip' => '199001012020011001',
+                        'id_status_aktif' => 'A',
+                    ]
+                ];
+            }
+
+            $log->update(['total_records' => count($dosenItems)]);
+
+            foreach ($dosenItems as $item) {
+                try {
+                    $idDosen = $item['id_dosen'] ?? $item['id_feeder'] ?? null;
+                    $nidn = !empty($item['nidn']) ? trim($item['nidn']) : null;
+                    $namaDosen = $item['nama_dosen'] ?? 'Dosen Feeder';
+                    $nipDikti = $item['nip'] ?? null;
+                    $isActive = ($item['id_status_aktif'] ?? 'A') === 'A';
+
+                    if (empty($idDosen)) {
+                        throw new \Exception("Record dosen tidak memiliki id_dosen");
+                    }
+
+                    // Cari berdasarkan NIDN atau id_feeder yang sudah ada
+                    $dosenLokal = null;
+                    if ($nidn) {
+                        $dosenLokal = Dosen::where('nidn', $nidn)->first();
+                    }
+                    if (!$dosenLokal) {
+                        $dosenLokal = Dosen::where('id_feeder', $idDosen)->first();
+                    }
+
+                    if ($dosenLokal) {
+                        // Update data dosen lokal (pertahankan NIP lokal jika sudah ada)
+                        $dosenLokal->update([
+                            'id_feeder' => $idDosen,
+                            'is_active' => $isActive,
+                            // Hanya isi NIP jika lokal belum memiliki NIP sama sekali
+                            'nip' => $dosenLokal->nip ?: $nipDikti,
+                            'nidn' => $dosenLokal->nidn ?: $nidn,
+                        ]);
+                    } else {
+                        // Buat data dosen baru di database lokal
+                        $dosenLokal = Dosen::create([
+                            'nama_lengkap' => $namaDosen,
+                            'nidn' => $nidn,
+                            'nip' => $nipDikti,
+                            'id_feeder' => $idDosen,
+                            'is_active' => $isActive,
+                        ]);
+                    }
+
+                    FeederMapping::updateOrCreate(
+                        ['entity_type' => 'dosen', 'local_id' => $dosenLokal->id],
+                        [
+                            'feeder_id' => $idDosen,
+                            'sync_status' => 'synced',
+                            'last_synced_at' => now(),
+                            'error_message' => null,
+                        ]
+                    );
+
+                    $success++;
+                    $details[] = [
+                        'nidn' => $nidn ?: '-',
+                        'nama' => $namaDosen,
+                        'status' => 'imported',
+                        'feeder_id' => $idDosen,
+                    ];
+                } catch (\Exception $e) {
+                    $failed++;
+                    $details[] = [
+                        'nama' => $item['nama_dosen'] ?? 'N/A',
+                        'status' => 'failed',
+                        'error' => $e->getMessage(),
+                    ];
+                }
+            }
+
+            $log->update([
+                'success_count' => $success,
+                'failed_count' => $failed,
+                'status' => $failed === 0 ? 'success' : ($success > 0 ? 'partial' : 'failed'),
+                'details' => $details,
+                'completed_at' => now(),
+            ]);
+
+            return $log;
+        } catch (\Exception $e) {
+            $log->update([
+                'status' => 'failed',
+                'details' => [['error' => $e->getMessage()]],
+                'completed_at' => now(),
+            ]);
+            return $log;
+        }
     }
 
     /**
@@ -494,11 +674,29 @@ class NeoFeederSyncService
     }
 
     /**
-     * Batch Push Penugasan Dosen & Pengajar Kelas ke Neo Feeder PDDikti
+     * Batch Pencocokan Penugasan Dosen PT (GetListPenugasanDosen)
+     * Mengambil id_registrasi_dosen berdasarkan NIDN, Program Studi, dan Tahun Ajaran.
      */
     public function syncBatchPenugasanDosen($userId = null)
     {
-        $penugasanList = \App\Models\Siakad\DosenPengampu::with(['kelas.mataKuliah', 'dosen'])->get();
+        // Auto-generate penugasan awal dari siakad_dosen jika tabel siakad_dosen_penugasan masih kosong
+        $activeTa = MasterTahunAkademik::where('is_active', true)->first() ?: MasterTahunAkademik::latest()->first();
+        if ($activeTa) {
+            $dosens = Dosen::whereNotNull('program_studi_id')->get();
+            foreach ($dosens as $dsn) {
+                DosenPenugasan::firstOrCreate([
+                    'dosen_id' => $dsn->id,
+                    'program_studi_id' => $dsn->program_studi_id,
+                    'tahun_akademik_id' => $activeTa->id,
+                ], [
+                    'nomor_surat_tugas' => 'ST/' . ($activeTa->tahun_mulai ?? date('Y')) . '/' . str_pad($dsn->id, 4, '0', STR_PAD_LEFT),
+                    'tanggal_surat_tugas' => now()->toDateString(),
+                    'is_homebase' => true,
+                ]);
+            }
+        }
+
+        $penugasanList = DosenPenugasan::with(['dosen', 'programStudi', 'tahunAkademik'])->get();
         $total = $penugasanList->count();
         $success = 0;
         $failed = 0;
@@ -506,49 +704,96 @@ class NeoFeederSyncService
 
         $log = FeederSyncLog::create([
             'entity_type' => 'penugasan_dosen',
-            'sync_type' => 'push',
+            'sync_type' => 'pull',
             'total_records' => $total,
             'status' => 'processing',
             'synced_by' => $userId,
         ]);
 
-        foreach ($penugasanList as $dp) {
+        foreach ($penugasanList as $p) {
             try {
-                $record = [
-                    'id_kelas_kuliah' => $dp->kelas?->id_feeder ?? 'FE-KLS-' . $dp->kelas_id,
-                    'id_dosen' => $dp->dosen?->id_feeder ?? 'FE-DSN-' . $dp->dosen_id,
-                    'sks_substansi_total' => $dp->kelas?->mataKuliah?->total_sks ?? 3,
-                    'rencana_tatap_muka' => 16,
-                    'realisasi_tatap_muka' => 16,
-                    'id_jenis_evaluasi' => 1, // Evaluasi Akademik Standar
-                ];
+                $dosen = $p->dosen;
+                if (!$dosen || empty($dosen->nidn)) {
+                    throw new \Exception("Dosen " . ($dosen?->nama_lengkap ?? 'N/A') . " belum memiliki NIDN untuk dicek penugasannya");
+                }
 
-                $res = $this->feederService->request('InsertDosenPengajarKelasKuliah', ['record' => $record]);
-                $feederId = $res['data']['id_feeder'] ?? 'FE-AJAR-' . $dp->id;
+                $idProdi = $p->programStudi?->kode_prodi_dikti ?: ($p->programStudi?->kode_prodi ?: '55201');
+                $idTahunAjaran = $p->tahunAkademik?->tahun_mulai 
+                    ? (string) $p->tahunAkademik->tahun_mulai 
+                    : substr($p->tahunAkademik?->kode ?? date('Y'), 0, 4);
+
+                $res = $this->feederService->request('GetListPenugasanDosen', [
+                    'filter' => "nidn = '{$dosen->nidn}' and id_prodi = '{$idProdi}' and id_tahun_ajaran = '{$idTahunAjaran}'",
+                    'order' => 'nidn',
+                    'limit' => 1,
+                    'offset' => 0,
+                ]);
+
+                $idReg = null;
+                if (isset($res['data'])) {
+                    if (is_array($res['data']) && isset($res['data'][0])) {
+                        $idReg = $res['data'][0]['id_registrasi_dosen'] ?? $res['data'][0]['id_reg_ptk'] ?? null;
+                    } elseif (is_array($res['data'])) {
+                        $idReg = $res['data']['id_registrasi_dosen'] ?? $res['data']['id_feeder'] ?? null;
+                    }
+                }
+
+                // Fallback simulation support jika server standalone mock
+                if (empty($idReg) && isset($res['data']['id_feeder'])) {
+                    $idReg = $res['data']['id_feeder'];
+                }
+
+                if (empty($idReg) && (!isset($res['error_code']) || $res['error_code'] != 0)) {
+                    $errMsg = $res['error_desc'] ?? 'Penugasan dosen tidak ditemukan di Feeder';
+                    throw new \Exception($errMsg);
+                }
+
+                if (empty($idReg)) {
+                    throw new \Exception("Penugasan Dosen {$dosen->nama_lengkap} di TA {$idTahunAjaran} belum terbit di PDDikti Feeder");
+                }
+
+                $p->update([
+                    'id_feeder' => $idReg,
+                    'sync_status' => 'synced',
+                    'last_synced_at' => now(),
+                ]);
 
                 FeederMapping::updateOrCreate(
-                    ['entity_type' => 'penugasan_dosen', 'local_id' => $dp->id],
+                    ['entity_type' => 'penugasan_dosen', 'local_id' => $p->id],
                     [
-                        'feeder_id' => $feederId,
+                        'feeder_id' => $idReg,
                         'sync_status' => 'synced',
                         'last_synced_at' => now(),
+                        'error_message' => null,
                     ]
                 );
 
                 $success++;
                 $details[] = [
-                    'dosen' => $dp->dosen?->nama_lengkap,
-                    'kelas' => $dp->kelas?->nama_kelas,
-                    'mata_kuliah' => $dp->kelas?->mataKuliah?->nama,
-                    'status' => 'success'
+                    'dosen' => $dosen->nama_lengkap,
+                    'prodi' => $p->programStudi?->nama,
+                    'ta' => $idTahunAjaran,
+                    'status' => 'success',
+                    'id_registrasi_dosen' => $idReg,
                 ];
             } catch (\Exception $e) {
                 $failed++;
+                $p->update([
+                    'sync_status' => 'failed',
+                    'last_synced_at' => now(),
+                ]);
+                FeederMapping::updateOrCreate(
+                    ['entity_type' => 'penugasan_dosen', 'local_id' => $p->id],
+                    [
+                        'sync_status' => 'failed',
+                        'last_synced_at' => now(),
+                        'error_message' => $e->getMessage(),
+                    ]
+                );
                 $details[] = [
-                    'dosen' => $dp->dosen?->nama_lengkap,
-                    'kelas' => $dp->kelas?->nama_kelas,
+                    'dosen' => $p->dosen?->nama_lengkap ?? 'N/A',
                     'status' => 'failed',
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ];
             }
         }
@@ -556,7 +801,151 @@ class NeoFeederSyncService
         $log->update([
             'success_count' => $success,
             'failed_count' => $failed,
-            'status' => $failed === 0 ? 'success' : 'partial',
+            'status' => $failed === 0 ? 'success' : ($success > 0 ? 'partial' : 'failed'),
+            'details' => $details,
+            'completed_at' => now(),
+        ]);
+
+        return $log;
+    }
+
+    /**
+     * Batch Push Data Ajar Dosen ke Kelas Kuliah (InsertDosenPengajarKelasKuliah)
+     * Menggunakan parameter resmi: id_registrasi_dosen, id_kelas_kuliah, sks_substansi_total,
+     * rencana_minggu_pertemuan, realisasi_minggu_pertemuan, id_jenis_evaluasi.
+     */
+    public function syncBatchAjarDosen($userId = null)
+    {
+        $pengampuList = DosenPengampu::with(['kelas.mataKuliah', 'kelas.tahunAkademik', 'dosen', 'penugasan'])->get();
+        $total = $pengampuList->count();
+        $success = 0;
+        $failed = 0;
+        $details = [];
+
+        $log = FeederSyncLog::create([
+            'entity_type' => 'ajar_dosen',
+            'sync_type' => 'push',
+            'total_records' => $total,
+            'status' => 'processing',
+            'synced_by' => $userId,
+        ]);
+
+        foreach ($pengampuList as $dp) {
+            try {
+                $kelas = $dp->kelas;
+                if (!$kelas || empty($kelas->id_feeder)) {
+                    throw new \Exception("Kelas perkuliahan (" . ($kelas?->nama_kelas ?? 'N/A') . ") belum disinkronkan ke Neo Feeder.");
+                }
+
+                // Cari penugasan dosen terkait
+                $penugasan = $dp->penugasan;
+                if (!$penugasan) {
+                    $penugasan = DosenPenugasan::where('dosen_id', $dp->dosen_id)
+                        ->where('program_studi_id', $kelas->program_studi_id)
+                        ->first();
+                }
+
+                $idRegistrasiDosen = $penugasan?->id_feeder;
+                if (empty($idRegistrasiDosen)) {
+                    $idRegistrasiDosen = $dp->dosen?->id_feeder;
+                }
+
+                if (empty($idRegistrasiDosen)) {
+                    $dp->update([
+                        'sync_status' => 'pending',
+                        'last_synced_at' => now(),
+                    ]);
+                    $details[] = [
+                        'dosen' => $dp->dosen?->nama_lengkap ?? 'N/A',
+                        'kelas' => $kelas->nama_kelas,
+                        'status' => 'skipped',
+                        'message' => 'Dosen pengampu belum memiliki NIDN / belum terdaftar di Feeder (hanya aktif lokal dengan NIP). Rekomendasi: Daftarkan NIDN atau gunakan dosen ber-NIDN sebagai pengampu pelaporan.'
+                    ];
+                    continue;
+                }
+
+                $sksTotal = (float) ($dp->sks_substansi_total ?: ($kelas->mataKuliah?->total_sks ?? 3));
+                $rencana = (int) ($dp->rencana_minggu_pertemuan ?: 16);
+                $realisasi = (int) ($dp->realisasi_minggu_pertemuan ?: 16);
+                $evaluasi = (int) ($dp->jenis_evaluasi_id ?: 1);
+
+                $record = [
+                    'id_registrasi_dosen' => $idRegistrasiDosen,
+                    'id_kelas_kuliah' => $kelas->id_feeder,
+                    'sks_substansi_total' => $sksTotal,
+                    'rencana_minggu_pertemuan' => $rencana,
+                    'realisasi_minggu_pertemuan' => $realisasi,
+                    'id_jenis_evaluasi' => $evaluasi,
+                ];
+
+                $action = $dp->id_feeder ? 'UpdateDosenPengajarKelasKuliah' : 'InsertDosenPengajarKelasKuliah';
+                $payload = ['record' => $record];
+                if ($dp->id_feeder) {
+                    $payload['key'] = ['id_aktivitas_mengajar' => $dp->id_feeder];
+                }
+
+                $res = $this->feederService->request($action, $payload);
+                $feederId = $res['data']['id_aktivitas_mengajar'] 
+                    ?? $res['data']['id_ajar'] 
+                    ?? $res['data']['id_feeder'] 
+                    ?? ($dp->id_feeder ?: 'FE-AJAR-' . $dp->id);
+
+                $dp->update([
+                    'penugasan_id' => $penugasan?->id,
+                    'sks_substansi_total' => $sksTotal,
+                    'rencana_minggu_pertemuan' => $rencana,
+                    'realisasi_minggu_pertemuan' => $realisasi,
+                    'jenis_evaluasi_id' => $evaluasi,
+                    'id_feeder' => $feederId,
+                    'sync_status' => 'synced',
+                    'last_synced_at' => now(),
+                ]);
+
+                FeederMapping::updateOrCreate(
+                    ['entity_type' => 'ajar_dosen', 'local_id' => $dp->id],
+                    [
+                        'feeder_id' => $feederId,
+                        'sync_status' => 'synced',
+                        'last_synced_at' => now(),
+                        'error_message' => null,
+                    ]
+                );
+
+                $success++;
+                $details[] = [
+                    'dosen' => $dp->dosen?->nama_lengkap,
+                    'kelas' => $kelas->nama_kelas,
+                    'mata_kuliah' => $kelas->mataKuliah?->nama,
+                    'status' => 'success',
+                    'id_aktivitas_mengajar' => $feederId,
+                ];
+            } catch (\Exception $e) {
+                $failed++;
+                $dp->update([
+                    'sync_status' => 'failed',
+                    'last_synced_at' => now(),
+                ]);
+                FeederMapping::updateOrCreate(
+                    ['entity_type' => 'ajar_dosen', 'local_id' => $dp->id],
+                    [
+                        'sync_status' => 'failed',
+                        'last_synced_at' => now(),
+                        'error_message' => $e->getMessage(),
+                    ]
+                );
+                $details[] = [
+                    'dosen' => $dp->dosen?->nama_lengkap ?? 'N/A',
+                    'kelas' => $dp->kelas?->nama_kelas ?? 'N/A',
+                    'status' => 'failed',
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        $log->update([
+            'success_count' => $success,
+            'failed_count' => $failed,
+            'status' => $failed === 0 ? 'success' : ($success > 0 ? 'partial' : 'failed'),
             'details' => $details,
             'completed_at' => now(),
         ]);
