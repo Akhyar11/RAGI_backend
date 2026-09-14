@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class SsoToken extends Model
 {
+    protected $table = 'core_sso_tokens';
+
     // Tidak ada updated_at (hanya created_at)
     const UPDATED_AT = null;
 

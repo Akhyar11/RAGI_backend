@@ -3,14 +3,13 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Mail\Mailables\Address;
 
-class PasswordResetMail extends Mailable implements ShouldQueue
+class PasswordResetMail extends Mailable
 {
     use Queueable, SerializesModels;
 
@@ -26,7 +25,8 @@ class PasswordResetMail extends Mailable implements ShouldQueue
         $this->token = $token;
         $this->email = $email;
         // Construct the frontend reset URL
-        $this->resetUrl = config('app.url') . '/reset-password?token=' . $token . '&email=' . urlencode($email);
+        $frontendUrl = rtrim(config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:3000')), '/');
+        $this->resetUrl = $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($email);
     }
 
     /**

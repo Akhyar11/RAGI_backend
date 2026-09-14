@@ -85,8 +85,9 @@ class AuthController extends Controller
         $verifyToken = Str::random(60);
         Cache::put('email_verify_' . $verifyToken, $user->id, now()->addMinutes(60));
 
-        // Construct frontend URL (adjust as needed)
-        $verifyUrl = config('app.url') . '/verify-email?token=' . $verifyToken;
+        // Construct frontend URL
+        $frontendUrl = rtrim(config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:3000')), '/');
+        $verifyUrl = $frontendUrl . '/verify-email?token=' . $verifyToken;
 
         // Send email
         Mail::to($user->email)->send(new VerifyEmailMail($verifyUrl, $user->username));
