@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\Simpeg\UnitKerjaSeeder::class,
             \Database\Seeders\Simpeg\JabatanFungsionalSeeder::class,
             \Database\Seeders\Simpeg\JabatanSeeder::class,
+            \Database\Seeders\Simpeg\MasterJenisCutiSeeder::class,
             \Database\Seeders\Simpeg\PegawaiSeeder::class,
             \Database\Seeders\Simpeg\EnterpriseSimpegSeeder::class,
             \Database\Seeders\Simpeg\SimpegPresensiSettingSeeder::class,

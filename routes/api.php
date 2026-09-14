@@ -169,6 +169,9 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('dokumen/{id}/download', [App\Http\Controllers\Simpeg\DokumenController::class, 'downloadFile']);
     Route::delete('dokumen/{id}', [App\Http\Controllers\Simpeg\DokumenController::class, 'destroy']);
 
+    // Master Jenis Izin & Cuti
+    Route::apiResource('master-jenis-cuti', App\Http\Controllers\Simpeg\MasterJenisCutiController::class);
+
     Route::get('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'index']);
     Route::post('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'store']);
     Route::patch('cuti/{id}/status', [App\Http\Controllers\Simpeg\CutiController::class, 'updateStatus']);

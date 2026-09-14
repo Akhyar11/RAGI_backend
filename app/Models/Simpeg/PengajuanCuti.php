@@ -15,6 +15,7 @@ class PengajuanCuti extends Model
 
     protected $fillable = [
         'pegawai_id',
+        'master_jenis_cuti_id',
         'jenis_cuti',
         'tanggal_mulai',
         'tanggal_selesai',
@@ -29,6 +30,11 @@ class PengajuanCuti extends Model
     public function pegawai(): BelongsTo
     {
         return $this->belongsTo(Pegawai::class, 'pegawai_id');
+    }
+
+    public function masterJenisCuti(): BelongsTo
+    {
+        return $this->belongsTo(MasterJenisCuti::class, 'master_jenis_cuti_id');
     }
 
     public function approver(): BelongsTo
