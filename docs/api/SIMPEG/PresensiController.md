@@ -4,6 +4,7 @@
 > **Base URL**: `/api/v1` dan `/api/simpeg`  
 > **Autentikasi**: Bearer Token (Passport/Sanctum) / X-API-KEY (Integrasi)  
 > **Dibuat**: 2026-09-14  
+> **Diperbarui**: 2026-09-14 (endpoint keterangan ketidakhadiran + rekap silang cuti)
 
 Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Python port 8001), geofencing Haversine, dan jadwal shift dinamis yang digunakan oleh aplikasi **Mobile Android (Flutter)** dan dashboard **SIMPEG Web**.
 
@@ -150,3 +151,56 @@ Mengecek konektivitas dan kesiapan microservice Python yang berjalan di port 800
   }
 }
 ```
+
+---
+
+### 4. Presensi Web SIMPEG (`/api/simpeg/presensi/...`)
+
+| Method | Endpoint | Fungsi | Auth |
+|---|---|---|---|
+| POST | `/api/simpeg/presensi/{id}/approve` | Persetujuan manual HR (clock-in hari libur / upaya ditolak) | ✅ Bearer (`simpeg.presensi.manage`) |
+| POST | `/api/simpeg/presensi/keterangan` | Tetapkan keterangan ketidakhadiran (izin/sakit/dinas/alfa) untuk pegawai terjadwal masuk tanpa log | ✅ Bearer (`simpeg.presensi.manage`) |
+| GET | `/api/simpeg/presensi/recap?pegawai_id=&month=&year=` | Rekap bulanan per pegawai (silang cuti disetujui) | ✅ Bearer |
+
+> Clock-in valid langsung tercatat `hadir`/`terlambat` tanpa verifikasi. Verifikasi manual hanya untuk clock-in di hari libur jadwal shift (`menunggu_approval`) dan upaya yang ditolak validasi (`ditolak`).
+
+### POST `/api/simpeg/presensi/keterangan`
+
+Idempotent per pasangan (`pegawai_id`, `tanggal`). Data hasil scan (`clock_in`/`clock_out`) **tidak dapat** ditimpa lewat endpoint ini (`422`).
+
+**Request Body:**
+```json
+{
+  "pegawai_id": "integer, required, exists:simpeg_pegawai,id",
+  "tanggal": "string, required, format YYYY-MM-DD",
+  "status_kehadiran": "enum: izin|sakit|dinas|alfa, required",
+  "catatan": "string, nullable, max 1000"
+}
+```
+
+**Response Sukses (201 Created):**
+```json
+{
+  "status": "success",
+  "message": "Keterangan ketidakhadiran (izin) berhasil disimpan.",
+  "data": { "id": 55, "pegawai_id": 3, "tanggal": "2026-09-11", "status_kehadiran": "izin" }
+}
+```
+
+**422 Unprocessable Entity** (sudah ada hasil scan):
+```json
+{
+  "status": "error",
+  "message": "Tanggal tersebut sudah memiliki data hasil scan presensi dan tidak dapat ditimpa dengan keterangan manual."
+}
+```
+
+### GET `/api/simpeg/presensi/recap` — prioritas keterangan per tanggal
+
+1. Ada log presensi → pakai status log (`hadir`, `terlambat`, `ditolak`, `menunggu_approval`, atau `izin`/`sakit`/`dinas`/`alfa` dari input HR).
+2. Tanpa log + tanggal merah → `libur_nasional`.
+3. Tanpa log + hari libur shift → `libur_reguler`.
+4. Tanpa log + ada cuti berstatus `approved` menutupi tanggal → badge `cuti`/`sakit`, keterangan mis. `Cuti Tahunan (disetujui)`.
+5. Tanpa log + hari kerja yang sudah lewat → `alpa` (`Tidak Hadir (Alpa)`).
+
+**Ringkasannya (`summary`):** `total_hadir`, `total_terlambat`, `total_alpa`, `total_libur`, ditambah `total_izin`, `total_sakit`, `total_dinas`, `total_cuti`.

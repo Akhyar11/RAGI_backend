@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Simpeg;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Simpeg\SetKeteranganRequest;
 use App\Models\Attendance;
 use App\Models\NationalHoliday;
 use App\Models\Simpeg\Pegawai;
@@ -414,6 +415,60 @@ class PresensiController extends Controller
             'message' => 'Presensi berhasil disetujui.',
             'data' => $attendance,
         ]);
+    }
+
+    /**
+     * Tetapkan keterangan ketidakhadiran oleh HR / Admin untuk pegawai yang
+     * terjadwal masuk (referensi shift) tetapi tidak memiliki log presensi.
+     * Idempotent per (pegawai, tanggal). Data hasil scan (clock_in/clock_out)
+     * tidak boleh ditimpa lewat endpoint ini.
+     */
+    public function setKeterangan(SetKeteranganRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.presensi.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk menetapkan keterangan ketidakhadiran.',
+            ], 403);
+        }
+
+        $validated = $request->validated();
+
+        $existing = Attendance::where('pegawai_id', $validated['pegawai_id'])
+            ->whereDate('tanggal', $validated['tanggal'])
+            ->first();
+
+        if ($existing && ($existing->clock_in || $existing->clock_out)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tanggal tersebut sudah memiliki data hasil scan presensi dan tidak dapat ditimpa dengan keterangan manual.',
+            ], 422);
+        }
+
+        $payload = [
+            'status' => $validated['status_kehadiran'],
+            'notes' => $validated['catatan'] ?? null,
+            'is_approved_by_admin' => true,
+            'approved_by' => $user->id,
+            'approved_at' => Carbon::now(),
+        ];
+
+        if ($existing) {
+            $existing->update($payload);
+            $attendance = $existing->fresh();
+        } else {
+            $attendance = Attendance::create(array_merge($payload, [
+                'pegawai_id' => $validated['pegawai_id'],
+                'tanggal' => $validated['tanggal'],
+            ]));
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Keterangan ketidakhadiran ({$attendance->status}) berhasil disimpan.",
+            'data' => $attendance->fresh(),
+        ], 201);
     }
 
     /**
