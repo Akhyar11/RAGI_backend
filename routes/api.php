@@ -194,8 +194,14 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::put('presensi/office-locations/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateOfficeLocation']);
     Route::delete('presensi/office-locations/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'destroyOfficeLocation']);
     Route::get('presensi/shift-templates', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'listShiftTemplates']);
+    Route::post('presensi/shift-templates', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'storeShiftTemplate']);
     Route::put('presensi/shift-templates/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateShiftTemplate']);
+    Route::delete('presensi/shift-templates/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'destroyShiftTemplate']);
     Route::get('presensi/national-holidays', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'listNationalHolidays']);
+    Route::post('presensi/national-holidays/sync', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'syncNationalHolidays']);
+    Route::post('presensi/national-holidays', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'storeNationalHoliday']);
+    Route::put('presensi/national-holidays/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateNationalHoliday']);
+    Route::delete('presensi/national-holidays/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'destroyNationalHoliday']);
 
     Route::get('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'index']);
     Route::post('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'store']);

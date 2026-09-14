@@ -8,7 +8,7 @@ class PegawaiService
 {
     public function getFiltered(array $filters = [])
     {
-        $query = Pegawai::with(['user', 'unitKerja', 'riwayatJabatan.jabatan', 'riwayatPendidikan']);
+        $query = Pegawai::with(['user', 'unitKerja', 'shiftTemplate', 'officeLocation', 'riwayatJabatan.jabatan', 'riwayatPendidikan']);
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];
@@ -29,6 +29,10 @@ class PegawaiService
 
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
+        }
+
+        if (!empty($filters['shift_template_id'])) {
+            $query->where('shift_template_id', $filters['shift_template_id']);
         }
 
         return $query->paginate($filters['per_page'] ?? 15);

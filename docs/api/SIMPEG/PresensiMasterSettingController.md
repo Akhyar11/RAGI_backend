@@ -1,0 +1,260 @@
+# PresensiMasterSettingController
+
+> **Modul**: SIMPEG (Master Pengaturan Presensi)
+> **Base URL**: `/api/simpeg/presensi`
+> **Autentikasi**: Bearer Token (Passport) — seluruh endpoint terproteksi `auth:api`
+> **Dibuat**: 2026-09-14
+> **Diperbarui**: 2026-09-14 (sync libur via Opica `https://app.opica.id/api-libur`)
+
+Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe shift kerja (multi-tipe dengan jadwal 7 hari), dan kalender libur nasional/tanggal merah.
+
+## Daftar Endpoint
+
+| Method | Endpoint | Fungsi | Auth |
+|---|---|---|---|
+| GET | `/api/simpeg/presensi/settings` | Baca parameter sistem presensi | ✅ Bearer |
+| PUT | `/api/simpeg/presensi/settings` | Perbarui parameter sistem presensi | ✅ Bearer |
+| GET | `/api/simpeg/presensi/office-locations` | Daftar lokasi kantor + jumlah pegawai | ✅ Bearer |
+| POST | `/api/simpeg/presensi/office-locations` | Tambah lokasi kantor | ✅ Bearer |
+| PUT | `/api/simpeg/presensi/office-locations/{id}` | Ubah lokasi kantor | ✅ Bearer |
+| DELETE | `/api/simpeg/presensi/office-locations/{id}` | Hapus lokasi kantor (ditolak bila dipakai pegawai) | ✅ Bearer |
+| GET | `/api/simpeg/presensi/shift-templates` | Daftar tipe shift + jadwal 7 hari (auto-seed default bila kosong) | ✅ Bearer |
+| POST | `/api/simpeg/presensi/shift-templates` | Tambah tipe shift baru (jam bisa beda per tipe) | ✅ Bearer |
+| PUT | `/api/simpeg/presensi/shift-templates/{id}` | Ubah info tipe shift + jadwal harian | ✅ Bearer |
+| DELETE | `/api/simpeg/presensi/shift-templates/{id}` | Hapus tipe shift (ditolak bila dipakai pegawai) | ✅ Bearer |
+| GET | `/api/simpeg/presensi/national-holidays?year=` | Daftar tanggal libur per tahun | ✅ Bearer |
+| POST | `/api/simpeg/presensi/national-holidays/sync` | Sinkronisasi libur dari API publik nasional | ✅ Bearer |
+| POST | `/api/simpeg/presensi/national-holidays` | Tambah tanggal libur manual | ✅ Bearer |
+| PUT | `/api/simpeg/presensi/national-holidays/{id}` | Ubah tanggal libur | ✅ Bearer |
+| DELETE | `/api/simpeg/presensi/national-holidays/{id}` | Hapus tanggal libur | ✅ Bearer |
+
+---
+
+## GET /api/simpeg/presensi/shift-templates
+
+> Bila tabel masih kosong, otomatis membuat template default "Shift Reguler 5 Hari" (Senin–Jumat 08:00–17:00, Sabtu–Minggu libur) beserta 7 baris harinya. Template yang kekurangan baris hari akan di-backfill otomatis.
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": [
+        {
+            "id": 1,
+            "name": "Shift Reguler 5 Hari",
+            "description": "Jam kerja standar 08:00 s/d 17:00 (Senin - Jumat)",
+            "is_active": true,
+            "late_tolerance_minutes": 15,
+            "early_leave_tolerance_minutes": 15,
+            "max_early_clock_in_minutes": 60,
+            "applies_national_holidays": true,
+            "employees_count": 36,
+            "days": [
+                { "id": 1, "shift_template_id": 1, "day_of_week": 0, "start_time": null, "end_time": null, "is_day_off": true },
+                { "id": 2, "shift_template_id": 1, "day_of_week": 1, "start_time": "08:00:00", "end_time": "17:00:00", "is_day_off": false }
+            ]
+        }
+    ]
+}
+```
+
+> `day_of_week`: 0=Minggu, 1=Senin, …, 6=Sabtu.
+
+---
+
+## POST /api/simpeg/presensi/shift-templates
+
+> Tambah tipe shift baru. `days` opsional (tepat 7 entitas bila dikirim); bila tidak dikirim, dibuatkan 7 hari default yang bisa diubah lewat `PUT`.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body (untuk POST/PUT)
+
+```json
+{
+    "name": "string, required, unique (contoh: Shift Pagi Satpam)",
+    "description": "string, nullable",
+    "late_tolerance_minutes": "integer, nullable, 0-120 (default 15)",
+    "early_leave_tolerance_minutes": "integer, nullable, 0-120 (default 15)",
+    "max_early_clock_in_minutes": "integer, nullable, 0-240 (default 60)",
+    "applies_national_holidays": "boolean, nullable (default true — matikan untuk shift satpam/operasional)",
+    "is_active": "boolean, required",
+    "days": "array, nullable (PUT: array berisi {id, start_time, end_time, is_day_off}; POST: array 7 item berisi {day_of_week, start_time, end_time, is_day_off})"
+}
+```
+
+### Response Sukses
+
+**201 Created**
+```json
+{
+    "status": "success",
+    "message": "Tipe shift 'Shift Pagi Satpam' berhasil ditambahkan",
+    "data": { "id": 2, "name": "Shift Pagi Satpam", "days": [] }
+}
+```
+
+### Response Error
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "name": ["Nama tipe shift sudah digunakan."]
+    }
+}
+```
+
+---
+
+## DELETE /api/simpeg/presensi/shift-templates/{id}
+
+> Dihapus beserta 7 baris harinya (`cascadeOnDelete`). Ditolak dengan `422` bila masih dipakai pegawai.
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Tipe shift 'Shift Malam' berhasil dihapus"
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Tipe shift 'Shift Reguler 5 Hari' tidak dapat dihapus karena masih digunakan oleh 36 pegawai."
+}
+```
+
+---
+
+## GET /api/simpeg/presensi/national-holidays?year=
+
+### Query Parameters (untuk GET dengan filter)
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `year` | integer | ❌ | tahun berjalan | Tahun kalender libur |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": [
+        { "id": 1, "holiday_date": "2026-08-17", "name": "Hari Kemerdekaan RI ke-81", "is_mass_leave": false, "description": null }
+    ]
+}
+```
+
+---
+
+## POST /api/simpeg/presensi/national-holidays
+
+### Request Body (untuk POST/PUT)
+
+```json
+{
+    "holiday_date": "string, required, format Y-m-d, unique",
+    "name": "string, required, max 255",
+    "is_mass_leave": "boolean, required (true = cuti bersama, false = libur nasional)",
+    "description": "string, nullable"
+}
+```
+
+### Response Sukses
+
+**201 Created**
+```json
+{
+    "status": "success",
+    "message": "Tanggal libur 17 Aug 2026 berhasil ditambahkan",
+    "data": { "id": 99, "holiday_date": "2026-08-17", "name": "Libur Khusus Kampus", "is_mass_leave": false }
+}
+```
+
+---
+
+## POST /api/simpeg/presensi/national-holidays/sync
+
+> Menarik daftar libur nasional & cuti bersama tahun berjalan dari API Libur Indonesia (Opica: `https://app.opica.id/api-libur/api?year={tahun}`, fallback legacy `dayoffapi.vercel.app`). `holiday_type = cuti_bersama` dipetakan ke `is_mass_leave = true`. Data manual yang sudah ada tidak dihapus (`updateOrCreate` per tanggal), sehingga aman ditekan berulang kali.
+>
+> Konfigurasi: `HOLIDAY_API_BASE_URL` (default `https://app.opica.id/api-libur`), `HOLIDAY_API_TIMEOUT` (default `10` detik) — lihat `config/services.php` key `services.holiday`.
+
+### Request Body (untuk POST/PUT)
+
+```json
+{
+    "year": "integer, nullable, 2020-2035 (default tahun berjalan)"
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Sinkronisasi libur nasional 2026 berhasil — 19 tanggal diproses, total 19 tanggal tersimpan.",
+    "data": { "year": 2026, "synced": 19, "total": 19 }
+}
+```
+
+**502 Bad Gateway**
+```json
+{
+    "status": "error",
+    "message": "Sinkronisasi libur nasional 2026 gagal — API publik tidak dapat dijangkau. Data manual tetap aman."
+}
+```
+
+---
+
+## Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "ShiftTemplate tidak ditemukan."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "holiday_date": ["Tanggal libur sudah terdaftar."]
+    }
+}
+```
+
+### Catatan Tambahan
+
+> - `GET shift-templates` tidak pernah mengembalikan kosong: selalu ada minimal 1 template default (auto-seed).
+> - Field `applies_national_holidays = false` cocok untuk shift satpam/operasional yang tetap wajib masuk saat tanggal merah.
+> - Penghapusan shift/lokasi yang masih dipakai pegawai ditolak (`422`) demi integritas referensi `simpeg_pegawai.shift_template_id`.

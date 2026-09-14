@@ -72,6 +72,7 @@
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
 | PresensiController | Presensi biometrik mobile (Android Flutter), validasi wajah Python port 8001, shift, geofence, & integrasi | [docs/api/SIMPEG/PresensiController.md](api/SIMPEG/PresensiController.md) |
+| PresensiMasterSettingController | Master pengaturan presensi: parameter sistem, lokasi kantor, multi-tipe shift, & kalender libur | [docs/api/SIMPEG/PresensiMasterSettingController.md](api/SIMPEG/PresensiMasterSettingController.md) |
 | AttendanceDataApi | Spesifikasi API integrasi data absensi & rekapitulasi kehadiran | [docs/api/SIMPEG/ATTENDANCE_DATA_API.md](api/SIMPEG/ATTENDANCE_DATA_API.md) |
 | AttendanceApi | Spesifikasi teknis integrasi & sinkronisasi SIMPEG | [docs/api/SIMPEG/ATTENDANCE_API.md](api/SIMPEG/ATTENDANCE_API.md) |
 

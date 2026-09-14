@@ -56,7 +56,7 @@ class PegawaiController extends Controller
             ], 403);
         }
 
-        $filters = $request->only(['search', 'unit_kerja_id', 'jenis_pegawai', 'status', 'per_page']);
+        $filters = $request->only(['search', 'unit_kerja_id', 'jenis_pegawai', 'status', 'shift_template_id', 'per_page']);
         $pegawai = $this->pegawaiService->getFiltered($filters);
 
         return response()->json([
@@ -90,6 +90,8 @@ class PegawaiController extends Controller
             'status' => 'in:aktif,non_aktif,pensiun,meninggal',
             'telepon' => 'nullable|string',
             'alamat' => 'nullable|string',
+            'shift_template_id' => 'nullable|exists:simpeg_shift_templates,id',
+            'office_location_id' => 'nullable|exists:simpeg_office_locations,id',
         ]);
 
         $pegawai = $this->pegawaiService->create($request->all());
@@ -113,6 +115,8 @@ class PegawaiController extends Controller
         $pegawai = Pegawai::with([
             'user',
             'unitKerja',
+            'shiftTemplate',
+            'officeLocation',
             'riwayatJabatan.jabatan',
             'riwayatJabatan.jabatanFungsional',
             'riwayatPendidikan'
@@ -151,6 +155,8 @@ class PegawaiController extends Controller
             'status' => 'sometimes|in:aktif,non_aktif,pensiun,meninggal',
             'telepon' => 'nullable|string',
             'alamat' => 'nullable|string',
+            'shift_template_id' => 'nullable|exists:simpeg_shift_templates,id',
+            'office_location_id' => 'nullable|exists:simpeg_office_locations,id',
         ]);
 
         $updated = $this->pegawaiService->update($pegawai, $request->all());

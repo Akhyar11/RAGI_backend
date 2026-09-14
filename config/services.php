@@ -61,4 +61,9 @@ return [
         'key' => env('ATTENDANCE_API_KEY', 'indo_absen_sec_2026_x89a7f3d'),
     ],
 
+    'holiday' => [
+        'base_url' => env('HOLIDAY_API_BASE_URL', 'https://app.opica.id/api-libur'),
+        'timeout' => env('HOLIDAY_API_TIMEOUT', 10),
+    ],
+
 ];
