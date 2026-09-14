@@ -40,11 +40,51 @@ class PegawaiService
 
     public function create(array $data)
     {
-        return Pegawai::create($data);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($data) {
+            // Otomatis buatkan akun SSO di core_users dengan password default 'indonusa' jika user_id belum ada
+            if (empty($data['user_id'])) {
+                $nama = $data['nama_lengkap'] ?? 'Pegawai Baru';
+                $nip = !empty($data['nip']) ? preg_replace('/[^0-9]/', '', (string) $data['nip']) : null;
+                $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', explode(' ', $nama)[0] ?? 'user'));
+
+                $email = !empty($data['email']) ? trim($data['email']) : (($nip ?: $cleanName . rand(100, 999)) . '@campus.ac.id');
+                $username = !empty($data['username']) ? trim($data['username']) : ($nip ?: $cleanName . rand(10, 99));
+
+                while (\App\Models\User::where('username', $username)->exists()) {
+                    $username = $username . '_' . rand(10, 99);
+                }
+
+                $user = \App\Models\User::where('email', $email)->first();
+                if (!$user) {
+                    $user = \App\Models\User::create([
+                        'username' => $username,
+                        'email' => $email,
+                        'password' => \Illuminate\Support\Facades\Hash::make('indonusa'),
+                        'phone' => $data['telepon'] ?? null,
+                        'is_active' => true,
+                        'is_verified' => true,
+                    ]);
+
+                    $jenisPegawai = $data['jenis_pegawai'] ?? 'dosen';
+                    $roleSlug = ($jenisPegawai === 'dosen') ? 'dosen' : 'tendik';
+                    $role = \App\Models\Role::where('slug', $roleSlug)->first();
+                    if ($role) {
+                        $user->roles()->syncWithoutDetaching([$role->id]);
+                    }
+                }
+
+                $data['user_id'] = $user->id;
+            }
+
+            unset($data['email'], $data['username']);
+
+            return Pegawai::create($data);
+        });
     }
 
     public function update(Pegawai $pegawai, array $data)
     {
+        unset($data['email'], $data['username']);
         $pegawai->update($data);
         return $pegawai;
     }

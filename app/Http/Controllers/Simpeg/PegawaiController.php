@@ -4,16 +4,71 @@ namespace App\Http\Controllers\Simpeg;
 
 use App\Http\Controllers\Controller;
 use App\Models\Simpeg\Pegawai;
+use App\Services\Simpeg\PegawaiImportService;
 use App\Services\Simpeg\PegawaiService;
 use Illuminate\Http\Request;
 
 class PegawaiController extends Controller
 {
     protected $pegawaiService;
+    protected $pegawaiImportService;
 
-    public function __construct(PegawaiService $pegawaiService)
+    public function __construct(PegawaiService $pegawaiService, PegawaiImportService $pegawaiImportService)
     {
         $this->pegawaiService = $pegawaiService;
+        $this->pegawaiImportService = $pegawaiImportService;
+    }
+
+    public function downloadTemplate(Request $request)
+    {
+        if (!$request->user()->hasPermission('simpeg.pegawai.read') && !$request->user()->hasPermission('simpeg.pegawai.create') && !$request->user()->hasPermission('simpeg.pegawai.manage')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses (permission) untuk mengunduh template Data Pegawai.'
+            ], 403);
+        }
+
+        $csvContent = $this->pegawaiImportService->getTemplateCsv();
+
+        return response($csvContent, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="template_import_pegawai.csv"',
+        ]);
+    }
+
+    public function import(Request $request)
+    {
+        if (!$request->user()->hasPermission('simpeg.pegawai.create') && !$request->user()->hasPermission('simpeg.pegawai.manage')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses (permission) untuk mengimpor Data Pegawai.'
+            ], 403);
+        }
+
+        $request->validate([
+            'file' => 'required|file|max:10240',
+        ], [
+            'file.required' => 'Berkas impor wajib diunggah.',
+            'file.file' => 'Berkas yang diunggah tidak valid.',
+            'file.max' => 'Ukuran berkas maksimal 10 MB.',
+        ]);
+
+        $file = $request->file('file');
+        $extension = strtolower($file->getClientOriginalExtension());
+        if (!in_array($extension, ['csv', 'txt', 'xlsx', 'xls'])) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Format berkas tidak didukung. Harap unggah berkas .csv atau .xlsx.'
+            ], 422);
+        }
+
+        $result = $this->pegawaiImportService->import($file);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Proses impor selesai: {$result['success']} berhasil, {$result['failed']} gagal.",
+            'data' => $result
+        ]);
     }
 
     public function me(Request $request)
@@ -75,11 +130,13 @@ class PegawaiController extends Controller
         }
 
         $request->validate([
-            'user_id' => 'nullable|exists:core_users,id|unique:pegawai,user_id',
-            'unit_kerja_id' => 'nullable|exists:unit_kerja,id',
-            'nip' => 'nullable|string|unique:pegawai,nip',
-            'nik' => 'nullable|string|unique:pegawai,nik',
+            'user_id' => 'nullable|exists:core_users,id|unique:simpeg_pegawai,user_id',
+            'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
+            'nip' => 'nullable|string|unique:simpeg_pegawai,nip',
+            'nik' => 'nullable|string|unique:simpeg_pegawai,nik',
             'nama_lengkap' => 'required|string',
+            'email' => 'nullable|email|unique:core_users,email',
+            'username' => 'nullable|string|unique:core_users,username',
             'tanggal_lahir' => 'nullable|date',
             'tempat_lahir' => 'nullable|string',
             'jenis_kelamin' => 'required|in:L,P',
@@ -142,16 +199,18 @@ class PegawaiController extends Controller
         }
 
         $request->validate([
-            'user_id' => 'nullable|exists:core_users,id|unique:pegawai,user_id,' . $id,
-            'unit_kerja_id' => 'nullable|exists:unit_kerja,id',
-            'nip' => 'nullable|string|unique:pegawai,nip,' . $id,
-            'nik' => 'nullable|string|unique:pegawai,nik,' . $id,
+            'user_id' => 'nullable|exists:core_users,id|unique:simpeg_pegawai,user_id,' . $id,
+            'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
+            'nip' => 'nullable|string|unique:simpeg_pegawai,nip,' . $id,
+            'nik' => 'nullable|string|unique:simpeg_pegawai,nik,' . $id,
             'nama_lengkap' => 'sometimes|string',
             'tanggal_lahir' => 'nullable|date',
             'tempat_lahir' => 'nullable|string',
             'jenis_kelamin' => 'sometimes|in:L,P',
+            'agama' => 'nullable|string',
             'jenis_pegawai' => 'sometimes|in:dosen,tendik,honorer',
             'status_kepegawaian' => 'sometimes|in:pns,non_pns,kontrak,tetap_yayasan',
+            'tanggal_masuk' => 'nullable|date',
             'status' => 'sometimes|in:aktif,non_aktif,pensiun,meninggal',
             'telepon' => 'nullable|string',
             'alamat' => 'nullable|string',

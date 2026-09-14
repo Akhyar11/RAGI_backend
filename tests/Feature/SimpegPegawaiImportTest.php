@@ -1,0 +1,132 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Role;
+use App\Models\Simpeg\Pegawai;
+use App\Models\Simpeg\UnitKerja;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
+use Tests\TestCase;
+
+class SimpegPegawaiImportTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $admin;
+    protected UnitKerja $unitKerja;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->setUpPassport();
+
+        $this->admin = User::factory()->create([
+            'id' => 1,
+            'username' => 'superadmin',
+            'email' => 'admin@campus.ac.id',
+        ]);
+
+        $this->unitKerja = UnitKerja::create([
+            'nama' => 'Fakultas Ilmu Komputer',
+            'kode' => 'FIK',
+            'tipe' => 'fakultas',
+            'is_active' => true,
+        ]);
+
+        Role::firstOrCreate(['slug' => 'dosen'], ['name' => 'Dosen']);
+        Role::firstOrCreate(['slug' => 'tendik'], ['name' => 'Tenaga Kependidikan']);
+    }
+
+    public function test_can_download_pegawai_template_csv()
+    {
+        $response = $this->actingAs($this->admin, 'api')
+            ->get('/api/simpeg/pegawai/template');
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+        $this->assertStringContainsString('nip,nik,nama_lengkap', $response->getContent());
+    }
+
+    public function test_can_import_pegawai_from_csv_and_auto_creates_sso_users_with_indonusa_password()
+    {
+        $csvContent = "\xEF\xBB\xBF" .
+            "nip,nik,nama_lengkap,email,telepon,jenis_kelamin,tempat_lahir,tanggal_lahir,jenis_pegawai,status_kepegawaian,unit_kerja,jabatan,tanggal_masuk,alamat\n" .
+            "198801012015011001,3271010101880001,Budi Santoso M.T.,budi.santoso@campus.ac.id,081234567891,L,Bandung,1988-01-01,dosen,tetap_yayasan,Fakultas Ilmu Komputer,Dosen,2015-01-01,Jl. Suci No. 1\n" .
+            "199002022018022002,3271010202900002,Dewi Lestari S.E.,dewi.lestari@campus.ac.id,081234567892,P,Jakarta,1990-02-02,tendik,kontrak,Fakultas Ilmu Komputer,Staf,2018-02-01,Jl. Riau No. 2\n";
+
+        $file = UploadedFile::fake()->createWithContent('data_pegawai.csv', $csvContent);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/pegawai/import', [
+                'file' => $file,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'total' => 2,
+                    'success' => 2,
+                    'failed' => 0,
+                ],
+            ]);
+
+        // Verifikasi User SSO Budi Santoso (Dosen)
+        $userBudi = User::where('email', 'budi.santoso@campus.ac.id')->first();
+        $this->assertNotNull($userBudi);
+        $this->assertTrue(Hash::check('indonusa', $userBudi->password));
+        $this->assertTrue($userBudi->hasRole('dosen'));
+
+        // Verifikasi Simpeg Pegawai Budi
+        $pegawaiBudi = Pegawai::where('nip', '198801012015011001')->first();
+        $this->assertNotNull($pegawaiBudi);
+        $this->assertEquals($userBudi->id, $pegawaiBudi->user_id);
+        $this->assertEquals('Budi Santoso M.T.', $pegawaiBudi->nama_lengkap);
+
+        // Verifikasi User SSO Dewi Lestari (Tendik)
+        $userDewi = User::where('email', 'dewi.lestari@campus.ac.id')->first();
+        $this->assertNotNull($userDewi);
+        $this->assertTrue(Hash::check('indonusa', $userDewi->password));
+        $this->assertTrue($userDewi->hasRole('tendik'));
+    }
+
+    public function test_manual_store_pegawai_auto_creates_sso_user_with_indonusa_password()
+    {
+        $payload = [
+            'nama_lengkap' => 'Rian Hidayat, M.Si.',
+            'nip' => '199505052020051003',
+            'nik' => '3271010505950003',
+            'jenis_kelamin' => 'L',
+            'jenis_pegawai' => 'dosen',
+            'status_kepegawaian' => 'tetap_yayasan',
+            'unit_kerja_id' => $this->unitKerja->id,
+            'email' => 'rian.hidayat@campus.ac.id',
+            'status' => 'aktif',
+        ];
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/pegawai', $payload);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'nama_lengkap' => 'Rian Hidayat, M.Si.',
+                    'nip' => '199505052020051003',
+                ],
+            ]);
+
+        $createdPegawai = Pegawai::where('nip', '199505052020051003')->first();
+        $this->assertNotNull($createdPegawai);
+        $this->assertNotNull($createdPegawai->user_id);
+
+        $createdUser = User::find($createdPegawai->user_id);
+        $this->assertNotNull($createdUser);
+        $this->assertEquals('rian.hidayat@campus.ac.id', $createdUser->email);
+        $this->assertTrue(Hash::check('indonusa', $createdUser->password));
+        $this->assertTrue($createdUser->hasRole('dosen'));
+    }
+}
