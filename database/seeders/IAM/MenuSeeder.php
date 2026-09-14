@@ -496,5 +496,16 @@ class MenuSeeder extends Seeder
                 }
             }
         }
+
+        // Attach all SIMPEG menus to admin_simpeg and operator_sdm
+        $simpegMenuIds = Menu::where('module', 'simpeg')->pluck('id')->toArray();
+        $adminSimpegRole = \App\Models\Role::where('slug', 'admin_simpeg')->first();
+        if ($adminSimpegRole) {
+            $adminSimpegRole->menus()->syncWithoutDetaching($simpegMenuIds);
+        }
+        $operatorSdmRole = \App\Models\Role::where('slug', 'operator_sdm')->first();
+        if ($operatorSdmRole) {
+            $operatorSdmRole->menus()->syncWithoutDetaching($simpegMenuIds);
+        }
     }
 }
