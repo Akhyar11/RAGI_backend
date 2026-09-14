@@ -65,5 +65,28 @@ class AppServiceProvider extends ServiceProvider
 
         // Personal access token berlaku 1 tahun
         Passport::personalAccessTokensExpireIn(now()->addYear());
+
+        // Konfigurasi dinamis mail/SMTP dari core_system_settings
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('core_system_settings')) {
+                $mailHost = \App\Models\SystemSetting::get('mail_host');
+                if (!empty($mailHost)) {
+                    $scheme = \App\Models\SystemSetting::get('mail_scheme');
+                    config([
+                        'mail.default'                => \App\Models\SystemSetting::get('mail_mailer', config('mail.default', 'smtp')),
+                        'mail.mailers.smtp.transport' => 'smtp',
+                        'mail.mailers.smtp.host'      => $mailHost,
+                        'mail.mailers.smtp.port'      => (int) \App\Models\SystemSetting::get('mail_port', config('mail.mailers.smtp.port', 587)),
+                        'mail.mailers.smtp.username'  => \App\Models\SystemSetting::get('mail_username', config('mail.mailers.smtp.username')),
+                        'mail.mailers.smtp.password'  => \App\Models\SystemSetting::get('mail_password', config('mail.mailers.smtp.password')),
+                        'mail.mailers.smtp.scheme'    => $scheme === 'none' ? null : $scheme,
+                        'mail.from.address'           => \App\Models\SystemSetting::get('mail_from_address', config('mail.from.address')),
+                        'mail.from.name'              => \App\Models\SystemSetting::get('mail_from_name', config('mail.from.name')),
+                    ]);
+                }
+            }
+        } catch (\Throwable $th) {
+            // Lewati jika database belum siap / saat proses migrasi
+        }
     }
 }
