@@ -94,4 +94,13 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 429);
             }
         });
+        // 413 — File upload / POST size too large
+        $exceptions->render(function (\Illuminate\Http\Exceptions\PostTooLargeException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Ukuran berkas yang diunggah melebihi batas php.ini (upload_max_filesize / post_max_size). Silakan jalankan backend dengan opsi: php -d upload_max_filesize=100M -d post_max_size=100M artisan serve',
+                ], 413);
+            }
+        });
     })->create();

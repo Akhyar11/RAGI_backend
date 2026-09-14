@@ -13,6 +13,7 @@ class PresensiPegawai extends Model
     protected $table = 'simpeg_presensi_pegawai';
 
     protected $fillable = [
+        'presensi_periode_id',
         'pegawai_id',
         'tanggal',
         'jam_masuk',
@@ -26,5 +27,10 @@ class PresensiPegawai extends Model
     public function pegawai(): BelongsTo
     {
         return $this->belongsTo(Pegawai::class, 'pegawai_id');
+    }
+
+    public function periode(): BelongsTo
+    {
+        return $this->belongsTo(PresensiPeriode::class, 'presensi_periode_id');
     }
 }

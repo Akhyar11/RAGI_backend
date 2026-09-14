@@ -67,6 +67,110 @@ class MenuSeeder extends Seeder
                 ]
             ],
 
+            // ── MODUL SIMPEG ───────────────────────────────────────
+            [
+                'name' => 'Dashboard SIMPEG',
+                'url' => '/simpeg',
+                'icon' => 'FaChartPie',
+                'module' => 'simpeg',
+                'permission_slug' => 'simpeg.dashboard.read',
+                'order_index' => 1,
+            ],
+            [
+                'name' => 'MANAJEMEN KEPEGAWAIAN',
+                'url' => '#kepegawaian_simpeg',
+                'icon' => 'FaUsers',
+                'module' => 'simpeg',
+                'order_index' => 2,
+                'children' => [
+                    ['name' => 'Data Pegawai', 'url' => '/simpeg/pegawai', 'icon' => 'FaUsers', 'module' => 'simpeg', 'permission_slug' => 'simpeg.pegawai.read', 'order_index' => 1],
+                    ['name' => 'E-File & Dokumen', 'url' => '/simpeg/dokumen', 'icon' => 'FaFileAlt', 'module' => 'simpeg', 'permission_slug' => 'simpeg.dokumen.read', 'order_index' => 2],
+                ]
+            ],
+            [
+                'name' => 'LAYANAN & KINERJA',
+                'url' => '#layanan_simpeg',
+                'icon' => 'FaClipboardCheck',
+                'module' => 'simpeg',
+                'order_index' => 3,
+                'children' => [
+                    ['name' => 'Presensi & Absensi', 'url' => '/simpeg/presensi', 'icon' => 'FaClock', 'module' => 'simpeg', 'permission_slug' => 'simpeg.presensi.read', 'order_index' => 1],
+                    ['name' => 'Pengajuan Cuti', 'url' => '/simpeg/cuti', 'icon' => 'FaCalendar', 'module' => 'simpeg', 'permission_slug' => 'simpeg.cuti.read', 'order_index' => 2],
+                    ['name' => 'Payroll & Slip Gaji', 'url' => '/simpeg/payroll', 'icon' => 'FaMoneyBillWave', 'module' => 'simpeg', 'permission_slug' => 'simpeg.payroll.read', 'order_index' => 3],
+                    ['name' => 'Usulan Jafung (KUM)', 'url' => '/simpeg/usulan-jafung', 'icon' => 'FaAward', 'module' => 'simpeg', 'permission_slug' => 'simpeg.usulan_jafung.read', 'order_index' => 4],
+                    ['name' => 'Evaluasi Kinerja SKP', 'url' => '/simpeg/kinerja', 'icon' => 'FaChartPie', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kinerja.read', 'order_index' => 5],
+                ]
+            ],
+            [
+                'name' => 'MASTER DATA SDM',
+                'url' => '#master_simpeg',
+                'icon' => 'FaDatabase',
+                'module' => 'simpeg',
+                'order_index' => 4,
+                'children' => [
+                    ['name' => 'Unit Kerja', 'url' => '/simpeg/unit-kerja', 'icon' => 'FaSitemap', 'module' => 'simpeg', 'permission_slug' => 'simpeg.unit_kerja.read', 'order_index' => 1],
+                    ['name' => 'Jabatan & Jafung', 'url' => '/simpeg/jabatan', 'icon' => 'FaBriefcase', 'module' => 'simpeg', 'permission_slug' => 'simpeg.jabatan.read', 'order_index' => 2],
+                ]
+            ],
+
+            // ── MODUL SIPPM ───────────────────────────────────────
+            [
+                'name' => 'Dashboard SIPPM',
+                'url' => '/sippm',
+                'icon' => 'FaChartPie',
+                'module' => 'sippm',
+                'permission_slug' => 'sippm.dashboard.read',
+                'order_index' => 1,
+            ],
+            [
+                'name' => 'MANAJEMEN PROPOSAL',
+                'url' => '#proposal_sippm',
+                'icon' => 'FaFileAlt',
+                'module' => 'sippm',
+                'order_index' => 2,
+                'children' => [
+                    ['name' => 'Daftar Proposal', 'url' => '/sippm/proposal', 'icon' => 'FaFileAlt', 'module' => 'sippm', 'permission_slug' => 'sippm.proposal.read', 'order_index' => 1],
+                    ['name' => 'Kontrak Penelitian', 'url' => '/sippm/kontrak', 'icon' => 'FaClipboardCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.kontrak.read', 'order_index' => 2],
+                    ['name' => 'Pencairan Dana', 'url' => '/sippm/pencairan', 'icon' => 'FaCreditCard', 'module' => 'sippm', 'permission_slug' => 'sippm.pencairan.read', 'order_index' => 3],
+                    ['name' => 'Pengumuman Hibah', 'url' => '/sippm/pengumuman', 'icon' => 'FaAward', 'module' => 'sippm', 'permission_slug' => 'sippm.pengumuman.read', 'order_index' => 4],
+                ]
+            ],
+            [
+                'name' => 'LUARAN & STANDAR IKU',
+                'url' => '#luaran_sippm',
+                'icon' => 'FaAward',
+                'module' => 'sippm',
+                'order_index' => 3,
+                'children' => [
+                    ['name' => 'Luaran Publikasi', 'url' => '/sippm/luaran/publikasi', 'icon' => 'FaBookOpen', 'module' => 'sippm', 'permission_slug' => 'sippm.luaran.read', 'order_index' => 1],
+                    ['name' => 'Luaran HKI & Paten', 'url' => '/sippm/luaran/hki', 'icon' => 'FaAward', 'module' => 'sippm', 'permission_slug' => 'sippm.luaran.read', 'order_index' => 2],
+                    ['name' => 'Standar IKU 5', 'url' => '/sippm/iku5-standards', 'icon' => 'FaChartPie', 'module' => 'sippm', 'permission_slug' => 'sippm.iku.read', 'order_index' => 3],
+                ]
+            ],
+            [
+                'name' => 'REVIEWER & PRODI',
+                'url' => '#reviewer_sippm',
+                'icon' => 'FaUsers',
+                'module' => 'sippm',
+                'order_index' => 4,
+                'children' => [
+                    ['name' => 'Evaluasi Reviewer', 'url' => '/sippm/reviewer', 'icon' => 'FaClipboardCheck', 'module' => 'sippm', 'permission_slug' => 'sippm.reviewer.read', 'order_index' => 1],
+                    ['name' => 'Laporan Prodi', 'url' => '/sippm/prodi', 'icon' => 'FaBuilding', 'module' => 'sippm', 'permission_slug' => 'sippm.prodi.read', 'order_index' => 2],
+                ]
+            ],
+            [
+                'name' => 'MASTER DATA SIPPM',
+                'url' => '#master_sippm',
+                'icon' => 'FaDatabase',
+                'module' => 'sippm',
+                'order_index' => 5,
+                'children' => [
+                    ['name' => 'Periode Hibah', 'url' => '/sippm/periode', 'icon' => 'FaCalendar', 'module' => 'sippm', 'permission_slug' => 'sippm.master.manage', 'order_index' => 1],
+                    ['name' => 'Skema Penelitian', 'url' => '/sippm/skema', 'icon' => 'FaList', 'module' => 'sippm', 'permission_slug' => 'sippm.master.manage', 'order_index' => 2],
+                    ['name' => 'Rubrik Penilaian', 'url' => '/sippm/rubrik', 'icon' => 'FaCheckSquare', 'module' => 'sippm', 'permission_slug' => 'sippm.master.manage', 'order_index' => 3],
+                ]
+            ],
+
             // ── MODUL SIAKAD (MENU DENGAN PEMBATASAN LEVEL ROLE & PERMISSION) ─────
             [
                 'name' => 'Dashboard Akademik',

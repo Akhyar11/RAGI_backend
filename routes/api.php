@@ -165,6 +165,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('dokumen', [App\Http\Controllers\Simpeg\DokumenController::class, 'index']);
     Route::post('dokumen', [App\Http\Controllers\Simpeg\DokumenController::class, 'store']);
     Route::get('dokumen/{id}/secure-view', [App\Http\Controllers\Simpeg\DokumenController::class, 'getSecureView']);
+    Route::get('dokumen/{id}/download', [App\Http\Controllers\Simpeg\DokumenController::class, 'downloadFile']);
     Route::delete('dokumen/{id}', [App\Http\Controllers\Simpeg\DokumenController::class, 'destroy']);
 
     Route::get('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'index']);
@@ -173,9 +174,17 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 
     Route::get('presensi', [App\Http\Controllers\Simpeg\PresensiController::class, 'index']);
     Route::post('presensi', [App\Http\Controllers\Simpeg\PresensiController::class, 'store']);
+    Route::post('presensi/upload-rekap', [App\Http\Controllers\Simpeg\PresensiController::class, 'uploadRekap']);
+    Route::delete('presensi/reset', [App\Http\Controllers\Simpeg\PresensiController::class, 'resetData']);
+    Route::get('presensi/{id}', [App\Http\Controllers\Simpeg\PresensiController::class, 'show']);
+    Route::delete('presensi/{id}', [App\Http\Controllers\Simpeg\PresensiController::class, 'destroy']);
+    Route::post('presensi/{id}/payroll', [App\Http\Controllers\Simpeg\PresensiController::class, 'processPayroll']);
 
     Route::get('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'index']);
     Route::post('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'store']);
+    Route::post('payroll/generate', [App\Http\Controllers\Simpeg\PayrollController::class, 'generatePayroll']);
+    Route::post('payroll/submit-to-sikeu', [App\Http\Controllers\Simpeg\PayrollController::class, 'submitToSikeu']);
+    Route::post('payroll/{id}/process-payment', [App\Http\Controllers\Simpeg\PayrollController::class, 'processPayment']);
 
     Route::get('usulan-jafung', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'index']);
     Route::post('usulan-jafung', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'store']);

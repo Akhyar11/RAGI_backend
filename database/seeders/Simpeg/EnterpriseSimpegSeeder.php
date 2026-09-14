@@ -20,107 +20,17 @@ class EnterpriseSimpegSeeder extends Seeder
         if ($pegawaiList->isEmpty()) return;
 
         foreach ($pegawaiList as $pegawai) {
-            // 1. Dokumen Pegawai
-            DokumenPegawai::firstOrCreate([
-                'pegawai_id' => $pegawai->id,
-                'nama_dokumen' => 'KTP - ' . $pegawai->nama_lengkap,
-            ], [
-                'jenis_dokumen' => 'ktp',
-                'file_path' => 'dokumen/ktp_' . $pegawai->id . '.pdf',
-                'file_size' => '1.2 MB',
-                'status_verifikasi' => 'terverifikasi',
-            ]);
+            // 1. Dokumen Pegawai (Cleared by user demand)
+            // DokumenPegawai records cleared
 
-            DokumenPegawai::firstOrCreate([
-                'pegawai_id' => $pegawai->id,
-                'nama_dokumen' => 'Ijazah Pendidikan Terakhir',
-            ], [
-                'jenis_dokumen' => 'ijazah',
-                'file_path' => 'dokumen/ijazah_' . $pegawai->id . '.pdf',
-                'file_size' => '2.5 MB',
-                'status_verifikasi' => 'terverifikasi',
-            ]);
+            // 2. Pengajuan Cuti (Cleared by user demand)
+            // PengajuanCuti records cleared
 
-            DokumenPegawai::firstOrCreate([
-                'pegawai_id' => $pegawai->id,
-                'nama_dokumen' => 'SK Pengangkatan Kepegawaian',
-            ], [
-                'jenis_dokumen' => 'sk',
-                'file_path' => 'dokumen/sk_' . $pegawai->id . '.pdf',
-                'file_size' => '1.8 MB',
-                'status_verifikasi' => 'terverifikasi',
-            ]);
+            // 3. Presensi Pegawai (Cleared by user demand)
+            // PresensiPegawai records cleared
 
-            // 2. Pengajuan Cuti
-            PengajuanCuti::firstOrCreate([
-                'pegawai_id' => $pegawai->id,
-                'tanggal_mulai' => '2026-06-10',
-            ], [
-                'jenis_cuti' => 'tahunan',
-                'tanggal_selesai' => '2026-06-14',
-                'jumlah_hari' => 5,
-                'alasan' => 'Cuti Tahunan & Keperluan Keluarga',
-                'status_approval' => 'approved',
-                'approved_by' => $pegawai->user_id,
-                'catatan_approval' => 'Disetujui oleh Bagian Kepegawaian',
-            ]);
-
-            PengajuanCuti::firstOrCreate([
-                'pegawai_id' => $pegawai->id,
-                'tanggal_mulai' => '2026-08-15',
-            ], [
-                'jenis_cuti' => 'alasan_penting',
-                'tanggal_selesai' => '2026-08-16',
-                'jumlah_hari' => 2,
-                'alasan' => 'Menghadiri Seminar Internasional & Konferensi Nasional',
-                'status_approval' => 'pending',
-                'approved_by' => null,
-                'catatan_approval' => null,
-            ]);
-
-            // 3. Presensi Pegawai (3 Hari Terakhir)
-            $dates = ['2026-07-28', '2026-07-29', '2026-07-30'];
-            foreach ($dates as $tgl) {
-                PresensiPegawai::firstOrCreate([
-                    'pegawai_id' => $pegawai->id,
-                    'tanggal' => $tgl,
-                ], [
-                    'jam_masuk' => '07:45:00',
-                    'jam_keluar' => '16:15:00',
-                    'status_kehadiran' => 'hadir',
-                    'lat_long' => '-6.8915,107.6107',
-                    'catatan' => 'Presensi Fingerprint & GPS Verified',
-                ]);
-            }
-
-            // 4. Gaji & Slip Gaji Pegawai (Juli & Juni 2026)
-            GajiPegawai::firstOrCreate([
-                'pegawai_id' => $pegawai->id,
-                'periode_bulan_tahun' => '2026-07',
-            ], [
-                'gaji_pokok' => 7500000,
-                'total_tunjangan' => 3500000,
-                'total_potongan' => 500000,
-                'gaji_bersih' => 10500000,
-                'status_transfer' => 'paid',
-                'tanggal_transfer' => '2026-07-25',
-                'nomor_rekening' => '1310012345678',
-                'bank_nama' => 'Bank Mandiri',
-            ]);
-
-            GajiPegawai::firstOrCreate([
-                'pegawai_id' => $pegawai->id,
-                'periode_bulan_tahun' => '2026-06',
-            ], [
-                'gaji_pokok' => 7500000,
-                'total_tunjangan' => 3500000,
-                'total_potongan' => 500000,
-                'gaji_bersih' => 10500000,
-                'status_transfer' => 'paid',
-                'tanggal_transfer' => '2026-06-25',
-                'nomor_rekening' => '1310012345678',
-                'bank_nama' => 'Bank Mandiri',
-            ]);
+            // 4. Gaji & Slip Gaji Pegawai (Cleared by user demand)
+            // GajiPegawai records cleared
 
             // 5. Usulan Jafung
             $jafungLektor = JabatanFungsionalAkademik::where('golongan', 'lektor')->first();
