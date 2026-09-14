@@ -32,6 +32,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(
             \App\Http\Middleware\SetDatabaseConnection::class,
         );
+
+        $middleware->alias([
+            'api.key' => \App\Http\Middleware\ValidateApiKey::class,
+        ]);
     })
     ->withProviders([
         \App\Providers\RateLimiterServiceProvider::class,

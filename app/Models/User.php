@@ -50,6 +50,11 @@ class User extends Authenticatable
         return $this->hasOne(\App\Models\Simpeg\Pegawai::class, 'user_id');
     }
 
+    public function employee()
+    {
+        return $this->hasOne(\App\Models\Simpeg\Pegawai::class, 'user_id');
+    }
+
     public function ssoTokens()
     {
         return $this->hasMany(SsoToken::class);

@@ -25,6 +25,8 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\Simpeg\JabatanSeeder::class,
             \Database\Seeders\Simpeg\PegawaiSeeder::class,
             \Database\Seeders\Simpeg\EnterpriseSimpegSeeder::class,
+            \Database\Seeders\Simpeg\SimpegPresensiSettingSeeder::class,
+            \Database\Seeders\NationalHolidaySeeder::class,
 
             // SIPPM Seeders
             \Database\Seeders\Sippm\SippmSkemaSeeder::class,

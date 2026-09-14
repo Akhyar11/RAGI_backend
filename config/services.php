@@ -51,4 +51,14 @@ return [
         'org_unit_path' => env('GOOGLE_WORKSPACE_OU_PATH'),
     ],
 
+    'face_service' => [
+        'url' => env('FACE_SERVICE_URL', 'http://127.0.0.1:8001'),
+        'timeout' => env('FACE_SERVICE_TIMEOUT', 15),
+        'min_similarity' => env('FACE_SERVICE_MIN_SIMILARITY', 0.68),
+    ],
+
+    'attendance_api' => [
+        'key' => env('ATTENDANCE_API_KEY', 'indo_absen_sec_2026_x89a7f3d'),
+    ],
+
 ];

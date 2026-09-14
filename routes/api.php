@@ -172,13 +172,29 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::post('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'store']);
     Route::patch('cuti/{id}/status', [App\Http\Controllers\Simpeg\CutiController::class, 'updateStatus']);
 
+    Route::get('presensi/today', [App\Http\Controllers\Simpeg\PresensiController::class, 'today']);
+    Route::post('presensi/clock-in', [App\Http\Controllers\Simpeg\PresensiController::class, 'clockIn']);
+    Route::post('presensi/clock-out', [App\Http\Controllers\Simpeg\PresensiController::class, 'clockOut']);
+    Route::get('presensi/recap', [App\Http\Controllers\Simpeg\PresensiController::class, 'recap']);
+    Route::post('presensi/{id}/approve', [App\Http\Controllers\Simpeg\PresensiController::class, 'approve']);
+    Route::get('presensi/{id}', [App\Http\Controllers\Simpeg\PresensiController::class, 'show'])->whereNumber('id');
     Route::get('presensi', [App\Http\Controllers\Simpeg\PresensiController::class, 'index']);
     Route::post('presensi', [App\Http\Controllers\Simpeg\PresensiController::class, 'store']);
     Route::post('presensi/upload-rekap', [App\Http\Controllers\Simpeg\PresensiController::class, 'uploadRekap']);
     Route::delete('presensi/reset', [App\Http\Controllers\Simpeg\PresensiController::class, 'resetData']);
-    Route::get('presensi/{id}', [App\Http\Controllers\Simpeg\PresensiController::class, 'show']);
     Route::delete('presensi/{id}', [App\Http\Controllers\Simpeg\PresensiController::class, 'destroy']);
     Route::post('presensi/{id}/payroll', [App\Http\Controllers\Simpeg\PresensiController::class, 'processPayroll']);
+
+    // Master Pengaturan Presensi (Lokasi, Shift, Parameter, Hari Libur)
+    Route::get('presensi/settings', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'getSettings']);
+    Route::put('presensi/settings', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateSettings']);
+    Route::get('presensi/office-locations', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'listOfficeLocations']);
+    Route::post('presensi/office-locations', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'storeOfficeLocation']);
+    Route::put('presensi/office-locations/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateOfficeLocation']);
+    Route::delete('presensi/office-locations/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'destroyOfficeLocation']);
+    Route::get('presensi/shift-templates', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'listShiftTemplates']);
+    Route::put('presensi/shift-templates/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateShiftTemplate']);
+    Route::get('presensi/national-holidays', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'listNationalHolidays']);
 
     Route::get('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'index']);
     Route::post('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'store']);
@@ -544,3 +560,45 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
 
 
 
+
+/*
+|--------------------------------------------------------------------------
+| Mobile Attendance (Flutter Android) & Python Face Microservice Routes (v1)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('v1')->group(function () {
+    // 1. Publik / Auth Mobile App (Flutter)
+    Route::post('/auth/login', [App\Http\Controllers\Api\AuthController::class, 'login']);
+
+    // 2. Microservice Python Face Recognition (Port 8001)
+    Route::prefix('face')->group(function () {
+        Route::get('/health', [App\Http\Controllers\Api\FaceRecognitionController::class, 'health']);
+        Route::post('/verify', [App\Http\Controllers\Api\FaceRecognitionController::class, 'verify']);
+        Route::post('/extract', [App\Http\Controllers\Api\FaceRecognitionController::class, 'extract']);
+        Route::post('/enroll', [App\Http\Controllers\Api\FaceRecognitionController::class, 'enroll']);
+    });
+
+    // 3. Mobile Authenticated (Passport / Sanctum)
+    Route::middleware(['auth:api'])->group(function () {
+        // Autentikasi & Profil Karyawan
+        Route::get('/auth/profile', [App\Http\Controllers\Api\AuthController::class, 'profile']);
+        Route::post('/auth/consent', [App\Http\Controllers\Api\AuthController::class, 'recordConsent']);
+        Route::post('/auth/enroll-face', [App\Http\Controllers\Api\AuthController::class, 'enrollFace']);
+        Route::post('/auth/reset-face', [App\Http\Controllers\Api\AuthController::class, 'resetFace']);
+        Route::post('/auth/logout', [App\Http\Controllers\Api\AuthController::class, 'logout']);
+
+        // Presensi Mobile
+        Route::get('/attendance/today', [App\Http\Controllers\Api\AttendanceController::class, 'todayStatus']);
+        Route::post('/attendance/clock-in', [App\Http\Controllers\Api\AttendanceController::class, 'clockIn']);
+        Route::post('/attendance/clock-out', [App\Http\Controllers\Api\AttendanceController::class, 'clockOut']);
+        Route::get('/attendance/history', [App\Http\Controllers\Api\AttendanceController::class, 'history']);
+        Route::get('/attendance/recap', [App\Http\Controllers\Api\AttendanceController::class, 'recap']);
+    });
+
+    // 4. Akses Integrasi Sistem Eksternal (API Key)
+    Route::middleware('api.key')->prefix('integration')->group(function () {
+        Route::get('/attendances', [App\Http\Controllers\Api\AttendanceIntegrationController::class, 'index']);
+        Route::get('/attendances/recap', [App\Http\Controllers\Api\AttendanceIntegrationController::class, 'recap']);
+        Route::get('/attendances/{id}', [App\Http\Controllers\Api\AttendanceIntegrationController::class, 'show'])->whereNumber('id');
+    });
+});
