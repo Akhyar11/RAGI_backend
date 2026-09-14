@@ -470,7 +470,7 @@ class NeoFeederSyncService
                     $nidn = !empty($item['nidn']) ? trim($item['nidn']) : null;
                     $namaDosen = $item['nama_dosen'] ?? 'Dosen Feeder';
                     $nipDikti = $item['nip'] ?? null;
-                    $isActive = ($item['id_status_aktif'] ?? 'A') === 'A';
+                    $isActive = in_array((string)($item['id_status_aktif'] ?? '1'), ['1', 'A'], true) || ($item['nama_status_aktif'] ?? '') === 'Aktif';
 
                     if (empty($idDosen)) {
                         throw new \Exception("Record dosen tidak memiliki id_dosen");
