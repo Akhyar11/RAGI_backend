@@ -352,6 +352,8 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     // Tagihan Mahasiswa List & Detail
     Route::get('tagihan', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'indexTagihan']);
     Route::get('tagihan/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'showTagihan']);
+    Route::post('tagihan/{id}/potongan', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'addAdHocPotonganTagihan']);
+    Route::delete('tagihan/potongan/{potonganId}', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'deleteAdHocPotonganTagihan']);
 
     // Master Tarif Gaji & Transport Pegawai (SIKEU)
     Route::get('master/gaji-pegawai', [App\Http\Controllers\Sikeu\MasterGajiPegawaiController::class, 'index']);
@@ -375,9 +377,17 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::put('master/beasiswa/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'updateBeasiswa']);
     Route::delete('master/beasiswa/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'destroyBeasiswa']);
 
-    // Mapping Mahasiswa Penerima Beasiswa
+    // Mapping Mahasiswa Penerima Beasiswa & Potongan
     Route::get('master/mahasiswa-beasiswa', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'indexMahasiswaBeasiswa']);
     Route::post('master/mahasiswa-beasiswa', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'storeMahasiswaBeasiswa']);
+    Route::put('master/mahasiswa-beasiswa/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'updateMahasiswaBeasiswa']);
+    Route::delete('master/mahasiswa-beasiswa/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'destroyMahasiswaBeasiswa']);
+
+    // Setting Potongan Khusus Mahasiswa (Di Luar Beasiswa)
+    Route::get('master/potongan-mahasiswa', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'indexPotonganMahasiswa']);
+    Route::post('master/potongan-mahasiswa', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'storePotonganMahasiswa']);
+    Route::put('master/potongan-mahasiswa/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'updatePotonganMahasiswa']);
+    Route::delete('master/potongan-mahasiswa/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'destroyPotonganMahasiswa']);
 
     // Master Jalur Kelas & Tipe Mahasiswa (Referensi SPMB)
     Route::get('master/referensi/{tipe}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getReferensi']);

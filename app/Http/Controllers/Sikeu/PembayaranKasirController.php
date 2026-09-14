@@ -456,16 +456,86 @@ class PembayaranKasirController extends Controller
                 // Hitung total dari setting tarif
                 $totalNominal = (float)$settings->sum('nominal');
                 $totalPotonganBeasiswa = 0;
+                $applicableMasterBiayaIds = [];
+                $applicableNominal = $totalNominal;
 
                 if ($beasiswaMhs && $beasiswaMhs->beasiswa) {
                     $b = $beasiswaMhs->beasiswa;
-                    if ($b->tipe_potongan === 'persen' || $b->tipe_potongan === 'persentase') {
-                        $totalPotonganBeasiswa = ($totalNominal * (float)$b->nilai_potongan) / 100;
-                    } elseif ($b->tipe_potongan === 'nominal') {
-                        $totalPotonganBeasiswa = min($totalNominal, (float)$b->nilai_potongan);
-                    } else {
-                        $totalPotonganBeasiswa = $totalNominal; // full scholarship
+                    $b->loadMissing('jenisBiaya');
+                    $applicableMasterBiayaIds = $b->jenisBiaya->pluck('id')->toArray();
+
+                    if (!empty($applicableMasterBiayaIds)) {
+                        $applicableNominal = (float)$settings->whereIn('master_biaya_id', $applicableMasterBiayaIds)->sum('nominal');
                     }
+
+                    if ($b->tipe_potongan === 'persen' || $b->tipe_potongan === 'persentase') {
+                        $totalPotonganBeasiswa = ($applicableNominal * (float)$b->nilai_potongan) / 100;
+                    } elseif ($b->tipe_potongan === 'nominal') {
+                        $totalPotonganBeasiswa = min($applicableNominal, (float)$b->nilai_potongan);
+                    } else {
+                        $totalPotonganBeasiswa = $applicableNominal;
+                    }
+                }
+
+                // Cek apakah mahasiswa memiliki potongan tambahan khusus (di luar beasiswa)
+                $activePotonganKhusus = \App\Models\Sikeu\PotonganMahasiswa::where('mahasiswa_id', $mhs->mahasiswa_id)
+                    ->where('status', 'aktif')
+                    ->where(function($q) {
+                        $today = now()->toDateString();
+                        $q->where(function($sub) use ($today) {
+                            $sub->whereNull('berlaku_mulai')->orWhere('berlaku_mulai', '<=', $today);
+                        })->where(function($sub) use ($today) {
+                            $sub->whereNull('berlaku_sampai')->orWhere('berlaku_sampai', '>=', $today);
+                        });
+                    })
+                    ->where(function($q) use ($request) {
+                        if ($request->filled('semester')) {
+                            $q->whereNull('semester')->orWhere('semester', (int)$request->semester);
+                        }
+                    })
+                    ->get();
+
+                $totalPotonganKhusus = 0;
+                $potonganKhususRecords = [];
+
+                foreach ($activePotonganKhusus as $potKhusus) {
+                    $baseSisa = max(0, $totalNominal - $totalPotonganBeasiswa - $totalPotonganKhusus);
+                    if ($baseSisa <= 0) break;
+
+                    $nominalItem = 0;
+                    if ($potKhusus->master_biaya_id) {
+                        $match = $settings->firstWhere('master_biaya_id', $potKhusus->master_biaya_id);
+                        $compNominal = $match ? (float)$match->nominal : 0;
+                        if ($potKhusus->tipe_potongan === 'persen') {
+                            $nominalItem = round(($compNominal * (float)$potKhusus->nilai_potongan) / 100, 2);
+                        } else {
+                            $nominalItem = min($compNominal, (float)$potKhusus->nilai_potongan);
+                        }
+                    } else {
+                        if ($potKhusus->tipe_potongan === 'persen') {
+                            $nominalItem = round(($baseSisa * (float)$potKhusus->nilai_potongan) / 100, 2);
+                        } else {
+                            $nominalItem = min($baseSisa, (float)$potKhusus->nilai_potongan);
+                        }
+                    }
+
+                    if ($nominalItem > 0) {
+                        $totalPotonganKhusus += $nominalItem;
+                        $potonganKhususRecords[] = [
+                            'nominal' => $nominalItem,
+                            'data' => $potKhusus,
+                        ];
+                    }
+                }
+
+                $totalSemuaPotongan = $totalPotonganBeasiswa + $totalPotonganKhusus;
+
+                $approvalNote = 'Tagihan masal ' . $semesterLabel;
+                if ($beasiswaMhs) {
+                    $approvalNote .= " (Beasiswa: {$beasiswaMhs->beasiswa->nama})";
+                }
+                if ($totalPotonganKhusus > 0) {
+                    $approvalNote .= " (Potongan Khusus: Rp " . number_format($totalPotonganKhusus, 0, ',', '.') . ")";
                 }
 
                 $tagihan = TagihanMahasiswa::create([
@@ -473,27 +543,36 @@ class PembayaranKasirController extends Controller
                     'tahun_akademik_id' => 1,
                     'nomor_tagihan' => $nomorTagihan,
                     'total_tagihan' => $totalNominal,
-                    'total_potongan' => $totalPotonganBeasiswa,
+                    'total_potongan' => $totalSemuaPotongan,
                     'total_denda' => 0,
                     'total_bayar' => 0,
-                    'status' => $totalPotonganBeasiswa >= $totalNominal ? 'lunas' : 'belum_bayar',
+                    'status' => $totalSemuaPotongan >= $totalNominal ? 'lunas' : 'belum_bayar',
                     'source_system' => 'SIAKAD',
                     'jatuh_tempo' => $request->jatuh_tempo,
-                    'catatan_approval' => 'Tagihan masal ' . $semesterLabel . ($beasiswaMhs ? " (Beasiswa: {$beasiswaMhs->beasiswa->nama})" : ''),
+                    'catatan_approval' => $approvalNote,
                 ]);
 
                 // Insert detail per komponen biaya
                 foreach ($settings as $st) {
                     $detailPotongan = 0;
-                    if ($totalNominal > 0 && $totalPotonganBeasiswa > 0) {
-                        $detailPotongan = round(($st->nominal / $totalNominal) * $totalPotonganBeasiswa, 2);
+                    $isApplicable = empty($applicableMasterBiayaIds) || in_array($st->master_biaya_id, $applicableMasterBiayaIds);
+
+                    if ($isApplicable && $totalPotonganBeasiswa > 0 && $applicableNominal > 0) {
+                        $detailPotongan += round(($st->nominal / $applicableNominal) * $totalPotonganBeasiswa, 2);
+                    }
+
+                    // Cek jika ada potongan khusus untuk master biaya ini
+                    foreach ($potonganKhususRecords as $pRec) {
+                        if ($pRec['data']->master_biaya_id == $st->master_biaya_id) {
+                            $detailPotongan += $pRec['nominal'];
+                        }
                     }
 
                     DetailTagihan::create([
                         'tagihan_id' => $tagihan->id,
                         'master_biaya_id' => $st->master_biaya_id,
                         'nominal' => $st->nominal,
-                        'potongan' => $detailPotongan,
+                        'potongan' => min((float)$st->nominal, $detailPotongan),
                         'nominal_bersih' => max(0, (float)$st->nominal - $detailPotongan),
                         'keterangan' => ($st->masterBiaya->nama ?? 'Biaya Pendidikan') . ' - ' . $semesterLabel,
                     ]);
@@ -510,6 +589,18 @@ class PembayaranKasirController extends Controller
                     ]);
                 }
 
+                // Catat masing-masing potongan khusus di PotonganTagihan jika ada
+                foreach ($potonganKhususRecords as $pRec) {
+                    $pData = $pRec['data'];
+                    PotonganTagihan::create([
+                        'tagihan_id' => $tagihan->id,
+                        'tipe' => 'diskon',
+                        'nominal_potongan' => $pRec['nominal'],
+                        'keterangan' => 'Potongan khusus: ' . $pData->nama_potongan . ($pData->nomor_sk ? " (SK: {$pData->nomor_sk})" : ''),
+                        'diinput_oleh' => $pData->diinput_oleh ?? auth()->id(),
+                    ]);
+                }
+
                 // Auto-generate BNI Virtual Account untuk tagihan ini (status 'aktif' sesuai enum database)
                 \App\Models\Sikeu\VirtualAccount::updateOrCreate(
                     ['tagihan_id' => $tagihan->id],
@@ -517,9 +608,9 @@ class PembayaranKasirController extends Controller
                         'va_number' => '88012' . str_pad($mhs->nim ? preg_replace('/[^0-9]/', '', $mhs->nim) : $mhs->mahasiswa_id, 10, '0', STR_PAD_LEFT),
                         'bank_kode' => 'BNI',
                         'bank_nama' => 'Bank BNI',
-                        'nominal' => max(0, $totalNominal - $totalPotonganBeasiswa),
+                        'nominal' => max(0, $totalNominal - $totalSemuaPotongan),
                         'expired_at' => $request->jatuh_tempo . ' 23:59:59',
-                        'status' => 'aktif',
+                        'status' => $totalSemuaPotongan >= $totalNominal ? 'nonaktif' : 'aktif',
                     ]
                 );
 
@@ -877,6 +968,163 @@ class PembayaranKasirController extends Controller
                 'status' => 'error',
                 'message' => 'Gagal memproses pembayaran langsung kasir: ' . $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * POST /api/v1/sikeu/tagihan/{id}/potongan
+     * Menambahkan potongan khusus/keringanan tambahan langsung pada tagihan mahasiswa yang sudah terbit.
+     */
+    public function addAdHocPotonganTagihan($tagihanId, Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'nama_potongan' => 'required|string|max:200',
+            'tipe' => 'nullable|string|max:50',
+            'tipe_potongan' => 'nullable|in:nominal,persen',
+            'nilai_potongan' => 'required|numeric|min:1',
+            'keterangan' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+        }
+
+        $tagihan = TagihanMahasiswa::with(['potonganTagihan', 'virtualAccounts'])->findOrFail($tagihanId);
+
+        if ($tagihan->status === 'batal') {
+            return response()->json(['status' => 'error', 'message' => 'Tagihan yang sudah dibatalkan tidak dapat diberikan potongan.'], 422);
+        }
+
+        $totalTagihanKotor = (float)$tagihan->total_tagihan + (float)$tagihan->total_denda;
+        $currentPotongan = (float)$tagihan->total_potongan;
+        $currentBayar = (float)$tagihan->total_bayar;
+        $sisaTagihan = max(0, $totalTagihanKotor - $currentPotongan - $currentBayar);
+
+        if ($sisaTagihan <= 0) {
+            return response()->json(['status' => 'error', 'message' => 'Tagihan ini sudah lunas, tidak dapat diberikan potongan tambahan.'], 422);
+        }
+
+        $inputNilai = (float)$request->nilai_potongan;
+        $tipePotongan = $request->input('tipe_potongan', 'nominal');
+        $nominalPotongan = 0;
+
+        if ($tipePotongan === 'persen') {
+            $nominalPotongan = round(($sisaTagihan * $inputNilai) / 100, 2);
+        } else {
+            $nominalPotongan = $inputNilai;
+        }
+
+        if ($nominalPotongan > $sisaTagihan) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Nominal potongan (Rp ' . number_format($nominalPotongan, 0, ',', '.') . ') melebihi sisa tagihan (Rp ' . number_format($sisaTagihan, 0, ',', '.') . ').',
+            ], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $potonganRecord = PotonganTagihan::create([
+                'tagihan_id' => $tagihan->id,
+                'tipe' => $request->input('tipe', 'diskon'),
+                'nominal_potongan' => $nominalPotongan,
+                'keterangan' => $request->nama_potongan . ($request->filled('keterangan') ? ' - ' . $request->keterangan : ''),
+                'diinput_oleh' => auth()->id(),
+            ]);
+
+            $newTotalPotongan = (float)PotonganTagihan::where('tagihan_id', $tagihan->id)->sum('nominal_potongan');
+            $tagihan->total_potongan = $newTotalPotongan;
+            $newSisa = max(0, $totalTagihanKotor - $newTotalPotongan - $currentBayar);
+
+            if ($newSisa <= 0) {
+                $tagihan->status = 'lunas';
+            } elseif ($currentBayar > 0) {
+                $tagihan->status = 'sebagian';
+            }
+
+            $tagihan->save();
+
+            // Update VA jika ada
+            foreach ($tagihan->virtualAccounts as $va) {
+                $va->nominal = $newSisa;
+                if ($newSisa <= 0) {
+                    $va->status = 'nonaktif';
+                }
+                $va->save();
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Potongan tambahan berhasil diterapkan pada tagihan.',
+                'data' => [
+                    'potongan' => $potonganRecord,
+                    'sisa_tagihan' => $newSisa,
+                    'total_potongan' => $newTotalPotongan,
+                    'status' => $tagihan->status,
+                ],
+            ], 201);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('Error adding ad-hoc potongan tagihan: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Gagal menerapkan potongan tagihan: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * DELETE /api/v1/sikeu/tagihan/potongan/{potonganId}
+     * Membatalkan / mencabut potongan pada tagihan mahasiswa.
+     */
+    public function deleteAdHocPotonganTagihan($potonganId)
+    {
+        $potongan = PotonganTagihan::with('tagihan.virtualAccounts')->findOrFail($potonganId);
+        $tagihan = $potongan->tagihan;
+
+        DB::beginTransaction();
+        try {
+            $potongan->delete();
+
+            $newTotalPotongan = (float)PotonganTagihan::where('tagihan_id', $tagihan->id)->sum('nominal_potongan');
+            $tagihan->total_potongan = $newTotalPotongan;
+
+            $totalTagihanKotor = (float)$tagihan->total_tagihan + (float)$tagihan->total_denda;
+            $currentBayar = (float)$tagihan->total_bayar;
+            $newSisa = max(0, $totalTagihanKotor - $newTotalPotongan - $currentBayar);
+
+            if ($newSisa <= 0) {
+                $tagihan->status = 'lunas';
+            } elseif ($currentBayar > 0) {
+                $tagihan->status = 'sebagian';
+            } else {
+                $tagihan->status = 'belum_bayar';
+            }
+
+            $tagihan->save();
+
+            // Update VA jika ada
+            foreach ($tagihan->virtualAccounts as $va) {
+                $va->nominal = $newSisa;
+                if ($newSisa > 0 && $va->status === 'nonaktif') {
+                    $va->status = 'aktif';
+                }
+                $va->save();
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Potongan tagihan berhasil dicabut / dibatalkan.',
+                'data' => [
+                    'sisa_tagihan' => $newSisa,
+                    'total_potongan' => $newTotalPotongan,
+                    'status' => $tagihan->status,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('Error deleting ad-hoc potongan tagihan: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Gagal membatalkan potongan: ' . $e->getMessage()], 500);
         }
     }
 }

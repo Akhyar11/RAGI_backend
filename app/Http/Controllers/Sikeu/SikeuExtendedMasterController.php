@@ -7,6 +7,8 @@ use App\Models\Sikeu\JalurKelas;
 use App\Models\Sikeu\TarifUkt;
 use App\Models\Sikeu\Beasiswa;
 use App\Models\Sikeu\MahasiswaBeasiswa;
+use App\Models\Sikeu\PotonganMahasiswa;
+use App\Models\Sikeu\PotonganTagihan;
 use App\Models\Sikeu\TagihanMahasiswa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -214,11 +216,14 @@ class SikeuExtendedMasterController extends Controller
             return [
                 'id' => $item->id,
                 'mahasiswa_id' => $item->mahasiswa_id,
+                'beasiswa_id' => $item->beasiswa_id,
                 'nim' => $item->nim ?? ('NIM-' . $item->mahasiswa_id),
                 'nama_mahasiswa' => $item->nama_mahasiswa ?? ('Mahasiswa #' . $item->mahasiswa_id),
                 'nama_beasiswa' => $item->beasiswa->nama ?? 'Beasiswa',
+                'tipe_potongan' => $item->beasiswa->tipe_potongan ?? 'persen',
+                'nilai_potongan' => $item->beasiswa->nilai_potongan ?? 0,
                 'potongan_text' => $potonganText,
-                'status' => $item->status,
+                'status' => $item->status ?? 'aktif',
                 'berlaku_mulai' => $item->berlaku_mulai,
                 'berlaku_sampai' => $item->berlaku_sampai,
             ];
@@ -232,23 +237,272 @@ class SikeuExtendedMasterController extends Controller
         $validator = Validator::make($request->all(), [
             'mahasiswa_id' => 'required|integer',
             'beasiswa_id' => 'required|integer|exists:sikeu_beasiswa,id',
+            'berlaku_mulai' => 'nullable|date',
+            'berlaku_sampai' => 'nullable|date|after_or_equal:berlaku_mulai',
+            'status' => 'nullable|in:aktif,nonaktif,selesai',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
         }
 
+        // Cek apakah mahasiswa sudah memiliki mapping aktif untuk skema ini
+        $existing = MahasiswaBeasiswa::where('mahasiswa_id', $request->mahasiswa_id)
+            ->where('beasiswa_id', $request->beasiswa_id)
+            ->where('status', 'aktif')
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Mahasiswa ini sudah terdaftar aktif pada program beasiswa/potongan ini.',
+            ], 422);
+        }
+
+        $nim = $request->input('nim');
+        $namaMahasiswa = $request->input('nama_mahasiswa');
+
+        if (empty($nim) || empty($namaMahasiswa)) {
+            $mhs = \App\Models\Siakad\Mahasiswa::find($request->mahasiswa_id);
+            if ($mhs) {
+                $nim = $nim ?: $mhs->nim;
+                $namaMahasiswa = $namaMahasiswa ?: ($mhs->nama_lengkap ?? $mhs->nama);
+            }
+        }
+
         $item = MahasiswaBeasiswa::create([
             'mahasiswa_id' => $request->mahasiswa_id,
             'beasiswa_id' => $request->beasiswa_id,
-            'nim' => $request->nim ?? ('NIM-' . $request->mahasiswa_id),
-            'nama_mahasiswa' => $request->nama_mahasiswa ?? ('Mahasiswa #' . $request->mahasiswa_id),
+            'nim' => $nim ?? ('NIM-' . $request->mahasiswa_id),
+            'nama_mahasiswa' => $namaMahasiswa ?? ('Mahasiswa #' . $request->mahasiswa_id),
             'berlaku_mulai' => $request->berlaku_mulai ?? now()->toDateString(),
             'berlaku_sampai' => $request->berlaku_sampai ?? now()->addYears(1)->toDateString(),
-            'status' => 'aktif',
+            'status' => $request->status ?? 'aktif',
         ]);
 
-        return response()->json(['status' => 'success', 'message' => 'Penerima beasiswa berhasil ditetapkan', 'data' => $item], 201);
+        $item->load('beasiswa');
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Penerima beasiswa berhasil ditetapkan',
+            'data' => $item
+        ], 201);
+    }
+
+    public function updateMahasiswaBeasiswa(Request $request, $id)
+    {
+        $item = MahasiswaBeasiswa::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'beasiswa_id' => 'nullable|integer|exists:sikeu_beasiswa,id',
+            'berlaku_mulai' => 'nullable|date',
+            'berlaku_sampai' => 'nullable|date|after_or_equal:berlaku_mulai',
+            'status' => 'nullable|in:aktif,nonaktif,selesai',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+        }
+
+        $item->update($request->only([
+            'beasiswa_id', 'berlaku_mulai', 'berlaku_sampai', 'status'
+        ]));
+
+        $item->load('beasiswa');
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data penetapan potongan beasiswa berhasil diperbarui',
+            'data' => $item,
+        ]);
+    }
+
+    public function destroyMahasiswaBeasiswa($id)
+    {
+        $item = MahasiswaBeasiswa::findOrFail($id);
+        $item->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Penetapan beasiswa/potongan mahasiswa berhasil dihapus',
+        ]);
+    }
+
+    // ========================================================
+    // 4B. POTONGAN KHUSUS MAHASISWA (DI LUAR BEASISWA)
+    // ========================================================
+
+    public function indexPotonganMahasiswa(Request $request)
+    {
+        $query = PotonganMahasiswa::with(['masterBiaya', 'inputter']);
+
+        if ($request->filled('q') || $request->filled('search')) {
+            $search = $request->input('q') ?: $request->input('search');
+            $query->where(function($q) use ($search) {
+                $q->where('nama_mahasiswa', 'like', "%{$search}%")
+                  ->orWhere('nim', 'like', "%{$search}%")
+                  ->orWhere('nama_potongan', 'like', "%{$search}%")
+                  ->orWhere('nomor_sk', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('mahasiswa_id')) {
+            $query->where('mahasiswa_id', $request->mahasiswa_id);
+        }
+
+        $perPage = min(100, $request->integer('per_page', 20));
+        $paginated = $query->orderBy('id', 'desc')->paginate($perPage);
+
+        $mapped = collect($paginated->items())->map(function($item) {
+            $potonganText = $item->tipe_potongan === 'persen'
+                ? $item->nilai_potongan . '%'
+                : 'Rp ' . number_format($item->nilai_potongan, 0, ',', '.');
+
+            return [
+                'id' => $item->id,
+                'mahasiswa_id' => $item->mahasiswa_id,
+                'nim' => $item->nim ?? ('NIM-' . $item->mahasiswa_id),
+                'nama_mahasiswa' => $item->nama_mahasiswa ?? ('Mahasiswa #' . $item->mahasiswa_id),
+                'nama_potongan' => $item->nama_potongan,
+                'tipe_potongan' => $item->tipe_potongan,
+                'nilai_potongan' => (float)$item->nilai_potongan,
+                'potongan_text' => $potonganText,
+                'master_biaya_id' => $item->master_biaya_id,
+                'komponen_biaya' => $item->masterBiaya?->nama ?? 'Semua Komponen (Total Tagihan)',
+                'semester' => $item->semester,
+                'tahun_akademik' => $item->tahun_akademik,
+                'berlaku_mulai' => $item->berlaku_mulai ? (is_object($item->berlaku_mulai) ? $item->berlaku_mulai->format('Y-m-d') : $item->berlaku_mulai) : null,
+                'berlaku_sampai' => $item->berlaku_sampai ? (is_object($item->berlaku_sampai) ? $item->berlaku_sampai->format('Y-m-d') : $item->berlaku_sampai) : null,
+                'nomor_sk' => $item->nomor_sk,
+                'keterangan' => $item->keterangan,
+                'status' => $item->status,
+                'diinput_oleh' => $item->diinput_oleh,
+                'petugas_nama' => $item->inputter?->name ?? 'Admin Keuangan',
+                'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
+            ];
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $mapped,
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'last_page' => $paginated->lastPage(),
+            ],
+        ]);
+    }
+
+    public function storePotonganMahasiswa(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'mahasiswa_id' => 'required|integer',
+            'nama_potongan' => 'required|string|max:150',
+            'tipe_potongan' => 'required|in:nominal,persen',
+            'nilai_potongan' => 'required|numeric|min:0',
+            'master_biaya_id' => 'nullable|integer|exists:sikeu_master_biaya,id',
+            'semester' => 'nullable|integer|min:1|max:14',
+            'tahun_akademik' => 'nullable|string|max:20',
+            'berlaku_mulai' => 'nullable|date',
+            'berlaku_sampai' => 'nullable|date|after_or_equal:berlaku_mulai',
+            'nomor_sk' => 'nullable|string|max:100',
+            'keterangan' => 'nullable|string',
+            'status' => 'nullable|in:aktif,nonaktif,selesai',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+        }
+
+        $nim = $request->input('nim');
+        $namaMahasiswa = $request->input('nama_mahasiswa');
+
+        if (empty($nim) || empty($namaMahasiswa)) {
+            $mhs = \App\Models\Siakad\Mahasiswa::find($request->mahasiswa_id);
+            if ($mhs) {
+                $nim = $nim ?: $mhs->nim;
+                $namaMahasiswa = $namaMahasiswa ?: ($mhs->nama_lengkap ?? $mhs->nama);
+            }
+        }
+
+        $item = PotonganMahasiswa::create([
+            'mahasiswa_id' => $request->mahasiswa_id,
+            'nim' => $nim ?? ('NIM-' . $request->mahasiswa_id),
+            'nama_mahasiswa' => $namaMahasiswa ?? ('Mahasiswa #' . $request->mahasiswa_id),
+            'nama_potongan' => $request->nama_potongan,
+            'tipe_potongan' => $request->tipe_potongan,
+            'nilai_potongan' => $request->nilai_potongan,
+            'master_biaya_id' => $request->master_biaya_id,
+            'semester' => $request->semester,
+            'tahun_akademik' => $request->tahun_akademik,
+            'berlaku_mulai' => $request->berlaku_mulai,
+            'berlaku_sampai' => $request->berlaku_sampai,
+            'nomor_sk' => $request->nomor_sk,
+            'keterangan' => $request->keterangan,
+            'status' => $request->status ?? 'aktif',
+            'diinput_oleh' => auth()->id(),
+        ]);
+
+        $item->load(['masterBiaya', 'inputter']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Setting potongan khusus mahasiswa berhasil disimpan',
+            'data' => $item,
+        ], 201);
+    }
+
+    public function updatePotonganMahasiswa(Request $request, $id)
+    {
+        $item = PotonganMahasiswa::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'nama_potongan' => 'sometimes|required|string|max:150',
+            'tipe_potongan' => 'sometimes|required|in:nominal,persen',
+            'nilai_potongan' => 'sometimes|required|numeric|min:0',
+            'master_biaya_id' => 'nullable|integer|exists:sikeu_master_biaya,id',
+            'semester' => 'nullable|integer|min:1|max:14',
+            'tahun_akademik' => 'nullable|string|max:20',
+            'berlaku_mulai' => 'nullable|date',
+            'berlaku_sampai' => 'nullable|date|after_or_equal:berlaku_mulai',
+            'nomor_sk' => 'nullable|string|max:100',
+            'keterangan' => 'nullable|string',
+            'status' => 'nullable|in:aktif,nonaktif,selesai',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+        }
+
+        $item->update($request->only([
+            'nama_potongan', 'tipe_potongan', 'nilai_potongan', 'master_biaya_id',
+            'semester', 'tahun_akademik', 'berlaku_mulai', 'berlaku_sampai',
+            'nomor_sk', 'keterangan', 'status'
+        ]));
+
+        $item->load(['masterBiaya', 'inputter']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data potongan khusus mahasiswa berhasil diperbarui',
+            'data' => $item,
+        ]);
+    }
+
+    public function destroyPotonganMahasiswa($id)
+    {
+        $item = PotonganMahasiswa::findOrFail($id);
+        $item->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Setting potongan khusus mahasiswa berhasil dihapus',
+        ]);
     }
 
     // ========================================================
@@ -348,7 +602,7 @@ class SikeuExtendedMasterController extends Controller
     {
         $tagihan = TagihanMahasiswa::with([
             'details.masterBiaya.modules',
-            'potonganTagihan',
+            'potonganTagihan.inputter',
             'virtualAccounts',
             'pembayarans',
             'dispensasis',
@@ -444,6 +698,18 @@ class SikeuExtendedMasterController extends Controller
                 ],
                 'pembayaran' => $tagihan->pembayarans,
                 'dispensasi' => $tagihan->dispensasis,
+                'potongan_tagihan' => $tagihan->potonganTagihan->map(function($pot) {
+                    return [
+                        'id' => $pot->id,
+                        'tagihan_id' => $pot->tagihan_id,
+                        'tipe' => $pot->tipe,
+                        'nominal_potongan' => (float)$pot->nominal_potongan,
+                        'keterangan' => $pot->keterangan,
+                        'diinput_oleh' => $pot->diinput_oleh,
+                        'petugas_nama' => $pot->inputter?->name ?? 'Admin Keuangan',
+                        'created_at' => $pot->created_at ? (is_object($pot->created_at) ? $pot->created_at->format('Y-m-d H:i:s') : (string)$pot->created_at) : null,
+                    ];
+                }),
             ]
         ]);
     }

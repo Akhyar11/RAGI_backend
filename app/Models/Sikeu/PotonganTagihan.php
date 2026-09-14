@@ -29,5 +29,8 @@ class PotonganTagihan extends Model
         return $this->belongsTo(TagihanMahasiswa::class, 'tagihan_id');
     }
 
-
+    public function inputter()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'diinput_oleh');
+    }
 }
