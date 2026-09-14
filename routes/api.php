@@ -568,37 +568,37 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
 */
 Route::prefix('v1')->group(function () {
     // 1. Publik / Auth Mobile App (Flutter)
-    Route::post('/auth/login', [App\Http\Controllers\Api\AuthController::class, 'login']);
+    Route::post('/auth/login', [App\Http\Controllers\API\AuthController::class, 'login']);
 
     // 2. Microservice Python Face Recognition (Port 8001)
     Route::prefix('face')->group(function () {
-        Route::get('/health', [App\Http\Controllers\Api\FaceRecognitionController::class, 'health']);
-        Route::post('/verify', [App\Http\Controllers\Api\FaceRecognitionController::class, 'verify']);
-        Route::post('/extract', [App\Http\Controllers\Api\FaceRecognitionController::class, 'extract']);
-        Route::post('/enroll', [App\Http\Controllers\Api\FaceRecognitionController::class, 'enroll']);
+        Route::get('/health', [App\Http\Controllers\API\FaceRecognitionController::class, 'health']);
+        Route::post('/verify', [App\Http\Controllers\API\FaceRecognitionController::class, 'verify']);
+        Route::post('/extract', [App\Http\Controllers\API\FaceRecognitionController::class, 'extract']);
+        Route::post('/enroll', [App\Http\Controllers\API\FaceRecognitionController::class, 'enroll']);
     });
 
     // 3. Mobile Authenticated (Passport / Sanctum)
     Route::middleware(['auth:api'])->group(function () {
         // Autentikasi & Profil Karyawan
-        Route::get('/auth/profile', [App\Http\Controllers\Api\AuthController::class, 'profile']);
-        Route::post('/auth/consent', [App\Http\Controllers\Api\AuthController::class, 'recordConsent']);
-        Route::post('/auth/enroll-face', [App\Http\Controllers\Api\AuthController::class, 'enrollFace']);
-        Route::post('/auth/reset-face', [App\Http\Controllers\Api\AuthController::class, 'resetFace']);
-        Route::post('/auth/logout', [App\Http\Controllers\Api\AuthController::class, 'logout']);
+        Route::get('/auth/profile', [App\Http\Controllers\API\AuthController::class, 'profile']);
+        Route::post('/auth/consent', [App\Http\Controllers\API\AuthController::class, 'recordConsent']);
+        Route::post('/auth/enroll-face', [App\Http\Controllers\API\AuthController::class, 'enrollFace']);
+        Route::post('/auth/reset-face', [App\Http\Controllers\API\AuthController::class, 'resetFace']);
+        Route::post('/auth/logout', [App\Http\Controllers\API\AuthController::class, 'logout']);
 
         // Presensi Mobile
-        Route::get('/attendance/today', [App\Http\Controllers\Api\AttendanceController::class, 'todayStatus']);
-        Route::post('/attendance/clock-in', [App\Http\Controllers\Api\AttendanceController::class, 'clockIn']);
-        Route::post('/attendance/clock-out', [App\Http\Controllers\Api\AttendanceController::class, 'clockOut']);
-        Route::get('/attendance/history', [App\Http\Controllers\Api\AttendanceController::class, 'history']);
-        Route::get('/attendance/recap', [App\Http\Controllers\Api\AttendanceController::class, 'recap']);
+        Route::get('/attendance/today', [App\Http\Controllers\API\AttendanceController::class, 'todayStatus']);
+        Route::post('/attendance/clock-in', [App\Http\Controllers\API\AttendanceController::class, 'clockIn']);
+        Route::post('/attendance/clock-out', [App\Http\Controllers\API\AttendanceController::class, 'clockOut']);
+        Route::get('/attendance/history', [App\Http\Controllers\API\AttendanceController::class, 'history']);
+        Route::get('/attendance/recap', [App\Http\Controllers\API\AttendanceController::class, 'recap']);
     });
 
     // 4. Akses Integrasi Sistem Eksternal (API Key)
     Route::middleware('api.key')->prefix('integration')->group(function () {
-        Route::get('/attendances', [App\Http\Controllers\Api\AttendanceIntegrationController::class, 'index']);
-        Route::get('/attendances/recap', [App\Http\Controllers\Api\AttendanceIntegrationController::class, 'recap']);
-        Route::get('/attendances/{id}', [App\Http\Controllers\Api\AttendanceIntegrationController::class, 'show'])->whereNumber('id');
+        Route::get('/attendances', [App\Http\Controllers\API\AttendanceIntegrationController::class, 'index']);
+        Route::get('/attendances/recap', [App\Http\Controllers\API\AttendanceIntegrationController::class, 'recap']);
+        Route::get('/attendances/{id}', [App\Http\Controllers\API\AttendanceIntegrationController::class, 'show'])->whereNumber('id');
     });
 });
