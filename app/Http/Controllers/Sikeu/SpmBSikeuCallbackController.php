@@ -4,10 +4,6 @@ namespace App\Http\Controllers\Sikeu;
 
 use App\Http\Controllers\Controller;
 use App\Models\Sikeu\TagihanMahasiswa;
-use App\Models\Sikeu\AkunKeuangan;
-use App\Models\Sikeu\JurnalUmum;
-use App\Models\Sikeu\DetailJurnalUmum;
-use App\Models\Sikeu\UnitKas;
 use App\Models\Sikeu\Pembayaran;
 use App\Events\Sikeu\PembayaranSpmbLunas;
 use Illuminate\Http\Request;
@@ -89,6 +85,14 @@ class SpmBSikeuCallbackController extends Controller
                     'status' => DB::raw("CASE WHEN status = 'draft' THEN 'submitted' ELSE status END"),
                 ]);
 
+            // Sync status pembayaran SPMB agar tidak tertahan 'pending' selamanya
+            \App\Models\Spmb\PembayaranSpmb::where('pendaftaran_id', $calonMahasiswaId)
+                ->update([
+                    'status' => 'paid',
+                    'jumlah_bayar' => $validated['nominal'],
+                    'paid_at' => now(),
+                ]);
+
             // Create Pembayaran Record
             $pembayaran = Pembayaran::create([
                 'tagihan_id' => $tagihan->id,
@@ -98,49 +102,6 @@ class SpmBSikeuCallbackController extends Controller
                 'channel_bayar' => $validated['channel'] ?? $validated['bank_kode'] ?? 'BANK_VA',
                 'status' => 'success',
             ]);
-
-            // Auto Journal Entry
-            $akunKas = AkunKeuangan::where('kode_akun', '102.01')->first()
-                ?? AkunKeuangan::where('kelompok', 'aset')->first();
-            $akunSpmb = AkunKeuangan::where('kode_akun', '401.03')->first()
-                ?? AkunKeuangan::where('kelompok', 'pendapatan')->first();
-
-            $unitKas = UnitKas::first();
-            if ($unitKas) {
-                $unitKas->increment('saldo_saat_ini', $validated['nominal']);
-            }
-
-            if ($akunKas && $akunSpmb) {
-                $jurnal = JurnalUmum::create([
-                    'nomor_jurnal' => 'JRN-SPMB-' . date('Ymd') . '-' . sprintf('%04d', $pembayaran->id),
-                    'tanggal_jurnal' => now()->toDateString(),
-                    'jenis_sumber' => 'pembayaran_mahasiswa',
-                    'referensi_id' => $pembayaran->id,
-                    'keterangan' => "Penerimaan Biaya Pendaftaran SPMB Calon Mahasiswa ID #{$calonMahasiswaId}",
-                    'status_posting' => 'posted',
-                    'total_debet' => $validated['nominal'],
-                    'total_kredit' => $validated['nominal'],
-                    'created_by' => 1,
-                    'posted_by' => 1,
-                    'posted_at' => now(),
-                ]);
-
-                DetailJurnalUmum::create([
-                    'jurnal_id' => $jurnal->id,
-                    'akun_id' => $akunKas->id,
-                    'debet' => $validated['nominal'],
-                    'kredit' => 0,
-                    'keterangan' => "Penerimaan Kas/Bank Pendaftaran SPMB ID #{$calonMahasiswaId}",
-                ]);
-
-                DetailJurnalUmum::create([
-                    'jurnal_id' => $jurnal->id,
-                    'akun_id' => $akunSpmb->id,
-                    'debet' => 0,
-                    'kredit' => $validated['nominal'],
-                    'keterangan' => "Pendapatan Pendaftaran SPMB ID #{$calonMahasiswaId}",
-                ]);
-            }
 
             DB::commit();
 

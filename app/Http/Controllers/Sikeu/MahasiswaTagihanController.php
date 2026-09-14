@@ -6,9 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\VirtualAccount;
 use App\Models\Sikeu\Pembayaran;
-use App\Models\Sikeu\JurnalUmum;
-use App\Models\Sikeu\DetailJurnalUmum;
-use App\Models\Sikeu\AkunKeuangan;
 use App\Models\Sikeu\MahasiswaTipeTagihan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -613,46 +610,8 @@ class MahasiswaTagihanController extends Controller
                 $tagihan->status = 'lunas';
                 $tagihan->save();
 
-                // Auto Jurnal Akuntansi
-                try {
-                    $akunKas = AkunKeuangan::where('kode_akun', 'like', '1%')->where('is_kas_bank', true)->first()
-                        ?? AkunKeuangan::first();
-                    $akunPendapatan = AkunKeuangan::where('kelompok', 'pendapatan')->first()
-                        ?? AkunKeuangan::where('kode_akun', 'like', '4%')->first()
-                        ?? $akunKas;
-
-                    if ($akunKas && $akunPendapatan) {
-                        $jurnal = JurnalUmum::create([
-                            'nomor_jurnal' => 'JRN-MHS-' . date('Ymd') . '-' . Str::upper(Str::random(4)),
-                            'tanggal_transaksi' => now()->toDateString(),
-                            'keterangan' => 'Pelunasan Tagihan Mahasiswa ' . $tagihan->nomor_tagihan . ' via ' . $channel,
-                            'jenis_sumber' => 'pembayaran_mahasiswa',
-                            'referensi_id' => $pembayaran->id,
-                            'total_debet' => $sisa,
-                            'total_kredit' => $sisa,
-                            'status' => 'posted',
-                            'dibuat_oleh' => auth()->id() ?? 1,
-                        ]);
-
-                        DetailJurnalUmum::create([
-                            'jurnal_umum_id' => $jurnal->id,
-                            'akun_keuangan_id' => $akunKas->id,
-                            'debet' => $sisa,
-                            'kredit' => 0,
-                            'keterangan' => 'Kas/Bank Penerimaan ' . $channel . ' Tagihan ' . $tagihan->nomor_tagihan,
-                        ]);
-
-                        DetailJurnalUmum::create([
-                            'jurnal_umum_id' => $jurnal->id,
-                            'akun_keuangan_id' => $akunPendapatan->id,
-                            'debet' => 0,
-                            'kredit' => $sisa,
-                            'keterangan' => 'Pendapatan Pendidikan Mahasiswa ' . $tagihan->nomor_tagihan,
-                        ]);
-                    }
-                } catch (\Throwable $e) {
-                    // Ignore journal failure if tables differ
-                }
+                // Auto Jurnal Akuntansi via shared service (satu-satunya penulis jurnal pembayaran)
+                \App\Services\Sikeu\AutoJournalService::recordStudentPaymentJournal($tagihan, (float) $sisa);
 
                 $totalPaidAll += $sisa;
                 $createdPayments[] = [

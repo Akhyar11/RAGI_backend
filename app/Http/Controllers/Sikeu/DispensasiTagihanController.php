@@ -57,8 +57,8 @@ class DispensasiTagihanController extends Controller
             $dArray['has_unpaid_previous_dispensation'] = $prevUnpaidCount > 0;
             $dArray['unpaid_previous_dispensation_count'] = $prevUnpaidCount;
             $dArray['nama_mahasiswa'] = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $d->mahasiswa_id);
-            $dArray['nim'] = $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($d->mahasiswa_id, 4, '0', STR_PAD_LEFT));
-            $dArray['prodi'] = $mhs?->programStudi?->nama ?? 'Teknik Informatika';
+            $dArray['nim'] = $mhs?->nim ?? $tipeMhs?->nim ?? '';
+            $dArray['prodi'] = $mhs?->programStudi?->nama ?? $tipeMhs?->program_studi?->nama ?? '';
             $dArray['allow_krs'] = (bool)($d->allow_krs ?? true);
             return $dArray;
         });
@@ -83,7 +83,7 @@ class DispensasiTagihanController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'tagihan_id' => 'required|exists:sikeu_tagihan_mahasiswa,id',
-            'tipe_dispensasi' => 'required|in:penundaan_jatuh_tempo,pembayaran_cicilan,cicilan,keringanan_khusus,keringanan_potongan',
+            'tipe_dispensasi' => 'required|in:penundaan_jatuh_tempo,cicilan,keringanan_khusus',
             'jatuh_tempo_baru' => 'nullable|date',
             'jumlah_cicilan' => 'nullable|integer|min:1',
             'nominal_per_cicilan' => 'nullable|numeric|min:0',
@@ -153,8 +153,10 @@ class DispensasiTagihanController extends Controller
 
         $data = $dispensasi->toArray();
         $data['has_unpaid_previous_dispensation'] = $hasUnpaidPrev;
-        $data['nama_mahasiswa'] = 'Mahasiswa #' . $dispensasi->mahasiswa_id;
-        $data['nim'] = '2024' . str_pad($dispensasi->mahasiswa_id, 4, '0', STR_PAD_LEFT);
+
+        $mhs = \App\Models\Siakad\Mahasiswa::with('programStudi')->find($dispensasi->mahasiswa_id);
+        $data['nama_mahasiswa'] = $mhs?->nama_lengkap ?? ('Mahasiswa #' . $dispensasi->mahasiswa_id);
+        $data['nim'] = $mhs?->nim ?? '';
 
         return response()->json([
             'status' => 'success',
@@ -170,16 +172,18 @@ class DispensasiTagihanController extends Controller
     {
         $dispensasi = DispensasiTagihan::with(['tagihan.details.masterBiaya'])->findOrFail($id);
 
+        $mhs = \App\Models\Siakad\Mahasiswa::with('programStudi')->find($dispensasi->mahasiswa_id);
+
         $bukti = [
             'nomor_dispensasi' => 'DISP-' . date('Y') . '-' . str_pad($dispensasi->id, 5, '0', STR_PAD_LEFT),
             'tanggal_pengajuan' => $dispensasi->created_at ? $dispensasi->created_at->format('d F Y') : date('d F Y'),
             'tanggal_persetujuan' => $dispensasi->tanggal_persetujuan ? date('d F Y', strtotime($dispensasi->tanggal_persetujuan)) : date('d F Y'),
             'status' => $dispensasi->status,
             'mahasiswa' => [
-                'nama' => 'Mahasiswa #' . $dispensasi->mahasiswa_id,
-                'nim' => '2024' . str_pad($dispensasi->mahasiswa_id, 4, '0', STR_PAD_LEFT),
-                'prodi' => 'Teknik Informatika',
-                'angkatan' => 2024,
+                'nama' => $mhs?->nama_lengkap ?? ('Mahasiswa #' . $dispensasi->mahasiswa_id),
+                'nim' => $mhs?->nim ?? '',
+                'prodi' => $mhs?->programStudi?->nama ?? '',
+                'angkatan' => $mhs?->angkatan ?? null,
             ],
             'tagihan' => [
                 'nomor_tagihan' => $dispensasi->tagihan->nomor_tagihan ?? '-',
@@ -195,7 +199,7 @@ class DispensasiTagihanController extends Controller
                 'catatan_pimpinan' => $dispensasi->catatan_pimpinan ?? 'Persetujuan dispensasi diberikan sesuai kebijakan pimpinan.',
             ],
             'pejabat_approver' => [
-                'nama' => 'Dr. Ir. Wakil Rektor II, M.M.',
+                'nama' => $dispensasi->disetujui_oleh ? $this->approverName($dispensasi->disetujui_oleh) : '',
                 'jabatan' => 'Wakil Rektor II / Kabag Keuangan',
                 'digital_signature_hash' => 'SIG-DISP-' . md5($dispensasi->id . 'OK'),
             ]
@@ -205,5 +209,27 @@ class DispensasiTagihanController extends Controller
             'status' => 'success',
             'data' => $bukti
         ]);
+    }
+
+    /**
+     * Resolve real approver name from Users/Pegawai DB instead of hardcoded fake identity.
+     */
+    protected function approverName($userId): string
+    {
+        if (!$userId) {
+            return '';
+        }
+
+        try {
+            $user = \App\Models\User::find($userId);
+            if ($user) {
+                return $user->name ?? $user->username ?? ('User #' . $userId);
+            }
+
+            $pegawai = \App\Models\Simpeg\Pegawai::where('user_id', $userId)->first();
+            return $pegawai?->nama_lengkap ?? ('User #' . $userId);
+        } catch (\Throwable $e) {
+            return 'User #' . $userId;
+        }
     }
 }

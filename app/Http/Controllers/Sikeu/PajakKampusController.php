@@ -149,7 +149,7 @@ class PajakKampusController extends Controller
             }
 
             // Post Balanced Accounting Journal: Dr Utang Pajak, Cr Kas/Bank
-            $akunUtangPajak = AkunKeuangan::where('kelompok', 'kewajiban')->first();
+            $akunUtangPajak = AkunKeuangan::where('kelompok', 'liabilitas')->first();
             $akunKas = AkunKeuangan::where('kelompok', 'aset')->first();
 
             if ($akunUtangPajak && $akunKas) {

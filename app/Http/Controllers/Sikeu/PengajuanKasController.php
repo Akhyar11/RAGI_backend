@@ -29,7 +29,7 @@ class PengajuanKasController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'unit_kas_id' => 'required|exists:unit_kas,id',
+            'unit_kas_id' => 'required|exists:sikeu_unit_kas,id',
             'judul_pengajuan' => 'required|string',
             'deskripsi' => 'nullable|string',
             'nominal_diajukan' => 'required|numeric|min:1',

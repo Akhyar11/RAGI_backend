@@ -43,7 +43,7 @@ class PemasukanKampusController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'sumber_pemasukan' => 'required|in:hibah_sippm,donatur,kerjasama,pendapatan_lainnya',
-            'unit_kas_id' => 'nullable|exists:unit_kas,id',
+            'unit_kas_id' => 'nullable|exists:sikeu_unit_kas,id',
             'akun_pendapatan_kode' => 'nullable|string',
             'nominal' => 'required|numeric|min:1000',
             'tanggal_terima' => 'required|date',

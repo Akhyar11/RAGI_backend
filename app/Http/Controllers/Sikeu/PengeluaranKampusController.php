@@ -84,7 +84,7 @@ class PengeluaranKampusController extends Controller
             'nama_vendor' => 'required|string|max:255',
             'npwp_vendor' => 'nullable|string|max:50',
             'jenis_pajak' => 'required|in:tanpa_pajak,pph_21,pph_23,ppn_11',
-            'unit_kas_id' => 'nullable|exists:unit_kas,id',
+            'unit_kas_id' => 'nullable|exists:sikeu_unit_kas,id',
             'keterangan' => 'nullable|string',
             'file_bukti_bayar' => 'nullable|string',
         ]);
@@ -132,7 +132,7 @@ class PengeluaranKampusController extends Controller
             // Accounting COA mapping
             $akunBeban = AkunKeuangan::where('kelompok', 'beban')->first();
             $akunKas = AkunKeuangan::where('kelompok', 'aset')->first();
-            $akunUtangPajak = AkunKeuangan::where('kelompok', 'kewajiban')->first();
+            $akunUtangPajak = AkunKeuangan::where('kelompok', 'liabilitas')->first();
 
             $pengeluaran = PengeluaranKampus::create([
                 'nomor_transaksi' => $nomorTransaksi,

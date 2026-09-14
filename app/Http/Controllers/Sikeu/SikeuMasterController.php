@@ -143,7 +143,7 @@ class SikeuMasterController extends Controller
         $biaya = MasterBiaya::findOrFail($id);
         
         // Prevent deletion if used in tags/billing
-        $hasUsage = \App\Models\Sikeu\TagihanMahasiswaDetail::where('master_biaya_id', $id)->exists();
+        $hasUsage = \App\Models\Sikeu\DetailTagihan::where('master_biaya_id', $id)->exists();
         if ($hasUsage) {
             return response()->json(['status' => 'error', 'message' => 'Master biaya tidak dapat dihapus karena sudah digunakan dalam tagihan.'], 400);
         }
@@ -263,9 +263,9 @@ class SikeuMasterController extends Controller
                 ->unique()
                 ->take(30);
 
-            // If empty and search is empty, fallback to sample ids if exist
+            // If empty and search is empty, return empty list (jangan fabrikasi data)
             if ($studentIds->isEmpty() && empty($search)) {
-                $studentIds = collect([101, 102, 103, 104]);
+                $studentIds = collect();
             }
 
             $results = $studentIds->map(function ($mhsId) {
@@ -279,11 +279,11 @@ class SikeuMasterController extends Controller
                     $tipe = MahasiswaTipeTagihan::where('mahasiswa_id', $mhsId)->first();
                 } catch (\Throwable $e) {}
 
-                $nim = $siakad?->nim ?? $tipe?->nim ?? ('2025' . str_pad($mhsId, 6, '0', STR_PAD_LEFT));
+                $nim = $siakad?->nim ?? $tipe?->nim ?? ('-');
                 $nama = $siakad?->nama_lengkap ?? $tipe?->nama_mahasiswa ?? ('Mahasiswa #' . $mhsId);
-                $prodi = $siakad?->programStudi?->nama ?? $siakad?->programStudi?->nama_prodi ?? 'Teknik Informatika';
-                $angkatan = $siakad?->angkatan ?? $tipe?->tahun_angkatan ?? 2025;
-                $jalur = $tipe?->jalur_kelas ?? 'Reguler';
+                $prodi = $siakad?->programStudi?->nama ?? $siakad?->programStudi?->nama_prodi ?? '-';
+                $angkatan = $siakad?->angkatan ?? $tipe?->tahun_angkatan ?? null;
+                $jalur = $tipe?->jalur_kelas ?? '-';
                 $kelompokUkt = $tipe?->kelompok_ukt ?? 3;
 
                 // Unpaid bills

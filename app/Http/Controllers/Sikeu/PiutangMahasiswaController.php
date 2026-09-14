@@ -73,10 +73,10 @@ class PiutangMahasiswaController extends Controller
             $mhs = $t->mahasiswa;
             $tipeMhs = $t->tipeTagihanMahasiswa;
 
-            $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($t->mahasiswa_id, 4, '0', STR_PAD_LEFT));
+            $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ('-');
             $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $t->mahasiswa_id);
-            $angkatanVal = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? 2025;
-            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika';
+            $angkatanVal = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? null;
+            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? '-';
 
             $totalBayarRow = $cutoffDate
                 ? (float)$t->pembayarans->where('status', 'success')->filter(function ($p) use ($cutoffDate) {

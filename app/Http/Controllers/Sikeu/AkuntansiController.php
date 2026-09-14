@@ -41,7 +41,7 @@ class AkuntansiController extends Controller
     public function storeCoa(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'kode_akun' => 'required|string|unique:akun_keuangan,kode_akun',
+            'kode_akun' => 'required|string|unique:sikeu_akun_keuangan,kode_akun',
             'nama_akun' => 'required|string',
             'kelompok' => 'required|in:aset,liabilitas,ekuitas,pendapatan,beban',
             'saldo_normal' => 'required|in:debet,kredit',
@@ -106,7 +106,7 @@ class AkuntansiController extends Controller
             'jenis_sumber' => 'required|in:pembayaran_mahasiswa,pemasukan_hibah,pencairan_kas,pengeluaran_manual,penyesuaian,penutupan',
             'keterangan' => 'required|string',
             'details' => 'required|array|min:2',
-            'details.*.akun_id' => 'required|exists:akun_keuangan,id',
+            'details.*.akun_id' => 'required|exists:sikeu_akun_keuangan,id',
             'details.*.debet' => 'required|numeric|min:0',
             'details.*.kredit' => 'required|numeric|min:0',
             'details.*.keterangan' => 'nullable|string',
@@ -233,7 +233,7 @@ class AkuntansiController extends Controller
         $piutangMahasiswa = (float) (\App\Models\Sikeu\TagihanMahasiswa::whereIn('status', ['belum_bayar', 'sebagian'])
             ->selectRaw('SUM(total_tagihan + total_denda - total_potongan - total_bayar) as sisa')
             ->value('sisa') ?? 0.0);
-        $asetTetap = 1250000000.0;
+        $asetTetap = (float) (\App\Models\SystemSetting::get('sikeu.aset_tetap', 0));
         $totalAset = $kasBank + $piutangMahasiswa + $asetTetap;
 
         // 4. Liabilitas & Ekuitas
