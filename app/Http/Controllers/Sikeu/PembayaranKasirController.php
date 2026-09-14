@@ -114,14 +114,16 @@ class PembayaranKasirController extends Controller
                 ], 422);
             }
 
-            // Generate kode transaksi unik kasir loket
-            $kodeTransaksi = 'TRX-LOKET-' . date('Ymd') . '-' . strtoupper(Str::random(5));
+            // Generate kode transaksi unik kasir loket (shared batch code for kuitansi)
+            $batchKodeTransaksi = 'TRX-LOKET-' . date('Ymd') . '-' . strtoupper(Str::random(5));
 
             $remainingBayar = (float)$request->jumlah_bayar;
             $remainingPotongan = $potonganTambahanTotal;
             $processedPembayarans = [];
             $paidBillNumbers = [];
             $totalSisaAkhir = 0;
+
+            $allocationIndex = 0;
 
             foreach ($tagihans as $tagihan) {
                 $currentSisa = $billBalances[$tagihan->id]['sisa'];
@@ -145,6 +147,8 @@ class PembayaranKasirController extends Controller
                 // 2. Alokasikan pembayaran kasir
                 $alokasiBayar = min($remainingBayar, $currentSisa);
                 if ($alokasiBayar > 0 || (count($tagihans) === 1 && $remainingBayar >= 0)) {
+                    $allocationIndex++;
+                    $kodeTransaksi = $batchKodeTransaksi . '-' . $allocationIndex;
                     $pembayaran = Pembayaran::create([
                         'tagihan_id' => $tagihan->id,
                         'jumlah_bayar' => $alokasiBayar,
@@ -189,7 +193,7 @@ class PembayaranKasirController extends Controller
                     'pembayaran' => $processedPembayarans[0] ?? null,
                     'pembayarans' => $processedPembayarans,
                     'kuitansi' => [
-                        'kode_transaksi' => $kodeTransaksi,
+                        'kode_transaksi' => $batchKodeTransaksi,
                         'tanggal' => now()->format('Y-m-d H:i:s'),
                         'mahasiswa_id' => $primaryTagihan->mahasiswa_id,
                         'nomor_tagihan' => implode(', ', $paidBillNumbers),
@@ -818,7 +822,7 @@ class PembayaranKasirController extends Controller
             if ($potongan > 0) {
                 PotonganTagihan::create([
                     'tagihan_id' => $tagihan->id,
-                    'tipe' => 'diskon_khusus',
+                    'tipe' => 'diskon',
                     'nominal_potongan' => $potongan,
                     'keterangan' => $request->alasan_potongan ?? 'Diskon khusus kasir loket',
                     'diinput_oleh' => auth()->id() ?? 1,
@@ -835,7 +839,6 @@ class PembayaranKasirController extends Controller
                 'channel_bayar' => $request->channel_bayar,
                 'status' => 'success',
                 'diverifikasi_oleh' => auth()->id() ?? 1,
-                'catatan' => $catatanTransaksi,
             ]);
 
             // 5. Auto Jurnal

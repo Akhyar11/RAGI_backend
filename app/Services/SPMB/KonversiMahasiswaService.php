@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\SPMB;
+namespace App\Services\Spmb;
 
 use App\Models\PendaftaranCalonMhs;
 use App\Models\KonversiMahasiswa;

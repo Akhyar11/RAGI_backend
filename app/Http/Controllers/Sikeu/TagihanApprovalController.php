@@ -58,12 +58,13 @@ class TagihanApprovalController extends Controller
             // Generate VA if not created
             if ($tagihan->virtualAccounts()->count() === 0) {
                 $vaNumber = '888' . date('ymd') . str_pad($tagihan->id, 5, '0', STR_PAD_LEFT);
+                $sisaTagihan = max(0, (float) $tagihan->total_tagihan + (float) $tagihan->total_denda - (float) $tagihan->total_potongan - (float) $tagihan->total_bayar);
                 VirtualAccount::create([
                     'tagihan_id' => $tagihan->id,
                     'va_number' => $vaNumber,
                     'bank_kode' => 'BNI',
                     'bank_nama' => 'Bank BNI',
-                    'nominal' => $tagihan->total_bayar,
+                    'nominal' => $sisaTagihan,
                     'expired_at' => date('Y-m-d H:i:s', strtotime('+30 days')),
                     'status' => 'aktif',
                 ]);

@@ -1,0 +1,23 @@
+{
+  "comment": "Mapping jenis_daftar integer dari sistem lama ke jalur_kelas string di RAG",
+  "mapping": {
+    "1": "Reguler",
+    "2": "Karyawan",
+    "3": "Internasional",
+    "4": "Karyawan",
+    "5": "Reguler"
+  },
+  "kode_lama_format": "Format kode lama: YYYYnn = Tahun angkatan + 2 digit kode prodi+kelas. Contoh: 200311 = 2003 + prodi 1 kelas 1 (TI Reguler)",
+  "kode_prodi_lama": {
+    "11": { "prodi": "Teknik Informatika", "kelas": "Reguler" },
+    "12": { "prodi": "Teknik Informatika", "kelas": "Karyawan" },
+    "13": { "prodi": "Teknik Informatika", "kelas": "Malam/Eksekutif" },
+    "14": { "prodi": "Teknik Informatika", "kelas": "Lainnya" },
+    "21": { "prodi": "Sistem Informasi", "kelas": "Reguler" },
+    "22": { "prodi": "Sistem Informasi", "kelas": "Karyawan" },
+    "31": { "prodi": "Komputerisasi Akuntansi", "kelas": "Reguler" },
+    "32": { "prodi": "Komputerisasi Akuntansi", "kelas": "Karyawan" },
+    "41": { "prodi": "Manajemen Informatika", "kelas": "Reguler" },
+    "42": { "prodi": "Manajemen Informatika", "kelas": "Karyawan" }
+  }
+}

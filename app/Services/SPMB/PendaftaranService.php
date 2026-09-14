@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Services\SPMB;
+namespace App\Services\Spmb;
 
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\User;
 use App\Notifications\PendaftaranSuksesNotification;
-use App\Services\SIKEU\PembayaranSpmbService;
+use App\Services\Sikeu\PembayaranSpmbService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Exception;

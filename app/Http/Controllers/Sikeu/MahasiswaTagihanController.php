@@ -17,7 +17,7 @@ class MahasiswaTagihanController extends Controller
     /**
      * Resolve the authenticated student ID
      */
-    protected function resolveMahasiswaId(Request $request)
+    protected function resolveMahasiswaId(Request $request): ?int
     {
         $user = $request->user();
         $mahasiswaId = $request->query('mahasiswa_id', $request->input('mahasiswa_id'));
@@ -39,15 +39,6 @@ class MahasiswaTagihanController extends Controller
 
             // 2. Check by NIM / username
             if (!empty($user->username)) {
-                // If username is generic 'mahasiswa', look for Ahmad Fadillah (NIM 2301001001) as primary seeded student
-                if ($user->username === 'mahasiswa') {
-                    $mhsAhmad = \App\Models\Siakad\Mahasiswa::where('nim', '2301001001')->first();
-                    if ($mhsAhmad) return $mhsAhmad->id;
-                    $tipeAhmad = MahasiswaTipeTagihan::where('nim', '2301001001')->first();
-                    if ($tipeAhmad) return $tipeAhmad->mahasiswa_id;
-                    return 1;
-                }
-
                 $mhsByNim = \App\Models\Siakad\Mahasiswa::where('nim', $user->username)->first();
                 if ($mhsByNim) return $mhsByNim->id;
 
@@ -57,14 +48,6 @@ class MahasiswaTagihanController extends Controller
 
             // 3. Check by Email
             if (!empty($user->email)) {
-                if ($user->email === 'mahasiswa@kampus.ac.id') {
-                    $mhsAhmad = \App\Models\Siakad\Mahasiswa::where('nim', '2301001001')->first();
-                    if ($mhsAhmad) return $mhsAhmad->id;
-                    $tipeAhmad = MahasiswaTipeTagihan::where('nim', '2301001001')->first();
-                    if ($tipeAhmad) return $tipeAhmad->mahasiswa_id;
-                    return 1;
-                }
-
                 $tipeByEmail = MahasiswaTipeTagihan::where('nama_mahasiswa', 'like', "%{$user->username}%")->first();
                 if ($tipeByEmail) return $tipeByEmail->mahasiswa_id;
             }
@@ -80,14 +63,7 @@ class MahasiswaTagihanController extends Controller
             return (int)$mahasiswaId;
         }
 
-        // Fallback to Ahmad Fadillah (NIM: 2301001001 / ID: 1)
-        $ahmadSiakad = \App\Models\Siakad\Mahasiswa::where('nim', '2301001001')->first();
-        if ($ahmadSiakad) return $ahmadSiakad->id;
-
-        $ahmadTipe = MahasiswaTipeTagihan::where('nim', '2301001001')->first();
-        if ($ahmadTipe) return $ahmadTipe->mahasiswa_id;
-
-        return 1;
+        return null;
     }
 
     protected function extractSemesterLabel($tagihan)
@@ -117,6 +93,13 @@ class MahasiswaTagihanController extends Controller
     public function myBills(Request $request)
     {
         $mahasiswaId = $this->resolveMahasiswaId($request);
+
+        if (!$mahasiswaId) {
+            return response()->json([
+                'status' => 'success',
+                'data' => [],
+            ]);
+        }
 
         $query = TagihanMahasiswa::with([
             'details.masterBiaya',
@@ -412,6 +395,14 @@ class MahasiswaTagihanController extends Controller
     public function generateBatchInvoice(Request $request)
     {
         $mahasiswaId = $this->resolveMahasiswaId($request);
+
+        if (!$mahasiswaId) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akun mahasiswa tidak ditemukan.',
+            ], 404);
+        }
+
         $tagihanIds = $request->input('tagihan_ids', []);
         $bankCode = strtoupper($request->input('bank_kode', 'BNI'));
 
@@ -542,6 +533,13 @@ class MahasiswaTagihanController extends Controller
         }
 
         $mahasiswaId = $this->resolveMahasiswaId($request);
+        if (!$mahasiswaId) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tagihan yang dipilih tidak ditemukan untuk akun mahasiswa anda.',
+            ], 404);
+        }
+
         $tagihans = TagihanMahasiswa::where('mahasiswa_id', $mahasiswaId)
             ->whereIn('id', $request->tagihan_ids)
             ->get();
@@ -652,6 +650,13 @@ class MahasiswaTagihanController extends Controller
     public function myPaymentHistory(Request $request)
     {
         $mahasiswaId = $this->resolveMahasiswaId($request);
+
+        if (!$mahasiswaId) {
+            return response()->json([
+                'status' => 'success',
+                'data' => [],
+            ]);
+        }
 
         $tagihanIds = TagihanMahasiswa::where('mahasiswa_id', $mahasiswaId)->pluck('id');
 

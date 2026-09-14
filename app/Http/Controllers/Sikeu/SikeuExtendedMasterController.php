@@ -129,20 +129,53 @@ class SikeuExtendedMasterController extends Controller
             'sumber' => 'required|string',
             'tipe_potongan' => 'required|in:persen,nominal',
             'nilai_potongan' => 'required|numeric|min:0',
+            'jenis_biaya_ids' => 'nullable|array',
+            'jenis_biaya_ids.*' => 'integer|exists:sikeu_master_biaya,id',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
         }
 
-        $item = Beasiswa::create($request->all());
+        $item = Beasiswa::create($request->only([
+            'kode', 'nama', 'sumber', 'tipe_potongan', 'nilai_potongan',
+            'berlaku_angkatan_mulai', 'berlaku_angkatan_sampai', 'deskripsi', 'is_active',
+        ]));
+
+        $jenisBiayaIds = $request->filled('jenis_biaya_ids') ? $request->input('jenis_biaya_ids') : [];
+        $item->jenisBiaya()->sync(array_map('intval', $jenisBiayaIds));
+
+        $item->load('jenisBiaya');
         return response()->json(['status' => 'success', 'message' => 'Program beasiswa berhasil disimpan', 'data' => $item], 201);
     }
 
     public function updateBeasiswa(Request $request, $id)
     {
         $item = Beasiswa::findOrFail($id);
-        $item->update($request->all());
+
+        $validator = Validator::make($request->all(), [
+            'kode' => 'required|string|unique:sikeu_beasiswa,kode,' . $id,
+            'nama' => 'required|string',
+            'sumber' => 'required|string',
+            'tipe_potongan' => 'required|in:persen,nominal',
+            'nilai_potongan' => 'required|numeric|min:0',
+            'jenis_biaya_ids' => 'nullable|array',
+            'jenis_biaya_ids.*' => 'integer|exists:sikeu_master_biaya,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+        }
+
+        $item->update($request->only([
+            'kode', 'nama', 'sumber', 'tipe_potongan', 'nilai_potongan',
+            'berlaku_angkatan_mulai', 'berlaku_angkatan_sampai', 'deskripsi', 'is_active',
+        ]));
+
+        $jenisBiayaIds = $request->filled('jenis_biaya_ids') ? $request->input('jenis_biaya_ids') : [];
+        $item->jenisBiaya()->sync(array_map('intval', $jenisBiayaIds));
+
+        $item->load('jenisBiaya');
         return response()->json(['status' => 'success', 'message' => 'Program beasiswa berhasil diperbarui', 'data' => $item]);
     }
 

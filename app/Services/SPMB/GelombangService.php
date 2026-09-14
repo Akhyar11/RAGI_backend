@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\SPMB;
+namespace App\Services\Spmb;
 
 use App\Models\Spmb\GelombangPenerimaan;
 use Illuminate\Support\Facades\DB;

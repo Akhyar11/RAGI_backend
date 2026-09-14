@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\SIKEU;
+namespace App\Services\Sikeu;
 
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\PembayaranSpmb;
@@ -17,9 +17,14 @@ class PembayaranSpmbService
     public function generateTagihanPendaftaran(PendaftaranCalonMhs $pendaftaran): PembayaranSpmb
     {
         return DB::transaction(function () use ($pendaftaran) {
-            // 1. Dapatkan nominal dari Gelombang
-            $gelombang = $pendaftaran->gelombang;
-            $biaya = $gelombang->biaya_pendaftaran ?? 250000; // Mock default
+            // 1. Dapatkan nominal dari Gelombang (relasi yang benar: gelombangPenerimaan)
+            $gelombang = $pendaftaran->gelombangPenerimaan;
+            $biaya = 0.00;
+            if ($gelombang) {
+                $jalurId = $gelombang->jalur_masuk_id ?? $gelombang->jalur_id ?? null;
+                $biaya = app(SpmbSikeuService::class)
+                    ->getTarifPendaftaranSpmb($jalurId ?: 1, $gelombang->id);
+            }
 
             // 2. Generate VA Number (Mocking integrasi BNI/Mandiri)
             $vaNumber = '8' . rand(1000000000, 9999999999);

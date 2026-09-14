@@ -30,6 +30,24 @@ class SpmBSikeuCallbackController extends Controller
         try {
             DB::beginTransaction();
 
+            // Idempotency guard: pastikan order_id belum pernah diproses sebelumnya.
+            // Callback dari payment gateway bisa dikirim berulang kali (retry/delivery ganda).
+            $existingPembayaran = Pembayaran::where('kode_transaksi', $validated['order_id'])->first();
+            if ($existingPembayaran) {
+                DB::commit();
+                Log::info("SPMB Payment Callback duplikat diabaikan untuk order_id {$validated['order_id']}");
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Callback sudah diproses sebelumnya (idempotent).',
+                    'spmb_unlock' => true,
+                    'data' => [
+                        'tagihan' => $existingPembayaran->tagihan,
+                        'pembayaran' => $existingPembayaran,
+                    ],
+                ]);
+            }
+
             $tagihan = TagihanMahasiswa::where(function ($q) use ($calonMahasiswaId) {
                 $q->where('calon_mahasiswa_id', $calonMahasiswaId)
                   ->orWhere('mahasiswa_id', $calonMahasiswaId);
@@ -55,7 +73,7 @@ class SpmBSikeuCallbackController extends Controller
                 $tagihan->update([
                     'calon_mahasiswa_id' => $tagihan->calon_mahasiswa_id ?? $calonMahasiswaId,
                     'status' => 'lunas',
-                    'total_bayar' => $validated['nominal'],
+                    'total_bayar' => (float) $tagihan->total_tagihan,
                 ]);
             }
             // Trigger Auto Journal (Debet Kas Bank, Kredit Pendapatan SPMB)

@@ -13,15 +13,15 @@ return new class extends Migration
     {
         if (Schema::hasTable('sikeu_tagihan_mahasiswa')) {
             Schema::table('sikeu_tagihan_mahasiswa', function (Blueprint $table) {
-                if (Schema::hasColumn('tagihan_mahasiswa', 'mahasiswa_id')) {
+                if (Schema::hasColumn('sikeu_tagihan_mahasiswa', 'mahasiswa_id')) {
                     $table->unsignedBigInteger('mahasiswa_id')->nullable()->change();
                 }
 
-                if (!Schema::hasColumn('tagihan_mahasiswa', 'calon_mahasiswa_id')) {
+                if (!Schema::hasColumn('sikeu_tagihan_mahasiswa', 'calon_mahasiswa_id')) {
                     $table->unsignedBigInteger('calon_mahasiswa_id')->nullable()->after('mahasiswa_id')->index();
                 }
 
-                if (!Schema::hasColumn('tagihan_mahasiswa', 'tipe_referensi')) {
+                if (!Schema::hasColumn('sikeu_tagihan_mahasiswa', 'tipe_referensi')) {
                     $table->string('tipe_referensi', 30)->default('mahasiswa')->after('calon_mahasiswa_id')->index();
                 }
             });
@@ -35,10 +35,10 @@ return new class extends Migration
     {
         if (Schema::hasTable('sikeu_tagihan_mahasiswa')) {
             Schema::table('sikeu_tagihan_mahasiswa', function (Blueprint $table) {
-                if (Schema::hasColumn('tagihan_mahasiswa', 'tipe_referensi')) {
+                if (Schema::hasColumn('sikeu_tagihan_mahasiswa', 'tipe_referensi')) {
                     $table->dropColumn('tipe_referensi');
                 }
-                if (Schema::hasColumn('tagihan_mahasiswa', 'calon_mahasiswa_id')) {
+                if (Schema::hasColumn('sikeu_tagihan_mahasiswa', 'calon_mahasiswa_id')) {
                     $table->dropColumn('calon_mahasiswa_id');
                 }
             });

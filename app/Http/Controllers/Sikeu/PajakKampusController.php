@@ -110,7 +110,7 @@ class PajakKampusController extends Controller
         $validator = Validator::make($request->all(), [
             'ntpn' => 'required|string|min:6|max:50',
             'tanggal_setor' => 'nullable|date',
-            'unit_kas_id' => 'nullable|exists:unit_kas,id',
+            'unit_kas_id' => 'nullable|exists:sikeu_unit_kas,id',
         ]);
 
         if ($validator->fails()) {
