@@ -357,10 +357,11 @@ class MenuSeeder extends Seeder
                 'order_index' => 2,
                 'children' => [
                     ['name' => 'Pengaturan Tarif & Beasiswa', 'url' => '/sikeu/mahasiswa/tarif', 'icon' => 'FaDollarSign', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
-                    ['name' => 'Tagihan SPP & UKT', 'url' => '/sikeu/tagihan', 'icon' => 'FaCreditCard', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 2],
-                    ['name' => 'Pembayaran & Kasir Loket', 'url' => '/sikeu/pembayaran', 'icon' => 'FaMoneyBillWave', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pembayaran.read', 'order_index' => 3],
-                    ['name' => 'Piutang Mahasiswa', 'url' => '/sikeu/piutang', 'icon' => 'FaExclamationTriangle', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 4],
-                    ['name' => 'Dispensasi Pembayaran', 'url' => '/sikeu/dispensasi', 'icon' => 'FaClipboardCheck', 'module' => 'sikeu', 'permission_slug' => 'sikeu.dispensasi.read', 'order_index' => 5],
+                    ['name' => 'Potongan & Keringanan Khusus', 'url' => '/sikeu/mahasiswa/potongan', 'icon' => 'FaSparkles', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 2],
+                    ['name' => 'Tagihan SPP & UKT', 'url' => '/sikeu/tagihan', 'icon' => 'FaCreditCard', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 3],
+                    ['name' => 'Pembayaran & Kasir Loket', 'url' => '/sikeu/pembayaran', 'icon' => 'FaMoneyBillWave', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pembayaran.read', 'order_index' => 4],
+                    ['name' => 'Piutang Mahasiswa', 'url' => '/sikeu/piutang', 'icon' => 'FaExclamationTriangle', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 5],
+                    ['name' => 'Dispensasi Pembayaran', 'url' => '/sikeu/dispensasi', 'icon' => 'FaClipboardCheck', 'module' => 'sikeu', 'permission_slug' => 'sikeu.dispensasi.read', 'order_index' => 6],
                 ]
             ],
             [
@@ -471,7 +472,10 @@ class MenuSeeder extends Seeder
 
                 // Sync module specific menus
                 $moduleSlug = str_replace('admin_', '', $role->slug);
-                $moduleSlug = str_replace('operator_', '', $role->slug);
+                $moduleSlug = str_replace('operator_', '', $moduleSlug);
+                if (in_array($role->slug, ['operator_sikeu', 'kabag_keuangan'])) {
+                    $moduleSlug = 'sikeu';
+                }
                 $roleMenuIds = Menu::whereIn('module', ['sso', $moduleSlug])
                     ->where(function($q) {
                         $q->whereNull('permission_id')
@@ -483,6 +487,11 @@ class MenuSeeder extends Seeder
                     ->toArray();
                 if (!empty($roleMenuIds)) {
                     $role->menus()->syncWithoutDetaching($roleMenuIds);
+                }
+
+                if (in_array($role->slug, ['operator_sikeu', 'kabag_keuangan'])) {
+                    $sikeuMenuIds = Menu::where('module', 'sikeu')->pluck('id')->toArray();
+                    $role->menus()->syncWithoutDetaching($sikeuMenuIds);
                 }
             }
         }
