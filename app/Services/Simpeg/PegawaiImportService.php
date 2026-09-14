@@ -265,29 +265,39 @@ class PegawaiImportService
                 continue;
             }
 
-            // Normalisasi jenis kelamin
-            $jkRaw = strtoupper(trim($row['jenis_kelamin'] ?? ''));
-            $jk = str_starts_with($jkRaw, 'P') || str_contains($jkRaw, 'WANITA') || str_contains($jkRaw, 'PEREMPUAN') ? 'P' : 'L';
-
-            // Normalisasi jenis pegawai
-            $jenisPegawaiRaw = strtolower(trim($row['jenis_pegawai'] ?? 'dosen'));
-            $jenisPegawai = str_contains($jenisPegawaiRaw, 'tendik') || str_contains($jenisPegawaiRaw, 'staf') || str_contains($jenisPegawaiRaw, 'karyawan')
-                ? 'tendik'
-                : (str_contains($jenisPegawaiRaw, 'honorer') ? 'honorer' : 'dosen');
-
-            // Normalisasi status kepegawaian
-            $statusKepegawaianRaw = strtolower(trim($row['status_kepegawaian'] ?? 'tetap_yayasan'));
-            $statusKepegawaian = 'tetap_yayasan';
-            if (str_contains($statusKepegawaianRaw, 'pns')) {
-                $statusKepegawaian = 'pns';
-            } elseif (str_contains($statusKepegawaianRaw, 'kontrak')) {
-                $statusKepegawaian = 'kontrak';
-            } elseif (str_contains($statusKepegawaianRaw, 'non_pns')) {
-                $statusKepegawaian = 'non_pns';
+            // Jenis kelamin: null jika kosong di file
+            $jk = null;
+            if (!empty($row['jenis_kelamin'])) {
+                $jkRaw = strtoupper(trim($row['jenis_kelamin']));
+                $jk = (str_starts_with($jkRaw, 'P') || str_contains($jkRaw, 'WANITA') || str_contains($jkRaw, 'PEREMPUAN')) ? 'P' : 'L';
             }
 
-            // Cari Unit Kerja berdasarkan nama atau kode
-            $unitKerjaId = $defaultUnit?->id;
+            // Jenis pegawai: null jika kosong di file
+            $jenisPegawai = null;
+            if (!empty($row['jenis_pegawai'])) {
+                $jenisPegawaiRaw = strtolower(trim($row['jenis_pegawai']));
+                $jenisPegawai = (str_contains($jenisPegawaiRaw, 'tendik') || str_contains($jenisPegawaiRaw, 'staf') || str_contains($jenisPegawaiRaw, 'karyawan'))
+                    ? 'tendik'
+                    : (str_contains($jenisPegawaiRaw, 'honorer') ? 'honorer' : 'dosen');
+            }
+
+            // Status kepegawaian: null jika kosong di file
+            $statusKepegawaian = null;
+            if (!empty($row['status_kepegawaian'])) {
+                $statusKepegawaianRaw = strtolower(trim($row['status_kepegawaian']));
+                if (str_contains($statusKepegawaianRaw, 'pns')) {
+                    $statusKepegawaian = 'pns';
+                } elseif (str_contains($statusKepegawaianRaw, 'kontrak')) {
+                    $statusKepegawaian = 'kontrak';
+                } elseif (str_contains($statusKepegawaianRaw, 'non_pns')) {
+                    $statusKepegawaian = 'non_pns';
+                } else {
+                    $statusKepegawaian = 'tetap_yayasan';
+                }
+            }
+
+            // Cari Unit Kerja berdasarkan nama atau kode (null jika kosong)
+            $unitKerjaId = null;
             if (!empty($row['unit_kerja'])) {
                 $searchUnit = trim($row['unit_kerja']);
                 $foundUnit = UnitKerja::where('nama', 'like', "%{$searchUnit}%")
@@ -297,6 +307,27 @@ class PegawaiImportService
                     $unitKerjaId = $foundUnit->id;
                 }
             }
+
+            // Tanggal masuk: null jika kosong
+            $tanggalMasuk = null;
+            if (!empty($row['tanggal_masuk'])) {
+                $parsedTglMasuk = strtotime($row['tanggal_masuk']);
+                if ($parsedTglMasuk !== false) {
+                    $tanggalMasuk = date('Y-m-d', $parsedTglMasuk);
+                }
+            }
+
+            // Tanggal lahir: null jika kosong
+            $tanggalLahir = null;
+            if (!empty($row['tanggal_lahir'])) {
+                $parsedTglLahir = strtotime($row['tanggal_lahir']);
+                if ($parsedTglLahir !== false) {
+                    $tanggalLahir = date('Y-m-d', $parsedTglLahir);
+                }
+            }
+
+            // Agama: null jika kosong
+            $agama = !empty($row['agama']) ? trim($row['agama']) : null;
 
             // Tentukan email dan username akun SSO
             $email = !empty($row['email']) ? trim($row['email']) : null;
@@ -329,14 +360,15 @@ class PegawaiImportService
                         'is_verified' => true,
                     ]);
 
-                    // Lampirkan role SSO
-                    $roleToAttach = ($jenisPegawai === 'dosen') ? $dosenRole : $tendikRole;
-                    if ($roleToAttach) {
-                        $user->roles()->syncWithoutDetaching([$roleToAttach->id]);
+                    // Lampirkan role SSO jika jenis_pegawai ditentukan
+                    if ($jenisPegawai === 'dosen' && $dosenRole) {
+                        $user->roles()->syncWithoutDetaching([$dosenRole->id]);
+                    } elseif ($jenisPegawai === 'tendik' && $tendikRole) {
+                        $user->roles()->syncWithoutDetaching([$tendikRole->id]);
                     }
                 }
 
-                // 2. Simpan Data Pegawai di simpeg_pegawai
+                // 2. Simpan Data Pegawai di simpeg_pegawai (kolom kosong tetap null)
                 $pegawai = Pegawai::create([
                     'user_id' => $user->id,
                     'unit_kerja_id' => $unitKerjaId,
@@ -345,11 +377,11 @@ class PegawaiImportService
                     'nama_lengkap' => $namaLengkap,
                     'jenis_kelamin' => $jk,
                     'tempat_lahir' => !empty($row['tempat_lahir']) ? trim($row['tempat_lahir']) : null,
-                    'tanggal_lahir' => !empty($row['tanggal_lahir']) ? date('Y-m-d', strtotime($row['tanggal_lahir'])) : null,
-                    'agama' => !empty($row['agama']) ? trim($row['agama']) : 'Islam',
+                    'tanggal_lahir' => $tanggalLahir,
+                    'agama' => $agama,
                     'jenis_pegawai' => $jenisPegawai,
                     'status_kepegawaian' => $statusKepegawaian,
-                    'tanggal_masuk' => !empty($row['tanggal_masuk']) ? date('Y-m-d', strtotime($row['tanggal_masuk'])) : date('Y-m-d'),
+                    'tanggal_masuk' => $tanggalMasuk,
                     'status' => 'aktif',
                     'telepon' => !empty($row['telepon']) ? trim($row['telepon']) : null,
                     'alamat' => !empty($row['alamat']) ? trim($row['alamat']) : null,

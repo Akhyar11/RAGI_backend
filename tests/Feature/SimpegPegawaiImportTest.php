@@ -129,4 +129,49 @@ class SimpegPegawaiImportTest extends TestCase
         $this->assertTrue(Hash::check('indonusa', $createdUser->password));
         $this->assertTrue($createdUser->hasRole('dosen'));
     }
+
+    public function test_can_import_pegawai_with_empty_columns_and_does_not_set_default_values()
+    {
+        $csvContent = "\xEF\xBB\xBF" .
+            "nip,nik,nama_lengkap,email,telepon,jenis_kelamin,tempat_lahir,tanggal_lahir,jenis_pegawai,status_kepegawaian,unit_kerja,jabatan,tanggal_masuk,alamat\n" .
+            ",,Hendri Wijaya,,,,,,,,,,,\n";
+
+        $file = UploadedFile::fake()->createWithContent('data_pegawai_minimal.csv', $csvContent);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/pegawai/import', [
+                'file' => $file,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'total' => 1,
+                    'success' => 1,
+                    'failed' => 0,
+                ],
+            ]);
+
+        $pegawai = Pegawai::where('nama_lengkap', 'Hendri Wijaya')->first();
+        $this->assertNotNull($pegawai);
+        $this->assertNull($pegawai->nip);
+        $this->assertNull($pegawai->nik);
+        $this->assertNull($pegawai->jenis_kelamin);
+        $this->assertNull($pegawai->jenis_pegawai);
+        $this->assertNull($pegawai->status_kepegawaian);
+        $this->assertNull($pegawai->unit_kerja_id);
+        $this->assertNull($pegawai->tanggal_masuk);
+        $this->assertNull($pegawai->agama);
+        $this->assertNull($pegawai->telepon);
+        $this->assertNull($pegawai->alamat);
+
+        // Pastikan akun SSO tetap dibuat dengan default password indonusa
+        $user = User::find($pegawai->user_id);
+        $this->assertNotNull($user);
+        $this->assertTrue(Hash::check('indonusa', $user->password));
+        // Karena jenis_pegawai kosong, tidak ada role dosen/tendik yang otomatis dipaksakan
+        $this->assertFalse($user->hasRole('dosen'));
+        $this->assertFalse($user->hasRole('tendik'));
+    }
 }

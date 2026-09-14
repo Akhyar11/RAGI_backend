@@ -65,9 +65,13 @@ class PegawaiService
                         'is_verified' => true,
                     ]);
 
-                    $jenisPegawai = $data['jenis_pegawai'] ?? 'dosen';
-                    $roleSlug = ($jenisPegawai === 'dosen') ? 'dosen' : 'tendik';
-                    $role = \App\Models\Role::where('slug', $roleSlug)->first();
+                    $jenisPegawai = $data['jenis_pegawai'] ?? null;
+                    $role = null;
+                    if ($jenisPegawai === 'dosen') {
+                        $role = \App\Models\Role::where('slug', 'dosen')->first();
+                    } elseif ($jenisPegawai === 'tendik') {
+                        $role = \App\Models\Role::where('slug', 'tendik')->first();
+                    }
                     if ($role) {
                         $user->roles()->syncWithoutDetaching([$role->id]);
                     }
