@@ -174,4 +174,46 @@ class SimpegPegawaiRoleTest extends TestCase
             'is_active' => true,
         ]);
     }
+
+    public function test_sso_username_priority_scales_nidn_nuptk_nip()
+    {
+        // 1. Dosen dengan 3 data (NIDN, NUPTK, NIP) -> Username WAJIB NIDN
+        $resA = $this->actingAs($this->admin, 'api')->postJson('/api/simpeg/pegawai', [
+            'nama_lengkap' => 'Dosen Tiga Identitas',
+            'nidn' => '0401019001',
+            'nuptk' => '8888777766665555',
+            'nip' => '199001012015011001',
+            'jenis_kelamin' => 'L',
+            'role_ids' => [$this->roleDosen->id],
+        ]);
+        $resA->assertStatus(201);
+        $userA = User::find($resA->json('data.user_id'));
+        $this->assertNotNull($userA);
+        $this->assertEquals('0401019001', $userA->username); // Prioritas 1: NIDN
+
+        // 2. Dosen dengan NUPTK dan NIP (tanpa NIDN) -> Username WAJIB NUPTK
+        $resB = $this->actingAs($this->admin, 'api')->postJson('/api/simpeg/pegawai', [
+            'nama_lengkap' => 'Dosen Dua Identitas',
+            'nuptk' => '9999888877776666',
+            'nip' => '199202022018021002',
+            'jenis_kelamin' => 'P',
+            'role_ids' => [$this->roleDosen->id],
+        ]);
+        $resB->assertStatus(201);
+        $userB = User::find($resB->json('data.user_id'));
+        $this->assertNotNull($userB);
+        $this->assertEquals('9999888877776666', $userB->username); // Prioritas 2: NUPTK
+
+        // 3. Pegawai/Dosen hanya dengan NIP -> Username WAJIB NIP
+        $resC = $this->actingAs($this->admin, 'api')->postJson('/api/simpeg/pegawai', [
+            'nama_lengkap' => 'Pegawai Satu Identitas',
+            'nip' => '199505052020011003',
+            'jenis_kelamin' => 'L',
+            'role_ids' => [$this->roleTendik->id],
+        ]);
+        $resC->assertStatus(201);
+        $userC = User::find($resC->json('data.user_id'));
+        $this->assertNotNull($userC);
+        $this->assertEquals('199505052020011003', $userC->username); // Prioritas 3: NIP
+    }
 }

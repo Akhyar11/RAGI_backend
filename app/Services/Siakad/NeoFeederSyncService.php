@@ -17,6 +17,7 @@ use App\Models\Siakad\FeederMapping;
 use App\Models\Spmb\MasterProgramStudi;
 use App\Models\Simpeg\Pegawai;
 use App\Models\Simpeg\RiwayatPendidikanPegawai;
+use App\Services\Simpeg\PegawaiService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
@@ -839,6 +840,15 @@ class NeoFeederSyncService
 
                     if ($pegawai && $dosenLokal->pegawai_id !== $pegawai->id) {
                         $dosenLokal->update(['pegawai_id' => $pegawai->id]);
+                    }
+
+                    // Otomatis buatkan / hubungkan akun SSO di core_users dengan skala prioritas username: NIDN -> NUPTK -> NIP
+                    $user = app(PegawaiService::class)->ensureSsoUserForPegawai($pegawai, [
+                        'email' => !empty($item['email']) ? trim($item['email']) : null,
+                    ]);
+
+                    if ($dosenLokal->user_id !== $user->id) {
+                        $dosenLokal->update(['user_id' => $user->id]);
                     }
 
                     // 3. Masukkan Data Riwayat Sekolah ke SIMPEG (simpeg_riwayat_pendidikan_pegawai)

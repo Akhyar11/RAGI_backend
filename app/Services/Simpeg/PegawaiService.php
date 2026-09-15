@@ -5,6 +5,10 @@ namespace App\Services\Simpeg;
 use App\Models\Simpeg\Pegawai;
 use App\Models\Siakad\Dosen;
 use App\Models\Spmb\MasterProgramStudi;
+use App\Models\User;
+use App\Models\Role;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class PegawaiService
 {
@@ -75,38 +79,8 @@ class PegawaiService
                 $data['jenis_pegawai'] = $roles->pluck('name')->implode(', ');
             }
 
-            // Otomatis buatkan akun SSO di core_users dengan password default 'indonusa' jika user_id belum ada
-            if (empty($data['user_id'])) {
-                $nama = $data['nama_lengkap'] ?? 'Pegawai Baru';
-                $nip = !empty($data['nip']) ? preg_replace('/[^0-9]/', '', (string) $data['nip']) : null;
-                $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', explode(' ', $nama)[0] ?? 'user'));
-
-                $email = !empty($data['email']) ? trim($data['email']) : (($nip ?: $cleanName . rand(100, 999)) . '@campus.ac.id');
-                $username = !empty($data['username']) ? trim($data['username']) : ($nip ?: $cleanName . rand(10, 99));
-
-                while (\App\Models\User::where('username', $username)->exists()) {
-                    $username = $username . '_' . rand(10, 99);
-                }
-
-                $user = \App\Models\User::where('email', $email)->first();
-                if (!$user) {
-                    $user = \App\Models\User::create([
-                        'username' => $username,
-                        'email' => $email,
-                        'password' => \Illuminate\Support\Facades\Hash::make('indonusa'),
-                        'phone' => $data['telepon'] ?? null,
-                        'is_active' => true,
-                        'is_verified' => true,
-                    ]);
-
-                    if (!empty($roleIds)) {
-                        $user->roles()->syncWithoutDetaching($roleIds);
-                    }
-                }
-
-                $data['user_id'] = $user->id;
-            }
-
+            $email = !empty($data['email']) ? trim($data['email']) : null;
+            $username = !empty($data['username']) ? trim($data['username']) : null;
             unset($data['email'], $data['username']);
 
             $pegawai = Pegawai::create($data);
@@ -114,6 +88,15 @@ class PegawaiService
             if (!empty($roleIds)) {
                 $pegawai->roles()->sync($roleIds);
             }
+
+            $pegawai->load(['roles']);
+
+            // Buat atau pastikan akun SSO di core_users dengan skala prioritas: NIDN -> NUPTK -> NIP
+            $this->ensureSsoUserForPegawai($pegawai, [
+                'role_ids' => $roleIds,
+                'email' => $email,
+                'username' => $username,
+            ]);
 
             $pegawai->load(['roles', 'user.roles']);
             $this->syncDosenRecord($pegawai, $roleIds);
@@ -132,7 +115,7 @@ class PegawaiService
                 $roleIds = (array)$data['role_ids'];
                 unset($data['role_ids']);
 
-                $roles = \App\Models\Role::whereIn('id', $roleIds)->get();
+                $roles = Role::whereIn('id', $roleIds)->get();
                 $data['jenis_pegawai'] = $roles->pluck('name')->implode(', ');
 
                 $pegawai->roles()->sync($roleIds);
@@ -143,6 +126,13 @@ class PegawaiService
             }
 
             $pegawai->update($data);
+            $pegawai->load(['roles']);
+
+            // Pastikan akun SSO tetap ada dan sinkron dengan perannya
+            $this->ensureSsoUserForPegawai($pegawai, [
+                'role_ids' => $roleIds ?? [],
+            ]);
+
             $pegawai->load(['roles', 'user.roles']);
             $this->syncDosenRecord($pegawai, $roleIds ?? []);
 
@@ -298,5 +288,171 @@ class PegawaiService
         }
 
         return Dosen::create($dosenData);
+    }
+
+    /**
+     * Membersihkan nilai identifier (NIDN/NUPTK/NIP) dari placeholder kosong atau karakter tidak valid.
+     */
+    public function sanitizeIdentifier(?string $val): ?string
+    {
+        if ($val === null) {
+            return null;
+        }
+        $trimmed = trim($val);
+        $invalid = ['-', '--', '---', '0', 'n/a', 'none', 'null', ''];
+        if (in_array(strtolower($trimmed), $invalid, true)) {
+            return null;
+        }
+        return $trimmed;
+    }
+
+    /**
+     * Menentukan username berdasarkan skala prioritas: NIDN -> NUPTK -> NIP.
+     * Jika memiliki ketiganya, gunakan NIDN. Jika hanya NUPTK dan NIP, gunakan NUPTK.
+     * Jika hanya NIP, gunakan NIP. Fallback ke nama depan + angka acak.
+     */
+    public function resolveUsernamePriority(?string $nidn, ?string $nuptk, ?string $nip, ?string $nama = null): string
+    {
+        $cleanNidn = $this->sanitizeIdentifier($nidn);
+        if ($cleanNidn !== null) {
+            return $cleanNidn;
+        }
+
+        $cleanNuptk = $this->sanitizeIdentifier($nuptk);
+        if ($cleanNuptk !== null) {
+            return $cleanNuptk;
+        }
+
+        $cleanNip = $this->sanitizeIdentifier($nip);
+        if ($cleanNip !== null) {
+            return $cleanNip;
+        }
+
+        $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', explode(' ', $nama ?? 'user')[0] ?? 'user'));
+        if (empty($cleanName)) {
+            $cleanName = 'pegawai';
+        }
+
+        return $cleanName . rand(10, 99);
+    }
+
+    /**
+     * Menentukan alamat email akun SSO.
+     */
+    public function resolveEmail(?string $email, string $username, ?string $nama = null): string
+    {
+        $cleanEmail = $this->sanitizeIdentifier($email);
+        if ($cleanEmail !== null && filter_var($cleanEmail, FILTER_VALIDATE_EMAIL)) {
+            return strtolower($cleanEmail);
+        }
+
+        return strtolower($username) . '@campus.ac.id';
+    }
+
+    /**
+     * Memastikan akun SSO di core_users dibuat atau dihubungkan ke Pegawai,
+     * dengan username mematuhi skala prioritas (NIDN -> NUPTK -> NIP).
+     */
+    public function ensureSsoUserForPegawai(Pegawai $pegawai, array $options = []): User
+    {
+        // 1. Cek jika user sudah ada dan terhubung
+        if (!empty($pegawai->user_id)) {
+            $existingUser = User::find($pegawai->user_id);
+            if ($existingUser) {
+                $this->assignRolesToUser($existingUser, $pegawai, $options['role_ids'] ?? []);
+                return $existingUser;
+            }
+        }
+
+        // 2. Tentukan username berdasarkan skala prioritas: NIDN -> NUPTK -> NIP -> cleanName
+        $username = $options['username'] ?? $this->resolveUsernamePriority(
+            $pegawai->nidn,
+            $pegawai->nuptk,
+            $pegawai->nip,
+            $pegawai->nama_lengkap
+        );
+
+        // 3. Tentukan email
+        $email = $options['email'] ?? $this->resolveEmail(
+            $options['email'] ?? null,
+            $username,
+            $pegawai->nama_lengkap
+        );
+
+        // 4. Cek apakah user dengan username atau email ini sudah pernah ada di database
+        $user = User::where('username', $username)->first();
+        if (!$user) {
+            $user = User::where('email', $email)->first();
+        }
+
+        if (!$user) {
+            // Pastikan username unik jika kebetulan ada konflik
+            $baseUsername = $username;
+            while (User::where('username', $username)->exists()) {
+                $username = $baseUsername . '_' . rand(10, 99);
+            }
+
+            // Pastikan email unik jika kebetulan ada konflik
+            $baseEmail = $email;
+            $emailParts = explode('@', $baseEmail);
+            while (User::where('email', $email)->exists()) {
+                $email = $emailParts[0] . rand(10, 99) . '@' . ($emailParts[1] ?? 'campus.ac.id');
+            }
+
+            $user = User::create([
+                'username' => $username,
+                'email' => $email,
+                'password' => Hash::make('indonusa'),
+                'phone' => $pegawai->telepon ?? null,
+                'is_active' => true,
+                'is_verified' => true,
+            ]);
+        }
+
+        // 5. Hubungkan user_id ke pegawai
+        if ($pegawai->user_id !== $user->id) {
+            $pegawai->update(['user_id' => $user->id]);
+        }
+
+        // 6. Hubungkan user_id ke record siakad_dosen jika ada
+        if ($pegawai->dosen && $pegawai->dosen->user_id !== $user->id) {
+            $pegawai->dosen->update(['user_id' => $user->id]);
+        }
+
+        // 7. Lampirkan roles yang sesuai
+        $this->assignRolesToUser($user, $pegawai, $options['role_ids'] ?? []);
+
+        return $user;
+    }
+
+    /**
+     * Sinkronisasi roles antara User SSO dan Pegawai.
+     */
+    public function assignRolesToUser(User $user, Pegawai $pegawai, array $roleIds = []): void
+    {
+        $allRoleIds = $roleIds;
+
+        // Ambil role_ids dari pegawai jika ada
+        if (empty($allRoleIds) && $pegawai->relationLoaded('roles')) {
+            $allRoleIds = $pegawai->roles->pluck('id')->toArray();
+        } elseif (empty($allRoleIds)) {
+            $allRoleIds = $pegawai->roles()->pluck('core_roles.id')->toArray();
+        }
+
+        // Cek jika pegawai adalah dosen, pastikan role 'dosen' terlampir
+        if ($this->isPegawaiDosen($pegawai, $allRoleIds)) {
+            $dosenRole = Role::firstOrCreate(
+                ['slug' => 'dosen'],
+                ['name' => 'Dosen Pengajar', 'is_active' => true]
+            );
+            if ($dosenRole && !in_array($dosenRole->id, $allRoleIds, true)) {
+                $allRoleIds[] = $dosenRole->id;
+            }
+        }
+
+        if (!empty($allRoleIds)) {
+            $user->roles()->syncWithoutDetaching($allRoleIds);
+            $pegawai->roles()->syncWithoutDetaching($allRoleIds);
+        }
     }
 }

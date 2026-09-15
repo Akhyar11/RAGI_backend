@@ -23,6 +23,8 @@ class PegawaiImportService
     public function getTemplateCsv(): string
     {
         $headers = [
+            'nidn',
+            'nuptk',
             'nip',
             'nik',
             'nama_lengkap',
@@ -41,6 +43,8 @@ class PegawaiImportService
 
         $sampleRows = [
             [
+                '0415018501',
+                '3560763664230001',
                 '198501152010121001',
                 '3271011501850002',
                 'Dr. Ahmad Fadhil, M.Kom.',
@@ -57,20 +61,22 @@ class PegawaiImportService
                 'Jl. Merdeka No. 10, Bandung',
             ],
             [
+                '',
+                '',
                 '199203102018042002',
-                '3271025003920001',
+                '3271011003920003',
                 'Siti Nurhaliza, S.E.',
                 'siti.nurhaliza@campus.ac.id',
-                '081298765432',
+                '082345678901',
                 'P',
                 'Jakarta',
                 '1992-03-10',
                 'tendik',
                 'kontrak',
                 'Biro Keuangan & Administrasi Umum',
-                'Staf Administrasi',
+                'Staf Administrasi Keuangan',
                 '2018-04-01',
-                'Jl. Cihampelas No. 25, Bandung',
+                'Jl. Sudirman No. 25, Bandung',
             ],
         ];
 
@@ -329,49 +335,18 @@ class PegawaiImportService
             // Agama: null jika kosong
             $agama = !empty($row['agama']) ? trim($row['agama']) : null;
 
-            // Tentukan email dan username akun SSO
+            $nidn = !empty($row['nidn']) ? trim($row['nidn']) : null;
+            $nuptk = !empty($row['nuptk']) ? trim($row['nuptk']) : null;
             $email = !empty($row['email']) ? trim($row['email']) : null;
-            if (!$email) {
-                $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', explode(' ', $namaLengkap)[0]));
-                $email = ($nip ? $nip : $cleanName . rand(100, 999)) . '@campus.ac.id';
-            }
-
-            // Buat username unik
-            $username = $nip ?: strtolower(preg_replace('/[^a-zA-Z0-9]/', '', explode(' ', $namaLengkap)[0]) . rand(10, 99));
 
             try {
                 DB::beginTransaction();
 
-                // 1. Buat atau dapatkan akun SSO di core_users dengan DEFAULT PASSWORD: 'indonusa'
-                $user = User::where('email', $email)->first();
-                if (!$user) {
-                    // Pastikan username unik
-                    $existingUsername = User::where('username', $username)->exists();
-                    if ($existingUsername) {
-                        $username = $username . '_' . rand(10, 99);
-                    }
-
-                    $user = User::create([
-                        'username' => $username,
-                        'email' => $email,
-                        'password' => Hash::make('indonusa'),
-                        'phone' => !empty($row['telepon']) ? trim($row['telepon']) : null,
-                        'is_active' => true,
-                        'is_verified' => true,
-                    ]);
-
-                    // Lampirkan role SSO jika jenis_pegawai ditentukan
-                    if ($jenisPegawai === 'dosen' && $dosenRole) {
-                        $user->roles()->syncWithoutDetaching([$dosenRole->id]);
-                    } elseif ($jenisPegawai === 'tendik' && $tendikRole) {
-                        $user->roles()->syncWithoutDetaching([$tendikRole->id]);
-                    }
-                }
-
-                // 2. Simpan Data Pegawai di simpeg_pegawai (kolom kosong tetap null)
+                // 1. Simpan Data Pegawai di simpeg_pegawai (kolom kosong tetap null)
                 $pegawai = Pegawai::create([
-                    'user_id' => $user->id,
                     'unit_kerja_id' => $unitKerjaId,
+                    'nidn' => $nidn,
+                    'nuptk' => $nuptk,
                     'nip' => $nip,
                     'nik' => $nik,
                     'nama_lengkap' => $namaLengkap,
@@ -385,6 +360,19 @@ class PegawaiImportService
                     'status' => 'aktif',
                     'telepon' => !empty($row['telepon']) ? trim($row['telepon']) : null,
                     'alamat' => !empty($row['alamat']) ? trim($row['alamat']) : null,
+                ]);
+
+                // 2. Buat atau hubungkan akun SSO di core_users dengan skala prioritas username: NIDN -> NUPTK -> NIP
+                $roleIds = [];
+                if ($jenisPegawai === 'dosen' && $dosenRole) {
+                    $roleIds[] = $dosenRole->id;
+                } elseif ($jenisPegawai === 'tendik' && $tendikRole) {
+                    $roleIds[] = $tendikRole->id;
+                }
+
+                $user = app(PegawaiService::class)->ensureSsoUserForPegawai($pegawai, [
+                    'email' => $email,
+                    'role_ids' => $roleIds,
                 ]);
 
                 // 3. Tambahkan riwayat jabatan awal jika kolom jabatan terisi

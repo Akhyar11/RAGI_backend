@@ -351,6 +351,14 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals('Dosen Baru Impor Dikti', $pegawai->nama_lengkap);
         $this->assertEquals('dosen', $pegawai->jenis_pegawai);
         $this->assertEquals('aktif', $pegawai->status);
+
+        // Verifikasi otomatis dibuatkan akun SSO dengan username skala prioritas NIDN
+        $this->assertNotNull($pegawai->user_id);
+        $this->assertEquals($pegawai->user_id, $dosenBaru->user_id);
+        $ssoUser = \App\Models\User::find($pegawai->user_id);
+        $this->assertNotNull($ssoUser);
+        $this->assertEquals('0611223344', $ssoUser->username); // Prioritas 1: NIDN
+        $this->assertTrue($ssoUser->roles->contains('slug', 'dosen'));
     }
 
     public function test_sync_batch_ajar_dosen_gracefully_handles_non_nidn_lecturers()
