@@ -846,12 +846,15 @@ class NeoFeederSyncService
                     }
 
                     // Otomatis buatkan / hubungkan akun SSO di core_users dengan skala prioritas username: NIDN -> NUPTK -> NIP
-                    $user = app(PegawaiService::class)->ensureSsoUserForPegawai($pegawai, [
-                        'email' => !empty($item['email']) ? trim($item['email']) : null,
-                    ]);
+                    // HANYA dibuatkan untuk dosen yang berstatus AKTIF
+                    if ($isActive) {
+                        $user = app(PegawaiService::class)->ensureSsoUserForPegawai($pegawai, [
+                            'email' => !empty($item['email']) ? trim($item['email']) : null,
+                        ]);
 
-                    if ($dosenLokal->user_id !== $user->id) {
-                        $dosenLokal->update(['user_id' => $user->id]);
+                        if ($dosenLokal->user_id !== $user->id) {
+                            $dosenLokal->update(['user_id' => $user->id]);
+                        }
                     }
 
                     // 3. Masukkan Data Riwayat Sekolah ke SIMPEG (simpeg_riwayat_pendidikan_pegawai)

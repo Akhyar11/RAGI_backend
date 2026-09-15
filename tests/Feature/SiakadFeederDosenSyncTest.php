@@ -316,6 +316,18 @@ class SiakadFeederDosenSyncTest extends TestCase
                                 'id_status_aktif' => '1',
                                 'nama_status_aktif' => 'Aktif',
                             ],
+                            [
+                                'id_dosen' => 'UUID-PULL-DOSEN-INACTIVE',
+                                'nama_dosen' => 'Dosen Feeder Status Keluar',
+                                'nidn' => '0699001122',
+                                'nuptk' => '3560763664230111',
+                                'nip' => '198001012010011003',
+                                'jenis_kelamin' => 'P',
+                                'nama_agama' => 'Islam',
+                                'tanggal_lahir' => '01-01-1980',
+                                'id_status_aktif' => 'N',
+                                'nama_status_aktif' => 'Keluar',
+                            ],
                         ]
                     ];
                 }
@@ -326,7 +338,7 @@ class SiakadFeederDosenSyncTest extends TestCase
         $log = $service->pullBatchDosenFromFeeder();
 
         $this->assertEquals('dosen', $log->entity_type);
-        $this->assertEquals(2, $log->success_count);
+        $this->assertEquals(3, $log->success_count);
 
         // Verifikasi dosen existing: NIP lokal tetap dipertahankan, id_feeder diperbarui
         $dosenExisting->refresh();
@@ -352,13 +364,25 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals('dosen', $pegawai->jenis_pegawai);
         $this->assertEquals('aktif', $pegawai->status);
 
-        // Verifikasi otomatis dibuatkan akun SSO dengan username skala prioritas NIDN
+        // Verifikasi otomatis dibuatkan akun SSO dengan username skala prioritas NIDN (hanya untuk yang aktif)
         $this->assertNotNull($pegawai->user_id);
         $this->assertEquals($pegawai->user_id, $dosenBaru->user_id);
         $ssoUser = \App\Models\User::find($pegawai->user_id);
         $this->assertNotNull($ssoUser);
         $this->assertEquals('0611223344', $ssoUser->username); // Prioritas 1: NIDN
         $this->assertTrue($ssoUser->roles->contains('slug', 'dosen'));
+
+        // Verifikasi dosen tidak aktif TIDAK dibuatkan akun SSO
+        $dosenInactive = Dosen::where('nidn', '0699001122')->first();
+        $this->assertNotNull($dosenInactive);
+        $this->assertEquals('Keluar', $dosenInactive->status_aktif);
+        $this->assertFalse((bool)$dosenInactive->is_active);
+        $this->assertNull($dosenInactive->user_id);
+        $pegawaiInactive = \App\Models\Simpeg\Pegawai::find($dosenInactive->pegawai_id);
+        $this->assertNotNull($pegawaiInactive);
+        $this->assertEquals('non_aktif', $pegawaiInactive->status);
+        $this->assertNull($pegawaiInactive->user_id);
+        $this->assertDatabaseMissing('core_users', ['username' => '0699001122']);
     }
 
     public function test_sync_batch_ajar_dosen_gracefully_handles_non_nidn_lecturers()
