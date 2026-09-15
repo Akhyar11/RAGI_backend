@@ -12,6 +12,7 @@ use App\Models\Siakad\Dosen;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\Kelas;
 use App\Models\Spmb\MasterTahunAkademik;
+use Illuminate\Validation\Rule;
 
 class AkademikController extends Controller
 {
@@ -194,7 +195,7 @@ class AkademikController extends Controller
         $request->validate([
             'fakultas_id' => 'required|exists:siakad_fakultas,id',
             'kaprodi_id' => 'nullable|exists:siakad_dosen,id',
-            'kode_prodi' => 'required|string|unique:master_program_studi,kode_prodi',
+            'kode_prodi' => ['required', 'string', Rule::unique(ProgramStudi::class, 'kode_prodi')],
             'kode_prodi_dikti' => 'nullable|string|max:50',
             'nama' => 'required|string|max:255',
             'jenjang' => 'required|string|max:10',
@@ -272,7 +273,7 @@ class AkademikController extends Controller
     public function storeKurikulum(Request $request)
     {
         $request->validate([
-            'program_studi_id' => 'required|exists:master_program_studi,id',
+            'program_studi_id' => ['required', Rule::exists(ProgramStudi::class, 'id')],
             'kode' => 'required|string|unique:siakad_kurikulum,kode',
             'nama' => 'required|string|max:255',
             'tahun_berlaku' => 'required|integer',
@@ -413,25 +414,6 @@ class AkademikController extends Controller
     // --- DOSEN CRUD ---
     public function listDosen(Request $request)
     {
-        // Otomatis sinkronkan jika ada pegawai berstatus Dosen di SIMPEG yang belum terdaftar di siakad_dosen
-        $unsyncedPegawais = \App\Models\Simpeg\Pegawai::whereDoesntHave('dosen')
-            ->where(function ($q) {
-                $q->where('jenis_pegawai', 'like', '%dosen%')
-                  ->orWhereHas('roles', function ($r) {
-                      $r->where('slug', 'like', '%dosen%')->orWhere('name', 'like', '%dosen%');
-                  })
-                  ->orWhereHas('user.roles', function ($r) {
-                      $r->where('slug', 'like', '%dosen%')->orWhere('name', 'like', '%dosen%');
-                  });
-            })->get();
-
-        if ($unsyncedPegawais->isNotEmpty()) {
-            $pegawaiService = app(\App\Services\Simpeg\PegawaiService::class);
-            foreach ($unsyncedPegawais as $p) {
-                $pegawaiService->syncDosenRecord($p);
-            }
-        }
-
         $query = Dosen::with(['programStudi']);
 
         if ($request->filled('search')) {
@@ -439,14 +421,26 @@ class AkademikController extends Controller
             $query->where(fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")
                 ->orWhere('nidn', 'like', "%{$s}%")
                 ->orWhere('nuptk', 'like', "%{$s}%")
-                ->orWhere('nip', 'like', "%{$s}%"));
+                ->orWhere('nip', 'like', "%{$s}%")
+                ->orWhere('nik', 'like', "%{$s}%"));
         }
 
         if ($request->filled('program_studi_id')) {
             $query->where('program_studi_id', $request->program_studi_id);
         }
 
-        $data = $query->paginate($request->integer('per_page', 500));
+        if ($request->has('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
+        }
+
+        // Sorting whitelist
+        $allowedSort = ['nama_lengkap', 'nidn', 'nuptk', 'nip', 'created_at'];
+        $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'nama_lengkap';
+        $sortOrder = strtolower($request->sort_order ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        $perPage = min(500, max(1, $request->integer('per_page', 500)));
+        $data = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
@@ -455,45 +449,91 @@ class AkademikController extends Controller
                 'current_page' => $data->currentPage(),
                 'per_page' => $data->perPage(),
                 'total' => $data->total(),
+                'last_page' => $data->lastPage(),
             ]
         ]);
     }
 
     public function storeDosen(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'nama_lengkap' => 'required|string|max:255',
-            'nidn' => 'nullable|string|unique:siakad_dosen,nidn',
-            'nip' => 'nullable|string',
-            'program_studi_id' => 'required|exists:master_program_studi,id',
-            'jabatan_akademik' => 'nullable|string',
+            'nidn' => 'nullable|string|max:30|unique:siakad_dosen,nidn',
+            'nuptk' => 'nullable|string|max:30|unique:siakad_dosen,nuptk',
+            'nip' => 'nullable|string|max:30',
+            'nik' => 'nullable|string|max:30',
+            'program_studi_id' => ['required', Rule::exists(ProgramStudi::class, 'id')],
+            'jabatan_akademik' => 'nullable|string|max:100',
+            'gelar_depan' => 'nullable|string|max:50',
+            'gelar_belakang' => 'nullable|string|max:50',
+            'jenis_kelamin' => 'nullable|in:L,P',
+            'tempat_lahir' => 'nullable|string|max:100',
+            'tanggal_lahir' => 'nullable|date',
+            'agama' => 'nullable|string|max:50',
+            'telepon' => 'nullable|string|max:30',
+            'handphone' => 'nullable|string|max:30',
+            'email' => 'nullable|email|max:100',
+            'status_aktif' => 'nullable|string|max:50',
+            'is_active' => 'nullable|boolean',
         ]);
 
-        $dosen = Dosen::create($request->all());
+        // Whitelist mass-assignment protection
+        $allowedFields = [
+            'nama_lengkap', 'nidn', 'nuptk', 'nip', 'nik', 'program_studi_id',
+            'jabatan_akademik', 'gelar_depan', 'gelar_belakang', 'jenis_kelamin',
+            'tempat_lahir', 'tanggal_lahir', 'agama', 'telepon', 'handphone',
+            'email', 'status_aktif', 'is_active',
+        ];
+        $payload = array_intersect_key($validated, array_flip($allowedFields));
+
+        $dosen = Dosen::create($payload);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Dosen berhasil ditambahkan',
-            'data' => $dosen
+            'data' => $dosen->load('programStudi')
         ], 201);
     }
 
     public function updateDosen(Request $request, $id)
     {
         $dosen = Dosen::findOrFail($id);
-        $request->validate([
+        $validated = $request->validate([
             'nama_lengkap' => 'required|string|max:255',
-            'nip' => 'nullable|string',
-            'program_studi_id' => 'required|exists:master_program_studi,id',
-            'jabatan_akademik' => 'nullable|string',
+            'nidn' => ['nullable', 'string', 'max:30', Rule::unique('siakad_dosen', 'nidn')->ignore($dosen->id)],
+            'nuptk' => ['nullable', 'string', 'max:30', Rule::unique('siakad_dosen', 'nuptk')->ignore($dosen->id)],
+            'nip' => 'nullable|string|max:30',
+            'nik' => 'nullable|string|max:30',
+            'program_studi_id' => ['required', Rule::exists(ProgramStudi::class, 'id')],
+            'jabatan_akademik' => 'nullable|string|max:100',
+            'gelar_depan' => 'nullable|string|max:50',
+            'gelar_belakang' => 'nullable|string|max:50',
+            'jenis_kelamin' => 'nullable|in:L,P',
+            'tempat_lahir' => 'nullable|string|max:100',
+            'tanggal_lahir' => 'nullable|date',
+            'agama' => 'nullable|string|max:50',
+            'telepon' => 'nullable|string|max:30',
+            'handphone' => 'nullable|string|max:30',
+            'email' => 'nullable|email|max:100',
+            'status_aktif' => 'nullable|string|max:50',
+            'is_active' => 'nullable|boolean',
         ]);
 
-        $dosen->update($request->all());
+        // Whitelist mass-assignment protection
+        $allowedFields = [
+            'nama_lengkap', 'nidn', 'nuptk', 'nip', 'nik', 'program_studi_id',
+            'jabatan_akademik', 'gelar_depan', 'gelar_belakang', 'jenis_kelamin',
+            'tempat_lahir', 'tanggal_lahir', 'agama', 'telepon', 'handphone',
+            'email', 'status_aktif', 'is_active',
+        ];
+        $payload = array_intersect_key($validated, array_flip($allowedFields));
+
+        $dosen->update($payload);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Data dosen berhasil diperbarui',
-            'data' => $dosen
+            'data' => $dosen->fresh()->load('programStudi')
         ]);
     }
 

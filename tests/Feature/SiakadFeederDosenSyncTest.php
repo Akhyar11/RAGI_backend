@@ -423,10 +423,10 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertNull($pengampuNonNidn->id_feeder);
     }
 
-    public function test_list_dosen_automatically_syncs_unsynced_simpeg_dosen()
+    public function test_list_dosen_is_pure_read_only_and_does_not_mutate_database()
     {
         $pegawaiDosen = \App\Models\Simpeg\Pegawai::create([
-            'nama_lengkap' => 'Dr. Siakad Sync Dosen, M.Kom.',
+            'nama_lengkap' => 'Dr. Unsynced Pegawai, M.Kom.',
             'nip' => '198909092020011005',
             'nidn' => '0609098901',
             'jenis_pegawai' => 'dosen',
@@ -439,15 +439,87 @@ class SiakadFeederDosenSyncTest extends TestCase
             ->getJson('/api/v1/siakad/akademik/dosen?search=0609098901');
 
         $response->assertStatus(200);
-        $items = $response->json('data');
-        $this->assertNotEmpty($items);
-        $this->assertEquals('0609098901', $items[0]['nidn']);
 
-        $this->assertDatabaseHas('siakad_dosen', [
-            'pegawai_id' => $pegawaiDosen->id,
+        // Verifikasi bahwa GET request MURNI read-only, TIDAK melakukan operasi tulis ke siakad_dosen
+        $this->assertDatabaseMissing('siakad_dosen', [
             'nidn' => '0609098901',
+        ]);
+    }
+
+    public function test_store_dosen_protects_against_mass_assignment_injection()
+    {
+        $admin = User::factory()->create();
+
+        $payload = [
+            'nama_lengkap' => 'Dosen Whitelist Test, S.Kom.',
+            'nidn' => '0655443322',
+            'nip' => '199101012020011002',
+            'program_studi_id' => $this->prodi->id,
+            'jabatan_akademik' => 'Asisten Ahli',
+            // Field injeksi ilegal yang TIDAK boleh ter-assign
+            'user_id' => 88888,
+            'id_feeder' => 'MALICIOUS-FEEDER-UUID',
+            'feeder_raw' => ['injected' => true],
+        ];
+
+        $response = $this->actingAs($admin, 'api')
+            ->postJson('/api/v1/siakad/akademik/dosen', $payload);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('status', 'success');
+
+        $dosen = Dosen::where('nidn', '0655443322')->first();
+        $this->assertNotNull($dosen);
+        $this->assertEquals('Dosen Whitelist Test, S.Kom.', $dosen->nama_lengkap);
+
+        // Pastikan field injeksi tidak tersimpan (mass-assignment tertutup)
+        $this->assertNull($dosen->user_id);
+        $this->assertNull($dosen->id_feeder);
+        $this->assertNull($dosen->feeder_raw);
+    }
+
+    public function test_update_dosen_allows_same_nidn_and_rejects_duplicate_nidn()
+    {
+        $admin = User::factory()->create();
+
+        $dosenA = Dosen::create([
+            'nama_lengkap' => 'Dosen A Awal',
+            'nidn' => '0611112222',
+            'program_studi_id' => $this->prodi->id,
             'is_active' => true,
         ]);
+
+        $dosenB = Dosen::create([
+            'nama_lengkap' => 'Dosen B',
+            'nidn' => '0633334444',
+            'program_studi_id' => $this->prodi->id,
+            'is_active' => true,
+        ]);
+
+        // 1. Update Dosen A dengan NIDN yang sama persis (Rule::unique ignore self) harus BERHASIL (200)
+        $resSelf = $this->actingAs($admin, 'api')
+            ->putJson("/api/v1/siakad/akademik/dosen/{$dosenA->id}", [
+                'nama_lengkap' => 'Dosen A Diperbarui',
+                'nidn' => '0611112222',
+                'program_studi_id' => $this->prodi->id,
+            ]);
+
+        $resSelf->assertStatus(200)
+            ->assertJsonPath('status', 'success');
+
+        $dosenA->refresh();
+        $this->assertEquals('Dosen A Diperbarui', $dosenA->nama_lengkap);
+
+        // 2. Update Dosen A menggunakan NIDN milik Dosen B harus DITOLAK (422)
+        $resConflict = $this->actingAs($admin, 'api')
+            ->putJson("/api/v1/siakad/akademik/dosen/{$dosenA->id}", [
+                'nama_lengkap' => 'Dosen A Tabrakan',
+                'nidn' => '0633334444', // Duplikat dari Dosen B
+                'program_studi_id' => $this->prodi->id,
+            ]);
+
+        $resConflict->assertStatus(422)
+            ->assertJsonValidationErrors(['nidn']);
     }
 
     public function test_pull_dosen_restores_soft_deleted_dosen_and_pegawai_without_duplication()
