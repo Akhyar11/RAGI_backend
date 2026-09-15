@@ -17,6 +17,8 @@ class RiwayatPendidikanPegawai extends Model
         'nama_institusi',
         'program_studi',
         'bidang_ilmu',
+        'gelar_akademik',
+        'singkatan_gelar',
         'tahun_masuk',
         'tahun_lulus',
         'nomor_ijazah',

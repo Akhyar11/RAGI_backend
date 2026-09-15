@@ -14,6 +14,9 @@ use App\Models\Siakad\Krs;
 use App\Models\Siakad\NilaiMahasiswa;
 use App\Models\Siakad\FeederSyncLog;
 use App\Models\Siakad\FeederMapping;
+use App\Models\Spmb\MasterProgramStudi;
+use App\Models\Simpeg\Pegawai;
+use App\Models\Simpeg\RiwayatPendidikanPegawai;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
@@ -417,6 +420,195 @@ class NeoFeederSyncService
     }
 
     /**
+     * Sinkronisasi Daftar Program Studi Resmi dari Neo Feeder (GetProdi)
+     */
+    public function syncProgramStudiFromFeeder()
+    {
+        try {
+            $res = $this->feederService->request('GetProdi', ['limit' => 100]);
+            $items = $res['data'] ?? [];
+            if (isset($items[0])) {
+                foreach ($items as $p) {
+                    $idFeeder = $p['id_prodi'] ?? null;
+                    $kode = $p['kode_program_studi'] ?? '';
+                    $nama = $p['nama_program_studi'] ?? '';
+                    $jenjang = $p['nama_jenjang_pendidikan'] ?? 'D4';
+                    $status = ($p['status'] ?? 'A') === 'A';
+                    $namaLengkap = (str_starts_with($nama, $jenjang . ' ')) ? $nama : "{$jenjang} {$nama}";
+
+                    MasterProgramStudi::updateOrCreate(
+                        ['kode_prodi' => $kode],
+                        [
+                            'nama' => $namaLengkap,
+                            'jenjang' => $jenjang,
+                            'id_feeder' => $idFeeder,
+                            'kode_prodi_dikti' => $kode,
+                            'is_active' => $status,
+                        ]
+                    );
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning("Gagal sync prodi feeder: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Konversi Nama Gelar Akademik Resmi DIKTI ke Singkatan Baku Indonesia
+     */
+    public function abbreviateAcademicDegree($namaGelar, $jenjang = null, $bidangStudi = null): array
+    {
+        $namaGelar = trim((string)$namaGelar);
+        $jenjang = strtoupper(trim((string)$jenjang));
+        $bidang = strtolower(trim((string)$bidangStudi));
+
+        $knownMap = [
+            'Magister Kesehatan' => ['belakang' => 'M.Kes.'],
+            'Magister Manajemen' => ['belakang' => 'M.M.'],
+            'Magister Pendidikan' => ['belakang' => 'M.Pd.'],
+            'Magister Komputer' => ['belakang' => 'M.Kom.'],
+            'Sarjana Komputer' => ['belakang' => 'S.Kom.'],
+            'Ahli Madya' => ['belakang' => 'A.Md.'],
+            'Ahli Madya Pariwisata' => ['belakang' => 'A.Md.Par.'],
+            'Doktor' => ['depan' => 'Dr.'],
+            'Dr' => ['depan' => 'Dr.'],
+            'Doktorandes' => ['depan' => 'Drs.'],
+            'Doktoranda' => ['depan' => 'Dra.'],
+            'Insinyur' => ['depan' => 'Ir.'],
+            'Dokter' => ['depan' => 'dr.'],
+            'Sarjana Ilmu Komunikasi' => ['belakang' => 'S.I.Kom.'],
+            'Magister Ilmu Komunikasi' => ['belakang' => 'M.I.Kom.'],
+            'Magister Sains' => ['belakang' => 'M.Si.'],
+            'Sarjana Sains' => ['belakang' => 'S.Si.'],
+            'Sarjana Pendidikan Islam' => ['belakang' => 'S.Pd.I.'],
+            'Magister Pendidikan Islam' => ['belakang' => 'M.Pd.I.'],
+            'Sarjana Ekonomi' => ['belakang' => 'S.E.'],
+            'Sarjana Akuntansi' => ['belakang' => 'S.Ak.'],
+            'Magister Akuntansi' => ['belakang' => 'M.Ak.'],
+            'Sarjana Teknik' => ['belakang' => 'S.T.'],
+            'Magister Teknik' => ['belakang' => 'M.T.'],
+            'Degree of Master of Public Health' => ['belakang' => 'M.P.H.'],
+            'Master of Public Health' => ['belakang' => 'M.P.H.'],
+            'Master of Public Health (Extension)' => ['belakang' => 'M.P.H.'],
+            'Master of Science' => ['belakang' => 'M.Sc.'],
+            'Msc' => ['belakang' => 'M.Sc.'],
+            'Master of Science, Technology, And Health' => ['belakang' => 'M.Sc.'],
+            'Sarjana Ilmu Sosial' => ['belakang' => 'S.Sos.'],
+            'Sarjana Pendidikan' => ['belakang' => 'S.Pd.'],
+            'Megister Manajemen Pariwisata' => ['belakang' => 'M.Par.'],
+            'Magister Pariwisata' => ['belakang' => 'M.Par.'],
+            'Sarjana Pariwisata' => ['belakang' => 'S.Par.'],
+            'Sarjana Sastra' => ['belakang' => 'S.S.'],
+            'Sarjana Sains Terapan' => ['belakang' => 'S.S.T.'],
+            'Sarjana Sains Terapan Pariwisata' => ['belakang' => 'S.Tr.Par.'],
+            'Sarjana Sains Terapan Fisioterapi' => ['belakang' => 'S.Tr.Ft.'],
+            'Sarjana Terapan Pariwisata' => ['belakang' => 'S.Tr.Par.'],
+            'Sarjana Terapan Analis Kesehatan' => ['belakang' => 'S.Tr.A.K.'],
+            'Sarjana Kesehatan Masyarakat' => ['belakang' => 'S.K.M.'],
+            'Magister Kesehatan Masyarakat' => ['belakang' => 'M.K.M.'],
+            'Magister of Arts' => ['belakang' => 'M.A.'],
+            'Master of Arts' => ['belakang' => 'M.A.'],
+            'Magister Ilmu Hukum' => ['belakang' => 'M.H.'],
+            'Sarjana Hukum' => ['belakang' => 'S.H.'],
+            'Sarjana Pertanian' => ['belakang' => 'S.P.'],
+            'Doctor of Philosophy' => ['belakang' => 'Ph.D.'],
+            'Doctor of Philosophy (Information Technology)' => ['belakang' => 'Ph.D.'],
+            'Doctor' => ['depan' => 'Dr.'],
+            'Magister of Engineering' => ['belakang' => 'M.Eng.'],
+            'Master of Computer Science' => ['belakang' => 'M.C.S.'],
+            'Master of Pharmaceutical Sciences' => ['belakang' => 'M.Pharm.'],
+            'Master of Pharmacy' => ['belakang' => 'M.Pharm.'],
+            'Sarjana Humaniora' => ['belakang' => 'S.Hum.'],
+            'Sarjana Rekam Medis' => ['belakang' => 'S.R.M.'],
+            'Magister Biomedik' => ['belakang' => 'M.Biomed.'],
+            'Sarjana Farmasi' => ['belakang' => 'S.Farm.'],
+            'Sarjana Kedokteran' => ['belakang' => 'S.Ked.'],
+            'Magister Imunologi' => ['belakang' => 'M.Imun.'],
+            'Apoteker' => ['depan' => 'Apt.'],
+        ];
+
+        if (isset($knownMap[$namaGelar])) {
+            return $knownMap[$namaGelar];
+        }
+
+        // Fallback pencocokan pola kata
+        if (preg_match('/^sarjana terapan/i', $namaGelar)) {
+            return ['belakang' => 'S.Tr.'];
+        }
+        if (preg_match('/^sarjana/i', $namaGelar)) {
+            return ['belakang' => 'S.'];
+        }
+        if (preg_match('/^magister/i', $namaGelar)) {
+            return ['belakang' => 'M.'];
+        }
+        if (preg_match('/^doktor/i', $namaGelar) || preg_match('/^doctor/i', $namaGelar)) {
+            return ['depan' => 'Dr.'];
+        }
+
+        // Fallback jika nama gelar kosong tapi ada jenjang & bidang studi
+        if ($namaGelar === '-' || empty($namaGelar)) {
+            if ($jenjang === 'S1') {
+                if (str_contains($bidang, 'farmasi')) return ['belakang' => 'S.Farm.'];
+                if (str_contains($bidang, 'komputer') || str_contains($bidang, 'informatika')) return ['belakang' => 'S.Kom.'];
+                if (str_contains($bidang, 'teknik')) return ['belakang' => 'S.T.'];
+                if (str_contains($bidang, 'ekonomi')) return ['belakang' => 'S.E.'];
+                return ['belakang' => 'S.'];
+            } elseif ($jenjang === 'S2') {
+                if (str_contains($bidang, 'farmasi')) return ['belakang' => 'M.Farm.'];
+                if (str_contains($bidang, 'komputer') || str_contains($bidang, 'informatika')) return ['belakang' => 'M.Kom.'];
+                if (str_contains($bidang, 'kesehatan')) return ['belakang' => 'M.Kes.'];
+                if (str_contains($bidang, 'manajemen')) return ['belakang' => 'M.M.'];
+                if (str_contains($bidang, 'teknik')) return ['belakang' => 'M.T.'];
+                return ['belakang' => 'M.'];
+            } elseif ($jenjang === 'S3') {
+                return ['depan' => 'Dr.'];
+            } elseif ($jenjang === 'PROFESI') {
+                if (str_contains($bidang, 'apoteker') || str_contains($bidang, 'farmasi')) return ['depan' => 'Apt.'];
+                if (str_contains($bidang, 'dokter')) return ['depan' => 'dr.'];
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * Menyusun Gelar Depan dan Gelar Belakang secara Otomatis dari Riwayat Pendidikan
+     */
+    public function resolveAcademicTitlesForDosen(array $educationList): array
+    {
+        $frontTitles = [];
+        $backTitles = [];
+
+        // Urutkan jenjang: D1 -> D2 -> D3 -> D4 -> S1 -> Profesi -> Spesialis -> S2 -> S3
+        $order = ['D1' => 1, 'D2' => 2, 'D3' => 3, 'D4' => 4, 'S1' => 5, 'PROFESI' => 6, 'SPESIALIS' => 7, 'S2' => 8, 'S3' => 9];
+        usort($educationList, function ($a, $b) use ($order) {
+            $jA = strtoupper($a['nama_jenjang_pendidikan'] ?? '');
+            $jB = strtoupper($b['nama_jenjang_pendidikan'] ?? '');
+            return ($order[$jA] ?? 5) <=> ($order[$jB] ?? 5);
+        });
+
+        foreach ($educationList as $edu) {
+            $abbr = $this->abbreviateAcademicDegree(
+                $edu['nama_gelar_akademik'] ?? '',
+                $edu['nama_jenjang_pendidikan'] ?? '',
+                $edu['nama_bidang_studi'] ?? ''
+            );
+
+            if (!empty($abbr['depan']) && !in_array($abbr['depan'], $frontTitles, true)) {
+                $frontTitles[] = $abbr['depan'];
+            }
+            if (!empty($abbr['belakang']) && !in_array($abbr['belakang'], $backTitles, true)) {
+                $backTitles[] = $abbr['belakang'];
+            }
+        }
+
+        return [
+            'gelar_depan' => !empty($frontTitles) ? implode(' ', $frontTitles) : null,
+            'gelar_belakang' => !empty($backTitles) ? implode(', ', $backTitles) : null,
+        ];
+    }
+
+    /**
      * Tarik / Import Seluruh Data Dosen dari Neo Feeder (GetListDosen)
      * Mengambil daftar dosen resmi kampus yang tercatat di PDDikti dan menyimpannya ke database lokal.
      * Jika dosen sudah ada (berdasarkan NIDN), update id_feeder tanpa menimpa NIP lokal yang sudah ada.
@@ -463,6 +655,47 @@ class NeoFeederSyncService
             }
 
             $log->update(['total_records' => count($dosenItems)]);
+
+            // 1. Sinkronisasi Program Studi Resmi dari Neo Feeder
+            $this->syncProgramStudiFromFeeder();
+
+            // 2. Ambil Peta Homebase Resmi Dosen (a_sp_homebase = '1')
+            $homebaseMap = [];
+            try {
+                $penugasanRes = $this->feederService->request('GetListPenugasanDosen', [
+                    'filter' => "a_sp_homebase = '1' and tgl_ptk_keluar is null",
+                    'order' => 'id_tahun_ajaran desc',
+                    'limit' => 500,
+                ]);
+                if (!empty($penugasanRes['data']) && is_array($penugasanRes['data'])) {
+                    $pList = isset($penugasanRes['data'][0]) ? $penugasanRes['data'] : [$penugasanRes['data']];
+                    foreach ($pList as $pn) {
+                        $dId = $pn['id_dosen'] ?? null;
+                        if ($dId && !isset($homebaseMap[$dId])) {
+                            $homebaseMap[$dId] = $pn;
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning("Gagal fetch homebase penugasan dosen: " . $e->getMessage());
+            }
+
+            // 3. Ambil Seluruh Riwayat Pendidikan Dosen dari Neo Feeder
+            $riwayatByDosen = [];
+            try {
+                $riwayatRes = $this->feederService->request('GetRiwayatPendidikanDosen', ['limit' => 1000]);
+                if (!empty($riwayatRes['data']) && is_array($riwayatRes['data'])) {
+                    $rList = isset($riwayatRes['data'][0]) ? $riwayatRes['data'] : [$riwayatRes['data']];
+                    foreach ($rList as $rw) {
+                        $dId = $rw['id_dosen'] ?? null;
+                        if ($dId) {
+                            $riwayatByDosen[$dId][] = $rw;
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning("Gagal fetch riwayat pendidikan dosen: " . $e->getMessage());
+            }
 
             foreach ($dosenItems as $item) {
                 try {
@@ -521,6 +754,32 @@ class NeoFeederSyncService
                     if (!empty($handphone)) $dataToSave['handphone'] = $handphone;
                     if (!empty($email)) $dataToSave['email'] = $email;
 
+                    // 1. Pemetaan Homebase Program Studi Spesifik
+                    if (isset($homebaseMap[$idDosen])) {
+                        $hb = $homebaseMap[$idDosen];
+                        $idProdiFeeder = $hb['id_prodi'] ?? null;
+                        $namaProdiFeeder = $hb['nama_program_studi'] ?? '';
+
+                        $prodiTarget = null;
+                        if ($idProdiFeeder) {
+                            $prodiTarget = MasterProgramStudi::where('id_feeder', $idProdiFeeder)->first();
+                        }
+                        if (!$prodiTarget && $namaProdiFeeder) {
+                            $prodiTarget = MasterProgramStudi::where('nama', 'like', "%{$namaProdiFeeder}%")->first();
+                        }
+                        if ($prodiTarget) {
+                            $dataToSave['program_studi_id'] = $prodiTarget->id;
+                        }
+                    }
+
+                    // 2. Pemetaan Gelar Otomatis dari Riwayat Pendidikan Feeder
+                    $titles = ['gelar_depan' => null, 'gelar_belakang' => null];
+                    if (isset($riwayatByDosen[$idDosen])) {
+                        $titles = $this->resolveAcademicTitlesForDosen($riwayatByDosen[$idDosen]);
+                    }
+                    $dataToSave['gelar_depan'] = $titles['gelar_depan'];
+                    $dataToSave['gelar_belakang'] = $titles['gelar_belakang'];
+
                     if ($dosenLokal) {
                         // Update data dosen lokal (pertahankan NIP lokal jika sudah ada)
                         if (empty($dosenLokal->nip) && !empty($nipDikti)) {
@@ -540,17 +799,19 @@ class NeoFeederSyncService
 
                     $pegawai = null;
                     if (!empty($dosenLokal->pegawai_id)) {
-                        $pegawai = \App\Models\Simpeg\Pegawai::find($dosenLokal->pegawai_id);
+                        $pegawai = Pegawai::find($dosenLokal->pegawai_id);
                     }
                     if (!$pegawai && $nipFinal) {
-                        $pegawai = \App\Models\Simpeg\Pegawai::where('nip', $nipFinal)->first();
+                        $pegawai = Pegawai::where('nip', $nipFinal)->first();
                     }
                     if (!$pegawai && $nikFinal) {
-                        $pegawai = \App\Models\Simpeg\Pegawai::where('nik', $nikFinal)->first();
+                        $pegawai = Pegawai::where('nik', $nikFinal)->first();
                     }
 
                     $pegawaiData = [
                         'nama_lengkap' => $namaDosen,
+                        'gelar_depan' => $titles['gelar_depan'],
+                        'gelar_belakang' => $titles['gelar_belakang'],
                         'jenis_pegawai' => 'dosen',
                         'status_kepegawaian' => 'tetap_yayasan',
                         'status' => $isActive ? 'aktif' : 'non_aktif',
@@ -569,11 +830,43 @@ class NeoFeederSyncService
                     if ($pegawai) {
                         $pegawai->update($pegawaiData);
                     } else {
-                        $pegawai = \App\Models\Simpeg\Pegawai::create($pegawaiData);
+                        $pegawai = Pegawai::create($pegawaiData);
                     }
 
                     if ($pegawai && $dosenLokal->pegawai_id !== $pegawai->id) {
                         $dosenLokal->update(['pegawai_id' => $pegawai->id]);
+                    }
+
+                    // 3. Masukkan Data Riwayat Sekolah ke SIMPEG (simpeg_riwayat_pendidikan_pegawai)
+                    if ($pegawai && isset($riwayatByDosen[$idDosen])) {
+                        $eduList = $riwayatByDosen[$idDosen];
+                        $lastIdx = count($eduList) - 1;
+                        foreach ($eduList as $idx => $edu) {
+                            $jenjang = strtolower($edu['nama_jenjang_pendidikan'] ?? 's1');
+                            $institusi = $edu['nama_perguruan_tinggi'] ?? 'Perguruan Tinggi';
+                            $abbr = $this->abbreviateAcademicDegree(
+                                $edu['nama_gelar_akademik'] ?? '',
+                                $edu['nama_jenjang_pendidikan'] ?? '',
+                                $edu['nama_bidang_studi'] ?? ''
+                            );
+                            $singkatan = $abbr['belakang'] ?? ($abbr['depan'] ?? null);
+
+                            RiwayatPendidikanPegawai::updateOrCreate(
+                                [
+                                    'pegawai_id' => $pegawai->id,
+                                    'jenjang' => $jenjang,
+                                    'nama_institusi' => $institusi,
+                                ],
+                                [
+                                    'program_studi' => $edu['nama_bidang_studi'] ?? null,
+                                    'bidang_ilmu' => $edu['nama_bidang_studi'] ?? null,
+                                    'gelar_akademik' => $edu['nama_gelar_akademik'] ?? null,
+                                    'singkatan_gelar' => $singkatan,
+                                    'tahun_lulus' => !empty($edu['tahun_lulus']) ? (int)$edu['tahun_lulus'] : null,
+                                    'is_pendidikan_terakhir' => ($idx === $lastIdx),
+                                ]
+                            );
+                        }
                     }
 
                     FeederMapping::updateOrCreate(

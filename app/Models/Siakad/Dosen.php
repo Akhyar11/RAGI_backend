@@ -42,6 +42,10 @@ class Dosen extends Model
         'tanggal_lahir' => 'date',
     ];
 
+    protected $appends = [
+        'nama_gelar',
+    ];
+
     public function user()
     {
         return $this->belongsTo(User::class);

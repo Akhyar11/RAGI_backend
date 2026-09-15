@@ -21,6 +21,7 @@ class MasterProgramStudi extends Model
         'kaprodi_id',
         'kode_prodi',
         'kode_prodi_dikti',
+        'id_feeder',
         'nama',
         'jenjang',
         'akreditasi',

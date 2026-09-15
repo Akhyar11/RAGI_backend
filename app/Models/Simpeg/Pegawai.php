@@ -26,6 +26,8 @@ class Pegawai extends Model
         'nuptk',
         'nik',
         'nama_lengkap',
+        'gelar_depan',
+        'gelar_belakang',
         'tanggal_lahir',
         'tempat_lahir',
         'jenis_kelamin',
@@ -104,6 +106,17 @@ class Pegawai extends Model
     public function getDepartmentAttribute(): ?string
     {
         return $this->unitKerja?->nama ?: 'General';
+    }
+
+    protected $appends = [
+        'nama_gelar',
+    ];
+
+    public function getNamaGelarAttribute(): string
+    {
+        $depan = $this->gelar_depan ? "{$this->gelar_depan} " : '';
+        $belakang = $this->gelar_belakang ? ", {$this->gelar_belakang}" : '';
+        return "{$depan}{$this->nama_lengkap}{$belakang}";
     }
 
     public function user()
