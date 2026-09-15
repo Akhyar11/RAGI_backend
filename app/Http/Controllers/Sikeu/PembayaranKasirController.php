@@ -647,15 +647,20 @@ class PembayaranKasirController extends Controller
      */
     private function createAutoJurnal(Pembayaran $pembayaran, string $channel, TagihanMahasiswa $tagihan)
     {
-        $akunKas = AkunKeuangan::where('kelompok', 'aset')->first();
-        $akunPendapatan = AkunKeuangan::where('kelompok', 'pendapatan')->first();
+        $isTunai = in_array(strtoupper($channel), ['LOKET_TUNAI', 'TUNAI', 'CASH']);
+        $kodeKas = $isTunai ? '101.01' : '102.01';
+        $akunKas = AkunKeuangan::where('kode_akun', $kodeKas)->first() ?? AkunKeuangan::where('kelompok', 'aset')->first();
+
+        $sourceSystem = strtoupper($tagihan->source_system ?? 'SIAKAD');
+        $kodePendapatan = ($sourceSystem === 'SPMB') ? '401.02' : '401.01';
+        $akunPendapatan = AkunKeuangan::where('kode_akun', $kodePendapatan)->first() ?? AkunKeuangan::where('kelompok', 'pendapatan')->first();
 
         if (!$akunKas || !$akunPendapatan) {
             return; // Skip if COA not configured
         }
 
         $nomorJurnal = 'JRN-PAY-' . date('Ymd') . '-' . strtoupper(Str::random(4));
-        $channelLabel = $channel === 'LOKET_TUNAI' ? 'Tunai Loket Kasir' : 'Transfer Bank (Non-Tunai)';
+        $channelLabel = $isTunai ? 'Tunai Loket Kasir' : 'Transfer Bank (Non-Tunai)';
 
         $jurnal = JurnalUmum::create([
             'nomor_jurnal' => $nomorJurnal,
@@ -671,22 +676,22 @@ class PembayaranKasirController extends Controller
             'posted_at' => now(),
         ]);
 
-        // Debet: Kas/Bank
+        // Debet: Kas Utama / Bank
         DetailJurnalUmum::create([
             'jurnal_id' => $jurnal->id,
             'akun_id' => $akunKas->id,
             'debet' => $pembayaran->jumlah_bayar,
             'kredit' => 0,
-            'keterangan' => "Penerimaan kas pembayaran mahasiswa",
+            'keterangan' => "Penerimaan {$channelLabel} pembayaran mahasiswa",
         ]);
 
-        // Kredit: Pendapatan UKT/SPP
+        // Kredit: Pendapatan UKT/SPP atau SPMB
         DetailJurnalUmum::create([
             'jurnal_id' => $jurnal->id,
             'akun_id' => $akunPendapatan->id,
             'debet' => 0,
             'kredit' => $pembayaran->jumlah_bayar,
-            'keterangan' => "Pengakuan pendapatan UKT/SPP mahasiswa",
+            'keterangan' => "Pengakuan pendapatan {$akunPendapatan->nama_akun}",
         ]);
     }
 
@@ -695,8 +700,14 @@ class PembayaranKasirController extends Controller
      */
     private function createReversalJurnal(Pembayaran $pembayaran, string $alasan)
     {
-        $akunKas = AkunKeuangan::where('kelompok', 'aset')->first();
-        $akunPendapatan = AkunKeuangan::where('kelompok', 'pendapatan')->first();
+        $channel = $pembayaran->channel_bayar ?? 'LOKET_TUNAI';
+        $isTunai = in_array(strtoupper($channel), ['LOKET_TUNAI', 'TUNAI', 'CASH']);
+        $kodeKas = $isTunai ? '101.01' : '102.01';
+        $akunKas = AkunKeuangan::where('kode_akun', $kodeKas)->first() ?? AkunKeuangan::where('kelompok', 'aset')->first();
+
+        $sourceSystem = strtoupper($pembayaran->tagihan?->source_system ?? 'SIAKAD');
+        $kodePendapatan = ($sourceSystem === 'SPMB') ? '401.02' : '401.01';
+        $akunPendapatan = AkunKeuangan::where('kode_akun', $kodePendapatan)->first() ?? AkunKeuangan::where('kelompok', 'pendapatan')->first();
 
         if (!$akunKas || !$akunPendapatan) {
             return;

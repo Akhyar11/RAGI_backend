@@ -31,14 +31,13 @@ class SikeuIntegrationService
                 $potongan    = (float) ($gaji->total_potongan ?? 0);
 
                 // --- Cari / fallback COA accounts ---
-                $akunBeban = AkunKeuangan::where('kode_akun', '5.1.01.01')->first()
+                $akunBeban = AkunKeuangan::whereIn('kode_akun', ['501.01', '5.1.01.01'])->first()
                     ?? AkunKeuangan::where('kelompok', 'beban')->first();
 
-                $akunKas = AkunKeuangan::where('kode_akun', '1.1.01.02')->first()
-                    ?? AkunKeuangan::where('kode_akun', '102.01')->first()
+                $akunKas = AkunKeuangan::whereIn('kode_akun', ['102.01', '1.1.01.02', '101.01'])->first()
                     ?? AkunKeuangan::where('kelompok', 'aset')->whereRaw("LOWER(nama_akun) LIKE '%kas%'")->first();
 
-                $akunUtangPajak = AkunKeuangan::where('kode_akun', '2.1.03.01')->first()
+                $akunUtangPajak = AkunKeuangan::whereIn('kode_akun', ['202.01', '2.1.03.01'])->first()
                     ?? AkunKeuangan::where('kelompok', 'liabilitas')->first();
 
                 $nomorJurnal = 'JRN-SIMPEG-' . now()->format('Ymd') . '-' . sprintf('%04d', $gaji->id);
