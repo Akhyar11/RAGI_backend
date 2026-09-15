@@ -291,33 +291,36 @@ class SiakadFeederDosenSyncTest extends TestCase
         ]);
 
         $mockFeeder = $this->createMock(NeoFeederService::class);
-        $mockFeeder->expects($this->once())
-            ->method('request')
-            ->with('GetListDosen')
-            ->willReturn([
-                'error_code' => 0,
-                'data' => [
-                    [
-                        'id_dosen' => 'UUID-PULL-DOSEN-EXISTING',
-                        'nama_dosen' => 'Dosen Lama Lokal (Update Dikti)',
-                        'nidn' => '0688776655',
-                        'nip' => 'NIP-DIKTI-BEDA',
-                        'id_status_aktif' => 'A',
-                    ],
-                    [
-                        'id_dosen' => 'UUID-PULL-DOSEN-BARU',
-                        'nama_dosen' => 'Dosen Baru Impor Dikti',
-                        'nidn' => '0611223344',
-                        'nuptk' => '3560763664230999',
-                        'nip' => '199501012025011002',
-                        'jenis_kelamin' => 'L',
-                        'nama_agama' => 'Islam',
-                        'tanggal_lahir' => '15-05-1995',
-                        'id_status_aktif' => '1',
-                        'nama_status_aktif' => 'Aktif',
-                    ],
-                ]
-            ]);
+        $mockFeeder->method('request')
+            ->willReturnCallback(function ($act) {
+                if ($act === 'GetListDosen') {
+                    return [
+                        'error_code' => 0,
+                        'data' => [
+                            [
+                                'id_dosen' => 'UUID-PULL-DOSEN-EXISTING',
+                                'nama_dosen' => 'Dosen Lama Lokal (Update Dikti)',
+                                'nidn' => '0688776655',
+                                'nip' => 'NIP-DIKTI-BEDA',
+                                'id_status_aktif' => 'A',
+                            ],
+                            [
+                                'id_dosen' => 'UUID-PULL-DOSEN-BARU',
+                                'nama_dosen' => 'Dosen Baru Impor Dikti',
+                                'nidn' => '0611223344',
+                                'nuptk' => '3560763664230999',
+                                'nip' => '199501012025011002',
+                                'jenis_kelamin' => 'L',
+                                'nama_agama' => 'Islam',
+                                'tanggal_lahir' => '15-05-1995',
+                                'id_status_aktif' => '1',
+                                'nama_status_aktif' => 'Aktif',
+                            ],
+                        ]
+                    ];
+                }
+                return ['error_code' => 0, 'data' => []];
+            });
 
         $service = new NeoFeederSyncService($mockFeeder);
         $log = $service->pullBatchDosenFromFeeder();
@@ -386,5 +389,32 @@ class SiakadFeederDosenSyncTest extends TestCase
         $pengampuNonNidn->refresh();
         $this->assertEquals('pending', $pengampuNonNidn->sync_status);
         $this->assertNull($pengampuNonNidn->id_feeder);
+    }
+
+    public function test_list_dosen_automatically_syncs_unsynced_simpeg_dosen()
+    {
+        $pegawaiDosen = \App\Models\Simpeg\Pegawai::create([
+            'nama_lengkap' => 'Dr. Siakad Sync Dosen, M.Kom.',
+            'nip' => '198909092020011005',
+            'nidn' => '0609098901',
+            'jenis_pegawai' => 'dosen',
+            'jenis_kelamin' => 'L',
+            'status' => 'aktif',
+        ]);
+
+        $admin = User::factory()->create(['id' => 9999]);
+        $response = $this->actingAs($admin, 'api')
+            ->getJson('/api/v1/siakad/akademik/dosen?search=0609098901');
+
+        $response->assertStatus(200);
+        $items = $response->json('data');
+        $this->assertNotEmpty($items);
+        $this->assertEquals('0609098901', $items[0]['nidn']);
+
+        $this->assertDatabaseHas('siakad_dosen', [
+            'pegawai_id' => $pegawaiDosen->id,
+            'nidn' => '0609098901',
+            'is_active' => true,
+        ]);
     }
 }

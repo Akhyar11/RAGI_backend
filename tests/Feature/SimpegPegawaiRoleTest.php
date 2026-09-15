@@ -146,4 +146,32 @@ class SimpegPegawaiRoleTest extends TestCase
         $this->assertCount(1, $items);
         $this->assertEquals('Dosen Satu', $items[0]['nama_lengkap']);
     }
+
+    public function test_creating_pegawai_with_dosen_status_automatically_syncs_to_siakad_dosen()
+    {
+        $payload = [
+            'nama_lengkap' => 'Prof. Dr. Hendra Gunawan, M.Sc.',
+            'nip' => '197508102000031001',
+            'nik' => '3271011008750001',
+            'nidn' => '0410087501',
+            'jenis_kelamin' => 'L',
+            'role_ids' => [$this->roleDosen->id],
+            'unit_kerja_id' => $this->unitKerja->id,
+            'status' => 'aktif',
+        ];
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/pegawai', $payload);
+
+        $response->assertStatus(201);
+        $pegawaiId = $response->json('data.id');
+
+        // Pastikan otomatis tercatat di tabel siakad_dosen
+        $this->assertDatabaseHas('siakad_dosen', [
+            'pegawai_id' => $pegawaiId,
+            'nidn' => '0410087501',
+            'nama_lengkap' => 'Prof. Dr. Hendra Gunawan, M.Sc.',
+            'is_active' => true,
+        ]);
+    }
 }

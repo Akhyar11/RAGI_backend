@@ -657,7 +657,11 @@ class NeoFeederSyncService
             $log->update(['total_records' => count($dosenItems)]);
 
             // 1. Sinkronisasi Program Studi Resmi dari Neo Feeder
-            $this->syncProgramStudiFromFeeder();
+            try {
+                $this->syncProgramStudiFromFeeder();
+            } catch (\Throwable $e) {
+                Log::warning("Gagal fetch prodi feeder: " . $e->getMessage());
+            }
 
             // 2. Ambil Peta Homebase Resmi Dosen (a_sp_homebase = '1')
             $homebaseMap = [];

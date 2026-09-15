@@ -413,6 +413,25 @@ class AkademikController extends Controller
     // --- DOSEN CRUD ---
     public function listDosen(Request $request)
     {
+        // Otomatis sinkronkan jika ada pegawai berstatus Dosen di SIMPEG yang belum terdaftar di siakad_dosen
+        $unsyncedPegawais = \App\Models\Simpeg\Pegawai::whereDoesntHave('dosen')
+            ->where(function ($q) {
+                $q->where('jenis_pegawai', 'like', '%dosen%')
+                  ->orWhereHas('roles', function ($r) {
+                      $r->where('slug', 'like', '%dosen%')->orWhere('name', 'like', '%dosen%');
+                  })
+                  ->orWhereHas('user.roles', function ($r) {
+                      $r->where('slug', 'like', '%dosen%')->orWhere('name', 'like', '%dosen%');
+                  });
+            })->get();
+
+        if ($unsyncedPegawais->isNotEmpty()) {
+            $pegawaiService = app(\App\Services\Simpeg\PegawaiService::class);
+            foreach ($unsyncedPegawais as $p) {
+                $pegawaiService->syncDosenRecord($p);
+            }
+        }
+
         $query = Dosen::with(['programStudi']);
 
         if ($request->filled('search')) {
@@ -427,7 +446,7 @@ class AkademikController extends Controller
             $query->where('program_studi_id', $request->program_studi_id);
         }
 
-        $data = $query->paginate($request->integer('per_page', 20));
+        $data = $query->paginate($request->integer('per_page', 500));
 
         return response()->json([
             'status' => 'success',
@@ -494,31 +513,18 @@ class AkademikController extends Controller
     {
         $pegawais = \App\Models\Simpeg\Pegawai::where(function($q) {
             $q->where('jenis_pegawai', 'like', '%dosen%')
-              ->orWhereNotNull('nip')
-              ->orWhereNotNull('sinta_id');
+              ->orWhereHas('roles', function ($r) {
+                  $r->where('slug', 'like', '%dosen%')->orWhere('name', 'like', '%dosen%');
+              })
+              ->orWhereHas('user.roles', function ($r) {
+                  $r->where('slug', 'like', '%dosen%')->orWhere('name', 'like', '%dosen%');
+              });
         })->get();
 
-        if ($pegawais->isEmpty()) {
-            $pegawais = \App\Models\Simpeg\Pegawai::all();
-        }
-
-        $defaultProdi = ProgramStudi::first();
         $syncedCount = 0;
-
+        $pegawaiService = app(\App\Services\Simpeg\PegawaiService::class);
         foreach ($pegawais as $p) {
-            $existingDosen = Dosen::where('pegawai_id', $p->id)->first();
-            Dosen::updateOrCreate(
-                ['pegawai_id' => $p->id],
-                [
-                    'user_id' => $p->user_id,
-                    'nip' => $p->nip,
-                    'nidn' => $p->nidn ?: ($existingDosen?->nidn ?? null),
-                    'nama_lengkap' => $p->nama_lengkap,
-                    'program_studi_id' => $defaultProdi?->id ?? 1,
-                    'jabatan_akademik' => $p->jenis_pegawai ?? 'Tenaga Pendidik / Dosen',
-                    'is_active' => true,
-                ]
-            );
+            $pegawaiService->syncDosenRecord($p);
             $syncedCount++;
         }
 

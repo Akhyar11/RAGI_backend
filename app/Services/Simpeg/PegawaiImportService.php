@@ -402,6 +402,9 @@ class PegawaiImportService
                     }
                 }
 
+                // Sinkronisasi otomatis ke modul SIAKAD jika pegawai adalah Dosen
+                app(PegawaiService::class)->syncDosenRecord($pegawai);
+
                 DB::commit();
                 $successCount++;
                 $createdPegawai[] = [
