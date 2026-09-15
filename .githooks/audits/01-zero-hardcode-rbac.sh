@@ -1,66 +1,65 @@
 #!/bin/bash
+#
+# Audit 2/9: Zero Hardcode & RBAC (deterministik, tanpa AI).
+# Memeriksa baris baru (+) pada file PHP yang di-stage terhadap:
+#  1. Validasi enum statis  -> wajib exists:nama_tabel,id (aturan: in:... berhuruf kapital)
+#  2. Perbandingan user_type statis dalam logika (==, !=, in_array, match, case)
+#  3. Perbandingan string nama modul/role statis dalam logika IF/ELSE
+#
+# Cakupan: app/, routes/. Dikecualikan: database/, tests/, docs, config.
 
-echo "🤖 [Audit 1/7: Zero Hardcode & RBAC] Memeriksa staged changes..."
+echo "🤖 [Audit 2/9: Zero Hardcode & RBAC] Memeriksa staged changes..."
 
-STAGED_DIFF=$(git diff --cached)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM -- "app/**/*.php" "app/*.php" "routes/*.php")
 
-if [ -z "$STAGED_DIFF" ]; then
+if [ -z "$STAGED_FILES" ]; then
+    echo "ℹ️ [Audit Zero Hardcode & RBAC] Tidak ada file app/routes yang di-stage. Skip."
     exit 0
 fi
 
-PROMPT_FILE=$(mktemp)
+FAILED=0
 
-cat << 'EOF' > "$PROMPT_FILE"
-Kamu adalah Code Auditor khusus Zero Hardcode & RBAC.
-Periksa Git Diff berikut HANYA terhadap aturan Zero Hardcode & RBAC Policy:
+check_added_lines() {
+    local file="$1"
+    git diff --cached -- "$file" | grep '^+' | grep -v '^+++' | sed 's^+^^'
+}
 
-Aturan:
-1. DILARANG KERAS MENGGUNAKAN VALIDASI ENUM STATIS: Seluruh form request/controller yang memvalidasi input *dropdown* (seperti `in:REGULER,KARYAWAN` atau `in:Islam,Kristen`) wajib menggunakan aturan dinamis `exists:nama_tabel,id` dan datanya wajib bersumber dari tabel database (misalnya `master_referensi` atau tabel master lain).
-2. DILARANG MENYEDIAKAN ARRAY/ENUM LITERAL STATIS: Jangan ada *array literal* di Controller atau Model untuk pilihan statis jika pilihan tersebut merepresentasikan data master referensi.
-3. DILARANG ADA HARDCODE string nama modul/role (seperti 'spmb', 'sikeu', 'admin', 'mahasiswa') dalam pengujian logika IF/ELSE atau perbandingan statis.
-4. DILARANG menggunakan properti statis user.user_type atau user_type.
-5. Seluruh otorisasi dan relasi WAJIB berbasis ID entitas atau hook RBAC (seperti hasRole / hasPermission).
+while IFS= read -r file; do
+    ADDED=$(check_added_lines "$file")
+    [ -z "$ADDED" ] && continue
 
-Catatan Penting:
-- HANYA periksa baris-baris kode baru yang DITAMBAHKAN atau DIUBAH (diawali tanda `+`). JANGAN menolak baris konteks yang tidak diubah.
-- Status alur/workflow tiket atau entitas (seperti draft, submitted, dilaporkan, dalam_perbaikan, selesai, dibatalkan) merupakan status internal tabel dan BUKAN pelanggaran master referensi.
+    # 1. Validasi enum statis: in:XXX dengan huruf kapital (mis. in:REGULER,KARYAWAN / in:Islam,Kristen).
+    #    Pengecualian struktural: asc, desc, true, false, angka.
+    ENUM_HIT=$(echo "$ADDED" | grep -oP 'in:\K[A-Za-z0-9_|,\s.-]+' | grep -P '([A-Z]{2,}|[A-Z][a-z]{2,})' | head -n 3)
+    if [ -n "$ENUM_HIT" ]; then
+        echo "❌ [Audit Zero Hardcode] Validasi enum statis di $file:"
+        echo "$ENUM_HIT" | sed 's/^/    in:/'
+        echo "   💡 Validasi dropdown/master WAJIB memakai exists:nama_tabel,id (bukan in:STATIS)."
+        FAILED=1
+    fi
 
-Git Diff:
-EOF
+    # 2. Perbandingan user_type statis dalam logika.
+    USERTYPE_HIT=$(echo "$ADDED" | grep -P '(==|===|!=|!==|in_array|match\s*\(|^\s*case\s)' | grep -P 'user.type' | head -n 3)
+    if [ -n "$USERTYPE_HIT" ]; then
+        echo "❌ [Audit Zero Hardcode] Perbandingan user_type statis di $file:"
+        echo "$USERTYPE_HIT" | sed 's/^/    /'
+        echo "   💡 Otorisasi WAJIB via Policy/Gate atau hasRole/hasPermission, bukan user_type."
+        FAILED=1
+    fi
 
-echo '```diff' >> "$PROMPT_FILE"
-echo "$STAGED_DIFF" >> "$PROMPT_FILE"
-echo '```' >> "$PROMPT_FILE"
+    # 3. Perbandingan string nama modul/role dalam logika IF/ELSE.
+    SLUG_HIT=$(echo "$ADDED" | grep -P '(==|===|!=|!==)' | grep -P "'(spmb|sikeu|siakad|simpeg|sinapra|sippm|lms|upm|admin|superadmin|mahasiswa|dosen|tendik|calon_mhs)'" | head -n 3)
+    if [ -n "$SLUG_HIT" ]; then
+        echo "❌ [Audit Zero Hardcode] Hardcode nama modul/role dalam logika di $file:"
+        echo "$SLUG_HIT" | sed 's/^/    /'
+        echo "   💡 Relasi/filter WAJIB memakai referensi ID entitas dari database."
+        FAILED=1
+    fi
+done <<< "$STAGED_FILES"
 
-cat << 'EOF' >> "$PROMPT_FILE"
-PENTING: Jawab HANYA secara langsung tanpa memanggil tool atau membaca file.
-Jawab HANYA salah satu:
-- PASSED jika kode bersih dari hardcode dan sesuai RBAC.
-- REJECTED: [detail alasan pelanggaran] jika ditemukan hardcode/pelanggaran RBAC pada baris baru (+).
-EOF
-
-if command -v opencode &> /dev/null; then
-    RESULT=$(timeout 25s opencode run -m opencode/muse-spark-1.3-contributor-free "$(cat "$PROMPT_FILE")" 2>&1)
-    AI_EXIT_CODE=$?
-elif command -v agy &> /dev/null; then
-    RESULT=$(timeout 15s agy --print "$(cat "$PROMPT_FILE")" 2>&1)
-    AI_EXIT_CODE=$?
-else
-    AI_EXIT_CODE=127
-fi
-
-rm -f "$PROMPT_FILE"
-
-if [ $AI_EXIT_CODE -ne 0 ]; then
-    echo "⚠️ [Audit Zero Hardcode & RBAC] AI tool timeout/gagal, dilewati."
-    exit 0
-fi
-
-if echo "$RESULT" | grep -qi "REJECTED"; then
-    echo "❌ [Audit Zero Hardcode & RBAC] REJECTED!"
-    echo "$RESULT" | grep -i "REJECTED"
+if [ $FAILED -ne 0 ]; then
     exit 1
-else
-    echo "✅ [Audit Zero Hardcode & RBAC] PASSED."
-    exit 0
 fi
+
+echo "✅ [Audit Zero Hardcode & RBAC] PASSED."
+exit 0
