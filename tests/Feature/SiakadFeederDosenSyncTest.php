@@ -449,4 +449,249 @@ class SiakadFeederDosenSyncTest extends TestCase
             'is_active' => true,
         ]);
     }
+
+    public function test_pull_dosen_restores_soft_deleted_dosen_and_pegawai_without_duplication()
+    {
+        $pegawai = \App\Models\Simpeg\Pegawai::create([
+            'nama_lengkap' => 'Dosen Soft Deleted',
+            'nidn' => '0677889900',
+            'nip' => '198701012015011009',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+        ]);
+
+        $dosen = Dosen::create([
+            'pegawai_id' => $pegawai->id,
+            'nama_lengkap' => 'Dosen Soft Deleted',
+            'nidn' => '0677889900',
+            'nip' => '198701012015011009',
+            'is_active' => true,
+            'status_aktif' => 'Aktif',
+        ]);
+
+        // Soft delete both
+        $dosen->delete();
+        $pegawai->delete();
+
+        $this->assertSoftDeleted('siakad_dosen', ['id' => $dosen->id]);
+        $this->assertSoftDeleted('simpeg_pegawai', ['id' => $pegawai->id]);
+
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->expects($this->any())
+            ->method('request')
+            ->willReturnCallback(function ($act, $p) {
+                if ($act === 'GetListDosen') {
+                    return [
+                        'error_code' => 0,
+                        'data' => [
+                            [
+                                'id_dosen' => 'UUID-RESTORE-TEST',
+                                'nama_dosen' => 'Dosen Soft Deleted (Restored)',
+                                'nidn' => '0677889900',
+                                'id_status_aktif' => '1',
+                                'nama_status_aktif' => 'Aktif',
+                            ]
+                        ]
+                    ];
+                }
+                return ['error_code' => 0, 'data' => []];
+            });
+
+        $service = new NeoFeederSyncService($mockFeeder);
+        $log = $service->pullBatchDosenFromFeeder();
+
+        $this->assertEquals(1, $log->success_count);
+
+        // Verifikasi dosen dan pegawai dipulihkan (restore) dan tidak ada duplikasi
+        $dosen->refresh();
+        $this->assertFalse($dosen->trashed());
+        $this->assertEquals('Dosen Soft Deleted (Restored)', $dosen->nama_lengkap);
+        $this->assertEquals('UUID-RESTORE-TEST', $dosen->id_feeder);
+
+        $pegawai->refresh();
+        $this->assertFalse($pegawai->trashed());
+        $this->assertEquals(1, Dosen::where('nidn', '0677889900')->count());
+        $this->assertEquals(1, \App\Models\Simpeg\Pegawai::where('nidn', '0677889900')->count());
+    }
+
+    public function test_pull_dosen_matches_by_nuptk_when_nidn_empty()
+    {
+        $dosenNuptk = Dosen::create([
+            'nama_lengkap' => 'Dosen NUPTK Only',
+            'nuptk' => '9876543210123456',
+            'nidn' => null,
+            'is_active' => true,
+        ]);
+
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->expects($this->any())
+            ->method('request')
+            ->willReturnCallback(function ($act, $p) {
+                if ($act === 'GetListDosen') {
+                    return [
+                        'error_code' => 0,
+                        'data' => [
+                            [
+                                'id_dosen' => 'UUID-NUPTK-TEST',
+                                'nama_dosen' => 'Dosen NUPTK Only Updated',
+                                'nuptk' => '9876543210123456',
+                                'nidn' => null,
+                                'id_status_aktif' => '1',
+                                'nama_status_aktif' => 'Aktif',
+                            ]
+                        ]
+                    ];
+                }
+                return ['error_code' => 0, 'data' => []];
+            });
+
+        $service = new NeoFeederSyncService($mockFeeder);
+        $log = $service->pullBatchDosenFromFeeder();
+
+        $this->assertEquals(1, $log->success_count);
+        $this->assertEquals(1, Dosen::where('nuptk', '9876543210123456')->count());
+        $dosenNuptk->refresh();
+        $this->assertEquals('UUID-NUPTK-TEST', $dosenNuptk->id_feeder);
+        $this->assertEquals('Dosen NUPTK Only Updated', $dosenNuptk->nama_lengkap);
+    }
+
+    public function test_pull_dosen_leaves_prodi_null_when_no_exact_match_found()
+    {
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->expects($this->any())
+            ->method('request')
+            ->willReturnCallback(function ($act, $p) {
+                if ($act === 'GetListDosen') {
+                    return [
+                        'error_code' => 0,
+                        'data' => [
+                            [
+                                'id_dosen' => 'UUID-UNKNOWN-PRODI',
+                                'nama_dosen' => 'Dosen Prodi Antah Berantah',
+                                'nidn' => '0655443322',
+                                'id_status_aktif' => '1',
+                            ]
+                        ]
+                    ];
+                }
+                if ($act === 'GetListPenugasanDosen') {
+                    return [
+                        'error_code' => 0,
+                        'data' => [
+                            [
+                                'id_dosen' => 'UUID-UNKNOWN-PRODI',
+                                'id_prodi' => 'UNKNOWN-UUID-PRODI-999',
+                                'nama_program_studi' => 'Program Studi Yang Tidak Terdaftar Di Lokal',
+                            ]
+                        ]
+                    ];
+                }
+                return ['error_code' => 0, 'data' => []];
+            });
+
+        $service = new NeoFeederSyncService($mockFeeder);
+        $log = $service->pullBatchDosenFromFeeder();
+
+        $this->assertEquals(1, $log->success_count);
+        $dosen = Dosen::where('nidn', '0655443322')->first();
+        $this->assertNotNull($dosen);
+        // Harus null dan TIDAK fallback ke MasterProgramStudi::first() atau buat PRODI-DEFAULT
+        $this->assertNull($dosen->program_studi_id);
+        $this->assertDatabaseMissing('spmb_master_program_studi', ['kode_prodi' => 'PRODI-DEFAULT']);
+    }
+
+    public function test_pull_dosen_pagination_loops_beyond_500_records()
+    {
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->expects($this->any())
+            ->method('request')
+            ->willReturnCallback(function ($act, $p) {
+                if ($act === 'GetListDosen') {
+                    $offset = $p['offset'] ?? 0;
+                    if ($offset === 0) {
+                        // Page 1: generate 500 dosen
+                        $items = [];
+                        for ($i = 1; $i <= 500; $i++) {
+                            $items[] = [
+                                'id_dosen' => "UUID-PAGE1-{$i}",
+                                'nama_dosen' => "Dosen Page 1 No {$i}",
+                                'nidn' => sprintf('061000%04d', $i),
+                                'id_status_aktif' => '1',
+                            ];
+                        }
+                        return ['error_code' => 0, 'data' => $items];
+                    } elseif ($offset === 500) {
+                        // Page 2: generate 2 dosen
+                        return [
+                            'error_code' => 0,
+                            'data' => [
+                                [
+                                    'id_dosen' => 'UUID-PAGE2-1',
+                                    'nama_dosen' => 'Dosen Page 2 No 1',
+                                    'nidn' => '0620000001',
+                                    'id_status_aktif' => '1',
+                                ],
+                                [
+                                    'id_dosen' => 'UUID-PAGE2-2',
+                                    'nama_dosen' => 'Dosen Page 2 No 2',
+                                    'nidn' => '0620000002',
+                                    'id_status_aktif' => '1',
+                                ],
+                            ]
+                        ];
+                    }
+                    return ['error_code' => 0, 'data' => []];
+                }
+                return ['error_code' => 0, 'data' => []];
+            });
+
+        $service = new NeoFeederSyncService($mockFeeder);
+        $log = $service->pullBatchDosenFromFeeder();
+
+        // Total harus 502 (tidak terpotong di 500)
+        $this->assertEquals(502, $log->total_records);
+        $this->assertEquals(502, $log->success_count);
+        $this->assertDatabaseHas('siakad_dosen', ['nidn' => '0620000001']);
+        $this->assertDatabaseHas('siakad_dosen', ['nidn' => '0620000002']);
+    }
+
+    public function test_pull_dosen_transaction_isolation_allows_valid_records_to_succeed_even_if_one_fails()
+    {
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->expects($this->any())
+            ->method('request')
+            ->willReturnCallback(function ($act, $p) {
+                if ($act === 'GetListDosen') {
+                    return [
+                        'error_code' => 0,
+                        'data' => [
+                            [
+                                'id_dosen' => null, // ini akan memicu exception "Record dosen tidak memiliki id_dosen"
+                                'nama_dosen' => 'Dosen Gagal Missing ID',
+                                'nidn' => '0699990001',
+                                'id_status_aktif' => '1',
+                            ],
+                            [
+                                'id_dosen' => 'UUID-SUKSES-ISO',
+                                'nama_dosen' => 'Dosen Sukses Isolasi',
+                                'nidn' => '0699990002',
+                                'id_status_aktif' => '1',
+                            ],
+                        ]
+                    ];
+                }
+                return ['error_code' => 0, 'data' => []];
+            });
+
+        $service = new NeoFeederSyncService($mockFeeder);
+        $log = $service->pullBatchDosenFromFeeder();
+
+        $this->assertEquals(2, $log->total_records);
+        $this->assertEquals(1, $log->success_count);
+        $this->assertEquals(1, $log->failed_count);
+        $this->assertEquals('partial', $log->status);
+
+        $this->assertDatabaseMissing('siakad_dosen', ['nidn' => '0699990001']);
+        $this->assertDatabaseHas('siakad_dosen', ['nidn' => '0699990002']);
+    }
 }

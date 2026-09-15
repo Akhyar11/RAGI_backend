@@ -632,31 +632,41 @@ class NeoFeederSyncService
         $details = [];
 
         try {
-            $res = $this->feederService->request('GetListDosen', [
-                'order' => 'nama_dosen',
-                'limit' => 500,
-                'offset' => 0,
-            ]);
-
+            // Looping pagination untuk GetListDosen agar kampus dengan > 500 dosen tidak terpotong
             $dosenItems = [];
-            if (isset($res['data'])) {
-                if (is_array($res['data'])) {
-                    $dosenItems = isset($res['data'][0]) ? $res['data'] : [$res['data']];
-                }
-            }
+            $offset = 0;
+            $limit = 500;
+            do {
+                $res = $this->feederService->request('GetListDosen', [
+                    'order' => 'nama_dosen',
+                    'limit' => $limit,
+                    'offset' => $offset,
+                ]);
 
-            // Fallback simulation jika server standalone mock
-            if (empty($dosenItems) && isset($res['data']['id_feeder'])) {
-                $dosenItems = [
-                    [
-                        'id_dosen' => $res['data']['id_feeder'],
-                        'nama_dosen' => 'Dosen Simulasi Feeder',
-                        'nidn' => '0699887766',
-                        'nip' => '199001012020011001',
-                        'id_status_aktif' => 'A',
-                    ]
-                ];
-            }
+                $batch = [];
+                if (isset($res['data']) && is_array($res['data'])) {
+                    $batch = isset($res['data'][0]) ? $res['data'] : [$res['data']];
+                }
+
+                // Fallback simulation jika server standalone mock
+                if (empty($batch) && $offset === 0 && isset($res['data']['id_feeder'])) {
+                    $batch = [
+                        [
+                            'id_dosen' => $res['data']['id_feeder'],
+                            'nama_dosen' => 'Dosen Simulasi Feeder',
+                            'nidn' => '0699887766',
+                            'nip' => '199001012020011001',
+                            'id_status_aktif' => 'A',
+                        ]
+                    ];
+                }
+
+                foreach ($batch as $b) {
+                    $dosenItems[] = $b;
+                }
+
+                $offset += $limit;
+            } while (!empty($batch) && count($batch) >= $limit);
 
             $log->update(['total_records' => count($dosenItems)]);
 
@@ -667,252 +677,308 @@ class NeoFeederSyncService
                 Log::warning("Gagal fetch prodi feeder: " . $e->getMessage());
             }
 
-            // 2. Ambil Peta Homebase Resmi Dosen (a_sp_homebase = '1')
+            // 2. Ambil Peta Homebase Resmi Dosen (a_sp_homebase = '1') dengan looping pagination
             $homebaseMap = [];
             try {
-                $penugasanRes = $this->feederService->request('GetListPenugasanDosen', [
-                    'filter' => "a_sp_homebase = '1' and tgl_ptk_keluar is null",
-                    'order' => 'id_tahun_ajaran desc',
-                    'limit' => 500,
-                ]);
-                if (!empty($penugasanRes['data']) && is_array($penugasanRes['data'])) {
-                    $pList = isset($penugasanRes['data'][0]) ? $penugasanRes['data'] : [$penugasanRes['data']];
-                    foreach ($pList as $pn) {
-                        $dId = $pn['id_dosen'] ?? null;
-                        if ($dId && !isset($homebaseMap[$dId])) {
-                            $homebaseMap[$dId] = $pn;
+                $offset = 0;
+                $limit = 500;
+                do {
+                    $penugasanRes = $this->feederService->request('GetListPenugasanDosen', [
+                        'filter' => "a_sp_homebase = '1' and tgl_ptk_keluar is null",
+                        'order' => 'id_tahun_ajaran desc',
+                        'limit' => $limit,
+                        'offset' => $offset,
+                    ]);
+                    $pList = [];
+                    if (!empty($penugasanRes['data']) && is_array($penugasanRes['data'])) {
+                        $pList = isset($penugasanRes['data'][0]) ? $penugasanRes['data'] : [$penugasanRes['data']];
+                        foreach ($pList as $pn) {
+                            $dId = $pn['id_dosen'] ?? null;
+                            if ($dId && !isset($homebaseMap[$dId])) {
+                                $homebaseMap[$dId] = $pn;
+                            }
                         }
                     }
-                }
+                    $offset += $limit;
+                } while (!empty($pList) && count($pList) >= $limit);
             } catch (\Exception $e) {
                 Log::warning("Gagal fetch homebase penugasan dosen: " . $e->getMessage());
             }
 
-            // 3. Ambil Seluruh Riwayat Pendidikan Dosen dari Neo Feeder
+            // 3. Ambil Seluruh Riwayat Pendidikan Dosen dari Neo Feeder dengan looping pagination
             $riwayatByDosen = [];
             try {
-                $riwayatRes = $this->feederService->request('GetRiwayatPendidikanDosen', ['limit' => 1000]);
-                if (!empty($riwayatRes['data']) && is_array($riwayatRes['data'])) {
-                    $rList = isset($riwayatRes['data'][0]) ? $riwayatRes['data'] : [$riwayatRes['data']];
-                    foreach ($rList as $rw) {
-                        $dId = $rw['id_dosen'] ?? null;
-                        if ($dId) {
-                            $riwayatByDosen[$dId][] = $rw;
+                $offset = 0;
+                $limit = 1000;
+                do {
+                    $riwayatRes = $this->feederService->request('GetRiwayatPendidikanDosen', [
+                        'limit' => $limit,
+                        'offset' => $offset,
+                    ]);
+                    $rList = [];
+                    if (!empty($riwayatRes['data']) && is_array($riwayatRes['data'])) {
+                        $rList = isset($riwayatRes['data'][0]) ? $riwayatRes['data'] : [$riwayatRes['data']];
+                        foreach ($rList as $rw) {
+                            $dId = $rw['id_dosen'] ?? null;
+                            if ($dId) {
+                                $riwayatByDosen[$dId][] = $rw;
+                            }
                         }
                     }
-                }
+                    $offset += $limit;
+                } while (!empty($rList) && count($rList) >= $limit);
             } catch (\Exception $e) {
                 Log::warning("Gagal fetch riwayat pendidikan dosen: " . $e->getMessage());
             }
 
             foreach ($dosenItems as $item) {
                 try {
-                    $idDosen = $item['id_dosen'] ?? $item['id_feeder'] ?? null;
-                    $nidn = !empty($item['nidn']) ? trim($item['nidn']) : null;
-                    $nuptk = !empty($item['nuptk']) ? trim($item['nuptk']) : null;
-                    $namaDosen = $item['nama_dosen'] ?? 'Dosen Feeder';
-                    $nipDikti = !empty($item['nip']) ? trim($item['nip']) : null;
-                    $jenisKelamin = !empty($item['jenis_kelamin']) ? trim($item['jenis_kelamin']) : null;
-                    $agama = !empty($item['nama_agama']) ? trim($item['nama_agama']) : ($item['agama'] ?? null);
-                    $statusAktif = !empty($item['nama_status_aktif']) ? trim($item['nama_status_aktif']) : (($item['id_status_aktif'] ?? '1') == '1' ? 'Aktif' : 'Tidak Aktif');
-                    $isActive = in_array((string)($item['id_status_aktif'] ?? '1'), ['1', 'A'], true) || $statusAktif === 'Aktif';
+                    DB::transaction(function () use (
+                        $item,
+                        $homebaseMap,
+                        $riwayatByDosen,
+                        &$success,
+                        &$details
+                    ) {
+                        $idDosen = $item['id_dosen'] ?? $item['id_feeder'] ?? null;
+                        $nidn = !empty($item['nidn']) ? trim($item['nidn']) : null;
+                        $nuptk = !empty($item['nuptk']) ? trim($item['nuptk']) : null;
+                        $namaDosen = $item['nama_dosen'] ?? 'Dosen Feeder';
+                        $nipDikti = !empty($item['nip']) ? trim($item['nip']) : null;
+                        $jenisKelamin = !empty($item['jenis_kelamin']) ? trim($item['jenis_kelamin']) : null;
+                        $agama = !empty($item['nama_agama']) ? trim($item['nama_agama']) : ($item['agama'] ?? null);
+                        $statusAktif = !empty($item['nama_status_aktif']) ? trim($item['nama_status_aktif']) : (($item['id_status_aktif'] ?? '1') == '1' ? 'Aktif' : 'Tidak Aktif');
+                        $isActive = in_array((string)($item['id_status_aktif'] ?? '1'), ['1', 'A'], true) || $statusAktif === 'Aktif';
 
-                    $tanggalLahir = null;
-                    if (!empty($item['tanggal_lahir'])) {
-                        try {
-                            $tanggalLahir = \Carbon\Carbon::parse($item['tanggal_lahir'])->format('Y-m-d');
-                        } catch (\Exception $e) {
-                            $tanggalLahir = null;
+                        $tanggalLahir = null;
+                        if (!empty($item['tanggal_lahir'])) {
+                            try {
+                                $tanggalLahir = \Carbon\Carbon::parse($item['tanggal_lahir'])->format('Y-m-d');
+                            } catch (\Exception $e) {
+                                $tanggalLahir = null;
+                            }
                         }
-                    }
 
-                    $tempatLahir = !empty($item['tempat_lahir']) ? trim($item['tempat_lahir']) : null;
-                    $nik = !empty($item['nik']) ? trim($item['nik']) : null;
-                    $telepon = !empty($item['telepon']) ? trim($item['telepon']) : null;
-                    $handphone = !empty($item['handphone']) ? trim($item['handphone']) : null;
-                    $email = !empty($item['email']) ? trim($item['email']) : null;
+                        $tempatLahir = !empty($item['tempat_lahir']) ? trim($item['tempat_lahir']) : null;
+                        $nik = !empty($item['nik']) ? trim($item['nik']) : null;
+                        $telepon = !empty($item['telepon']) ? trim($item['telepon']) : null;
+                        $handphone = !empty($item['handphone']) ? trim($item['handphone']) : null;
+                        $email = !empty($item['email']) ? trim($item['email']) : null;
 
-                    if (empty($idDosen)) {
-                        throw new \Exception("Record dosen tidak memiliki id_dosen");
-                    }
-
-                    // Cari berdasarkan NIDN atau id_feeder yang sudah ada
-                    $dosenLokal = null;
-                    if ($nidn) {
-                        $dosenLokal = Dosen::where('nidn', $nidn)->first();
-                    }
-                    if (!$dosenLokal) {
-                        $dosenLokal = Dosen::where('id_feeder', $idDosen)->first();
-                    }
-
-                    $dataToSave = [
-                        'nama_lengkap' => $namaDosen,
-                        'nidn' => $nidn,
-                        'nuptk' => $nuptk,
-                        'jenis_kelamin' => $jenisKelamin,
-                        'tanggal_lahir' => $tanggalLahir,
-                        'agama' => $agama,
-                        'status_aktif' => $statusAktif,
-                        'is_active' => $isActive,
-                        'id_feeder' => $idDosen,
-                    ];
-                    if (!empty($tempatLahir)) $dataToSave['tempat_lahir'] = $tempatLahir;
-                    if (!empty($nik)) $dataToSave['nik'] = $nik;
-                    if (!empty($telepon)) $dataToSave['telepon'] = $telepon;
-                    if (!empty($handphone)) $dataToSave['handphone'] = $handphone;
-                    if (!empty($email)) $dataToSave['email'] = $email;
-
-                    // 1. Pemetaan Homebase Program Studi Spesifik
-                    if (isset($homebaseMap[$idDosen])) {
-                        $hb = $homebaseMap[$idDosen];
-                        $idProdiFeeder = $hb['id_prodi'] ?? null;
-                        $namaProdiFeeder = $hb['nama_program_studi'] ?? '';
-
-                        $prodiTarget = null;
-                        if ($idProdiFeeder) {
-                            $prodiTarget = MasterProgramStudi::where('id_feeder', $idProdiFeeder)->first();
+                        if (empty($idDosen)) {
+                            throw new \Exception("Record dosen tidak memiliki id_dosen");
                         }
-                        if (!$prodiTarget && $namaProdiFeeder) {
-                            $prodiTarget = MasterProgramStudi::where('nama', 'like', "%{$namaProdiFeeder}%")->first();
-                        }
-                        if ($prodiTarget) {
-                            $dataToSave['program_studi_id'] = $prodiTarget->id;
-                        }
-                    }
 
-                    // 2. Pemetaan Gelar Otomatis dari Riwayat Pendidikan Feeder
-                    $titles = ['gelar_depan' => null, 'gelar_belakang' => null];
-                    if (isset($riwayatByDosen[$idDosen])) {
-                        $titles = $this->resolveAcademicTitlesForDosen($riwayatByDosen[$idDosen]);
-                    }
-                    $dataToSave['gelar_depan'] = $titles['gelar_depan'];
-                    $dataToSave['gelar_belakang'] = $titles['gelar_belakang'];
+                        // Cari Dosen lokal dengan pencocokan bertingkat: id_feeder -> nidn -> nuptk -> nip -> nik (+ withTrashed()->restore())
+                        $dosenLokal = null;
+                        if (!empty($idDosen)) {
+                            $dosenLokal = Dosen::withTrashed()->where('id_feeder', $idDosen)->first();
+                        }
+                        if (!$dosenLokal && !empty($nidn)) {
+                            $dosenLokal = Dosen::withTrashed()->where('nidn', $nidn)->first();
+                        }
+                        if (!$dosenLokal && !empty($nuptk)) {
+                            $dosenLokal = Dosen::withTrashed()->where('nuptk', $nuptk)->first();
+                        }
+                        if (!$dosenLokal && !empty($nipDikti)) {
+                            $dosenLokal = Dosen::withTrashed()->where('nip', $nipDikti)->first();
+                        }
+                        if (!$dosenLokal && !empty($nik)) {
+                            $dosenLokal = Dosen::withTrashed()->where('nik', $nik)->first();
+                        }
 
-                    if ($dosenLokal) {
-                        // Update data dosen lokal (pertahankan NIP lokal jika sudah ada)
-                        if (empty($dosenLokal->nip) && !empty($nipDikti)) {
+                        if ($dosenLokal && $dosenLokal->trashed()) {
+                            $dosenLokal->restore();
+                        }
+
+                        $dataToSave = [
+                            'nama_lengkap' => $namaDosen,
+                            'nidn' => $nidn,
+                            'nuptk' => $nuptk,
+                            'jenis_kelamin' => $jenisKelamin,
+                            'tanggal_lahir' => $tanggalLahir,
+                            'agama' => $agama,
+                            'status_aktif' => $statusAktif,
+                            'is_active' => $isActive,
+                            'id_feeder' => $idDosen,
+                        ];
+                        if (!empty($tempatLahir)) $dataToSave['tempat_lahir'] = $tempatLahir;
+                        if (!empty($nik)) $dataToSave['nik'] = $nik;
+                        if (!empty($telepon)) $dataToSave['telepon'] = $telepon;
+                        if (!empty($handphone)) $dataToSave['handphone'] = $handphone;
+                        if (!empty($email)) $dataToSave['email'] = $email;
+
+                        // 1. Pemetaan Homebase Program Studi Spesifik (Exact match, NO LIKE %...% dan NO random fallback)
+                        if (isset($homebaseMap[$idDosen])) {
+                            $hb = $homebaseMap[$idDosen];
+                            $idProdiFeeder = $hb['id_prodi'] ?? null;
+                            $namaProdiFeeder = !empty($hb['nama_program_studi']) ? trim($hb['nama_program_studi']) : null;
+
+                            $prodiTarget = null;
+                            if ($idProdiFeeder) {
+                                $prodiTarget = MasterProgramStudi::where('id_feeder', $idProdiFeeder)->first();
+                            }
+                            if (!$prodiTarget && $namaProdiFeeder) {
+                                $prodiTarget = MasterProgramStudi::where('nama', $namaProdiFeeder)->first();
+                            }
+                            if ($prodiTarget) {
+                                $dataToSave['program_studi_id'] = $prodiTarget->id;
+                            }
+                        }
+
+                        // 2. Pemetaan Gelar Otomatis dari Riwayat Pendidikan Feeder
+                        $titles = ['gelar_depan' => null, 'gelar_belakang' => null];
+                        if (isset($riwayatByDosen[$idDosen])) {
+                            $titles = $this->resolveAcademicTitlesForDosen($riwayatByDosen[$idDosen]);
+                        }
+                        $dataToSave['gelar_depan'] = $titles['gelar_depan'];
+                        $dataToSave['gelar_belakang'] = $titles['gelar_belakang'];
+
+                        if ($dosenLokal) {
+                            // Update data dosen lokal (pertahankan NIP lokal jika sudah ada)
+                            if (empty($dosenLokal->nip) && !empty($nipDikti)) {
+                                $dataToSave['nip'] = $nipDikti;
+                            }
+                            $dosenLokal->update($dataToSave);
+                        } else {
+                            // Buat data dosen baru di database lokal
                             $dataToSave['nip'] = $nipDikti;
+                            $dosenLokal = Dosen::create($dataToSave);
                         }
-                        $dosenLokal->update($dataToSave);
-                    } else {
-                        // Buat data dosen baru di database lokal
-                        $dataToSave['nip'] = $nipDikti;
-                        $dosenLokal = Dosen::create($dataToSave);
-                    }
 
-                    // Sinkronisasi otomatis ke Modul SIMPEG (simpeg_pegawai)
-                    $invalidPlaceholders = ['-', '--', '0', 'N/A', 'none', '', ' '];
-                    $nipFinal = (!empty($dosenLokal->nip) && !in_array(trim($dosenLokal->nip), $invalidPlaceholders, true)) ? trim($dosenLokal->nip) : null;
-                    $nikFinal = (!empty($dosenLokal->nik) && !in_array(trim($dosenLokal->nik), $invalidPlaceholders, true)) ? trim($dosenLokal->nik) : null;
+                        // Sinkronisasi otomatis ke Modul SIMPEG (simpeg_pegawai)
+                        $invalidPlaceholders = ['-', '--', '0', 'N/A', 'none', '', ' '];
+                        $nipFinal = (!empty($dosenLokal->nip) && !in_array(trim($dosenLokal->nip), $invalidPlaceholders, true)) ? trim($dosenLokal->nip) : (!empty($nipDikti) && !in_array(trim($nipDikti), $invalidPlaceholders, true) ? trim($nipDikti) : null);
+                        $nikFinal = (!empty($dosenLokal->nik) && !in_array(trim($dosenLokal->nik), $invalidPlaceholders, true)) ? trim($dosenLokal->nik) : (!empty($nik) && !in_array(trim($nik), $invalidPlaceholders, true) ? trim($nik) : null);
 
-                    $pegawai = null;
-                    if (!empty($dosenLokal->pegawai_id)) {
-                        $pegawai = Pegawai::find($dosenLokal->pegawai_id);
-                    }
-                    if (!$pegawai && $nipFinal) {
-                        $pegawai = Pegawai::where('nip', $nipFinal)->first();
-                    }
-                    if (!$pegawai && $nikFinal) {
-                        $pegawai = Pegawai::where('nik', $nikFinal)->first();
-                    }
-
-                    $pegawaiData = [
-                        'nama_lengkap' => $namaDosen,
-                        'gelar_depan' => $titles['gelar_depan'],
-                        'gelar_belakang' => $titles['gelar_belakang'],
-                        'jenis_pegawai' => 'dosen',
-                        'status_kepegawaian' => 'tetap_yayasan',
-                        'status' => $isActive ? 'aktif' : 'non_aktif',
-                    ];
-                    if ($nipFinal) $pegawaiData['nip'] = $nipFinal;
-                    $pegawaiData['nidn'] = $nidn ?: null;
-                    $pegawaiData['nuptk'] = $nuptk ?: null;
-                    if ($nikFinal) $pegawaiData['nik'] = $nikFinal;
-                    if ($jenisKelamin) $pegawaiData['jenis_kelamin'] = in_array($jenisKelamin, ['L', 'P']) ? $jenisKelamin : 'L';
-                    if ($tanggalLahir) $pegawaiData['tanggal_lahir'] = $tanggalLahir;
-                    if (!empty($tempatLahir)) $pegawaiData['tempat_lahir'] = $tempatLahir;
-                    if ($agama) $pegawaiData['agama'] = $agama;
-                    if (!empty($handphone)) $pegawaiData['telepon'] = $handphone;
-                    elseif (!empty($telepon)) $pegawaiData['telepon'] = $telepon;
-
-                    if ($pegawai) {
-                        $pegawai->update($pegawaiData);
-                    } else {
-                        $pegawai = Pegawai::create($pegawaiData);
-                    }
-
-                    if ($pegawai && $dosenLokal->pegawai_id !== $pegawai->id) {
-                        $dosenLokal->update(['pegawai_id' => $pegawai->id]);
-                    }
-
-                    // Otomatis buatkan / hubungkan akun SSO di core_users dengan skala prioritas username: NIDN -> NUPTK -> NIP
-                    // HANYA dibuatkan untuk dosen yang berstatus AKTIF
-                    if ($isActive) {
-                        $user = app(PegawaiService::class)->ensureSsoUserForPegawai($pegawai, [
-                            'email' => !empty($item['email']) ? trim($item['email']) : null,
-                        ]);
-
-                        if ($dosenLokal->user_id !== $user->id) {
-                            $dosenLokal->update(['user_id' => $user->id]);
+                        // Pencocokan bertingkat Pegawai SIMPEG: pegawai_id -> nidn -> nuptk -> nip -> nik (+ withTrashed()->restore())
+                        $pegawai = null;
+                        if (!empty($dosenLokal->pegawai_id)) {
+                            $pegawai = Pegawai::withTrashed()->find($dosenLokal->pegawai_id);
                         }
-                    }
-
-                    // 3. Masukkan Data Riwayat Sekolah ke SIMPEG (simpeg_riwayat_pendidikan_pegawai)
-                    if ($pegawai && isset($riwayatByDosen[$idDosen])) {
-                        $eduList = $riwayatByDosen[$idDosen];
-                        $lastIdx = count($eduList) - 1;
-                        foreach ($eduList as $idx => $edu) {
-                            $jenjang = strtolower($edu['nama_jenjang_pendidikan'] ?? 's1');
-                            $institusi = $edu['nama_perguruan_tinggi'] ?? 'Perguruan Tinggi';
-                            $abbr = $this->abbreviateAcademicDegree(
-                                $edu['nama_gelar_akademik'] ?? '',
-                                $edu['nama_jenjang_pendidikan'] ?? '',
-                                $edu['nama_bidang_studi'] ?? ''
-                            );
-                            $singkatan = $abbr['belakang'] ?? ($abbr['depan'] ?? null);
-
-                            RiwayatPendidikanPegawai::updateOrCreate(
-                                [
-                                    'pegawai_id' => $pegawai->id,
-                                    'jenjang' => $jenjang,
-                                    'nama_institusi' => $institusi,
-                                ],
-                                [
-                                    'program_studi' => $edu['nama_bidang_studi'] ?? null,
-                                    'bidang_ilmu' => $edu['nama_bidang_studi'] ?? null,
-                                    'gelar_akademik' => $edu['nama_gelar_akademik'] ?? null,
-                                    'singkatan_gelar' => $singkatan,
-                                    'tahun_lulus' => !empty($edu['tahun_lulus']) ? (int)$edu['tahun_lulus'] : null,
-                                    'is_pendidikan_terakhir' => ($idx === $lastIdx),
-                                ]
-                            );
+                        if (!$pegawai && !empty($nidn)) {
+                            $pegawai = Pegawai::withTrashed()->where('nidn', $nidn)->first();
                         }
-                    }
+                        if (!$pegawai && !empty($nuptk)) {
+                            $pegawai = Pegawai::withTrashed()->where('nuptk', $nuptk)->first();
+                        }
+                        if (!$pegawai && $nipFinal) {
+                            $pegawai = Pegawai::withTrashed()->where('nip', $nipFinal)->first();
+                        }
+                        if (!$pegawai && $nikFinal) {
+                            $pegawai = Pegawai::withTrashed()->where('nik', $nikFinal)->first();
+                        }
 
-                    FeederMapping::updateOrCreate(
-                        ['entity_type' => 'dosen', 'local_id' => $dosenLokal->id],
-                        [
+                        if ($pegawai && $pegawai->trashed()) {
+                            $pegawai->restore();
+                        }
+
+                        $pegawaiData = [
+                            'nama_lengkap' => $namaDosen,
+                            'gelar_depan' => $titles['gelar_depan'],
+                            'gelar_belakang' => $titles['gelar_belakang'],
+                            'jenis_pegawai' => 'dosen',
+                            'status_kepegawaian' => 'tetap_yayasan',
+                            'status' => $isActive ? 'aktif' : 'non_aktif',
+                        ];
+                        if ($nipFinal) $pegawaiData['nip'] = $nipFinal;
+                        $pegawaiData['nidn'] = $nidn ?: null;
+                        $pegawaiData['nuptk'] = $nuptk ?: null;
+                        if ($nikFinal) $pegawaiData['nik'] = $nikFinal;
+                        if ($jenisKelamin) $pegawaiData['jenis_kelamin'] = in_array($jenisKelamin, ['L', 'P']) ? $jenisKelamin : 'L';
+                        if ($tanggalLahir) $pegawaiData['tanggal_lahir'] = $tanggalLahir;
+                        if (!empty($tempatLahir)) $pegawaiData['tempat_lahir'] = $tempatLahir;
+                        if ($agama) $pegawaiData['agama'] = $agama;
+                        if (!empty($handphone)) $pegawaiData['telepon'] = $handphone;
+                        elseif (!empty($telepon)) $pegawaiData['telepon'] = $telepon;
+
+                        if ($pegawai) {
+                            $pegawai->update($pegawaiData);
+                        } else {
+                            $pegawai = Pegawai::create($pegawaiData);
+                        }
+
+                        if ($pegawai && $dosenLokal->pegawai_id !== $pegawai->id) {
+                            $dosenLokal->update(['pegawai_id' => $pegawai->id]);
+                        }
+
+                        // Otomatis buatkan / hubungkan akun SSO di core_users dengan skala prioritas username: NIDN -> NUPTK -> NIP
+                        // HANYA dibuatkan untuk dosen yang berstatus AKTIF
+                        if ($isActive) {
+                            $user = app(PegawaiService::class)->ensureSsoUserForPegawai($pegawai, [
+                                'email' => !empty($item['email']) ? trim($item['email']) : null,
+                            ]);
+
+                            if ($dosenLokal->user_id !== $user->id) {
+                                $dosenLokal->update(['user_id' => $user->id]);
+                            }
+                        }
+
+                        // 3. Masukkan Data Riwayat Sekolah ke SIMPEG (simpeg_riwayat_pendidikan_pegawai)
+                        if ($pegawai && isset($riwayatByDosen[$idDosen])) {
+                            $eduList = $riwayatByDosen[$idDosen];
+                            $lastIdx = count($eduList) - 1;
+                            foreach ($eduList as $idx => $edu) {
+                                $jenjang = strtolower($edu['nama_jenjang_pendidikan'] ?? 's1');
+                                $institusi = $edu['nama_perguruan_tinggi'] ?? 'Perguruan Tinggi';
+                                $abbr = $this->abbreviateAcademicDegree(
+                                    $edu['nama_gelar_akademik'] ?? '',
+                                    $edu['nama_jenjang_pendidikan'] ?? '',
+                                    $edu['nama_bidang_studi'] ?? ''
+                                );
+                                $singkatan = $abbr['belakang'] ?? ($abbr['depan'] ?? null);
+
+                                RiwayatPendidikanPegawai::updateOrCreate(
+                                    [
+                                        'pegawai_id' => $pegawai->id,
+                                        'jenjang' => $jenjang,
+                                        'nama_institusi' => $institusi,
+                                    ],
+                                    [
+                                        'program_studi' => $edu['nama_bidang_studi'] ?? null,
+                                        'bidang_ilmu' => $edu['nama_bidang_studi'] ?? null,
+                                        'gelar_akademik' => $edu['nama_gelar_akademik'] ?? null,
+                                        'singkatan_gelar' => $singkatan,
+                                        'tahun_lulus' => !empty($edu['tahun_lulus']) ? (int)$edu['tahun_lulus'] : null,
+                                        'is_pendidikan_terakhir' => ($idx === $lastIdx),
+                                    ]
+                                );
+                            }
+                        }
+
+                        FeederMapping::updateOrCreate(
+                            ['entity_type' => 'dosen', 'local_id' => $dosenLokal->id],
+                            [
+                                'feeder_id' => $idDosen,
+                                'sync_status' => 'synced',
+                                'last_synced_at' => now(),
+                                'error_message' => null,
+                            ]
+                        );
+
+                        $success++;
+                        $details[] = [
+                            'nidn' => $nidn ?: '-',
+                            'nama' => $namaDosen,
+                            'status' => 'imported',
                             'feeder_id' => $idDosen,
-                            'sync_status' => 'synced',
-                            'last_synced_at' => now(),
-                            'error_message' => null,
-                        ]
-                    );
-
-                    $success++;
-                    $details[] = [
-                        'nidn' => $nidn ?: '-',
-                        'nama' => $namaDosen,
-                        'status' => 'imported',
-                        'feeder_id' => $idDosen,
-                    ];
-                } catch (\Exception $e) {
+                        ];
+                    });
+                } catch (\Throwable $e) {
                     $failed++;
                     $details[] = [
                         'nama' => $item['nama_dosen'] ?? 'N/A',
                         'status' => 'failed',
                         'error' => $e->getMessage(),
                     ];
+                    try {
+                        Log::error("Gagal sinkronisasi data dosen feeder: " . $e->getMessage(), [
+                            'item' => $item,
+                            'trace' => $e->getTraceAsString(),
+                        ]);
+                    } catch (\Throwable $logEx) {
+                        // ignore log write failure if disk or permissions issue
+                    }
                 }
             }
 

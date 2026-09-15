@@ -207,16 +207,26 @@ class PegawaiService
     {
         $isDosen = $this->isPegawaiDosen($pegawai, $roleIds);
 
-        // Cari record Dosen yang sudah ada
-        $existingDosen = Dosen::where('pegawai_id', $pegawai->id)->first();
+        // Cari record Dosen yang sudah ada menggunakan pencocokan bertingkat (pegawai_id -> nidn -> nuptk -> nip -> nik -> user_id)
+        $existingDosen = Dosen::withTrashed()->where('pegawai_id', $pegawai->id)->first();
         if (!$existingDosen && !empty($pegawai->nidn)) {
-            $existingDosen = Dosen::where('nidn', $pegawai->nidn)->first();
+            $existingDosen = Dosen::withTrashed()->where('nidn', $pegawai->nidn)->first();
+        }
+        if (!$existingDosen && !empty($pegawai->nuptk)) {
+            $existingDosen = Dosen::withTrashed()->where('nuptk', $pegawai->nuptk)->first();
         }
         if (!$existingDosen && !empty($pegawai->nip)) {
-            $existingDosen = Dosen::where('nip', $pegawai->nip)->first();
+            $existingDosen = Dosen::withTrashed()->where('nip', $pegawai->nip)->first();
+        }
+        if (!$existingDosen && !empty($pegawai->nik)) {
+            $existingDosen = Dosen::withTrashed()->where('nik', $pegawai->nik)->first();
         }
         if (!$existingDosen && !empty($pegawai->user_id)) {
-            $existingDosen = Dosen::where('user_id', $pegawai->user_id)->first();
+            $existingDosen = Dosen::withTrashed()->where('user_id', $pegawai->user_id)->first();
+        }
+
+        if ($existingDosen && $existingDosen->trashed()) {
+            $existingDosen->restore();
         }
 
         if (!$isDosen) {
@@ -232,28 +242,21 @@ class PegawaiService
 
         // Tentukan Program Studi (Homebase)
         $prodiId = $existingDosen?->program_studi_id;
+        if ($prodiId && !MasterProgramStudi::where('id', $prodiId)->exists()) {
+            $prodiId = null;
+        }
+
         if (!$prodiId && $pegawai->unit_kerja_id) {
             $unitKerja = $pegawai->unitKerja ?? \App\Models\Simpeg\UnitKerja::find($pegawai->unit_kerja_id);
             if ($unitKerja) {
-                $matchedProdi = MasterProgramStudi::where('nama', 'like', "%{$unitKerja->nama}%")->first();
+                $matchedProdi = MasterProgramStudi::where('nama', trim($unitKerja->nama))->first();
+                if (!$matchedProdi && !empty($unitKerja->kode_unit)) {
+                    $matchedProdi = MasterProgramStudi::where('kode_prodi', trim($unitKerja->kode_unit))->first();
+                }
                 if ($matchedProdi) {
                     $prodiId = $matchedProdi->id;
                 }
             }
-        }
-
-        $prodi = $prodiId ? MasterProgramStudi::find($prodiId) : null;
-        if (!$prodi) {
-            $prodi = MasterProgramStudi::first();
-            if (!$prodi) {
-                $prodi = MasterProgramStudi::create([
-                    'kode_prodi' => 'PRODI-DEFAULT',
-                    'nama' => 'Program Studi Umum',
-                    'jenjang' => 'S1',
-                    'is_active' => true,
-                ]);
-            }
-            $prodiId = $prodi->id;
         }
 
         $isActive = ($pegawai->status === 'aktif');
