@@ -51,4 +51,23 @@ class FeederTokenModeTest extends TestCase
         $token = $response->json('data.token');
         $this->assertTrue(str_starts_with($token, 'STAGING-TOKEN-'));
     }
+
+    public function test_update_kredensial_feeder_membuang_token_cache(): void
+    {
+        \Illuminate\Support\Facades\Cache::put('neo_feeder_token', 'STAGING-TOKEN-LAMA', 3600);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->token())
+            ->postJson('/api/admin/system-settings', [
+                'settings' => [
+                    ['key' => 'feeder_password', 'value' => 'baru123'],
+                ],
+            ]);
+
+        $response->assertStatus(200)->assertJsonPath('status', 'success');
+        $this->assertNull(\Illuminate\Support\Facades\Cache::get('neo_feeder_token'));
+        $this->assertDatabaseHas('core_system_settings', [
+            'key' => 'feeder_password',
+            'value' => 'baru123',
+        ]);
+    }
 }

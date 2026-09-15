@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\SystemSetting;
 use App\Services\IAM\RestrictedRoleService;
+use Illuminate\Support\Facades\Cache;
 
 class SystemSettingController extends Controller
 {
@@ -75,6 +76,8 @@ class SystemSettingController extends Controller
             'settings.*.value' => 'nullable|string',
         ]);
 
+        $feederChanged = false;
+
         foreach ($request->settings as $setting) {
             $value = $setting['value'];
 
@@ -96,6 +99,16 @@ class SystemSettingController extends Controller
                 ['key' => $setting['key']],
                 ['value' => $value]
             );
+
+            if (in_array($setting['key'], ['feeder_url', 'feeder_username', 'feeder_password'], true)) {
+                $feederChanged = true;
+            }
+        }
+
+        // Kredensial berubah: buang token cache agar Tes Koneksi memakai nilai baru,
+        // bukan token staging basi (TTL cache 1 jam).
+        if ($feederChanged) {
+            Cache::forget('neo_feeder_token');
         }
 
         return response()->json([
