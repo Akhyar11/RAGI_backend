@@ -508,35 +508,6 @@ class AkademikController extends Controller
         ]);
     }
 
-    // --- INTEGRASI SIMPEG PEGAWAI / DOSEN ---
-    public function syncDosenFromSimpeg(Request $request)
-    {
-        $pegawais = \App\Models\Simpeg\Pegawai::where(function($q) {
-            $q->where('jenis_pegawai', 'like', '%dosen%')
-              ->orWhereHas('roles', function ($r) {
-                  $r->where('slug', 'like', '%dosen%')->orWhere('name', 'like', '%dosen%');
-              })
-              ->orWhereHas('user.roles', function ($r) {
-                  $r->where('slug', 'like', '%dosen%')->orWhere('name', 'like', '%dosen%');
-              });
-        })->get();
-
-        $syncedCount = 0;
-        $pegawaiService = app(\App\Services\Simpeg\PegawaiService::class);
-        foreach ($pegawais as $p) {
-            $pegawaiService->syncDosenRecord($p);
-            $syncedCount++;
-        }
-
-        return response()->json([
-            'status' => 'success',
-            'message' => "Berhasil menyinkronkan {$syncedCount} data Dosen dari modul SIMPEG.",
-            'data' => [
-                'total_synced' => $syncedCount,
-            ]
-        ]);
-    }
-
     public function updateModePenilaian(Request $request, $id)
     {
         $request->validate([

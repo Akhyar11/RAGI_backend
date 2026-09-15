@@ -166,6 +166,14 @@ return new class extends Migration
         });
 
         // 7. Compatibility Views untuk nama tabel standar blueprint (attendances, office_locations, dsb.)
+        // Catatan: view diskip pada SQLite (database test :memory:) karena SQLite
+        // me-rebuild tabel saat ALTER TABLE, dan view yang menggantung ke
+        // simpeg_pegawai menggagalkan migrasi berikutnya (nidn, nuptk, dsb.)
+        // dengan error "no such table: main.simpeg_pegawai". View hanya
+        // compatibility layer dan tidak dipakai oleh kode aplikasi/test.
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
         try {
             DB::statement('DROP VIEW IF EXISTS attendances');
             DB::statement('CREATE VIEW attendances AS SELECT id, pegawai_id AS employee_id, office_location_id, tanggal AS attendance_date, clock_in, clock_in_latitude, clock_in_longitude, clock_in_distance_meters, clock_in_accuracy, clock_in_face_score, clock_in_is_mock_location, clock_out, clock_out_latitude, clock_out_longitude, clock_out_distance_meters, clock_out_accuracy, clock_out_face_score, clock_out_is_mock_location, status_kehadiran AS status, late_minutes, rejection_reason, notes, is_approved_by_admin, approved_by, approved_at, created_at, updated_at FROM simpeg_presensi_pegawai');

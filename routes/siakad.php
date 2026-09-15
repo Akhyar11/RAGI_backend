@@ -76,7 +76,6 @@ Route::prefix('akademik')->group(function () {
 
     Route::get('/dosen', [AkademikController::class, 'listDosen']);
     Route::post('/dosen', [AkademikController::class, 'storeDosen']);
-    Route::post('/dosen/sync-from-simpeg', [AkademikController::class, 'syncDosenFromSimpeg']);
     Route::put('/dosen/{id}', [AkademikController::class, 'updateDosen']);
     Route::delete('/dosen/{id}', [AkademikController::class, 'destroyDosen']);
 });
