@@ -532,15 +532,9 @@ class NeoFeederSyncService
             return $knownMap[$namaGelar];
         }
 
-        // Fallback pencocokan pola kata
+        // Fallback pencocokan pola kata spesifik (Dilarang singkatan generik liar seperti S. atau M.)
         if (preg_match('/^sarjana terapan/i', $namaGelar)) {
             return ['belakang' => 'S.Tr.'];
-        }
-        if (preg_match('/^sarjana/i', $namaGelar)) {
-            return ['belakang' => 'S.'];
-        }
-        if (preg_match('/^magister/i', $namaGelar)) {
-            return ['belakang' => 'M.'];
         }
         if (preg_match('/^doktor/i', $namaGelar) || preg_match('/^doctor/i', $namaGelar)) {
             return ['depan' => 'Dr.'];
@@ -553,14 +547,17 @@ class NeoFeederSyncService
                 if (str_contains($bidang, 'komputer') || str_contains($bidang, 'informatika')) return ['belakang' => 'S.Kom.'];
                 if (str_contains($bidang, 'teknik')) return ['belakang' => 'S.T.'];
                 if (str_contains($bidang, 'ekonomi')) return ['belakang' => 'S.E.'];
-                return ['belakang' => 'S.'];
+                if (str_contains($bidang, 'hukum')) return ['belakang' => 'S.H.'];
+                if (str_contains($bidang, 'pendidikan')) return ['belakang' => 'S.Pd.'];
             } elseif ($jenjang === 'S2') {
                 if (str_contains($bidang, 'farmasi')) return ['belakang' => 'M.Farm.'];
                 if (str_contains($bidang, 'komputer') || str_contains($bidang, 'informatika')) return ['belakang' => 'M.Kom.'];
                 if (str_contains($bidang, 'kesehatan')) return ['belakang' => 'M.Kes.'];
                 if (str_contains($bidang, 'manajemen')) return ['belakang' => 'M.M.'];
                 if (str_contains($bidang, 'teknik')) return ['belakang' => 'M.T.'];
-                return ['belakang' => 'M.'];
+                if (str_contains($bidang, 'hukum')) return ['belakang' => 'M.H.'];
+                if (str_contains($bidang, 'pendidikan')) return ['belakang' => 'M.Pd.'];
+                if (str_contains($bidang, 'sains')) return ['belakang' => 'M.Si.'];
             } elseif ($jenjang === 'S3') {
                 return ['depan' => 'Dr.'];
             } elseif ($jenjang === 'PROFESI') {
@@ -573,6 +570,26 @@ class NeoFeederSyncService
     }
 
     /**
+     * Menghitung bobot hierarki jenjang pendidikan resmi Indonesia (D1 s.d. S3)
+     */
+    public function getJenjangHierarchyWeight(?string $jenjang): int
+    {
+        $j = strtoupper(trim((string)$jenjang));
+        return match (true) {
+            str_contains($j, 'S3') || str_contains($j, 'DOKTOR') || str_contains($j, 'SUBSPESIALIS') || str_contains($j, 'SP-2') || str_contains($j, 'SP2') => 10,
+            str_contains($j, 'S2') || str_contains($j, 'MAGISTER') || str_contains($j, 'MASTER') => 8,
+            str_contains($j, 'SP-1') || str_contains($j, 'SP1') || str_contains($j, 'SPESIALIS') => 7,
+            str_contains($j, 'PROFESI') => 6,
+            str_contains($j, 'S1') || str_contains($j, 'SARJANA') || str_contains($j, 'D4') => 5,
+            str_contains($j, 'D3') || str_contains($j, 'AHLI MADYA') => 4,
+            str_contains($j, 'D2') || str_contains($j, 'AHLI MUDA') => 3,
+            str_contains($j, 'D1') || str_contains($j, 'AHLI PRATAMA') => 2,
+            str_contains($j, 'SMA') || str_contains($j, 'SMK') || str_contains($j, 'MA') => 1,
+            default => 5,
+        };
+    }
+
+    /**
      * Menyusun Gelar Depan dan Gelar Belakang secara Otomatis dari Riwayat Pendidikan
      */
     public function resolveAcademicTitlesForDosen(array $educationList): array
@@ -580,12 +597,16 @@ class NeoFeederSyncService
         $frontTitles = [];
         $backTitles = [];
 
-        // Urutkan jenjang: D1 -> D2 -> D3 -> D4 -> S1 -> Profesi -> Spesialis -> S2 -> S3
-        $order = ['D1' => 1, 'D2' => 2, 'D3' => 3, 'D4' => 4, 'S1' => 5, 'PROFESI' => 6, 'SPESIALIS' => 7, 'S2' => 8, 'S3' => 9];
-        usort($educationList, function ($a, $b) use ($order) {
-            $jA = strtoupper($a['nama_jenjang_pendidikan'] ?? '');
-            $jB = strtoupper($b['nama_jenjang_pendidikan'] ?? '');
-            return ($order[$jA] ?? 5) <=> ($order[$jB] ?? 5);
+        // Urutkan jenjang dari terendah ke tertinggi untuk penyusunan gelar
+        usort($educationList, function ($a, $b) {
+            $wA = $this->getJenjangHierarchyWeight($a['nama_jenjang_pendidikan'] ?? '');
+            $wB = $this->getJenjangHierarchyWeight($b['nama_jenjang_pendidikan'] ?? '');
+            if ($wA === $wB) {
+                $yA = !empty($a['tahun_lulus']) ? (int)$a['tahun_lulus'] : 0;
+                $yB = !empty($b['tahun_lulus']) ? (int)$b['tahun_lulus'] : 0;
+                return $yA <=> $yB;
+            }
+            return $wA <=> $wB;
         });
 
         foreach ($educationList as $edu) {
@@ -745,10 +766,70 @@ class NeoFeederSyncService
                         $nuptk = !empty($item['nuptk']) ? trim($item['nuptk']) : null;
                         $namaDosen = $item['nama_dosen'] ?? 'Dosen Feeder';
                         $nipDikti = !empty($item['nip']) ? trim($item['nip']) : null;
-                        $jenisKelamin = !empty($item['jenis_kelamin']) ? trim($item['jenis_kelamin']) : null;
+
+                        // Parse gender: normalisasi 'L'/'P', jangan dipaksa default 'L'
+                        $rawJk = !empty($item['jenis_kelamin']) ? strtoupper(trim($item['jenis_kelamin'])) : null;
+                        $jenisKelaminFeeder = in_array($rawJk, ['L', 'P'], true) ? $rawJk : null;
+
                         $agama = !empty($item['nama_agama']) ? trim($item['nama_agama']) : ($item['agama'] ?? null);
-                        $statusAktif = !empty($item['nama_status_aktif']) ? trim($item['nama_status_aktif']) : (($item['id_status_aktif'] ?? '1') == '1' ? 'Aktif' : 'Tidak Aktif');
-                        $isActive = in_array((string)($item['id_status_aktif'] ?? '1'), ['1', 'A'], true) || $statusAktif === 'Aktif';
+
+                        // Parse tanggal keluar dari Feeder
+                        $tanggalKeluar = null;
+                        $rawTglKeluar = $item['tanggal_keluar'] ?? $item['tgl_keluar'] ?? $item['tgl_ptk_keluar'] ?? $item['tanggal_sk_keluar'] ?? null;
+                        if (!empty($rawTglKeluar)) {
+                            try {
+                                $tanggalKeluar = \Carbon\Carbon::parse($rawTglKeluar)->format('Y-m-d');
+                            } catch (\Throwable $e) {
+                                $tanggalKeluar = null;
+                            }
+                        }
+
+                        // Analisis status keaktifan riil PDDikti
+                        $rawStatusAktif = strtolower(trim((string)(
+                            $item['nama_status_aktif'] ??
+                            $item['id_status_aktif'] ??
+                            $item['nama_alasan_keluar'] ??
+                            $item['id_alasan_keluar'] ?? ''
+                        )));
+                        $idStatusAktif = strtoupper(trim((string)($item['id_status_aktif'] ?? '1')));
+
+                        if (
+                            in_array($idStatusAktif, ['P', 'PENSIUN'], true) ||
+                            str_contains($rawStatusAktif, 'pensiun')
+                        ) {
+                            $simpegStatus = 'pensiun';
+                            $isActive = false;
+                            $statusAktif = 'Pensiun';
+                        } elseif (
+                            in_array($idStatusAktif, ['M', 'MENINGGAL', 'WAFAT'], true) ||
+                            str_contains($rawStatusAktif, 'meninggal') ||
+                            str_contains($rawStatusAktif, 'wafat')
+                        ) {
+                            $simpegStatus = 'meninggal';
+                            $isActive = false;
+                            $statusAktif = 'Meninggal';
+                        } elseif (
+                            in_array($idStatusAktif, ['C', 'CUTI'], true) ||
+                            str_contains($rawStatusAktif, 'cuti')
+                        ) {
+                            $simpegStatus = 'non_aktif';
+                            $isActive = false;
+                            $statusAktif = 'Cuti';
+                        } elseif (
+                            in_array($idStatusAktif, ['N', 'K', 'KELUAR', '0'], true) ||
+                            str_contains($rawStatusAktif, 'keluar') ||
+                            str_contains($rawStatusAktif, 'dikeluarkan') ||
+                            str_contains($rawStatusAktif, 'mengundurkan') ||
+                            str_contains($rawStatusAktif, 'tidak aktif')
+                        ) {
+                            $simpegStatus = 'non_aktif';
+                            $isActive = false;
+                            $statusAktif = !empty($item['nama_status_aktif']) ? trim($item['nama_status_aktif']) : 'Keluar';
+                        } else {
+                            $simpegStatus = 'aktif';
+                            $isActive = true;
+                            $statusAktif = !empty($item['nama_status_aktif']) ? trim($item['nama_status_aktif']) : 'Aktif';
+                        }
 
                         $tanggalLahir = null;
                         if (!empty($item['tanggal_lahir'])) {
@@ -791,17 +872,20 @@ class NeoFeederSyncService
                             $dosenLokal->restore();
                         }
 
+                        // Tentukan jenis kelamin final (prioritas: Feeder valid -> Dosen lokal existing -> null)
+                        $finalJenisKelamin = $jenisKelaminFeeder ?: ($dosenLokal?->jenis_kelamin ?? null);
+
                         $dataToSave = [
                             'nama_lengkap' => $namaDosen,
                             'nidn' => $nidn,
                             'nuptk' => $nuptk,
-                            'jenis_kelamin' => $jenisKelamin,
                             'tanggal_lahir' => $tanggalLahir,
                             'agama' => $agama,
                             'status_aktif' => $statusAktif,
                             'is_active' => $isActive,
                             'id_feeder' => $idDosen,
                         ];
+                        if ($finalJenisKelamin) $dataToSave['jenis_kelamin'] = $finalJenisKelamin;
                         if (!empty($tempatLahir)) $dataToSave['tempat_lahir'] = $tempatLahir;
                         if (!empty($nik)) $dataToSave['nik'] = $nik;
                         if (!empty($telepon)) $dataToSave['telepon'] = $telepon;
@@ -873,24 +957,52 @@ class NeoFeederSyncService
                             $pegawai->restore();
                         }
 
+                        // Penentuan status_kepegawaian dinamis dari Feeder (tidak hardcode tetap_yayasan)
+                        $feederIkatan = strtolower(trim((string)(
+                            $item['status_kepegawaian'] ??
+                            $item['nama_status_kepegawaian'] ??
+                            $item['nama_ikatan_kerja'] ??
+                            $item['id_ikatan_kerja'] ??
+                            $item['ikatan_kerja'] ?? ''
+                        )));
+
+                        $statusKepegawaian = null;
+                        if (str_contains($feederIkatan, 'pns') || str_contains($feederIkatan, 'dpk')) {
+                            $statusKepegawaian = 'pns';
+                        } elseif (str_contains($feederIkatan, 'kontrak') || str_contains($feederIkatan, 'perjanjian kerja') || str_contains($feederIkatan, 'tidak tetap')) {
+                            $statusKepegawaian = 'kontrak';
+                        } elseif (str_contains($feederIkatan, 'non pns') || str_contains($feederIkatan, 'non_pns')) {
+                            $statusKepegawaian = 'non_pns';
+                        } elseif (str_contains($feederIkatan, 'tetap') || str_contains($feederIkatan, 'yayasan')) {
+                            $statusKepegawaian = 'tetap_yayasan';
+                        }
+
+                        if (!$statusKepegawaian) {
+                            $statusKepegawaian = $pegawai?->status_kepegawaian ?? 'tetap_yayasan';
+                        }
+
+                        $finalPegawaiGender = $finalJenisKelamin ?: ($pegawai?->jenis_kelamin ?? null);
+
                         $pegawaiData = [
                             'nama_lengkap' => $namaDosen,
                             'gelar_depan' => $titles['gelar_depan'],
                             'gelar_belakang' => $titles['gelar_belakang'],
                             'jenis_pegawai' => 'dosen',
-                            'status_kepegawaian' => 'tetap_yayasan',
-                            'status' => $isActive ? 'aktif' : 'non_aktif',
+                            'status_kepegawaian' => $statusKepegawaian,
+                            'status' => $simpegStatus,
+                            'is_active' => $isActive,
                         ];
+                        if ($finalPegawaiGender) $pegawaiData['jenis_kelamin'] = $finalPegawaiGender;
                         if ($nipFinal) $pegawaiData['nip'] = $nipFinal;
                         $pegawaiData['nidn'] = $nidn ?: null;
                         $pegawaiData['nuptk'] = $nuptk ?: null;
                         if ($nikFinal) $pegawaiData['nik'] = $nikFinal;
-                        if ($jenisKelamin) $pegawaiData['jenis_kelamin'] = in_array($jenisKelamin, ['L', 'P']) ? $jenisKelamin : 'L';
                         if ($tanggalLahir) $pegawaiData['tanggal_lahir'] = $tanggalLahir;
                         if (!empty($tempatLahir)) $pegawaiData['tempat_lahir'] = $tempatLahir;
                         if ($agama) $pegawaiData['agama'] = $agama;
                         if (!empty($handphone)) $pegawaiData['telepon'] = $handphone;
                         elseif (!empty($telepon)) $pegawaiData['telepon'] = $telepon;
+                        if ($tanggalKeluar) $pegawaiData['tanggal_keluar'] = $tanggalKeluar;
 
                         if ($pegawai) {
                             $pegawai->update($pegawaiData);
@@ -917,10 +1029,28 @@ class NeoFeederSyncService
                         // 3. Masukkan Data Riwayat Sekolah ke SIMPEG (simpeg_riwayat_pendidikan_pegawai)
                         if ($pegawai && isset($riwayatByDosen[$idDosen])) {
                             $eduList = $riwayatByDosen[$idDosen];
-                            $lastIdx = count($eduList) - 1;
+
+                            // Urutkan riwayat pendidikan: Jenjang tertinggi (S3 > S2 > S1 > D3) & tahun terbaru lebih dulu
+                            usort($eduList, function ($a, $b) {
+                                $wA = $this->getJenjangHierarchyWeight($a['nama_jenjang_pendidikan'] ?? '');
+                                $wB = $this->getJenjangHierarchyWeight($b['nama_jenjang_pendidikan'] ?? '');
+                                if ($wA === $wB) {
+                                    $yA = !empty($a['tahun_lulus']) ? (int)$a['tahun_lulus'] : 0;
+                                    $yB = !empty($b['tahun_lulus']) ? (int)$b['tahun_lulus'] : 0;
+                                    return $yB <=> $yA;
+                                }
+                                return $wB <=> $wA;
+                            });
+
+                            // Reset semua flag is_pendidikan_terakhir sebelumnya untuk pegawai ini
+                            RiwayatPendidikanPegawai::where('pegawai_id', $pegawai->id)->update(['is_pendidikan_terakhir' => false]);
+
                             foreach ($eduList as $idx => $edu) {
                                 $jenjang = strtolower($edu['nama_jenjang_pendidikan'] ?? 's1');
                                 $institusi = $edu['nama_perguruan_tinggi'] ?? 'Perguruan Tinggi';
+                                $prodiEdu = !empty($edu['nama_bidang_studi']) ? trim($edu['nama_bidang_studi']) : null;
+                                $tahunLulus = !empty($edu['tahun_lulus']) ? (int)$edu['tahun_lulus'] : null;
+
                                 $abbr = $this->abbreviateAcademicDegree(
                                     $edu['nama_gelar_akademik'] ?? '',
                                     $edu['nama_jenjang_pendidikan'] ?? '',
@@ -928,19 +1058,28 @@ class NeoFeederSyncService
                                 );
                                 $singkatan = $abbr['belakang'] ?? ($abbr['depan'] ?? null);
 
+                                // Kunci pencarian unik menyertakan program_studi dan tahun_lulus agar tidak menimpa S2 ganda
+                                $searchCriteria = [
+                                    'pegawai_id' => $pegawai->id,
+                                    'jenjang' => $jenjang,
+                                    'nama_institusi' => $institusi,
+                                ];
+                                if ($prodiEdu) {
+                                    $searchCriteria['program_studi'] = $prodiEdu;
+                                }
+                                if ($tahunLulus) {
+                                    $searchCriteria['tahun_lulus'] = $tahunLulus;
+                                }
+
                                 RiwayatPendidikanPegawai::updateOrCreate(
+                                    $searchCriteria,
                                     [
-                                        'pegawai_id' => $pegawai->id,
-                                        'jenjang' => $jenjang,
-                                        'nama_institusi' => $institusi,
-                                    ],
-                                    [
-                                        'program_studi' => $edu['nama_bidang_studi'] ?? null,
-                                        'bidang_ilmu' => $edu['nama_bidang_studi'] ?? null,
+                                        'program_studi' => $prodiEdu,
+                                        'bidang_ilmu' => $prodiEdu,
                                         'gelar_akademik' => $edu['nama_gelar_akademik'] ?? null,
                                         'singkatan_gelar' => $singkatan,
-                                        'tahun_lulus' => !empty($edu['tahun_lulus']) ? (int)$edu['tahun_lulus'] : null,
-                                        'is_pendidikan_terakhir' => ($idx === $lastIdx),
+                                        'tahun_lulus' => $tahunLulus,
+                                        'is_pendidikan_terakhir' => ($idx === 0),
                                     ]
                                 );
                             }

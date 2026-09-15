@@ -694,4 +694,190 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertDatabaseMissing('siakad_dosen', ['nidn' => '0699990001']);
         $this->assertDatabaseHas('siakad_dosen', ['nidn' => '0699990002']);
     }
+
+    public function test_pull_dosen_maps_real_pddikti_status_and_tanggal_keluar_to_simpeg()
+    {
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->expects($this->any())
+            ->method('request')
+            ->willReturnCallback(function ($act, $p) {
+                if ($act === 'GetListDosen') {
+                    return [
+                        'error_code' => 0,
+                        'data' => [
+                            [
+                                'id_dosen' => 'UUID-DOSEN-PENSIUN',
+                                'nama_dosen' => 'Prof. Pensiun Feeder',
+                                'nidn' => '0633445566',
+                                'id_status_aktif' => 'P',
+                                'nama_status_aktif' => 'Pensiun',
+                                'nama_ikatan_kerja' => 'PNS DPK',
+                                'tanggal_keluar' => '2025-06-30',
+                            ],
+                            [
+                                'id_dosen' => 'UUID-DOSEN-MENINGGAL',
+                                'nama_dosen' => 'Dosen Meninggal Feeder',
+                                'nidn' => '0644556677',
+                                'id_status_aktif' => 'M',
+                                'nama_status_aktif' => 'Meninggal Dunia',
+                                'status_kepegawaian' => 'Dosen Tetap Yayasan',
+                                'tanggal_keluar' => '2024-12-15',
+                            ],
+                            [
+                                'id_dosen' => 'UUID-DOSEN-KONTRAK-KELUAR',
+                                'nama_dosen' => 'Dosen Kontrak Keluar',
+                                'nidn' => '0655667788',
+                                'id_status_aktif' => 'K',
+                                'nama_status_aktif' => 'Mengundurkan Diri',
+                                'status_kepegawaian' => 'Perjanjian Kerja Waktu Tertentu',
+                                'tanggal_keluar' => '2026-01-10',
+                            ],
+                        ]
+                    ];
+                }
+                return ['error_code' => 0, 'data' => []];
+            });
+
+        $service = new NeoFeederSyncService($mockFeeder);
+        $log = $service->pullBatchDosenFromFeeder();
+
+        $this->assertEquals(3, $log->success_count);
+
+        // 1. Verifikasi Dosen Pensiun
+        $dosenPensiun = Dosen::where('nidn', '0633445566')->first();
+        $this->assertNotNull($dosenPensiun);
+        $this->assertEquals('Pensiun', $dosenPensiun->status_aktif);
+        $this->assertFalse((bool)$dosenPensiun->is_active);
+        $pegawaiPensiun = \App\Models\Simpeg\Pegawai::find($dosenPensiun->pegawai_id);
+        $this->assertNotNull($pegawaiPensiun);
+        $this->assertEquals('pensiun', $pegawaiPensiun->status);
+        $this->assertEquals('pns', $pegawaiPensiun->status_kepegawaian);
+        $this->assertEquals('2025-06-30', $pegawaiPensiun->tanggal_keluar?->format('Y-m-d'));
+
+        // 2. Verifikasi Dosen Meninggal
+        $dosenMeninggal = Dosen::where('nidn', '0644556677')->first();
+        $this->assertNotNull($dosenMeninggal);
+        $this->assertEquals('Meninggal', $dosenMeninggal->status_aktif);
+        $this->assertFalse((bool)$dosenMeninggal->is_active);
+        $pegawaiMeninggal = \App\Models\Simpeg\Pegawai::find($dosenMeninggal->pegawai_id);
+        $this->assertNotNull($pegawaiMeninggal);
+        $this->assertEquals('meninggal', $pegawaiMeninggal->status);
+        $this->assertEquals('tetap_yayasan', $pegawaiMeninggal->status_kepegawaian);
+        $this->assertEquals('2024-12-15', $pegawaiMeninggal->tanggal_keluar?->format('Y-m-d'));
+
+        // 3. Verifikasi Dosen Kontrak Mengundurkan Diri
+        $dosenKeluar = Dosen::where('nidn', '0655667788')->first();
+        $this->assertNotNull($dosenKeluar);
+        $this->assertFalse((bool)$dosenKeluar->is_active);
+        $pegawaiKeluar = \App\Models\Simpeg\Pegawai::find($dosenKeluar->pegawai_id);
+        $this->assertNotNull($pegawaiKeluar);
+        $this->assertEquals('non_aktif', $pegawaiKeluar->status);
+        $this->assertEquals('kontrak', $pegawaiKeluar->status_kepegawaian);
+        $this->assertEquals('2026-01-10', $pegawaiKeluar->tanggal_keluar?->format('Y-m-d'));
+    }
+
+    public function test_pull_dosen_preserves_multi_degree_and_determines_highest_education_level()
+    {
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->expects($this->any())
+            ->method('request')
+            ->willReturnCallback(function ($act, $p) {
+                if ($act === 'GetListDosen') {
+                    return [
+                        'error_code' => 0,
+                        'data' => [
+                            [
+                                'id_dosen' => 'UUID-DOSEN-MULTIDEGREE',
+                                'nama_dosen' => 'Dr. Multi Degree, S.Kom., M.Kom., M.M.',
+                                'nidn' => '0677112233',
+                                'id_status_aktif' => '1',
+                            ]
+                        ]
+                    ];
+                }
+                if ($act === 'GetRiwayatPendidikanDosen') {
+                    // Sengaja acak urutannya: S1 di paling akhir, S2 ada 2 gelar dari kampus yang sama
+                    return [
+                        'error_code' => 0,
+                        'data' => [
+                            [
+                                'id_dosen' => 'UUID-DOSEN-MULTIDEGREE',
+                                'nama_jenjang_pendidikan' => 'S2',
+                                'nama_perguruan_tinggi' => 'Universitas Indonesia',
+                                'nama_bidang_studi' => 'Ilmu Komputer',
+                                'nama_gelar_akademik' => 'Magister Komputer',
+                                'tahun_lulus' => '2018',
+                            ],
+                            [
+                                'id_dosen' => 'UUID-DOSEN-MULTIDEGREE',
+                                'nama_jenjang_pendidikan' => 'S3',
+                                'nama_perguruan_tinggi' => 'Institut Teknologi Bandung',
+                                'nama_bidang_studi' => 'Informatika',
+                                'nama_gelar_akademik' => 'Doktor',
+                                'tahun_lulus' => '2024',
+                            ],
+                            [
+                                'id_dosen' => 'UUID-DOSEN-MULTIDEGREE',
+                                'nama_jenjang_pendidikan' => 'S2',
+                                'nama_perguruan_tinggi' => 'Universitas Indonesia',
+                                'nama_bidang_studi' => 'Manajemen',
+                                'nama_gelar_akademik' => 'Magister Manajemen',
+                                'tahun_lulus' => '2021',
+                            ],
+                            [
+                                'id_dosen' => 'UUID-DOSEN-MULTIDEGREE',
+                                'nama_jenjang_pendidikan' => 'S1',
+                                'nama_perguruan_tinggi' => 'Universitas Gadjah Mada',
+                                'nama_bidang_studi' => 'Ilmu Komputer',
+                                'nama_gelar_akademik' => 'Sarjana Komputer',
+                                'tahun_lulus' => '2015',
+                            ],
+                        ]
+                    ];
+                }
+                return ['error_code' => 0, 'data' => []];
+            });
+
+        $service = new NeoFeederSyncService($mockFeeder);
+        $log = $service->pullBatchDosenFromFeeder();
+
+        $this->assertEquals(1, $log->success_count);
+
+        $dosen = Dosen::where('nidn', '0677112233')->first();
+        $this->assertNotNull($dosen);
+        $pegawai = \App\Models\Simpeg\Pegawai::find($dosen->pegawai_id);
+        $this->assertNotNull($pegawai);
+
+        // Verifikasi ke-4 gelar tersimpan semua (termasuk 2 gelar S2 dari kampus yang sama tidak saling timpa)
+        $riwayat = \App\Models\Simpeg\RiwayatPendidikanPegawai::where('pegawai_id', $pegawai->id)->get();
+        $this->assertCount(4, $riwayat);
+
+        $s2List = $riwayat->where('jenjang', 's2');
+        $this->assertCount(2, $s2List);
+        $this->assertTrue($s2List->contains('program_studi', 'Ilmu Komputer'));
+        $this->assertTrue($s2List->contains('program_studi', 'Manajemen'));
+
+        // Verifikasi hanya S3 yang merupakan jenjang tertinggi yang ditandai is_pendidikan_terakhir = true
+        $terakhir = $riwayat->where('is_pendidikan_terakhir', true);
+        $this->assertCount(1, $terakhir);
+        $this->assertEquals('s3', $terakhir->first()->jenjang);
+        $this->assertEquals(2024, $terakhir->first()->tahun_lulus);
+    }
+
+    public function test_abbreviate_degree_does_not_generate_generic_s_or_m()
+    {
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $service = new NeoFeederSyncService($mockFeeder);
+
+        // Uji gelar generik tanpa bidang studi
+        $resSarjana = $service->abbreviateAcademicDegree('Sarjana', 'S1', 'Bidang Tidak Diketahui');
+        $this->assertArrayNotHasKey('belakang', $resSarjana);
+
+        $resMagister = $service->abbreviateAcademicDegree('Magister', 'S2', 'Bidang Tidak Diketahui');
+        $this->assertArrayNotHasKey('belakang', $resMagister);
+
+        // Uji gelar valid terstandarisasi tetap bekerja
+        $resKomputer = $service->abbreviateAcademicDegree('Magister Komputer', 'S2', 'Teknik Informatika');
+        $this->assertEquals(['belakang' => 'M.Kom.'], $resKomputer);
+    }
 }

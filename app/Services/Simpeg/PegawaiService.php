@@ -272,7 +272,7 @@ class PegawaiService
             'nuptk' => $pegawai->nuptk ?: ($existingDosen?->nuptk ?? null),
             'nip' => $pegawai->nip ?: ($existingDosen?->nip ?? null),
             'nik' => $pegawai->nik ?: ($existingDosen?->nik ?? null),
-            'jenis_kelamin' => in_array($pegawai->jenis_kelamin, ['L', 'P']) ? $pegawai->jenis_kelamin : ($existingDosen?->jenis_kelamin ?? 'L'),
+            'jenis_kelamin' => in_array($pegawai->jenis_kelamin, ['L', 'P']) ? $pegawai->jenis_kelamin : ($existingDosen?->jenis_kelamin ?? null),
             'tempat_lahir' => $pegawai->tempat_lahir ?: ($existingDosen?->tempat_lahir ?? null),
             'tanggal_lahir' => $pegawai->tanggal_lahir ?: ($existingDosen?->tanggal_lahir ?? null),
             'agama' => $pegawai->agama ?: ($existingDosen?->agama ?? null),
