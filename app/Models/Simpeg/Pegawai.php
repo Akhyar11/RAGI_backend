@@ -22,6 +22,7 @@ class Pegawai extends Model
         'office_location_id',
         'shift_template_id',
         'nip',
+        'nidn',
         'nik',
         'nama_lengkap',
         'tanggal_lahir',
