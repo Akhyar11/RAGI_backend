@@ -880,4 +880,174 @@ class SiakadFeederDosenSyncTest extends TestCase
         $resKomputer = $service->abbreviateAcademicDegree('Magister Komputer', 'S2', 'Teknik Informatika');
         $this->assertEquals(['belakang' => 'M.Kom.'], $resKomputer);
     }
+
+    public function test_pull_dosen_protects_local_corrections_from_blind_overwrites_and_saves_feeder_raw_snapshot()
+    {
+        // 1. Dosen sudah pernah disinkronkan dari Feeder dengan nama awal 'Budi Hartono'
+        $feederId = 'UUID-DOSEN-SNAPSHOT-01';
+        $dosen = Dosen::create([
+            'id_feeder' => $feederId,
+            'nidn' => '0688991122',
+            'nip' => '198001012010121001',
+            'nama_lengkap' => 'Budi Hartono',
+            'tempat_lahir' => 'Solo',
+            'telepon' => '081111111111',
+            'gelar_depan' => null,
+            'gelar_belakang' => 'M.Kom.',
+            'is_active' => true,
+            'status_aktif' => 'Aktif',
+            'feeder_raw' => [
+                'id_dosen' => $feederId,
+                'nama_dosen' => 'Budi Hartono',
+                'nidn' => '0688991122',
+                'tempat_lahir' => 'Solo',
+                'telepon' => '081111111111',
+            ],
+        ]);
+
+        $pegawai = \App\Models\Simpeg\Pegawai::create([
+            'nidn' => '0688991122',
+            'nip' => '198001012010121001',
+            'nama_lengkap' => 'Budi Hartono',
+            'tempat_lahir' => 'Solo',
+            'telepon' => '081111111111',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+        ]);
+        $dosen->update(['pegawai_id' => $pegawai->id]);
+
+        // 2. Admin kampus melakukan perbaikan manual di SIMPEG/SIAKAD (nama resmi, gelar, tempat lahir, HP)
+        $dosen->update([
+            'nama_lengkap' => 'Prof. Dr. Ir. Budi Hartono, M.Sc., Ph.D.',
+            'gelar_depan' => 'Prof. Dr. Ir.',
+            'gelar_belakang' => 'M.Sc., Ph.D.',
+            'tempat_lahir' => 'Surakarta',
+            'telepon' => '081299998888',
+        ]);
+        $pegawai->update([
+            'nama_lengkap' => 'Prof. Dr. Ir. Budi Hartono, M.Sc., Ph.D.',
+            'gelar_depan' => 'Prof. Dr. Ir.',
+            'gelar_belakang' => 'M.Sc., Ph.D.',
+            'tempat_lahir' => 'Surakarta',
+            'telepon' => '081299998888',
+        ]);
+
+        // 3. Feeder ditarik ulang dengan data mentah PDDikti yang belum terupdate
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->expects($this->any())
+            ->method('request')
+            ->willReturnCallback(function ($act, $p) use ($feederId) {
+                if ($act === 'GetListDosen') {
+                    return [
+                        'error_code' => 0,
+                        'data' => [
+                            [
+                                'id_dosen' => $feederId,
+                                'nama_dosen' => 'Budi Hartono', // Data mentah di Feeder masih nama lama
+                                'nidn' => '0688991122',
+                                'tempat_lahir' => 'Solo',
+                                'telepon' => '081111111111',
+                                'id_status_aktif' => '1',
+                                'nama_status_aktif' => 'Aktif',
+                            ]
+                        ]
+                    ];
+                }
+                return ['error_code' => 0, 'data' => []];
+            });
+
+        $service = new NeoFeederSyncService($mockFeeder);
+        $log = $service->pullBatchDosenFromFeeder();
+
+        $this->assertEquals(1, $log->success_count);
+
+        // 4. Verifikasi data lokal TIDAK tertimpa secara buta!
+        $dosen->refresh();
+        $pegawai->refresh();
+
+        $this->assertEquals('Prof. Dr. Ir. Budi Hartono, M.Sc., Ph.D.', $dosen->nama_lengkap);
+        $this->assertEquals('Prof. Dr. Ir.', $dosen->gelar_depan);
+        $this->assertEquals('M.Sc., Ph.D.', $dosen->gelar_belakang);
+        $this->assertEquals('Surakarta', $dosen->tempat_lahir);
+        $this->assertEquals('081299998888', $dosen->telepon);
+
+        $this->assertEquals('Prof. Dr. Ir. Budi Hartono, M.Sc., Ph.D.', $pegawai->nama_lengkap);
+        $this->assertEquals('Surakarta', $pegawai->tempat_lahir);
+        $this->assertEquals('081299998888', $pegawai->telepon);
+
+        // 5. Verifikasi snapshot mentah Feeder tersimpan di feeder_raw & siakad_feeder_mappings.raw_data
+        $this->assertNotNull($dosen->feeder_raw);
+        $this->assertEquals('Budi Hartono', $dosen->feeder_raw['nama_dosen']);
+
+        $mapping = \App\Models\Siakad\FeederMapping::where('entity_type', 'dosen')
+            ->where('local_id', $dosen->id)
+            ->first();
+        $this->assertNotNull($mapping);
+        $this->assertNotNull($mapping->raw_data);
+        $this->assertEquals('Budi Hartono', $mapping->raw_data['nama_dosen']);
+    }
+
+    public function test_ensure_sso_user_does_not_hijack_existing_account_via_fabricated_email()
+    {
+        // 1. Buat akun user yang sudah ada sebelumnya (misal mahasiswa atau admin)
+        // yang secara kebetulan memiliki email 0699001122@campus.ac.id
+        $victimUser = User::create([
+            'username' => 'mahasiswa_lama',
+            'email' => '0699001122@campus.ac.id',
+            'password' => \Illuminate\Support\Facades\Hash::make('secretpassword123'),
+            'is_active' => true,
+            'is_verified' => true,
+        ]);
+        $victimRole = \App\Models\Role::firstOrCreate(['slug' => 'mahasiswa'], ['name' => 'Mahasiswa']);
+        $victimUser->roles()->attach($victimRole->id);
+
+        // 2. Dosen baru ditarik/dibuat dengan NIDN 0699001122 (email kosong di Feeder, sistem resolve ke 0699001122@campus.ac.id)
+        $pegawaiDosen = \App\Models\Simpeg\Pegawai::create([
+            'nidn' => '0699001122',
+            'nama_lengkap' => 'Dosen Peneliti Baru',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+        ]);
+
+        $pegawaiService = app(\App\Services\Simpeg\PegawaiService::class);
+        $ssoUser = $pegawaiService->ensureSsoUserForPegawai($pegawaiDosen);
+
+        // 3. Verifikasi Akun Korban TIDAK DIBAJAK!
+        $this->assertNotEquals($victimUser->id, $ssoUser->id);
+        $this->assertNotEquals($victimUser->id, $pegawaiDosen->user_id);
+
+        // User korban tidak boleh tertular role 'dosen'
+        $victimUser->refresh();
+        $this->assertFalse($victimUser->hasRole('dosen'));
+        $this->assertEquals('mahasiswa_lama', $victimUser->username);
+
+        // Akun dosen baru dibuat tersendiri dengan username sesuai NIDN
+        $this->assertEquals('0699001122', $ssoUser->username);
+        $this->assertTrue($ssoUser->hasRole('dosen'));
+        $this->assertNotEquals($victimUser->email, $ssoUser->email); // Email tidak tabrakan
+    }
+
+    public function test_sso_user_creation_does_not_use_universal_indonusa_password_and_sets_unverified()
+    {
+        $pegawaiDosen = \App\Models\Simpeg\Pegawai::create([
+            'nidn' => '0612345679',
+            'nama_lengkap' => 'Dosen Keamanan SSO',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+        ]);
+
+        $pegawaiService = app(\App\Services\Simpeg\PegawaiService::class);
+        $user = $pegawaiService->ensureSsoUserForPegawai($pegawaiDosen);
+
+        // 1. Password bukan 'indonusa'
+        $this->assertFalse(\Illuminate\Support\Facades\Hash::check('indonusa', $user->password));
+
+        // 2. is_verified = false (wajib verifikasi/aktivasi awal)
+        $this->assertFalse($user->is_verified);
+
+        // 3. Token reset password awal tercatat di database
+        $this->assertDatabaseHas('password_reset_tokens', [
+            'email' => $user->email,
+        ]);
+    }
 }

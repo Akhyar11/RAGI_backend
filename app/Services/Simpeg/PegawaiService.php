@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Role;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class PegawaiService
 {
@@ -382,34 +383,58 @@ class PegawaiService
             $pegawai->nama_lengkap
         );
 
-        // 4. Cek apakah user dengan username atau email ini sudah pernah ada di database
+        // 4. Cari akun user yang cocok secara ketat (HANYA via username, DILARANG membajak akun lain via email rekaan)
         $user = User::where('username', $username)->first();
-        if (!$user) {
-            $user = User::where('email', $email)->first();
+
+        // Jika user dengan username ini ditemukan, pastikan akun tersebut belum diklaim oleh pegawai lain
+        if ($user) {
+            $isClaimedByOther = Pegawai::where('user_id', $user->id)
+                ->where('id', '!=', $pegawai->id)
+                ->exists();
+            if ($isClaimedByOther) {
+                // Username sudah digunakan oleh pegawai lain; jangan bajak, buat username baru unik
+                $user = null;
+                $baseUsername = $username;
+                while (User::where('username', $username)->exists()) {
+                    $username = $baseUsername . '_' . rand(10, 99);
+                }
+            }
         }
 
         if (!$user) {
-            // Pastikan username unik jika kebetulan ada konflik
+            // Pastikan username benar-benar unik
             $baseUsername = $username;
             while (User::where('username', $username)->exists()) {
                 $username = $baseUsername . '_' . rand(10, 99);
             }
 
-            // Pastikan email unik jika kebetulan ada konflik
+            // Pastikan email unik dan TIDAK membajak akun user lain yang kebetulan memiliki email sama
             $baseEmail = $email;
             $emailParts = explode('@', $baseEmail);
             while (User::where('email', $email)->exists()) {
-                $email = $emailParts[0] . rand(10, 99) . '@' . ($emailParts[1] ?? 'campus.ac.id');
+                $email = $emailParts[0] . '.' . rand(100, 999) . '@' . ($emailParts[1] ?? 'campus.ac.id');
             }
+
+            // Keamanan: Password acak aman (hapus password universal 'indonusa') dan set is_verified false
+            $plainPassword = $options['password'] ?? Str::random(16);
 
             $user = User::create([
                 'username' => $username,
                 'email' => $email,
-                'password' => Hash::make('indonusa'),
+                'password' => Hash::make($plainPassword),
                 'phone' => $pegawai->telepon ?? null,
                 'is_active' => true,
-                'is_verified' => true,
+                'is_verified' => false,
             ]);
+
+            // Buat token reset password awal agar pegawai/admin dapat melakukan aktivasi mandiri secara aman
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $email],
+                [
+                    'token' => Hash::make(Str::random(32)),
+                    'created_at' => now(),
+                ]
+            );
         }
 
         // 5. Hubungkan user_id ke pegawai

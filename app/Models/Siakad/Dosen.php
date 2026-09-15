@@ -35,11 +35,13 @@ class Dosen extends Model
         'status_aktif',
         'is_active',
         'id_feeder',
+        'feeder_raw',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'tanggal_lahir' => 'date',
+        'feeder_raw' => 'array',
     ];
 
     protected $appends = [

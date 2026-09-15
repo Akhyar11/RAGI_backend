@@ -50,7 +50,7 @@ class SimpegPegawaiImportTest extends TestCase
         $this->assertStringContainsString('nip,nik,nama_lengkap', $response->getContent());
     }
 
-    public function test_can_import_pegawai_from_csv_and_auto_creates_sso_users_with_indonusa_password()
+    public function test_can_import_pegawai_from_csv_and_auto_creates_sso_users_with_secure_credentials()
     {
         $csvContent = "\xEF\xBB\xBF" .
             "nip,nik,nama_lengkap,email,telepon,jenis_kelamin,tempat_lahir,tanggal_lahir,jenis_pegawai,status_kepegawaian,unit_kerja,jabatan,tanggal_masuk,alamat\n" .
@@ -74,10 +74,12 @@ class SimpegPegawaiImportTest extends TestCase
                 ],
             ]);
 
-        // Verifikasi User SSO Budi Santoso (Dosen)
+        // Verifikasi User SSO Budi Santoso (Dosen): Password aman (bukan indonusa) & butuh verifikasi
         $userBudi = User::where('email', 'budi.santoso@campus.ac.id')->first();
         $this->assertNotNull($userBudi);
-        $this->assertTrue(Hash::check('indonusa', $userBudi->password));
+        $this->assertFalse(Hash::check('indonusa', $userBudi->password));
+        $this->assertFalse($userBudi->is_verified);
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $userBudi->email]);
         $this->assertTrue($userBudi->hasRole('dosen'));
 
         // Verifikasi Simpeg Pegawai Budi
@@ -86,14 +88,16 @@ class SimpegPegawaiImportTest extends TestCase
         $this->assertEquals($userBudi->id, $pegawaiBudi->user_id);
         $this->assertEquals('Budi Santoso M.T.', $pegawaiBudi->nama_lengkap);
 
-        // Verifikasi User SSO Dewi Lestari (Tendik)
+        // Verifikasi User SSO Dewi Lestari (Tendik): Password aman (bukan indonusa) & butuh verifikasi
         $userDewi = User::where('email', 'dewi.lestari@campus.ac.id')->first();
         $this->assertNotNull($userDewi);
-        $this->assertTrue(Hash::check('indonusa', $userDewi->password));
+        $this->assertFalse(Hash::check('indonusa', $userDewi->password));
+        $this->assertFalse($userDewi->is_verified);
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $userDewi->email]);
         $this->assertTrue($userDewi->hasRole('tendik'));
     }
 
-    public function test_manual_store_pegawai_auto_creates_sso_user_with_indonusa_password()
+    public function test_manual_store_pegawai_auto_creates_sso_user_with_secure_credentials()
     {
         $payload = [
             'nama_lengkap' => 'Rian Hidayat, M.Si.',
@@ -126,7 +130,9 @@ class SimpegPegawaiImportTest extends TestCase
         $createdUser = User::find($createdPegawai->user_id);
         $this->assertNotNull($createdUser);
         $this->assertEquals('rian.hidayat@campus.ac.id', $createdUser->email);
-        $this->assertTrue(Hash::check('indonusa', $createdUser->password));
+        $this->assertFalse(Hash::check('indonusa', $createdUser->password));
+        $this->assertFalse($createdUser->is_verified);
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $createdUser->email]);
         $this->assertTrue($createdUser->hasRole('dosen'));
     }
 
@@ -166,10 +172,11 @@ class SimpegPegawaiImportTest extends TestCase
         $this->assertNull($pegawai->telepon);
         $this->assertNull($pegawai->alamat);
 
-        // Pastikan akun SSO tetap dibuat dengan default password indonusa
+        // Pastikan akun SSO tetap dibuat dengan kredensial aman & butuh verifikasi
         $user = User::find($pegawai->user_id);
         $this->assertNotNull($user);
-        $this->assertTrue(Hash::check('indonusa', $user->password));
+        $this->assertFalse(Hash::check('indonusa', $user->password));
+        $this->assertFalse($user->is_verified);
         // Karena jenis_pegawai kosong, tidak ada role dosen/tendik yang otomatis dipaksakan
         $this->assertFalse($user->hasRole('dosen'));
         $this->assertFalse($user->hasRole('tendik'));

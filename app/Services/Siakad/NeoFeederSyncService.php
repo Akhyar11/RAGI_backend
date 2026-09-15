@@ -875,25 +875,87 @@ class NeoFeederSyncService
                         // Tentukan jenis kelamin final (prioritas: Feeder valid -> Dosen lokal existing -> null)
                         $finalJenisKelamin = $jenisKelaminFeeder ?: ($dosenLokal?->jenis_kelamin ?? null);
 
+                        // 2. Pemetaan Gelar Otomatis dari Riwayat Pendidikan Feeder
+                        $titles = ['gelar_depan' => null, 'gelar_belakang' => null];
+                        if (isset($riwayatByDosen[$idDosen])) {
+                            $titles = $this->resolveAcademicTitlesForDosen($riwayatByDosen[$idDosen]);
+                        }
+
+                        // Proteksi Overwrite Buta: Jika dosen lokal memiliki feeder_raw sebelumnya dan nama lokal berbeda,
+                        // berarti ada perbaikan/koreksi manual oleh admin lokal yang TIDAK BOLEH ditimpa secara buta!
+                        $localNameWasEdited = $dosenLokal !== null &&
+                            !empty($dosenLokal->feeder_raw) &&
+                            !empty($dosenLokal->feeder_raw['nama_dosen']) &&
+                            $dosenLokal->nama_lengkap !== $dosenLokal->feeder_raw['nama_dosen'];
+
+                        $namaDosenFinal = ($localNameWasEdited && !empty($dosenLokal?->nama_lengkap))
+                            ? $dosenLokal->nama_lengkap
+                            : ($namaDosen ?: ($dosenLokal?->nama_lengkap ?? 'Dosen'));
+
+                        // Proteksi gelar: jika lokal sudah diisi (misal verifikasi ijazah kampus), jangan ditimpa jika kosong di Feeder
+                        $localGelarDepanEdited = !empty($dosenLokal?->feeder_raw) &&
+                            isset($dosenLokal->feeder_raw['gelar_depan']) &&
+                            $dosenLokal->gelar_depan !== $dosenLokal->feeder_raw['gelar_depan'];
+                        $gelarDepanFinal = ($localGelarDepanEdited || !empty($dosenLokal?->gelar_depan))
+                            ? $dosenLokal->gelar_depan
+                            : $titles['gelar_depan'];
+
+                        $localGelarBelakangEdited = !empty($dosenLokal?->feeder_raw) &&
+                            isset($dosenLokal->feeder_raw['gelar_belakang']) &&
+                            $dosenLokal->gelar_belakang !== $dosenLokal->feeder_raw['gelar_belakang'];
+                        $gelarBelakangFinal = ($localGelarBelakangEdited || !empty($dosenLokal?->gelar_belakang))
+                            ? $dosenLokal->gelar_belakang
+                            : $titles['gelar_belakang'];
+
+                        $tempatLahirFinal = !empty($dosenLokal?->tempat_lahir)
+                            ? $dosenLokal->tempat_lahir
+                            : $tempatLahir;
+
+                        $tanggalLahirFinal = !empty($dosenLokal?->tanggal_lahir)
+                            ? $dosenLokal->tanggal_lahir
+                            : $tanggalLahir;
+
+                        $agamaFinal = !empty($dosenLokal?->agama)
+                            ? $dosenLokal->agama
+                            : $agama;
+
+                        $teleponFinal = !empty($dosenLokal?->telepon)
+                            ? $dosenLokal->telepon
+                            : $telepon;
+
+                        $handphoneFinal = !empty($dosenLokal?->handphone)
+                            ? $dosenLokal->handphone
+                            : $handphone;
+
+                        $emailFinal = !empty($dosenLokal?->email)
+                            ? $dosenLokal->email
+                            : $email;
+
                         $dataToSave = [
-                            'nama_lengkap' => $namaDosen,
-                            'nidn' => $nidn,
-                            'nuptk' => $nuptk,
-                            'tanggal_lahir' => $tanggalLahir,
-                            'agama' => $agama,
+                            'nama_lengkap' => $namaDosenFinal,
+                            'gelar_depan' => $gelarDepanFinal,
+                            'gelar_belakang' => $gelarBelakangFinal,
+                            'nidn' => $nidn ?: ($dosenLokal?->nidn ?? null),
+                            'nuptk' => $nuptk ?: ($dosenLokal?->nuptk ?? null),
+                            'tanggal_lahir' => $tanggalLahirFinal,
+                            'agama' => $agamaFinal,
                             'status_aktif' => $statusAktif,
                             'is_active' => $isActive,
                             'id_feeder' => $idDosen,
+                            'feeder_raw' => $item,
                         ];
                         if ($finalJenisKelamin) $dataToSave['jenis_kelamin'] = $finalJenisKelamin;
-                        if (!empty($tempatLahir)) $dataToSave['tempat_lahir'] = $tempatLahir;
-                        if (!empty($nik)) $dataToSave['nik'] = $nik;
-                        if (!empty($telepon)) $dataToSave['telepon'] = $telepon;
-                        if (!empty($handphone)) $dataToSave['handphone'] = $handphone;
-                        if (!empty($email)) $dataToSave['email'] = $email;
+                        if (!empty($tempatLahirFinal)) $dataToSave['tempat_lahir'] = $tempatLahirFinal;
+                        if (!empty($nik)) $dataToSave['nik'] = $dosenLokal?->nik ?: $nik;
+                        if (!empty($teleponFinal)) $dataToSave['telepon'] = $teleponFinal;
+                        if (!empty($handphoneFinal)) $dataToSave['handphone'] = $handphoneFinal;
+                        if (!empty($emailFinal)) $dataToSave['email'] = $emailFinal;
 
                         // 1. Pemetaan Homebase Program Studi Spesifik (Exact match, NO LIKE %...% dan NO random fallback)
-                        if (isset($homebaseMap[$idDosen])) {
+                        // Jika dosen lokal sudah memiliki homebase prodi, jangan ditimpa secara buta
+                        if (!empty($dosenLokal?->program_studi_id)) {
+                            $dataToSave['program_studi_id'] = $dosenLokal->program_studi_id;
+                        } elseif (isset($homebaseMap[$idDosen])) {
                             $hb = $homebaseMap[$idDosen];
                             $idProdiFeeder = $hb['id_prodi'] ?? null;
                             $namaProdiFeeder = !empty($hb['nama_program_studi']) ? trim($hb['nama_program_studi']) : null;
@@ -909,14 +971,6 @@ class NeoFeederSyncService
                                 $dataToSave['program_studi_id'] = $prodiTarget->id;
                             }
                         }
-
-                        // 2. Pemetaan Gelar Otomatis dari Riwayat Pendidikan Feeder
-                        $titles = ['gelar_depan' => null, 'gelar_belakang' => null];
-                        if (isset($riwayatByDosen[$idDosen])) {
-                            $titles = $this->resolveAcademicTitlesForDosen($riwayatByDosen[$idDosen]);
-                        }
-                        $dataToSave['gelar_depan'] = $titles['gelar_depan'];
-                        $dataToSave['gelar_belakang'] = $titles['gelar_belakang'];
 
                         if ($dosenLokal) {
                             // Update data dosen lokal (pertahankan NIP lokal jika sudah ada)
@@ -983,10 +1037,20 @@ class NeoFeederSyncService
 
                         $finalPegawaiGender = $finalJenisKelamin ?: ($pegawai?->jenis_kelamin ?? null);
 
+                        // Proteksi overwrite untuk entitas Pegawai SIMPEG
+                        $localPegawaiNameWasEdited = $pegawai !== null &&
+                            !empty($dosenLokal?->feeder_raw) &&
+                            !empty($dosenLokal->feeder_raw['nama_dosen']) &&
+                            $pegawai->nama_lengkap !== $dosenLokal->feeder_raw['nama_dosen'];
+
+                        $namaPegawaiFinal = ($localPegawaiNameWasEdited && !empty($pegawai?->nama_lengkap))
+                            ? $pegawai->nama_lengkap
+                            : $namaDosenFinal;
+
                         $pegawaiData = [
-                            'nama_lengkap' => $namaDosen,
-                            'gelar_depan' => $titles['gelar_depan'],
-                            'gelar_belakang' => $titles['gelar_belakang'],
+                            'nama_lengkap' => $namaPegawaiFinal,
+                            'gelar_depan' => !empty($pegawai?->gelar_depan) ? $pegawai->gelar_depan : $gelarDepanFinal,
+                            'gelar_belakang' => !empty($pegawai?->gelar_belakang) ? $pegawai->gelar_belakang : $gelarBelakangFinal,
                             'jenis_pegawai' => 'dosen',
                             'status_kepegawaian' => $statusKepegawaian,
                             'status' => $simpegStatus,
@@ -994,14 +1058,17 @@ class NeoFeederSyncService
                         ];
                         if ($finalPegawaiGender) $pegawaiData['jenis_kelamin'] = $finalPegawaiGender;
                         if ($nipFinal) $pegawaiData['nip'] = $nipFinal;
-                        $pegawaiData['nidn'] = $nidn ?: null;
-                        $pegawaiData['nuptk'] = $nuptk ?: null;
+                        $pegawaiData['nidn'] = $nidn ?: ($pegawai?->nidn ?? null);
+                        $pegawaiData['nuptk'] = $nuptk ?: ($pegawai?->nuptk ?? null);
                         if ($nikFinal) $pegawaiData['nik'] = $nikFinal;
-                        if ($tanggalLahir) $pegawaiData['tanggal_lahir'] = $tanggalLahir;
-                        if (!empty($tempatLahir)) $pegawaiData['tempat_lahir'] = $tempatLahir;
-                        if ($agama) $pegawaiData['agama'] = $agama;
-                        if (!empty($handphone)) $pegawaiData['telepon'] = $handphone;
-                        elseif (!empty($telepon)) $pegawaiData['telepon'] = $telepon;
+                        if ($tanggalLahirFinal) $pegawaiData['tanggal_lahir'] = $tanggalLahirFinal;
+                        if (!empty($tempatLahirFinal)) $pegawaiData['tempat_lahir'] = $tempatLahirFinal;
+                        if ($agamaFinal) $pegawaiData['agama'] = $agamaFinal;
+
+                        $teleponPegawaiFinal = !empty($pegawai?->telepon)
+                            ? $pegawai->telepon
+                            : (!empty($handphoneFinal) ? $handphoneFinal : $teleponFinal);
+                        if (!empty($teleponPegawaiFinal)) $pegawaiData['telepon'] = $teleponPegawaiFinal;
                         if ($tanggalKeluar) $pegawaiData['tanggal_keluar'] = $tanggalKeluar;
 
                         if ($pegawai) {
@@ -1089,6 +1156,7 @@ class NeoFeederSyncService
                             ['entity_type' => 'dosen', 'local_id' => $dosenLokal->id],
                             [
                                 'feeder_id' => $idDosen,
+                                'raw_data' => $item,
                                 'sync_status' => 'synced',
                                 'last_synced_at' => now(),
                                 'error_message' => null,
