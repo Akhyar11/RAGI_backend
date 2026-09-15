@@ -557,6 +557,7 @@ class NeoFeederSyncService
                     ];
                     if ($nipFinal) $pegawaiData['nip'] = $nipFinal;
                     $pegawaiData['nidn'] = $nidn ?: null;
+                    $pegawaiData['nuptk'] = $nuptk ?: null;
                     if ($nikFinal) $pegawaiData['nik'] = $nikFinal;
                     if ($jenisKelamin) $pegawaiData['jenis_kelamin'] = in_array($jenisKelamin, ['L', 'P']) ? $jenisKelamin : 'L';
                     if ($tanggalLahir) $pegawaiData['tanggal_lahir'] = $tanggalLahir;

@@ -16,6 +16,7 @@ class PegawaiService
                 $q->where('nama_lengkap', 'like', "%{$search}%")
                   ->orWhere('nip', 'like', "%{$search}%")
                   ->orWhere('nidn', 'like', "%{$search}%")
+                  ->orWhere('nuptk', 'like', "%{$search}%")
                   ->orWhere('nik', 'like', "%{$search}%");
             });
         }

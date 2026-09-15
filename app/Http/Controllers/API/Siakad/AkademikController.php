@@ -417,7 +417,10 @@ class AkademikController extends Controller
 
         if ($request->filled('search')) {
             $s = $request->search;
-            $query->where(fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nidn', 'like', "%{$s}%"));
+            $query->where(fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")
+                ->orWhere('nidn', 'like', "%{$s}%")
+                ->orWhere('nuptk', 'like', "%{$s}%")
+                ->orWhere('nip', 'like', "%{$s}%"));
         }
 
         if ($request->filled('program_studi_id')) {
