@@ -144,6 +144,9 @@ Route::middleware('auth:api')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:api')->prefix('simpeg')->group(function () {
+    // Dashboard Stats
+    Route::get('dashboard-stats', [App\Http\Controllers\Simpeg\SimpegDashboardController::class, 'stats']);
+
     // Unit Kerja
     Route::apiResource('unit-kerja', App\Http\Controllers\Simpeg\UnitKerjaController::class);
 
