@@ -12,13 +12,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('spmb_gelombang_penerimaan', function (Blueprint $table) {
-            $table->foreignId('master_biaya_id')
-                ->nullable()
-                ->after('tahun_akademik_id')
-                ->constrained('sikeu_master_biaya')
-                ->nullOnDelete();
-        });
+        if (!Schema::hasTable('spmb_gelombang_penerimaan')) {
+            return;
+        }
+
+        if (!Schema::hasColumn('spmb_gelombang_penerimaan', 'master_biaya_id')) {
+            Schema::table('spmb_gelombang_penerimaan', function (Blueprint $table) {
+                $table->foreignId('master_biaya_id')
+                    ->nullable()
+                    ->after('tahun_akademik_id')
+                    ->constrained('sikeu_master_biaya')
+                    ->nullOnDelete();
+            });
+        }
 
         // Set default master_biaya_id untuk data gelombang yang sudah ada jika ada master biaya SPMB_ADM
         $spmbAdm = DB::table('sikeu_master_biaya')->where('kode', 'SPMB_ADM')->first();
@@ -34,6 +40,14 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (!Schema::hasTable('spmb_gelombang_penerimaan')) {
+            return;
+        }
+
+        if (!Schema::hasColumn('spmb_gelombang_penerimaan', 'master_biaya_id')) {
+            return;
+        }
+
         Schema::table('spmb_gelombang_penerimaan', function (Blueprint $table) {
             $table->dropForeign(['master_biaya_id']);
             $table->dropColumn('master_biaya_id');

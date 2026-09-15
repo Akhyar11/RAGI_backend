@@ -608,6 +608,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:api'])->group(function () {
         // Autentikasi & Profil Karyawan
         Route::get('/auth/profile', [App\Http\Controllers\API\AuthController::class, 'profile']);
+        Route::get('/auth/me', [App\Http\Controllers\API\AuthController::class, 'profile']);
         Route::post('/auth/consent', [App\Http\Controllers\API\AuthController::class, 'recordConsent']);
         Route::post('/auth/enroll-face', [App\Http\Controllers\API\AuthController::class, 'enrollFace']);
         Route::post('/auth/reset-face', [App\Http\Controllers\API\AuthController::class, 'resetFace']);
@@ -617,6 +618,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/attendance/today', [App\Http\Controllers\API\AttendanceController::class, 'todayStatus']);
         Route::post('/attendance/clock-in', [App\Http\Controllers\API\AttendanceController::class, 'clockIn']);
         Route::post('/attendance/clock-out', [App\Http\Controllers\API\AttendanceController::class, 'clockOut']);
+        Route::post('/attendance/keterangan', [App\Http\Controllers\API\AttendanceController::class, 'keterangan']);
         Route::get('/attendance/history', [App\Http\Controllers\API\AttendanceController::class, 'history']);
         Route::get('/attendance/recap', [App\Http\Controllers\API\AttendanceController::class, 'recap']);
     });

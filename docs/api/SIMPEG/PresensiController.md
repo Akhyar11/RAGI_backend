@@ -16,8 +16,9 @@ Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Py
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
-| POST | `/api/v1/auth/login` | Login karyawan mobile via NIP atau Email | ❌ Publik |
+| POST | `/api/v1/auth/login` | Login karyawan mobile (Email / Username / NIP / NIDN) | ❌ Publik |
 | GET | `/api/v1/auth/profile` | Profil karyawan & status biometrik terdaftar | ✅ Bearer |
+| GET | `/api/v1/auth/me` | Alias profil karyawan & informasi sesi | ✅ Bearer |
 | POST | `/api/v1/auth/consent` | Rekam persetujuan pemrosesan biometrik (UU PDP) | ✅ Bearer |
 | POST | `/api/v1/auth/enroll-face` | Daftarkan foto wajah multi-shot / embedding | ✅ Bearer |
 | POST | `/api/v1/auth/reset-face` | Reset data biometrik wajah karyawan | ✅ Bearer |
@@ -25,6 +26,7 @@ Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Py
 | GET | `/api/v1/attendance/today` | Status presensi, lokasi kantor & jadwal shift hari ini | ✅ Bearer |
 | POST | `/api/v1/attendance/clock-in` | Presensi masuk (validasi GPS, Anti Fake GPS, Face Score) | ✅ Bearer |
 | POST | `/api/v1/attendance/clock-out` | Presensi pulang (validasi GPS & Face Score) | ✅ Bearer |
+| POST | `/api/v1/attendance/keterangan` | Pengajuan mandiri izin, sakit, atau dinas luar | ✅ Bearer |
 | GET | `/api/v1/attendance/history` | Riwayat presensi bulanan milik karyawan login | ✅ Bearer |
 | GET | `/api/v1/attendance/recap` | Rekap kehadiran bulanan per individu | ✅ Bearer |
 
@@ -47,39 +49,74 @@ Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Py
 
 ---
 
+## Daftar Kredensial Login Siap Pakai
+
+Semua akun berikut menggunakan password default: `password`
+
+| Peran | Username | Email | NIP | Nama Lengkap |
+|---|---|---|---|---|
+| Admin & Dosen | `admin` | `admin@kampus.ac.id` | `198501152010121001` | Dr. Wasis Utama, M.T. |
+| Dosen Demo | `dosen` | `dosen@kampus.ac.id` | `199008152015122001` | Anisa Rahmawati, M.Kom. |
+| Tendik Demo | `tendik` | `tendik@kampus.ac.id` | `199205102016031002` | Rahmat Hidayat, S.Kom. |
+| Pimpinan / Dosen | `wasis` | `wasis@kampus.ac.id` | `198501152010121099` | Wasis Utama, Ph.D. |
+| Admin SIMPEG | `admin_simpeg` | `admin.simpeg@kampus.ac.id` | `198811202012011003` | Staff Admin SIMPEG |
+| Dosen Informatika | `if_dosen1` | `if.dosen1@kampus.ac.id` | `1991061520101101` | Prof. Dr. Ir. H. Ahmad Dahlan, M.Kom |
+| Tendik Staff | `tendik_101` | `tendik_101@kampus.ac.id` | `199002102015032001` | Siti Rahmawati, A.Md. |
+
+---
+
 ## Detail Request & Response
 
 ### POST `/api/v1/auth/login`
-Mendukung input email atau NIP pegawai.
+Mendukung body dengan key `username`, `email`, `login`, atau `identifier`.
 
-**Request Body:**
+**Request Body (Format 1 - via Username/Email/NIP):**
 ```json
 {
-  "login": "198501152010121001",
+  "username": "dosen",
   "password": "password",
   "device_name": "flutter-android-device"
+}
+```
+
+*Atau menggunakan key `login`:*
+```json
+{
+  "login": "199008152015122001",
+  "password": "password"
 }
 ```
 
 **Response Sukses (200 OK):**
 ```json
 {
+  "status": "success",
   "success": true,
   "message": "Login berhasil",
+  "token": "eyJ0eXAiOiJKV1QiLCJhbGci...",
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGci...",
+  "token_type": "Bearer",
   "data": {
     "token": "eyJ0eXAiOiJKV1QiLCJhbGci...",
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGci...",
+    "token_type": "Bearer",
     "user": {
       "id": 2,
-      "name": "Dr. Wasis Utama, M.T.",
-      "email": "admin@kampus.ac.id"
+      "name": "Anisa Rahmawati, M.Kom.",
+      "username": "dosen",
+      "email": "dosen@kampus.ac.id",
+      "roles": ["dosen"]
     },
     "employee": {
       "id": 1,
-      "employee_code": "198501152010121001",
+      "employee_code": "199008152015122001",
+      "nip": "199008152015122001",
+      "nidn": null,
       "position": "dosen",
       "department": "Rektorat Universitas",
       "is_face_enrolled": false,
-      "consent_pdp_at": "2026-09-14T06:21:49.000000Z",
+      "face_enrolled_at": null,
+      "consent_pdp_at": null,
       "office": {
         "id": 1,
         "name": "Politeknik Indonusa Surakarta",
@@ -88,6 +125,10 @@ Mendukung input email atau NIP pegawai.
         "longitude": 110.8036,
         "radius_meters": 150,
         "is_active": true
+      },
+      "shift": {
+        "id": 1,
+        "name": "Shift Reguler 5 Hari"
       }
     }
   }

@@ -97,13 +97,83 @@ class SimpegAttendanceTest extends TestCase
         $response->assertStatus(200)
             ->assertJson([
                 'success' => true,
+                'status' => 'success',
                 'message' => 'Login berhasil',
             ])
             ->assertJsonStructure([
+                'token',
+                'access_token',
                 'data' => [
                     'token',
+                    'access_token',
                     'user' => ['id', 'name', 'email'],
                     'employee' => ['id', 'employee_code', 'office'],
+                ],
+            ]);
+    }
+
+    public function test_mobile_login_with_username_and_email_and_identifier(): void
+    {
+        // 1. Login with username payload
+        $resUsername = $this->postJson('/api/v1/auth/login', [
+            'username' => 'dosentest',
+            'password' => 'password123',
+        ]);
+        $resUsername->assertStatus(200)
+            ->assertJson(['success' => true, 'status' => 'success']);
+
+        // 2. Login with email payload
+        $resEmail = $this->postJson('/api/v1/auth/login', [
+            'email' => 'dosen.test@kampus.ac.id',
+            'password' => 'password123',
+        ]);
+        $resEmail->assertStatus(200)
+            ->assertJson(['success' => true, 'status' => 'success']);
+
+        // 3. Login with identifier payload
+        $resIdentifier = $this->postJson('/api/v1/auth/login', [
+            'identifier' => '199999992026091001',
+            'password' => 'password123',
+        ]);
+        $resIdentifier->assertStatus(200)
+            ->assertJson(['success' => true, 'status' => 'success']);
+    }
+
+    public function test_profile_and_me_endpoints(): void
+    {
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        $resProfile = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/auth/profile');
+        $resProfile->assertStatus(200)
+            ->assertJson(['success' => true, 'status' => 'success']);
+
+        $resMe = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/auth/me');
+        $resMe->assertStatus(200)
+            ->assertJson(['success' => true, 'status' => 'success']);
+    }
+
+    public function test_submit_keterangan_izin_from_mobile(): void
+    {
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/keterangan', [
+                'tanggal' => '2026-09-25',
+                'status_kehadiran' => 'izin',
+                'catatan' => 'Izin keperluan keluarga',
+            ]);
+
+        $res->assertStatus(201)
+            ->assertJson([
+                'status' => 'success',
+                'success' => true,
+                'data' => [
+                    'status' => 'izin',
+                    'notes' => 'Izin keperluan keluarga',
                 ],
             ]);
     }

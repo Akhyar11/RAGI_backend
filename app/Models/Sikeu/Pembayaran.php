@@ -19,6 +19,7 @@ class Pembayaran extends Model
         'waktu_bayar',
         'channel_bayar',
         'bank_pengirim',
+        'catatan',
         'status',
         'diverifikasi_oleh',
     ];

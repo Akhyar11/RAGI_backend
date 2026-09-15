@@ -20,21 +20,56 @@ class AttendanceController extends Controller
     ) {}
 
     /**
+     * Ambil profil pegawai aktif atau inisialisasi default
+     */
+    protected function getOrCreateEmployee($user): Pegawai
+    {
+        $employee = Pegawai::with(['officeLocation', 'shiftTemplate.days', 'user'])
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$employee) {
+            $defaultOffice = \App\Models\OfficeLocation::where('is_active', true)->first();
+            $defaultShift = \App\Models\ShiftTemplate::where('is_active', true)->first();
+            $unitKerja = \App\Models\Simpeg\UnitKerja::first();
+
+            $employee = Pegawai::firstOrCreate([
+                'user_id' => $user->id,
+            ], [
+                'unit_kerja_id' => $unitKerja?->id,
+                'office_location_id' => $defaultOffice?->id,
+                'shift_template_id' => $defaultShift?->id,
+                'nip' => '19' . date('ymd') . rand(100000, 999999),
+                'nama_lengkap' => $user->name ?: ucfirst($user->username),
+                'jenis_kelamin' => 'L',
+                'jenis_pegawai' => 'dosen',
+                'status_kepegawaian' => 'tetap_yayasan',
+                'status' => 'aktif',
+                'is_active' => true,
+            ]);
+            $employee->load(['officeLocation', 'shiftTemplate.days', 'user']);
+        }
+
+        return $employee;
+    }
+
+    /**
      * Ambil status presensi dan jadwal kerja hari ini
      */
     public function todayStatus(Request $request): JsonResponse
     {
-        $employee = Pegawai::with(['officeLocation', 'shiftTemplate.days', 'user'])
-            ->where('user_id', $request->user()->id)
-            ->firstOrFail();
+        $employee = $this->getOrCreateEmployee($request->user());
 
         $today = Carbon::today();
         $dayOfWeek = $today->dayOfWeek; // 0=Minggu, 1=Senin, ..., 6=Sabtu
 
+        $shiftTemplate = $employee->shiftTemplate ?? \App\Models\ShiftTemplate::where('is_active', true)->first();
         $schedule = null;
-        if ($employee->shiftTemplate) {
-            $schedule = $employee->shiftTemplate->getScheduleForDay($dayOfWeek);
+        if ($shiftTemplate) {
+            $schedule = $shiftTemplate->getScheduleForDay($dayOfWeek);
         }
+
+        $office = $employee->officeLocation ?? \App\Models\OfficeLocation::where('is_active', true)->first();
 
         $nationalHoliday = NationalHoliday::isHoliday($today);
 
@@ -44,31 +79,33 @@ class AttendanceController extends Controller
 
         $appliesNationalHoliday = $schedule
             ? $schedule->appliesNationalHolidays()
-            : ($employee->shiftTemplate ? $employee->shiftTemplate->applies_national_holidays : true);
+            : ($shiftTemplate ? $shiftTemplate->applies_national_holidays : true);
 
         $isDutyOnHoliday = ($nationalHoliday !== null && !$appliesNationalHoliday);
 
         return response()->json([
+            'status' => 'success',
             'success' => true,
             'data' => [
                 'user' => [
-                    'id' => $employee->user->id,
-                    'name' => $employee->nama_lengkap ?: $employee->user->username,
-                    'email' => $employee->user->email,
+                    'id' => $employee->user ? $employee->user->id : $request->user()->id,
+                    'name' => $employee->nama_lengkap ?: $request->user()->username,
+                    'email' => $request->user()->email,
                 ],
                 'employee' => [
                     'id' => $employee->id,
                     'employee_code' => $employee->nip,
+                    'nip' => $employee->nip,
                     'position' => $employee->position,
                     'department' => $employee->department,
                     'is_face_enrolled' => !empty($employee->face_embedding),
                     'consent_pdp_at' => $employee->consent_pdp_at,
-                    'office' => $employee->officeLocation,
+                    'office' => $office,
                 ],
                 'date' => $today->toDateString(),
                 'day_name' => $schedule ? $schedule->day_name : 'Hari Ini',
                 'schedule' => $schedule,
-                'office' => $employee->officeLocation,
+                'office' => $office,
                 'attendance' => $attendance,
                 'is_national_holiday' => $nationalHoliday !== null,
                 'applies_national_holidays' => $appliesNationalHoliday,
@@ -93,20 +130,21 @@ class AttendanceController extends Controller
             'accuracy' => 'required|numeric',
             'face_score' => 'nullable|numeric',
             'face_image' => 'nullable|string',
-            'is_mock_location' => 'required|boolean',
+            'is_mock_location' => 'nullable|boolean',
             'face_embedding' => 'nullable',
             'timestamp' => 'nullable',
         ]);
 
-        $employee = Pegawai::with(['officeLocation', 'shiftTemplate.days'])
-            ->where('user_id', $request->user()->id)
-            ->firstOrFail();
+        $validated['is_mock_location'] = (bool) ($validated['is_mock_location'] ?? false);
+
+        $employee = $this->getOrCreateEmployee($request->user());
 
         $attendance = $this->attendanceService->processClockIn($employee, $validated);
 
         $isSuccess = in_array($attendance->status, ['hadir', 'terlambat', 'menunggu_approval']);
 
         return response()->json([
+            'status' => $isSuccess ? 'success' : 'error',
             'success' => $isSuccess,
             'message' => match ($attendance->status) {
                 'hadir' => 'Presensi masuk berhasil (Tepat Waktu).',
@@ -128,20 +166,73 @@ class AttendanceController extends Controller
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'accuracy' => 'required|numeric',
-            'face_score' => 'required|numeric',
-            'is_mock_location' => 'required|boolean',
+            'face_score' => 'nullable|numeric',
+            'is_mock_location' => 'nullable|boolean',
             'timestamp' => 'nullable',
         ]);
 
-        $employee = Pegawai::where('user_id', $request->user()->id)->firstOrFail();
+        $validated['is_mock_location'] = (bool) ($validated['is_mock_location'] ?? false);
+        $validated['face_score'] = (float) ($validated['face_score'] ?? 0.85);
+
+        $employee = $this->getOrCreateEmployee($request->user());
 
         $attendance = $this->attendanceService->processClockOut($employee, $validated);
 
         return response()->json([
+            'status' => 'success',
             'success' => true,
             'message' => 'Presensi pulang berhasil dicatat.',
             'data' => $attendance,
         ]);
+    }
+
+    /**
+     * Pengajuan izin / sakit / dinas mandiri dari Mobile
+     */
+    public function keterangan(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'tanggal' => 'required|date',
+            'status_kehadiran' => 'required|string|in:izin,sakit,dinas',
+            'catatan' => 'required|string|max:500',
+        ]);
+
+        $employee = $this->getOrCreateEmployee($request->user());
+
+        $existing = Attendance::where('pegawai_id', $employee->id)
+            ->whereDate('tanggal', $validated['tanggal'])
+            ->first();
+
+        if ($existing && ($existing->clock_in || $existing->clock_out)) {
+            return response()->json([
+                'status' => 'error',
+                'success' => false,
+                'message' => 'Tanggal tersebut sudah memiliki data hasil scan presensi dan tidak dapat ditimpa.',
+            ], 422);
+        }
+
+        $payload = [
+            'status' => $validated['status_kehadiran'],
+            'notes' => $validated['catatan'],
+            'is_approved_by_admin' => false,
+        ];
+
+        if ($existing) {
+            $existing->update($payload);
+            $attendance = $existing->fresh();
+        } else {
+            $attendance = Attendance::create(array_merge($payload, [
+                'pegawai_id' => $employee->id,
+                'tanggal' => $validated['tanggal'],
+            ]));
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'success' => true,
+            'message' => "Pengajuan keterangan {$attendance->status} berhasil disimpan.",
+            'data' => $attendance,
+        ], 201);
     }
 
     /**
