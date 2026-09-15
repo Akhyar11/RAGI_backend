@@ -89,7 +89,7 @@ class NeoFeederService
             }
 
             try {
-                $response = Http::timeout(60)->post($config['url'], [
+                $response = Http::timeout(120)->post($config['url'], [
                     'act' => 'GetToken',
                     'username' => $config['username'],
                     'password' => $config['password'],
@@ -130,13 +130,13 @@ class NeoFeederService
         ], $params);
 
         try {
-            $response = Http::timeout(60)->post($config['url'], $payload);
+            $response = Http::timeout(120)->post($config['url'], $payload);
             $result = $response->json();
 
             if (isset($result['error_code']) && $result['error_code'] == 100) { 
                 Cache::forget('neo_feeder_token');
                 $payload['token'] = $this->getToken();
-                $response = Http::timeout(60)->post($config['url'], $payload);
+                $response = Http::timeout(120)->post($config['url'], $payload);
                 $result = $response->json();
             }
 

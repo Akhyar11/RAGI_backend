@@ -616,6 +616,9 @@ class NeoFeederSyncService
      */
     public function pullBatchDosenFromFeeder($userId = null)
     {
+        set_time_limit(120);
+        ini_set('max_execution_time', '120');
+
         $log = FeederSyncLog::create([
             'entity_type' => 'dosen',
             'sync_type' => 'pull',

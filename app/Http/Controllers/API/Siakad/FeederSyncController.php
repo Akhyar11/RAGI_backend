@@ -74,6 +74,10 @@ class FeederSyncController extends Controller
 
     public function triggerSync(Request $request)
     {
+        // Berikan batas waktu eksekusi 2 menit (120 detik) untuk sinkronisasi batch
+        set_time_limit(120);
+        ini_set('max_execution_time', '120');
+
         $request->validate([
             'entity_type' => 'required|in:mahasiswa,biodata_mahasiswa,riwayat_pendidikan_mahasiswa,dosen,pull_dosen,mata_kuliah,kelas,penugasan_dosen,ajar_dosen',
         ]);
