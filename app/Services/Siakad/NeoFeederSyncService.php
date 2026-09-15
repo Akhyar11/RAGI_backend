@@ -556,7 +556,7 @@ class NeoFeederSyncService
                         'status' => $isActive ? 'aktif' : 'non_aktif',
                     ];
                     if ($nipFinal) $pegawaiData['nip'] = $nipFinal;
-                    if ($nidn) $pegawaiData['nidn'] = $nidn;
+                    $pegawaiData['nidn'] = $nidn ?: null;
                     if ($nikFinal) $pegawaiData['nik'] = $nikFinal;
                     if ($jenisKelamin) $pegawaiData['jenis_kelamin'] = in_array($jenisKelamin, ['L', 'P']) ? $jenisKelamin : 'L';
                     if ($tanggalLahir) $pegawaiData['tanggal_lahir'] = $tanggalLahir;

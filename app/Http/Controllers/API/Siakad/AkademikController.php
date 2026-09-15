@@ -503,12 +503,13 @@ class AkademikController extends Controller
         $syncedCount = 0;
 
         foreach ($pegawais as $p) {
+            $existingDosen = Dosen::where('pegawai_id', $p->id)->first();
             Dosen::updateOrCreate(
                 ['pegawai_id' => $p->id],
                 [
                     'user_id' => $p->user_id,
                     'nip' => $p->nip,
-                    'nidn' => $p->nip ?? ('04' . str_pad($p->id, 8, '0', STR_PAD_LEFT)),
+                    'nidn' => $p->nidn ?: ($existingDosen?->nidn ?? null),
                     'nama_lengkap' => $p->nama_lengkap,
                     'program_studi_id' => $defaultProdi?->id ?? 1,
                     'jabatan_akademik' => $p->jenis_pegawai ?? 'Tenaga Pendidik / Dosen',
