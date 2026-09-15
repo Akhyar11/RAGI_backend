@@ -5,6 +5,7 @@ namespace App\Http\Controllers\IAM;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\SystemSetting;
+use App\Services\IAM\RestrictedRoleService;
 
 class SystemSettingController extends Controller
 {
@@ -34,13 +35,39 @@ class SystemSettingController extends Controller
             }
         }
 
+        if (!isset($settings[RestrictedRoleService::SETTING_KEY])) {
+            $settings[RestrictedRoleService::SETTING_KEY] = [
+                'id'          => null,
+                'key'         => RestrictedRoleService::SETTING_KEY,
+                'value'       => '[]',
+                'description' => 'Daftar ID role (JSON array) yang disembunyikan dari daftar roles untuk non-pengelola IAM',
+            ];
+        }
+
+        $defaultFeeder = [
+            'feeder_url'      => 'http://localhost:8100/ws/live2.php',
+            'feeder_username' => 'admin_siakad',
+            'feeder_password' => '',
+        ];
+
+        foreach ($defaultFeeder as $key => $val) {
+            if (!isset($settings[$key])) {
+                $settings[$key] = [
+                    'id'          => null,
+                    'key'         => $key,
+                    'value'       => (string) $val,
+                    'description' => 'Kredensial Neo Feeder PDDikti default (diubah via IAM → Pengaturan Sistem)',
+                ];
+            }
+        }
+
         return response()->json([
             'status' => 'success',
             'data'   => $settings,
         ]);
     }
 
-    public function update(Request $request)
+    public function update(Request $request, RestrictedRoleService $restrictedRoles)
     {
         $request->validate([
             'settings'         => 'required|array',
@@ -49,9 +76,25 @@ class SystemSettingController extends Controller
         ]);
 
         foreach ($request->settings as $setting) {
+            $value = $setting['value'];
+
+            if ($setting['key'] === RestrictedRoleService::SETTING_KEY) {
+                $decoded = json_decode((string) $value, true);
+
+                if (!is_array($decoded)) {
+                    return response()->json([
+                        'status'  => 'error',
+                        'message' => 'Format restricted_role_ids tidak valid. Gunakan JSON array dari ID role, contoh: "[1,2]".',
+                    ], 422);
+                }
+
+                // Hanya ID role yang benar-benar ada yang disimpan.
+                $value = json_encode($restrictedRoles->sanitizeIds($decoded));
+            }
+
             SystemSetting::updateOrCreate(
                 ['key' => $setting['key']],
-                ['value' => $setting['value']]
+                ['value' => $value]
             );
         }
 

@@ -5,16 +5,22 @@ namespace App\Http\Controllers;
 use App\Models\Role;
 use App\Http\Requests\StoreRoleRequest;
 use App\Http\Requests\UpdateRoleRequest;
+use App\Services\IAM\RestrictedRoleService;
 use Illuminate\Http\Request;
 
 class RoleController extends Controller
 {
+    public function __construct(private RestrictedRoleService $restrictedRoles) {}
+
     public function index(Request $request)
     {
         $this->authorize('viewAny', Role::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
         $query = Role::query()->with('permissions');
+
+        // Sembunyikan roles terestriksi dari non-pengelola IAM.
+        $restrictedExcluded = $this->restrictedRoles->applyVisibilityScope($query, $request->user());
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -46,7 +52,8 @@ class RoleController extends Controller
             'filters' => [
                 'search' => $request->search,
                 'sort_by' => $sortBy,
-                'sort_order' => $sortOrder
+                'sort_order' => $sortOrder,
+                'restricted_roles_excluded' => $restrictedExcluded
             ]
         ]);
     }

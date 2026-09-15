@@ -108,6 +108,10 @@ class RoleSeeder extends Seeder
                 ['key' => 'superadmin_role'],
                 ['value' => 'superadmin', 'description' => 'Role slug for Super Administrator']
             );
+            DB::table('core_system_settings')->updateOrInsert(
+                ['key' => 'restricted_role_ids'],
+                ['value' => '[]', 'description' => 'Daftar ID role (JSON array) yang disembunyikan dari daftar roles untuk non-pengelola IAM']
+            );
         }
     }
 }

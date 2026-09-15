@@ -10,13 +10,15 @@ use App\Models\SystemSetting;
 class NeoFeederService
 {
     /**
-     * Dapatkan konfigurasi Feeder dari SystemSetting
+     * Dapatkan konfigurasi Feeder dari SystemSetting (IAM → Pengaturan Sistem).
+     * Sumber kebenaran tunggal adalah database; tidak ada fallback .env
+     * agar kredensial hanya dikelola dari halaman IAM/Settings.
      */
     public function getConfig()
     {
-        $url = SystemSetting::where('key', 'feeder_url')->value('value') ?? env('FEEDER_URL', 'http://localhost:8100/ws/live2.php');
-        $username = SystemSetting::where('key', 'feeder_username')->value('value') ?? env('FEEDER_USERNAME', 'admin_siakad');
-        $password = SystemSetting::where('key', 'feeder_password')->value('value') ?? env('FEEDER_PASSWORD', 'secret');
+        $url = SystemSetting::where('key', 'feeder_url')->value('value') ?? '';
+        $username = SystemSetting::where('key', 'feeder_username')->value('value') ?? '';
+        $password = SystemSetting::where('key', 'feeder_password')->value('value') ?? '';
 
         return [
             'url' => $url,
@@ -40,6 +42,41 @@ class NeoFeederService
     }
 
     /**
+     * Prefix untuk token simulasi yang dihasilkan lokal saat WS Feeder
+     * tidak terjangkau. Token seperti ini BUKAN koneksi asli.
+     */
+    public const STAGING_TOKEN_PREFIXES = ['STAGING-TOKEN-', 'FEEDER-TOKEN-'];
+
+    /**
+     * Apakah token merupakan token staging/simulasi lokal?
+     */
+    public function isStagingToken(string $token): bool
+    {
+        foreach (self::STAGING_TOKEN_PREFIXES as $prefix) {
+            if (str_starts_with($token, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Dapatkan token beserta status keasliannya.
+     *
+     * @return array{token: string, is_staging: bool}
+     */
+    public function getTokenInfo(): array
+    {
+        $token = $this->getToken();
+
+        return [
+            'token'      => $token,
+            'is_staging' => $this->isStagingToken($token),
+        ];
+    }
+
+    /**
      * Dapatkan Token Feeder (dengan Caching & Simulasi Offline Fallback)
      */
     public function getToken()
@@ -52,7 +89,7 @@ class NeoFeederService
             }
 
             try {
-                $response = Http::timeout(5)->post($config['url'], [
+                $response = Http::timeout(15)->post($config['url'], [
                     'act' => 'GetToken',
                     'username' => $config['username'],
                     'password' => $config['password'],
@@ -93,13 +130,13 @@ class NeoFeederService
         ], $params);
 
         try {
-            $response = Http::timeout(6)->post($config['url'], $payload);
+            $response = Http::timeout(15)->post($config['url'], $payload);
             $result = $response->json();
 
             if (isset($result['error_code']) && $result['error_code'] == 100) { 
                 Cache::forget('neo_feeder_token');
                 $payload['token'] = $this->getToken();
-                $response = Http::timeout(6)->post($config['url'], $payload);
+                $response = Http::timeout(15)->post($config['url'], $payload);
                 $result = $response->json();
             }
 
