@@ -4,22 +4,58 @@
 > **Base URL**: `/api/simpeg/pegawai`  
 > **Autentikasi**: Bearer Token (Passport)  
 > **Dibuat**: 2026-09-14  
-> **Diperbarui**: 2026-09-14  
+> **Dibuat**: 2026-09-14  
+> **Diperbarui**: 2026-09-15  
 
-Controller ini mengelola data pegawai, pembuatan akun SSO otomatis (`core_users`) dengan password default `indonusa`, pengunduhan template import berkas, serta import data pegawai massal via CSV atau Excel (XLSX/XLS).
+Controller ini mengelola data pegawai, pembuatan akun SSO otomatis (`core_users`) dengan password default `indonusa`, relasi multi-role jenis pegawai (`core_roles`), pengunduhan template import berkas, serta import data pegawai massal via CSV atau Excel (XLSX/XLS).
 
 ## Daftar Endpoint
 
 | Method | Endpoint | Fungsi | Permission |
 |---|---|---|---|
+| GET | `/api/simpeg/pegawai/roles` | Daftar opsi role aktif SSO untuk jenis pegawai | `simpeg.pegawai.read` / `simpeg.pegawai.manage` |
 | GET | `/api/simpeg/pegawai/template` | Mengunduh template file CSV impor pegawai | `simpeg.pegawai.read` / `simpeg.pegawai.create` / `simpeg.pegawai.manage` |
 | POST | `/api/simpeg/pegawai/import` | Mengimpor berkas data pegawai (.csv, .xlsx) | `simpeg.pegawai.create` / `simpeg.pegawai.manage` |
 | GET | `/api/simpeg/pegawai/me` | Profil data pegawai dari user login | Login User |
-| GET | `/api/simpeg/pegawai` | Daftar data pegawai (dengan pagination & filter) | `simpeg.pegawai.read` / `simpeg.pegawai.manage` |
-| POST | `/api/simpeg/pegawai` | Tambah data pegawai baru (otomatis buat akun SSO) | `simpeg.pegawai.create` / `simpeg.pegawai.manage` |
-| GET | `/api/simpeg/pegawai/{id}` | Detail profil pegawai | `simpeg.pegawai.read` / `simpeg.pegawai.manage` |
-| PUT | `/api/simpeg/pegawai/{id}` | Memperbarui data pegawai | `simpeg.pegawai.update` / `simpeg.pegawai.manage` |
+| GET | `/api/simpeg/pegawai` | Daftar data pegawai (dengan pagination & filter role) | `simpeg.pegawai.read` / `simpeg.pegawai.manage` |
+| POST | `/api/simpeg/pegawai` | Tambah data pegawai baru (multi-role SSO) | `simpeg.pegawai.create` / `simpeg.pegawai.manage` |
+| GET | `/api/simpeg/pegawai/{id}` | Detail profil pegawai (termasuk roles & dosen) | `simpeg.pegawai.read` / `simpeg.pegawai.manage` |
+| PUT | `/api/simpeg/pegawai/{id}` | Memperbarui data pegawai & sinkronisasi roles | `simpeg.pegawai.update` / `simpeg.pegawai.manage` |
 | DELETE | `/api/simpeg/pegawai/{id}` | Menghapus data pegawai | `simpeg.pegawai.delete` / `simpeg.pegawai.manage` |
+
+---
+
+## GET /api/simpeg/pegawai/roles
+
+> Mengambil daftar seluruh role aktif dari SSO (`core_roles`) untuk digunakan sebagai opsi dinamis pilihan jenis pegawai.
+
+### Headers
+```http
+Authorization: Bearer <token>
+Accept: application/json
+```
+
+### Response Success (200 OK)
+```json
+{
+  "status": "success",
+  "message": "Daftar role berhasil diambil",
+  "data": [
+    {
+      "id": 5,
+      "name": "Dosen Pengajar",
+      "slug": "dosen",
+      "description": "Tenaga pendidik akademik"
+    },
+    {
+      "id": 6,
+      "name": "Tenaga Kependidikan",
+      "slug": "tendik",
+      "description": "Staf administrasi dan operasional"
+    }
+  ]
+}
+```
 
 ---
 

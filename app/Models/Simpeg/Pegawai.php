@@ -110,6 +110,7 @@ class Pegawai extends Model
 
     protected $appends = [
         'nama_gelar',
+        'role_ids',
     ];
 
     public function getNamaGelarAttribute(): string
@@ -117,6 +118,19 @@ class Pegawai extends Model
         $depan = $this->gelar_depan ? "{$this->gelar_depan} " : '';
         $belakang = $this->gelar_belakang ? ", {$this->gelar_belakang}" : '';
         return "{$depan}{$this->nama_lengkap}{$belakang}";
+    }
+
+    public function getRoleIdsAttribute(): array
+    {
+        if ($this->relationLoaded('roles')) {
+            return $this->roles->pluck('id')->toArray();
+        }
+        return $this->roles()->pluck('core_roles.id')->toArray();
+    }
+
+    public function roles()
+    {
+        return $this->belongsToMany(\App\Models\Role::class, 'simpeg_pegawai_roles', 'pegawai_id', 'role_id')->withTimestamps();
     }
 
     public function user()

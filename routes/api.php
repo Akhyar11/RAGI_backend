@@ -156,6 +156,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('pegawai/template', [App\Http\Controllers\Simpeg\PegawaiController::class, 'downloadTemplate']);
     Route::post('pegawai/import', [App\Http\Controllers\Simpeg\PegawaiController::class, 'import']);
     Route::get('pegawai/me', [App\Http\Controllers\Simpeg\PegawaiController::class, 'me']);
+    Route::get('pegawai/roles', [App\Http\Controllers\Simpeg\PegawaiController::class, 'getRoles']);
     Route::apiResource('pegawai', App\Http\Controllers\Simpeg\PegawaiController::class);
 
     // Riwayat Jabatan & Pendidikan

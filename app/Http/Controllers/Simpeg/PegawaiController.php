@@ -111,12 +111,24 @@ class PegawaiController extends Controller
             ], 403);
         }
 
-        $filters = $request->only(['search', 'unit_kerja_id', 'jenis_pegawai', 'status', 'shift_template_id', 'per_page']);
+        $filters = $request->only(['search', 'unit_kerja_id', 'jenis_pegawai', 'role_id', 'status', 'shift_template_id', 'per_page']);
         $pegawai = $this->pegawaiService->getFiltered($filters);
 
         return response()->json([
             'status' => 'success',
             'data' => $pegawai
+        ]);
+    }
+
+    public function getRoles(Request $request)
+    {
+        $roles = \App\Models\Role::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug', 'description']);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $roles
         ]);
     }
 
@@ -141,7 +153,9 @@ class PegawaiController extends Controller
             'tempat_lahir' => 'nullable|string',
             'jenis_kelamin' => 'nullable|in:L,P',
             'agama' => 'nullable|string',
-            'jenis_pegawai' => 'nullable|in:dosen,tendik,honorer',
+            'role_ids' => 'nullable|array',
+            'role_ids.*' => 'exists:core_roles,id',
+            'jenis_pegawai' => 'nullable|string',
             'status_kepegawaian' => 'nullable|in:pns,non_pns,kontrak,tetap_yayasan',
             'tanggal_masuk' => 'nullable|date',
             'status' => 'nullable|in:aktif,non_aktif,pensiun,meninggal',
@@ -170,7 +184,7 @@ class PegawaiController extends Controller
         }
 
         $pegawai = Pegawai::with([
-            'user',
+            'user.roles',
             'unitKerja',
             'shiftTemplate',
             'officeLocation',
@@ -178,6 +192,7 @@ class PegawaiController extends Controller
             'riwayatJabatan.jabatanFungsional',
             'riwayatPendidikan',
             'dosen.programStudi',
+            'roles',
         ])->findOrFail($id);
 
         return response()->json([
@@ -209,7 +224,9 @@ class PegawaiController extends Controller
             'tempat_lahir' => 'nullable|string',
             'jenis_kelamin' => 'sometimes|in:L,P',
             'agama' => 'nullable|string',
-            'jenis_pegawai' => 'sometimes|in:dosen,tendik,honorer',
+            'role_ids' => 'sometimes|array',
+            'role_ids.*' => 'exists:core_roles,id',
+            'jenis_pegawai' => 'nullable|string',
             'status_kepegawaian' => 'sometimes|in:pns,non_pns,kontrak,tetap_yayasan',
             'tanggal_masuk' => 'nullable|date',
             'status' => 'sometimes|in:aktif,non_aktif,pensiun,meninggal',

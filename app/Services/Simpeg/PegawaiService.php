@@ -8,7 +8,7 @@ class PegawaiService
 {
     public function getFiltered(array $filters = [])
     {
-        $query = Pegawai::with(['user', 'unitKerja', 'shiftTemplate', 'officeLocation', 'riwayatJabatan.jabatan', 'riwayatPendidikan', 'dosen', 'dosen.programStudi']);
+        $query = Pegawai::with(['user', 'user.roles', 'unitKerja', 'shiftTemplate', 'officeLocation', 'riwayatJabatan.jabatan', 'riwayatPendidikan', 'dosen', 'dosen.programStudi', 'roles']);
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];
@@ -25,8 +25,23 @@ class PegawaiService
             $query->where('unit_kerja_id', $filters['unit_kerja_id']);
         }
 
+        if (!empty($filters['role_id'])) {
+            $roleId = $filters['role_id'];
+            $query->whereHas('roles', function ($q) use ($roleId) {
+                $q->where('core_roles.id', $roleId);
+            });
+        }
+
         if (!empty($filters['jenis_pegawai'])) {
-            $query->where('jenis_pegawai', $filters['jenis_pegawai']);
+            $jp = $filters['jenis_pegawai'];
+            $query->where(function ($q) use ($jp) {
+                $q->where('jenis_pegawai', 'like', "%{$jp}%")
+                  ->orWhereHas('roles', function ($r) use ($jp) {
+                      $r->where('slug', $jp)
+                        ->orWhere('name', 'like', "%{$jp}%")
+                        ->orWhere('core_roles.id', $jp);
+                  });
+            });
         }
 
         if (!empty($filters['status'])) {
@@ -43,6 +58,21 @@ class PegawaiService
     public function create(array $data)
     {
         return \Illuminate\Support\Facades\DB::transaction(function () use ($data) {
+            $roleIds = $data['role_ids'] ?? [];
+            unset($data['role_ids']);
+
+            if (empty($roleIds) && !empty($data['jenis_pegawai'])) {
+                $role = \App\Models\Role::where('slug', strtolower(trim($data['jenis_pegawai'])))->first();
+                if ($role) {
+                    $roleIds = [$role->id];
+                }
+            }
+
+            if (!empty($roleIds)) {
+                $roles = \App\Models\Role::whereIn('id', $roleIds)->get();
+                $data['jenis_pegawai'] = $roles->pluck('name')->implode(', ');
+            }
+
             // Otomatis buatkan akun SSO di core_users dengan password default 'indonusa' jika user_id belum ada
             if (empty($data['user_id'])) {
                 $nama = $data['nama_lengkap'] ?? 'Pegawai Baru';
@@ -67,15 +97,8 @@ class PegawaiService
                         'is_verified' => true,
                     ]);
 
-                    $jenisPegawai = $data['jenis_pegawai'] ?? null;
-                    $role = null;
-                    if ($jenisPegawai === 'dosen') {
-                        $role = \App\Models\Role::where('slug', 'dosen')->first();
-                    } elseif ($jenisPegawai === 'tendik') {
-                        $role = \App\Models\Role::where('slug', 'tendik')->first();
-                    }
-                    if ($role) {
-                        $user->roles()->syncWithoutDetaching([$role->id]);
+                    if (!empty($roleIds)) {
+                        $user->roles()->syncWithoutDetaching($roleIds);
                     }
                 }
 
@@ -84,15 +107,40 @@ class PegawaiService
 
             unset($data['email'], $data['username']);
 
-            return Pegawai::create($data);
+            $pegawai = Pegawai::create($data);
+
+            if (!empty($roleIds)) {
+                $pegawai->roles()->sync($roleIds);
+            }
+
+            $pegawai->load(['roles', 'user.roles']);
+            return $pegawai;
         });
     }
 
     public function update(Pegawai $pegawai, array $data)
     {
-        unset($data['email'], $data['username']);
-        $pegawai->update($data);
-        return $pegawai;
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($pegawai, $data) {
+            unset($data['email'], $data['username']);
+
+            if (isset($data['role_ids'])) {
+                $roleIds = (array)$data['role_ids'];
+                unset($data['role_ids']);
+
+                $roles = \App\Models\Role::whereIn('id', $roleIds)->get();
+                $data['jenis_pegawai'] = $roles->pluck('name')->implode(', ');
+
+                $pegawai->roles()->sync($roleIds);
+
+                if ($pegawai->user) {
+                    $pegawai->user->roles()->sync($roleIds);
+                }
+            }
+
+            $pegawai->update($data);
+            $pegawai->load(['roles', 'user.roles']);
+            return $pegawai;
+        });
     }
 
     public function delete(Pegawai $pegawai)
