@@ -214,8 +214,19 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::put('presensi/national-holidays/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateNationalHoliday']);
     Route::delete('presensi/national-holidays/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'destroyNationalHoliday']);
 
+    // Master Komponen Gaji Fleksibel
+    Route::get('payroll/komponen', [App\Http\Controllers\Simpeg\PayrollController::class, 'indexKomponen']);
+    Route::post('payroll/komponen', [App\Http\Controllers\Simpeg\PayrollController::class, 'storeKomponen']);
+    Route::put('payroll/komponen/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'updateKomponen']);
+    Route::delete('payroll/komponen/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'destroyKomponen']);
+
+    // Komponen Gaji Pegawai
+    Route::get('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PayrollController::class, 'getPegawaiKomponen']);
+    Route::post('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PayrollController::class, 'savePegawaiKomponen']);
+
+    // Rekapan Payroll, Detail Slip & Eksekusi SIKEU
     Route::get('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'index']);
-    Route::post('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'store']);
+    Route::get('payroll/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'show']);
     Route::post('payroll/generate', [App\Http\Controllers\Simpeg\PayrollController::class, 'generatePayroll']);
     Route::post('payroll/submit-to-sikeu', [App\Http\Controllers\Simpeg\PayrollController::class, 'submitToSikeu']);
     Route::post('payroll/{id}/process-payment', [App\Http\Controllers\Simpeg\PayrollController::class, 'processPayment']);

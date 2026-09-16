@@ -78,7 +78,10 @@
 | KompetensiController | Kompetensi dosen: Sertifikasi dosen, riwayat tes kemampuan, & pelatihan/diklat | [docs/api/simpeg/KompetensiController.md](api/simpeg/KompetensiController.md) |
 | SuratTugasController | Surat tugas dinas luar, armada/driver, tim rombongan, persetujuan, auto-presensi, & LPJ | [docs/api/simpeg/SuratTugasController.md](api/simpeg/SuratTugasController.md) |
 | IzinJamKerjaController | Izin parsial jam kerja (keluar kantor, datang terlambat, pulang awal) & integrasi presensi | [docs/api/simpeg/IzinJamKerjaController.md](api/simpeg/IzinJamKerjaController.md) |
-| SkPegawaiController | Arsip & pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/simpeg/SkPegawaiController.md](api/simpeg/SkPegawaiController.md) |
+| SkPegawaiController | Arsip | SkPegawaiController | Arsip & pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/simpeg/SkPegawaiController.md](api/simpeg/SkPegawaiController.md) | pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/simpeg/SkPegawaiController.md](api/simpeg/SkPegawaiController.md) |
+| PenilaianKinerjaController | Sasaran Kinerja Pegawai (SKP) butir-per-butir | SkPegawaiController | Arsip & pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/simpeg/SkPegawaiController.md](api/simpeg/SkPegawaiController.md) | evaluasi capaian BKD | [docs/api/simpeg/PenilaianKinerjaController.md](api/simpeg/PenilaianKinerjaController.md) |
+| TridharmaDossierController | Agregasi portofolio Tridharma terpadu (SIAKAD, SIPPM, SIMPEG) | [docs/api/simpeg/TridharmaDossierController.md](api/simpeg/TridharmaDossierController.md) |
+| PayrollController | Penggajian fleksibel, master komponen insentif, honor SKS, PPh 21, | SkPegawaiController | Arsip & pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/simpeg/SkPegawaiController.md](api/simpeg/SkPegawaiController.md) | posting kas SIKEU | [docs/api/simpeg/PayrollController.md](api/simpeg/PayrollController.md) |
 
 ---
 

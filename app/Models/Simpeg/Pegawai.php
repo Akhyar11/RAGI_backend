@@ -242,6 +242,16 @@ class Pegawai extends Model
         return $this->hasMany(\App\Models\Sippm\HkiDanBuku::class, 'pegawai_id');
     }
 
+    public function gajiPegawai()
+    {
+        return $this->hasMany(GajiPegawai::class, "pegawai_id");
+    }
+
+    public function komponenGaji()
+    {
+        return $this->hasMany(PegawaiKomponenGaji::class, "pegawai_id");
+    }
+
     public function penilaianKinerja()
     {
         return $this->hasMany(PenilaianKinerja::class, 'pegawai_id');
