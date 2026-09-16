@@ -78,6 +78,11 @@ class PermissionSeeder extends Seeder
             ['name' => 'Tambah Kinerja SKP & BKD', 'slug' => 'simpeg.kinerja.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Menginput skor evaluasi kinerja baru'],
             ['name' => 'Ubah Kinerja SKP & BKD', 'slug' => 'simpeg.kinerja.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah skor & predikat evaluasi kinerja'],
             ['name' => 'Hapus Kinerja SKP & BKD', 'slug' => 'simpeg.kinerja.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus laporan evaluasi kinerja'],
+            ['name' => 'Lihat Kompetensi Pegawai', 'slug' => 'simpeg.kompetensi.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat sertifikasi, tes & riwayat pelatihan'],
+            ['name' => 'Tambah Kompetensi Pegawai', 'slug' => 'simpeg.kompetensi.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Menambahkan data sertifikasi, tes, atau pelatihan baru'],
+            ['name' => 'Ubah Kompetensi Pegawai', 'slug' => 'simpeg.kompetensi.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah data riwayat kompetensi pegawai'],
+            ['name' => 'Hapus Kompetensi Pegawai', 'slug' => 'simpeg.kompetensi.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus data riwayat kompetensi pegawai'],
+            ['name' => 'Kelola & Rekap Kompetensi Seluruh Pegawai', 'slug' => 'simpeg.kompetensi.manage', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Mengakses pencarian dan rekap kompetensi untuk akreditasi'],
 
             // ── MODUL SIPPM ───────────────────────────────────────
             ['name' => 'Lihat Dashboard SIPPM', 'slug' => 'sippm.dashboard.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat dashboard utama & metrik IKU SIPPM'],
@@ -270,6 +275,7 @@ class PermissionSeeder extends Seeder
                 'simpeg.cuti.read', 'simpeg.cuti.create',
                 'simpeg.presensi.read', 'simpeg.presensi.create',
                 'simpeg.payroll.read',
+                'simpeg.kompetensi.read', 'simpeg.kompetensi.create', 'simpeg.kompetensi.update', 'simpeg.kompetensi.delete',
                 // SIPPM mandiri
                 'sippm.dashboard.read',
                 'sippm.proposal.read', 'sippm.proposal.create', 'sippm.proposal.update', 'sippm.proposal.submit',

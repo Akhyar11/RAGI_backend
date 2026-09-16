@@ -177,4 +177,19 @@ class Pegawai extends Model
     {
         return $this->hasOne(\App\Models\Siakad\Dosen::class, 'pegawai_id');
     }
+
+    public function sertifikasiDosen()
+    {
+        return $this->hasMany(SertifikasiDosen::class, 'pegawai_id');
+    }
+
+    public function riwayatTes()
+    {
+        return $this->hasMany(RiwayatTes::class, 'pegawai_id');
+    }
+
+    public function riwayatPelatihan()
+    {
+        return $this->hasMany(RiwayatPelatihan::class, 'pegawai_id');
+    }
 }

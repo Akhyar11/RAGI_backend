@@ -228,6 +228,25 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     // PDDikti Feeder Integration
     Route::get('pddikti/status', [App\Http\Controllers\Simpeg\PddiktiSyncController::class, 'getStatus']);
     Route::post('pddikti/sync-all', [App\Http\Controllers\Simpeg\PddiktiSyncController::class, 'triggerSync']);
+
+    // Kompetensi Dosen & Pegawai (Sertifikasi, Tes, Pelatihan)
+    Route::get('kompetensi/masters', [App\Http\Controllers\Simpeg\KompetensiController::class, 'masters']);
+    Route::get('kompetensi/pencarian', [App\Http\Controllers\Simpeg\KompetensiController::class, 'pencarianAdmin']);
+    Route::get('kompetensi/sertifikasi', [App\Http\Controllers\Simpeg\KompetensiController::class, 'listSertifikasi']);
+    Route::post('kompetensi/sertifikasi', [App\Http\Controllers\Simpeg\KompetensiController::class, 'storeSertifikasi']);
+    Route::post('kompetensi/sertifikasi/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'updateSertifikasi']);
+    Route::put('kompetensi/sertifikasi/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'updateSertifikasi']);
+    Route::delete('kompetensi/sertifikasi/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'destroySertifikasi']);
+    Route::get('kompetensi/tes', [App\Http\Controllers\Simpeg\KompetensiController::class, 'listTes']);
+    Route::post('kompetensi/tes', [App\Http\Controllers\Simpeg\KompetensiController::class, 'storeTes']);
+    Route::post('kompetensi/tes/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'updateTes']);
+    Route::put('kompetensi/tes/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'updateTes']);
+    Route::delete('kompetensi/tes/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'destroyTes']);
+    Route::get('kompetensi/pelatihan', [App\Http\Controllers\Simpeg\KompetensiController::class, 'listPelatihan']);
+    Route::post('kompetensi/pelatihan', [App\Http\Controllers\Simpeg\KompetensiController::class, 'storePelatihan']);
+    Route::post('kompetensi/pelatihan/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'updatePelatihan']);
+    Route::put('kompetensi/pelatihan/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'updatePelatihan']);
+    Route::delete('kompetensi/pelatihan/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'destroyPelatihan']);
 });
 
 /*
