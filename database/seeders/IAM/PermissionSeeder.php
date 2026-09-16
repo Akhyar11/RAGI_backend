@@ -88,6 +88,16 @@ class PermissionSeeder extends Seeder
             ['name' => 'Ubah Surat Tugas', 'slug' => 'simpeg.surat_tugas.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah data surat tugas atau mengunggah LPJ'],
             ['name' => 'Hapus Surat Tugas', 'slug' => 'simpeg.surat_tugas.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus pengajuan surat tugas'],
             ['name' => 'Approve & Terbitkan Surat Tugas', 'slug' => 'simpeg.surat_tugas.approve', 'module' => 'simpeg', 'action' => 'approve', 'description' => 'Menyetujui, memberi nomor resmi, dan menerbitkan surat tugas'],
+            ['name' => 'Lihat Izin Jam Kerja', 'slug' => 'simpeg.izin_kerja.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat permohonan izin jam kerja / dinas parsial'],
+            ['name' => 'Tambah Izin Jam Kerja', 'slug' => 'simpeg.izin_kerja.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Mengajukan izin keluar kantor / terlambat / pulang awal'],
+            ['name' => 'Ubah Izin Jam Kerja', 'slug' => 'simpeg.izin_kerja.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah draf permohonan izin jam kerja'],
+            ['name' => 'Hapus Izin Jam Kerja', 'slug' => 'simpeg.izin_kerja.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus permohonan izin jam kerja'],
+            ['name' => 'Persetujuan Izin Jam Kerja', 'slug' => 'simpeg.izin_kerja.approve', 'module' => 'simpeg', 'action' => 'approve', 'description' => 'Menyetujui atau menolak permohonan izin jam kerja'],
+            ['name' => 'Lihat Arsip SK Pegawai', 'slug' => 'simpeg.sk_pegawai.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat repositori SK kepegawaian & penugasan'],
+            ['name' => 'Tambah / Laporkan SK Pegawai', 'slug' => 'simpeg.sk_pegawai.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Mengunggah dan melaporkan SK baru secara mandiri'],
+            ['name' => 'Ubah SK Pegawai', 'slug' => 'simpeg.sk_pegawai.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah data arsip SK pegawai'],
+            ['name' => 'Hapus SK Pegawai', 'slug' => 'simpeg.sk_pegawai.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus arsip SK pegawai'],
+            ['name' => 'Verifikasi SK Pegawai', 'slug' => 'simpeg.sk_pegawai.verify', 'module' => 'simpeg', 'action' => 'approve', 'description' => 'Memverifikasi atau menolak keabsahan SK pegawai'],
 
             // ── MODUL SIPPM ───────────────────────────────────────
             ['name' => 'Lihat Dashboard SIPPM', 'slug' => 'sippm.dashboard.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat dashboard utama & metrik IKU SIPPM'],
@@ -282,6 +292,8 @@ class PermissionSeeder extends Seeder
                 'simpeg.payroll.read',
                 'simpeg.kompetensi.read', 'simpeg.kompetensi.create', 'simpeg.kompetensi.update', 'simpeg.kompetensi.delete',
                 'simpeg.surat_tugas.read', 'simpeg.surat_tugas.create', 'simpeg.surat_tugas.update',
+                'simpeg.izin_kerja.read', 'simpeg.izin_kerja.create', 'simpeg.izin_kerja.update', 'simpeg.izin_kerja.delete',
+                'simpeg.sk_pegawai.read', 'simpeg.sk_pegawai.create', 'simpeg.sk_pegawai.update', 'simpeg.sk_pegawai.delete',
                 // SIPPM mandiri
                 'sippm.dashboard.read',
                 'sippm.proposal.read', 'sippm.proposal.create', 'sippm.proposal.update', 'sippm.proposal.submit',

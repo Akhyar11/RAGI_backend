@@ -77,6 +77,8 @@
 | AttendanceApi | Spesifikasi teknis integrasi & sinkronisasi SIMPEG | [docs/api/SIMPEG/ATTENDANCE_API.md](api/SIMPEG/ATTENDANCE_API.md) |
 | KompetensiController | Kompetensi dosen: Sertifikasi dosen, riwayat tes kemampuan, & pelatihan/diklat | [docs/api/simpeg/KompetensiController.md](api/simpeg/KompetensiController.md) |
 | SuratTugasController | Surat tugas dinas luar, armada/driver, tim rombongan, persetujuan, auto-presensi, & LPJ | [docs/api/simpeg/SuratTugasController.md](api/simpeg/SuratTugasController.md) |
+| IzinJamKerjaController | Izin parsial jam kerja (keluar kantor, datang terlambat, pulang awal) & integrasi presensi | [docs/api/simpeg/IzinJamKerjaController.md](api/simpeg/IzinJamKerjaController.md) |
+| SkPegawaiController | Arsip & pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/simpeg/SkPegawaiController.md](api/simpeg/SkPegawaiController.md) |
 
 ---
 

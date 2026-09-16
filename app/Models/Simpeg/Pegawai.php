@@ -204,4 +204,14 @@ class Pegawai extends Model
             ->withPivot('peran')
             ->withTimestamps();
     }
+
+    public function izinJamKerja()
+    {
+        return $this->hasMany(IzinJamKerja::class, 'pegawai_id');
+    }
+
+    public function skPegawai()
+    {
+        return $this->hasMany(SkPegawai::class, 'pegawai_id');
+    }
 }

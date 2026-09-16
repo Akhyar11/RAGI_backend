@@ -20,6 +20,11 @@ class AppServiceProvider extends ServiceProvider
             \App\Events\Simpeg\SuratTugasDisetujui::class,
             \App\Listeners\Simpeg\SetPresensiDinasLuar::class
         );
+
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Events\Simpeg\IzinJamKerjaDisetujui::class,
+            \App\Listeners\Simpeg\SinkronisasiPresensiIzinJamKerja::class
+        );
     }
 
     public function boot(): void

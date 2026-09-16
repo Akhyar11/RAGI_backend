@@ -258,6 +258,26 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::post('surat-tugas/{id}/approve', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'approve']);
     Route::post('surat-tugas/{id}/lpj', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'uploadLpj']);
     Route::delete('surat-tugas/{id}', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'destroy']);
+
+    // Izin Parsial Jam Kerja Pegawai
+    Route::get('izin-kerja/masters', [App\Http\Controllers\Simpeg\IzinJamKerjaController::class, 'masters']);
+    Route::get('izin-kerja', [App\Http\Controllers\Simpeg\IzinJamKerjaController::class, 'index']);
+    Route::get('izin-kerja/{id}', [App\Http\Controllers\Simpeg\IzinJamKerjaController::class, 'show']);
+    Route::post('izin-kerja', [App\Http\Controllers\Simpeg\IzinJamKerjaController::class, 'store']);
+    Route::post('izin-kerja/{id}', [App\Http\Controllers\Simpeg\IzinJamKerjaController::class, 'update']);
+    Route::put('izin-kerja/{id}', [App\Http\Controllers\Simpeg\IzinJamKerjaController::class, 'update']);
+    Route::post('izin-kerja/{id}/approve', [App\Http\Controllers\Simpeg\IzinJamKerjaController::class, 'approve']);
+    Route::delete('izin-kerja/{id}', [App\Http\Controllers\Simpeg\IzinJamKerjaController::class, 'destroy']);
+
+    // Repositori & Arsip SK Pegawai Mandiri
+    Route::get('sk-pegawai/masters', [App\Http\Controllers\Simpeg\SkPegawaiController::class, 'masters']);
+    Route::get('sk-pegawai', [App\Http\Controllers\Simpeg\SkPegawaiController::class, 'index']);
+    Route::get('sk-pegawai/{id}', [App\Http\Controllers\Simpeg\SkPegawaiController::class, 'show']);
+    Route::post('sk-pegawai', [App\Http\Controllers\Simpeg\SkPegawaiController::class, 'store']);
+    Route::post('sk-pegawai/{id}', [App\Http\Controllers\Simpeg\SkPegawaiController::class, 'update']);
+    Route::put('sk-pegawai/{id}', [App\Http\Controllers\Simpeg\SkPegawaiController::class, 'update']);
+    Route::post('sk-pegawai/{id}/verify', [App\Http\Controllers\Simpeg\SkPegawaiController::class, 'verify']);
+    Route::delete('sk-pegawai/{id}', [App\Http\Controllers\Simpeg\SkPegawaiController::class, 'destroy']);
 });
 
 /*

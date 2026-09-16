@@ -101,6 +101,8 @@ class MenuSeeder extends Seeder
                     ['name' => 'Evaluasi Kinerja SKP', 'url' => '/simpeg/kinerja', 'icon' => 'FaChartPie', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kinerja.read', 'order_index' => 5],
                     ['name' => 'Kompetensi & Pelatihan', 'url' => '/simpeg/kompetensi', 'icon' => 'FaGraduationCap', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kompetensi.read', 'order_index' => 6],
                     ['name' => 'Surat Tugas & LPJ', 'url' => '/simpeg/surat-tugas', 'icon' => 'FaBriefcase', 'module' => 'simpeg', 'permission_slug' => 'simpeg.surat_tugas.read', 'order_index' => 7],
+                    ['name' => 'Izin Jam Kerja', 'url' => '/simpeg/izin-kerja', 'icon' => 'FaHourglassHalf', 'module' => 'simpeg', 'permission_slug' => 'simpeg.izin_kerja.read', 'order_index' => 8],
+                    ['name' => 'Arsip SK Pegawai', 'url' => '/simpeg/sk-pegawai', 'icon' => 'FaFileSignature', 'module' => 'simpeg', 'permission_slug' => 'simpeg.sk_pegawai.read', 'order_index' => 9],
                 ]
             ],
             [
@@ -513,7 +515,7 @@ class MenuSeeder extends Seeder
         $dosenRole = \App\Models\Role::where('slug', 'dosen')->first();
         if ($dosenRole) {
             $dosenSimpegMenuIds = Menu::where('module', 'simpeg')
-                ->whereIn('url', ['/simpeg', '/simpeg/presensi', '/simpeg/cuti', '/simpeg/payroll', '/simpeg/kompetensi', '/simpeg/surat-tugas'])
+                ->whereIn('url', ['/simpeg', '/simpeg/presensi', '/simpeg/cuti', '/simpeg/payroll', '/simpeg/kompetensi', '/simpeg/surat-tugas', '/simpeg/izin-kerja', '/simpeg/sk-pegawai'])
                 ->pluck('id')
                 ->toArray();
             $dosenRole->menus()->syncWithoutDetaching($dosenSimpegMenuIds);
