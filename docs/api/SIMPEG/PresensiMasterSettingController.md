@@ -27,6 +27,11 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
 | POST | `/api/simpeg/presensi/national-holidays` | Tambah tanggal libur manual | ✅ Bearer |
 | PUT | `/api/simpeg/presensi/national-holidays/{id}` | Ubah tanggal libur | ✅ Bearer |
 | DELETE | `/api/simpeg/presensi/national-holidays/{id}` | Hapus tanggal libur | ✅ Bearer |
+| GET | `/api/simpeg/presensi/fingerprint-devices` | Daftar perangkat mesin absensi sidik jari / wajah | ✅ Bearer |
+| POST | `/api/simpeg/presensi/fingerprint-devices` | Tambah perangkat mesin presensi | ✅ Bearer |
+| PUT | `/api/simpeg/presensi/fingerprint-devices/{id}` | Ubah konfigurasi perangkat mesin | ✅ Bearer |
+| DELETE | `/api/simpeg/presensi/fingerprint-devices/{id}` | Hapus perangkat mesin | ✅ Bearer |
+| POST | `/api/simpeg/presensi/fingerprint-devices/{id}/test-connection` | Uji ping/koneksi perangkat mesin | ✅ Bearer |
 
 ---
 
@@ -258,3 +263,51 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
 > - `GET shift-templates` tidak pernah mengembalikan kosong: selalu ada minimal 1 template default (auto-seed).
 > - Field `applies_national_holidays = false` cocok untuk shift satpam/operasional yang tetap wajib masuk saat tanggal merah.
 > - Penghapusan shift/lokasi yang masih dipakai pegawai ditolak (`422`) demi integritas referensi `simpeg_pegawai.shift_template_id`.
+
+---
+
+## Fingerprint Devices Management
+
+### GET `/api/simpeg/presensi/fingerprint-devices`
+Mengembalikan daftar terminal mesin absensi sidik jari / wajah yang terdaftar di jaringan kampus.
+
+**Response (200 OK):**
+```json
+{
+    "status": "success",
+    "data": [
+        {
+            "id": 1,
+            "device_name": "Terminal Fingerprint Rektorat Lt. 1",
+            "device_code": "FP-UTAMA-REKTORAT",
+            "ip_address": "192.168.1.201",
+            "port": 4370,
+            "location": "Lobi Utama Gedung Rektorat",
+            "device_model": "ZKTeco ProCapture-X",
+            "is_active": true,
+            "last_status": "online",
+            "last_sync_at": "2026-09-16 11:20:00"
+        }
+    ]
+}
+```
+
+### POST `/api/simpeg/presensi/fingerprint-devices/{id}/test-connection`
+Menguji status koneksi soket IP dan port mesin fingerprint.
+
+**Response (200 OK):**
+```json
+{
+    "status": "success",
+    "message": "Koneksi ke mesin Terminal Fingerprint Rektorat Lt. 1 (192.168.1.201:4370) terhubung dengan baik.",
+    "data": {
+        "device_id": 1,
+        "device_code": "FP-UTAMA-REKTORAT",
+        "ip_address": "192.168.1.201",
+        "port": 4370,
+        "status": "online",
+        "latency_ms": 24
+    }
+}
+```
+

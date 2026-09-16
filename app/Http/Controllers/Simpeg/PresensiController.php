@@ -9,8 +9,10 @@ use App\Models\NationalHoliday;
 use App\Models\Simpeg\Pegawai;
 use App\Models\Simpeg\PresensiPegawai;
 use App\Models\Simpeg\PresensiPeriode;
+use App\Services\AttendanceCutoffService;
 use App\Services\AttendanceRecapService;
 use App\Services\AttendanceService;
+use App\Services\FingerprintSyncService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -765,6 +767,125 @@ class PresensiController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Seluruh bundle & data presensi berhasil di-reset.',
+        ]);
+    }
+
+    /**
+     * Sinkronisasi Batch Punch Log Mesin Fingerprint / Biometrik Terminal
+     */
+    public function syncFingerprint(Request $request, FingerprintSyncService $syncService): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.presensi.manage') && !$user->hasPermission('simpeg.presensi.create') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk sinkronisasi log mesin fingerprint.'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'device_id' => 'nullable|string|max:50',
+            'device_code' => 'nullable|string|max:50',
+            'device_ip' => 'nullable|string|max:50',
+            'logs' => 'required|array|min:1',
+            'logs.*.pin' => 'nullable|string',
+            'logs.*.nip' => 'nullable|string',
+            'logs.*.pegawai_id' => 'nullable',
+            'logs.*.timestamp' => 'required|string',
+            'logs.*.verify_mode' => 'nullable|integer',
+            'logs.*.in_out_mode' => 'nullable',
+        ]);
+
+        $result = $syncService->syncPunchLogs($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Sinkronisasi mesin selesai: {$result['synced_count']} log berhasil diproses, {$result['skipped_count']} dilewati.",
+            'data' => $result,
+        ]);
+    }
+
+    /**
+     * Jalankan Otomasi Presensi Cut-off Harian (Auto-Alfa)
+     */
+    public function runDailyCutoff(Request $request, AttendanceCutoffService $cutoffService): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.presensi.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk menjalankan cut-off presensi harian.'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'date' => 'nullable|date_format:Y-m-d',
+            'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
+        ]);
+
+        $report = $cutoffService->runDailyCutoff($validated['date'] ?? null, $validated['unit_kerja_id'] ?? null);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Cut-off presensi tanggal {$report['date']} selesai. {$report['total_marked_alfa']} pegawai ditandai Alfa dari {$report['total_evaluated']} pegawai dievaluasi.",
+            'data' => $report,
+        ]);
+    }
+
+    /**
+     * Penugasan Kelompok Shift Kerja Secara Massal (Bulk Assign Shift)
+     */
+    public function assignShiftBulk(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.presensi.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk menugaskan shift pegawai secara massal.'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'shift_template_id' => 'required|exists:simpeg_shift_templates,id',
+            'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
+            'jenis_pegawai' => 'nullable|in:dosen,tendik',
+            'pegawai_ids' => 'nullable|array',
+            'pegawai_ids.*' => 'exists:simpeg_pegawai,id',
+        ]);
+
+        $query = Pegawai::query();
+
+        if (!empty($validated['pegawai_ids'])) {
+            $query->whereIn('id', $validated['pegawai_ids']);
+        } else {
+            if (!empty($validated['unit_kerja_id'])) {
+                $query->where('unit_kerja_id', $validated['unit_kerja_id']);
+            }
+            if (!empty($validated['jenis_pegawai'])) {
+                $query->where('jenis_pegawai', $validated['jenis_pegawai']);
+            }
+        }
+
+        $count = $query->count();
+        if ($count === 0) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tidak ada pegawai yang memenuhi kriteria filter untuk ditugaskan shift.'
+            ], 422);
+        }
+
+        $query->update(['shift_template_id' => $validated['shift_template_id']]);
+
+        $shift = \App\Models\ShiftTemplate::find($validated['shift_template_id']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Berhasil menugaskan template shift '{$shift->name}' ke {$count} pegawai.",
+            'data' => [
+                'shift_template_id' => $shift->id,
+                'shift_name' => $shift->name,
+                'total_assigned' => $count,
+            ],
         ]);
     }
 }

@@ -47,6 +47,14 @@ Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Py
 | GET | `/api/v1/integration/attendances/{id}` | Detail log presensi lengkap dengan GPS audit | ✅ X-API-KEY |
 | GET | `/api/v1/integration/attendances/recap` | Rekapitulasi kehadiran organisasi per bulan/tahun | ✅ X-API-KEY |
 
+### 4. Otomasi Presensi, Toleransi Shift, Mesin Fingerprint & Cut-off (`/api/simpeg/presensi/...`)
+
+| Method | Endpoint | Fungsi | Auth |
+|---|---|---|---|
+| POST | `/api/simpeg/presensi/fingerprint/sync` | Sinkronisasi batch punch log mesin absensi biometrik | ✅ Bearer |
+| POST | `/api/simpeg/presensi/daily-cutoff` | Eksekusi cut-off harian untuk menandai pegawai tidak hadir sebagai Alfa | ✅ Bearer |
+| POST | `/api/simpeg/presensi/shift-assign-bulk` | Penugasan kelompok shift secara massal ke pegawai / unit kerja | ✅ Bearer |
+
 ---
 
 ## Daftar Kredensial Login Siap Pakai

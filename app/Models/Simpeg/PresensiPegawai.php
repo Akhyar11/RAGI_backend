@@ -27,6 +27,10 @@ class PresensiPegawai extends Model
         'status',
         'approved_at',
         'notes',
+        'source',
+        'device_id',
+        'device_ip',
+        'early_leave_minutes',
     ];
 
     public function pegawai(): BelongsTo

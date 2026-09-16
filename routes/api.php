@@ -196,8 +196,11 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::delete('presensi/reset', [App\Http\Controllers\Simpeg\PresensiController::class, 'resetData']);
     Route::delete('presensi/{id}', [App\Http\Controllers\Simpeg\PresensiController::class, 'destroy']);
     Route::post('presensi/{id}/payroll', [App\Http\Controllers\Simpeg\PresensiController::class, 'processPayroll']);
+    Route::post('presensi/fingerprint/sync', [App\Http\Controllers\Simpeg\PresensiController::class, 'syncFingerprint']);
+    Route::post('presensi/daily-cutoff', [App\Http\Controllers\Simpeg\PresensiController::class, 'runDailyCutoff']);
+    Route::post('presensi/shift-assign-bulk', [App\Http\Controllers\Simpeg\PresensiController::class, 'assignShiftBulk']);
 
-    // Master Pengaturan Presensi (Lokasi, Shift, Parameter, Hari Libur)
+    // Master Pengaturan Presensi (Lokasi, Shift, Parameter, Hari Libur, Perangkat Fingerprint)
     Route::get('presensi/settings', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'getSettings']);
     Route::put('presensi/settings', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateSettings']);
     Route::get('presensi/office-locations', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'listOfficeLocations']);
@@ -213,6 +216,11 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::post('presensi/national-holidays', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'storeNationalHoliday']);
     Route::put('presensi/national-holidays/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateNationalHoliday']);
     Route::delete('presensi/national-holidays/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'destroyNationalHoliday']);
+    Route::get('presensi/fingerprint-devices', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'listFingerprintDevices']);
+    Route::post('presensi/fingerprint-devices', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'storeFingerprintDevice']);
+    Route::put('presensi/fingerprint-devices/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateFingerprintDevice']);
+    Route::delete('presensi/fingerprint-devices/{id}', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'destroyFingerprintDevice']);
+    Route::post('presensi/fingerprint-devices/{id}/test-connection', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'testFingerprintDeviceConnection']);
 
     // Master Komponen Gaji Fleksibel
     Route::get('payroll/komponen', [App\Http\Controllers\Simpeg\PayrollController::class, 'indexKomponen']);

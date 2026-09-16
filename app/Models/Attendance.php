@@ -46,6 +46,10 @@ class Attendance extends Model
         'is_approved_by_admin',
         'approved_by',
         'approved_at',
+        'source',
+        'device_id',
+        'device_ip',
+        'early_leave_minutes',
     ];
 
     protected $casts = [
@@ -54,6 +58,7 @@ class Attendance extends Model
         'clock_in' => 'datetime',
         'clock_out' => 'datetime',
         'late_minutes' => 'integer',
+        'early_leave_minutes' => 'integer',
         'clock_in_latitude' => 'float',
         'clock_in_longitude' => 'float',
         'clock_in_distance_meters' => 'float',

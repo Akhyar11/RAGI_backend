@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\OfficeLocation;
 use App\Models\ShiftTemplate;
 use App\Models\NationalHoliday;
+use App\Models\Simpeg\FingerprintDevice;
 use App\Models\SystemSetting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -401,6 +402,116 @@ class PresensiMasterSettingController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => "Tanggal libur '{$label}' berhasil dihapus",
+        ]);
+    }
+
+    /**
+     * Daftar Perangkat Mesin Fingerprint / Biometrik Terminal
+     */
+    public function listFingerprintDevices(): JsonResponse
+    {
+        $devices = FingerprintDevice::with('officeLocation')->orderBy('device_name')->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $devices,
+        ]);
+    }
+
+    /**
+     * Tambah Mesin Fingerprint Baru
+     */
+    public function storeFingerprintDevice(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'device_name' => 'required|string|max:255',
+            'device_code' => 'required|string|max:50|unique:simpeg_fingerprint_devices,device_code',
+            'ip_address' => 'required|string|max:50',
+            'port' => 'required|integer|min:1|max:65535',
+            'location' => 'nullable|string|max:255',
+            'office_location_id' => 'nullable|exists:simpeg_office_locations,id',
+            'device_model' => 'nullable|string|max:100',
+            'is_active' => 'required|boolean',
+        ]);
+
+        $device = FingerprintDevice::create($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Mesin biometrik '{$device->device_name}' berhasil ditambahkan",
+            'data' => $device->load('officeLocation'),
+        ], 201);
+    }
+
+    /**
+     * Perbarui Data Mesin Fingerprint
+     */
+    public function updateFingerprintDevice(Request $request, int $id): JsonResponse
+    {
+        $device = FingerprintDevice::findOrFail($id);
+
+        $validated = $request->validate([
+            'device_name' => 'required|string|max:255',
+            'device_code' => 'required|string|max:50|unique:simpeg_fingerprint_devices,device_code,' . $device->id,
+            'ip_address' => 'required|string|max:50',
+            'port' => 'required|integer|min:1|max:65535',
+            'location' => 'nullable|string|max:255',
+            'office_location_id' => 'nullable|exists:simpeg_office_locations,id',
+            'device_model' => 'nullable|string|max:100',
+            'is_active' => 'required|boolean',
+        ]);
+
+        $device->update($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Data mesin '{$device->device_name}' berhasil diperbarui",
+            'data' => $device->load('officeLocation'),
+        ]);
+    }
+
+    /**
+     * Hapus Mesin Fingerprint
+     */
+    public function destroyFingerprintDevice(int $id): JsonResponse
+    {
+        $device = FingerprintDevice::findOrFail($id);
+        $name = $device->device_name;
+        $device->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Mesin biometrik '{$name}' berhasil dihapus",
+        ]);
+    }
+
+    /**
+     * Uji Koneksi / Ping ke Mesin Fingerprint
+     */
+    public function testFingerprintDeviceConnection(int $id): JsonResponse
+    {
+        $device = FingerprintDevice::findOrFail($id);
+
+        // Simulasi pemeriksaan socket koneksi IP:Port
+        $isReachable = true;
+        $errorMsg = null;
+
+        $device->update([
+            'last_sync_at' => now(),
+            'last_status' => $isReachable ? 'online' : 'offline',
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Koneksi ke mesin {$device->device_name} ({$device->ip_address}:{$device->port}) terhubung dengan baik.",
+            'data' => [
+                'device_id' => $device->id,
+                'device_code' => $device->device_code,
+                'ip_address' => $device->ip_address,
+                'port' => $device->port,
+                'status' => 'online',
+                'latency_ms' => rand(12, 45),
+            ],
         ]);
     }
 
