@@ -222,8 +222,17 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('usulan-jafung', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'index']);
     Route::post('usulan-jafung', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'store']);
 
+    // Penilaian Kinerja & SKP Butir-per-Butir
+    Route::get('penilaian-kinerja/masters', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'masters']);
     Route::get('penilaian-kinerja', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'index']);
     Route::post('penilaian-kinerja', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'store']);
+    Route::get('penilaian-kinerja/{id}', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'show']);
+    Route::put('penilaian-kinerja/{id}', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'update']);
+    Route::delete('penilaian-kinerja/{id}', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'destroy']);
+    Route::post('penilaian-kinerja/{id}/submit-target', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'submitTarget']);
+    Route::post('penilaian-kinerja/{id}/approve-target', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'approveTarget']);
+    Route::post('penilaian-kinerja/{id}/submit-realisasi', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'submitRealisasi']);
+    Route::post('penilaian-kinerja/{id}/evaluate', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'evaluate']);
 
     // PDDikti Feeder Integration
     Route::get('pddikti/status', [App\Http\Controllers\Simpeg\PddiktiSyncController::class, 'getStatus']);
