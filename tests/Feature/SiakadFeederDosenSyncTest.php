@@ -1099,11 +1099,11 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertNotEquals($victimUser->email, $ssoUser->email); // Email tidak tabrakan
     }
 
-    public function test_sso_user_creation_does_not_use_universal_indonusa_password_and_sets_unverified()
+    public function test_sso_user_creation_uses_default_indonusa_password_and_sets_verified()
     {
         $pegawaiDosen = \App\Models\Simpeg\Pegawai::create([
             'nidn' => '0612345679',
-            'nama_lengkap' => 'Dosen Keamanan SSO',
+            'nama_lengkap' => 'Dosen SSO',
             'jenis_pegawai' => 'dosen',
             'status' => 'aktif',
         ]);
@@ -1111,15 +1111,10 @@ class SiakadFeederDosenSyncTest extends TestCase
         $pegawaiService = app(\App\Services\Simpeg\PegawaiService::class);
         $user = $pegawaiService->ensureSsoUserForPegawai($pegawaiDosen);
 
-        // 1. Password bukan 'indonusa'
-        $this->assertFalse(\Illuminate\Support\Facades\Hash::check('indonusa', $user->password));
+        // 1. Password default 'indonusa'
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('indonusa', $user->password));
 
-        // 2. is_verified = false (wajib verifikasi/aktivasi awal)
-        $this->assertFalse($user->is_verified);
-
-        // 3. Token reset password awal tercatat di database
-        $this->assertDatabaseHas('password_reset_tokens', [
-            'email' => $user->email,
-        ]);
+        // 2. is_verified = true
+        $this->assertTrue($user->is_verified);
     }
 }

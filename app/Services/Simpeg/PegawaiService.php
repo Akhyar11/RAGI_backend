@@ -415,8 +415,8 @@ class PegawaiService
                 $email = $emailParts[0] . '.' . rand(100, 999) . '@' . ($emailParts[1] ?? 'campus.ac.id');
             }
 
-            // Keamanan: Password acak aman (hapus password universal 'indonusa') dan set is_verified false
-            $plainPassword = $options['password'] ?? Str::random(16);
+            // Default password 'indonusa' (atau dari options jika ada)
+            $plainPassword = $options['password'] ?? 'indonusa';
 
             $user = User::create([
                 'username' => $username,
@@ -424,17 +424,8 @@ class PegawaiService
                 'password' => Hash::make($plainPassword),
                 'phone' => $pegawai->telepon ?? null,
                 'is_active' => true,
-                'is_verified' => false,
+                'is_verified' => $options['is_verified'] ?? true,
             ]);
-
-            // Buat token reset password awal agar pegawai/admin dapat melakukan aktivasi mandiri secara aman
-            DB::table('password_reset_tokens')->updateOrInsert(
-                ['email' => $email],
-                [
-                    'token' => Hash::make(Str::random(32)),
-                    'created_at' => now(),
-                ]
-            );
         }
 
         // 5. Hubungkan user_id ke pegawai
