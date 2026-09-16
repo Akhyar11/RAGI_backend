@@ -234,6 +234,7 @@ class PermissionSeeder extends Seeder
         $adminRole = Role::where('slug', 'admin')->first();
         $superAdminRole = Role::where('slug', 'superadmin')->first();
         $dosenRole = Role::where('slug', 'dosen')->first();
+        $tendikRole = Role::where('slug', 'tendik')->first();
         $mahasiswaRole = Role::where('slug', 'mahasiswa')->first();
         $operatorSdmRole = Role::where('slug', 'operator_sdm')->first();
         $operatorSikeuRole = Role::where('slug', 'operator_sikeu')->first();
@@ -294,6 +295,8 @@ class PermissionSeeder extends Seeder
                 'simpeg.surat_tugas.read', 'simpeg.surat_tugas.create', 'simpeg.surat_tugas.update',
                 'simpeg.izin_kerja.read', 'simpeg.izin_kerja.create', 'simpeg.izin_kerja.update', 'simpeg.izin_kerja.delete',
                 'simpeg.sk_pegawai.read', 'simpeg.sk_pegawai.create', 'simpeg.sk_pegawai.update', 'simpeg.sk_pegawai.delete',
+                'simpeg.usulan_jafung.read', 'simpeg.usulan_jafung.create',
+                'simpeg.kinerja.read', 'simpeg.kinerja.create',
                 // SIPPM mandiri
                 'sippm.dashboard.read',
                 'sippm.proposal.read', 'sippm.proposal.create', 'sippm.proposal.update', 'sippm.proposal.submit',
@@ -301,6 +304,27 @@ class PermissionSeeder extends Seeder
             $perms = Permission::whereIn('slug', $dosenSlugs)->get();
             foreach ($perms as $p) {
                 RolePermission::create(['role_id' => $dosenRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 3b. Tenaga Kependidikan (Tendik) -> Portal Mandiri Tendik
+        if ($tendikRole) {
+            $tendikSlugs = [
+                'simpeg.dashboard.read',
+                'simpeg.pegawai.read',
+                'simpeg.dokumen.read', 'simpeg.dokumen.create',
+                'simpeg.cuti.read', 'simpeg.cuti.create',
+                'simpeg.presensi.read', 'simpeg.presensi.create',
+                'simpeg.payroll.read',
+                'simpeg.kompetensi.read', 'simpeg.kompetensi.create', 'simpeg.kompetensi.update', 'simpeg.kompetensi.delete',
+                'simpeg.surat_tugas.read', 'simpeg.surat_tugas.create', 'simpeg.surat_tugas.update',
+                'simpeg.izin_kerja.read', 'simpeg.izin_kerja.create', 'simpeg.izin_kerja.update', 'simpeg.izin_kerja.delete',
+                'simpeg.sk_pegawai.read', 'simpeg.sk_pegawai.create', 'simpeg.sk_pegawai.update', 'simpeg.sk_pegawai.delete',
+                'simpeg.kinerja.read', 'simpeg.kinerja.create',
+            ];
+            $perms = Permission::whereIn('slug', $tendikSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::create(['role_id' => $tendikRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -356,6 +380,16 @@ class PermissionSeeder extends Seeder
             $pimpinanSlugs = [
                 'iam.audit_logs.read',
                 'simpeg.dashboard.read',
+                'simpeg.surat_tugas.read',
+                'simpeg.surat_tugas.approve',
+                'simpeg.izin_kerja.read',
+                'simpeg.izin_kerja.approve',
+                'simpeg.sk_pegawai.read',
+                'simpeg.sk_pegawai.verify',
+                'simpeg.cuti.read',
+                'simpeg.cuti.update',
+                'simpeg.kinerja.read',
+                'simpeg.kinerja.update',
                 'sippm.dashboard.read',
                 'sikeu.dashboard.read',
                 'sikeu.approval.read',

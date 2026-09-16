@@ -28,6 +28,12 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\Simpeg\EnterpriseSimpegSeeder::class,
             \Database\Seeders\Simpeg\SimpegPresensiSettingSeeder::class,
             \Database\Seeders\NationalHolidaySeeder::class,
+            SimpegKompetensiMasterSeeder::class,
+            SimpegSuratTugasMasterSeeder::class,
+            SimpegIzinDanSkMasterSeeder::class,
+            SimpegSkpMasterSeeder::class,
+            \Database\Seeders\Simpeg\SimpegPayrollFlexibleSeeder::class,
+            \Database\Seeders\Simpeg\SimpegShiftUniversitySeeder::class,
 
             // SIPPM Seeders
             \Database\Seeders\Sippm\SippmSkemaSeeder::class,
