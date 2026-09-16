@@ -217,6 +217,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'Kelola Data Dosen Pengajar', 'slug' => 'siakad.dosen.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'CRUD data dosen pengajar & NIDN'],
             ['name' => 'Kelola Buka Kelas & Ruang', 'slug' => 'siakad.kelas.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Membuka kelas perkuliahan & alokasi ruang SINAPRA'],
             ['name' => 'Kelola Integrasi Neo Feeder', 'slug' => 'siakad.feeder.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Sinkronisasi data ke Neo Feeder PDDIKTI'],
+            ['name' => 'Kelola Penerima Beasiswa Mahasiswa', 'slug' => 'siakad.beasiswa.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Menetapkan mahasiswa penerima beasiswa'],
         ];
 
         foreach ($permissions as $perm) {

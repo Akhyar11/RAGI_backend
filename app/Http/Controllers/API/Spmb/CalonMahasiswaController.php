@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Spmb;
 use App\Http\Controllers\Controller;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Services\Spmb\SpmbPendaftaranService;
+use App\Services\Storage\FileStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -12,8 +13,10 @@ class CalonMahasiswaController extends Controller
 {
     protected SpmbPendaftaranService $pendaftaranService;
 
-    public function __construct(SpmbPendaftaranService $pendaftaranService)
-    {
+    public function __construct(
+        SpmbPendaftaranService $pendaftaranService,
+        private FileStorageService $files
+    ) {
         $this->pendaftaranService = $pendaftaranService;
     }
 
@@ -374,8 +377,7 @@ class CalonMahasiswaController extends Controller
         }
 
         $file = $request->file('file');
-        $fileName = \Illuminate\Support\Str::uuid() . '.' . $file->getClientOriginalExtension();
-        $filePath = $file->storeAs('spmb/dokumen_pendaftaran/' . date('Y/m'), $fileName, 'public');
+        $filePath = $this->files->store($file, 'spmb/dokumen_pendaftaran', private: true);
 
         // Delete old file if existing record exists
         $query = \App\Models\Spmb\DokumenPendaftaran::where('pendaftaran_id', $pendaftaran->id);
@@ -393,7 +395,7 @@ class CalonMahasiswaController extends Controller
         $existingDoc = $query->first();
 
         if ($existingDoc && !empty($existingDoc->file_path)) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($existingDoc->file_path);
+            $this->files->delete($existingDoc->file_path, private: true);
         }
 
         $docData = [
@@ -420,7 +422,7 @@ class CalonMahasiswaController extends Controller
             ], $docData));
         }
 
-        $fileUrl = asset(\Illuminate\Support\Facades\Storage::url($filePath));
+        $fileUrl = $this->files->temporaryUrl($filePath) ?? $this->files->url($filePath, private: true);
 
         return response()->json([
             'status' => 'success',

@@ -22,4 +22,9 @@ class MahasiswaBeasiswa extends Model
     {
         return $this->belongsTo(Beasiswa::class, 'beasiswa_id');
     }
+
+    public function mahasiswa()
+    {
+        return $this->belongsTo(\App\Models\Siakad\Mahasiswa::class, 'mahasiswa_id');
+    }
 }

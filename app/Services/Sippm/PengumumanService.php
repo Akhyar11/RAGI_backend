@@ -6,12 +6,13 @@ use App\Models\Sippm\PengumumanHibah;
 use App\Models\Sippm\PeriodeHibah;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\Storage\FileStorageService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class PengumumanService
 {
+    public function __construct(private FileStorageService $files) {}
     /**
      * Get active published announcement for lecturers.
      */
@@ -93,7 +94,7 @@ class PengumumanService
      */
     public function uploadSignedDocument(PengumumanHibah $pengumuman, $file): PengumumanHibah
     {
-        $path = $file->store('sippm/pengumuman/signed', 'public');
+        $path = $this->files->store($file, 'sippm/pengumuman/signed');
         
         $oldValues = $pengumuman->toArray();
         $pengumuman->update([
@@ -122,7 +123,7 @@ class PengumumanService
             throw new InvalidArgumentException("Tipe template harus 'mitra_indo' atau 'mitra_intl'.");
         }
 
-        $path = $file->store('sippm/templates', 'public');
+        $path = $this->files->store($file, 'sippm/templates');
         $field = $type === 'mitra_indo' ? 'file_template_mitra_indo_path' : 'file_template_mitra_intl_path';
 
         $pengumuman->update([$field => $path]);

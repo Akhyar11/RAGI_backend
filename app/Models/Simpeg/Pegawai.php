@@ -58,6 +58,10 @@ class Pegawai extends Model
         'is_active' => 'boolean',
     ];
 
+    protected $hidden = [
+        'face_embedding',
+    ];
+
     /**
      * Accessor aman untuk face_embedding (mendukung plain JSON legacy & ciphertext terenkripsi).
      */
@@ -111,7 +115,13 @@ class Pegawai extends Model
     protected $appends = [
         'nama_gelar',
         'role_ids',
+        'is_face_enrolled',
     ];
+
+    public function getIsFaceEnrolledAttribute(): bool
+    {
+        return !empty($this->attributes['face_embedding']);
+    }
 
     public function getNamaGelarAttribute(): string
     {

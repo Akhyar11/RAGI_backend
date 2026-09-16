@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Simpeg;
 
 use App\Http\Controllers\Controller;
 use App\Models\Simpeg\Pegawai;
+use App\Services\AuditLogService;
 use App\Services\Simpeg\PegawaiImportService;
 use App\Services\Simpeg\PegawaiService;
 use Illuminate\Http\Request;
@@ -264,6 +265,37 @@ class PegawaiController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data Pegawai berhasil dihapus.'
+        ]);
+    }
+
+    /**
+     * Reset data biometrik wajah pegawai (Admin / HR)
+     */
+    public function resetFace(Request $request, $id)
+    {
+        $pegawai = Pegawai::findOrFail($id);
+
+        if (!$request->user()->hasPermission('simpeg.pegawai.update') && !$request->user()->hasPermission('simpeg.pegawai.manage') && !$request->user()->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses (permission) untuk mereset biometrik pegawai ini.'
+            ], 403);
+        }
+
+        $pegawai->update([
+            'face_embedding' => null,
+            'face_enrolled_at' => null,
+        ]);
+
+        AuditLogService::record('SIMPEG', 'reset_face', 'simpeg_pegawai', $pegawai->id, [
+            'nip' => $pegawai->nip,
+            'nama' => $pegawai->nama_lengkap,
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data biometrik wajah pegawai berhasil direset. Pegawai dapat mendaftarkan ulang melalui aplikasi mobile.',
+            'data' => $pegawai->fresh(['unitKerja', 'officeLocation', 'shiftTemplate'])
         ]);
     }
 }

@@ -22,6 +22,7 @@ Controller ini mengelola data pegawai, pembuatan akun SSO otomatis (`core_users`
 | GET | `/api/simpeg/pegawai/{id}` | Detail profil pegawai (termasuk roles & dosen) | `simpeg.pegawai.read` / `simpeg.pegawai.manage` |
 | PUT | `/api/simpeg/pegawai/{id}` | Memperbarui data pegawai & sinkronisasi roles | `simpeg.pegawai.update` / `simpeg.pegawai.manage` |
 | DELETE | `/api/simpeg/pegawai/{id}` | Menghapus data pegawai | `simpeg.pegawai.delete` / `simpeg.pegawai.manage` |
+| POST | `/api/simpeg/pegawai/{id}/reset-face` | Mereset data biometrik wajah pegawai untuk registrasi ulang | `simpeg.pegawai.update` / `simpeg.pegawai.manage` |
 
 ---
 
@@ -116,6 +117,40 @@ Content-Type: multipart/form-data
 
 ---
 
-## POST /api/simpeg/pegawai
+## POST /api/simpeg/pegawai/{id}/reset-face
 
-> Menambahkan data pegawai secara individual. Jika `user_id` kosong, sistem akan otomatis membuat akun SSO di `core_users` dengan role yang sesuai (`dosen` atau `tendik`) dan password default `indonusa`.
+> Mereset data biometrik wajah pegawai (`face_embedding` dan `face_enrolled_at`). Digunakan oleh Admin/HR ketika pegawai berganti perangkat atau gagal mengenali wajah sehingga perlu melakukan enrollment biometrik wajah ulang melalui aplikasi mobile presensi.
+
+### Headers
+```http
+Authorization: Bearer <token>
+Accept: application/json
+```
+
+### URL Parameters
+| Parameter | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `id` | integer | Ya | ID entitas pegawai (`simpeg_pegawai.id`) |
+
+### Response Success (200 OK)
+```json
+{
+  "status": "success",
+  "message": "Data biometrik wajah pegawai berhasil direset. Pegawai dapat mendaftarkan ulang wajahnya via aplikasi mobile presensi.",
+  "data": {
+    "id": 1,
+    "nama_lengkap": "Dr. Wasis Utama, M.T.",
+    "is_face_enrolled": false,
+    "face_enrolled_at": null
+  }
+}
+```
+
+### Response Error (404 Not Found)
+```json
+{
+  "status": "error",
+  "message": "Pegawai tidak ditemukan."
+}
+```
+

@@ -6,6 +6,7 @@ use App\Http\Controllers\API\Siakad\MahasiswaController;
 use App\Http\Controllers\API\Siakad\AkademikController;
 use App\Http\Controllers\API\Siakad\PerkuliahanController;
 use App\Http\Controllers\API\Siakad\ObeController;
+use App\Http\Controllers\API\Siakad\MahasiswaBeasiswaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -45,6 +46,16 @@ Route::prefix('mahasiswa')->group(function () {
     Route::get('/{id}', [MahasiswaController::class, 'show']);
     Route::put('/{id}', [MahasiswaController::class, 'update']);
     Route::delete('/{id}', [MahasiswaController::class, 'destroy']);
+});
+
+// --- Penerima Beasiswa Mahasiswa (Kelolaan BAAK) ---
+Route::prefix('civitas/beasiswa')->group(function () {
+    Route::get('/options', [MahasiswaBeasiswaController::class, 'getBeasiswaOptions']);
+    Route::get('/', [MahasiswaBeasiswaController::class, 'index']);
+    Route::post('/', [MahasiswaBeasiswaController::class, 'store']);
+    Route::get('/{id}', [MahasiswaBeasiswaController::class, 'show']);
+    Route::put('/{id}', [MahasiswaBeasiswaController::class, 'update']);
+    Route::delete('/{id}', [MahasiswaBeasiswaController::class, 'destroy']);
 });
 
 // --- Master Data Akademik CRUD (Fakultas, Prodi, Kurikulum, Matakuliah, Dosen, Tahun Akademik) ---

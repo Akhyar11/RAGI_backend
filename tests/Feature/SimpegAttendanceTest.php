@@ -239,4 +239,33 @@ class SimpegAttendanceTest extends TestCase
                 'data',
             ]);
     }
+
+    public function test_admin_can_reset_pegawai_face_biometric(): void
+    {
+        // Beri data wajah awal
+        $this->pegawai->update([
+            'face_embedding' => json_encode([0.12, 0.34, 0.56]),
+            'face_enrolled_at' => now(),
+        ]);
+        $this->assertTrue($this->pegawai->fresh()->is_face_enrolled);
+
+        // Admin token
+        $adminRole = \App\Models\Role::firstOrCreate(['slug' => 'super_admin'], ['name' => 'Super Admin']);
+        $this->user->roles()->sync([$adminRole->id]);
+
+        $tokenResult = $this->user->createToken('admin-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson("/api/simpeg/pegawai/{$this->pegawai->id}/reset-face");
+
+        $res->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'message' => 'Data biometrik wajah pegawai berhasil direset. Pegawai dapat mendaftarkan ulang melalui aplikasi mobile.',
+            ]);
+
+        $this->assertFalse($this->pegawai->fresh()->is_face_enrolled);
+        $this->assertNull($this->pegawai->fresh()->face_enrolled_at);
+    }
 }

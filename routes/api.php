@@ -161,6 +161,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('pegawai/me', [App\Http\Controllers\Simpeg\PegawaiController::class, 'me']);
     Route::get('pegawai/roles', [App\Http\Controllers\Simpeg\PegawaiController::class, 'getRoles']);
     Route::apiResource('pegawai', App\Http\Controllers\Simpeg\PegawaiController::class);
+    Route::post('pegawai/{id}/reset-face', [App\Http\Controllers\Simpeg\PegawaiController::class, 'resetFace']);
 
     // Riwayat Jabatan, Pendidikan & Portofolio Tridharma Terpadu
     Route::get('pegawai/{id}/tridharma-dossier', [App\Http\Controllers\Simpeg\TridharmaDossierController::class, 'getDossier']);
