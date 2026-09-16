@@ -192,4 +192,16 @@ class Pegawai extends Model
     {
         return $this->hasMany(RiwayatPelatihan::class, 'pegawai_id');
     }
+
+    public function suratTugas()
+    {
+        return $this->hasMany(SuratTugas::class, 'pegawai_id');
+    }
+
+    public function penugasanDinas()
+    {
+        return $this->belongsToMany(SuratTugas::class, 'simpeg_surat_tugas_anggota', 'pegawai_id', 'surat_tugas_id')
+            ->withPivot('peran')
+            ->withTimestamps();
+    }
 }

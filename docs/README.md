@@ -75,6 +75,8 @@
 | PresensiMasterSettingController | Master pengaturan presensi: parameter sistem, lokasi kantor, multi-tipe shift, & kalender libur | [docs/api/SIMPEG/PresensiMasterSettingController.md](api/SIMPEG/PresensiMasterSettingController.md) |
 | AttendanceDataApi | Spesifikasi API integrasi data absensi & rekapitulasi kehadiran | [docs/api/SIMPEG/ATTENDANCE_DATA_API.md](api/SIMPEG/ATTENDANCE_DATA_API.md) |
 | AttendanceApi | Spesifikasi teknis integrasi & sinkronisasi SIMPEG | [docs/api/SIMPEG/ATTENDANCE_API.md](api/SIMPEG/ATTENDANCE_API.md) |
+| KompetensiController | Kompetensi dosen: Sertifikasi dosen, riwayat tes kemampuan, & pelatihan/diklat | [docs/api/simpeg/KompetensiController.md](api/simpeg/KompetensiController.md) |
+| SuratTugasController | Surat tugas dinas luar, armada/driver, tim rombongan, persetujuan, auto-presensi, & LPJ | [docs/api/simpeg/SuratTugasController.md](api/simpeg/SuratTugasController.md) |
 
 ---
 

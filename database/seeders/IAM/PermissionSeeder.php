@@ -83,6 +83,11 @@ class PermissionSeeder extends Seeder
             ['name' => 'Ubah Kompetensi Pegawai', 'slug' => 'simpeg.kompetensi.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah data riwayat kompetensi pegawai'],
             ['name' => 'Hapus Kompetensi Pegawai', 'slug' => 'simpeg.kompetensi.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus data riwayat kompetensi pegawai'],
             ['name' => 'Kelola & Rekap Kompetensi Seluruh Pegawai', 'slug' => 'simpeg.kompetensi.manage', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Mengakses pencarian dan rekap kompetensi untuk akreditasi'],
+            ['name' => 'Lihat Surat Tugas & LPJ', 'slug' => 'simpeg.surat_tugas.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat daftar pengajuan surat tugas & laporan LPJ'],
+            ['name' => 'Tambah Surat Tugas', 'slug' => 'simpeg.surat_tugas.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Mengajukan permohonan surat tugas dinas luar'],
+            ['name' => 'Ubah Surat Tugas', 'slug' => 'simpeg.surat_tugas.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah data surat tugas atau mengunggah LPJ'],
+            ['name' => 'Hapus Surat Tugas', 'slug' => 'simpeg.surat_tugas.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus pengajuan surat tugas'],
+            ['name' => 'Approve & Terbitkan Surat Tugas', 'slug' => 'simpeg.surat_tugas.approve', 'module' => 'simpeg', 'action' => 'approve', 'description' => 'Menyetujui, memberi nomor resmi, dan menerbitkan surat tugas'],
 
             // ── MODUL SIPPM ───────────────────────────────────────
             ['name' => 'Lihat Dashboard SIPPM', 'slug' => 'sippm.dashboard.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat dashboard utama & metrik IKU SIPPM'],
@@ -276,6 +281,7 @@ class PermissionSeeder extends Seeder
                 'simpeg.presensi.read', 'simpeg.presensi.create',
                 'simpeg.payroll.read',
                 'simpeg.kompetensi.read', 'simpeg.kompetensi.create', 'simpeg.kompetensi.update', 'simpeg.kompetensi.delete',
+                'simpeg.surat_tugas.read', 'simpeg.surat_tugas.create', 'simpeg.surat_tugas.update',
                 // SIPPM mandiri
                 'sippm.dashboard.read',
                 'sippm.proposal.read', 'sippm.proposal.create', 'sippm.proposal.update', 'sippm.proposal.submit',

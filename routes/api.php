@@ -247,6 +247,17 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::post('kompetensi/pelatihan/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'updatePelatihan']);
     Route::put('kompetensi/pelatihan/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'updatePelatihan']);
     Route::delete('kompetensi/pelatihan/{id}', [App\Http\Controllers\Simpeg\KompetensiController::class, 'destroyPelatihan']);
+
+    // Surat Tugas & LPJ Dinas Luar
+    Route::get('surat-tugas/masters', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'masters']);
+    Route::get('surat-tugas', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'index']);
+    Route::get('surat-tugas/{id}', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'show']);
+    Route::post('surat-tugas', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'store']);
+    Route::post('surat-tugas/{id}', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'update']);
+    Route::put('surat-tugas/{id}', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'update']);
+    Route::post('surat-tugas/{id}/approve', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'approve']);
+    Route::post('surat-tugas/{id}/lpj', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'uploadLpj']);
+    Route::delete('surat-tugas/{id}', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'destroy']);
 });
 
 /*

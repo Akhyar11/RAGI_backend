@@ -15,6 +15,11 @@ class AppServiceProvider extends ServiceProvider
             \App\Events\Sikeu\PembayaranSpmbLunas::class,
             \App\Listeners\Spmb\UpdateStatusPembayaranSpmb::class
         );
+
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Events\Simpeg\SuratTugasDisetujui::class,
+            \App\Listeners\Simpeg\SetPresensiDinasLuar::class
+        );
     }
 
     public function boot(): void

@@ -22,6 +22,11 @@ class PresensiPegawai extends Model
         'lat_long',
         'foto_presensi',
         'catatan',
+        'is_approved_by_admin',
+        'approved_by',
+        'status',
+        'approved_at',
+        'notes',
     ];
 
     public function pegawai(): BelongsTo
