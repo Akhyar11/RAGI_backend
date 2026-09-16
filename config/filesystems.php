@@ -17,6 +17,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Dynamic Upload Disks (Local / R2)
+    |--------------------------------------------------------------------------
+    |
+    | "public_disk" dipakai untuk file publik (template, pengumuman).
+    | "private_disk" dipakai untuk file rahasia (dokumen SPMB, e-file Simpeg).
+    |
+    | Lokal  : FILESYSTEM_PUBLIC_DISK=public  FILESYSTEM_PRIVATE_DISK=public
+    | R2     : FILESYSTEM_PUBLIC_DISK=r2      FILESYSTEM_PRIVATE_DISK=r2-private
+    |
+    */
+
+    'public_disk' => env('FILESYSTEM_PUBLIC_DISK', 'public'),
+
+    'private_disk' => env('FILESYSTEM_PRIVATE_DISK', env('FILESYSTEM_PUBLIC_DISK', 'public')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |
@@ -57,6 +74,44 @@ return [
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
+            'report' => false,
+        ],
+
+        /*
+        |--------------------------------------------------------------------------
+        | Cloudflare R2 (S3-Compatible)
+        |--------------------------------------------------------------------------
+        |
+        | R2 mengatur visibility di level bucket, BUKAN per-object.
+        | Jangan set 'visibility' => 'public' — R2 menolak dengan NotImplemented.
+        | Region R2 selalu 'auto'. Endpoint:
+        | https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+        |
+        */
+
+        'r2' => [
+            'driver' => 's3',
+            'key' => env('R2_ACCESS_KEY_ID'),
+            'secret' => env('R2_SECRET_ACCESS_KEY'),
+            'region' => env('R2_DEFAULT_REGION', 'auto'),
+            'bucket' => env('R2_BUCKET'),
+            'url' => env('R2_URL'),
+            'endpoint' => env('R2_ENDPOINT'),
+            'use_path_style_endpoint' => env('R2_USE_PATH_STYLE_ENDPOINT', true),
+            'throw' => true,
+            'report' => false,
+        ],
+
+        'r2-private' => [
+            'driver' => 's3',
+            'key' => env('R2_ACCESS_KEY_ID'),
+            'secret' => env('R2_SECRET_ACCESS_KEY'),
+            'region' => env('R2_DEFAULT_REGION', 'auto'),
+            'bucket' => env('R2_PRIVATE_BUCKET', env('R2_BUCKET')),
+            'url' => env('R2_PRIVATE_URL'),
+            'endpoint' => env('R2_ENDPOINT'),
+            'use_path_style_endpoint' => env('R2_USE_PATH_STYLE_ENDPOINT', true),
+            'throw' => true,
             'report' => false,
         ],
 

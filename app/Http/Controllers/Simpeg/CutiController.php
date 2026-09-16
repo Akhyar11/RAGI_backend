@@ -6,12 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Simpeg\StorePengajuanCutiRequest;
 use App\Models\Simpeg\MasterJenisCuti;
 use App\Models\Simpeg\PengajuanCuti;
+use App\Services\Storage\FileStorageService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CutiController extends Controller
 {
+    public function __construct(private FileStorageService $files) {}
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -152,9 +154,7 @@ class CutiController extends Controller
 
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $fileName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
-            $path = $file->storeAs('cuti_lampiran', $fileName, 'public');
-            $validated['file_pendukung'] = 'storage/' . $path;
+            $validated['file_pendukung'] = $this->files->store($file, 'simpeg/cuti_lampiran', private: true);
         }
 
         unset($validated['file']);

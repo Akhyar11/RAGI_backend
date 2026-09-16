@@ -11,6 +11,7 @@ use App\Models\Simpeg\PresensiPegawai;
 use App\Models\Simpeg\PresensiPeriode;
 use App\Services\AttendanceRecapService;
 use App\Services\AttendanceService;
+use App\Services\Storage\FileStorageService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,8 @@ class PresensiController extends Controller
 {
     public function __construct(
         protected AttendanceService $attendanceService,
-        protected AttendanceRecapService $recapService
+        protected AttendanceRecapService $recapService,
+        protected FileStorageService $files
     ) {}
 
     /**
@@ -530,9 +532,9 @@ class PresensiController extends Controller
         ]);
 
         $file = $request->file('file_rekap');
-        $fileName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
-        $path = $file->storeAs('presensi_rekap', $fileName, 'public');
-        $fullPath = storage_path('app/public/' . $path);
+        $path = $this->files->store($file, 'simpeg/presensi_rekap');
+        // Salin ke file lokal sementara agar parsing (fopen) bekerja untuk local maupun R2.
+        $fullPath = $this->files->temporaryLocalPath($path);
 
         // 1. Create Bundle / Periode Record
         $periode = PresensiPeriode::create([
@@ -687,6 +689,9 @@ class PresensiController extends Controller
 
         } finally {
             Schema::enableForeignKeyConstraints();
+            if (isset($fullPath) && is_string($fullPath) && $fullPath !== '') {
+                @unlink($fullPath);
+            }
         }
 
         return response()->json([

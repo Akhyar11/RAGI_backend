@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Simpeg;
 
 use App\Http\Controllers\Controller;
 use App\Models\Simpeg\DokumenPegawai;
+use App\Services\Storage\FileStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class DokumenController extends Controller
 {
+    public function __construct(private FileStorageService $files) {}
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -67,9 +68,8 @@ class DokumenController extends Controller
 
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $fileName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
-            $path = $file->storeAs('dokumen_pegawai', $fileName, 'public');
-            $validated['file_path'] = 'storage/' . $path;
+            $path = $this->files->store($file, 'simpeg/dokumen_pegawai', private: true);
+            $validated['file_path'] = $path;
             $sizeBytes = $file->getSize();
             $validated['file_size'] = round($sizeBytes / (1024 * 1024), 2) . ' MB';
         } elseif (empty($validated['file_path'])) {
@@ -109,10 +109,10 @@ class DokumenController extends Controller
         }
 
         $watermarkText = \App\Services\Simpeg\FileSecurityService::getWatermarkText($dokumen);
-        $relativePath = str_replace('storage/', '', $dokumen->file_path ?? '');
-        $fullPath = storage_path('app/public/' . $relativePath);
-        $fileExists = !empty($dokumen->file_path) && file_exists($fullPath);
-        $fileUrl = $fileExists ? asset($dokumen->file_path) : null;
+        $fileExists = $this->files->exists($dokumen->file_path, private: true);
+        $fileUrl = $fileExists
+            ? ($this->files->temporaryUrl($dokumen->file_path) ?? $this->files->url($dokumen->file_path, private: true))
+            : null;
 
         return response()->json([
             'status' => 'success',
@@ -150,14 +150,17 @@ class DokumenController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Berkas fisik dokumen tidak ditemukan di server.'], 404);
         }
 
-        $relativePath = str_replace('storage/', '', $dokumen->file_path);
-        $fullPath = storage_path('app/public/' . $relativePath);
-
-        if (!file_exists($fullPath)) {
+        if (! $this->files->exists($dokumen->file_path, private: true)) {
             return response()->json(['status' => 'error', 'message' => 'File fisik tidak ditemukan pada lokasi storage server.'], 404);
         }
 
-        return response()->download($fullPath, $dokumen->nama_dokumen . '.' . pathinfo($fullPath, PATHINFO_EXTENSION));
+        $extension = pathinfo($this->files->normalizePath($dokumen->file_path), PATHINFO_EXTENSION);
+
+        return $this->files->download(
+            $dokumen->file_path,
+            $dokumen->nama_dokumen . ($extension !== '' ? '.' . $extension : ''),
+            private: true
+        );
     }
 
     public function destroy(Request $request, $id): JsonResponse
@@ -172,12 +175,9 @@ class DokumenController extends Controller
 
         $dokumen = DokumenPegawai::findOrFail($id);
 
-        // Delete physical file if exists
+        // Delete physical file if exists (dinamis: local / R2)
         if (!empty($dokumen->file_path)) {
-            $relativePath = str_replace('storage/', '', $dokumen->file_path);
-            if (Storage::disk('public')->exists($relativePath)) {
-                Storage::disk('public')->delete($relativePath);
-            }
+            $this->files->delete($dokumen->file_path, private: true);
         }
 
         $dokumen->delete();
