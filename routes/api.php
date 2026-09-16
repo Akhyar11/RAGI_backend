@@ -162,7 +162,8 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('pegawai/roles', [App\Http\Controllers\Simpeg\PegawaiController::class, 'getRoles']);
     Route::apiResource('pegawai', App\Http\Controllers\Simpeg\PegawaiController::class);
 
-    // Riwayat Jabatan & Pendidikan
+    // Riwayat Jabatan, Pendidikan & Portofolio Tridharma Terpadu
+    Route::get('pegawai/{id}/tridharma-dossier', [App\Http\Controllers\Simpeg\TridharmaDossierController::class, 'getDossier']);
     Route::get('pegawai/{id}/riwayat-jabatan', [App\Http\Controllers\Simpeg\RiwayatController::class, 'getRiwayatJabatan']);
     Route::post('pegawai/{id}/riwayat-jabatan', [App\Http\Controllers\Simpeg\RiwayatController::class, 'storeRiwayatJabatan']);
     Route::get('pegawai/{id}/riwayat-pendidikan', [App\Http\Controllers\Simpeg\RiwayatController::class, 'getRiwayatPendidikan']);
