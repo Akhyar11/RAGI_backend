@@ -145,7 +145,69 @@ Mendukung body dengan key `username`, `email`, `login`, atau `identifier`.
 
 ---
 
-### POST `/api/v1/attendance/clock-in`
+### GET `/api/v1/attendance/today` & `GET /api/simpeg/presensi/today`
+
+Mengambil status presensi hari ini, authoritative server time (anti clock-tampering di Android/iOS), jadwal kerja/shift aktif, dan helper status flags untuk antarmuka tombol presensi mobile.
+
+**Response Sukses (200 OK):**
+```json
+{
+  "status": "success",
+  "success": true,
+  "data": {
+    "server_time": "2026-09-17T12:00:00.000000+07:00",
+    "server_timestamp": 1789621200,
+    "server_date": "2026-09-17",
+    "server_time_formatted": "12:00:00",
+    "can_clock_in": true,
+    "can_clock_out": false,
+    "is_clocked_in": false,
+    "is_clocked_out": false,
+    "clock_in_time": null,
+    "clock_out_time": null,
+    "status": "belum_absen",
+    "user": {
+      "id": 2,
+      "name": "Anisa Rahmawati, M.Kom.",
+      "username": "dosen",
+      "email": "dosen@kampus.ac.id",
+      "avatar": "https://ui-avatars.com/api/?name=Anisa+Rahmawati..."
+    },
+    "employee": {
+      "id": 1,
+      "employee_code": "199008152015122001",
+      "nip": "199008152015122001",
+      "nama": "Anisa Rahmawati, M.Kom.",
+      "avatar": "https://ui-avatars.com/api/?name=Anisa+Rahmawati...",
+      "foto_url": "https://ui-avatars.com/api/?name=Anisa+Rahmawati...",
+      "position": "dosen",
+      "department": "Rektorat Universitas",
+      "is_face_enrolled": true,
+      "office": {
+        "id": 1,
+        "name": "Politeknik Indonusa Surakarta",
+        "latitude": -7.5675,
+        "longitude": 110.8036,
+        "radius_meters": 150
+      }
+    },
+    "schedule": {
+      "start_time": "08:00:00",
+      "end_time": "17:00:00",
+      "late_tolerance_minutes": 15,
+      "early_leave_tolerance_minutes": 15,
+      "is_day_off": false
+    },
+    "attendance": null
+  }
+}
+```
+
+---
+
+### POST `/api/v1/attendance/clock-in` & `POST /api/simpeg/presensi/clock-in`
+
+Mencatat presensi masuk karyawan dengan validasi geofencing, GPS accuracy, anti-mock GPS, dan biometrik wajah. Mendukung auto-sync ke kolom legacy `jam_masuk` dan `lat_long`, serta penyimpanan foto presensi.
 
 **Request Body:**
 ```json
@@ -155,29 +217,80 @@ Mendukung body dengan key `username`, `email`, `login`, atau `identifier`.
   "accuracy": 10.0,
   "face_score": 0.88,
   "face_image": "data:image/jpeg;base64,...",
-  "is_mock_location": false
+  "is_mock_location": false,
+  "device_id": "flutter-android-device-uuid",
+  "notes": "Hadir tepat waktu"
 }
 ```
 
 **Response Sukses (200 OK):**
 ```json
 {
+  "status": "success",
   "success": true,
   "message": "Presensi masuk berhasil (Tepat Waktu).",
   "data": {
     "id": 109,
     "pegawai_id": 1,
-    "tanggal": "2026-09-14",
-    "clock_in": "2026-09-14T08:05:00.000000Z",
+    "tanggal": "2026-09-17",
+    "jam_masuk": "08:00:00",
+    "clock_in": "2026-09-17T08:00:00.000000Z",
+    "lat_long": "-7.5675,110.8036",
     "status": "hadir",
     "late_minutes": 0,
     "clock_in_latitude": -7.5675,
     "clock_in_longitude": 110.8036,
     "clock_in_distance_meters": 0,
-    "clock_in_face_score": 0.88
+    "clock_in_face_score": 0.88,
+    "foto_url": "http://localhost:8000/storage/simpeg/presensi/2026/09/uuid.jpg"
   }
 }
 ```
+
+---
+
+### POST `/api/v1/attendance/clock-out` & `POST /api/simpeg/presensi/clock-out`
+
+Mencatat presensi pulang karyawan. Nilai `face_score` dan `is_mock_location` bersifat opsional (default terisi aman).
+
+**Request Body:**
+```json
+{
+  "latitude": -7.5675,
+  "longitude": 110.8036,
+  "accuracy": 12.0,
+  "notes": "Pulang kerja"
+}
+```
+
+---
+
+### POST `/api/v1/attendance/keterangan`
+
+Pengajuan mandiri izin, sakit, atau dinas luar oleh pegawai langsung dari aplikasi mobile. Mendukung upload berkas/foto lampiran bukti (surat dokter / surat penugasan dinas) hingga 5MB (PDF/JPG/PNG).
+
+**Request Body (Multipart Form-Data / JSON):**
+```
+tanggal: "2026-09-28"
+status_kehadiran: "sakit"  (atau key "status")
+catatan: "Demam tinggi, istirahat dokter"  (atau key "notes")
+file: [File Binary: surat_dokter.pdf / .jpg / .png]  (atau key "lampiran" / "foto" / "bukti")
+```
+
+---
+
+### GET `/api/v1/attendance/history`
+
+Mengambil riwayat presensi individu dengan paginasi server-side dan filter.
+
+**Query Parameters:**
+- `per_page`: int (default: 31, max: 100)
+- `page`: int
+- `month`: int (1-12)
+- `year`: int (e.g. 2026)
+- `start_date`: YYYY-MM-DD
+- `end_date`: YYYY-MM-DD
+- `status`: hadir | terlambat | izin | sakit | dinas | alfa
 
 ---
 

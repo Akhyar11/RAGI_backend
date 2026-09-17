@@ -86,12 +86,13 @@ class AttendanceService
         }
 
         // Aturan D: Face match score & Server-Side Biometric Verification ke Python port 8001
-        if (!empty($data['face_image'])) {
+        $faceImage = $data['face_image'] ?? $data['foto'] ?? $data['foto_presensi'] ?? null;
+        if (!empty($faceImage)) {
             if (empty($employee->face_embedding)) {
                 $rejectionReasons[] = 'Data biometrik wajah karyawan belum terdaftar di sistem. Silakan lakukan pendaftaran wajah terlebih dahulu.';
             } else {
                 $enrolledVec = json_decode($employee->face_embedding, true) ?? [];
-                $verifyResult = $this->faceService->verifyFace($data['face_image'], $enrolledVec, $minFaceScore);
+                $verifyResult = $this->faceService->verifyFace($faceImage, $enrolledVec, $minFaceScore);
 
                 if ($verifyResult['success']) {
                     $faceScore = (float) $verifyResult['similarity'];
@@ -172,6 +173,9 @@ class AttendanceService
 
         // 6. Simpan / update log presensi lengkap
         $attendance = $existing ?? new Attendance();
+
+        $photoPath = $this->saveAttendanceFile($faceImage, 'presensi');
+
         $attendanceData = [
             'pegawai_id' => $employee->id,
             'office_location_id' => $office?->id,
@@ -185,10 +189,22 @@ class AttendanceService
             'status' => $status,
             'late_minutes' => $lateMinutes,
             'rejection_reason' => !empty($rejectionReasons) ? implode(' | ', $rejectionReasons) : null,
+            'source' => $data['source'] ?? 'mobile_gps',
         ];
+
+        if ($photoPath) {
+            $attendanceData['foto_presensi'] = $photoPath;
+        }
+
+        if (!empty($data['device_id']) || !empty($data['device_info'])) {
+            $attendanceData['device_id'] = $data['device_id'] ?? $data['device_info'];
+        }
 
         if ($status !== 'ditolak') {
             $attendanceData['clock_in'] = $now;
+            $attendanceData['jam_masuk'] = $now->format('H:i:s');
+            $attendanceData['lat_long'] = "{$userLat},{$userLon}";
+
             if ($isHolidayForEmployee) {
                 $attendanceData['notes'] = "Presensi masuk pada Hari Libur Nasional: {$nationalHoliday->name} (Lembur/Piket).";
             } elseif ($nationalHoliday && !$appliesNationalHoliday) {
@@ -197,6 +213,13 @@ class AttendanceService
                 $attendanceData['notes'] = $requiresApproval
                     ? 'Presensi masuk pada hari libur terjadwal (butuh persetujuan HR).'
                     : ($existing && $existing->status === 'ditolak' ? 'Presensi berhasil setelah percobaan sebelumnya sempat ditolak.' : null);
+            }
+
+            if (!empty($data['notes']) || !empty($data['catatan'])) {
+                $customNote = $data['notes'] ?? $data['catatan'];
+                $attendanceData['notes'] = !empty($attendanceData['notes'])
+                    ? $attendanceData['notes'] . ' | ' . $customNote
+                    : $customNote;
             }
         } else {
             $attendanceData['clock_in'] = null;
@@ -342,12 +365,18 @@ class AttendanceService
         $nationalHoliday = \App\Models\NationalHoliday::isHoliday($today);
         $isHolidayForEmployee = $nationalHoliday && $appliesNationalHoliday;
 
+        $earlyLeaveMinutes = 0;
         if ($schedule && !$schedule->is_day_off && $schedule->end_time && !$isHolidayForEmployee) {
             $scheduledEnd = Carbon::parse("{$today} {$schedule->end_time}");
             $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyLeaveToleranceMinutes);
 
             if ($now->lessThan($earliestClockOut)) {
                 $rejectionReasons[] = "Presensi pulang belum dibuka. Presensi pulang untuk shift ini ({$schedule->end_time}) baru dapat dilakukan mulai pukul {$earliestClockOut->format('H:i')} (toleransi pulang cepat: {$earlyLeaveToleranceMinutes} menit).";
+            } elseif ($now->lessThan($scheduledEnd)) {
+                $earlyLeaveMinutes = (int) $now->diffInMinutes($scheduledEnd, false);
+                if ($earlyLeaveMinutes < 0) {
+                    $earlyLeaveMinutes = 0;
+                }
             }
         }
 
@@ -357,16 +386,80 @@ class AttendanceService
             ]);
         }
 
-        $attendance->update([
+        $clockOutData = [
             'clock_out' => $now,
+            'jam_keluar' => $now->format('H:i:s'),
             'clock_out_latitude' => $userLat,
             'clock_out_longitude' => $userLon,
             'clock_out_distance_meters' => $distance,
             'clock_out_accuracy' => $accuracy,
             'clock_out_face_score' => $faceScore,
             'clock_out_is_mock_location' => $isMock,
-        ]);
+            'early_leave_minutes' => $earlyLeaveMinutes,
+        ];
+
+        if (!empty($data['notes']) || !empty($data['catatan'])) {
+            $customNote = $data['notes'] ?? $data['catatan'];
+            $clockOutData['notes'] = !empty($attendance->notes)
+                ? $attendance->notes . ' | ' . $customNote
+                : $customNote;
+        }
+
+        $attendance->update($clockOutData);
 
         return $attendance;
+    }
+
+    /**
+     * Simpan file gambar wajah atau berkas lampiran ke storage publik.
+     */
+    public function saveAttendanceFile(mixed $fileInput, string $subFolder = 'presensi'): ?string
+    {
+        if (empty($fileInput)) {
+            return null;
+        }
+
+        try {
+            // 1. Jika instance UploadedFile dari multipart form request
+            if ($fileInput instanceof \Illuminate\Http\UploadedFile) {
+                $ext = $fileInput->getClientOriginalExtension() ?: 'jpg';
+                $fileName = \Illuminate\Support\Str::uuid() . '.' . strtolower($ext);
+                $datePath = date('Y/m');
+                return $fileInput->storeAs("simpeg/{$subFolder}/{$datePath}", $fileName, 'public');
+            }
+
+            // 2. Jika berupa base64 data URI atau raw base64 string
+            if (is_string($fileInput) && (str_contains($fileInput, ';base64,') || (strlen($fileInput) > 100 && base64_decode(substr($fileInput, 0, 100), true) !== false))) {
+                $content = $fileInput;
+                $ext = 'jpg';
+                if (str_contains($content, ';base64,')) {
+                    [$header, $body] = explode(';base64,', $content, 2);
+                    if (str_contains($header, 'png')) {
+                        $ext = 'png';
+                    } elseif (str_contains($header, 'pdf')) {
+                        $ext = 'pdf';
+                    } elseif (str_contains($header, 'webp')) {
+                        $ext = 'webp';
+                    }
+                    $content = $body;
+                }
+                $decoded = base64_decode($content);
+                if ($decoded !== false && strlen($decoded) > 0) {
+                    $fileName = \Illuminate\Support\Str::uuid() . '.' . $ext;
+                    $relPath = "simpeg/{$subFolder}/" . date('Y/m') . "/{$fileName}";
+                    \Illuminate\Support\Facades\Storage::disk('public')->put($relPath, $decoded);
+                    return $relPath;
+                }
+            }
+
+            // 3. Jika sudah berupa path file relatif
+            if (is_string($fileInput) && (str_starts_with($fileInput, 'simpeg/') || str_starts_with($fileInput, 'http'))) {
+                return $fileInput;
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Gagal menyimpan file presensi: " . $e->getMessage());
+        }
+
+        return null;
     }
 }

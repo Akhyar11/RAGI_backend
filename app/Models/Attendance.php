@@ -75,6 +75,41 @@ class Attendance extends Model
         'approved_at' => 'datetime',
     ];
 
+    protected $appends = [
+        'foto_url',
+        'late_formatted',
+    ];
+
+    public function setClockInAttribute($value): void
+    {
+        $this->attributes['clock_in'] = $value;
+        if ($value) {
+            $this->attributes['jam_masuk'] = \Carbon\Carbon::parse($value)->format('H:i:s');
+        }
+    }
+
+    public function setClockOutAttribute($value): void
+    {
+        $this->attributes['clock_out'] = $value;
+        if ($value) {
+            $this->attributes['jam_keluar'] = \Carbon\Carbon::parse($value)->format('H:i:s');
+        }
+    }
+
+    public function getFotoUrlAttribute(): ?string
+    {
+        $path = $this->attributes['foto_presensi'] ?? null;
+        if (empty($path)) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return \Illuminate\Support\Facades\Storage::disk('public')->url($path);
+    }
+
     // Sinkronisasi dwiarah employee_id <-> pegawai_id
     public function getEmployeeIdAttribute(): ?int
     {

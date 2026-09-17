@@ -260,27 +260,75 @@ class PresensiController extends Controller
             ], 404);
         }
 
-        $today = Carbon::today();
-        $dayOfWeek = $today->dayOfWeek;
+        $now = Carbon::now();
+        $today = $now->toDateString();
+        $dayOfWeek = $now->dayOfWeek;
 
         $schedule = $employee->shiftTemplate?->getScheduleForDay($dayOfWeek);
         $attendance = Attendance::where('pegawai_id', $employee->id)
             ->whereDate('tanggal', $today)
             ->first();
-        $holiday = NationalHoliday::isHoliday($today);
+        $holiday = NationalHoliday::isHoliday(Carbon::parse($today));
+
+        $isClockedIn = ($attendance && $attendance->clock_in !== null);
+        $isClockedOut = ($attendance && $attendance->clock_out !== null);
+        $hasValidClockIn = ($attendance && in_array($attendance->status, ['hadir', 'terlambat', 'menunggu_approval']) && $attendance->clock_in !== null);
+        $canClockIn = !$hasValidClockIn && !$isClockedOut;
+        $canClockOut = $isClockedIn && !$isClockedOut;
+
+        $schedulePayload = $schedule ? [
+            'id' => $schedule->id,
+            'day_of_week' => $schedule->day_of_week,
+            'day_name' => $schedule->day_name,
+            'start_time' => $schedule->start_time,
+            'end_time' => $schedule->end_time,
+            'break_start' => $schedule->break_start,
+            'break_end' => $schedule->break_end,
+            'is_day_off' => $schedule->is_day_off,
+            'late_tolerance_minutes' => $schedule->getLateToleranceMinutes(),
+            'early_leave_tolerance_minutes' => $schedule->getEarlyLeaveToleranceMinutes(),
+            'max_early_clock_in_minutes' => $employee->shiftTemplate ? $employee->shiftTemplate->max_early_clock_in_minutes : 60,
+        ] : [
+            'id' => null,
+            'day_of_week' => $dayOfWeek,
+            'day_name' => match ($dayOfWeek) {
+                0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', default => 'Hari Ini'
+            },
+            'start_time' => '08:00:00',
+            'end_time' => '17:00:00',
+            'break_start' => '12:00:00',
+            'break_end' => '13:00:00',
+            'is_day_off' => ($dayOfWeek === 0 || $dayOfWeek === 6),
+            'late_tolerance_minutes' => $employee->shiftTemplate ? $employee->shiftTemplate->late_tolerance_minutes : 15,
+            'early_leave_tolerance_minutes' => $employee->shiftTemplate ? $employee->shiftTemplate->early_leave_tolerance_minutes : 15,
+            'max_early_clock_in_minutes' => $employee->shiftTemplate ? $employee->shiftTemplate->max_early_clock_in_minutes : 60,
+        ];
 
         return response()->json([
             'status' => 'success',
             'data' => [
-                'date' => $today->toDateString(),
-                'day_name' => $schedule ? $schedule->day_name : 'Hari Ini',
+                'server_time' => $now->toIso8601String(),
+                'server_timestamp' => $now->timestamp,
+                'server_date' => $today,
+                'server_time_formatted' => $now->format('H:i:s'),
+                'can_clock_in' => $canClockIn,
+                'can_clock_out' => $canClockOut,
+                'is_clocked_in' => $isClockedIn,
+                'is_clocked_out' => $isClockedOut,
+                'clock_in_time' => $attendance?->clock_in ? $attendance->clock_in->format('H:i:s') : null,
+                'clock_out_time' => $attendance?->clock_out ? $attendance->clock_out->format('H:i:s') : null,
+                'status' => $attendance?->status ?? 'belum_absen',
+                'date' => $today,
+                'day_name' => $schedulePayload['day_name'],
                 'employee' => [
                     'id' => $employee->id,
                     'nip' => $employee->nip,
                     'nama' => $employee->nama_lengkap,
+                    'avatar' => $employee->avatar,
+                    'foto_url' => $employee->foto_url,
                     'is_face_enrolled' => !empty($employee->face_embedding),
                 ],
-                'schedule' => $schedule,
+                'schedule' => $schedulePayload,
                 'office' => $employee->officeLocation,
                 'attendance' => $attendance,
                 'holiday' => $holiday,
@@ -299,9 +347,24 @@ class PresensiController extends Controller
             'accuracy' => 'required|numeric',
             'face_score' => 'nullable|numeric',
             'face_image' => 'nullable|string',
-            'is_mock_location' => 'required|boolean',
+            'foto' => 'nullable',
+            'foto_presensi' => 'nullable',
+            'is_mock_location' => 'nullable|boolean',
             'pegawai_id' => 'nullable|exists:simpeg_pegawai,id',
+            'device_id' => 'nullable|string',
+            'notes' => 'nullable|string|max:500',
+            'catatan' => 'nullable|string|max:500',
         ]);
+
+        $validated['is_mock_location'] = (bool) ($validated['is_mock_location'] ?? false);
+
+        if ($request->hasFile('foto')) {
+            $validated['foto'] = $request->file('foto');
+        } elseif ($request->hasFile('foto_presensi')) {
+            $validated['foto_presensi'] = $request->file('foto_presensi');
+        } elseif ($request->hasFile('face_image')) {
+            $validated['face_image'] = $request->file('face_image');
+        }
 
         $employee = null;
         if ($request->filled('pegawai_id') && ($request->user()->hasPermission('simpeg.presensi.manage') || $request->user()->user_type === 'admin')) {
@@ -335,10 +398,16 @@ class PresensiController extends Controller
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'accuracy' => 'required|numeric',
-            'face_score' => 'required|numeric',
-            'is_mock_location' => 'required|boolean',
+            'face_score' => 'nullable|numeric',
+            'is_mock_location' => 'nullable|boolean',
             'pegawai_id' => 'nullable|exists:simpeg_pegawai,id',
+            'device_id' => 'nullable|string',
+            'notes' => 'nullable|string|max:500',
+            'catatan' => 'nullable|string|max:500',
         ]);
+
+        $validated['is_mock_location'] = (bool) ($validated['is_mock_location'] ?? false);
+        $validated['face_score'] = (float) ($validated['face_score'] ?? 0.85);
 
         $employee = null;
         if ($request->filled('pegawai_id') && ($request->user()->hasPermission('simpeg.presensi.manage') || $request->user()->user_type === 'admin')) {

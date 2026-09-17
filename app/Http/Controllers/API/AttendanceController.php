@@ -60,8 +60,9 @@ class AttendanceController extends Controller
     {
         $employee = $this->getOrCreateEmployee($request->user());
 
-        $today = Carbon::today();
-        $dayOfWeek = $today->dayOfWeek; // 0=Minggu, 1=Senin, ..., 6=Sabtu
+        $now = Carbon::now();
+        $today = $now->toDateString();
+        $dayOfWeek = $now->dayOfWeek; // 0=Minggu, 1=Senin, ..., 6=Sabtu
 
         $shiftTemplate = $employee->shiftTemplate ?? \App\Models\ShiftTemplate::where('is_active', true)->first();
         $schedule = null;
@@ -71,10 +72,10 @@ class AttendanceController extends Controller
 
         $office = $employee->officeLocation ?? \App\Models\OfficeLocation::where('is_active', true)->first();
 
-        $nationalHoliday = NationalHoliday::isHoliday($today);
+        $nationalHoliday = NationalHoliday::isHoliday(Carbon::parse($today));
 
         $attendance = Attendance::where('pegawai_id', $employee->id)
-            ->where('tanggal', $today->toDateString())
+            ->where('tanggal', $today)
             ->first();
 
         $appliesNationalHoliday = $schedule
@@ -83,28 +84,82 @@ class AttendanceController extends Controller
 
         $isDutyOnHoliday = ($nationalHoliday !== null && !$appliesNationalHoliday);
 
+        // Helper boolean flags untuk Mobile UI
+        $isClockedIn = ($attendance && $attendance->clock_in !== null);
+        $isClockedOut = ($attendance && $attendance->clock_out !== null);
+        $hasValidClockIn = ($attendance && in_array($attendance->status, ['hadir', 'terlambat', 'menunggu_approval']) && $attendance->clock_in !== null);
+        $canClockIn = !$hasValidClockIn && !$isClockedOut;
+        $canClockOut = $isClockedIn && !$isClockedOut;
+
+        // Fallback schedule object yang aman bagi parser client Flutter
+        $schedulePayload = $schedule ? [
+            'id' => $schedule->id,
+            'day_of_week' => $schedule->day_of_week,
+            'day_name' => $schedule->day_name,
+            'start_time' => $schedule->start_time,
+            'end_time' => $schedule->end_time,
+            'break_start' => $schedule->break_start,
+            'break_end' => $schedule->break_end,
+            'is_day_off' => $schedule->is_day_off,
+            'late_tolerance_minutes' => $schedule->getLateToleranceMinutes(),
+            'early_leave_tolerance_minutes' => $schedule->getEarlyLeaveToleranceMinutes(),
+            'max_early_clock_in_minutes' => $shiftTemplate ? $shiftTemplate->max_early_clock_in_minutes : 60,
+        ] : [
+            'id' => null,
+            'day_of_week' => $dayOfWeek,
+            'day_name' => match ($dayOfWeek) {
+                0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', default => 'Hari Ini'
+            },
+            'start_time' => '08:00:00',
+            'end_time' => '17:00:00',
+            'break_start' => '12:00:00',
+            'break_end' => '13:00:00',
+            'is_day_off' => ($dayOfWeek === 0 || $dayOfWeek === 6),
+            'late_tolerance_minutes' => $shiftTemplate ? $shiftTemplate->late_tolerance_minutes : 15,
+            'early_leave_tolerance_minutes' => $shiftTemplate ? $shiftTemplate->early_leave_tolerance_minutes : 15,
+            'max_early_clock_in_minutes' => $shiftTemplate ? $shiftTemplate->max_early_clock_in_minutes : 60,
+        ];
+
         return response()->json([
             'status' => 'success',
             'success' => true,
             'data' => [
+                'server_time' => $now->toIso8601String(),
+                'server_timestamp' => $now->timestamp,
+                'server_date' => $today,
+                'server_time_formatted' => $now->format('H:i:s'),
+                'can_clock_in' => $canClockIn,
+                'can_clock_out' => $canClockOut,
+                'is_clocked_in' => $isClockedIn,
+                'is_clocked_out' => $isClockedOut,
+                'clock_in_time' => $attendance?->clock_in ? $attendance->clock_in->format('H:i:s') : null,
+                'clock_out_time' => $attendance?->clock_out ? $attendance->clock_out->format('H:i:s') : null,
+                'status' => $attendance?->status ?? 'belum_absen',
                 'user' => [
                     'id' => $employee->user ? $employee->user->id : $request->user()->id,
                     'name' => $employee->nama_lengkap ?: $request->user()->username,
+                    'username' => $request->user()->username,
                     'email' => $request->user()->email,
+                    'avatar' => $employee->avatar,
                 ],
                 'employee' => [
                     'id' => $employee->id,
                     'employee_code' => $employee->nip,
                     'nip' => $employee->nip,
+                    'nama' => $employee->nama_lengkap,
+                    'nama_lengkap' => $employee->nama_lengkap,
                     'position' => $employee->position,
                     'department' => $employee->department,
+                    'avatar' => $employee->avatar,
+                    'foto_url' => $employee->foto_url,
                     'is_face_enrolled' => !empty($employee->face_embedding),
                     'consent_pdp_at' => $employee->consent_pdp_at,
                     'office' => $office,
+                    'shift' => $shiftTemplate,
                 ],
-                'date' => $today->toDateString(),
-                'day_name' => $schedule ? $schedule->day_name : 'Hari Ini',
-                'schedule' => $schedule,
+                'date' => $today,
+                'day_name' => $schedulePayload['day_name'],
+                'schedule' => $schedulePayload,
                 'office' => $office,
                 'attendance' => $attendance,
                 'is_national_holiday' => $nationalHoliday !== null,
@@ -130,12 +185,27 @@ class AttendanceController extends Controller
             'accuracy' => 'required|numeric',
             'face_score' => 'nullable|numeric',
             'face_image' => 'nullable|string',
+            'foto' => 'nullable',
+            'foto_presensi' => 'nullable',
             'is_mock_location' => 'nullable|boolean',
             'face_embedding' => 'nullable',
             'timestamp' => 'nullable',
+            'device_id' => 'nullable|string',
+            'device_info' => 'nullable|string',
+            'address' => 'nullable|string',
+            'notes' => 'nullable|string|max:500',
+            'catatan' => 'nullable|string|max:500',
         ]);
 
         $validated['is_mock_location'] = (bool) ($validated['is_mock_location'] ?? false);
+
+        if ($request->hasFile('foto')) {
+            $validated['foto'] = $request->file('foto');
+        } elseif ($request->hasFile('foto_presensi')) {
+            $validated['foto_presensi'] = $request->file('foto_presensi');
+        } elseif ($request->hasFile('face_image')) {
+            $validated['face_image'] = $request->file('face_image');
+        }
 
         $employee = $this->getOrCreateEmployee($request->user());
 
@@ -169,6 +239,10 @@ class AttendanceController extends Controller
             'face_score' => 'nullable|numeric',
             'is_mock_location' => 'nullable|boolean',
             'timestamp' => 'nullable',
+            'device_id' => 'nullable|string',
+            'device_info' => 'nullable|string',
+            'notes' => 'nullable|string|max:500',
+            'catatan' => 'nullable|string|max:500',
         ]);
 
         $validated['is_mock_location'] = (bool) ($validated['is_mock_location'] ?? false);
@@ -191,10 +265,22 @@ class AttendanceController extends Controller
      */
     public function keterangan(Request $request): JsonResponse
     {
+        $status = $request->input('status_kehadiran') ?? $request->input('status');
+        $catatan = $request->input('catatan') ?? $request->input('notes') ?? ucfirst($status ?? 'izin');
+
+        $request->merge([
+            'status_kehadiran' => $status,
+            'catatan' => $catatan,
+        ]);
+
         $validated = $request->validate([
             'tanggal' => 'required|date',
-            'status_kehadiran' => 'required|string|in:izin,sakit,dinas',
-            'catatan' => 'required|string|max:500',
+            'status_kehadiran' => 'required|string|in:izin,sakit,dinas,cuti,alfa',
+            'catatan' => 'nullable|string|max:1000',
+            'file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'lampiran' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'bukti' => 'nullable',
+            'foto' => 'nullable',
         ]);
 
         $employee = $this->getOrCreateEmployee($request->user());
@@ -211,11 +297,29 @@ class AttendanceController extends Controller
             ], 422);
         }
 
+        // Simpan lampiran/bukti jika ada
+        $attachmentFile = $request->file('file')
+            ?? $request->file('lampiran')
+            ?? $request->file('foto')
+            ?? $request->input('bukti')
+            ?? $request->input('foto');
+
+        $attachmentPath = null;
+        if ($attachmentFile) {
+            $attachmentPath = $this->attendanceService->saveAttendanceFile($attachmentFile, 'presensi/lampiran');
+        }
+
         $payload = [
             'status' => $validated['status_kehadiran'],
-            'notes' => $validated['catatan'],
+            'status_kehadiran' => $validated['status_kehadiran'],
+            'notes' => $catatan,
+            'catatan' => $catatan,
             'is_approved_by_admin' => false,
         ];
+
+        if ($attachmentPath) {
+            $payload['foto_presensi'] = $attachmentPath;
+        }
 
         if ($existing) {
             $existing->update($payload);
@@ -224,6 +328,7 @@ class AttendanceController extends Controller
             $attendance = Attendance::create(array_merge($payload, [
                 'pegawai_id' => $employee->id,
                 'tanggal' => $validated['tanggal'],
+                'source' => 'mobile_gps',
             ]));
         }
 
@@ -240,22 +345,45 @@ class AttendanceController extends Controller
      */
     public function history(Request $request): JsonResponse
     {
-        $employee = Pegawai::where('user_id', $request->user()->id)->firstOrFail();
+        $employee = $this->getOrCreateEmployee($request->user());
 
         $query = Attendance::where('pegawai_id', $employee->id)->orderByDesc('tanggal');
 
-        if ($request->has('month') && $request->has('year')) {
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('tanggal', [$request->start_date, $request->end_date]);
+        } elseif ($request->filled('month') && $request->filled('year')) {
             $query->whereMonth('tanggal', $request->month)
                   ->whereYear('tanggal', $request->year);
+        } elseif ($request->filled('date')) {
+            $query->whereDate('tanggal', $request->date);
         }
 
-        $history = $query->limit(31)->get();
+        if ($request->filled('status')) {
+            $status = $request->status;
+            $query->where(function ($q) use ($status) {
+                $q->where('status', $status)
+                  ->orWhere('status_kehadiran', $status);
+            });
+        }
+
+        $perPage = min(100, max(1, (int) $request->input('per_page', $request->input('limit', 31))));
+        $paginator = $query->paginate($perPage);
 
         return response()->json([
+            'status' => 'success',
             'success' => true,
+            'message' => 'Riwayat presensi berhasil diambil',
             'data' => [
-                'attendances' => $history,
-                'total' => $history->count(),
+                'attendances' => $paginator->items(),
+                'total' => $paginator->total(),
+            ],
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
             ],
         ]);
     }
@@ -265,7 +393,7 @@ class AttendanceController extends Controller
      */
     public function recap(Request $request): JsonResponse
     {
-        $employee = Pegawai::where('user_id', $request->user()->id)->firstOrFail();
+        $employee = $this->getOrCreateEmployee($request->user());
 
         $month = (int) $request->input('month', Carbon::now()->month);
         $year = (int) $request->input('year', Carbon::now()->year);
@@ -276,7 +404,9 @@ class AttendanceController extends Controller
         $recap = $this->recapService->generateRecap($employee, $startDate, $endDate);
 
         return response()->json([
+            'status' => 'success',
             'success' => true,
+            'message' => 'Rekap presensi berhasil diambil',
             'data' => $recap,
         ]);
     }

@@ -116,7 +116,25 @@ class Pegawai extends Model
         'nama_gelar',
         'role_ids',
         'is_face_enrolled',
+        'avatar',
+        'foto_url',
     ];
+
+    public function getAvatarAttribute(): string
+    {
+        if ($this->relationLoaded('dokumen')) {
+            $foto = $this->dokumen->firstWhere('jenis_dokumen', 'foto');
+            if ($foto && !empty($foto->file_path)) {
+                return \Illuminate\Support\Facades\Storage::disk('public')->url($foto->file_path);
+            }
+        }
+        return "https://ui-avatars.com/api/?name=" . urlencode($this->nama_lengkap ?: 'User') . "&background=0D8ABC&color=fff";
+    }
+
+    public function getFotoUrlAttribute(): string
+    {
+        return $this->getAvatarAttribute();
+    }
 
     public function getIsFaceEnrolledAttribute(): bool
     {

@@ -400,7 +400,15 @@ class SikeuExtendedMasterController extends Controller
 
     public function storePotonganMahasiswa(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        $data = $request->all();
+        if (array_key_exists('master_biaya_id', $data) && ($data['master_biaya_id'] === '' || $data['master_biaya_id'] === '0' || $data['master_biaya_id'] === 0)) {
+            $data['master_biaya_id'] = null;
+        }
+        if (array_key_exists('semester', $data) && ($data['semester'] === '' || $data['semester'] === '0' || $data['semester'] === 0)) {
+            $data['semester'] = null;
+        }
+
+        $validator = Validator::make($data, [
             'mahasiswa_id' => 'required|integer',
             'nama_potongan' => 'required|string|max:150',
             'tipe_potongan' => 'required|in:nominal,persen',
@@ -419,11 +427,11 @@ class SikeuExtendedMasterController extends Controller
             return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
         }
 
-        $nim = $request->input('nim');
-        $namaMahasiswa = $request->input('nama_mahasiswa');
+        $nim = $data['nim'] ?? $request->input('nim');
+        $namaMahasiswa = $data['nama_mahasiswa'] ?? $request->input('nama_mahasiswa');
 
         if (empty($nim) || empty($namaMahasiswa)) {
-            $mhs = \App\Models\Siakad\Mahasiswa::find($request->mahasiswa_id);
+            $mhs = \App\Models\Siakad\Mahasiswa::find($data['mahasiswa_id']);
             if ($mhs) {
                 $nim = $nim ?: $mhs->nim;
                 $namaMahasiswa = $namaMahasiswa ?: ($mhs->nama_lengkap ?? $mhs->nama);
@@ -431,20 +439,20 @@ class SikeuExtendedMasterController extends Controller
         }
 
         $item = PotonganMahasiswa::create([
-            'mahasiswa_id' => $request->mahasiswa_id,
-            'nim' => $nim ?? ('NIM-' . $request->mahasiswa_id),
-            'nama_mahasiswa' => $namaMahasiswa ?? ('Mahasiswa #' . $request->mahasiswa_id),
-            'nama_potongan' => $request->nama_potongan,
-            'tipe_potongan' => $request->tipe_potongan,
-            'nilai_potongan' => $request->nilai_potongan,
-            'master_biaya_id' => $request->master_biaya_id,
-            'semester' => $request->semester,
-            'tahun_akademik' => $request->tahun_akademik,
-            'berlaku_mulai' => $request->berlaku_mulai,
-            'berlaku_sampai' => $request->berlaku_sampai,
-            'nomor_sk' => $request->nomor_sk,
-            'keterangan' => $request->keterangan,
-            'status' => $request->status ?? 'aktif',
+            'mahasiswa_id' => $data['mahasiswa_id'],
+            'nim' => $nim ?? ('NIM-' . $data['mahasiswa_id']),
+            'nama_mahasiswa' => $namaMahasiswa ?? ('Mahasiswa #' . $data['mahasiswa_id']),
+            'nama_potongan' => $data['nama_potongan'],
+            'tipe_potongan' => $data['tipe_potongan'],
+            'nilai_potongan' => $data['nilai_potongan'],
+            'master_biaya_id' => $data['master_biaya_id'] ?? null,
+            'semester' => $data['semester'] ?? null,
+            'tahun_akademik' => $data['tahun_akademik'] ?? null,
+            'berlaku_mulai' => $data['berlaku_mulai'] ?? null,
+            'berlaku_sampai' => $data['berlaku_sampai'] ?? null,
+            'nomor_sk' => $data['nomor_sk'] ?? null,
+            'keterangan' => $data['keterangan'] ?? null,
+            'status' => $data['status'] ?? 'aktif',
             'diinput_oleh' => auth()->id(),
         ]);
 
@@ -461,7 +469,15 @@ class SikeuExtendedMasterController extends Controller
     {
         $item = PotonganMahasiswa::findOrFail($id);
 
-        $validator = Validator::make($request->all(), [
+        $data = $request->all();
+        if (array_key_exists('master_biaya_id', $data) && ($data['master_biaya_id'] === '' || $data['master_biaya_id'] === '0' || $data['master_biaya_id'] === 0)) {
+            $data['master_biaya_id'] = null;
+        }
+        if (array_key_exists('semester', $data) && ($data['semester'] === '' || $data['semester'] === '0' || $data['semester'] === 0)) {
+            $data['semester'] = null;
+        }
+
+        $validator = Validator::make($data, [
             'nama_potongan' => 'sometimes|required|string|max:150',
             'tipe_potongan' => 'sometimes|required|in:nominal,persen',
             'nilai_potongan' => 'sometimes|required|numeric|min:0',
@@ -479,11 +495,19 @@ class SikeuExtendedMasterController extends Controller
             return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
         }
 
-        $item->update($request->only([
-            'nama_potongan', 'tipe_potongan', 'nilai_potongan', 'master_biaya_id',
-            'semester', 'tahun_akademik', 'berlaku_mulai', 'berlaku_sampai',
-            'nomor_sk', 'keterangan', 'status'
-        ]));
+        $item->update([
+            'nama_potongan' => $data['nama_potongan'] ?? $item->nama_potongan,
+            'tipe_potongan' => $data['tipe_potongan'] ?? $item->tipe_potongan,
+            'nilai_potongan' => array_key_exists('nilai_potongan', $data) ? $data['nilai_potongan'] : $item->nilai_potongan,
+            'master_biaya_id' => array_key_exists('master_biaya_id', $data) ? $data['master_biaya_id'] : $item->master_biaya_id,
+            'semester' => array_key_exists('semester', $data) ? $data['semester'] : $item->semester,
+            'tahun_akademik' => array_key_exists('tahun_akademik', $data) ? $data['tahun_akademik'] : $item->tahun_akademik,
+            'berlaku_mulai' => array_key_exists('berlaku_mulai', $data) ? $data['berlaku_mulai'] : $item->berlaku_mulai,
+            'berlaku_sampai' => array_key_exists('berlaku_sampai', $data) ? $data['berlaku_sampai'] : $item->berlaku_sampai,
+            'nomor_sk' => array_key_exists('nomor_sk', $data) ? $data['nomor_sk'] : $item->nomor_sk,
+            'keterangan' => array_key_exists('keterangan', $data) ? $data['keterangan'] : $item->keterangan,
+            'status' => $data['status'] ?? $item->status,
+        ]);
 
         $item->load(['masterBiaya', 'inputter']);
 
