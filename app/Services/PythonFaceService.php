@@ -89,6 +89,8 @@ class PythonFaceService
                 return [
                     'success' => true,
                     'centroid_embedding' => $response->json('centroid_embedding'),
+                    'embeddings' => $response->json('embeddings', []),
+                    'pose_diversity' => $response->json('pose_diversity', []),
                     'samples_received' => $response->json('samples_received'),
                     'message' => $response->json('message'),
                 ];
@@ -109,19 +111,30 @@ class PythonFaceService
     }
 
     /**
-     * Memvalidasi kecocokan foto live presensi terhadap enrolled embedding karyawan.
+     * Memvalidasi kecocokan foto live presensi terhadap enrolled embedding pegawai.
+     * Mengikuti fungsi project Presensi Indonusa: mendukung multi-pose lewat
+     * $enrolledEmbeddings (vektor per sampel pose tegak/nunduk/dongak); server
+     * mengambil skor TERBAIK sehingga tetap cocok saat pose kepala bervariasi.
+     * $enrolledEmbedding (centroid) tetap dikirim sebagai kandidat cadangan.
      * Mengembalikan skor kesamaan (similarity: 0.0 - 1.0) dan boolean is_match.
      */
-    public function verifyFace(string $liveBase64Image, array $enrolledEmbedding, ?float $threshold = null): array
+    public function verifyFace(string $liveBase64Image, array $enrolledEmbedding, ?float $threshold = null, array $enrolledEmbeddings = []): array
     {
         $thresh = $threshold ?? $this->defaultThreshold;
 
         try {
-            $response = Http::timeout($this->timeout)->post("{$this->baseUrl}/api/v1/verify", [
+            $payload = [
                 'live_image' => $liveBase64Image,
                 'enrolled_embedding' => array_map('floatval', $enrolledEmbedding),
                 'threshold' => $thresh,
-            ]);
+            ];
+            if (!empty($enrolledEmbeddings)) {
+                $payload['enrolled_embeddings'] = array_map(
+                    fn ($vec) => array_map('floatval', (array) $vec),
+                    array_values($enrolledEmbeddings)
+                );
+            }
+            $response = Http::timeout($this->timeout)->post("{$this->baseUrl}/api/v1/verify", $payload);
 
             if ($response->successful() && $response->json('success')) {
                 return [
@@ -131,6 +144,9 @@ class PythonFaceService
                     'distance' => (float) $response->json('distance'),
                     'threshold' => (float) $response->json('threshold'),
                     'engine' => $response->json('engine'),
+                    'matched_sample' => $response->json('matched_sample'),
+                    'matched_index' => $response->json('matched_index'),
+                    'candidates_compared' => $response->json('candidates_compared'),
                     'live_embedding' => $response->json('live_embedding'),
                 ];
             }

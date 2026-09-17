@@ -40,6 +40,7 @@ class Pegawai extends Model
         'alamat',
         'telepon',
         'face_embedding',
+        'face_embeddings',
         'face_enrolled_at',
         'consent_pdp_at',
         'is_active',
@@ -60,6 +61,7 @@ class Pegawai extends Model
 
     protected $hidden = [
         'face_embedding',
+        'face_embeddings',
     ];
 
     /**
@@ -92,6 +94,38 @@ class Pegawai extends Model
                 $this->attributes['face_embedding'] = $str;
             } catch (\Throwable $e) {
                 $this->attributes['face_embedding'] = encrypt($str);
+            }
+        }
+    }
+
+    /**
+     * Sampel multi-pose (array vektor per pose: tegak/nunduk/dongak).
+     * Enkripsi & toleransi legacy sama seperti face_embedding.
+     */
+    public function getFaceEmbeddingsAttribute($value): ?string
+    {
+        if (empty($value)) {
+            return null;
+        }
+
+        try {
+            return decrypt($value);
+        } catch (\Throwable $e) {
+            return (string) $value;
+        }
+    }
+
+    public function setFaceEmbeddingsAttribute($value): void
+    {
+        if (empty($value)) {
+            $this->attributes['face_embeddings'] = null;
+        } else {
+            $str = is_array($value) ? json_encode($value) : (string) $value;
+            try {
+                decrypt($str);
+                $this->attributes['face_embeddings'] = $str;
+            } catch (\Throwable $e) {
+                $this->attributes['face_embeddings'] = encrypt($str);
             }
         }
     }

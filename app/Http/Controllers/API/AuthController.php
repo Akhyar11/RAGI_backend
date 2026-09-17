@@ -281,10 +281,29 @@ class AuthController extends Controller
             }
 
             $embedding = $enrollResult['centroid_embedding'];
+            $poseEmbeddings = $enrollResult['embeddings'] ?? [];
+            $poseDiversity = $enrollResult['pose_diversity'] ?? [];
+
+            // Gerbang diversitas pose (mengikuti project Presensi Indonusa):
+            // tolak jika semua sampel hampir identik, minta rekam ulang
+            // bervariasi: tegak hadap kamera, nunduk sedikit, dongak sedikit.
+            $minPair = isset($poseDiversity['min_pairwise_similarity'])
+                ? (float) $poseDiversity['min_pairwise_similarity']
+                : null;
+            if (count($poseEmbeddings) >= 2 && $minPair !== null && $minPair > 0.97) {
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'POSE_NOT_DIVERSE',
+                    'message' => 'Foto pendaftaran terlalu mirip (pose tidak bervariasi). Ulangi dengan 3 pose: tegak hadap kamera, nunduk sedikit, dan dongak sedikit.',
+                    'pose_diversity' => $poseDiversity,
+                ], 422);
+            }
         }
         // Opsi B: Vektor embedding langsung
         elseif ($request->has('embedding')) {
             $embedding = $request->input('embedding');
+            $poseEmbeddings = [];
+            $poseDiversity = [];
         }
 
         if (empty($embedding) || !is_array($embedding)) {
@@ -296,6 +315,7 @@ class AuthController extends Controller
 
         $employee->update([
             'face_embedding' => json_encode($embedding),
+            'face_embeddings' => !empty($poseEmbeddings) ? json_encode(array_values($poseEmbeddings)) : null,
             'face_enrolled_at' => Carbon::now(),
         ]);
 
@@ -305,6 +325,8 @@ class AuthController extends Controller
             'data' => [
                 'face_enrolled_at' => $employee->face_enrolled_at,
                 'dimension' => count($embedding),
+                'samples_received' => count($poseEmbeddings),
+                'pose_diversity' => $poseDiversity,
             ],
         ]);
     }
@@ -317,6 +339,7 @@ class AuthController extends Controller
         $employee = Pegawai::where('user_id', $request->user()->id)->firstOrFail();
         $employee->update([
             'face_embedding' => null,
+            'face_embeddings' => null,
             'face_enrolled_at' => null,
         ]);
 

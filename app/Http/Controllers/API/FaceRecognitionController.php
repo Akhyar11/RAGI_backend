@@ -64,14 +64,16 @@ class FaceRecognitionController extends Controller
     {
         $request->validate([
             'live_image' => 'required|string',
-            'enrolled_embedding' => 'required|array',
+            'enrolled_embedding' => 'required_without:enrolled_embeddings|array',
+            'enrolled_embeddings' => 'nullable|array',
             'threshold' => 'nullable|numeric|min:0|max:1',
         ]);
 
         $result = $this->faceService->verifyFace(
             $request->input('live_image'),
-            $request->input('enrolled_embedding'),
-            $request->input('threshold')
+            $request->input('enrolled_embedding', []),
+            $request->input('threshold'),
+            $request->input('enrolled_embeddings', [])
         );
 
         if (!$result['success']) {

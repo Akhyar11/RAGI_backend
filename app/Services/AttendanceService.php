@@ -92,7 +92,16 @@ class AttendanceService
                 $rejectionReasons[] = 'Data biometrik wajah karyawan belum terdaftar di sistem. Silakan lakukan pendaftaran wajah terlebih dahulu.';
             } else {
                 $enrolledVec = json_decode($employee->face_embedding, true) ?? [];
-                $verifyResult = $this->faceService->verifyFace($faceImage, $enrolledVec, $minFaceScore);
+                // Kandidat multi-pose (tegak/nunduk/dongak) mengikuti fungsi
+                // project Presensi Indonusa; fallback ke centroid untuk data lama.
+                $enrolledPoseVecs = [];
+                if (!empty($employee->face_embeddings)) {
+                    $decodedPoses = json_decode($employee->face_embeddings, true);
+                    if (is_array($decodedPoses)) {
+                        $enrolledPoseVecs = array_values(array_filter($decodedPoses, 'is_array'));
+                    }
+                }
+                $verifyResult = $this->faceService->verifyFace($faceImage, $enrolledVec, $minFaceScore, $enrolledPoseVecs);
 
                 if ($verifyResult['success']) {
                     $faceScore = (float) $verifyResult['similarity'];
