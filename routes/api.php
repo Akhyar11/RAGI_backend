@@ -109,6 +109,7 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::get('system-settings', [App\Http\Controllers\IAM\SystemSettingController::class, 'index']);
     Route::post('system-settings', [App\Http\Controllers\IAM\SystemSettingController::class, 'update']);
     Route::post('system-settings/test-smtp', [App\Http\Controllers\IAM\SystemSettingController::class, 'testSmtp']);
+    Route::post('system-settings/test-r2', [App\Http\Controllers\IAM\SystemSettingController::class, 'testR2']);
 
     // Menus (Admin Management)
     Route::get('menus', [MenuController::class, 'index']);

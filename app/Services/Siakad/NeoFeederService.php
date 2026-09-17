@@ -62,19 +62,60 @@ class NeoFeederService
     }
 
     /**
+     * Ubah exception teknis menjadi penjelasan yang dimengerti admin.
+     * Tidak pernah menyertakan username/password.
+     */
+    protected function describeTokenError(\Throwable $e, array $config): string
+    {
+        $msg = $e->getMessage();
+
+        if (str_contains($msg, 'belum disetting')) {
+            return 'Konfigurasi Neo Feeder belum disetting.';
+        }
+
+        if (str_contains($msg, 'cURL error 7')) {
+            $host = parse_url((string) $config['url'], PHP_URL_HOST) ?: (string) $config['url'];
+            $port = parse_url((string) $config['url'], PHP_URL_PORT);
+            $endpoint = $port ? "{$host}:{$port}" : $host;
+
+            return "Tidak dapat terhubung ke {$endpoint} (koneksi ditolak/jaringan). Periksa firewall egress & whitelist IP server di sisi Feeder.";
+        }
+
+        if (str_contains($msg, 'cURL error 28')) {
+            return 'Koneksi ke WS Feeder timeout (tidak merespons). Coba lagi atau periksa jaringan/server Feeder.';
+        }
+
+        if (preg_match('/salah|invalid|password|username|kredensial|ditolak|denied|unauthor/i', $msg)) {
+            return 'Kredensial ditolak oleh WS Feeder (username/password salah). Periksa kembali isian di IAM Settings lalu Simpan.';
+        }
+
+        return 'WS Feeder merespons error: ' . mb_substr($msg, 0, 160);
+    }
+
+    /**
      * Dapatkan token beserta status keasliannya.
      *
-     * @return array{token: string, is_staging: bool}
+     * @return array{token: string, is_staging: bool, error: string|null}
      */
     public function getTokenInfo(): array
     {
         $token = $this->getToken();
+        $isStaging = $this->isStagingToken($token);
 
         return [
             'token'      => $token,
-            'is_staging' => $this->isStagingToken($token),
+            'is_staging' => $isStaging,
+            'error'      => $isStaging
+                ? ($this->lastTokenError ?? 'Token staging dari cache. Klik Simpan lalu Tes Koneksi ulang untuk diagnosa fresh.')
+                : null,
         ];
     }
+
+    /**
+     * Penyebab terakhir kegagalan token asli (diisi saat fallback staging).
+     * Hanya untuk diagnosa admin; tidak pernah memuat kredensial.
+     */
+    protected ?string $lastTokenError = null;
 
     /**
      * Dapatkan Token Feeder (dengan Caching & Simulasi Offline Fallback)
@@ -110,6 +151,7 @@ class NeoFeederService
 
             } catch (\Exception $e) {
                 Log::warning('Neo Feeder Offline/Fallback: ' . $e->getMessage());
+                $this->lastTokenError = $this->describeTokenError($e, $config);
                 // Mengembalikan stand-alone staging token agar sinkronisasi lokal tetap dapat berjalan
                 return 'STAGING-TOKEN-' . strtoupper(substr(md5($config['username'] . time()), 0, 24));
             }

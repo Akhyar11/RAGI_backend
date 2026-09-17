@@ -94,6 +94,52 @@ class AppServiceProvider extends ServiceProvider
                         'mail.from.name'              => \App\Models\SystemSetting::get('mail_from_name', config('mail.from.name')),
                     ]);
                 }
+
+                // Konfigurasi dinamis Cloudflare R2 / Filesystem dari core_system_settings
+                $fsDisk = \App\Models\SystemSetting::get('filesystem_disk');
+                if (!empty($fsDisk)) {
+                    config(['filesystems.default' => $fsDisk]);
+                }
+                $fsPublic = \App\Models\SystemSetting::get('filesystem_public_disk');
+                if (!empty($fsPublic)) {
+                    config(['filesystems.public_disk' => $fsPublic]);
+                }
+                $fsPrivate = \App\Models\SystemSetting::get('filesystem_private_disk');
+                if (!empty($fsPrivate)) {
+                    config(['filesystems.private_disk' => $fsPrivate]);
+                }
+
+                $r2Endpoint = \App\Models\SystemSetting::get('r2_endpoint');
+                $r2Key = \App\Models\SystemSetting::get('r2_access_key_id');
+                $r2Secret = \App\Models\SystemSetting::get('r2_secret_access_key');
+                $r2Bucket = \App\Models\SystemSetting::get('r2_bucket');
+
+                if (!empty($r2Endpoint) || !empty($r2Key) || !empty($r2Bucket)) {
+                    $r2Region = \App\Models\SystemSetting::get('r2_default_region', config('filesystems.disks.r2.region', 'auto'));
+                    $r2Url = \App\Models\SystemSetting::get('r2_url', config('filesystems.disks.r2.url'));
+                    $r2PathStyle = filter_var(\App\Models\SystemSetting::get('r2_use_path_style_endpoint', config('filesystems.disks.r2.use_path_style_endpoint', true)), FILTER_VALIDATE_BOOLEAN);
+
+                    $r2PrivateBucket = \App\Models\SystemSetting::get('r2_private_bucket', $r2Bucket);
+                    $r2PrivateUrl = \App\Models\SystemSetting::get('r2_private_url', config('filesystems.disks.r2-private.url'));
+
+                    config([
+                        'filesystems.disks.r2.key' => $r2Key ?: config('filesystems.disks.r2.key'),
+                        'filesystems.disks.r2.secret' => $r2Secret ?: config('filesystems.disks.r2.secret'),
+                        'filesystems.disks.r2.region' => $r2Region ?: 'auto',
+                        'filesystems.disks.r2.bucket' => $r2Bucket ?: config('filesystems.disks.r2.bucket'),
+                        'filesystems.disks.r2.url' => $r2Url ?: config('filesystems.disks.r2.url'),
+                        'filesystems.disks.r2.endpoint' => $r2Endpoint ?: config('filesystems.disks.r2.endpoint'),
+                        'filesystems.disks.r2.use_path_style_endpoint' => $r2PathStyle,
+
+                        'filesystems.disks.r2-private.key' => $r2Key ?: config('filesystems.disks.r2-private.key'),
+                        'filesystems.disks.r2-private.secret' => $r2Secret ?: config('filesystems.disks.r2-private.secret'),
+                        'filesystems.disks.r2-private.region' => $r2Region ?: 'auto',
+                        'filesystems.disks.r2-private.bucket' => $r2PrivateBucket ?: config('filesystems.disks.r2-private.bucket'),
+                        'filesystems.disks.r2-private.url' => $r2PrivateUrl ?: config('filesystems.disks.r2-private.url'),
+                        'filesystems.disks.r2-private.endpoint' => $r2Endpoint ?: config('filesystems.disks.r2-private.endpoint'),
+                        'filesystems.disks.r2-private.use_path_style_endpoint' => $r2PathStyle,
+                    ]);
+                }
             }
         } catch (\Throwable $th) {
             // Lewati jika database belum siap / saat proses migrasi

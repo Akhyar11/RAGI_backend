@@ -46,10 +46,11 @@ class FeederTokenModeTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('status', 'success')
             ->assertJsonPath('data.is_staging', true)
-            ->assertJsonStructure(['status', 'message', 'data' => ['token', 'is_staging']]);
+            ->assertJsonStructure(['status', 'message', 'data' => ['token', 'is_staging', 'staging_reason']]);
 
         $token = $response->json('data.token');
         $this->assertTrue(str_starts_with($token, 'STAGING-TOKEN-'));
+        $this->assertStringContainsString('Tidak dapat terhubung', (string) $response->json('data.staging_reason'));
     }
 
     public function test_update_kredensial_feeder_membuang_token_cache(): void
