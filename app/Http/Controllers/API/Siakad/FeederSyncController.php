@@ -8,6 +8,8 @@ use App\Services\Siakad\NeoFeederService;
 use App\Services\Siakad\NeoFeederSyncService;
 use App\Models\Siakad\FeederSyncLog;
 use App\Models\Siakad\FeederMapping;
+use App\Http\Requests\Siakad\SaveFeederConfigRequest;
+use App\Http\Requests\Siakad\TriggerFeederSyncRequest;
 
 class FeederSyncController extends Controller
 {
@@ -31,14 +33,8 @@ class FeederSyncController extends Controller
         ]);
     }
 
-    public function saveConfig(Request $request)
+    public function saveConfig(SaveFeederConfigRequest $request)
     {
-        $request->validate([
-            'url' => 'required|string',
-            'username' => 'required|string',
-            'password' => 'nullable|string',
-        ]);
-
         $config = $this->feederService->saveConfig(
             $request->url,
             $request->username,
@@ -70,15 +66,11 @@ class FeederSyncController extends Controller
         }
     }
 
-    public function triggerSync(Request $request)
+    public function triggerSync(TriggerFeederSyncRequest $request)
     {
         // Berikan batas waktu eksekusi 2 menit (120 detik) untuk sinkronisasi batch
         set_time_limit(120);
         ini_set('max_execution_time', '120');
-
-        $request->validate([
-            'entity_type' => 'required|in:mahasiswa,biodata_mahasiswa,riwayat_pendidikan_mahasiswa,dosen,pull_dosen,mata_kuliah,kelas,penugasan_dosen,ajar_dosen',
-        ]);
 
         $entity = $request->entity_type;
         $userId = $request->user()?->id;

@@ -42,6 +42,37 @@ class NeoFeederService
     }
 
     /**
+     * Ubah exception teknis menjadi penjelasan yang dimengerti admin.
+     * Tidak pernah menyertakan username/password.
+     */
+    public function describeTokenError(\Throwable $e, array $config): string
+    {
+        $msg = $e->getMessage();
+
+        if (str_contains($msg, 'belum disetting')) {
+            return 'Konfigurasi Neo Feeder belum disetting (URL atau Username kosong). Silakan atur di IAM → Pengaturan Sistem.';
+        }
+
+        if (str_contains($msg, 'cURL error 7')) {
+            $host = parse_url((string) $config['url'], PHP_URL_HOST) ?: (string) $config['url'];
+            $port = parse_url((string) $config['url'], PHP_URL_PORT);
+            $endpoint = $port ? "{$host}:{$port}" : $host;
+
+            return "Tidak dapat terhubung ke {$endpoint} (koneksi ditolak/jaringan). Periksa firewall egress & whitelist IP server di sisi Feeder.";
+        }
+
+        if (str_contains($msg, 'cURL error 28')) {
+            return 'Koneksi ke WS Feeder timeout (tidak merespons). Coba lagi atau periksa jaringan/server Feeder.';
+        }
+
+        if (preg_match('/salah|invalid|password|username|kredensial|ditolak|denied|unauthor/i', $msg)) {
+            return 'Kredensial ditolak oleh WS Feeder (username/password salah). Periksa kembali isian di IAM Settings lalu Simpan.';
+        }
+
+        return 'Gagal terhubung ke Web Service Neo Feeder: ' . mb_substr($msg, 0, 160);
+    }
+
+    /**
      * Dapatkan Token Feeder secara STRICT (dengan Caching)
      * Mode STRICT: Tidak ada token staging/simulasi palsu. Jika WS Feeder
      * tidak terjangkau atau kredensial salah, exception dilempar (fail-fast).
@@ -77,8 +108,9 @@ class NeoFeederService
 
             } catch (\Exception $e) {
                 Cache::forget('neo_feeder_token');
+                $friendlyError = $this->describeTokenError($e, $config);
                 Log::error('Neo Feeder Connection Failed: ' . $e->getMessage());
-                throw new \RuntimeException("Gagal terhubung ke Web Service Neo Feeder: " . $e->getMessage(), 0, $e);
+                throw new \RuntimeException($friendlyError, 0, $e);
             }
         });
     }

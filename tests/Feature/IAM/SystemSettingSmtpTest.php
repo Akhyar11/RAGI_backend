@@ -121,4 +121,48 @@ class SystemSettingSmtpTest extends TestCase
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['email']);
     }
+
+    public function test_system_settings_index_returns_r2_defaults(): void
+    {
+        $response = $this->getJson('/api/admin/system-settings');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'data' => [
+                    'filesystem_disk',
+                    'filesystem_public_disk',
+                    'filesystem_private_disk',
+                    'r2_access_key_id',
+                    'r2_secret_access_key',
+                    'r2_bucket',
+                    'r2_endpoint',
+                ],
+            ]);
+    }
+
+    public function test_admin_can_update_r2_settings(): void
+    {
+        $payload = [
+            'settings' => [
+                ['key' => 'filesystem_disk', 'value' => 'r2'],
+                ['key' => 'r2_bucket', 'value' => 'my-r2-bucket'],
+                ['key' => 'r2_endpoint', 'value' => 'https://accountid.r2.cloudflarestorage.com'],
+            ],
+        ];
+
+        $response = $this->postJson('/api/admin/system-settings', $payload);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('status', 'success');
+
+        $this->assertDatabaseHas('core_system_settings', [
+            'key'   => 'filesystem_disk',
+            'value' => 'r2',
+        ]);
+        $this->assertDatabaseHas('core_system_settings', [
+            'key'   => 'r2_bucket',
+            'value' => 'my-r2-bucket',
+        ]);
+    }
 }
+

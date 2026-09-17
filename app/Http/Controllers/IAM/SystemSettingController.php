@@ -7,6 +7,9 @@ use Illuminate\Http\Request;
 use App\Models\SystemSetting;
 use App\Services\IAM\RestrictedRoleService;
 use Illuminate\Support\Facades\Cache;
+use App\Http\Requests\IAM\UpdateSystemSettingRequest;
+use App\Http\Requests\IAM\TestSmtpSettingRequest;
+use App\Http\Requests\IAM\TestR2SettingRequest;
 
 class SystemSettingController extends Controller
 {
@@ -62,20 +65,40 @@ class SystemSettingController extends Controller
             }
         }
 
+        $defaultR2 = [
+            'filesystem_disk'            => (string) config('filesystems.default', 'local'),
+            'filesystem_public_disk'     => (string) config('filesystems.public_disk', 'public'),
+            'filesystem_private_disk'    => (string) config('filesystems.private_disk', 'public'),
+            'r2_access_key_id'           => (string) (config('filesystems.disks.r2.key') ?? ''),
+            'r2_secret_access_key'       => (string) (config('filesystems.disks.r2.secret') ?? ''),
+            'r2_default_region'          => (string) (config('filesystems.disks.r2.region') ?? 'auto'),
+            'r2_bucket'                  => (string) (config('filesystems.disks.r2.bucket') ?? ''),
+            'r2_private_bucket'          => (string) (config('filesystems.disks.r2-private.bucket') ?? ''),
+            'r2_url'                     => (string) (config('filesystems.disks.r2.url') ?? ''),
+            'r2_private_url'             => (string) (config('filesystems.disks.r2-private.url') ?? ''),
+            'r2_endpoint'                => (string) (config('filesystems.disks.r2.endpoint') ?? ''),
+            'r2_use_path_style_endpoint' => config('filesystems.disks.r2.use_path_style_endpoint') ? 'true' : 'false',
+        ];
+
+        foreach ($defaultR2 as $key => $val) {
+            if (!isset($settings[$key])) {
+                $settings[$key] = [
+                    'id'          => null,
+                    'key'         => $key,
+                    'value'       => (string) $val,
+                    'description' => 'Konfigurasi Cloudflare R2 / Object Storage',
+                ];
+            }
+        }
+
         return response()->json([
             'status' => 'success',
             'data'   => $settings,
         ]);
     }
 
-    public function update(Request $request, RestrictedRoleService $restrictedRoles)
+    public function update(UpdateSystemSettingRequest $request, RestrictedRoleService $restrictedRoles)
     {
-        $request->validate([
-            'settings'         => 'required|array',
-            'settings.*.key'   => 'required|string',
-            'settings.*.value' => 'nullable|string',
-        ]);
-
         $feederChanged = false;
 
         foreach ($request->settings as $setting) {
@@ -120,19 +143,8 @@ class SystemSettingController extends Controller
     /**
      * Mengirimkan email uji coba untuk memverifikasi konfigurasi SMTP.
      */
-    public function testSmtp(Request $request)
+    public function testSmtp(TestSmtpSettingRequest $request)
     {
-        $request->validate([
-            'email'             => 'required|email',
-            'mail_host'         => 'nullable|string',
-            'mail_port'         => 'nullable|numeric',
-            'mail_scheme'       => 'nullable|string',
-            'mail_username'     => 'nullable|string',
-            'mail_password'     => 'nullable|string',
-            'mail_from_address' => 'nullable|email',
-            'mail_from_name'    => 'nullable|string',
-        ]);
-
         try {
             // Jika dikirim kredensial on-the-fly untuk diuji sebelum disimpan:
             if ($request->filled('mail_host')) {
@@ -168,4 +180,64 @@ class SystemSettingController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Menguji koneksi ke Cloudflare R2 Object Storage.
+     */
+    public function testR2(TestR2SettingRequest $request)
+    {
+        try {
+            $key = $request->input('r2_access_key_id') ?: SystemSetting::get('r2_access_key_id', config('filesystems.disks.r2.key'));
+            $secret = $request->input('r2_secret_access_key') ?: SystemSetting::get('r2_secret_access_key', config('filesystems.disks.r2.secret'));
+            $endpoint = $request->input('r2_endpoint') ?: SystemSetting::get('r2_endpoint', config('filesystems.disks.r2.endpoint'));
+            $bucket = $request->input('r2_bucket') ?: SystemSetting::get('r2_bucket', config('filesystems.disks.r2.bucket'));
+            $region = $request->input('r2_default_region') ?: SystemSetting::get('r2_default_region', config('filesystems.disks.r2.region', 'auto'));
+            $usePathStyle = filter_var($request->input('r2_use_path_style_endpoint', SystemSetting::get('r2_use_path_style_endpoint', config('filesystems.disks.r2.use_path_style_endpoint', true))), FILTER_VALIDATE_BOOLEAN);
+
+            if (empty($key) || empty($secret) || empty($endpoint) || empty($bucket)) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Kredensial R2 belum lengkap. Mohon lengkapi Access Key ID, Secret Key, Endpoint, dan Nama Bucket.',
+                ], 422);
+            }
+
+            // Inisiasi temporary disk untuk pengujian
+            config([
+                'filesystems.disks._r2_test' => [
+                    'driver'                  => 's3',
+                    'key'                     => $key,
+                    'secret'                  => $secret,
+                    'region'                  => $region ?: 'auto',
+                    'bucket'                  => $bucket,
+                    'endpoint'                => $endpoint,
+                    'use_path_style_endpoint' => $usePathStyle,
+                    'throw'                   => true,
+                ],
+            ]);
+
+            $disk = \Illuminate\Support\Facades\Storage::disk('_r2_test');
+            $pingFile = '.r2-ping-test-' . time() . '.txt';
+            $disk->put($pingFile, 'R2_CONNECTION_TEST_' . now()->toIso8601String());
+            $exists = $disk->exists($pingFile);
+            $disk->delete($pingFile);
+
+            if ($exists) {
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => "Koneksi ke Cloudflare R2 berhasil! Bucket '{$bucket}' dapat diakses dan ditulis dengan baik.",
+                ]);
+            }
+
+            return response()->json([
+                'status'  => 'error',
+                'message' => "Gagal memverifikasi file uji pada bucket '{$bucket}'.",
+            ], 500);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Gagal terhubung ke Cloudflare R2: ' . $th->getMessage(),
+            ], 500);
+        }
+    }
 }
+
