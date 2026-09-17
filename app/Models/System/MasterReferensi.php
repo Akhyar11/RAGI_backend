@@ -13,9 +13,41 @@ class MasterReferensi extends Model
 
     protected $fillable = [
         'tipe',
+        'modul',
         'kode',
         'nama',
         'urutan',
         'is_active',
     ];
+
+    /**
+     * Scope a query to only include active references.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope a query to include references for a specific module or global.
+     */
+    public function scopeForModule($query, $module)
+    {
+        if (empty($module) || $module === 'all') {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($module) {
+            $q->where('modul', $module)
+              ->orWhere('modul', 'global');
+        });
+    }
+
+    /**
+     * Relasi ke Master Tipe Referensi
+     */
+    public function tipeRef()
+    {
+        return $this->belongsTo(MasterTipeReferensi::class, 'tipe', 'kode');
+    }
 }

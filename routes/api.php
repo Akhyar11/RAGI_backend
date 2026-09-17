@@ -60,6 +60,12 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/auth/user', [OAuthController::class, 'user']);
 });
 
+// Master Referensi Global Endpoint (Bisa diakses seluruh modul)
+Route::get('referensi/{tipe}', [App\Http\Controllers\System\MasterReferensiController::class, 'getByTipe']);
+Route::get('v1/referensi/{tipe}', [App\Http\Controllers\System\MasterReferensiController::class, 'getByTipe']);
+Route::get('tipe-referensi', [App\Http\Controllers\System\MasterTipeReferensiController::class, 'index']);
+Route::get('v1/tipe-referensi', [App\Http\Controllers\System\MasterTipeReferensiController::class, 'index']);
+
 /*
 |--------------------------------------------------------------------------
 | SSO Token Routes (Custom — kompatibilitas mundur untuk mobile/API client)
@@ -128,6 +134,23 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::put('modules/{module}', [ModuleController::class, 'update']);
     Route::delete('modules/{module}', [ModuleController::class, 'destroy']);
     Route::put('modules/{module}/toggle', [ModuleController::class, 'toggleActive']);
+
+    // Master Referensi (Admin Multi-Modul Management)
+    Route::get('master-referensi', [App\Http\Controllers\System\MasterReferensiController::class, 'index']);
+    Route::get('master-referensi/categories', [App\Http\Controllers\System\MasterReferensiController::class, 'getCategories']);
+    Route::post('master-referensi', [App\Http\Controllers\System\MasterReferensiController::class, 'store']);
+    Route::get('master-referensi/{id}', [App\Http\Controllers\System\MasterReferensiController::class, 'show']);
+    Route::put('master-referensi/{id}', [App\Http\Controllers\System\MasterReferensiController::class, 'update']);
+    Route::patch('master-referensi/{id}/toggle', [App\Http\Controllers\System\MasterReferensiController::class, 'toggleActive']);
+    Route::delete('master-referensi/{id}', [App\Http\Controllers\System\MasterReferensiController::class, 'destroy']);
+
+    // Master Tipe Referensi (Admin Management)
+    Route::get('master-tipe-referensi', [App\Http\Controllers\System\MasterTipeReferensiController::class, 'index']);
+    Route::post('master-tipe-referensi', [App\Http\Controllers\System\MasterTipeReferensiController::class, 'store']);
+    Route::get('master-tipe-referensi/{id}', [App\Http\Controllers\System\MasterTipeReferensiController::class, 'show']);
+    Route::put('master-tipe-referensi/{id}', [App\Http\Controllers\System\MasterTipeReferensiController::class, 'update']);
+    Route::patch('master-tipe-referensi/{id}/toggle', [App\Http\Controllers\System\MasterTipeReferensiController::class, 'toggleActive']);
+    Route::delete('master-tipe-referensi/{id}', [App\Http\Controllers\System\MasterTipeReferensiController::class, 'destroy']);
 });
 
 /*
@@ -337,7 +360,7 @@ Route::prefix('spmb')->group(function () {
     Route::get('tahun-akademik', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getTahunAkademik']);
     Route::get('tarif', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getTarifSpmb']);
     Route::get('master-tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getMasterTipeJalur']);
-    Route::get('referensi/{tipe}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getReferensi']);
+    Route::get('referensi/{tipe}', [App\Http\Controllers\System\MasterReferensiController::class, 'getByTipe']);
     Route::get('berkas-requirement', [\App\Http\Controllers\API\Spmb\BerkasRequirementController::class, 'index']);
     Route::get('master/berkas-requirement', [\App\Http\Controllers\API\Spmb\BerkasRequirementController::class, 'index']);
 });
