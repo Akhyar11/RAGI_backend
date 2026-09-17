@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1` dan `/api/simpeg`  
 > **Autentikasi**: Bearer Token (Passport/Sanctum) / X-API-KEY (Integrasi)  
 > **Dibuat**: 2026-09-14  
-> **Diperbarui**: 2026-09-14 (endpoint keterangan ketidakhadiran + rekap silang cuti)
+> **Diperbarui**: 2026-09-17 (RBAC murni tanpa user_type statis, dynamic sorting sort_by & sort_dir pada realtime log presensi)
 
 Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Python port 8001), geofencing Haversine, dan jadwal shift dinamis yang digunakan oleh aplikasi **Mobile Android (Flutter)** dan dashboard **SIMPEG Web**.
 
@@ -320,11 +320,29 @@ Mengecek konektivitas dan kesiapan microservice Python yang berjalan di port 800
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
+| GET | `/api/simpeg/presensi` | Daftar presensi (Realtime biometrik atau `type=bundle`) dengan filter & dynamic sorting (`sort_by`, `sort_dir`) | ✅ Bearer |
 | POST | `/api/simpeg/presensi/{id}/approve` | Persetujuan manual HR (clock-in hari libur / upaya ditolak) | ✅ Bearer (`simpeg.presensi.manage`) |
 | POST | `/api/simpeg/presensi/keterangan` | Tetapkan keterangan ketidakhadiran (izin/sakit/dinas/alfa) untuk pegawai terjadwal masuk tanpa log | ✅ Bearer (`simpeg.presensi.manage`) |
 | GET | `/api/simpeg/presensi/recap?pegawai_id=&month=&year=` | Rekap bulanan per pegawai (silang cuti disetujui) | ✅ Bearer |
 
 > Clock-in valid langsung tercatat `hadir`/`terlambat` tanpa verifikasi. Verifikasi manual hanya untuk clock-in di hari libur jadwal shift (`menunggu_approval`) dan upaya yang ditolak validasi (`ditolak`).
+
+### GET `/api/simpeg/presensi`
+
+**Query Parameters:**
+- `type`: `bundle` untuk melihat daftar periode presensi / bundle bulanan, atau kosongkan untuk realtime biometrik logs.
+- `search`: Pencarian nama atau NIP pegawai (atau nama periode jika mode bundle).
+- `status`: Filter status kehadiran (`hadir`, `terlambat`, `izin`, `sakit`, `dinas`, `alfa`, dll).
+- `tanggal`: Filter tanggal presensi format `YYYY-MM-DD`.
+- `sort_by`: Kolom pengurutan (`tanggal`, `clock_in`, `clock_out`, `status_kehadiran`, `id`, `created_at`). Default: `created_at`.
+- `sort_dir`: Arah pengurutan (`asc` atau `desc`). Default: `desc`.
+- `page`: Nomor halaman pagination. Default: 1.
+- `per_page`: Jumlah baris data per halaman. Default: 10 / 15.
+
+**Hak Akses RBAC:**
+- Pengguna dengan permission `simpeg.presensi.manage` / `simpeg.presensi.read` atau role `admin_simpeg` / `admin` dapat melihat presensi seluruh pegawai.
+- Karyawan biasa tanpa permission di atas secara otomatis difilter hanya melihat log presensi milik dirinya sendiri (`pegawai_id`).
+
 
 ### POST `/api/simpeg/presensi/keterangan`
 

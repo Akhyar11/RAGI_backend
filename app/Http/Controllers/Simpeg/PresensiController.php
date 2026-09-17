@@ -93,7 +93,7 @@ class PresensiController extends Controller
         }
 
         // 2. Mode Realtime Biometric Attendance
-        $isManager = $user->hasPermission('simpeg.presensi.manage') || $user->hasPermission('simpeg.presensi.read') || $user->user_type === 'admin' || $user->isAdmin();
+        $isManager = $user->hasPermission('simpeg.presensi.manage') || $user->hasPermission('simpeg.presensi.read') || $user->isAdmin() || $user->hasRole('admin_simpeg') || $user->hasRole('admin');
 
         $query = Attendance::with(['employee.unitKerja', 'officeLocation']);
 
@@ -132,8 +132,31 @@ class PresensiController extends Controller
             $query->where('status_kehadiran', $request->status);
         }
 
+        $orderBy = $request->input('sort_by', $request->input('orderBy', 'tanggal'));
+        $orderDir = strtolower($request->input('sort_dir', $request->input('orderDir', 'desc')));
+
+        $allowedSorts = [
+            'tanggal' => 'tanggal',
+            'clock_in' => 'clock_in',
+            'clock_out' => 'clock_out',
+            'status_kehadiran' => 'status_kehadiran',
+            'id' => 'id',
+            'created_at' => 'created_at',
+        ];
+
+        if (array_key_exists($orderBy, $allowedSorts)) {
+            $sortCol = $allowedSorts[$orderBy];
+            $orderDir = in_array($orderDir, ['asc', 'desc']) ? $orderDir : 'desc';
+            $query->orderBy($sortCol, $orderDir);
+            if ($sortCol !== 'clock_in') {
+                $query->orderBy('clock_in', 'desc');
+            }
+        } else {
+            $query->orderByDesc('tanggal')->orderByDesc('clock_in');
+        }
+
         $perPage = min(100, max(1, (int) $request->input('per_page', $request->input('limit', 15))));
-        $data = $query->orderByDesc('tanggal')->orderByDesc('clock_in')->paginate($perPage);
+        $data = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
@@ -367,7 +390,7 @@ class PresensiController extends Controller
         }
 
         $employee = null;
-        if ($request->filled('pegawai_id') && ($request->user()->hasPermission('simpeg.presensi.manage') || $request->user()->user_type === 'admin')) {
+        if ($request->filled('pegawai_id') && ($request->user()->hasPermission('simpeg.presensi.manage') || $request->user()->isAdmin() || $request->user()->hasRole('admin_simpeg'))) {
             $employee = Pegawai::with(['officeLocation', 'shiftTemplate.days'])->find($request->pegawai_id);
         } else {
             $employee = Pegawai::with(['officeLocation', 'shiftTemplate.days'])->where('user_id', $request->user()->id)->first();
@@ -410,7 +433,7 @@ class PresensiController extends Controller
         $validated['face_score'] = (float) ($validated['face_score'] ?? 0.85);
 
         $employee = null;
-        if ($request->filled('pegawai_id') && ($request->user()->hasPermission('simpeg.presensi.manage') || $request->user()->user_type === 'admin')) {
+        if ($request->filled('pegawai_id') && ($request->user()->hasPermission('simpeg.presensi.manage') || $request->user()->isAdmin() || $request->user()->hasRole('admin_simpeg'))) {
             $employee = Pegawai::find($request->pegawai_id);
         } else {
             $employee = Pegawai::where('user_id', $request->user()->id)->first();
@@ -467,7 +490,7 @@ class PresensiController extends Controller
      */
     public function approve(Request $request, int $id): JsonResponse
     {
-        if (!$request->user()->hasPermission('simpeg.presensi.manage') && $request->user()->user_type !== 'admin') {
+        if (!$request->user()->hasPermission('simpeg.presensi.manage') && !$request->user()->isAdmin() && !$request->user()->hasRole('admin_simpeg')) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk menyetujui presensi.',
