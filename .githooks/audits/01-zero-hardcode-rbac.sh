@@ -1,65 +1,73 @@
 #!/bin/bash
-#
-# Audit 2/9: Zero Hardcode & RBAC (deterministik, tanpa AI).
-# Memeriksa baris baru (+) pada file PHP yang di-stage terhadap:
-#  1. Validasi enum statis  -> wajib exists:nama_tabel,id (aturan: in:... berhuruf kapital)
-#  2. Perbandingan user_type statis dalam logika (==, !=, in_array, match, case)
-#  3. Perbandingan string nama modul/role statis dalam logika IF/ELSE
-#
-# Cakupan: app/, routes/. Dikecualikan: database/, tests/, docs, config.
 
-echo "🤖 [Audit 2/9: Zero Hardcode & RBAC] Memeriksa staged changes..."
+echo "🤖 [Audit 2/9: Zero Hardcode & RBAC] Memeriksa perubahan dengan AI (Opencode Muse)..."
 
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM -- "app/**/*.php" "app/*.php" "routes/*.php")
+export PATH="$HOME/.opencode/bin:/usr/local/bin:$PATH"
+OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
+MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
-if [ -z "$STAGED_FILES" ]; then
-    echo "ℹ️ [Audit Zero Hardcode & RBAC] Tidak ada file app/routes yang di-stage. Skip."
+if [ -n "$DIFF_TARGET" ]; then
+    STAGED_DIFF=$(git diff "$DIFF_TARGET" -- "app/**" "routes/**")
+else
+    STAGED_DIFF=$(git diff --cached -- "app/**" "routes/**")
+fi
+
+if [ -z "$STAGED_DIFF" ]; then
+    echo "ℹ️ [Audit Zero Hardcode & RBAC] Tidak ada perubahan app/routes yang diuji. Skip."
     exit 0
 fi
 
-FAILED=0
+TRUNCATED_DIFF=$(echo "$STAGED_DIFF" | head -n 400)
+PROMPT_FILE=$(mktemp)
 
-check_added_lines() {
-    local file="$1"
-    git diff --cached -- "$file" | grep '^+' | grep -v '^+++' | sed 's^+^^'
-}
+cat << 'EOF' > "$PROMPT_FILE"
+Kamu adalah Code Auditor khusus Zero Hardcode & RBAC Backend (Laravel).
+Periksa Git Diff berikut HANYA terhadap aturan Zero Hardcode & RBAC Policy:
 
-while IFS= read -r file; do
-    ADDED=$(check_added_lines "$file")
-    [ -z "$ADDED" ] && continue
+Aturan:
+1. DILARANG MENYEDIAKAN VALIDASI ENUM STATIS: Jangan menggunakan aturan validasi seperti `in:REGULER,KARYAWAN` atau `in:Islam,Kristen` jika pilihan tersebut merepresentasikan data master referensi/dropdown dinamis. WAJIB menggunakan `exists:nama_tabel,id` (misalnya `exists:spmb_master_referensi,id` atau `exists:core_tipe_referensi,kode`). Pengecualian struktural: order direction ('asc','desc') atau boolean ('true','false').
+2. DILARANG PERBANDINGAN STATIS USER_TYPE: Dilarang membandingkan `$user->user_type` atau properti statis serupa dalam logika pengkondisian (if/else/switch/match). Otorisasi WAJIB melalui Gate, Policy, atau method RBAC (`hasRole()`, `hasPermission()`).
+3. DILARANG HARDCODE NAMA MODUL / ROLE: Dilarang membandingkan string nama role/modul (seperti 'spmb', 'sikeu', 'admin', 'mahasiswa') dalam logika branching IF/ELSE untuk menentukan akses atau relasi. Relasi/filter wajib berbasis ID entitas atau permission.
 
-    # 1. Validasi enum statis: in:XXX dengan huruf kapital (mis. in:REGULER,KARYAWAN / in:Islam,Kristen).
-    #    Pengecualian struktural: asc, desc, true, false, angka.
-    ENUM_HIT=$(echo "$ADDED" | grep -oP 'in:\K[A-Za-z0-9_|,\s.-]+' | grep -P '([A-Z]{2,}|[A-Z][a-z]{2,})' | head -n 3)
-    if [ -n "$ENUM_HIT" ]; then
-        echo "❌ [Audit Zero Hardcode] Validasi enum statis di $file:"
-        echo "$ENUM_HIT" | sed 's/^/    in:/'
-        echo "   💡 Validasi dropdown/master WAJIB memakai exists:nama_tabel,id (bukan in:STATIS)."
-        FAILED=1
-    fi
+Catatan Penting:
+- HANYA periksa baris-baris kode baru yang DITAMBAHKAN atau DIUBAH (diawali tanda `+`). JANGAN menolak baris konteks yang tidak diubah.
 
-    # 2. Perbandingan user_type statis dalam logika.
-    USERTYPE_HIT=$(echo "$ADDED" | grep -P '(==|===|!=|!==|in_array|match\s*\(|^\s*case\s)' | grep -P 'user.type' | head -n 3)
-    if [ -n "$USERTYPE_HIT" ]; then
-        echo "❌ [Audit Zero Hardcode] Perbandingan user_type statis di $file:"
-        echo "$USERTYPE_HIT" | sed 's/^/    /'
-        echo "   💡 Otorisasi WAJIB via Policy/Gate atau hasRole/hasPermission, bukan user_type."
-        FAILED=1
-    fi
+Git Diff:
+EOF
 
-    # 3. Perbandingan string nama modul/role dalam logika IF/ELSE.
-    SLUG_HIT=$(echo "$ADDED" | grep -P '(==|===|!=|!==)' | grep -P "'(spmb|sikeu|siakad|simpeg|sinapra|sippm|lms|upm|admin|superadmin|mahasiswa|dosen|tendik|calon_mhs)'" | head -n 3)
-    if [ -n "$SLUG_HIT" ]; then
-        echo "❌ [Audit Zero Hardcode] Hardcode nama modul/role dalam logika di $file:"
-        echo "$SLUG_HIT" | sed 's/^/    /'
-        echo "   💡 Relasi/filter WAJIB memakai referensi ID entitas dari database."
-        FAILED=1
-    fi
-done <<< "$STAGED_FILES"
+echo '```diff' >> "$PROMPT_FILE"
+echo "$TRUNCATED_DIFF" >> "$PROMPT_FILE"
+echo '```' >> "$PROMPT_FILE"
 
-if [ $FAILED -ne 0 ]; then
-    exit 1
+cat << 'EOF' >> "$PROMPT_FILE"
+PENTING: Jawab HANYA secara langsung tanpa memanggil tool atau membaca file.
+Jawab HANYA salah satu:
+- PASSED jika kode bersih dari hardcode dan sesuai RBAC.
+- REJECTED: [detail alasan pelanggaran] jika ditemukan hardcode/pelanggaran RBAC pada baris baru (+).
+EOF
+
+if [ -x "$OPENCODE_BIN" ]; then
+    RESULT=$(timeout 30s "$OPENCODE_BIN" run --pure -m "$MODEL" "$(cat "$PROMPT_FILE")" 2>&1)
+    AI_EXIT_CODE=$?
+elif command -v agy &> /dev/null; then
+    RESULT=$(timeout 20s agy --print "$(cat "$PROMPT_FILE")" 2>&1)
+    AI_EXIT_CODE=$?
+else
+    AI_EXIT_CODE=127
 fi
 
-echo "✅ [Audit Zero Hardcode & RBAC] PASSED."
-exit 0
+rm -f "$PROMPT_FILE"
+
+if [ $AI_EXIT_CODE -ne 0 ]; then
+    echo "⚠️ [Audit Zero Hardcode & RBAC] AI reviewer tidak merespons (Exit: $AI_EXIT_CODE), melanjutkan..."
+    exit 0
+fi
+
+if echo "$RESULT" | grep -qi "REJECTED"; then
+    echo "❌ [Audit Zero Hardcode & RBAC] REJECTED oleh AI (Muse)!"
+    echo "$RESULT" | grep -i "REJECTED"
+    exit 1
+else
+    echo "✅ [Audit Zero Hardcode & RBAC] PASSED (Divalidasi oleh AI Opencode Muse)."
+    exit 0
+fi

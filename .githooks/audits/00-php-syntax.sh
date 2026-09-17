@@ -1,11 +1,15 @@
 #!/bin/bash
 
-echo "🔍 [Audit 1/9: PHP Syntax] Memeriksa sintaks file PHP yang di-stage..."
+echo "🔍 [Audit 1/9: PHP Syntax] Memeriksa sintaks file PHP..."
 
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM -- "*.php")
+if [ -n "$DIFF_TARGET" ]; then
+    STAGED_FILES=$(git diff "$DIFF_TARGET" --name-only --diff-filter=ACM -- "*.php")
+else
+    STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM -- "*.php")
+fi
 
 if [ -z "$STAGED_FILES" ]; then
-    echo "ℹ️ [Audit PHP Syntax] Tidak ada file PHP yang di-stage. Skip."
+    echo "ℹ️ [Audit PHP Syntax] Tidak ada file PHP yang diuji. Skip."
     exit 0
 fi
 
