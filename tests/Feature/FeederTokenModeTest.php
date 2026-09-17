@@ -38,23 +38,22 @@ class FeederTokenModeTest extends TestCase
         return $result->plainTextToken ?? $result->accessToken;
     }
 
-    public function test_token_ditandai_staging_saat_ws_tidak_terjangkau(): void
+    public function test_token_mengembalikan_error_503_strict_saat_ws_tidak_terjangkau(): void
     {
         $response = $this->withHeader('Authorization', 'Bearer ' . $this->token())
             ->getJson('/api/v1/siakad/feeder-sync/token');
 
-        $response->assertStatus(200)
-            ->assertJsonPath('status', 'success')
-            ->assertJsonPath('data.is_staging', true)
-            ->assertJsonStructure(['status', 'message', 'data' => ['token', 'is_staging']]);
+        $response->assertStatus(503)
+            ->assertJsonPath('status', 'error')
+            ->assertJsonStructure(['status', 'message']);
 
-        $token = $response->json('data.token');
-        $this->assertTrue(str_starts_with($token, 'STAGING-TOKEN-'));
+        $message = $response->json('message');
+        $this->assertStringContainsString('Gagal terhubung ke Web Service Neo Feeder', $message);
     }
 
     public function test_update_kredensial_feeder_membuang_token_cache(): void
     {
-        \Illuminate\Support\Facades\Cache::put('neo_feeder_token', 'STAGING-TOKEN-LAMA', 3600);
+        \Illuminate\Support\Facades\Cache::put('neo_feeder_token', 'TOKEN-LAMA', 3600);
 
         $response = $this->withHeader('Authorization', 'Bearer ' . $this->token())
             ->postJson('/api/admin/system-settings', [

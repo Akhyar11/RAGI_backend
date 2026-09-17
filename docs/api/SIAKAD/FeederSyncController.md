@@ -65,6 +65,37 @@
 
 ---
 
+## GET /api/v1/siakad/feeder-sync/token
+
+> Mendapatkan token autentikasi aktif dari Web Service Neo Feeder PDDikti secara STRICT.
+
+### Headers
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Berhasil terhubung ke Web Service Neo Feeder",
+    "data": {
+        "token": "79b389f4284d72851a6659c235ba92b1"
+    }
+}
+```
+
+### Response Gagal / Offline (503 Service Unavailable)
+```json
+{
+    "status": "error",
+    "message": "Gagal terhubung ke Web Service Neo Feeder: Connection refused"
+}
+```
+
+---
+
 ## POST /api/v1/siakad/feeder-sync/trigger
 
 > Memulai proses sinkronisasi atau penarikan data antara SIAKAD lokal dan Neo Feeder PDDikti.

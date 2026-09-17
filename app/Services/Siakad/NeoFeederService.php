@@ -42,82 +42,51 @@ class NeoFeederService
     }
 
     /**
-     * Prefix untuk token simulasi yang dihasilkan lokal saat WS Feeder
-     * tidak terjangkau. Token seperti ini BUKAN koneksi asli.
+     * Dapatkan Token Feeder secara STRICT (dengan Caching)
+     * Mode STRICT: Tidak ada token staging/simulasi palsu. Jika WS Feeder
+     * tidak terjangkau atau kredensial salah, exception dilempar (fail-fast).
      */
-    public const STAGING_TOKEN_PREFIXES = ['STAGING-TOKEN-', 'FEEDER-TOKEN-'];
-
-    /**
-     * Apakah token merupakan token staging/simulasi lokal?
-     */
-    public function isStagingToken(string $token): bool
-    {
-        foreach (self::STAGING_TOKEN_PREFIXES as $prefix) {
-            if (str_starts_with($token, $prefix)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Dapatkan token beserta status keasliannya.
-     *
-     * @return array{token: string, is_staging: bool}
-     */
-    public function getTokenInfo(): array
-    {
-        $token = $this->getToken();
-
-        return [
-            'token'      => $token,
-            'is_staging' => $this->isStagingToken($token),
-        ];
-    }
-
-    /**
-     * Dapatkan Token Feeder (dengan Caching & Simulasi Offline Fallback)
-     */
-    public function getToken()
+    public function getToken(): string
     {
         return Cache::remember('neo_feeder_token', 3600, function () {
             $config = $this->getConfig();
 
             if (empty($config['url']) || empty($config['username'])) {
-                throw new \Exception("Konfigurasi Neo Feeder belum disetting.");
+                throw new \RuntimeException("Konfigurasi Neo Feeder belum disetting (URL atau Username kosong). Silakan atur di IAM → Pengaturan Sistem.");
             }
 
             try {
-                $response = Http::timeout(120)->post($config['url'], [
+                $response = Http::timeout(15)->post($config['url'], [
                     'act' => 'GetToken',
                     'username' => $config['username'],
                     'password' => $config['password'],
                 ]);
 
+                if (!$response->successful()) {
+                    throw new \RuntimeException("Server Neo Feeder mengembalikan HTTP status {$response->status()}.");
+                }
+
                 $result = $response->json();
 
-                if (isset($result['error_code']) && $result['error_code'] == 0 && isset($result['data']['token'])) {
+                if (isset($result['error_code']) && $result['error_code'] == 0 && !empty($result['data']['token'])) {
                     return $result['data']['token'];
                 }
 
-                if (isset($result['error_desc'])) {
-                    throw new \Exception($result['error_desc']);
-                }
-
-                // Fallback simulation token jika endpoint WS lokal belum menyala
-                return 'FEEDER-TOKEN-' . strtoupper(bin2hex(random_bytes(16)));
+                $errorDesc = $result['error_desc'] ?? 'Respon tidak valid dari Neo Feeder.';
+                throw new \RuntimeException("Autentikasi Neo Feeder gagal: {$errorDesc}");
 
             } catch (\Exception $e) {
-                Log::warning('Neo Feeder Offline/Fallback: ' . $e->getMessage());
-                // Mengembalikan stand-alone staging token agar sinkronisasi lokal tetap dapat berjalan
-                return 'STAGING-TOKEN-' . strtoupper(substr(md5($config['username'] . time()), 0, 24));
+                Cache::forget('neo_feeder_token');
+                Log::error('Neo Feeder Connection Failed: ' . $e->getMessage());
+                throw new \RuntimeException("Gagal terhubung ke Web Service Neo Feeder: " . $e->getMessage(), 0, $e);
             }
         });
     }
 
     /**
-     * Request ke endpoint Feeder
+     * Request ke endpoint Feeder (STRICT Mode)
+     * Mengembalikan response asli dari Web Service Neo Feeder.
+     * Jika terjadi kegagalan jaringan atau timeout, exception dilempar (fail-fast).
      */
     public function request($act, $params = [])
     {
@@ -131,8 +100,14 @@ class NeoFeederService
 
         try {
             $response = Http::timeout(120)->post($config['url'], $payload);
+
+            if (!$response->successful()) {
+                throw new \RuntimeException("WS Neo Feeder mengembalikan HTTP {$response->status()} pada aksi {$act}.");
+            }
+
             $result = $response->json();
 
+            // Token expired (error_code 100 di Neo Feeder), refresh sekali
             if (isset($result['error_code']) && $result['error_code'] == 100) { 
                 Cache::forget('neo_feeder_token');
                 $payload['token'] = $this->getToken();
@@ -140,30 +115,15 @@ class NeoFeederService
                 $result = $response->json();
             }
 
-            if ($result && isset($result['error_code'])) {
+            if (is_array($result) && isset($result['error_code'])) {
                 return $result;
             }
 
-            // Standalone mock response jika server WS Feeder offline
-            return [
-                'error_code' => 0,
-                'error_desc' => 'Sukses (Simulasi Standalone)',
-                'data' => [
-                    'id_feeder' => 'FE-' . strtoupper(uniqid()),
-                    'timestamp' => now()->toISOString(),
-                ]
-            ];
+            throw new \RuntimeException("Respon tidak valid dari Neo Feeder pada aksi {$act}.");
 
         } catch (\Exception $e) {
-            Log::info("Neo Feeder Standalone Mode ($act): " . $e->getMessage());
-            return [
-                'error_code' => 0,
-                'error_desc' => 'Tersimpan di Staging Lokal',
-                'data' => [
-                    'id_feeder' => 'STG-' . strtoupper(uniqid()),
-                    'is_staging' => true,
-                ]
-            ];
+            Log::error("Neo Feeder Request Failed ({$act}): " . $e->getMessage());
+            throw new \RuntimeException("Permintaan ke Neo Feeder gagal ({$act}): " . $e->getMessage(), 0, $e);
         }
     }
 }

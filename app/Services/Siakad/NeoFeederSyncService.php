@@ -86,7 +86,13 @@ class NeoFeederSyncService
                 }
 
                 $res = $this->feederService->request($action, $payload);
-                $feederId = $res['data']['id_feeder'] ?? ($mhs->id_feeder_biodata ?: 'FE-BIO-' . $mhs->id);
+                if (isset($res['error_code']) && $res['error_code'] !== 0) {
+                    throw new \RuntimeException($res['error_desc'] ?? 'Gagal sinkronisasi biodata mahasiswa ke Neo Feeder');
+                }
+                $feederId = $res['data']['id_feeder'] ?? $mhs->id_feeder_biodata;
+                if (empty($feederId)) {
+                    throw new \RuntimeException('Neo Feeder tidak mengembalikan ID Biodata yang valid');
+                }
 
                 $mhs->update([
                     'id_feeder_biodata' => $feederId,
@@ -151,7 +157,10 @@ class NeoFeederSyncService
 
         foreach ($mahasiswas as $mhs) {
             try {
-                $bioFeederId = $mhs->id_feeder_biodata ?: ($mhs->id_feeder ?: 'FE-BIO-' . $mhs->id);
+                $bioFeederId = $mhs->id_feeder_biodata ?: $mhs->id_feeder;
+                if (empty($bioFeederId)) {
+                    throw new \RuntimeException("Mahasiswa {$mhs->nama_lengkap} ({$mhs->nim}) belum memiliki ID Biodata di Feeder. Sinkronkan biodata mahasiswa terlebih dahulu.");
+                }
                 $isTransfer = (bool) ($mhs->konversi_id || $mhs->konversiTransfer);
 
                 $record = [
@@ -174,7 +183,13 @@ class NeoFeederSyncService
                 }
 
                 $res = $this->feederService->request($action, $payload);
-                $feederId = $res['data']['id_feeder'] ?? ($mhs->id_feeder_riwayat ?: 'FE-REG-' . $mhs->id);
+                if (isset($res['error_code']) && $res['error_code'] !== 0) {
+                    throw new \RuntimeException($res['error_desc'] ?? 'Gagal sinkronisasi riwayat pendidikan ke Neo Feeder');
+                }
+                $feederId = $res['data']['id_feeder'] ?? $mhs->id_feeder_riwayat;
+                if (empty($feederId)) {
+                    throw new \RuntimeException('Neo Feeder tidak mengembalikan ID Riwayat Pendidikan yang valid');
+                }
 
                 $mhs->update(['id_feeder_riwayat' => $feederId]);
 
@@ -268,7 +283,13 @@ class NeoFeederSyncService
         }
 
         $resBio = $this->feederService->request($bioAction, $bioPayload);
-        $bioFeederId = $resBio['data']['id_feeder'] ?? ($mhs->id_feeder_biodata ?: 'FE-BIO-' . $mhs->id);
+        if (isset($resBio['error_code']) && $resBio['error_code'] !== 0) {
+            throw new \RuntimeException($resBio['error_desc'] ?? 'Gagal sinkronisasi biodata mahasiswa ke Neo Feeder');
+        }
+        $bioFeederId = $resBio['data']['id_feeder'] ?? $mhs->id_feeder_biodata;
+        if (empty($bioFeederId)) {
+            throw new \RuntimeException('Neo Feeder tidak mengembalikan ID Biodata yang valid');
+        }
 
         // 2. Sync Riwayat Pendidikan
         $isTransfer = (bool) ($mhs->konversi_id || $mhs->konversiTransfer);
@@ -292,7 +313,13 @@ class NeoFeederSyncService
         }
 
         $resRiwayat = $this->feederService->request($riwayatAction, $riwayatPayload);
-        $riwayatFeederId = $resRiwayat['data']['id_feeder'] ?? ($mhs->id_feeder_riwayat ?: 'FE-REG-' . $mhs->id);
+        if (isset($resRiwayat['error_code']) && $resRiwayat['error_code'] !== 0) {
+            throw new \RuntimeException($resRiwayat['error_desc'] ?? 'Gagal sinkronisasi riwayat pendidikan ke Neo Feeder');
+        }
+        $riwayatFeederId = $resRiwayat['data']['id_feeder'] ?? $mhs->id_feeder_riwayat;
+        if (empty($riwayatFeederId)) {
+            throw new \RuntimeException('Neo Feeder tidak mengembalikan ID Riwayat Pendidikan yang valid');
+        }
 
         $mhs->update([
             'id_feeder_biodata' => $bioFeederId,
@@ -365,11 +392,6 @@ class NeoFeederSyncService
                     } elseif (is_array($res['data'])) {
                         $feederId = $res['data']['id_dosen'] ?? $res['data']['id_feeder'] ?? null;
                     }
-                }
-
-                // Fallback simulation support jika server standalone mock
-                if (empty($feederId) && isset($res['data']['id_feeder'])) {
-                    $feederId = $res['data']['id_feeder'];
                 }
 
                 if (empty($feederId) && (!isset($res['error_code']) || $res['error_code'] != 0)) {
@@ -667,19 +689,6 @@ class NeoFeederSyncService
                 $batch = [];
                 if (isset($res['data']) && is_array($res['data'])) {
                     $batch = isset($res['data'][0]) ? $res['data'] : [$res['data']];
-                }
-
-                // Fallback simulation jika server standalone mock
-                if (empty($batch) && $offset === 0 && isset($res['data']['id_feeder'])) {
-                    $batch = [
-                        [
-                            'id_dosen' => $res['data']['id_feeder'],
-                            'nama_dosen' => 'Dosen Simulasi Feeder',
-                            'nidn' => '0699887766',
-                            'nip' => '199001012020011001',
-                            'id_status_aktif' => 'A',
-                        ]
-                    ];
                 }
 
                 foreach ($batch as $b) {
@@ -1239,7 +1248,13 @@ class NeoFeederSyncService
                 ];
 
                 $res = $this->feederService->request('InsertMataKuliah', ['record' => $record]);
-                $feederId = $res['data']['id_feeder'] ?? 'FE-MK-' . $mk->id;
+                if (isset($res['error_code']) && $res['error_code'] !== 0) {
+                    throw new \RuntimeException($res['error_desc'] ?? 'Gagal sinkronisasi mata kuliah ke Neo Feeder');
+                }
+                $feederId = $res['data']['id_feeder'] ?? null;
+                if (empty($feederId)) {
+                    throw new \RuntimeException('Neo Feeder tidak mengembalikan ID Mata Kuliah yang valid');
+                }
 
                 $mk->update(['id_feeder' => $feederId]);
 
@@ -1292,14 +1307,25 @@ class NeoFeederSyncService
 
         foreach ($kelasList as $k) {
             try {
+                $mkFeederId = $k->mataKuliah?->id_feeder;
+                if (empty($mkFeederId)) {
+                    throw new \RuntimeException("Mata kuliah {$k->mataKuliah?->nama} belum disinkronkan ke Neo Feeder. Sinkronkan mata kuliah terlebih dahulu.");
+                }
+
                 $record = [
                     'nama_kelas_kuliah' => $k->nama_kelas,
-                    'id_mata_kuliah' => $k->mataKuliah?->id_feeder ?? 'FE-MK-' . $k->mata_kuliah_id,
+                    'id_mata_kuliah' => $mkFeederId,
                     'kapasitas' => $k->kapasitas,
                 ];
 
                 $res = $this->feederService->request('InsertKelasKuliah', ['record' => $record]);
-                $feederId = $res['data']['id_feeder'] ?? 'FE-KLS-' . $k->id;
+                if (isset($res['error_code']) && $res['error_code'] !== 0) {
+                    throw new \RuntimeException($res['error_desc'] ?? 'Gagal sinkronisasi kelas ke Neo Feeder');
+                }
+                $feederId = $res['data']['id_feeder'] ?? null;
+                if (empty($feederId)) {
+                    throw new \RuntimeException('Neo Feeder tidak mengembalikan ID Kelas yang valid');
+                }
                 $k->update(['id_feeder' => $feederId]);
 
                 FeederMapping::updateOrCreate(
@@ -1393,11 +1419,6 @@ class NeoFeederSyncService
                     } elseif (is_array($res['data'])) {
                         $idReg = $res['data']['id_registrasi_dosen'] ?? $res['data']['id_feeder'] ?? null;
                     }
-                }
-
-                // Fallback simulation support jika server standalone mock
-                if (empty($idReg) && isset($res['data']['id_feeder'])) {
-                    $idReg = $res['data']['id_feeder'];
                 }
 
                 if (empty($idReg) && (!isset($res['error_code']) || $res['error_code'] != 0)) {
@@ -1542,10 +1563,16 @@ class NeoFeederSyncService
                 }
 
                 $res = $this->feederService->request($action, $payload);
+                if (isset($res['error_code']) && $res['error_code'] !== 0) {
+                    throw new \RuntimeException($res['error_desc'] ?? 'Gagal sinkronisasi aktivitas ajar dosen ke Neo Feeder');
+                }
                 $feederId = $res['data']['id_aktivitas_mengajar'] 
                     ?? $res['data']['id_ajar'] 
                     ?? $res['data']['id_feeder'] 
-                    ?? ($dp->id_feeder ?: 'FE-AJAR-' . $dp->id);
+                    ?? $dp->id_feeder;
+                if (empty($feederId)) {
+                    throw new \RuntimeException('Neo Feeder tidak mengembalikan ID Aktivitas Mengajar yang valid');
+                }
 
                 $dp->update([
                     'penugasan_id' => $penugasan?->id,

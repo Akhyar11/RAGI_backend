@@ -56,19 +56,17 @@ class FeederSyncController extends Controller
     public function getToken()
     {
         try {
-            $info = $this->feederService->getTokenInfo();
+            $token = $this->feederService->getToken();
             return response()->json([
                 'status' => 'success',
-                'message' => $info['is_staging']
-                    ? 'WS Feeder tidak terjangkau. Token staging lokal diterbitkan agar sinkronisasi tetap dapat diuji.'
-                    : 'Berhasil mendapatkan token Neo Feeder',
-                'data' => ['token' => $info['token'], 'is_staging' => $info['is_staging']]
+                'message' => 'Berhasil terhubung ke Web Service Neo Feeder',
+                'data' => ['token' => $token]
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => $e->getMessage()
-            ], 500);
+            ], 503);
         }
     }
 
