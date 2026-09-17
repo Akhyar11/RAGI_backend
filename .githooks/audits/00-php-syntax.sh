@@ -24,7 +24,10 @@ while IFS= read -r file; do
     OUTPUT=$(php -l "$file" 2>&1)
     if [ $? -ne 0 ]; then
         echo "❌ [Audit PHP Syntax] Sintaks error di $file:"
+        echo "================================ DETAIL SINTAKS ERROR =============================="
         echo "$OUTPUT"
+        echo "===================================================================================="
+        echo "💡 Perbaiki kesalahan sintaks PHP di atas sebelum melanjutkan commit."
         FAILED=1
     fi
 done <<< "$STAGED_FILES"

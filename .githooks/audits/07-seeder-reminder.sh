@@ -1,4 +1,7 @@
 #!/bin/bash
+# ==============================================================================
+# AUDIT 07: Seeder & Migration Reviewer (BE) — STRICT HYBRID
+# ==============================================================================
 
 echo "🌱 [Audit 8/9: Seeder Reminder] Memeriksa perubahan dengan AI (Opencode Muse)..."
 
@@ -17,41 +20,44 @@ if [ -z "$STAGED_DIFF" ]; then
     exit 0
 fi
 
-TRUNCATED_DIFF=$(echo "$STAGED_DIFF" | head -n 400)
 PROMPT_FILE=$(mktemp)
 
 cat << 'EOF' > "$PROMPT_FILE"
-Kamu adalah Code Auditor khusus Database Migration & Seeder Laravel.
+Kamu adalah Code Auditor khusus Database Migration & Seeder Laravel (Strict Backend Reviewer).
 Periksa Git Diff migration/seeder berikut:
 
-Aturan Seeder & Migration:
+Aturan Baku (STRICT):
 1. PEMBERIAN DATA AWAL (SEEDER):
    - Jika ada tabel master baru yang membutuhkan data inisialisasi awal sistem (seperti master referensi, tipe referensi, permission, default roles), pastikan seeder telah disiapkan atau disisipkan secara idempoten.
 2. METODE DOWN() SIMETRIS:
-   - Migration harus memiliki pembalikan `down()` yang membalikkan `up()` secara aman.
+   - Migration harus memiliki pembalikan `down()` yang membalikkan `up()` secara simetris dan aman tanpa meninggalkan data/tabel yatim.
 
 Catatan:
-- Bersikap toleran jika migrasi hanya penambahan kolom kecil atau seeder sudah lengkap.
+- HANYA periksa baris-baris kode baru yang DITAMBAHKAN atau DIUBAH (diawali tanda `+`). JANGAN menolak baris konteks yang tidak diubah.
 
 Git Diff:
 EOF
 
 echo '```diff' >> "$PROMPT_FILE"
-echo "$TRUNCATED_DIFF" >> "$PROMPT_FILE"
+echo "$STAGED_DIFF" >> "$PROMPT_FILE"
 echo '```' >> "$PROMPT_FILE"
 
 cat << 'EOF' >> "$PROMPT_FILE"
 PENTING: Jawab HANYA secara langsung tanpa memanggil tool atau membaca file.
-Jawab HANYA salah satu:
-- PASSED jika migration/seeder sudah baik.
-- REJECTED: [detail alasan] jika ditemukan inkonsistensi parah pada migration/seeder.
+Format Respon:
+- Jika migration/seeder sudah baik dan simetris, jawab TEPAT: PASSED
+- Jika ditemukan pelanggaran pada baris baru (+), awali respon dengan REJECTED dan berikan rincian lengkap:
+  * File & Potongan Baris Melanggar: (nama file dan baris/kode yang bersangkutan)
+  * Aturan yang Dilanggar: (nama aturan migration/seeder yang dilanggar)
+  * Alasan Penolakan: (penjelasan detail mengapa ditolak)
+  * Solusi / Rekomendasi Perbaikan: (solusi konkrit atau contoh kode perbaikan)
 EOF
 
 if [ -x "$OPENCODE_BIN" ]; then
-    RESULT=$(timeout 30s "$OPENCODE_BIN" run --pure -m "$MODEL" "$(cat "$PROMPT_FILE")" 2>&1)
+    RESULT=$(timeout 45s "$OPENCODE_BIN" run --pure -m "$MODEL" "$(cat "$PROMPT_FILE")" 2>&1)
     AI_EXIT_CODE=$?
 elif command -v agy &> /dev/null; then
-    RESULT=$(timeout 20s agy --print "$(cat "$PROMPT_FILE")" 2>&1)
+    RESULT=$(timeout 30s agy --print "$(cat "$PROMPT_FILE")" 2>&1)
     AI_EXIT_CODE=$?
 else
     AI_EXIT_CODE=127
@@ -60,13 +66,24 @@ fi
 rm -f "$PROMPT_FILE"
 
 if [ $AI_EXIT_CODE -ne 0 ]; then
-    echo "⚠️ [Audit Seeder] AI reviewer tidak merespons (Exit: $AI_EXIT_CODE), melanjutkan..."
-    exit 0
+    echo "❌ [Audit Seeder] REJECTED: AI Reviewer gagal/timeout (Exit: $AI_EXIT_CODE)!"
+    exit 1
 fi
+
+CLEAN_RESULT=$(echo "$RESULT" | sed -e '/^> build/d' -e '/^Loaded config/d' | awk '/./{p=1} p')
 
 if echo "$RESULT" | grep -qi "REJECTED"; then
     echo "❌ [Audit Seeder] REJECTED oleh AI (Muse)!"
-    echo "$RESULT" | grep -i "REJECTED"
+    echo "================================ DETAIL TEMUAN AUDIT ================================"
+    echo "$CLEAN_RESULT"
+    echo "===================================================================================="
+    echo "💡 Harap perbaiki seluruh pelanggaran di atas sebelum melakukan commit."
+    exit 1
+elif ! echo "$RESULT" | grep -qi "PASSED"; then
+    echo "❌ [Audit Seeder] REJECTED: AI tidak memberikan keputusan PASSED yang valid!"
+    echo "================================ DETAIL OUTPUT ====================================="
+    echo "$CLEAN_RESULT"
+    echo "===================================================================================="
     exit 1
 else
     echo "✅ [Audit Seeder] PASSED (Divalidasi oleh AI Opencode Muse)."
