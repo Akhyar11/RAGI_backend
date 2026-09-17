@@ -13,10 +13,23 @@ use Illuminate\Http\JsonResponse;
 class MasterReferensiController extends Controller
 {
     /**
+     * Check if current user has administrative permission for master referensi
+     */
+    private function authorizeAdmin(Request $request): void
+    {
+        $user = $request->user();
+        if (!$user || (!$user->isSuperAdmin() && !$user->isAdmin() && !$user->hasPermission('iam.roles.update'))) {
+            abort(403, 'Anda tidak memiliki hak akses untuk mengelola master referensi.');
+        }
+    }
+
+    /**
      * Display a listing of the resource with filters.
      */
     public function index(Request $request): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $query = MasterReferensi::query();
 
         if ($request->filled('modul') && $request->modul !== 'all') {
@@ -67,6 +80,8 @@ class MasterReferensiController extends Controller
      */
     public function getCategories(Request $request): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $query = MasterTipeReferensi::withCount('items')
             ->where('is_active', true);
 
@@ -106,6 +121,8 @@ class MasterReferensiController extends Controller
      */
     public function store(StoreMasterReferensiRequest $request): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $validated = $request->validated();
         
         if (!isset($validated['modul']) || empty($validated['modul'])) {
@@ -133,8 +150,10 @@ class MasterReferensiController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show($id): JsonResponse
+    public function show(Request $request, $id): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $referensi = MasterReferensi::findOrFail($id);
 
         return response()->json([
@@ -148,6 +167,8 @@ class MasterReferensiController extends Controller
      */
     public function update(UpdateMasterReferensiRequest $request, $id): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $referensi = MasterReferensi::findOrFail($id);
         $referensi->update($request->validated());
 
@@ -161,8 +182,10 @@ class MasterReferensiController extends Controller
     /**
      * Toggle active status.
      */
-    public function toggleActive($id): JsonResponse
+    public function toggleActive(Request $request, $id): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $referensi = MasterReferensi::findOrFail($id);
         $referensi->is_active = !$referensi->is_active;
         $referensi->save();
@@ -177,8 +200,10 @@ class MasterReferensiController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy($id): JsonResponse
+    public function destroy(Request $request, $id): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $referensi = MasterReferensi::findOrFail($id);
         $referensi->delete();
 

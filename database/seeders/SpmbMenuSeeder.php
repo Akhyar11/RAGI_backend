@@ -123,11 +123,27 @@ class SpmbMenuSeeder extends Seeder
             }
         }
 
-        $roles = Role::all();
-        foreach ($roles as $role) {
-            if (method_exists($role, 'menus')) {
-                $role->menus()->syncWithoutDetaching($allMenuIds);
-            }
+        $adminRoleSlugs = ['superadmin', 'admin', 'admin_spmb', 'panitia_spmb'];
+        $spmbAdminRoles = Role::whereIn('slug', $adminRoleSlugs)->get();
+        foreach ($spmbAdminRoles as $role) {
+            $role->menus()->syncWithoutDetaching($allMenuIds);
+        }
+
+        // Untuk calon mahasiswa, hanya berikan menu pendaftaran dan seleksi
+        $studentMenuIds = Menu::where('module', $modSpmb)
+            ->whereIn('url', [
+                '/spmb/dashboard',
+                '/spmb/registrasi',
+                '/spmb/daftar-ulang',
+                '/spmb/seleksi',
+                '#seleksi_spmb',
+            ])
+            ->pluck('id')
+            ->toArray();
+
+        $calonMhsRole = Role::where('slug', 'calon_mhs')->first();
+        if ($calonMhsRole) {
+            $calonMhsRole->menus()->syncWithoutDetaching($studentMenuIds);
         }
     }
 }

@@ -14,10 +14,23 @@ use Illuminate\Support\Facades\DB;
 class MasterTipeReferensiController extends Controller
 {
     /**
+     * Check if current user has administrative permission for master tipe referensi
+     */
+    private function authorizeAdmin(Request $request): void
+    {
+        $user = $request->user();
+        if (!$user || (!$user->isSuperAdmin() && !$user->isAdmin() && !$user->hasPermission('iam.roles.update'))) {
+            abort(403, 'Anda tidak memiliki hak akses untuk mengelola master tipe referensi.');
+        }
+    }
+
+    /**
      * Display a listing of master tipe referensi.
      */
     public function index(Request $request): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $query = MasterTipeReferensi::withCount('items');
 
         if ($request->filled('modul') && $request->modul !== 'all') {
@@ -58,6 +71,8 @@ class MasterTipeReferensiController extends Controller
      */
     public function store(StoreMasterTipeReferensiRequest $request): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $data = $request->validated();
         if (!isset($data['urutan'])) {
             $data['urutan'] = (MasterTipeReferensi::max('urutan') ?? 0) + 1;
@@ -75,8 +90,10 @@ class MasterTipeReferensiController extends Controller
     /**
      * Display the specified master tipe referensi.
      */
-    public function show($id): JsonResponse
+    public function show(Request $request, $id): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $tipe = MasterTipeReferensi::withCount('items')
             ->where('id', $id)
             ->orWhere('kode', $id)
@@ -93,6 +110,8 @@ class MasterTipeReferensiController extends Controller
      */
     public function update(UpdateMasterTipeReferensiRequest $request, $id): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $tipe = MasterTipeReferensi::where('id', $id)
             ->orWhere('kode', $id)
             ->firstOrFail();
@@ -119,8 +138,10 @@ class MasterTipeReferensiController extends Controller
     /**
      * Toggle active status.
      */
-    public function toggleActive($id): JsonResponse
+    public function toggleActive(Request $request, $id): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $tipe = MasterTipeReferensi::where('id', $id)
             ->orWhere('kode', $id)
             ->firstOrFail();
@@ -138,8 +159,10 @@ class MasterTipeReferensiController extends Controller
     /**
      * Remove the specified master tipe referensi.
      */
-    public function destroy($id): JsonResponse
+    public function destroy(Request $request, $id): JsonResponse
     {
+        $this->authorizeAdmin($request);
+
         $tipe = MasterTipeReferensi::withCount('items')
             ->where('id', $id)
             ->orWhere('kode', $id)

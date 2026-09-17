@@ -23,7 +23,6 @@ class MenuService
         }
 
         $isSuperAdmin = $user->isSuperAdmin();
-        $isAdmin = $user->isAdmin();
 
         // 1. Dapatkan daftar id role dan slug permissions yang dimiliki user
         $roleIds = $user->roles()->pluck('core_roles.id')->toArray();
@@ -41,14 +40,21 @@ class MenuService
             $cq->with('permission')->where('is_active', true);
             if (!$isSuperAdmin) {
                 $cq->where(function($q) use ($roleIds, $permissionSlugs) {
-                    $q->whereHas('permission', function($pq) use ($permissionSlugs) {
-                        $pq->whereIn('slug', $permissionSlugs);
+                    $q->where(function($permQ) use ($permissionSlugs) {
+                        $permQ->whereNotNull('permission_id')
+                              ->whereHas('permission', function($pq) use ($permissionSlugs) {
+                                  $pq->whereIn('slug', $permissionSlugs);
+                              });
                     })
-                    ->orWhereHas('roles', function($rq) use ($roleIds) {
-                        $rq->whereIn('core_roles.id', $roleIds);
+                    ->orWhere(function($roleQ) use ($roleIds) {
+                        $roleQ->whereNull('permission_id')
+                              ->whereHas('roles', function($rq) use ($roleIds) {
+                                  $rq->whereIn('core_roles.id', $roleIds);
+                              });
                     })
                     ->orWhere(function($pub) {
-                        $pub->whereNull('permission_id')->whereDoesntHave('roles');
+                        $pub->whereNull('permission_id')
+                            ->whereDoesntHave('roles');
                     });
                 });
             }
@@ -63,24 +69,36 @@ class MenuService
         if (!$isSuperAdmin) {
             $query->where(function($q) use ($roleIds, $permissionSlugs) {
                 // 1. Root menu memiliki permission yang dimiliki user
-                $q->whereHas('permission', function($pq) use ($permissionSlugs) {
-                    $pq->whereIn('slug', $permissionSlugs);
+                $q->where(function($permQ) use ($permissionSlugs) {
+                    $permQ->whereNotNull('permission_id')
+                          ->whereHas('permission', function($pq) use ($permissionSlugs) {
+                              $pq->whereIn('slug', $permissionSlugs);
+                          });
                 })
-                // 2. ATAU root menu memiliki role yang cocok
-                ->orWhereHas('roles', function($rq) use ($roleIds) {
-                    $rq->whereIn('core_roles.id', $roleIds);
+                // 2. ATAU root menu tanpa permission_id tetapi memiliki role yang cocok
+                ->orWhere(function($roleQ) use ($roleIds) {
+                    $roleQ->whereNull('permission_id')
+                          ->whereHas('roles', function($rq) use ($roleIds) {
+                              $rq->whereIn('core_roles.id', $roleIds);
+                          });
                 })
-                // 3. ATAU root menu adalah header grup '#' yang memiliki child yang berizin
+                // 3. ATAU root menu adalah grup hierarki yang memiliki child yang berizin
                 ->orWhere(function($grp) use ($roleIds, $permissionSlugs) {
-                    $grp->where('url', 'like', '#%')
+                    $grp->whereNull('permission_id')
                         ->whereHas('children', function($cq) use ($roleIds, $permissionSlugs) {
                             $cq->where('is_active', true)
                                ->where(function($subQ) use ($roleIds, $permissionSlugs) {
-                                   $subQ->whereHas('permission', function($pq) use ($permissionSlugs) {
-                                       $pq->whereIn('slug', $permissionSlugs);
+                                   $subQ->where(function($sp) use ($permissionSlugs) {
+                                       $sp->whereNotNull('permission_id')
+                                          ->whereHas('permission', function($pq) use ($permissionSlugs) {
+                                              $pq->whereIn('slug', $permissionSlugs);
+                                          });
                                    })
-                                   ->orWhereHas('roles', function($rq) use ($roleIds) {
-                                       $rq->whereIn('core_roles.id', $roleIds);
+                                   ->orWhere(function($sr) use ($roleIds) {
+                                       $sr->whereNull('permission_id')
+                                          ->whereHas('roles', function($rq) use ($roleIds) {
+                                              $rq->whereIn('core_roles.id', $roleIds);
+                                          });
                                    });
                                });
                         });
@@ -90,10 +108,10 @@ class MenuService
 
         $menus = $query->orderBy('order_index')->get();
 
-        // 3. Filter akhir untuk parent grup '#' yang tidak punya anak aktif
+        // 3. Filter akhir untuk parent grup yang tidak punya anak aktif
         if (!$isSuperAdmin) {
             $menus = $menus->filter(function ($menu) {
-                if (str_starts_with($menu->url, '#')) {
+                if (empty($menu->url) || str_starts_with($menu->url, '#')) {
                     return $menu->children && $menu->children->count() > 0;
                 }
                 return true;

@@ -127,12 +127,19 @@ return new class extends Migration
                         $moduleSlug = 'sippm';
                     }
 
-                    $roleMenuIds = Menu::whereIn('module', ['sso', $moduleSlug])
-                        ->where(function ($q) {
-                            $q->whereNull('permission_id')
-                              ->orWhere('url', 'like', '/profile%')
-                              ->orWhere('url', '#akun_keamanan')
-                              ->orWhere('url', '/dashboard');
+                    $roleMenuIds = Menu::where(function ($mq) use ($moduleSlug) {
+                            $mq->where('module', $moduleSlug)
+                               ->whereNull('permission_id')
+                               ->where('url', 'not like', '%/master/%')
+                               ->where('url', 'not like', '#master_%');
+                        })
+                        ->orWhere(function ($ssoQ) {
+                            $ssoQ->where('module', 'sso')
+                                 ->where(function ($sq) {
+                                     $sq->where('url', 'like', '/profile%')
+                                        ->orWhere('url', '#akun_keamanan')
+                                        ->orWhere('url', '/dashboard');
+                                 });
                         })
                         ->pluck('id')
                         ->toArray();

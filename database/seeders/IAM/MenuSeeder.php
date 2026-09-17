@@ -40,6 +40,8 @@ class MenuSeeder extends Seeder
                     ['name' => 'Plotting Role Menu', 'url' => '/admin/role-menus', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 6],
                     ['name' => 'Master Menu', 'url' => '/admin/menus', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 7],
                     ['name' => 'Master Modul', 'url' => '/admin/modules', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 8],
+                    ['name' => 'Master Data Referensi', 'url' => '/admin/master-referensi', 'icon' => 'FaDatabase', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 9],
+                    ['name' => 'Master Tipe Referensi', 'url' => '/admin/master-tipe-referensi', 'icon' => 'FaTags', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 10],
                 ]
             ],
             [
@@ -484,12 +486,19 @@ class MenuSeeder extends Seeder
                 if (in_array($role->slug, ['operator_sikeu', 'kabag_keuangan'])) {
                     $moduleSlug = 'sikeu';
                 }
-                $roleMenuIds = Menu::whereIn('module', ['sso', $moduleSlug])
-                    ->where(function($q) {
-                        $q->whereNull('permission_id')
-                          ->orWhere('url', 'like', '/profile%')
-                          ->orWhere('url', '#akun_keamanan')
-                          ->orWhere('url', '/dashboard');
+                $roleMenuIds = Menu::where(function ($mq) use ($moduleSlug) {
+                        $mq->where('module', $moduleSlug)
+                           ->whereNull('permission_id')
+                           ->where('url', 'not like', '%/master/%')
+                           ->where('url', 'not like', '#master_%');
+                    })
+                    ->orWhere(function ($ssoQ) {
+                        $ssoQ->where('module', 'sso')
+                             ->where(function ($sq) {
+                                 $sq->where('url', 'like', '/profile%')
+                                    ->orWhere('url', '#akun_keamanan')
+                                    ->orWhere('url', '/dashboard');
+                             });
                     })
                     ->pluck('id')
                     ->toArray();
