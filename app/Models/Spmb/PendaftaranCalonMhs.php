@@ -103,9 +103,19 @@ class PendaftaranCalonMhs extends Model
         return $this->belongsTo(GelombangPenerimaan::class, 'gelombang_id');
     }
 
+    public function gelombang_penerimaan()
+    {
+        return $this->gelombangPenerimaan();
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function konversi()
+    {
+        return $this->hasOne(KonversiMahasiswa::class, 'pendaftaran_id');
     }
 
     public function programStudi()

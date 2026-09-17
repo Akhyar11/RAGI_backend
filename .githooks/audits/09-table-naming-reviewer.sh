@@ -5,7 +5,7 @@
 
 echo "🗄️ [Audit 9/9: Table Naming Standard] Memeriksa perubahan dengan AI (Opencode Muse)..."
 
-export PATH="$HOME/.opencode/bin:/usr/local/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
 MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
@@ -115,14 +115,15 @@ Format Respon:
   * Solusi / Rekomendasi Perbaikan: (solusi konkrit atau contoh nama tabel berprefix yang benar)
 EOF
 
-if [ -x "$OPENCODE_BIN" ]; then
-    RESULT=$(timeout 45s "$OPENCODE_BIN" run --pure -m "$MODEL" "$(cat "$PROMPT_FILE")" 2>&1)
+AI_EXIT_CODE=1
+if [ "$AI_ENGINE" != "agy" ] && [ -x "$OPENCODE_BIN" ]; then
+    RESULT=$(timeout 20s "$OPENCODE_BIN" run --pure -m "$MODEL" "$(cat "$PROMPT_FILE")" 2>&1)
     AI_EXIT_CODE=$?
-elif command -v agy &> /dev/null; then
-    RESULT=$(timeout 30s agy --print "$(cat "$PROMPT_FILE")" 2>&1)
+fi
+
+if [ $AI_EXIT_CODE -ne 0 ] && command -v agy &> /dev/null; then
+    RESULT=$(timeout 30s agy --model gemini-3.8-flash-low --print "$(cat "$PROMPT_FILE")" 2>&1)
     AI_EXIT_CODE=$?
-else
-    AI_EXIT_CODE=127
 fi
 
 rm -f "$PROMPT_FILE"
