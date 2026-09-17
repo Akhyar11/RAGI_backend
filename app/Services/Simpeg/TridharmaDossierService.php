@@ -122,7 +122,7 @@ class TridharmaDossierService
             ->latest()
             ->get();
 
-        $skList = SkPegawai::with(['kategori'])
+        $skList = SkPegawai::with(['kategori', 'kategoriSk'])
             ->where('pegawai_id', $pegawai->id)
             ->latest()
             ->get();

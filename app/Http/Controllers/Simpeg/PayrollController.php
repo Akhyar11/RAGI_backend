@@ -5,9 +5,14 @@ namespace App\Http\Controllers\Simpeg;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Simpeg\StoreMasterKomponenGajiRequest;
 use App\Http\Requests\Simpeg\UpdateMasterKomponenGajiRequest;
+use App\Http\Requests\Simpeg\StoreMasterSkalaGajiRequest;
+use App\Http\Requests\Simpeg\UpdateMasterSkalaGajiRequest;
 use App\Models\Simpeg\GajiDetail;
 use App\Models\Simpeg\GajiPegawai;
+use App\Models\Simpeg\JabatanFungsionalAkademik;
+use App\Models\Simpeg\MasterBracketPph21;
 use App\Models\Simpeg\MasterKomponenGaji;
+use App\Models\Simpeg\MasterSkalaGajiPokok;
 use App\Models\Simpeg\Pegawai;
 use App\Models\Simpeg\PegawaiKomponenGaji;
 use App\Services\Simpeg\PayrollCalculationService;
@@ -444,6 +449,240 @@ class PayrollController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => "Konfigurasi komponen gaji untuk {$pegawai->nama_lengkap} berhasil disimpan.",
+        ]);
+    }
+
+    // ── MASTER SKALA GAJI POKOK (MASA KERJA) ──────────────────
+
+    /**
+     * GET /api/simpeg/payroll/skala-gaji
+     */
+    public function indexSkalaGaji(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.payroll.read') && !$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses melihat skala gaji pokok.'
+            ], 403);
+        }
+
+        $query = MasterSkalaGajiPokok::query();
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('nama_skala', 'like', "%{$search}%")
+                  ->orWhere('golongan', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('golongan')) {
+            $query->where('golongan', $request->golongan);
+        }
+
+        $query->orderBy('golongan', 'asc')->orderBy('masa_kerja_min_tahun', 'asc');
+
+        $perPage = min(100, $request->integer('limit', $request->integer('per_page', 20)));
+        $data = $query->paginate($perPage);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data skala gaji pokok berhasil dimuat',
+            'data' => $data->items(),
+            'meta' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+            ],
+        ]);
+    }
+
+    /**
+     * POST /api/simpeg/payroll/skala-gaji
+     */
+    public function storeSkalaGaji(StoreMasterSkalaGajiRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses menambah skala gaji pokok.'
+            ], 403);
+        }
+
+        $skala = MasterSkalaGajiPokok::create($request->validated());
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Skala gaji '{$skala->nama_skala}' berhasil ditambahkan.",
+            'data' => $skala,
+        ], 201);
+    }
+
+    /**
+     * PUT /api/simpeg/payroll/skala-gaji/{id}
+     */
+    public function updateSkalaGaji(UpdateMasterSkalaGajiRequest $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses mengubah skala gaji pokok.'
+            ], 403);
+        }
+
+        $skala = MasterSkalaGajiPokok::findOrFail($id);
+        $skala->update($request->validated());
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Skala gaji '{$skala->nama_skala}' berhasil diperbarui.",
+            'data' => $skala,
+        ]);
+    }
+
+    /**
+     * DELETE /api/simpeg/payroll/skala-gaji/{id}
+     */
+    public function destroySkalaGaji(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses menghapus skala gaji pokok.'
+            ], 403);
+        }
+
+        $skala = MasterSkalaGajiPokok::findOrFail($id);
+        $nama = $skala->nama_skala;
+        $skala->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Skala gaji '{$nama}' berhasil dihapus.",
+        ]);
+    }
+
+    // ── TUNJANGAN JABATAN FUNGSIONAL AKADEMIK ──────────────────
+
+    /**
+     * GET /api/simpeg/payroll/jafung-tunjangan
+     */
+    public function indexJafungTunjangan(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.payroll.read') && !$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses melihat tunjangan jabatan fungsional.'
+            ], 403);
+        }
+
+        $query = JabatanFungsionalAkademik::query()->orderBy('angka_kredit_min', 'asc');
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('nama', 'like', "%{$search}%")
+                  ->orWhere('golongan', 'like', "%{$search}%");
+            });
+        }
+
+        $data = $query->get();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data tunjangan jabatan fungsional berhasil dimuat',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * PUT /api/simpeg/payroll/jafung-tunjangan/{id}
+     */
+    public function updateJafungTunjangan(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses mengubah tunjangan jabatan fungsional.'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'tunjangan_nominal' => 'required|numeric|min:0',
+        ]);
+
+        $jafung = JabatanFungsionalAkademik::findOrFail($id);
+        $jafung->update([
+            'tunjangan_nominal' => $validated['tunjangan_nominal'],
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Tunjangan jabatan fungsional '{$jafung->nama}' berhasil diperbarui.",
+            'data' => $jafung,
+        ]);
+    }
+
+    // ── MASTER BRACKET TARIF PPH 21 (TER) ──────────────────────
+
+    /**
+     * GET /api/simpeg/payroll/bracket-pph21
+     */
+    public function indexBracketPph21(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.payroll.read') && !$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses melihat bracket tarif PPh 21.'
+            ], 403);
+        }
+
+        $query = MasterBracketPph21::query()->orderBy('penghasilan_bruto_min', 'asc');
+        $data = $query->get();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data bracket tarif PPh 21 berhasil dimuat',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * PUT /api/simpeg/payroll/bracket-pph21/{id}
+     */
+    public function updateBracketPph21(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses mengubah bracket tarif PPh 21.'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'penghasilan_bruto_min' => 'sometimes|required|numeric|min:0',
+            'penghasilan_bruto_max' => 'nullable|numeric|min:0',
+            'tarif_persen' => 'sometimes|required|numeric|min:0|max:1',
+            'keterangan' => 'nullable|string',
+            'is_active' => 'boolean',
+        ]);
+
+        $bracket = MasterBracketPph21::findOrFail($id);
+        $bracket->update($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Bracket tarif PPh 21 berhasil diperbarui.",
+            'data' => $bracket,
         ]);
     }
 }

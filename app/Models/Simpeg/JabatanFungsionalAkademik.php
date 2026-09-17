@@ -16,11 +16,13 @@ class JabatanFungsionalAkademik extends Model
         'angka_kredit_min',
         'angka_kredit_max',
         'golongan',
+        'tunjangan_nominal',
     ];
 
     protected $casts = [
         'angka_kredit_min' => 'integer',
         'angka_kredit_max' => 'integer',
+        'tunjangan_nominal' => 'float',
     ];
 
     public function riwayatJabatan()

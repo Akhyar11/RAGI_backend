@@ -229,6 +229,20 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::put('payroll/komponen/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'updateKomponen']);
     Route::delete('payroll/komponen/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'destroyKomponen']);
 
+    // Master Skala Gaji Pokok (Masa Kerja & Golongan)
+    Route::get('payroll/skala-gaji', [App\Http\Controllers\Simpeg\PayrollController::class, 'indexSkalaGaji']);
+    Route::post('payroll/skala-gaji', [App\Http\Controllers\Simpeg\PayrollController::class, 'storeSkalaGaji']);
+    Route::put('payroll/skala-gaji/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'updateSkalaGaji']);
+    Route::delete('payroll/skala-gaji/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'destroySkalaGaji']);
+
+    // Tunjangan Jabatan Fungsional Akademik (Dosen)
+    Route::get('payroll/jafung-tunjangan', [App\Http\Controllers\Simpeg\PayrollController::class, 'indexJafungTunjangan']);
+    Route::put('payroll/jafung-tunjangan/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'updateJafungTunjangan']);
+
+    // Master Bracket Pajak PPh 21 (TER)
+    Route::get('payroll/bracket-pph21', [App\Http\Controllers\Simpeg\PayrollController::class, 'indexBracketPph21']);
+    Route::put('payroll/bracket-pph21/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'updateBracketPph21']);
+
     // Komponen Gaji Pegawai
     Route::get('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PayrollController::class, 'getPegawaiKomponen']);
     Route::post('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PayrollController::class, 'savePegawaiKomponen']);

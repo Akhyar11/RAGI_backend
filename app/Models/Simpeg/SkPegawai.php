@@ -46,6 +46,11 @@ class SkPegawai extends Model
         return $this->belongsTo(MasterKategoriSk::class, 'kategori_sk_id');
     }
 
+    public function kategori()
+    {
+        return $this->kategoriSk();
+    }
+
     public function verifier()
     {
         return $this->belongsTo(User::class, 'verified_by');

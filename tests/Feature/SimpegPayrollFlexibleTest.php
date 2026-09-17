@@ -204,4 +204,59 @@ class SimpegPayrollFlexibleTest extends TestCase
         $finalSaldo = (float) UnitKas::first()->saldo_saat_ini;
         $this->assertEquals($initialSaldo - (float) $gaji->gaji_bersih, $finalSaldo);
     }
+
+    public function test_can_manage_skala_gaji_pokok_and_jafung_tunjangan(): void
+    {
+        // 1. Skala Gaji Pokok Index
+        $resSkala = $this->actingAs($this->admin, 'api')->getJson('/api/simpeg/payroll/skala-gaji');
+        $resSkala->assertStatus(200)->assertJsonStructure(['data', 'meta']);
+
+        // 2. Skala Gaji Pokok Store
+        $storeSkala = $this->actingAs($this->admin, 'api')->postJson('/api/simpeg/payroll/skala-gaji', [
+            'nama_skala' => 'Golongan Khusus Pengajar',
+            'golongan' => 'khusus',
+            'masa_kerja_min_tahun' => 0,
+            'masa_kerja_max_tahun' => 5,
+            'nominal_gaji' => 5000000,
+            'keterangan' => 'Skala dosen kontrak khusus',
+            'is_active' => true,
+        ]);
+        $storeSkala->assertStatus(201);
+        $this->assertDatabaseHas('simpeg_master_skala_gaji_pokok', ['nama_skala' => 'Golongan Khusus Pengajar']);
+
+        // 3. Jafung Tunjangan Index & Update
+        $resJafung = $this->actingAs($this->admin, 'api')->getJson('/api/simpeg/payroll/jafung-tunjangan');
+        $resJafung->assertStatus(200)->assertJsonStructure(['data']);
+
+        $jafungId = $resJafung->json('data.0.id');
+        $updateJafung = $this->actingAs($this->admin, 'api')->putJson("/api/simpeg/payroll/jafung-tunjangan/{$jafungId}", [
+            'tunjangan_nominal' => 2000000,
+        ]);
+        $updateJafung->assertStatus(200);
+        $this->assertDatabaseHas('simpeg_jabatan_fungsional_akademik', [
+            'id' => $jafungId,
+            'tunjangan_nominal' => 2000000,
+        ]);
+    }
+
+    public function test_payroll_calculates_dynamically_based_on_masa_kerja_and_jafung(): void
+    {
+        // Set tanggal masuk 5 tahun yang lalu
+        $this->pegawai->update([
+            'tanggal_masuk' => now()->subYears(5)->format('Y-m-d'),
+        ]);
+
+        $response = $this->actingAs($this->admin, 'api')->postJson('/api/simpeg/payroll/generate', [
+            'periode' => now()->format('Y-m'),
+            'pegawai_id' => $this->pegawai->id,
+        ]);
+
+        $response->assertStatus(200);
+        $gaji = GajiPegawai::where('pegawai_id', $this->pegawai->id)->first();
+        $this->assertNotNull($gaji);
+        // Gaji pokok harus merefleksikan skala gaji Lektor 5 tahun (5.200.000)
+        $this->assertEquals(5200000, (float) $gaji->gaji_pokok);
+        // Tunjangan fungsional harus merefleksikan Lektor dari database (1.250.000)
+        $this->assertEquals(1250000, (float) $gaji->total_tunjangan_fungsional);
+    }
 }

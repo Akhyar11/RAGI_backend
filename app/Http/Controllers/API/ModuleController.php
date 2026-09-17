@@ -30,7 +30,7 @@ class ModuleController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'required|string|max:50|unique:modules,code',
+            'code' => 'required|string|max:50|unique:core_modules,code',
             'description' => 'nullable|string',
             'primary_color' => 'nullable|string|max:20',
             'is_active' => 'boolean'
@@ -58,7 +58,7 @@ class ModuleController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'required|string|max:50|unique:modules,code,' . $module->id,
+            'code' => 'required|string|max:50|unique:core_modules,code,' . $module->id,
             'description' => 'nullable|string',
             'primary_color' => 'nullable|string|max:20',
             'is_active' => 'boolean'
