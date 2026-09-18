@@ -20,8 +20,8 @@ class SuratTugasService
     public function getMasters(): array
     {
         return [
-            'kategori_kegiatan' => MasterKategoriKegiatanTugas::where('is_active', true)->orderBy('urutan')->get(),
-            'jenis_transportasi' => MasterJenisTransportasi::where('is_active', true)->orderBy('urutan')->get(),
+            'kategori_kegiatan' => MasterKategoriKegiatanTugas::where('is_active', true)->orderBy('urutan')->orderBy('id')->get(),
+            'jenis_transportasi' => MasterJenisTransportasi::where('is_active', true)->orderBy('urutan')->orderBy('id')->get(),
         ];
     }
 

@@ -119,6 +119,8 @@ class MenuSeeder extends Seeder
                     ['name' => 'Master Jenis Cuti & Izin', 'url' => '/simpeg/master/jenis-cuti', 'icon' => 'FaCalendarCheck', 'module' => 'simpeg', 'permission_slug' => 'simpeg.cuti.read', 'order_index' => 3],
                     ['name' => 'Master Komponen Gaji', 'url' => '/simpeg/payroll/komponen', 'icon' => 'FaMoneyBillWave', 'module' => 'simpeg', 'permission_slug' => 'simpeg.payroll.read', 'order_index' => 4],
                     ['name' => 'Master Pengaturan Presensi', 'url' => '/simpeg/master/presensi', 'icon' => 'FaClock', 'module' => 'simpeg', 'permission_slug' => 'simpeg.presensi.manage', 'order_index' => 5],
+                    ['name' => 'Master Penugasan Dinas', 'url' => '/simpeg/master/surat-tugas', 'icon' => 'FaPlane', 'module' => 'simpeg', 'permission_slug' => 'simpeg.surat_tugas.read', 'order_index' => 6],
+                    ['name' => 'Master Kategori SKP', 'url' => '/simpeg/master/kategori-skp', 'icon' => 'FaChartBar', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kinerja.read', 'order_index' => 7],
                 ]
             ],
 

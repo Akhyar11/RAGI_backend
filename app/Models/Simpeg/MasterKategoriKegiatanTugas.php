@@ -11,10 +11,12 @@ class MasterKategoriKegiatanTugas extends Model
     protected $fillable = [
         'nama',
         'deskripsi',
+        'urutan',
         'is_active',
     ];
 
     protected $casts = [
+        'urutan' => 'integer',
         'is_active' => 'boolean',
     ];
 

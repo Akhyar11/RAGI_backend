@@ -12,10 +12,12 @@ class MasterJenisTransportasi extends Model
         'nama',
         'kode',
         'deskripsi',
+        'urutan',
         'is_active',
     ];
 
     protected $casts = [
+        'urutan' => 'integer',
         'is_active' => 'boolean',
     ];
 

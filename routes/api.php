@@ -204,6 +204,13 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     // Master Jenis Izin & Cuti
     Route::apiResource('master-jenis-cuti', App\Http\Controllers\Simpeg\MasterJenisCutiController::class);
 
+    // Master Penugasan Dinas (Kategori Kegiatan & Jenis Transportasi)
+    Route::apiResource('master/kategori-kegiatan-tugas', App\Http\Controllers\Simpeg\MasterKategoriKegiatanTugasController::class);
+    Route::apiResource('master/jenis-transportasi', App\Http\Controllers\Simpeg\MasterJenisTransportasiController::class);
+
+    // Master Kategori Sasaran Kinerja (SKP)
+    Route::apiResource('master/kategori-skp', App\Http\Controllers\Simpeg\MasterKategoriSkpController::class);
+
     Route::get('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'index']);
     Route::post('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'store']);
     Route::patch('cuti/{id}/status', [App\Http\Controllers\Simpeg\CutiController::class, 'updateStatus']);
