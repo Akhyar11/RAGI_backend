@@ -565,11 +565,18 @@ class SimpegAttendanceTest extends TestCase
                 'success' => true,
                 'data' => [
                     'can_clock_in' => false,
-                    'can_clock_out' => true,
+                    'can_clock_out' => false,
                 ],
             ])
             ->assertJsonPath('data.schedule.is_overnight', true)
             ->assertJsonPath('data.schedule.duty_date', '2026-09-14');
+
+        // 2b. Pada jam 06:00 (jam pulang shift), can_clock_out terbuka menjadi true
+        Carbon::setTestNow('2026-09-15 06:00:00');
+        $endRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/attendance/today');
+        $endRes->assertStatus(200)
+            ->assertJsonPath('data.can_clock_out', true);
 
         // 3. Clock-out Selasa 06:05 menutup record dinas Senin
         Carbon::setTestNow('2026-09-15 06:05:00');
@@ -831,4 +838,77 @@ class SimpegAttendanceTest extends TestCase
 
         $this->assertDatabaseMissing('simpeg_presensi_pegawai', ['id' => $attendance->id]);
     }
+
+    public function test_cannot_clock_out_immediately_at_08_01_after_clock_in_at_08_00(): void
+    {
+        // Shift Selasa 08:00 - 16:00
+        $shift = $this->pegawai->shiftTemplate;
+        \App\Models\ShiftScheduleDay::updateOrCreate(
+            ['shift_template_id' => $shift->id, 'day_of_week' => 2],
+            ['start_time' => '08:00:00', 'end_time' => '16:00:00', 'is_day_off' => false]
+        );
+
+        // 1. Pegawai Clock-In pada pukul 08:00:00
+        Carbon::setTestNow('2026-09-15 08:00:00');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        $inRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-in', [
+                'latitude' => -7.5675,
+                'longitude' => 110.8036,
+                'accuracy' => 10.0,
+                'face_score' => 0.88,
+            ]);
+
+        $inRes->assertStatus(200);
+
+        // 2. Satu menit kemudian (08:01:00), pegawai membuka app lagi untuk memastikan
+        Carbon::setTestNow('2026-09-15 08:01:00');
+
+        $todayRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/attendance/today');
+
+        $todayRes->assertStatus(200)
+            ->assertJsonPath('data.is_clocked_in', true)
+            ->assertJsonPath('data.is_clocked_out', false)
+            ->assertJsonPath('data.can_clock_in', false)
+            ->assertJsonPath('data.can_clock_out', false); // Terkunci, tidak boleh aktif!
+
+        // 3. Jika pegawai iseng/salah mencoba scan masuk lagi
+        $duplicateInRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-in', [
+                'latitude' => -7.5675,
+                'longitude' => 110.8036,
+                'accuracy' => 10.0,
+                'face_score' => 0.88,
+            ]);
+
+        $duplicateInRes->assertStatus(422);
+
+        // 4. Jika pegawai mencoba scan pulang (clock-out) di jam 08:01
+        $accidentalOutRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-out', [
+                'latitude' => -7.5675,
+                'longitude' => 110.8036,
+                'accuracy' => 10.0,
+                'face_score' => 0.88,
+            ]);
+
+        $accidentalOutRes->assertStatus(422);
+
+        // 5. Pastikan data di database tetap aman (masuk jam 08:00 dan belum pulang)
+        $attendance = \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
+            ->whereDate('tanggal', '2026-09-15')
+            ->first();
+
+        $this->assertNotNull($attendance);
+        $this->assertEquals('08:00:00', $attendance->jam_masuk);
+        $this->assertNull($attendance->clock_out);
+        $this->assertNull($attendance->jam_keluar);
+
+        Carbon::setTestNow();
+    }
 }
+

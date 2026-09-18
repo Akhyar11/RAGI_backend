@@ -439,3 +439,9 @@ Menghapus 1 baris log presensi individual (`Attendance`) berdasarkan ID log.
    - `getAllowedOfficeLocations()` mengembalikan seluruh lokasi kantor/kampus aktif (`OfficeLocation::where('is_active', true)`).
    - Validasi koordinat GPS mencocokkan ke lokasi kampus terdekat yang berada dalam radius geofence.
 
+3. **Pencegahan Salah Scan Pulang Sesaat Setelah Masuk (Cooldown & Jendela Jam Pulang):**
+   - **Terkunci di Mobile UI (`can_clock_out: false`)**: Setelah pegawai berhasil melakukan presensi masuk (misal jam 08:00), tombol presensi pulang di aplikasi mobile **tidak aktif** (`can_clock_out = false`) hingga jam kerja memasuki jendela jam pulang shift (misal pukul 15:45 pada shift 08:00 - 16:00).
+   - **Pencegahan Duplikasi Masuk**: Jika pegawai mencoba scan masuk lagi di jam 08:01 untuk "memastikan", sistem menolak dengan status 422 (*"Karyawan sudah melakukan presensi masuk yang sah hari ini"*), sehingga data jam masuk awal (08:00:00) tetap aman dan tidak tertimpa.
+   - **Validasi Server Cooldown**: Jika ada request presensi pulang sesaat setelah presensi masuk (kurang dari jeda minimal 15 menit), sistem menolak dengan validasi (*"Presensi pulang tidak dapat dilakukan sesaat setelah presensi masuk (jeda minimal 15 menit)"*).
+
+

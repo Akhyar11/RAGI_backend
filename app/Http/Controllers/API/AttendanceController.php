@@ -136,7 +136,8 @@ class AttendanceController extends Controller
             $canClockOut = false;
         } elseif ($hasValidClockIn) {
             $canClockIn = false;
-            $canClockOut = true;
+            // Presensi pulang HANYA dibuka jika waktu saat ini sudah memasuki jendela jam pulang shift
+            $canClockOut = $isInClockOutWindow;
         } else {
             // Belum pernah scan masuk hari ini
             if ($isPastShiftEnd || $isInClockOutWindow) {

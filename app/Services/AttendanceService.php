@@ -584,6 +584,22 @@ class AttendanceService
                     $earlyLeaveMinutes = 0;
                 }
             }
+        } elseif (!$schedule && !$isHolidayForEmployee) {
+            $fallbackEnd = Carbon::parse("{$today} 17:00:00");
+            $earliestClockOut = $fallbackEnd->copy()->subMinutes(15);
+            if ($now->lessThan($earliestClockOut)) {
+                $rejectionReasons[] = "Presensi pulang belum dibuka. Jam kerja reguler berakhir pukul 17:00 (presensi pulang baru dapat dilakukan mulai pukul {$earliestClockOut->format('H:i')}).";
+            }
+        }
+
+        // Pembatasan Cooldown / Jeda Minimum Antara Clock In dan Clock Out (Mencegah Salah Scan Sesaat Setelah Masuk)
+        if ($attendance && $attendance->clock_in) {
+            $clockInTime = Carbon::parse($attendance->clock_in);
+            $minWorkMinutes = (int) SystemSetting::get('min_work_duration_minutes', 15);
+            $elapsedMinutes = $clockInTime->diffInMinutes($now);
+            if ($elapsedMinutes < $minWorkMinutes) {
+                $rejectionReasons[] = "Presensi pulang tidak dapat dilakukan sesaat setelah presensi masuk (jeda minimal {$minWorkMinutes} menit). Anda baru saja melakukan presensi masuk pada pukul {$clockInTime->format('H:i:s')}.";
+            }
         }
 
         if (!empty($rejectionReasons)) {
