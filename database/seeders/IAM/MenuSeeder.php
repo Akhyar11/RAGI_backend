@@ -146,7 +146,7 @@ class MenuSeeder extends Seeder
                     ['name' => 'Master Jenis Cuti & Izin', 'url' => '/simpeg/master/jenis-cuti', 'icon' => 'FaCalendarCheck', 'module' => 'simpeg', 'permission_slug' => 'simpeg.cuti.read', 'order_index' => 3],
                     ['name' => 'Master Komponen Gaji', 'url' => '/simpeg/payroll/komponen', 'icon' => 'FaMoneyBillWave', 'module' => 'simpeg', 'permission_slug' => 'simpeg.payroll.read', 'order_index' => 4],
                     ['name' => 'Master Pengaturan Presensi', 'url' => '/simpeg/master/presensi', 'icon' => 'FaClock', 'module' => 'simpeg', 'permission_slug' => 'simpeg.presensi.manage', 'order_index' => 5],
-                    ['name' => 'Master Penugasan Dinas', 'url' => '/simpeg/master/surat-tugas', 'icon' => 'FaPlane', 'module' => 'simpeg', 'permission_slug' => 'simpeg.surat_tugas.read', 'order_index' => 6],
+                    ['name' => 'Master Penugasan Dinas', 'url' => '/simpeg/master/surat-tugas', 'icon' => 'FaFileSignature', 'module' => 'simpeg', 'permission_slug' => 'simpeg.surat_tugas.read', 'order_index' => 6],
                     ['name' => 'Master Kategori SKP', 'url' => '/simpeg/master/kategori-skp', 'icon' => 'FaChartBar', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kinerja.read', 'order_index' => 7],
                 ]
             ],
@@ -279,60 +279,56 @@ class MenuSeeder extends Seeder
                 ]
             ],
 
-            // Menu SPMB (Penerimaan Mahasiswa Baru)
-            // A. Menu Portal Calon Mahasiswa
+            // ── MODUL SPMB (PENERIMAAN MAHASISWA BARU) ─────────────
             [
-                'name' => 'Dashboard Saya',
-                'url' => '/spmb/dashboard',
+                'name' => 'Dashboard SPMB',
+                'url' => '/spmb',
                 'icon' => 'FaChartPie',
                 'module' => 'spmb',
-                'permission_slug' => 'spmb.student.read',
+                'permission_slug' => 'spmb.dashboard.read',
                 'order_index' => 1,
             ],
             [
-                'name' => 'Formulir Pendaftaran',
-                'url' => '/spmb/registrasi',
-                'icon' => 'FaUserPlus',
+                'name' => 'ADMISI & PENDAFTARAN',
+                'url' => '#admisi_spmb',
+                'icon' => 'FaUserCheck',
                 'module' => 'spmb',
-                'permission_slug' => 'spmb.student.read',
+                'permission_slug' => 'spmb.admin.manage',
                 'order_index' => 2,
-            ],
-
-            // B. Menu Pengelola Admin SPMB
-            [
-                'name' => 'PENDAFTARAN & VERIFIKASI',
-                'url' => '#layanan_spmb',
-                'icon' => 'FaList',
-                'module' => 'spmb',
-                'permission_slug' => 'spmb.admin.manage',
-                'order_index' => 3,
                 'children' => [
-                    ['name' => 'Data Pendaftar & Verifikasi', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUsers', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 1],
-                ]
-            ],
-            [
-                'name' => 'SELEKSI ADMINISTRASI',
-                'url' => '#seleksi_spmb',
-                'icon' => 'FaCheckSquare',
-                'module' => 'spmb',
-                'permission_slug' => 'spmb.admin.manage',
-                'order_index' => 4,
-                'children' => [
-                    ['name' => 'Hasil Seleksi Administrasi', 'url' => '/spmb/seleksi', 'icon' => 'FaTrophy', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 1],
+                    ['name' => 'Data Calon Mahasiswa', 'url' => '/spmb/pendaftar', 'icon' => 'FaUsers', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 1],
+                    ['name' => 'Pendaftaran Mahasiswa Baru', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUserPlus', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 2],
+                    ['name' => 'Verifikasi Daftar Ulang', 'url' => '/spmb/daftar-ulang', 'icon' => 'FaClipboardCheck', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 3],
+                    ['name' => 'Registrasi Online', 'url' => '/spmb/registrasi', 'icon' => 'FaPen', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 4],
                 ]
             ],
             [
                 'name' => 'MASTER DATA SPMB',
                 'url' => '#master_spmb',
-                'icon' => 'FaList',
+                'icon' => 'FaDatabase',
                 'module' => 'spmb',
                 'permission_slug' => 'spmb.admin.manage',
-                'order_index' => 5,
+                'order_index' => 3,
                 'children' => [
                     ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 1],
-                    ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 2],
-                    ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 3],
-                    ['name' => 'Persyaratan Berkas', 'url' => '/spmb/master/berkas-requirement', 'icon' => 'FaFileAlt', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 4],
+                    ['name' => 'Tipe Jalur Masuk', 'url' => '/spmb/master/tipe-jalur', 'icon' => 'FaTags', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 2],
+                    ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 3],
+                    ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 4],
+                    ['name' => 'Persyaratan Berkas', 'url' => '/spmb/master/berkas-requirement', 'icon' => 'FaFileAlt', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 5],
+                    ['name' => 'Tarif Masuk & UKT', 'url' => '/spmb/master/tarif-ukt', 'icon' => 'FaMoneyBillWave', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 6],
+                    ['name' => 'Master Data Referensi', 'url' => '/spmb/master/referensi', 'icon' => 'FaDatabase', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 7],
+                    ['name' => 'Master Tipe Referensi', 'url' => '/spmb/master/tipe-referensi', 'icon' => 'FaLayers', 'module' => 'spmb', 'permission_slug' => 'spmb.admin.manage', 'order_index' => 8],
+                ]
+            ],
+            [
+                'name' => 'LAPORAN & STATISTIK',
+                'url' => '#laporan_spmb',
+                'icon' => 'FaChartBar',
+                'module' => 'spmb',
+                'permission_slug' => 'spmb.laporan.read',
+                'order_index' => 4,
+                'children' => [
+                    ['name' => 'Statistik Pendaftaran', 'url' => '/spmb/laporan/statistik', 'icon' => 'FaChartBar', 'module' => 'spmb', 'permission_slug' => 'spmb.laporan.read', 'order_index' => 1],
                 ]
             ],
 
@@ -560,6 +556,13 @@ class MenuSeeder extends Seeder
                 ->pluck('id')
                 ->toArray();
             $dosenRole->menus()->syncWithoutDetaching($dosenSimpegMenuIds);
+        }
+
+        // Attach SPMB menus to admin-spmb role
+        $spmbMenuIds = Menu::where('module', 'spmb')->pluck('id')->toArray();
+        $adminSpmbRole = \App\Models\Role::where('slug', 'admin-spmb')->first();
+        if ($adminSpmbRole) {
+            $adminSpmbRole->menus()->syncWithoutDetaching($spmbMenuIds);
         }
     }
 }
