@@ -50,8 +50,11 @@ class MasterTipeReferensiController extends Controller
             $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
         }
 
-        $query->orderBy('urutan')
-            ->orderBy('id');
+        $allowedSortColumns = ['kode', 'nama', 'modul', 'urutan', 'created_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSortColumns, true) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+
+        $query->orderBy($sortBy, $sortOrder);
 
         if ($request->has('page') || $request->filled('per_page') || $request->filled('limit')) {
             $perPage = (int) $request->input('per_page', $request->input('limit', 20));

@@ -111,7 +111,47 @@ $admin = User::updateOrCreate(
 
 ---
 
-## 5. Menjalankan Seeder
+## 5. Standar Pengorganisasian Menu Seeder (`MenuSeeder.php`)
+
+Agar navigasi sistem di frontend tertata rapi dan mudah digunakan oleh pengguna:
+
+1. **Struktur Hirarki & Section Header:**
+   - Modul tidak boleh menumpuk daftar menu secara flat di satu parent raksasa.
+   - Wajib dikelompokkan ke dalam kategori/section terorganisir (contoh: `MANAJEMEN PENGGUNA`, `ROLE & HAK AKSES`, `DATA REFERENSI`, `LOG & AUDIT`).
+   - Nama section header **WAJIB UPPERCASE** dengan `url` berupa anchor `#` (contoh: `#users_section`, `#roles_section`).
+   - Section header wajib memiliki array `children` berisi sub-menu.
+
+2. **Validitas Menu Leaf & URL Unik:**
+   - Sub-menu leaf **WAJIB** memiliki rute URL yang valid (diawali `/`, contoh: `/admin/users`).
+   - **DILARANG** duplikasi URL rute dalam modul yang sama.
+   - Nama menu ditulis dengan format Title Case yang jelas dan deskriptif.
+
+3. **Standar Ikon Semantik (Bukan Generic Dump):**
+   - Setiap nama `icon` (seperti `FaHome`, `FaUsers`, `FaKey`, `FaShieldAlt`, `FaDatabase`, `FaLayers`, dsb.) **WAJIB** terdaftar di pemetaan ikon frontend (`Sidebar.tsx` `iconMap`).
+   - **DILARANG** membabi buta menggunakan ikon generik `FaList` atau `FaFileAlt` untuk menu dengan fungsi spesifik (seperti Role, User, Pengaturan, dsb.).
+
+4. **Order Index Berurutan & Modul Konsisten:**
+   - Setiap menu dan sub-menu wajib memiliki `order_index` numerik positif berurutan (1, 2, 3...) tanpa bentrok dalam parent yang sama.
+   - Nilai field `module` pada sub-menu wajib sama dengan parent section.
+
+```php
+// ✅ BENAR — Terorganisasi rapi per section
+[
+    'name' => 'MANAJEMEN PENGGUNA',
+    'url' => '#users_section',
+    'icon' => 'FaUsers',
+    'module' => 'sso',
+    'order_index' => 2,
+    'children' => [
+        ['name' => 'Pengguna Portal', 'url' => '/admin/users', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.users.read', 'order_index' => 1],
+        ['name' => 'Plotting User Role', 'url' => '/admin/user-roles', 'icon' => 'FaUserCheck', 'module' => 'sso', 'permission_slug' => 'iam.user_roles.manage', 'order_index' => 2],
+    ]
+],
+```
+
+---
+
+## 6. Menjalankan Seeder
 
 ```bash
 # Jalankan semua seeder
@@ -126,7 +166,7 @@ php artisan migrate:fresh --seed
 
 ---
 
-## 6. Aturan Tambahan
+## 7. Aturan Tambahan
 
 - **JANGAN** gunakan `factory()` di dalam Seeder untuk data master (gunakan factory hanya untuk data dummy testing).
 - Data dari Seeder harus **idempoten** — dijalankan 10 kali hasilnya sama.

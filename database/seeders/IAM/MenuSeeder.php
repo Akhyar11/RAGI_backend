@@ -26,40 +26,67 @@ class MenuSeeder extends Seeder
                 'order_index' => 1,
             ],
             [
-                'name' => 'KONTROL AKSES SSO',
-                'url' => '#iam_section',
-                'icon' => 'FaShieldAlt',
+                'name' => 'MANAJEMEN PENGGUNA',
+                'url' => '#users_section',
+                'icon' => 'FaUsers',
                 'module' => 'sso',
                 'order_index' => 2,
                 'children' => [
                     ['name' => 'Pengguna Portal', 'url' => '/admin/users', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.users.read', 'order_index' => 1],
-                    ['name' => 'Master Role', 'url' => '/admin/roles', 'icon' => 'FaShieldAlt', 'module' => 'sso', 'permission_slug' => 'iam.roles.read', 'order_index' => 2],
-                    ['name' => 'Hak Akses (Permissions)', 'url' => '/admin/permissions', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.permissions.read', 'order_index' => 3],
-                    ['name' => 'Plotting User Role', 'url' => '/admin/user-roles', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.user_roles.manage', 'order_index' => 4],
-                    ['name' => 'Plotting Role Permission', 'url' => '/admin/role-permissions', 'icon' => 'FaClipboardCheck', 'module' => 'sso', 'permission_slug' => 'iam.permissions.manage', 'order_index' => 5],
-                    ['name' => 'Plotting Role Menu', 'url' => '/admin/role-menus', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 6],
-                    ['name' => 'Master Menu', 'url' => '/admin/menus', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 7],
-                    ['name' => 'Master Modul', 'url' => '/admin/modules', 'icon' => 'FaList', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 8],
-                    ['name' => 'Master Data Referensi', 'url' => '/admin/master-referensi', 'icon' => 'FaDatabase', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 9],
-                    ['name' => 'Master Tipe Referensi', 'url' => '/admin/master-tipe-referensi', 'icon' => 'FaTags', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 10],
+                    ['name' => 'Plotting User Role', 'url' => '/admin/user-roles', 'icon' => 'FaUserCheck', 'module' => 'sso', 'permission_slug' => 'iam.user_roles.manage', 'order_index' => 2],
+                ]
+            ],
+            [
+                'name' => 'ROLE & HAK AKSES',
+                'url' => '#roles_section',
+                'icon' => 'FaShieldAlt',
+                'module' => 'sso',
+                'order_index' => 3,
+                'children' => [
+                    ['name' => 'Master Role', 'url' => '/admin/roles', 'icon' => 'FaShieldAlt', 'module' => 'sso', 'permission_slug' => 'iam.roles.read', 'order_index' => 1],
+                    ['name' => 'Hak Akses (Permissions)', 'url' => '/admin/permissions', 'icon' => 'FaKey', 'module' => 'sso', 'permission_slug' => 'iam.permissions.read', 'order_index' => 2],
+                    ['name' => 'Plotting Role Permission', 'url' => '/admin/role-permissions', 'icon' => 'FaClipboardCheck', 'module' => 'sso', 'permission_slug' => 'iam.permissions.manage', 'order_index' => 3],
+                    ['name' => 'Plotting Role Menu', 'url' => '/admin/role-menus', 'icon' => 'FaSlidersH', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 4],
+                ]
+            ],
+            [
+                'name' => 'MODUL & NAVIGASI',
+                'url' => '#modules_section',
+                'icon' => 'FaLayers',
+                'module' => 'sso',
+                'order_index' => 4,
+                'children' => [
+                    ['name' => 'Master Modul', 'url' => '/admin/modules', 'icon' => 'FaLayers', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 1],
+                    ['name' => 'Master Menu', 'url' => '/admin/menus', 'icon' => 'FaBars', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 2],
+                ]
+            ],
+            [
+                'name' => 'DATA REFERENSI',
+                'url' => '#referensi_section',
+                'icon' => 'FaDatabase',
+                'module' => 'sso',
+                'order_index' => 5,
+                'children' => [
+                    ['name' => 'Master Data Referensi', 'url' => '/admin/master-referensi', 'icon' => 'FaDatabase', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 1],
+                    ['name' => 'Master Tipe Referensi', 'url' => '/admin/master-tipe-referensi', 'icon' => 'FaTags', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 2],
                 ]
             ],
             [
                 'name' => 'LOG & AUDIT',
                 'url' => '#audit_section',
-                'icon' => 'FaFileAlt',
+                'icon' => 'FaHistory',
                 'module' => 'sso',
-                'order_index' => 3,
+                'order_index' => 6,
                 'children' => [
-                    ['name' => 'Sesi Login Aktif', 'url' => '/admin/sessions', 'icon' => 'FaUsers', 'module' => 'sso', 'permission_slug' => 'iam.sessions.read', 'order_index' => 1],
-                    ['name' => 'Audit Log Aktivitas', 'url' => '/admin/audit-logs', 'icon' => 'FaFileAlt', 'module' => 'sso', 'permission_slug' => 'iam.audit_logs.read', 'order_index' => 2],
+                    ['name' => 'Sesi Login Aktif', 'url' => '/admin/sessions', 'icon' => 'FaDesktop', 'module' => 'sso', 'permission_slug' => 'iam.sessions.read', 'order_index' => 1],
+                    ['name' => 'Audit Log Aktivitas', 'url' => '/admin/audit-logs', 'icon' => 'FaHistory', 'module' => 'sso', 'permission_slug' => 'iam.audit_logs.read', 'order_index' => 2],
                     ['name' => 'Pengaturan Sistem', 'url' => '/admin/settings', 'icon' => 'FaCogs', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 3],
                 ]
             ],
             [
                 'name' => 'AKUN & KEAMANAN',
                 'url' => '#akun_keamanan',
-                'icon' => 'FaShieldAlt',
+                'icon' => 'FaShieldCheck',
                 'module' => 'sso',
                 'order_index' => 999,
                 'children' => [

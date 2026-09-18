@@ -20,6 +20,11 @@ class MasterReferensi extends Model
         'is_active',
     ];
 
+    protected $casts = [
+        'is_active' => 'boolean',
+        'urutan' => 'integer',
+    ];
+
     /**
      * Scope a query to only include active references.
      */

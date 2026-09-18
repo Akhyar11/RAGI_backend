@@ -21,6 +21,15 @@
 
 ---
 
+## ⚙️ Modul System (Referensi & Konfigurasi)
+
+| Controller | Deskripsi | Dokumen |
+|---|---|---|
+| MasterReferensiController | Manajemen data item referensi umum, kode, modul, dan status aktif | [docs/api/System/MasterReferensiController.md](api/System/MasterReferensiController.md) |
+| MasterTipeReferensiController | Manajemen kategori master tipe referensi sistem | [docs/api/System/MasterTipeReferensiController.md](api/System/MasterTipeReferensiController.md) |
+
+---
+
 ## 📝 Modul SPMB
 
 | Controller | Deskripsi | Dokumen |

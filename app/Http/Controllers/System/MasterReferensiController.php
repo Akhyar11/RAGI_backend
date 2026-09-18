@@ -57,9 +57,11 @@ class MasterReferensiController extends Controller
             });
         }
 
-        $query->orderBy('tipe', 'asc')
-              ->orderBy('urutan', 'asc')
-              ->orderBy('id', 'asc');
+        $allowedSortColumns = ['tipe', 'kode', 'nama', 'modul', 'urutan', 'created_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSortColumns, true) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+
+        $query->orderBy($sortBy, $sortOrder);
 
         if ($request->has('page') || $request->filled('per_page') || $request->filled('limit')) {
             $perPage = (int) $request->input('per_page', $request->input('limit', 20));
