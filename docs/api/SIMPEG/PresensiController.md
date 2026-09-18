@@ -406,3 +406,36 @@ Idempotent per pasangan (`pegawai_id`, `tanggal`). Data hasil scan (`clock_in`/`
 5. Tanpa log + hari kerja yang sudah lewat → `alpa` (`Tidak Hadir (Alpa)`).
 
 **Ringkasannya (`summary`):** `total_hadir`, `total_terlambat`, `total_alpa`, `total_libur`, ditambah `total_izin`, `total_sakit`, `total_dinas`, `total_cuti`.
+
+---
+
+### DELETE `/api/simpeg/presensi/log/{id}`
+
+Menghapus 1 baris log presensi individual (`Attendance`) berdasarkan ID log.
+
+**Hak Akses RBAC:**
+- Memerlukan salah satu dari: `simpeg.presensi.delete`, `simpeg.presensi.manage`, atau role `admin` / `super_admin`.
+- Menghapus record secara permanen dari tabel `simpeg_presensi_pegawai` dan mencatat jejak audit ke tabel `audit_logs` (`module: 'SIMPEG'`, `action: 'delete'`).
+
+**Response Sukses (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Log presensi berhasil dihapus."
+}
+```
+
+---
+
+### Logika Presensi Shift & Multi-Lokasi Otomatis
+
+1. **Scan Setelah Shift Selesai (Clock-out Tanpa Clock-in):**
+   - Jika pegawai pada jadwal shift (misal 08:00 - 16:00) belum sempat melakukan clock-in dan baru melakukan scan pada atau setelah jam shift berakhir (misal jam 17:00), sistem otomatis mencatat aktivitas tersebut sebagai **Presensi Pulang (Clock-out)**.
+   - Kolom `clock_in` dan `jam_masuk` dibiarkan `null`, `clock_out` dan `jam_keluar` terisi dengan waktu scan aktual, serta `notes` diberi keterangan *"Presensi pulang tercatat tanpa presensi masuk sebelumnya"*.
+   - Jika pegawai menggunakan endpoint `/api/v1/attendance/clock-in` saat shift sudah berakhir, request otomatis didelegasikan ke `processClockOut` tanpa error.
+
+2. **Multi-Lokasi Kampus Otomatis:**
+   - Pegawai tidak diwajibkan dikaitkan ke satu kantor tertentu secara kaku.
+   - `getAllowedOfficeLocations()` mengembalikan seluruh lokasi kantor/kampus aktif (`OfficeLocation::where('is_active', true)`).
+   - Validasi koordinat GPS mencocokkan ke lokasi kampus terdekat yang berada dalam radius geofence.
+

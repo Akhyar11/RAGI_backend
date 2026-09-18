@@ -148,9 +148,19 @@ class AttendanceService
 
         // Aturan E: Batas Pembukaan Presensi Masuk (Tidak boleh scan terlalu pagi sebelum shift dibuka)
         // Aturan E2: Batas Penutupan Presensi Masuk (Tidak boleh scan setelah melewati batas telat maksimal)
+        // Aturan E3: Jika jam shift telah berakhir, alihkan otomatis sebagai Presensi Pulang
         if ($schedule && !$schedule->is_day_off && $schedule->start_time && !$isHolidayForEmployee) {
             $scheduledStart = Carbon::parse("{$today} {$schedule->start_time}");
             $earliestClockIn = $scheduledStart->copy()->subMinutes($maxEarlyClockInMinutes);
+
+            if ($schedule->end_time) {
+                $scheduledEnd = $schedule->getScheduledEndForDate($today);
+                if ($now->greaterThanOrEqualTo($scheduledEnd)) {
+                    // Jam kerja shift telah berakhir (misal scan jam 17:00 pada shift 08:00 - 16:00).
+                    // Alihkan secara otomatis ke proses presensi pulang (clock-out).
+                    return $this->processClockOut($employee, $data);
+                }
+            }
 
             if ($now->lessThan($earliestClockIn)) {
                 $rejectionReasons[] = "Presensi masuk belum dibuka. Presensi untuk shift ini ({$schedule->start_time}) baru dapat dilakukan mulai pukul {$earliestClockIn->format('H:i')} (maksimal {$maxEarlyClockInMinutes} menit sebelum jam kerja).";
@@ -161,6 +171,11 @@ class AttendanceService
                 if ($now->greaterThan($latestClockIn)) {
                     $rejectionReasons[] = "Presensi masuk ditutup. Batas maksimal keterlambatan untuk shift ini ({$schedule->start_time}) adalah {$maxLateClockInMinutes} menit setelah jam kerja (terakhir pukul {$latestClockIn->format('H:i')}). Hubungi HR untuk pencatatan manual.";
                 }
+            }
+        } elseif (!$schedule && !$isHolidayForEmployee) {
+            $fallbackEnd = Carbon::parse("{$today} 17:00:00");
+            if ($now->greaterThanOrEqualTo($fallbackEnd)) {
+                return $this->processClockOut($employee, $data);
             }
         }
 
@@ -473,13 +488,29 @@ class AttendanceService
         // Cari record terbuka: hari ini dulu, fallback ke shift lintas hari kemarin.
         $attendance = $this->resolveClockOutRecord($employee, $now);
 
+        $isMissingClockIn = false;
         if (!$attendance) {
-            throw ValidationException::withMessages([
-                'attendance' => ['Belum melakukan presensi masuk yang valid hari ini. Tidak dapat melakukan presensi pulang.'],
-            ]);
-        }
+            $today = $now->toDateString();
+            $existingToday = Attendance::where('pegawai_id', $employee->id)
+                ->whereDate('tanggal', $today)
+                ->first();
 
-        if ($attendance->clock_out) {
+            if ($existingToday && $existingToday->clock_out) {
+                throw ValidationException::withMessages([
+                    'attendance' => ['Karyawan sudah melakukan presensi pulang hari ini.'],
+                ]);
+            }
+
+            $isMissingClockIn = true;
+            $attendance = $existingToday ?? new Attendance();
+            $attendance->pegawai_id = $employee->id;
+            $attendance->tanggal = $today;
+            $attendance->status = 'hadir';
+            $attendance->status_kehadiran = 'hadir';
+            $attendance->source = $data['source'] ?? 'mobile_gps';
+            $attendance->clock_in = null;
+            $attendance->jam_masuk = null;
+        } elseif ($attendance->clock_out) {
             throw ValidationException::withMessages([
                 'attendance' => ['Karyawan sudah melakukan presensi pulang hari ini.'],
             ]);
@@ -573,8 +604,20 @@ class AttendanceService
             'early_leave_minutes' => $earlyLeaveMinutes,
         ];
 
+        $faceImage = $data['face_image'] ?? $data['foto'] ?? $data['foto_presensi'] ?? null;
+        if (!empty($faceImage)) {
+            $photoPath = $this->saveAttendanceFile($faceImage, 'presensi');
+            if ($photoPath && empty($attendance->foto_presensi)) {
+                $clockOutData['foto_presensi'] = $photoPath;
+            }
+        }
+
+        if ($office && empty($attendance->office_location_id)) {
+            $clockOutData['office_location_id'] = $office->id;
+        }
+
         // Penanda bila pulang dari lokasi berbeda dengan lokasi masuk (multi-lokasi).
-        if ($office && (int) $attendance->office_location_id !== (int) $office->id) {
+        if ($office && !empty($attendance->office_location_id) && (int) $attendance->office_location_id !== (int) $office->id) {
             $locationNote = "Pulang dari lokasi: {$office->name} (jarak {$distance}m).";
             $clockOutData['notes'] = !empty($attendance->notes)
                 ? $attendance->notes . ' ' . $locationNote
@@ -588,7 +631,21 @@ class AttendanceService
                 : $customNote;
         }
 
-        $attendance->update($clockOutData);
+        if ($isMissingClockIn) {
+            $scheduleInfo = ($schedule && $schedule->start_time && $schedule->end_time)
+                ? " ({$schedule->start_time} - {$schedule->end_time})"
+                : '';
+            $missingNote = "Presensi pulang tercatat tanpa presensi masuk sebelumnya{$scheduleInfo}.";
+            $clockOutData['notes'] = !empty($clockOutData['notes'])
+                ? $missingNote . ' | ' . $clockOutData['notes']
+                : $missingNote;
+            $clockOutData['status'] = 'hadir';
+            $clockOutData['status_kehadiran'] = 'hadir';
+            $clockOutData['late_minutes'] = 0;
+        }
+
+        $attendance->fill($clockOutData);
+        $attendance->save();
 
         return $attendance;
     }

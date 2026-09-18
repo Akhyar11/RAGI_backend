@@ -109,8 +109,46 @@ class AttendanceController extends Controller
         $isClockedIn = ($attendance && $attendance->clock_in !== null);
         $isClockedOut = ($attendance && $attendance->clock_out !== null);
         $hasValidClockIn = ($attendance && in_array($attendance->status, ['hadir', 'terlambat', 'menunggu_approval']) && $attendance->clock_in !== null);
-        $canClockIn = !$hasValidClockIn && !$isClockedOut;
-        $canClockOut = $isClockedIn && !$isClockedOut;
+
+        // Tentukan apakah waktu saat ini sudah jam pulang shift
+        $isPastShiftEnd = false;
+        $isInClockOutWindow = false;
+
+        if ($schedule && !$schedule->is_day_off && $schedule->end_time) {
+            $dutyDateStr = $attendance ? Carbon::parse($attendance->getAttribute('tanggal'))->toDateString() : $dutyDate;
+            $scheduledEnd = $schedule->getScheduledEndForDate($dutyDateStr);
+            $earlyLeaveTolerance = $schedule->getEarlyLeaveToleranceMinutes();
+            $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyLeaveTolerance);
+
+            $isPastShiftEnd = $now->greaterThanOrEqualTo($scheduledEnd);
+            $isInClockOutWindow = $now->greaterThanOrEqualTo($earliestClockOut);
+        } elseif (!$schedule) {
+            $scheduledEnd = Carbon::parse("{$dutyDate} 17:00:00");
+            $earlyLeaveTolerance = $shiftTemplate ? $shiftTemplate->early_leave_tolerance_minutes : 15;
+            $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyLeaveTolerance);
+
+            $isPastShiftEnd = $now->greaterThanOrEqualTo($scheduledEnd);
+            $isInClockOutWindow = $now->greaterThanOrEqualTo($earliestClockOut);
+        }
+
+        if ($isClockedOut) {
+            $canClockIn = false;
+            $canClockOut = false;
+        } elseif ($hasValidClockIn) {
+            $canClockIn = false;
+            $canClockOut = true;
+        } else {
+            // Belum pernah scan masuk hari ini
+            if ($isPastShiftEnd || $isInClockOutWindow) {
+                // Jam kerja shift sudah berakhir / sudah waktu pulang (misal jam 17:00 pada shift 08:00 - 16:00).
+                // Jendela presensi masuk ditutup, buka presensi pulang!
+                $canClockIn = false;
+                $canClockOut = true;
+            } else {
+                $canClockIn = true;
+                $canClockOut = false;
+            }
+        }
 
         // Fallback schedule object yang aman bagi parser client Flutter
         $schedulePayload = $schedule ? [
@@ -245,7 +283,9 @@ class AttendanceController extends Controller
             'status' => $isSuccess ? 'success' : 'error',
             'success' => $isSuccess,
             'message' => match ($attendance->status) {
-                'hadir' => 'Presensi masuk berhasil (Tepat Waktu).',
+                'hadir' => ($attendance->clock_out && !$attendance->clock_in)
+                    ? 'Presensi pulang berhasil dicatat (jam shift telah berakhir).'
+                    : 'Presensi masuk berhasil (Tepat Waktu).',
                 'terlambat' => 'Presensi masuk berhasil dicatat (Terlambat).',
                 'menunggu_approval' => 'Presensi masuk pada hari libur tersimpan, menunggu persetujuan HR.',
                 'ditolak' => 'Presensi masuk ditolak: ' . $attendance->rejection_reason,
@@ -265,6 +305,9 @@ class AttendanceController extends Controller
             'longitude' => 'required|numeric',
             'accuracy' => 'required|numeric',
             'face_score' => 'nullable|numeric',
+            'face_image' => 'nullable|string',
+            'foto' => 'nullable',
+            'foto_presensi' => 'nullable',
             'is_mock_location' => 'nullable|boolean',
             'timestamp' => 'nullable',
             'device_id' => 'nullable|string',
@@ -275,6 +318,14 @@ class AttendanceController extends Controller
 
         $validated['is_mock_location'] = (bool) ($validated['is_mock_location'] ?? false);
         $validated['face_score'] = (float) ($validated['face_score'] ?? 0.85);
+
+        if ($request->hasFile('foto')) {
+            $validated['foto'] = $request->file('foto');
+        } elseif ($request->hasFile('foto_presensi')) {
+            $validated['foto_presensi'] = $request->file('foto_presensi');
+        } elseif ($request->hasFile('face_image')) {
+            $validated['face_image'] = $request->file('face_image');
+        }
 
         $employee = $this->getOrCreateEmployee($request->user());
 

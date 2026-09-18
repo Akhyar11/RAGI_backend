@@ -707,4 +707,128 @@ class SimpegAttendanceTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_clock_out_at_17_without_prior_clock_in_records_as_clock_out(): void
+    {
+        // 1. Shift reguler 08:00 - 16:00
+        $shift = $this->pegawai->shiftTemplate;
+        $day = $shift->days()->where('day_of_week', 2)->first(); // Selasa
+        if ($day) {
+            $day->update(['start_time' => '08:00:00', 'end_time' => '16:00:00', 'is_day_off' => false]);
+        }
+
+        // 2. Jam 17:00 (1 jam setelah shift berakhir), belum ada clock-in
+        Carbon::setTestNow('2026-09-15 17:00:00');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        // Cek todayStatus: can_clock_in harus false, can_clock_out harus true
+        $todayRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/attendance/today');
+
+        $todayRes->assertStatus(200)
+            ->assertJsonPath('data.can_clock_in', false)
+            ->assertJsonPath('data.can_clock_out', true);
+
+        // Lakukan clock-out langsung
+        $outRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-out', [
+                'latitude' => -7.5675,
+                'longitude' => 110.8036,
+                'accuracy' => 10.0,
+                'face_score' => 0.88,
+            ]);
+
+        $outRes->assertStatus(200)
+            ->assertJson(['success' => true]);
+
+        $attendance = \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
+            ->whereDate('tanggal', '2026-09-15')
+            ->first();
+
+        $this->assertNotNull($attendance);
+        $this->assertNull($attendance->clock_in);
+        $this->assertNull($attendance->jam_masuk);
+        $this->assertNotNull($attendance->clock_out);
+        $this->assertEquals('17:00:00', $attendance->jam_keluar);
+        $this->assertStringContainsString('Presensi pulang tercatat tanpa presensi masuk', $attendance->notes ?? '');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_clock_in_at_17_after_shift_ended_auto_delegates_to_clock_out(): void
+    {
+        // Shift 08:00 - 16:00
+        $shift = $this->pegawai->shiftTemplate;
+        $day = $shift->days()->where('day_of_week', 2)->first();
+        if ($day) {
+            $day->update(['start_time' => '08:00:00', 'end_time' => '16:00:00', 'is_day_off' => false]);
+        }
+
+        // Pukul 17:00, user salah/legacy mengirim ke endpoint clock-in
+        Carbon::setTestNow('2026-09-15 17:00:00');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        $inRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-in', [
+                'latitude' => -7.5675,
+                'longitude' => 110.8036,
+                'accuracy' => 10.0,
+                'face_score' => 0.88,
+            ]);
+
+        $inRes->assertStatus(200)
+            ->assertJson(['success' => true]);
+
+        $attendance = \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
+            ->whereDate('tanggal', '2026-09-15')
+            ->first();
+
+        $this->assertNotNull($attendance);
+        // Otomatis terkonversi menjadi clock-out, bukan clock-in
+        $this->assertNull($attendance->clock_in);
+        $this->assertNotNull($attendance->clock_out);
+        $this->assertEquals('17:00:00', $attendance->jam_keluar);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_admin_can_delete_attendance_log(): void
+    {
+        $attendance = \App\Models\Attendance::create([
+            'pegawai_id' => $this->pegawai->id,
+            'office_location_id' => $this->office->id,
+            'tanggal' => '2026-09-15',
+            'jam_masuk' => '08:00:00',
+            'status' => 'hadir',
+            'status_kehadiran' => 'hadir',
+            'source' => 'mobile_gps',
+        ]);
+
+        $adminUser = \App\Models\User::factory()->create();
+        $adminRole = \App\Models\Role::firstOrCreate(
+            ['slug' => 'super-admin'],
+            ['name' => 'Super Admin', 'is_active' => true]
+        );
+        $perm = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'simpeg.presensi.delete'],
+            ['name' => 'Hapus Presensi', 'action' => 'delete', 'module' => 'SIMPEG']
+        );
+        $adminRole->permissions()->syncWithoutDetaching([$perm->id]);
+        $adminUser->roles()->sync([$adminRole->id]);
+
+        $tokenResult = $adminUser->createToken('admin-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->deleteJson("/api/simpeg/presensi/log/{$attendance->id}");
+
+        $res->assertStatus(200)
+            ->assertJson(['status' => 'success']);
+
+        $this->assertDatabaseMissing('simpeg_presensi_pegawai', ['id' => $attendance->id]);
+    }
 }

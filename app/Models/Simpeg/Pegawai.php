@@ -225,30 +225,20 @@ class Pegawai extends Model
     }
 
     /**
-     * Seluruh lokasi absen yang sah: lokasi utama + tambahan yang aktif.
+     * Seluruh lokasi absen yang sah: seluruh lokasi kantor kampus yang aktif
+     * (multi-lokasi otomatis, pegawai dapat absen dari lokasi kantor terdekat mana pun).
      *
      * @return \Illuminate\Support\Collection<int, OfficeLocation>
      */
     public function getAllowedOfficeLocations()
     {
-        $offices = collect();
+        $allActive = OfficeLocation::where('is_active', true)->orderBy('name')->get();
+        if ($allActive->isNotEmpty()) {
+            return $allActive;
+        }
 
         $primary = $this->officeLocation;
-        if ($primary && $primary->is_active) {
-            $offices->push($primary);
-        }
-
-        $additional = $this->relationLoaded('additionalOffices')
-            ? $this->additionalOffices->where('is_active', true)
-            : $this->additionalOffices()->where('simpeg_office_locations.is_active', true)->get();
-
-        foreach ($additional as $office) {
-            if (!$offices->contains('id', $office->id)) {
-                $offices->push($office);
-            }
-        }
-
-        return $offices->values();
+        return $primary ? collect([$primary]) : collect();
     }
 
     public function shiftTemplate()

@@ -317,8 +317,43 @@ class PresensiController extends Controller
         $isClockedIn = ($attendance && $attendance->clock_in !== null);
         $isClockedOut = ($attendance && $attendance->clock_out !== null);
         $hasValidClockIn = ($attendance && in_array($attendance->status, ['hadir', 'terlambat', 'menunggu_approval']) && $attendance->clock_in !== null);
-        $canClockIn = !$hasValidClockIn && !$isClockedOut;
-        $canClockOut = $isClockedIn && !$isClockedOut;
+
+        // Tentukan apakah waktu saat ini sudah jam pulang shift
+        $isPastShiftEnd = false;
+        $isInClockOutWindow = false;
+
+        if ($schedule && !$schedule->is_day_off && $schedule->end_time) {
+            $dutyDateStr = $attendance ? Carbon::parse($attendance->getAttribute('tanggal'))->toDateString() : $dutyDate;
+            $scheduledEnd = $schedule->getScheduledEndForDate($dutyDateStr);
+            $earlyLeaveTolerance = $schedule->getEarlyLeaveToleranceMinutes();
+            $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyLeaveTolerance);
+
+            $isPastShiftEnd = $now->greaterThanOrEqualTo($scheduledEnd);
+            $isInClockOutWindow = $now->greaterThanOrEqualTo($earliestClockOut);
+        } elseif (!$schedule) {
+            $scheduledEnd = Carbon::parse("{$dutyDate} 17:00:00");
+            $earlyLeaveTolerance = $employee->shiftTemplate ? $employee->shiftTemplate->early_leave_tolerance_minutes : 15;
+            $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyLeaveTolerance);
+
+            $isPastShiftEnd = $now->greaterThanOrEqualTo($scheduledEnd);
+            $isInClockOutWindow = $now->greaterThanOrEqualTo($earliestClockOut);
+        }
+
+        if ($isClockedOut) {
+            $canClockIn = false;
+            $canClockOut = false;
+        } elseif ($hasValidClockIn) {
+            $canClockIn = false;
+            $canClockOut = true;
+        } else {
+            if ($isPastShiftEnd || $isInClockOutWindow) {
+                $canClockIn = false;
+                $canClockOut = true;
+            } else {
+                $canClockIn = true;
+                $canClockOut = false;
+            }
+        }
 
         $schedulePayload = $schedule ? [
             'id' => $schedule->id,
@@ -433,9 +468,19 @@ class PresensiController extends Controller
 
         $attendance = $this->attendanceService->processClockIn($employee, $validated);
 
+        $message = match ($attendance->status) {
+            'hadir' => ($attendance->clock_out && !$attendance->clock_in)
+                ? 'Presensi pulang berhasil dicatat (jam shift telah berakhir).'
+                : 'Presensi masuk berhasil dicatat',
+            'terlambat' => 'Presensi masuk berhasil dicatat (Terlambat)',
+            'menunggu_approval' => 'Presensi masuk tersimpan, menunggu persetujuan HR',
+            'ditolak' => 'Presensi masuk ditolak: ' . $attendance->rejection_reason,
+            default => 'Status presensi: ' . $attendance->status,
+        };
+
         return response()->json([
             'status' => $attendance->status === 'ditolak' ? 'error' : 'success',
-            'message' => $attendance->status === 'ditolak' ? 'Presensi masuk ditolak: ' . $attendance->rejection_reason : 'Presensi masuk berhasil dicatat',
+            'message' => $message,
             'data' => $attendance,
         ], $attendance->status === 'ditolak' ? 422 : 200);
     }
@@ -450,6 +495,9 @@ class PresensiController extends Controller
             'longitude' => 'required|numeric',
             'accuracy' => 'required|numeric',
             'face_score' => 'nullable|numeric',
+            'face_image' => 'nullable|string',
+            'foto' => 'nullable',
+            'foto_presensi' => 'nullable',
             'is_mock_location' => 'nullable|boolean',
             'pegawai_id' => 'nullable|exists:simpeg_pegawai,id',
             'device_id' => 'nullable|string',
@@ -459,6 +507,14 @@ class PresensiController extends Controller
 
         $validated['is_mock_location'] = (bool) ($validated['is_mock_location'] ?? false);
         $validated['face_score'] = (float) ($validated['face_score'] ?? 0.85);
+
+        if ($request->hasFile('foto')) {
+            $validated['foto'] = $request->file('foto');
+        } elseif ($request->hasFile('foto_presensi')) {
+            $validated['foto_presensi'] = $request->file('foto_presensi');
+        } elseif ($request->hasFile('face_image')) {
+            $validated['face_image'] = $request->file('face_image');
+        }
 
         $employee = null;
         if ($request->filled('pegawai_id') && ($request->user()->hasPermission('simpeg.presensi.manage') || $request->user()->isAdmin() || $request->user()->hasRole('admin_simpeg'))) {
@@ -824,7 +880,40 @@ class PresensiController extends Controller
     }
 
     /**
-     * Delete a Presensi Bundle and all its attendance logs
+     * Delete an individual attendance log (Attendance)
+     */
+    public function destroyLog(Request $request, $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.presensi.delete') && !$user->hasPermission('simpeg.presensi.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses (permission) untuk menghapus Log Presensi.'
+            ], 403);
+        }
+
+        $attendance = Attendance::findOrFail($id);
+
+        \App\Services\AuditLogService::record(
+            'SIMPEG',
+            'delete',
+            'simpeg_presensi_pegawai',
+            (int) $id,
+            $attendance->toArray(),
+            null,
+            $request
+        );
+
+        $attendance->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Log presensi berhasil dihapus.',
+        ]);
+    }
+
+    /**
+     * Delete a Presensi Bundle or Attendance log by ID
      */
     public function destroy(Request $request, $id): JsonResponse
     {
@@ -832,18 +921,49 @@ class PresensiController extends Controller
         if (!$user->hasPermission('simpeg.presensi.delete') && !$user->hasPermission('simpeg.presensi.manage') && !$user->isAdmin()) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Anda tidak memiliki hak akses (permission) untuk menghapus Bundle Presensi.'
+                'message' => 'Anda tidak memiliki hak akses (permission) untuk menghapus Presensi.'
             ], 403);
         }
 
-        $periode = PresensiPeriode::findOrFail($id);
-        $nama = $periode->nama_periode;
-        $periode->delete();
+        // Jika request secara eksplisit bertipe log
+        if ($request->input('type') === 'log' || $request->has('log')) {
+            return $this->destroyLog($request, $id);
+        }
+
+        // Jika request secara eksplisit bertipe bundle
+        if ($request->input('type') === 'bundle' || $request->has('bundle')) {
+            $periode = PresensiPeriode::findOrFail($id);
+            $nama = $periode->nama_periode;
+            $periode->delete();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Bundle presensi '{$nama}' beserta seluruh log absensi di dalamnya berhasil dihapus.",
+            ]);
+        }
+
+        // Smart lookup: coba cari di Attendance dulu, jika ada hapus log
+        $attendance = Attendance::find($id);
+        if ($attendance) {
+            return $this->destroyLog($request, $id);
+        }
+
+        // Fallback cari di PresensiPeriode
+        $periode = PresensiPeriode::find($id);
+        if ($periode) {
+            $nama = $periode->nama_periode;
+            $periode->delete();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Bundle presensi '{$nama}' beserta seluruh log absensi di dalamnya berhasil dihapus.",
+            ]);
+        }
 
         return response()->json([
-            'status' => 'success',
-            'message' => "Bundle presensi '{$nama}' beserta seluruh log absensi di dalamnya berhasil dihapus.",
-        ]);
+            'status' => 'error',
+            'message' => 'Data presensi tidak ditemukan.',
+        ], 404);
     }
 
     /**
