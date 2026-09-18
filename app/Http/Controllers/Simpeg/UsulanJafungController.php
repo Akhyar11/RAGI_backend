@@ -22,18 +22,27 @@ class UsulanJafungController extends Controller
 
         if ($request->has('pegawai_id')) {
             $query->where('pegawai_id', $request->pegawai_id);
-        } elseif ($request->user()->user_type !== 'admin' && !$request->user()->hasPermission('simpeg.usulan_jafung.verify')) {
+        } elseif (!$request->user()->hasRole('superadmin') && !$request->user()->hasRole('admin') && !$request->user()->hasPermission('simpeg.usulan_jafung.verify')) {
             $pegId = $request->user()->pegawai?->id;
             if ($pegId) {
                 $query->where('pegawai_id', $pegId);
             }
         }
 
-        $usulan = $query->latest()->get();
+        $limit = (int) $request->input('limit', 15);
+        $paginated = $query->latest()->paginate($limit);
 
         return response()->json([
             'status' => 'success',
-            'data' => $usulan,
+            'data' => $paginated->items(),
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'from' => $paginated->firstItem(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'to' => $paginated->lastItem(),
+                'total' => $paginated->total(),
+            ],
         ]);
     }
 
