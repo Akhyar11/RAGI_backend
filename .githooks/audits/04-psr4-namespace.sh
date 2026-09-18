@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==============================================================================
-# AUDIT 04: PSR-4 Namespace Reviewer (BE) — STRICT HYBRID
+# AUDIT 04: PSR-4 Namespace Reviewer (BE) — AI Muse Spark Strict (Full Diff, tanpa regex)
 # ==============================================================================
 
-echo "📦 [Audit 5/9: PSR-4 Namespace] Memeriksa perubahan dengan AI (Opencode Muse)..."
+echo "📦 [Audit 5/9: PSR-4 Namespace] Memeriksa perubahan dengan AI (AI Muse Spark 1.3)..."
 
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
@@ -11,10 +11,8 @@ MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
 if [ -n "$DIFF_TARGET" ]; then
     STAGED_DIFF=$(git diff "$DIFF_TARGET" -- "app/**")
-    STAGED_FILES=$(git diff "$DIFF_TARGET" --name-only --diff-filter=A -- "app/**/*.php" "app/*.php")
 else
     STAGED_DIFF=$(git diff --cached -- "app/**")
-    STAGED_FILES=$(git diff --cached --name-only --diff-filter=A -- "app/**/*.php" "app/*.php")
 fi
 
 if [ -z "$STAGED_DIFF" ]; then
@@ -22,48 +20,27 @@ if [ -z "$STAGED_DIFF" ]; then
     exit 0
 fi
 
-# ------------------------------------------------------------------------------
-# 1. DETERMINISTIC PRE-CHECK
-# ------------------------------------------------------------------------------
-FAILED_REGEX=0
-
-while IFS= read -r file; do
-    [ -f "$file" ] || continue
-    EXPECTED=$(dirname "$file" | sed 's|^app|App|' | tr '/' '\\')
-    DECLARED=$(grep -m1 -oP '^namespace\s+\K[^;]+' "$file" || true)
-    if [ -z "$DECLARED" ]; then
-        echo "❌ [Audit PSR-4] $file tidak mendeklarasikan namespace."
-        FAILED_REGEX=1
-    elif [ "$DECLARED" != "$EXPECTED" ]; then
-        echo "❌ [Audit PSR-4] Namespace $file salah: '$DECLARED', seharusnya '$EXPECTED'."
-        FAILED_REGEX=1
-    fi
-done <<< "$STAGED_FILES"
-
-if [ $FAILED_REGEX -ne 0 ]; then
-    echo "❌ [Audit PSR-4 Namespace] DITOLAK pada tahap pemeriksaan statis!"
-    exit 1
-fi
-
-# ------------------------------------------------------------------------------
-# 2. DEEP AI AUDIT (Opencode Model Muse) — FULL DIFF
-# ------------------------------------------------------------------------------
+# DEEP AI AUDIT
 PROMPT_FILE=$(mktemp)
 
 cat << 'EOF' > "$PROMPT_FILE"
-Kamu adalah Code Auditor khusus PSR-4 Namespace & PHP Standards Laravel (Strict Backend Reviewer).
-Periksa Git Diff berikut HANYA terhadap Aturan PSR-4 & Coding Standards:
+Kamu adalah Code Auditor khusus PSR-4 Namespace & PHP Standards Laravel (Strict Backend Reviewer, AI Muse Spark 1.3).
+Periksa FULL Git Diff berikut secara SANGAT KETAT terhadap 3 aturan PSR-4. Penilaian MURNI oleh AI dari path file di header diff + baris baru — tidak ada pre-check regex.
 
-Aturan Baku (STRICT):
-1. KESESUAIAN NAMESPACE DENGAN PATH:
-   - Setiap file PHP baru atau diubah di dalam `app/` WAJIB mendeklarasikan namespace yang presisi sesuai direktori fisiknya (contoh: `app/Http/Controllers/System/FooController.php` -> `namespace App\Http\Controllers\System;`).
-2. KESESUAIAN NAMA CLASS & FILE:
-   - Nama class/interface/trait WAJIB persis sama dengan nama file tanpa ekstensi `.php`.
-3. STANDAR PSR-12:
-   - Format PHP tag pembuka (`<?php`), deklarasi namespace di baris atas, penulisan use statement yang rapi.
+Aturan Baku (STRICT — setiap aturan bernomor, nilai hanya dari baris baru):
+1. WAJIB namespace persis = path; DILARANG namespace menyimpang.
+   - SALAH: file `app/Http/Controllers/System/FooController.php` mendeklarasikan `+namespace App\\Http\\Controllers;` atau `+namespace App\\Services;`.
+   - BENAR: `+namespace App\\Http\\Controllers\\System;` untuk path tersebut; `app/Services/IAM/UserService.php` → `+namespace App\\Services\\IAM;`.
+   - Nilai dari header diff (`+++ b/app/...`) + baris `+namespace ...;`.
+2. WAJIB nama class/interface/trait = nama file; DILARANG nama berbeda.
+   - SALAH: file `UserService.php` berisi `+class AccountService`, file `UserObserver.php` berisi `+class UserListener`.
+   - BENAR: `UserService.php` → `+class UserService`, `HasPermission.php` (trait) → `+trait HasPermission`, `UserPolicy.php` → `+class UserPolicy`.
+3. WAJIB PSR-12; DILARANG format liar.
+   - SALAH: tanpa `+<?php` pembuka, `namespace` tidak di baris atas, `use` berantakan/tidak terurut.
+   - BENAR: `+<?php` baris pertama, lalu `+namespace App\\...;`, lalu blok `+use ...;` rapi, deklarasi class di bawahnya.
 
 Catatan:
-- HANYA periksa baris-baris kode baru yang DITAMBAHKAN atau DIUBAH (diawali tanda `+`). JANGAN menolak baris konteks yang tidak diubah.
+- HANYA periksa baris baru (+) — baris konteks tanpa `+` WAJIB diabaikan.
 
 Git Diff:
 EOF
@@ -104,7 +81,7 @@ fi
 CLEAN_RESULT=$(echo "$RESULT" | sed -e '/^> build/d' -e '/^Loaded config/d' | awk '/./{p=1} p')
 
 if echo "$RESULT" | grep -qi "REJECTED"; then
-    echo "❌ [Audit PSR-4 Namespace] REJECTED oleh AI (Muse)!"
+    echo "❌ [Audit PSR-4 Namespace] REJECTED oleh AI (Muse Spark)!"
     echo "================================ DETAIL TEMUAN AUDIT ================================"
     echo "$CLEAN_RESULT"
     echo "===================================================================================="
@@ -117,6 +94,6 @@ elif ! echo "$RESULT" | grep -qi "PASSED"; then
     echo "===================================================================================="
     exit 1
 else
-    echo "✅ [Audit PSR-4 Namespace] PASSED (Divalidasi oleh AI Opencode Muse)."
+    echo "✅ [Audit PSR-4 Namespace] PASSED (Divalidasi AI Muse Spark 1.3)."
     exit 0
 fi

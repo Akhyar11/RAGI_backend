@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==============================================================================
-# AUDIT 01: Zero Hardcode & RBAC Reviewer (BE) — STRICT HYBRID (Regex + AI Muse)
+# AUDIT 01: Zero Hardcode & RBAC Reviewer (BE) — AI Muse Spark Strict (Full Diff, tanpa regex)
 # ==============================================================================
 
-echo "🤖 [Audit 2/9: Zero Hardcode & RBAC] Memeriksa perubahan dengan AI (Opencode Muse)..."
+echo "🤖 [Audit 2/9: Zero Hardcode & RBAC] Memeriksa perubahan dengan AI (AI Muse Spark 1.3)..."
 
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
@@ -11,10 +11,8 @@ MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
 if [ -n "$DIFF_TARGET" ]; then
     STAGED_DIFF=$(git diff "$DIFF_TARGET" -- "app/**" "routes/**")
-    STAGED_FILES=$(git diff "$DIFF_TARGET" --name-only --diff-filter=ACM -- "app/**/*.php" "app/*.php" "routes/*.php")
 else
     STAGED_DIFF=$(git diff --cached -- "app/**" "routes/**")
-    STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM -- "app/**/*.php" "app/*.php" "routes/*.php")
 fi
 
 if [ -z "$STAGED_DIFF" ]; then
@@ -22,69 +20,40 @@ if [ -z "$STAGED_DIFF" ]; then
     exit 0
 fi
 
-# ------------------------------------------------------------------------------
-# 1. DETERMINISTIC PRE-CHECK (Fast Regex Rejection)
-# ------------------------------------------------------------------------------
-FAILED_REGEX=0
-
-while IFS= read -r file; do
-    [ -f "$file" ] || continue
-    if [ -n "$DIFF_TARGET" ]; then
-        ADDED=$(git diff "$DIFF_TARGET" -- "$file" | grep '^+' | grep -v '^+++' | sed 's^+^^')
-    else
-        ADDED=$(git diff --cached -- "$file" | grep '^+' | grep -v '^+++' | sed 's^+^^')
-    fi
-    [ -z "$ADDED" ] && continue
-
-    # 1. Validasi enum statis: in:XXX dengan huruf kapital
-    ENUM_HIT=$(echo "$ADDED" | grep -oP 'in:\K[A-Za-z0-9_|,\s.-]+' | grep -P '([A-Z]{2,}|[A-Z][a-z]{2,})' | head -n 3)
-    if [ -n "$ENUM_HIT" ]; then
-        echo "❌ [Audit Zero Hardcode] Validasi enum statis di $file:"
-        echo "$ENUM_HIT" | sed 's/^/    in:/'
-        echo "   💡 Validasi dropdown/master WAJIB memakai exists:nama_tabel,id (bukan in:STATIS)."
-        FAILED_REGEX=1
-    fi
-
-    # 2. Perbandingan user_type statis dalam logika
-    USERTYPE_HIT=$(echo "$ADDED" | grep -P '(==|===|!=|!==|in_array|match\s*\(|^\s*case\s)' | grep -P 'user.type' | head -n 3)
-    if [ -n "$USERTYPE_HIT" ]; then
-        echo "❌ [Audit Zero Hardcode] Perbandingan user_type statis di $file:"
-        echo "$USERTYPE_HIT" | sed 's/^/    /'
-        echo "   💡 Otorisasi WAJIB via Policy/Gate atau hasRole/hasPermission, bukan user_type."
-        FAILED_REGEX=1
-    fi
-
-    # 3. Perbandingan string nama modul/role dalam logika IF/ELSE
-    SLUG_HIT=$(echo "$ADDED" | grep -P '(==|===|!=|!==)' | grep -P "'(spmb|sikeu|siakad|simpeg|sinapra|sippm|lms|upm|admin|superadmin|mahasiswa|dosen|tendik|calon_mhs)'" | head -n 3)
-    if [ -n "$SLUG_HIT" ]; then
-        echo "❌ [Audit Zero Hardcode] Hardcode nama modul/role dalam logika di $file:"
-        echo "$SLUG_HIT" | sed 's/^/    /'
-        echo "   💡 Relasi/filter WAJIB memakai referensi ID entitas dari database."
-        FAILED_REGEX=1
-    fi
-done <<< "$STAGED_FILES"
-
-if [ $FAILED_REGEX -ne 0 ]; then
-    echo "❌ [Audit Zero Hardcode & RBAC] DITOLAK pada tahap pemeriksaan statis!"
-    exit 1
-fi
-
-# ------------------------------------------------------------------------------
-# 2. DEEP AI AUDIT (Opencode Model Muse) — FULL DIFF
-# ------------------------------------------------------------------------------
+# DEEP AI AUDIT
 PROMPT_FILE=$(mktemp)
 
 cat << 'EOF' > "$PROMPT_FILE"
-Kamu adalah Code Auditor khusus Zero Hardcode & RBAC Backend (Laravel Strict Reviewer).
-Periksa Git Diff berikut secara SANGAT KETAT terhadap aturan Zero Hardcode & RBAC Policy:
+Kamu adalah Code Auditor khusus Zero Hardcode & RBAC Backend Laravel (Strict Reviewer, AI Muse Spark 1.3).
+Periksa FULL Git Diff berikut secara SANGAT KETAT terhadap seluruh aturan Zero Hardcode & RBAC. Penilaian MURNI oleh AI dari diff — tidak ada pre-check regex.
 
-Aturan Baku (STRICT):
-1. DILARANG MENYEDIAKAN VALIDASI ENUM STATIS: Jangan menggunakan aturan validasi seperti `in:REGULER,KARYAWAN` atau `in:Islam,Kristen` jika pilihan tersebut merepresentasikan data master referensi/dropdown dinamis. WAJIB menggunakan `exists:nama_tabel,id` (misalnya `exists:spmb_master_referensi,id` atau `exists:core_tipe_referensi,kode`). Pengecualian struktural HANYA order direction ('asc','desc') atau boolean ('true','false').
-2. DILARANG PERBANDINGAN STATIS USER_TYPE: Dilarang membandingkan `$user->user_type` atau properti statis serupa dalam logika pengkondisian (if/else/switch/match). Otorisasi WAJIB melalui Gate, Policy, atau method RBAC (`hasRole()`, `hasPermission()`).
-3. DILARANG HARDCODE NAMA MODUL / ROLE: Dilarang membandingkan string nama role/modul (seperti 'spmb', 'sikeu', 'admin', 'mahasiswa') dalam logika branching IF/ELSE untuk menentukan akses atau relasi. Relasi/filter wajib berbasis ID entitas atau permission.
+Aturan Baku (STRICT — setiap aturan bernomor, nilai hanya dari baris baru):
+1. DILARANG `in:STATIS` untuk data master/dropdown dinamis, WAJIB `exists:nama_tabel,id`.
+   - SALAH: `'jalur_masuk' => 'required|in:REGULER,KARYAWAN'` atau `'agama' => 'in:Islam,Kristen'` (data master referensi/dropdown dinamis).
+   - BENAR: `'jalur_masuk_id' => 'required|exists:spmb_master_referensi,id'` atau `'tipe_id' => 'required|exists:core_tipe_referensi,id'`.
+   - Satu-satunya nilai `in:` yang sah adalah sort direction: `'sort_order' => 'in:asc,desc'`.
+   - SALAH bila memakai `exists:nama_tabel,kode` atau varian kolom lain — WAJIB `exists:nama_tabel,id`.
+2. DILARANG kata `user_type` di MANA PUN pada baris baru (+).
+   - Berlaku untuk: $fillable model User, validasi Form Request, where/select/query builder, if/else/switch/match, payload response JSON, factory/seeder.
+   - SALAH: `protected $fillable = [..., 'user_type'];`, `'user_type' => 'required|in:admin,mahasiswa'`, `User::where('user_type','admin')->get()`, `if ($user->user_type === 'admin')`, `return response()->json(['user_type' => $user->user_type])`, `'user_type' => 'admin'` di factory/seeder.
+   - BENAR: andalkan relasi `$user->roles()` / `$user->permissions()`, dan di seeder pakai `$user->roles()->attach($roleId)`.
+3. DILARANG banding string slug modul/role dalam branching; relasi/filter pakai ID entitas.
+   - SALAH: `if ($role === 'spmb')`, `if ($user->role == 'admin')`, `$q->where('modul','sikeu')`, `match($tipe){ 'mahasiswa' => ... }` untuk menentukan akses/relasi.
+   - BENAR: `where('module_id', $moduleId)`, `where('role_id', $roleId)`, `$user->hasRole('admin')`, `$user->hasPermission('spmb.create')` (lihat aturan 5 untuk klarifikasi string argumen helper).
+4. WAJIB otorisasi via Gate/Policy/RBAC, bukan perbandingan string manual.
+   - WAJIB memakai salah satu: `$this->authorize()`, `Gate::authorize()`, `$user->hasRole()`, `$user->hasPermission()`, middleware `can:`.
+   - SALAH: `if (auth()->user()->user_type !== 'admin') abort(403);`.
+   - BENAR: `$this->authorize('viewAny', User::class);`, `Gate::authorize('approve-krs');`, `Route::middleware(['auth:sanctum','can:manage-users'])`, `if (!auth()->user()->hasRole('admin')) abort(403);`.
+   - Gate WAJIB didefinisikan di `app/Providers/AppServiceProvider.php` (Gate::define / Gate::before).
+   - Helper WAJIB: `hasPermission(string $permissionSlug)` dan `hasRole(string $roleSlug)` memakai relasi `belongsToMany(Role::class,'user_roles')->withPivot(['valid_from','valid_until'])`.
+   - Slug permission WAJIB format `{modul}.{aksi}` (contoh BENAR: `users.read`, `users.create`, `krs.approve`; SALAH: `readUsers`, `approve`).
+   - Respons auth (login/SSO/AuthController) WAJIB eager-load relasi roles via `with('roles')` atau `$user->load('roles')` agar frontend dapat mengevaluasi otorisasi.
+5. WAJIB pahami klarifikasi: string literal di dalam argumen `hasRole()` / `hasPermission()` adalah BENAR, bukan pelanggaran.
+   - BENAR (jangan tolak): `$user->hasRole('admin')`, `$user->hasPermission('users.read')`, `$q->where('slug',$permissionSlug)` di dalam definisi helper/Gate/Policy.
+   - SALAH (tetap tolak): `$user->user_type === 'admin'`, `where('user_type','admin')`, `if ($modul === 'spmb')`.
 
 Catatan:
-- HANYA periksa baris-baris kode baru yang DITAMBAHKAN atau DIUBAH (diawali tanda `+`). JANGAN menolak baris konteks yang tidak diubah.
+- HANYA periksa baris baru (+) — baris konteks tanpa `+` dan file yang tidak diubah WAJIB diabaikan. Jangan menolak kode lama.
 
 Git Diff:
 EOF
@@ -125,7 +94,7 @@ fi
 CLEAN_RESULT=$(echo "$RESULT" | sed -e '/^> build/d' -e '/^Loaded config/d' | awk '/./{p=1} p')
 
 if echo "$RESULT" | grep -qi "REJECTED"; then
-    echo "❌ [Audit Zero Hardcode & RBAC] REJECTED oleh AI (Muse)!"
+    echo "❌ [Audit Zero Hardcode & RBAC] REJECTED oleh AI (Muse Spark)!"
     echo "================================ DETAIL TEMUAN AUDIT ================================"
     echo "$CLEAN_RESULT"
     echo "===================================================================================="
@@ -138,6 +107,6 @@ elif ! echo "$RESULT" | grep -qi "PASSED"; then
     echo "===================================================================================="
     exit 1
 else
-    echo "✅ [Audit Zero Hardcode & RBAC] PASSED (Divalidasi oleh AI Opencode Muse)."
+    echo "✅ [Audit Zero Hardcode & RBAC] PASSED (Divalidasi AI Muse Spark 1.3)."
     exit 0
 fi

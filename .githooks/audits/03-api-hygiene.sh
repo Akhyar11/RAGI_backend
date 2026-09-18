@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==============================================================================
-# AUDIT 03: API Hygiene Reviewer (BE) — STRICT HYBRID
+# AUDIT 03: API Hygiene Reviewer (BE) — AI Muse Spark Strict (Full Diff, tanpa regex)
 # ==============================================================================
 
-echo "🧹 [Audit 4/9: API Hygiene] Memeriksa perubahan dengan AI (Opencode Muse)..."
+echo "🧹 [Audit 4/9: API Hygiene] Memeriksa perubahan dengan AI (AI Muse Spark 1.3)..."
 
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
@@ -11,10 +11,8 @@ MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
 if [ -n "$DIFF_TARGET" ]; then
     STAGED_DIFF=$(git diff "$DIFF_TARGET" -- "app/**")
-    STAGED_FILES=$(git diff "$DIFF_TARGET" --name-only --diff-filter=ACM -- "app/**/*.php" "app/*.php")
 else
     STAGED_DIFF=$(git diff --cached -- "app/**")
-    STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM -- "app/**/*.php" "app/*.php")
 fi
 
 if [ -z "$STAGED_DIFF" ]; then
@@ -22,59 +20,35 @@ if [ -z "$STAGED_DIFF" ]; then
     exit 0
 fi
 
-# ------------------------------------------------------------------------------
-# 1. DETERMINISTIC PRE-CHECK
-# ------------------------------------------------------------------------------
-FAILED_REGEX=0
-
-while IFS= read -r file; do
-    [ -f "$file" ] || continue
-    if [ -n "$DIFF_TARGET" ]; then
-        ADDED=$(git diff "$DIFF_TARGET" -- "$file" | grep '^+' | grep -v '^+++' | sed 's^+^^')
-    else
-        ADDED=$(git diff --cached -- "$file" | grep '^+' | grep -v '^+++' | sed 's^+^^')
-    fi
-    [ -z "$ADDED" ] && continue
-
-    DEBUG_HIT=$(echo "$ADDED" | grep -nP '(?<!\w)(dd|dump|var_dump|print_r|ray|die|exit)\s*\(' | head -n 3)
-    if [ -n "$DEBUG_HIT" ]; then
-        echo "❌ [Audit API Hygiene] Sisa debug di $file:"
-        echo "$DEBUG_HIT" | sed 's/^/    /'
-        echo "   💡 Hapus dd()/dump()/die()/exit() sebelum commit."
-        FAILED_REGEX=1
-    fi
-
-    ENV_HIT=$(echo "$ADDED" | grep -nP '(?<!\w)env\s*\(' | head -n 3)
-    if [ -n "$ENV_HIT" ]; then
-        echo "❌ [Audit API Hygiene] Pemanggilan env() di $file:"
-        echo "$ENV_HIT" | sed 's/^/    /'
-        echo "   💡 Konfigurasi WAJIB via config/ atau SystemSetting (DB), bukan env() langsung di app/."
-        FAILED_REGEX=1
-    fi
-done <<< "$STAGED_FILES"
-
-if [ $FAILED_REGEX -ne 0 ]; then
-    echo "❌ [Audit API Hygiene] DITOLAK pada tahap pemeriksaan statis!"
-    exit 1
-fi
-
-# ------------------------------------------------------------------------------
-# 2. DEEP AI AUDIT (Opencode Model Muse) — FULL DIFF
-# ------------------------------------------------------------------------------
+# DEEP AI AUDIT
 PROMPT_FILE=$(mktemp)
 
 cat << 'EOF' > "$PROMPT_FILE"
-Kamu adalah Code Auditor khusus API Hygiene Backend Laravel (Strict Backend Reviewer).
-Periksa Git Diff berikut HANYA terhadap Aturan API Hygiene:
+Kamu adalah Code Auditor khusus API Hygiene Backend Laravel (Strict Backend Reviewer, AI Muse Spark 1.3).
+Periksa FULL Git Diff berikut secara SANGAT KETAT terhadap seluruh aturan hygiene + error handling. Penilaian MURNI oleh AI dari diff — tidak ada pre-check regex.
 
-Aturan Baku (STRICT):
-1. DILARANG SISA FUNGSI DEBUG:
-   - DILARANG KERAS meninggalkan fungsi debug seperti `dd(...)`, `dump(...)`, `var_dump(...)`, `print_r(...)`, `ray(...)`, `die(...)`, atau `exit(...)` pada baris kode baru.
-2. DILARANG PEMANGGILAN ENV() LANGSUNG:
-   - DILARANG memanggil helper `env(...)` secara langsung di dalam direktori `app/` (Controller, Model, Service). Seluruh pembacaan environment variable WAJIB melalui file konfigurasi `config('...')` atau database `SystemSetting`.
+Aturan Baku (STRICT — setiap aturan bernomor, nilai hanya dari baris baru):
+1. WAJIB format error `{status,message,errors?}`; DILARANG format liar.
+   - SALAH: `return response()->json(['data'=>$e->getMessage()])`, error validasi tanpa `errors`, error non-422 memakai `errors`, HTML/stack trace mentah bocor.
+   - BENAR: `{"status":"error","message":"..."}`, validasi 422 memakai `{"status":"error","message":"Data yang diberikan tidak valid.","errors":{"field":["..."]}}` (`errors` HANYA untuk 422).
+2. WAJIB global handler di `bootstrap/app.php` via `withExceptions`; DILARANG handler hilang/salah kode.
+   - SALAH: tidak ada render ValidationException→422, ModelNotFound→404, Authorization→403, Authentication→401, Throwable→500.
+   - BENAR: `ValidationException→422`, `ModelNotFoundException→404 ("{Model} tidak ditemukan.")`, `AuthorizationException→403 ("Anda tidak memiliki izin...")`, `AuthenticationException→401 ("Token tidak valid...")`, `Throwable→500 + Log::error + hanya bila !config('app.debug')` dengan pesan `Terjadi kesalahan internal pada server.`.
+3. WAJIB tabel kode tepat; DILARANG kode sembarang.
+   - SALAH: create balas 200, validasi balas 400/500, unauthorized balas 403, forbidden balas 401.
+   - BENAR: `200`=GET/PUT/PATCH/DELETE ok, `201`=POST create, `400`=bad request, `401`=belum login/token kedaluwarsa, `403`=tanpa izin, `404`=not found, `422`=validasi gagal, `429`=rate limit, `500`=unexpected.
+4. DILARANG try-catch umum di controller; WAJIB Log::error untuk 500; WAJIB APP_DEBUG=false produksi.
+   - SALAH: `try { ... } catch (\\Exception $e) { return response()->json([...], 500); }` menelan exception umum yang seharusnya ditangani global handler; `catch` 500 tanpa `\\Log::error($e)`.
+   - BENAR: biarkan exception umum ke global handler; `try-catch` HANYA untuk exception bisnis spesifik yang perlu respons khusus; setiap 500 WAJIB `\\Log::error($e)`; produksi `APP_DEBUG=false`.
+5. DILARANG sisa debug pada baris baru; WAJIB bersih.
+   - SALAH: `+dd($x);`, `+dump($data);`, `+var_dump($x);`, `+print_r($x);`, `+ray($x);`, `+die();`, `+exit;`, `+eval($code);`.
+   - BENAR: hapus seluruh debug sebelum commit; gunakan `Log::debug()` bila perlu jejak non-produksi.
+6. DILARANG `env()/getenv()/$_ENV` langsung di `app/`; WAJIB `config()/SystemSetting`.
+   - SALAH: `+env('DB_HOST')`, `+getenv('KEY')`, `+$_ENV['KEY']` di Controller/Model/Service dalam `app/`.
+   - BENAR: `config('database.host')`, `config('app.key')`, atau baca `SystemSetting` dari DB; `env()` hanya boleh di file `config/*.php`.
 
 Catatan:
-- HANYA periksa baris-baris kode baru yang DITAMBAHKAN atau DIUBAH (diawali tanda `+`). JANGAN menolak baris konteks yang tidak diubah.
+- HANYA periksa baris baru (+) — baris konteks tanpa `+` WAJIB diabaikan.
 
 Git Diff:
 EOF
@@ -115,7 +89,7 @@ fi
 CLEAN_RESULT=$(echo "$RESULT" | sed -e '/^> build/d' -e '/^Loaded config/d' | awk '/./{p=1} p')
 
 if echo "$RESULT" | grep -qi "REJECTED"; then
-    echo "❌ [Audit API Hygiene] REJECTED oleh AI (Muse)!"
+    echo "❌ [Audit API Hygiene] REJECTED oleh AI (Muse Spark)!"
     echo "================================ DETAIL TEMUAN AUDIT ================================"
     echo "$CLEAN_RESULT"
     echo "===================================================================================="
@@ -128,6 +102,6 @@ elif ! echo "$RESULT" | grep -qi "PASSED"; then
     echo "===================================================================================="
     exit 1
 else
-    echo "✅ [Audit API Hygiene] PASSED (Divalidasi oleh AI Opencode Muse)."
+    echo "✅ [Audit API Hygiene] PASSED (Divalidasi AI Muse Spark 1.3)."
     exit 0
 fi

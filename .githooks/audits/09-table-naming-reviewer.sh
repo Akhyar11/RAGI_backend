@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==============================================================================
-# AUDIT 09: Table Naming Standard Reviewer (BE) — STRICT HYBRID
+# AUDIT 09: Table Naming Standard Reviewer (BE) — AI Muse Spark Strict (Full Diff, tanpa regex)
 # ==============================================================================
 
-echo "🗄️ [Audit 9/9: Table Naming Standard] Memeriksa perubahan dengan AI (Opencode Muse)..."
+echo "🗄️ [Audit 9/9: Table Naming Standard] Memeriksa perubahan dengan AI (AI Muse Spark 1.3)..."
 
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
@@ -11,10 +11,8 @@ MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
 if [ -n "$DIFF_TARGET" ]; then
     STAGED_DIFF=$(git diff "$DIFF_TARGET" -- "database/migrations/**" "app/Models/**")
-    STAGED_FILES=$(git diff "$DIFF_TARGET" --name-only --diff-filter=ACM -- "database/migrations/*.php" "app/Models/**/*.php" "app/Models/*.php")
 else
     STAGED_DIFF=$(git diff --cached -- "database/migrations/**" "app/Models/**")
-    STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM -- "database/migrations/*.php" "app/Models/**/*.php" "app/Models/*.php")
 fi
 
 if [ -z "$STAGED_DIFF" ]; then
@@ -22,80 +20,31 @@ if [ -z "$STAGED_DIFF" ]; then
     exit 0
 fi
 
-# ------------------------------------------------------------------------------
-# 1. DETERMINISTIC PRE-CHECK
-# ------------------------------------------------------------------------------
-PREFIX_RE='^(core|iam|spmb|siakad|sikeu|simpeg|sinapra|sippm|lms|oauth|sso)_'
-FRAMEWORK_TABLES='^(sessions|cache|jobs|failed_jobs|job_batches|password_resets|password_reset_tokens)$'
-
-is_valid_table() {
-    local t="$1"
-    echo "$t" | grep -qP "$PREFIX_RE" && return 0
-    echo "$t" | grep -qP "$FRAMEWORK_TABLES" && return 0
-    return 1
-}
-
-FAILED_REGEX=0
-
-while IFS= read -r file; do
-    [ -f "$file" ] || continue
-    if [ -n "$DIFF_TARGET" ]; then
-        ADDED=$(git diff "$DIFF_TARGET" -- "$file" | grep '^+' | grep -v '^+++' | sed 's^+^^')
-    else
-        ADDED=$(git diff --cached -- "$file" | grep '^+' | grep -v '^+++' | sed 's^+^^')
-    fi
-    [ -z "$ADDED" ] && continue
-
-    NEW_TABLES=$(echo "$ADDED" | grep -oP "Schema::create\(\s*'\K[^']+" | head -n 10)
-    for t in $NEW_TABLES; do
-        if ! is_valid_table "$t"; then
-            echo "❌ [Audit Table Naming] Tabel '$t' di $file tanpa prefix modul."
-            echo "   💡 Gunakan prefix modul (core_, spmb_, siakad_, sikeu_, simpeg_, sinapra_, sippm_, iam_, ...)."
-            FAILED_REGEX=1
-        fi
-    done
-
-    MODEL_TABLES=$(echo "$ADDED" | grep -oP "protected \\\$table\s*=\s*'\K[^']+" | head -n 10)
-    for t in $MODEL_TABLES; do
-        if ! is_valid_table "$t"; then
-            echo "❌ [Audit Table Naming] property \$table = '$t' di $file tanpa prefix modul."
-            FAILED_REGEX=1
-        fi
-    done
-
-    FK_TABLES=$(echo "$ADDED" | grep -oP "constrained\(\s*'\K[^']+" | head -n 10)
-    for t in $FK_TABLES; do
-        if ! is_valid_table "$t"; then
-            echo "❌ [Audit Table Naming] constrained('$t') di $file mengarah ke tabel tanpa prefix modul."
-            FAILED_REGEX=1
-        fi
-    done
-done <<< "$STAGED_FILES"
-
-if [ $FAILED_REGEX -ne 0 ]; then
-    echo "❌ [Audit Table Naming Standard] DITOLAK pada tahap pemeriksaan statis!"
-    exit 1
-fi
-
-# ------------------------------------------------------------------------------
-# 2. DEEP AI AUDIT (Opencode Model Muse) — FULL DIFF
-# ------------------------------------------------------------------------------
+# DEEP AI AUDIT
 PROMPT_FILE=$(mktemp)
 
 cat << 'EOF' > "$PROMPT_FILE"
-Kamu adalah Code Auditor khusus Database Table Naming Standard (Strict Backend Reviewer).
-Periksa Git Diff berikut HANYA terhadap aturan Table Naming Standard:
+Kamu adalah Code Auditor khusus Database Table Naming Standard (Strict Backend Reviewer, AI Muse Spark 1.3).
+Periksa FULL Git Diff berikut secara SANGAT KETAT terhadap aturan prefix modul. Penilaian MURNI oleh AI dari diff — tidak ada pre-check regex. AI WAJIB menangani single DAN double quote, `Schema::create`, `$table`, `constrained()` dengan/tanpa argumen, dan `->references()->on()`.
 
-Aturan Baku (STRICT):
-1. PREFIX MODUL WAJIB PADA SCHEMA::CREATE:
-   - SEMUA nama tabel baru yang dibuat di migration (`Schema::create('nama_tabel', ...)`) WAJIB diawali dengan nama modulnya (contoh prefix: `core_`, `spmb_`, `siakad_`, `sikeu_`, `simpeg_`, `sinapra_`, `sippm_`, `lms_`, `oauth_`, `sso_`). DILARANG menggunakan nama tabel tunggal tanpa prefix modul (seperti `users`, `mahasiswa`, `tarif`).
-2. FOREIGN KEY WAJIB KE TABEL BERPREFIX:
-   - SEMUA relasi foreign key pada migration (`constrained('nama_tabel')`) WAJIB mengarah pada tabel yang memiliki prefix modul yang sah.
-3. MODEL PROPERTY $TABLE:
-   - Model baru atau dimodifikasi harus mendefinisikan property `protected $table` yang mereferensikan nama tabel berprefix modul.
+Aturan Baku (STRICT — setiap aturan bernomor, nilai hanya dari baris baru):
+1. WAJIB prefix modul pada `Schema::create`; DILARANG tabel tanpa prefix.
+   - SALAH: `+Schema::create('users', ...)`, `+Schema::create("mahasiswa", ...)`, `+Schema::create('tarif', ...)`.
+   - BENAR: `+Schema::create('iam_users', ...)`, `+Schema::create("spmb_pendaftar", ...)`, `+Schema::create('siakad_mahasiswa', ...)`.
+   - Prefix sah: `core_|iam_|spmb_|siakad_|sikeu_|simpeg_|sinapra_|sippm_|lms_|oauth_|sso_|upm_` (contoh BENAR: `core_settings`, `iam_roles`, `upm_standar`).
+   - Dikecualikan (BENAR tanpa prefix): `sessions|cache|jobs|failed_jobs|job_batches|migrations|password_resets|password_reset_tokens|personal_access_tokens|audit_logs`.
+   - Berlaku untuk single quote DAN double quote.
+2. WAJIB FK ke tabel berprefix; DILARANG FK ke tabel tanpa prefix.
+   - SALAH: `+->constrained('users')`, `+->constrained("mahasiswa")`, `+$table->foreign('x')->references('id')->on('users')`, `+$table->foreign('x')->references('id')->on("tarif")`.
+   - BENAR: `+->constrained('iam_users')`, `+->constrained()` (tanpa argumen, mengikuti konvensi Laravel — BENAR), `+->references('id')->on('iam_users')`, versi double-quote yang setara.
+   - AI WAJIB memeriksa `constrained()` dengan argumen, `constrained()` tanpa argumen (lolos), dan pola `->references(...)->on('...')` / `->references(...)->on("...")`.
+3. WAJIB `protected $table` berprefix pada Model; DILARANG tanpa prefix.
+   - SALAH: `+protected $table = 'users';`, `+protected $table = "mahasiswa";`.
+   - BENAR: `+protected $table = 'iam_users';`, `+protected $table = "spmb_pendaftar";`.
+   - Berlaku untuk single DAN double quote; baca dari baris `+$table` / `+protected $table`.
 
 Catatan:
-- HANYA periksa baris-baris kode baru yang DITAMBAHKAN atau DIUBAH (diawali tanda `+`). JANGAN menolak baris konteks yang tidak diubah.
+- HANYA periksa baris baru (+) — baris konteks tanpa `+` WAJIB diabaikan.
 
 Git Diff:
 EOF
@@ -136,7 +85,7 @@ fi
 CLEAN_RESULT=$(echo "$RESULT" | sed -e '/^> build/d' -e '/^Loaded config/d' | awk '/./{p=1} p')
 
 if echo "$RESULT" | grep -qi "REJECTED"; then
-    echo "❌ [Audit Table Naming Standard] REJECTED oleh AI (Muse)!"
+    echo "❌ [Audit Table Naming Standard] REJECTED oleh AI (Muse Spark)!"
     echo "================================ DETAIL TEMUAN AUDIT ================================"
     echo "$CLEAN_RESULT"
     echo "===================================================================================="
@@ -149,6 +98,6 @@ elif ! echo "$RESULT" | grep -qi "PASSED"; then
     echo "===================================================================================="
     exit 1
 else
-    echo "✅ [Audit Table Naming Standard] PASSED (Divalidasi oleh AI Opencode Muse)."
+    echo "✅ [Audit Table Naming Standard] PASSED (Divalidasi AI Muse Spark 1.3)."
     exit 0
 fi

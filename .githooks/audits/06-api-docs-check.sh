@@ -1,21 +1,17 @@
 #!/bin/bash
 # ==============================================================================
-# AUDIT 06: API Documentation Reviewer (BE) — STRICT HYBRID
+# AUDIT 06: API Documentation Reviewer (BE) — AI Muse Spark Strict (Full Diff, tanpa regex)
 # ==============================================================================
 
-echo "📚 [Audit 7/9: API Documentation] Memeriksa perubahan dengan AI (Opencode Muse)..."
+echo "📚 [Audit 7/9: API Documentation] Memeriksa perubahan dengan AI (AI Muse Spark 1.3)..."
 
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
 MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
 if [ -n "$DIFF_TARGET" ]; then
-    NEW_CONTROLLERS=$(git diff "$DIFF_TARGET" --name-only --diff-filter=A -- "app/Http/Controllers/**/*.php" "app/Http/Controllers/*.php")
-    STAGED_DOCS=$(git diff "$DIFF_TARGET" --name-only -- "docs/**/*.md")
     STAGED_DIFF=$(git diff "$DIFF_TARGET" -- "app/Http/Controllers/**" "docs/**")
 else
-    NEW_CONTROLLERS=$(git diff --cached --name-only --diff-filter=A -- "app/Http/Controllers/**/*.php" "app/Http/Controllers/*.php")
-    STAGED_DOCS=$(git diff --cached --name-only -- "docs/**/*.md")
     STAGED_DIFF=$(git diff --cached -- "app/Http/Controllers/**" "docs/**")
 fi
 
@@ -24,27 +20,27 @@ if [ -z "$STAGED_DIFF" ]; then
     exit 0
 fi
 
-# Cek apakah ada controller baru tanpa berkas docs
-if [ -n "$NEW_CONTROLLERS" ] && [ -z "$STAGED_DOCS" ]; then
-    echo "❌ [Audit API Documentation] Controller baru tanpa berkas dokumentasi di docs/api/:"
-    echo "$NEW_CONTROLLERS" | sed 's/^/    /'
-    echo "   💡 Setiap controller baru WAJIB memiliki docs/api/{Modul}/{Controller}.md."
-    exit 1
-fi
-
+# DEEP AI AUDIT
 PROMPT_FILE=$(mktemp)
 
 cat << 'EOF' > "$PROMPT_FILE"
-Kamu adalah Code Auditor khusus API Documentation Standard Laravel (Strict Backend Reviewer).
-Periksa Git Diff berikut terhadap kelengkapan dan format dokumentasi API:
+Kamu adalah Code Auditor khusus API Documentation Standard Laravel (Strict Backend Reviewer, AI Muse Spark 1.3).
+Periksa FULL Git Diff berikut secara SANGAT KETAT terhadap kelengkapan dan format dokumentasi API. Penilaian MURNI oleh AI dari diff (file baru terlihat dari header diff `+++ b/...`) — tidak ada pre-check regex.
 
-Aturan Baku (STRICT):
-1. KELENGKAPAN ENDPOINT DOKUMENTASI:
-   - Setiap endpoint controller baru wajib terdokumentasi (method, route path, parameter request, contoh response).
-   - Format dokumentasi menggunakan markdown rapi di folder `docs/api/`.
+Aturan Baku (STRICT — setiap aturan bernomor, nilai hanya dari baris baru):
+1. WAJIB `docs/api/{Modul}/{Controller}.md` per controller + `docs/README.md` indeks update; DILARANG controller/endpoint berubah tanpa docs.
+   - SALAH: header diff `+++ b/app/Http/Controllers/IAM/UserController.php` (controller baru) tanpa `+++ b/docs/api/IAM/UserController.md` dan tanpa `+++ b/docs/README.md`; endpoint baru/ubah tanpa file docs baru/ubah.
+   - BENAR: setiap controller baru/endpoint berubah disertai `docs/api/{Modul}/{Controller}.md` + update `docs/README.md` (tabel Controller|Deskripsi|Dokumen dengan link).
+2. WAJIB template lengkap; DILARANG template bolong/placeholder.
+   - SALAH: tanpa header `Modul/BaseURL/Auth/Dibuat/Diperbarui`, tanpa tabel `Method|Endpoint|Fungsi|Auth`, tanpa Headers (`Authorization Bearer`, `Accept`, `Content-Type`), tanpa Query Params (`search/sort_by/sort_order/per_page/page` + default `created_at/desc/15/1/maks 100`), tanpa Request Body, tanpa Response sukses+pagination+error nyata, tanpa catatan soft-delete/password.
+   - BENAR: header `> **Modul**: IAM / **Base URL**: /api/users / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**`; tabel endpoint; Headers; Query Params lengkap; Request Body JSON nyata; Response `200/201` + pagination (`meta`) + error `401/403/404/422` nyata (contoh: `{"status":"error","message":"User tidak ditemukan."}`); catatan `soft-delete` dan `password tidak dikembalikan`.
+   - DILARANG placeholder fiktif (`{"data":"..."}` tanpa struktur nyata) — WAJIB contoh nyata sesuai envelope API.
+3. WAJIB tandai publik & emoji konsisten; DILARANG label acak.
+   - SALAH: endpoint login tanpa `Auth: ❌ Publik`, memakai `[Ya]/[Tidak]` atau emoji acak.
+   - BENAR: publik Auth `❌` (contoh `| POST | /api/auth/login | Login | ❌ Publik |`); emoji konsisten `✅`=Diperlukan/Tersedia, `❌`=Tidak diperlukan/Tidak tersedia, `⚠️`=Kondisional.
 
 Catatan:
-- HANYA periksa baris-baris kode baru yang DITAMBAHKAN atau DIUBAH (diawali tanda `+`). JANGAN menolak baris konteks yang tidak diubah.
+- HANYA periksa baris baru (+) — baris konteks tanpa `+` WAJIB diabaikan. File baru/controller baru/endpoint berubah tanpa docs lengkap = REJECTED.
 
 Git Diff:
 EOF
@@ -85,7 +81,7 @@ fi
 CLEAN_RESULT=$(echo "$RESULT" | sed -e '/^> build/d' -e '/^Loaded config/d' | awk '/./{p=1} p')
 
 if echo "$RESULT" | grep -qi "REJECTED"; then
-    echo "❌ [Audit API Documentation] REJECTED oleh AI (Muse)!"
+    echo "❌ [Audit API Documentation] REJECTED oleh AI (Muse Spark)!"
     echo "================================ DETAIL TEMUAN AUDIT ================================"
     echo "$CLEAN_RESULT"
     echo "===================================================================================="
@@ -98,6 +94,6 @@ elif ! echo "$RESULT" | grep -qi "PASSED"; then
     echo "===================================================================================="
     exit 1
 else
-    echo "✅ [Audit API Documentation] PASSED (Divalidasi oleh AI Opencode Muse)."
+    echo "✅ [Audit API Documentation] PASSED (Divalidasi AI Muse Spark 1.3)."
     exit 0
 fi

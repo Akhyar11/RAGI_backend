@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==============================================================================
-# AUDIT 02: API CRUD Standard Reviewer (BE) — STRICT HYBRID
+# AUDIT 02: API CRUD Standard Reviewer (BE) — AI Muse Spark Strict (Full Diff, tanpa regex)
 # ==============================================================================
 
-echo "🤖 [Audit 3/9: API CRUD Standard] Memeriksa perubahan dengan AI (Opencode Muse)..."
+echo "🤖 [Audit 3/9: API CRUD Standard] Memeriksa perubahan dengan AI (AI Muse Spark 1.3)..."
 
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
@@ -11,10 +11,8 @@ MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
 if [ -n "$DIFF_TARGET" ]; then
     STAGED_DIFF=$(git diff "$DIFF_TARGET" -- "app/Http/Controllers/**" "app/Http/Requests/**")
-    STAGED_FILES=$(git diff "$DIFF_TARGET" --name-only --diff-filter=ACM -- "app/Http/Controllers/**/*.php" "app/Http/Controllers/*.php")
 else
     STAGED_DIFF=$(git diff --cached -- "app/Http/Controllers/**" "app/Http/Requests/**")
-    STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM -- "app/Http/Controllers/**/*.php" "app/Http/Controllers/*.php")
 fi
 
 if [ -z "$STAGED_DIFF" ]; then
@@ -22,54 +20,50 @@ if [ -z "$STAGED_DIFF" ]; then
     exit 0
 fi
 
-# ------------------------------------------------------------------------------
-# 1. DETERMINISTIC PRE-CHECK
-# ------------------------------------------------------------------------------
-FAILED_REGEX=0
-
-while IFS= read -r file; do
-    [ -f "$file" ] || continue
-    if [ -n "$DIFF_TARGET" ]; then
-        ADDED=$(git diff "$DIFF_TARGET" -- "$file" | grep '^+' | grep -v '^+++' | sed 's^+^^')
-    else
-        ADDED=$(git diff --cached -- "$file" | grep '^+' | grep -v '^+++' | sed 's^+^^')
-    fi
-    [ -z "$ADDED" ] && continue
-
-    INLINE_VALIDATE=$(echo "$ADDED" | grep -n '\$request->validate(' | head -n 3)
-    if [ -n "$INLINE_VALIDATE" ]; then
-        echo "❌ [Audit API CRUD] Validasi inline \$request->validate() di $file:"
-        echo "$INLINE_VALIDATE" | sed 's/^/    /'
-        echo "   💡 WAJIB memakai Form Request terpisah (Store*Request / Update*Request di app/Http/Requests/)."
-        FAILED_REGEX=1
-    fi
-done <<< "$STAGED_FILES"
-
-if [ $FAILED_REGEX -ne 0 ]; then
-    echo "❌ [Audit API CRUD Standard] DITOLAK pada tahap pemeriksaan statis!"
-    exit 1
-fi
-
-# ------------------------------------------------------------------------------
-# 2. DEEP AI AUDIT (Opencode Model Muse) — FULL DIFF
-# ------------------------------------------------------------------------------
+# DEEP AI AUDIT
 PROMPT_FILE=$(mktemp)
 
 cat << 'EOF' > "$PROMPT_FILE"
-Kamu adalah Code Auditor khusus API CRUD Standard Laravel (Strict Backend Reviewer).
-Periksa Git Diff berikut HANYA terhadap Aturan Standar API CRUD:
+Kamu adalah Code Auditor khusus API CRUD Standard Laravel (Strict Backend Reviewer, AI Muse Spark 1.3).
+Periksa FULL Git Diff berikut secara SANGAT KETAT terhadap seluruh aturan API CRUD + Service Layer + Naming. Penilaian MURNI oleh AI dari diff — tidak ada pre-check regex.
 
-Aturan Baku (STRICT):
-1. FORM REQUEST WAJIB (NO INLINE VALIDATION):
-   - Validasi data input WAJIB menggunakan Form Request terpisah di `app/Http/Requests/` (contoh: `StoreItemRequest`, `UpdateItemRequest`).
-   - DILARANG memanggil validasi inline langsung seperti `$request->validate([...])` di dalam Controller.
-2. SERVER-SIDE PAGINATION PADA INDEX:
-   - Endpoint listing/index di Controller WAJIB menggunakan `paginate(...)` untuk mendukung limit & pagination. Dilarang keras fallback `->get()` atau `->all()` tanpa limitasi pada data tabel dinamis.
-3. KONSISTENSI RESPONSE JSON:
-   - Format response JSON harus memiliki envelope konsisten (`status`, `message`, `data`, `meta`).
+Aturan Baku (STRICT — setiap aturan bernomor, nilai hanya dari baris baru):
+1. WAJIB envelope JSON konsisten; DILARANG envelope salah.
+   - SALAH: list tanpa `meta`/`filters`, single dengan `meta`, error 422 tanpa `errors`, error non-422 memakai `errors`.
+   - BENAR List: `{"status":"success","message":"...","data":[...],"meta":{"current_page":1,"per_page":15,"total":100,"last_page":7,"from":1,"to":15},"filters":{"search":"...","sort_by":"created_at","sort_order":"desc"}}`.
+   - BENAR Single (create/update/show): `{"status":"success","message":"...","data":{...}}` TANPA `meta`.
+   - BENAR Error: `{"status":"error","message":"...","errors":{...}}` dengan `errors` HANYA untuk 422.
+2. WAJIB paginate pada index; DILARANG `->get()`/`->all()` tanpa limit di data tabel dinamis.
+   - SALAH: `$data = $query->get(); return response()->json(['data'=>$data]);`.
+   - BENAR: `$perPage = min(100, $request->integer('per_page', 15)); $data = $query->paginate($perPage);` lalu kembalikan `data=>$data->items()` + `meta` (current_page, per_page, total, last_page, from, to).
+   - WAJIB default `per_page` 15 dan maks 100 via `$request->integer()+min`.
+3. WAJIB search + sort_by whitelist + sort_order pada index.
+   - SALAH: index tanpa `search`, `orderBy($request->sort_by)` langsung tanpa whitelist, sort default selain `created_at`/`desc`.
+   - BENAR: `if ($request->filled('search')) { $query->where(fn...) }`, `$allowed=['created_at','updated_at','nama']; $sortBy=in_array($request->sort_by,$allowed)?$request->sort_by:'created_at'; $sortOrder=$request->sort_order==='asc'?'asc':'desc'; $query->orderBy($sortBy,$sortOrder);`.
+4. WAJIB Form Request Store*/Update*Request di `app/Http/Requests`; DILARANG validasi inline.
+   - SALAH: `$request->validate([...])` atau `Validator::make(...)` di Controller.
+   - BENAR: `php artisan make:request StoreItemRequest`, `public function store(StoreItemRequest $request)`, `public function update(UpdateItemRequest $request, Model $m)`.
+5. WAJIB try-catch operasi berisiko + kode HTTP tepat; DILARANG 500 tanpa Log.
+   - SALAH: `catch{ return 500 tanpa Log::error }`, `POST create` balas 200, validasi gagal balas 500, not-found balas 200.
+   - BENAR: `200` (GET/PUT/PATCH/DELETE ok), `201` (POST create), `400` (bad request), `403` (forbidden), `404` (not found), `422` (validasi), `500` (unexpected + `Log::error($e)`).
+6. WAJIB SoftDeletes: respons destroy + endpoint restore opsional.
+   - SALAH: model pakai `SoftDeletes` tapi `destroy` tidak menjelaskan soft-delete / tidak ada `POST /resource/{id}/restore` saat dibutuhkan.
+   - BENAR: `use SoftDeletes;`, `destroy` mengembalikan status soft-delete, opsional `POST /resource/{id}/restore`.
+7. WAJIB route dilindungi `auth:sanctum`.
+   - SALAH: `Route::apiResource('users', ...)` tanpa middleware auth.
+   - BENAR: `Route::middleware(['auth:sanctum'])->group(...)` atau `Route::apiResource(...)->middleware('auth:sanctum')`.
+8. WAJIB Service layer bila logika > CRUD sederhana; DILARANG pola controller gemuk.
+   - Wajib buat Service di `app/Services/{Modul}/` bila: >1 operasi DB, cabang if/else kompleks, reuse >1 tempat, butuh transaksi.
+   - SALAH: controller berisi banyak query/transaksi, Service menerima `$request`, multi-tulis tanpa `DB::transaction`.
+   - BENAR: `namespace App\Services\IAM; class UserService { public function create(array $data): User { return DB::transaction(fn()=>...); } }`, inject `public function __construct(private UserService $userService){}`, panggil `$this->userService->create($request->validated())`, unit test di `tests/Unit/Services/`.
+   - DILARANG `$request` di Service — data dioper via `array $data`.
+   - WAJIB `DB::transaction` untuk multi-tulis.
+9. WAJIB naming standard; DILARANG verb/snake di URL, camelCase di JSON, boolean/waktu tak standar.
+   - SALAH: `/api/get-users`, `/api/create-permission`, `/api/Users`, `/api/role_permissions`, `GET /api/roles-by-user/{id}`, `POST /api/login-auth`, JSON `{"firstName":"...","active":true,"created":"..."}`, boolean `active/verified`, waktu `login_time/tanggal_lahir`.
+   - BENAR: kebab-case plural tanpa verb `/api/users`, `/api/audit-logs`, `/api/role-permissions`; nested `GET /api/users/{id}/roles`; custom action di ujung `PATCH /api/users/{id}/status`, `POST /api/auth/login`; `PUT` utuh vs `PATCH` parsial; JSON snake_case `first_name/is_active/created_at`; boolean prefix `is_/has_/can_` (`is_active`,`has_access`); waktu `_at/_date` (`created_at`,`last_login_at`,`birth_date`); prefix `/api/admin|/api/auth|/api/[Modul]` (`/api/spmb`,`/api/siakad`).
 
 Catatan:
-- HANYA periksa baris-baris kode baru yang DITAMBAHKAN atau DIUBAH (diawali tanda `+`). JANGAN menolak baris konteks yang tidak diubah.
+- HANYA periksa baris baru (+) — baris konteks tanpa `+` WAJIB diabaikan.
 
 Git Diff:
 EOF
@@ -110,7 +104,7 @@ fi
 CLEAN_RESULT=$(echo "$RESULT" | sed -e '/^> build/d' -e '/^Loaded config/d' | awk '/./{p=1} p')
 
 if echo "$RESULT" | grep -qi "REJECTED"; then
-    echo "❌ [Audit API CRUD Standard] REJECTED oleh AI (Muse)!"
+    echo "❌ [Audit API CRUD Standard] REJECTED oleh AI (Muse Spark)!"
     echo "================================ DETAIL TEMUAN AUDIT ================================"
     echo "$CLEAN_RESULT"
     echo "===================================================================================="
@@ -123,6 +117,6 @@ elif ! echo "$RESULT" | grep -qi "PASSED"; then
     echo "===================================================================================="
     exit 1
 else
-    echo "✅ [Audit API CRUD Standard] PASSED (Divalidasi oleh AI Opencode Muse)."
+    echo "✅ [Audit API CRUD Standard] PASSED (Divalidasi AI Muse Spark 1.3)."
     exit 0
 fi
