@@ -23,6 +23,7 @@ class PresensiMasterSettingController extends Controller
             'gps_accuracy_threshold_meters',
             'late_tolerance_minutes',
             'max_early_clock_in_minutes',
+            'max_late_clock_in_minutes',
             'early_leave_tolerance_minutes',
             'applies_national_holidays',
         ])->get()->keyBy('key');
@@ -34,6 +35,7 @@ class PresensiMasterSettingController extends Controller
                 'gps_accuracy_threshold_meters' => (float) ($settings->get('gps_accuracy_threshold_meters')?->value ?? 50.0),
                 'late_tolerance_minutes' => (int) ($settings->get('late_tolerance_minutes')?->value ?? 15),
                 'max_early_clock_in_minutes' => (int) ($settings->get('max_early_clock_in_minutes')?->value ?? 60),
+                'max_late_clock_in_minutes' => (int) ($settings->get('max_late_clock_in_minutes')?->value ?? 240),
                 'early_leave_tolerance_minutes' => (int) ($settings->get('early_leave_tolerance_minutes')?->value ?? 15),
                 'applies_national_holidays' => filter_var($settings->get('applies_national_holidays')?->value ?? true, FILTER_VALIDATE_BOOLEAN),
             ],
@@ -50,6 +52,7 @@ class PresensiMasterSettingController extends Controller
             'gps_accuracy_threshold_meters' => 'required|numeric|min:5|max:500',
             'late_tolerance_minutes' => 'required|integer|min:0|max:120',
             'max_early_clock_in_minutes' => 'required|integer|min:0|max:240',
+            'max_late_clock_in_minutes' => 'required|integer|min:0|max:720',
             'early_leave_tolerance_minutes' => 'required|integer|min:0|max:120',
             'applies_national_holidays' => 'required|boolean',
         ]);
@@ -186,6 +189,7 @@ class PresensiMasterSettingController extends Controller
             'late_tolerance_minutes' => 'nullable|integer|min:0|max:120',
             'early_leave_tolerance_minutes' => 'nullable|integer|min:0|max:120',
             'max_early_clock_in_minutes' => 'nullable|integer|min:0|max:240',
+            'max_late_clock_in_minutes' => 'nullable|integer|min:0|max:720',
             'applies_national_holidays' => 'nullable|boolean',
             'is_active' => 'required|boolean',
             'days' => 'nullable|array|size:7',
@@ -201,6 +205,7 @@ class PresensiMasterSettingController extends Controller
             'late_tolerance_minutes' => $validated['late_tolerance_minutes'] ?? 15,
             'early_leave_tolerance_minutes' => $validated['early_leave_tolerance_minutes'] ?? 15,
             'max_early_clock_in_minutes' => $validated['max_early_clock_in_minutes'] ?? 60,
+            'max_late_clock_in_minutes' => $validated['max_late_clock_in_minutes'] ?? 240,
             'applies_national_holidays' => $validated['applies_national_holidays'] ?? true,
             'is_active' => $validated['is_active'],
         ]);
@@ -238,6 +243,7 @@ class PresensiMasterSettingController extends Controller
             'late_tolerance_minutes' => 'nullable|integer',
             'early_leave_tolerance_minutes' => 'nullable|integer',
             'max_early_clock_in_minutes' => 'nullable|integer',
+            'max_late_clock_in_minutes' => 'nullable|integer',
             'applies_national_holidays' => 'nullable|boolean',
             'is_active' => 'required|boolean',
             'days' => 'nullable|array',
@@ -245,6 +251,8 @@ class PresensiMasterSettingController extends Controller
             'days.*.start_time' => 'nullable|string',
             'days.*.end_time' => 'nullable|string',
             'days.*.is_day_off' => 'required|boolean',
+            'days.*.max_late_clock_in_minutes' => 'nullable|integer|min:0|max:720',
+            'days.*.max_early_clock_in_minutes' => 'nullable|integer|min:0|max:240',
         ]);
 
         $shift->update([
@@ -253,17 +261,25 @@ class PresensiMasterSettingController extends Controller
             'late_tolerance_minutes' => $validated['late_tolerance_minutes'] ?? $shift->late_tolerance_minutes,
             'early_leave_tolerance_minutes' => $validated['early_leave_tolerance_minutes'] ?? $shift->early_leave_tolerance_minutes,
             'max_early_clock_in_minutes' => $validated['max_early_clock_in_minutes'] ?? $shift->max_early_clock_in_minutes,
+            'max_late_clock_in_minutes' => $validated['max_late_clock_in_minutes'] ?? $shift->max_late_clock_in_minutes,
             'applies_national_holidays' => $validated['applies_national_holidays'] ?? $shift->applies_national_holidays,
             'is_active' => $validated['is_active'],
         ]);
 
         if (!empty($validated['days'])) {
             foreach ($validated['days'] as $dayData) {
-                $shift->days()->where('id', $dayData['id'])->update([
+                $dayUpdate = [
                     'start_time' => $dayData['start_time'] ?? null,
                     'end_time' => $dayData['end_time'] ?? null,
                     'is_day_off' => $dayData['is_day_off'],
-                ]);
+                ];
+                if (array_key_exists('max_late_clock_in_minutes', $dayData)) {
+                    $dayUpdate['max_late_clock_in_minutes'] = $dayData['max_late_clock_in_minutes'];
+                }
+                if (array_key_exists('max_early_clock_in_minutes', $dayData)) {
+                    $dayUpdate['max_early_clock_in_minutes'] = $dayData['max_early_clock_in_minutes'];
+                }
+                $shift->days()->where('id', $dayData['id'])->update($dayUpdate);
             }
         }
 
@@ -529,6 +545,7 @@ class PresensiMasterSettingController extends Controller
                 'late_tolerance_minutes' => 15,
                 'early_leave_tolerance_minutes' => 15,
                 'max_early_clock_in_minutes' => 60,
+                'max_late_clock_in_minutes' => 240,
                 'applies_national_holidays' => true,
             ]
         );

@@ -74,6 +74,22 @@ class FingerprintSyncService
             $dayOfWeek = $punchTime->dayOfWeek;
             $schedule = $pegawai->shiftTemplate?->getScheduleForDay($dayOfWeek);
 
+            // Atribusi lintas hari: punch dini hari milik tanggal dinas kemarin
+            // bila shift kemarin lintas hari (misal satpam 22:00-06:00).
+            $yesterdayPunch = $punchTime->copy()->subDay();
+            $yDateStr = $yesterdayPunch->toDateString();
+            $ySchedule = $pegawai->shiftTemplate?->getScheduleForDay($yesterdayPunch->dayOfWeek);
+            if ($ySchedule && !$ySchedule->is_day_off && $ySchedule->isOvernight()) {
+                $yStart = $ySchedule->getScheduledStartForDate($yDateStr);
+                $yEnd = $ySchedule->getScheduledEndForDate($yDateStr);
+                if ($punchTime->greaterThanOrEqualTo($yStart->copy()->subMinutes($ySchedule->getMaxEarlyClockInMinutes()))
+                    && $punchTime->lessThanOrEqualTo($yEnd->copy()->addHours(12))) {
+                    $dateStr = $yDateStr;
+                    $dayOfWeek = $yesterdayPunch->dayOfWeek;
+                    $schedule = $ySchedule;
+                }
+            }
+
             // Ambil toleransi shift
             $lateToleranceMinutes = $schedule
                 ? $schedule->getLateToleranceMinutes()
@@ -147,7 +163,8 @@ class FingerprintSyncService
                 // Hitung pulang lebih awal (early leave)
                 $earlyLeaveMinutes = 0;
                 if ($schedule && !$schedule->is_day_off && $schedule->end_time) {
-                    $scheduledEnd = Carbon::parse("{$dateStr} {$schedule->end_time}");
+                    // getScheduledEndForDate otomatis +1 hari untuk shift lintas hari.
+                    $scheduledEnd = $schedule->getScheduledEndForDate($dateStr);
                     $earlyThreshold = $scheduledEnd->copy()->subMinutes($earlyLeaveToleranceMinutes);
 
                     if ($punchTime->lessThan($earlyThreshold)) {

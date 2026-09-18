@@ -4,7 +4,7 @@
 > **Base URL**: `/api/simpeg/presensi`
 > **Autentikasi**: Bearer Token (Passport) — seluruh endpoint terproteksi `auth:api`
 > **Dibuat**: 2026-09-14
-> **Diperbarui**: 2026-09-14 (sync libur via Opica `https://app.opica.id/api-libur`)
+> **Diperbarui**: 2026-09-18 (tambah `max_late_clock_in_minutes` + override per-hari)
 
 Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe shift kerja (multi-tipe dengan jadwal 7 hari), dan kalender libur nasional/tanggal merah.
 
@@ -32,6 +32,9 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
 | PUT | `/api/simpeg/presensi/fingerprint-devices/{id}` | Ubah konfigurasi perangkat mesin | ✅ Bearer |
 | DELETE | `/api/simpeg/presensi/fingerprint-devices/{id}` | Hapus perangkat mesin | ✅ Bearer |
 | POST | `/api/simpeg/presensi/fingerprint-devices/{id}/test-connection` | Uji ping/koneksi perangkat mesin | ✅ Bearer |
+| GET | `/api/simpeg/presensi/pegawai/{id}/office-locations` | Lokasi absen sah pegawai (utama + tambahan) | ✅ Bearer |
+| PUT | `/api/simpeg/presensi/pegawai/{id}/office-locations` | Atur lokasi absen tambahan pegawai | ✅ Bearer |
+| POST | `/api/simpeg/presensi/office-assign-bulk` | Tugaskan lokasi tambahan massal (filter unit/jenis/ids) | ✅ Bearer |
 
 ---
 
@@ -54,6 +57,7 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
             "late_tolerance_minutes": 15,
             "early_leave_tolerance_minutes": 15,
             "max_early_clock_in_minutes": 60,
+            "max_late_clock_in_minutes": 240,
             "applies_national_holidays": true,
             "employees_count": 36,
             "days": [
@@ -90,6 +94,7 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
     "late_tolerance_minutes": "integer, nullable, 0-120 (default 15)",
     "early_leave_tolerance_minutes": "integer, nullable, 0-120 (default 15)",
     "max_early_clock_in_minutes": "integer, nullable, 0-240 (default 60)",
+    "max_late_clock_in_minutes": "integer, nullable, 0-720 (default 240, 0 = tanpa batas)",
     "applies_national_holidays": "boolean, nullable (default true — matikan untuk shift satpam/operasional)",
     "is_active": "boolean, required",
     "days": "array, nullable (PUT: array berisi {id, start_time, end_time, is_day_off}; POST: array 7 item berisi {day_of_week, start_time, end_time, is_day_off})"
@@ -263,6 +268,12 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
 > - `GET shift-templates` tidak pernah mengembalikan kosong: selalu ada minimal 1 template default (auto-seed).
 > - Field `applies_national_holidays = false` cocok untuk shift satpam/operasional yang tetap wajib masuk saat tanggal merah.
 > - Penghapusan shift/lokasi yang masih dipakai pegawai ditolak (`422`) demi integritas referensi `simpeg_pegawai.shift_template_id`.
+> - Jendela clock-in: `[start - max_early, start + max_late]`. Keterlambatan dalam jendela tercatat `terlambat` + `late_minutes` + notes audit. `max_late = 0` berarti tanpa batas atas. Override per-hari via `days[].max_late_clock_in_minutes` / `days[].max_early_clock_in_minutes` (PUT).
+> - Shift lintas hari: isi `end_time` lebih kecil dari `start_time` (misal `22:00-06:00`, sudah dipakai Shift Satpam Malam). Sistem otomatis +1 hari untuk jam pulang, punch 00:xx diatribusikan ke tanggal dinas kemarin, dan clock-out pagi menutup record dinas kemarin. Cut-off menunda Alfa sampai shift selesai.
+> - Multi-lokasi absen: setiap pegawai punya 1 lokasi utama (`office_location_id`) + N lokasi tambahan (pivot `simpeg_pegawai_office_locations`). Clock-in/out sah bila masuk radius lokasi mana pun; lokasi yang cocok dicatat di `office_location_id` + notes audit. Cocok untuk dosen mengajar di gedung/kampus lain.
+> - `PUT pegawai/{id}/office-locations` menerima `{office_location_ids: [...]}` (lokasi utama otomatis dikecualikan dari pivot). Bulk: `{office_location_ids, unit_kerja_id?, jenis_pegawai? (dosen|tendik), pegawai_ids?, mode?: attach|sync}`.
+
+---
 
 ---
 

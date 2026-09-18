@@ -19,6 +19,7 @@ class ShiftTemplate extends Model
         'late_tolerance_minutes',
         'early_leave_tolerance_minutes',
         'max_early_clock_in_minutes',
+        'max_late_clock_in_minutes',
         'applies_national_holidays',
     ];
 
@@ -27,6 +28,7 @@ class ShiftTemplate extends Model
         'late_tolerance_minutes' => 'integer',
         'early_leave_tolerance_minutes' => 'integer',
         'max_early_clock_in_minutes' => 'integer',
+        'max_late_clock_in_minutes' => 'integer',
         'applies_national_holidays' => 'boolean',
     ];
 

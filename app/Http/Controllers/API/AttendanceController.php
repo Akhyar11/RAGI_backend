@@ -24,7 +24,7 @@ class AttendanceController extends Controller
      */
     protected function getOrCreateEmployee($user): Pegawai
     {
-        $employee = Pegawai::with(['officeLocation', 'shiftTemplate.days', 'user'])
+        $employee = Pegawai::with(['officeLocation', 'additionalOffices', 'shiftTemplate.days', 'user'])
             ->where('user_id', $user->id)
             ->first();
 
@@ -47,7 +47,7 @@ class AttendanceController extends Controller
                 'status' => 'aktif',
                 'is_active' => true,
             ]);
-            $employee->load(['officeLocation', 'shiftTemplate.days', 'user']);
+            $employee->load(['officeLocation', 'additionalOffices', 'shiftTemplate.days', 'user']);
         }
 
         return $employee;
@@ -75,8 +75,29 @@ class AttendanceController extends Controller
         $nationalHoliday = NationalHoliday::isHoliday(Carbon::parse($today));
 
         $attendance = Attendance::where('pegawai_id', $employee->id)
-            ->where('tanggal', $today)
+            ->whereDate('tanggal', $today)
             ->first();
+
+        // Shift lintas hari: bila tidak ada record hari ini, tampilkan record
+        // shift malam kemarin yang masih terbuka (belum clock-out).
+        $dutyDate = $today;
+        if (!$attendance && $shiftTemplate) {
+            $yesterday = $now->copy()->subDay();
+            $ySchedule = $shiftTemplate->getScheduleForDay($yesterday->dayOfWeek);
+            if ($ySchedule && !$ySchedule->is_day_off && $ySchedule->isOvernight()) {
+                $candidate = Attendance::where('pegawai_id', $employee->id)
+                    ->whereDate('tanggal', $yesterday->toDateString())
+                    ->whereIn('status', ['hadir', 'terlambat', 'menunggu_approval'])
+                    ->whereNotNull('clock_in')
+                    ->whereNull('clock_out')
+                    ->first();
+                if ($candidate) {
+                    $attendance = $candidate;
+                    $schedule = $ySchedule;
+                    $dutyDate = $yesterday->toDateString();
+                }
+            }
+        }
 
         $appliesNationalHoliday = $schedule
             ? $schedule->appliesNationalHolidays()
@@ -101,9 +122,12 @@ class AttendanceController extends Controller
             'break_start' => $schedule->break_start,
             'break_end' => $schedule->break_end,
             'is_day_off' => $schedule->is_day_off,
+            'is_overnight' => $schedule->isOvernight(),
+            'duty_date' => $dutyDate,
             'late_tolerance_minutes' => $schedule->getLateToleranceMinutes(),
             'early_leave_tolerance_minutes' => $schedule->getEarlyLeaveToleranceMinutes(),
-            'max_early_clock_in_minutes' => $shiftTemplate ? $shiftTemplate->max_early_clock_in_minutes : 60,
+            'max_early_clock_in_minutes' => $schedule->getMaxEarlyClockInMinutes(),
+            'max_late_clock_in_minutes' => $schedule->getMaxLateClockInMinutes(),
         ] : [
             'id' => null,
             'day_of_week' => $dayOfWeek,
@@ -115,9 +139,12 @@ class AttendanceController extends Controller
             'break_start' => '12:00:00',
             'break_end' => '13:00:00',
             'is_day_off' => ($dayOfWeek === 0 || $dayOfWeek === 6),
+            'is_overnight' => false,
+            'duty_date' => $dutyDate,
             'late_tolerance_minutes' => $shiftTemplate ? $shiftTemplate->late_tolerance_minutes : 15,
             'early_leave_tolerance_minutes' => $shiftTemplate ? $shiftTemplate->early_leave_tolerance_minutes : 15,
             'max_early_clock_in_minutes' => $shiftTemplate ? $shiftTemplate->max_early_clock_in_minutes : 60,
+            'max_late_clock_in_minutes' => $shiftTemplate ? ($shiftTemplate->max_late_clock_in_minutes ?? 240) : 240,
         ];
 
         return response()->json([
@@ -161,6 +188,7 @@ class AttendanceController extends Controller
                 'day_name' => $schedulePayload['day_name'],
                 'schedule' => $schedulePayload,
                 'office' => $office,
+                'allowed_offices' => $employee->getAllowedOfficeLocations()->values(),
                 'attendance' => $attendance,
                 'is_national_holiday' => $nationalHoliday !== null,
                 'applies_national_holidays' => $appliesNationalHoliday,

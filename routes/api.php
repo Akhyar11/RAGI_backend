@@ -224,6 +224,9 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::post('presensi/fingerprint/sync', [App\Http\Controllers\Simpeg\PresensiController::class, 'syncFingerprint']);
     Route::post('presensi/daily-cutoff', [App\Http\Controllers\Simpeg\PresensiController::class, 'runDailyCutoff']);
     Route::post('presensi/shift-assign-bulk', [App\Http\Controllers\Simpeg\PresensiController::class, 'assignShiftBulk']);
+    Route::get('presensi/pegawai/{id}/office-locations', [App\Http\Controllers\Simpeg\PresensiController::class, 'pegawaiOfficeLocations'])->whereNumber('id');
+    Route::put('presensi/pegawai/{id}/office-locations', [App\Http\Controllers\Simpeg\PresensiController::class, 'updatePegawaiOfficeLocations'])->whereNumber('id');
+    Route::post('presensi/office-assign-bulk', [App\Http\Controllers\Simpeg\PresensiController::class, 'assignOfficesBulk']);
 
     // Master Pengaturan Presensi (Lokasi, Shift, Parameter, Hari Libur, Perangkat Fingerprint)
     Route::get('presensi/settings', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'getSettings']);

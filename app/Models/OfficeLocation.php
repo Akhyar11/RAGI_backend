@@ -33,6 +33,19 @@ class OfficeLocation extends Model
         return $this->hasMany(Pegawai::class, 'office_location_id');
     }
 
+    /**
+     * Pegawai yang memiliki lokasi ini sebagai lokasi tambahan (multi-lokasi).
+     */
+    public function additionalEmployees()
+    {
+        return $this->belongsToMany(
+            Pegawai::class,
+            'simpeg_pegawai_office_locations',
+            'office_location_id',
+            'pegawai_id'
+        )->withTimestamps();
+    }
+
     public function attendances()
     {
         return $this->hasMany(Attendance::class, 'office_location_id');

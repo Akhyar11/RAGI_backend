@@ -21,6 +21,7 @@ class SimpegPresensiSettingSeeder extends Seeder
         SystemSetting::set('gps_accuracy_threshold_meters', '50.0', 'Toleransi akurasi GPS maksimal dalam meter');
         SystemSetting::set('late_tolerance_minutes', '15', 'Toleransi keterlambatan presensi masuk dalam menit');
         SystemSetting::set('max_early_clock_in_minutes', '60', 'Batas waktu paling awal presensi masuk dibuka sebelum jam shift (dalam menit)');
+        SystemSetting::set('max_late_clock_in_minutes', '240', 'Batas maksimal keterlambatan presensi masuk setelah jam shift, 0 = tanpa batas (dalam menit)');
         SystemSetting::set('early_leave_tolerance_minutes', '15', 'Toleransi kepulangan lebih cepat sebelum jam selesai shift (dalam menit)');
 
         // 2. Lokasi Kantor Default (Politeknik Indonusa Surakarta)
@@ -44,6 +45,7 @@ class SimpegPresensiSettingSeeder extends Seeder
                 'late_tolerance_minutes' => 15,
                 'early_leave_tolerance_minutes' => 15,
                 'max_early_clock_in_minutes' => 60,
+                'max_late_clock_in_minutes' => 240,
                 'applies_national_holidays' => true,
             ]
         );

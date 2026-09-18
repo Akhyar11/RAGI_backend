@@ -273,7 +273,7 @@ class PresensiController extends Controller
         $user = $request->user();
         $pegawaiId = $request->input('pegawai_id', $user->pegawai?->id);
 
-        $employee = Pegawai::with(['officeLocation', 'shiftTemplate.days'])
+        $employee = Pegawai::with(['officeLocation', 'additionalOffices', 'shiftTemplate.days'])
             ->find($pegawaiId);
 
         if (!$employee) {
@@ -291,6 +291,27 @@ class PresensiController extends Controller
         $attendance = Attendance::where('pegawai_id', $employee->id)
             ->whereDate('tanggal', $today)
             ->first();
+
+        // Shift lintas hari: bila tidak ada record hari ini, tampilkan record
+        // shift malam kemarin yang masih terbuka (belum clock-out).
+        $dutyDate = $today;
+        if (!$attendance && $employee->shiftTemplate) {
+            $yesterday = $now->copy()->subDay();
+            $ySchedule = $employee->shiftTemplate->getScheduleForDay($yesterday->dayOfWeek);
+            if ($ySchedule && !$ySchedule->is_day_off && $ySchedule->isOvernight()) {
+                $candidate = Attendance::where('pegawai_id', $employee->id)
+                    ->whereDate('tanggal', $yesterday->toDateString())
+                    ->whereIn('status', ['hadir', 'terlambat', 'menunggu_approval'])
+                    ->whereNotNull('clock_in')
+                    ->whereNull('clock_out')
+                    ->first();
+                if ($candidate) {
+                    $attendance = $candidate;
+                    $schedule = $ySchedule;
+                    $dutyDate = $yesterday->toDateString();
+                }
+            }
+        }
         $holiday = NationalHoliday::isHoliday(Carbon::parse($today));
 
         $isClockedIn = ($attendance && $attendance->clock_in !== null);
@@ -308,9 +329,12 @@ class PresensiController extends Controller
             'break_start' => $schedule->break_start,
             'break_end' => $schedule->break_end,
             'is_day_off' => $schedule->is_day_off,
+            'is_overnight' => $schedule->isOvernight(),
+            'duty_date' => $dutyDate,
             'late_tolerance_minutes' => $schedule->getLateToleranceMinutes(),
             'early_leave_tolerance_minutes' => $schedule->getEarlyLeaveToleranceMinutes(),
-            'max_early_clock_in_minutes' => $employee->shiftTemplate ? $employee->shiftTemplate->max_early_clock_in_minutes : 60,
+            'max_early_clock_in_minutes' => $schedule->getMaxEarlyClockInMinutes(),
+            'max_late_clock_in_minutes' => $schedule->getMaxLateClockInMinutes(),
         ] : [
             'id' => null,
             'day_of_week' => $dayOfWeek,
@@ -322,9 +346,12 @@ class PresensiController extends Controller
             'break_start' => '12:00:00',
             'break_end' => '13:00:00',
             'is_day_off' => ($dayOfWeek === 0 || $dayOfWeek === 6),
+            'is_overnight' => false,
+            'duty_date' => $dutyDate,
             'late_tolerance_minutes' => $employee->shiftTemplate ? $employee->shiftTemplate->late_tolerance_minutes : 15,
             'early_leave_tolerance_minutes' => $employee->shiftTemplate ? $employee->shiftTemplate->early_leave_tolerance_minutes : 15,
             'max_early_clock_in_minutes' => $employee->shiftTemplate ? $employee->shiftTemplate->max_early_clock_in_minutes : 60,
+            'max_late_clock_in_minutes' => $employee->shiftTemplate ? ($employee->shiftTemplate->max_late_clock_in_minutes ?? 240) : 240,
         ];
 
         return response()->json([
@@ -353,6 +380,7 @@ class PresensiController extends Controller
                 ],
                 'schedule' => $schedulePayload,
                 'office' => $employee->officeLocation,
+                'allowed_offices' => $employee->getAllowedOfficeLocations()->values(),
                 'attendance' => $attendance,
                 'holiday' => $holiday,
             ],
@@ -391,9 +419,9 @@ class PresensiController extends Controller
 
         $employee = null;
         if ($request->filled('pegawai_id') && ($request->user()->hasPermission('simpeg.presensi.manage') || $request->user()->isAdmin() || $request->user()->hasRole('admin_simpeg'))) {
-            $employee = Pegawai::with(['officeLocation', 'shiftTemplate.days'])->find($request->pegawai_id);
+            $employee = Pegawai::with(['officeLocation', 'additionalOffices', 'shiftTemplate.days'])->find($request->pegawai_id);
         } else {
-            $employee = Pegawai::with(['officeLocation', 'shiftTemplate.days'])->where('user_id', $request->user()->id)->first();
+            $employee = Pegawai::with(['officeLocation', 'additionalOffices', 'shiftTemplate.days'])->where('user_id', $request->user()->id)->first();
         }
 
         if (!$employee) {
@@ -982,6 +1010,145 @@ class PresensiController extends Controller
                 'shift_template_id' => $shift->id,
                 'shift_name' => $shift->name,
                 'total_assigned' => $count,
+            ],
+        ]);
+    }
+
+    /**
+     * Lokasi absen yang sah untuk satu pegawai (utama + tambahan multi-lokasi).
+     */
+    public function pegawaiOfficeLocations(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.presensi.manage') && !$user->hasPermission('simpeg.presensi.read') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk melihat lokasi absen pegawai.'
+            ], 403);
+        }
+
+        $pegawai = Pegawai::with(['officeLocation', 'additionalOffices'])->findOrFail($id);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'pegawai_id' => $pegawai->id,
+                'nip' => $pegawai->nip,
+                'nama_lengkap' => $pegawai->nama_lengkap,
+                'primary_office' => $pegawai->officeLocation,
+                'additional_offices' => $pegawai->additionalOffices,
+                'allowed_offices' => $pegawai->getAllowedOfficeLocations()->values(),
+            ],
+        ]);
+    }
+
+    /**
+     * Atur lokasi absen tambahan (multi-lokasi) untuk satu pegawai.
+     * Lokasi utama (office_location_id) tidak diubah di sini.
+     */
+    public function updatePegawaiOfficeLocations(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.presensi.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk mengatur lokasi absen pegawai.'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'office_location_ids' => 'required|array',
+            'office_location_ids.*' => 'exists:simpeg_office_locations,id',
+        ]);
+
+        $pegawai = Pegawai::findOrFail($id);
+
+        // Lokasi utama tidak perlu disimpan ganda di pivot.
+        $additionalIds = array_values(array_unique(array_diff(
+            $validated['office_location_ids'],
+            [(int) $pegawai->office_location_id]
+        )));
+
+        $pegawai->additionalOffices()->sync($additionalIds);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Lokasi absen tambahan '{$pegawai->nama_lengkap}' berhasil diperbarui (" . count($additionalIds) . ' lokasi).',
+            'data' => [
+                'pegawai_id' => $pegawai->id,
+                'primary_office' => $pegawai->fresh()->officeLocation,
+                'additional_offices' => $pegawai->fresh()->additionalOffices,
+            ],
+        ]);
+    }
+
+    /**
+     * Penugasan Lokasi Absen Tambahan Secara Massal (Bulk Assign Offices).
+     * Contoh: seluruh dosen diberi akses absen di kampus/gedung tempat mengajar.
+     */
+    public function assignOfficesBulk(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.presensi.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk menugaskan lokasi absen secara massal.'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'office_location_ids' => 'required|array|min:1',
+            'office_location_ids.*' => 'exists:simpeg_office_locations,id',
+            'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
+            'jenis_pegawai' => 'nullable|in:dosen,tendik',
+            'pegawai_ids' => 'nullable|array',
+            'pegawai_ids.*' => 'exists:simpeg_pegawai,id',
+            'mode' => 'nullable|in:attach,sync',
+        ]);
+
+        $query = Pegawai::query();
+
+        if (!empty($validated['pegawai_ids'])) {
+            $query->whereIn('id', $validated['pegawai_ids']);
+        } else {
+            if (!empty($validated['unit_kerja_id'])) {
+                $query->where('unit_kerja_id', $validated['unit_kerja_id']);
+            }
+            if (!empty($validated['jenis_pegawai'])) {
+                $query->where('jenis_pegawai', $validated['jenis_pegawai']);
+            }
+        }
+
+        $pegawaiList = $query->get();
+        if ($pegawaiList->isEmpty()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tidak ada pegawai yang memenuhi kriteria filter untuk ditugaskan lokasi.'
+            ], 422);
+        }
+
+        $mode = $validated['mode'] ?? 'attach';
+        foreach ($pegawaiList as $pegawai) {
+            $ids = array_values(array_unique(array_diff(
+                $validated['office_location_ids'],
+                [(int) $pegawai->office_location_id]
+            )));
+            if ($mode === 'sync') {
+                $pegawai->additionalOffices()->sync($ids);
+            } else {
+                $pegawai->additionalOffices()->syncWithoutDetaching($ids);
+            }
+        }
+
+        $offices = \App\Models\OfficeLocation::whereIn('id', $validated['office_location_ids'])->pluck('name');
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Berhasil menugaskan lokasi absen (" . $offices->implode(', ') . ") ke {$pegawaiList->count()} pegawai.",
+            'data' => [
+                'office_location_ids' => $validated['office_location_ids'],
+                'total_assigned' => $pegawaiList->count(),
+                'mode' => $mode,
             ],
         ]);
     }

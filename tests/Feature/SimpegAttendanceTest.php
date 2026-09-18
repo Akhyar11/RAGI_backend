@@ -497,5 +497,214 @@ class SimpegAttendanceTest extends TestCase
             ->assertJson([
                 'status' => 'success',
             ]);
+
+        Carbon::setTestNow();
+    }
+
+    protected function assignOvernightShift(): void
+    {
+        $nightShift = ShiftTemplate::create([
+            'name' => 'Shift Satpam Malam Test',
+            'description' => 'Shift lintas hari 22:00-06:00 untuk pengujian',
+            'is_active' => true,
+            'late_tolerance_minutes' => 10,
+            'early_leave_tolerance_minutes' => 5,
+            'max_early_clock_in_minutes' => 45,
+            'max_late_clock_in_minutes' => 180,
+            'applies_national_holidays' => false,
+        ]);
+
+        foreach ([0, 1, 2, 3, 4, 5, 6] as $dow) {
+            \App\Models\ShiftScheduleDay::create([
+                'shift_template_id' => $nightShift->id,
+                'day_of_week' => $dow,
+                'start_time' => '22:00:00',
+                'end_time' => '06:00:00',
+                'is_day_off' => false,
+            ]);
+        }
+
+        $this->pegawai->update(['shift_template_id' => $nightShift->id]);
+    }
+
+    public function test_overnight_shift_clock_in_and_next_day_clock_out(): void
+    {
+        $this->assignOvernightShift();
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        // 1. Clock-in Senin 22:05 (dalam toleransi 10 menit -> hadir)
+        Carbon::setTestNow('2026-09-14 22:05:00');
+
+        $inRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-in', [
+                'latitude' => -7.5675,
+                'longitude' => 110.8036,
+                'accuracy' => 10.0,
+                'face_score' => 0.88,
+            ]);
+
+        $inRes->assertStatus(200)
+            ->assertJson(['success' => true]);
+
+        $dutyRecord = \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
+            ->whereDate('tanggal', '2026-09-14')
+            ->first();
+        $this->assertNotNull($dutyRecord);
+
+        // 2. Status Selasa 02:00 masih menunjukkan dinas Senin yang terbuka
+        Carbon::setTestNow('2026-09-15 02:00:00');
+
+        $todayRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/attendance/today');
+
+        $todayRes->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'success' => true,
+                'data' => [
+                    'can_clock_in' => false,
+                    'can_clock_out' => true,
+                ],
+            ])
+            ->assertJsonPath('data.schedule.is_overnight', true)
+            ->assertJsonPath('data.schedule.duty_date', '2026-09-14');
+
+        // 3. Clock-out Selasa 06:05 menutup record dinas Senin
+        Carbon::setTestNow('2026-09-15 06:05:00');
+
+        $outRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-out', [
+                'latitude' => -7.5675,
+                'longitude' => 110.8036,
+                'accuracy' => 10.0,
+                'face_score' => 0.86,
+            ]);
+
+        $outRes->assertStatus(200)
+            ->assertJson(['success' => true]);
+
+        $attendance = \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
+            ->whereDate('tanggal', '2026-09-14')
+            ->first();
+
+        $this->assertNotNull($attendance);
+        $this->assertEquals('06:05:00', $attendance->jam_keluar);
+        $this->assertEquals(0, $attendance->early_leave_minutes);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_overnight_clock_in_after_midnight_attributed_to_duty_date(): void
+    {
+        $this->assignOvernightShift();
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        // Clock-in Selasa 00:30 = terlambat dinas Senin (150 menit dari 22:00)
+        Carbon::setTestNow('2026-09-15 00:30:00');
+
+        $inRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-in', [
+                'latitude' => -7.5675,
+                'longitude' => 110.8036,
+                'accuracy' => 10.0,
+                'face_score' => 0.88,
+            ]);
+
+        $inRes->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'status' => 'terlambat',
+                    'late_minutes' => 150,
+                ],
+            ]);
+
+        $this->assertNotNull(
+            \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
+                ->whereDate('tanggal', '2026-09-14')
+                ->where('status_kehadiran', 'terlambat')
+                ->first()
+        );
+
+        Carbon::setTestNow();
+    }
+
+    protected function assignAdditionalOffice(): OfficeLocation
+    {
+        $office2 = OfficeLocation::create([
+            'name' => 'Gedung Kuliah Kampus 2',
+            'address' => 'Jl. Mengajar No.2',
+            'latitude' => -7.6000000,
+            'longitude' => 110.8500000,
+            'radius_meters' => 150,
+            'is_active' => true,
+        ]);
+
+        $this->pegawai->additionalOffices()->syncWithoutDetaching([$office2->id]);
+
+        return $office2;
+    }
+
+    public function test_clock_in_from_additional_office_location_succeeds(): void
+    {
+        $office2 = $this->assignAdditionalOffice();
+
+        Carbon::setTestNow('2026-09-15 08:05:00');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        // Absen dari titik Y (lokasi mengajar), bukan titik X (kantor utama)
+        $inRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-in', [
+                'latitude' => -7.6000,
+                'longitude' => 110.8500,
+                'accuracy' => 10.0,
+                'face_score' => 0.88,
+            ]);
+
+        $inRes->assertStatus(200)
+            ->assertJson(['success' => true]);
+
+        $attendance = \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
+            ->whereDate('tanggal', '2026-09-15')
+            ->first();
+
+        $this->assertNotNull($attendance);
+        $this->assertEquals($office2->id, $attendance->office_location_id);
+        $this->assertStringContainsString('Lokasi absen', $attendance->notes ?? '');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_clock_in_outside_all_offices_rejected(): void
+    {
+        $this->assignAdditionalOffice();
+
+        Carbon::setTestNow('2026-09-15 08:05:00');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        // Titik antah-berantah: jauh dari kedua lokasi absen
+        $inRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-in', [
+                'latitude' => -7.0000,
+                'longitude' => 110.0000,
+                'accuracy' => 10.0,
+                'face_score' => 0.88,
+            ]);
+
+        $inRes->assertStatus(422);
+        $this->assertStringContainsString(
+            '2 lokasi absen diperiksa',
+            $inRes->json('message') ?? ''
+        );
+
+        Carbon::setTestNow();
     }
 }

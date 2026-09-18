@@ -22,10 +22,14 @@ class AttendanceService
     public function processClockIn(Pegawai $employee, array $data): Attendance
     {
         $now = Carbon::now();
-        $today = $now->toDateString();
-        $dayOfWeek = $now->dayOfWeek; // 0 = Minggu, 1 = Senin, ..., 6 = Sabtu
 
-        // 1. Cek apakah sudah pernah presensi masuk yang SAH/VALID hari ini
+        // Resolusi occurrence shift (tanggal dinas). Mendukung shift lintas hari
+        // (misal satpam malam 22:00-06:00): punch setelah tengah malam (00:xx)
+        // tetap diatribusikan ke tanggal dinas kemarin, bukan hari ini.
+        [$schedule, $dutyDate, $resolvedStart] = $this->resolveClockInOccurrence($employee, $now);
+        $today = $dutyDate;
+
+        // 1. Cek apakah sudah pernah presensi masuk yang SAH/VALID pada tanggal dinas ini
         $existing = Attendance::where('pegawai_id', $employee->id)
             ->whereDate('tanggal', $today)
             ->first();
@@ -36,11 +40,12 @@ class AttendanceService
             ]);
         }
 
-        // 2. Ambil pengaturan threshold sistem
+        // 2. Ambil pengaturan threshold sistem (fallback bila tanpa jadwal/shift)
         $minFaceScore = (float) SystemSetting::get('face_score_threshold', 0.80);
         $maxGpsAccuracy = (float) SystemSetting::get('gps_accuracy_threshold_meters', 50.0);
         $lateToleranceMinutes = (int) SystemSetting::get('late_tolerance_minutes', 15);
         $maxEarlyClockInMinutes = (int) SystemSetting::get('max_early_clock_in_minutes', 60);
+        $maxLateClockInMinutes = (int) SystemSetting::get('max_late_clock_in_minutes', 240);
 
         // Ambil data payload
         $userLat = (float) ($data['latitude'] ?? 0);
@@ -49,23 +54,10 @@ class AttendanceService
         $faceScore = (float) ($data['face_score'] ?? 0.0);
         $isMock = (bool) ($data['is_mock_location'] ?? false);
 
-        // 3. Ambil lokasi kantor yang ditugaskan ke karyawan
-        $office = $employee->officeLocation;
-        if (!$office) {
-            $office = OfficeLocation::where('is_active', true)->first();
-        }
-
-        $distance = null;
-        $isWithinRadius = false;
-        if ($office) {
-            $distance = $this->geofenceService->calculateDistance(
-                $userLat,
-                $userLon,
-                $office->latitude,
-                $office->longitude
-            );
-            $isWithinRadius = $distance <= $office->radius_meters;
-        }
+        // 3. Resolusi lokasi kantor (multi-lokasi): lokasi utama + tambahan.
+        // Diterima bila berada dalam radius LOKASI MANA PUN yang ditugaskan.
+        [$office, $distance, $isWithinRadius, $nearestOffice, $nearestDistance, $checkedCount] =
+            $this->resolveOfficeForCoordinates($employee, $userLat, $userLon);
 
         // 4. Evaluasi aturan validasi
         $rejectionReasons = [];
@@ -80,9 +72,9 @@ class AttendanceService
             $rejectionReasons[] = "Akurasi GPS tidak memadai ({$accuracy}m, batas maksimal {$maxGpsAccuracy}m).";
         }
 
-        // Aturan C: Geofence radius
+        // Aturan C: Geofence radius (multi-lokasi: lolos bila di lokasi mana pun)
         if ($office && !$isWithinRadius) {
-            $rejectionReasons[] = "Di luar area kantor (Jarak: {$distance}m, radius diizinkan: {$office->radius_meters}m).";
+            $rejectionReasons[] = "Di luar area kantor (terdekat: {$nearestOffice->name}, jarak {$nearestDistance}m, radius {$nearestOffice->radius_meters}m; {$checkedCount} lokasi absen diperiksa).";
         }
 
         // Aturan D: Face match score & Server-Side Biometric Verification ke Python port 8001
@@ -128,13 +120,9 @@ class AttendanceService
             $rejectionReasons[] = 'Foto wajah presensi wajib disertakan untuk verifikasi biometrik.';
         }
 
-        // 5. Cek Hari Libur Nasional & Jadwal Kerja / Shift Hari Ini
+        // 5. Cek Hari Libur Nasional & Jadwal Kerja / Shift pada tanggal dinas
+        // (untuk shift lintas hari, libur dinilai dari tanggal mulai dinas)
         $nationalHoliday = \App\Models\NationalHoliday::isHoliday($today);
-
-        $schedule = null;
-        if ($employee->shiftTemplate) {
-            $schedule = $employee->shiftTemplate->getScheduleForDay($dayOfWeek);
-        }
 
         $appliesNationalHoliday = $schedule ? $schedule->appliesNationalHolidays() : ($employee->shiftTemplate?->applies_national_holidays ?? true);
         $isHolidayForEmployee = $nationalHoliday && $appliesNationalHoliday;
@@ -144,13 +132,35 @@ class AttendanceService
             ? $schedule->getLateToleranceMinutes()
             : (int) SystemSetting::get('late_tolerance_minutes', 15);
 
+        // Resolusi jendela clock-in via hierarki: hari -> template -> SystemSetting.
+        // max_late = 0 berarti tanpa batas (keterlambatan selalu diterima sebagai 'terlambat').
+        $maxEarlyClockInMinutes = $schedule
+            ? $schedule->getMaxEarlyClockInMinutes()
+            : (($employee->shiftTemplate?->max_early_clock_in_minutes !== null)
+                ? (int) $employee->shiftTemplate->max_early_clock_in_minutes
+                : (int) SystemSetting::get('max_early_clock_in_minutes', 60));
+
+        $maxLateClockInMinutes = $schedule
+            ? $schedule->getMaxLateClockInMinutes()
+            : (($employee->shiftTemplate?->max_late_clock_in_minutes !== null)
+                ? (int) $employee->shiftTemplate->max_late_clock_in_minutes
+                : (int) SystemSetting::get('max_late_clock_in_minutes', 240));
+
         // Aturan E: Batas Pembukaan Presensi Masuk (Tidak boleh scan terlalu pagi sebelum shift dibuka)
+        // Aturan E2: Batas Penutupan Presensi Masuk (Tidak boleh scan setelah melewati batas telat maksimal)
         if ($schedule && !$schedule->is_day_off && $schedule->start_time && !$isHolidayForEmployee) {
             $scheduledStart = Carbon::parse("{$today} {$schedule->start_time}");
             $earliestClockIn = $scheduledStart->copy()->subMinutes($maxEarlyClockInMinutes);
 
             if ($now->lessThan($earliestClockIn)) {
                 $rejectionReasons[] = "Presensi masuk belum dibuka. Presensi untuk shift ini ({$schedule->start_time}) baru dapat dilakukan mulai pukul {$earliestClockIn->format('H:i')} (maksimal {$maxEarlyClockInMinutes} menit sebelum jam kerja).";
+            }
+
+            if ($maxLateClockInMinutes > 0) {
+                $latestClockIn = $scheduledStart->copy()->addMinutes($maxLateClockInMinutes);
+                if ($now->greaterThan($latestClockIn)) {
+                    $rejectionReasons[] = "Presensi masuk ditutup. Batas maksimal keterlambatan untuk shift ini ({$schedule->start_time}) adalah {$maxLateClockInMinutes} menit setelah jam kerja (terakhir pukul {$latestClockIn->format('H:i')}). Hubungi HR untuk pencatatan manual.";
+                }
             }
         }
 
@@ -181,7 +191,14 @@ class AttendanceService
         }
 
         // 6. Simpan / update log presensi lengkap
+        // Jika record berasal dari cut-off Alfa, reset flag approval sistem agar
+        // kehadiran susulan tercatat sebagai data scan valid, bukan Alfa.
         $attendance = $existing ?? new Attendance();
+        if ($existing && $existing->status === 'alfa' && $status !== 'ditolak') {
+            $attendance->is_approved_by_admin = null;
+            $attendance->approved_by = null;
+            $attendance->approved_at = null;
+        }
 
         $photoPath = $this->saveAttendanceFile($faceImage, 'presensi');
 
@@ -218,10 +235,31 @@ class AttendanceService
                 $attendanceData['notes'] = "Presensi masuk pada Hari Libur Nasional: {$nationalHoliday->name} (Lembur/Piket).";
             } elseif ($nationalHoliday && !$appliesNationalHoliday) {
                 $attendanceData['notes'] = "Tugas Shift Hari Libur Nasional: {$nationalHoliday->name} (Shift Operasional/Satpam).";
+            } elseif ($status === 'terlambat') {
+                // Log eksplisit agar keterlambatan melebihi toleransi tetap tercatat & teraudit.
+                $attendanceData['notes'] = "Terlambat {$lateMinutes} menit (Jadwal: {$schedule->start_time}, Toleransi: {$lateToleranceMinutes} mnt, Masuk: {$now->format('H:i:s')})."
+                    . ($existing && $existing->status === 'ditolak' ? ' Presensi berhasil setelah percobaan sebelumnya sempat ditolak.' : '')
+                    . ($existing && $existing->status === 'alfa' ? ' Mencatat ulang hasil cut-off Alfa menjadi kehadiran terlambat.' : '');
             } else {
                 $attendanceData['notes'] = $requiresApproval
                     ? 'Presensi masuk pada hari libur terjadwal (butuh persetujuan HR).'
                     : ($existing && $existing->status === 'ditolak' ? 'Presensi berhasil setelah percobaan sebelumnya sempat ditolak.' : null);
+            }
+
+            // Penanda shift lintas hari agar jejak audit jelas (pulang keesokan harinya).
+            if ($schedule && $schedule->isOvernight() && $schedule->end_time) {
+                $overnightNote = "Shift lintas hari (dinas {$today}, pulang " . $schedule->getScheduledEndForDate($today)->format('d/m H:i') . ").";
+                $attendanceData['notes'] = !empty($attendanceData['notes'])
+                    ? $attendanceData['notes'] . ' ' . $overnightNote
+                    : $overnightNote;
+            }
+
+            // Penanda lokasi absen (multi-lokasi): catat bila absen dari lokasi tambahan.
+            if ($office && (int) $employee->office_location_id !== (int) $office->id) {
+                $locationNote = "Lokasi absen: {$office->name} (jarak {$distance}m).";
+                $attendanceData['notes'] = !empty($attendanceData['notes'])
+                    ? $attendanceData['notes'] . ' ' . $locationNote
+                    : $locationNote;
             }
 
             if (!empty($data['notes']) || !empty($data['catatan'])) {
@@ -244,6 +282,140 @@ class AttendanceService
         }
 
         return $attendance;
+    }
+
+    /**
+     * Resolusi lokasi absen untuk koordinat pengguna (multi-lokasi).
+     *
+     * Dianggap sah bila berada dalam radius LOKASI MANA PUN yang ditugaskan
+     * (lokasi utama + tambahan). Mengembalikan:
+     * [0] office yang dicatat (yang cocok, atau terdekat bila tidak ada yang cocok),
+     * [1] jarak ke office tercatat, [2] apakah di dalam radius,
+     * [3] office terdekat, [4] jarak terdekat, [5] jumlah lokasi yang diperiksa.
+     *
+     * @return array{0: ?OfficeLocation, 1: ?float, 2: bool, 3: ?OfficeLocation, 4: ?float, 5: int}
+     */
+    protected function resolveOfficeForCoordinates(Pegawai $employee, float $userLat, float $userLon): array
+    {
+        $candidates = $employee->getAllowedOfficeLocations();
+
+        if ($candidates->isEmpty()) {
+            $fallback = OfficeLocation::where('is_active', true)->first();
+            if ($fallback) {
+                $candidates = collect([$fallback]);
+            }
+        }
+
+        $matched = null;
+        $matchedDistance = null;
+        $nearest = null;
+        $nearestDistance = null;
+
+        foreach ($candidates as $candidate) {
+            $d = $this->geofenceService->calculateDistance(
+                $userLat,
+                $userLon,
+                (float) $candidate->latitude,
+                (float) $candidate->longitude
+            );
+
+            if ($nearestDistance === null || $d < $nearestDistance) {
+                $nearest = $candidate;
+                $nearestDistance = $d;
+            }
+
+            if ($d <= $candidate->radius_meters
+                && ($matchedDistance === null || $d < $matchedDistance)) {
+                $matched = $candidate;
+                $matchedDistance = $d;
+            }
+        }
+
+        if ($matched) {
+            return [$matched, $matchedDistance, true, $nearest, $nearestDistance, $candidates->count()];
+        }
+
+        return [$nearest, $nearestDistance, false, $nearest, $nearestDistance, $candidates->count()];
+    }
+
+    /**
+     * Resolusi occurrence shift untuk clock-in: [schedule, dutyDate Y-m-d, scheduledStart].
+     *
+     * Shift lintas hari (end <= start, misal 22:00-06:00): punch setelah tengah malam
+     * yang masih dalam jendela clock-in shift kemarin ATAU masih dalam jam kerja
+     * shift kemarin diatribusikan ke tanggal dinas kemarin.
+     */
+    protected function resolveClockInOccurrence(Pegawai $employee, Carbon $now): array
+    {
+        $template = $employee->shiftTemplate;
+        if (!$template) {
+            return [null, $now->toDateString(), null];
+        }
+
+        $yesterday = $now->copy()->subDay();
+        $yDateStr = $yesterday->toDateString();
+        $ySchedule = $template->getScheduleForDay($yesterday->dayOfWeek);
+
+        if ($ySchedule && !$ySchedule->is_day_off && $ySchedule->start_time && $ySchedule->isOvernight()) {
+            $yStart = $ySchedule->getScheduledStartForDate($yDateStr);
+            $yEnd = $ySchedule->getScheduledEndForDate($yDateStr);
+            $yEarliest = $yStart->copy()->subMinutes($ySchedule->getMaxEarlyClockInMinutes());
+            $maxLate = $ySchedule->getMaxLateClockInMinutes();
+
+            $inClockInWindow = $now->greaterThanOrEqualTo($yEarliest)
+                && ($maxLate <= 0 || $now->lessThanOrEqualTo($yStart->copy()->addMinutes($maxLate)));
+            $stillOnShift = $now->greaterThanOrEqualTo($yEarliest) && $now->lessThanOrEqualTo($yEnd);
+
+            if ($inClockInWindow || $stillOnShift) {
+                return [$ySchedule, $yDateStr, $yStart];
+            }
+        }
+
+        $todayStr = $now->toDateString();
+        $schedule = $template->getScheduleForDay($now->dayOfWeek);
+        $scheduledStart = ($schedule && !$schedule->is_day_off && $schedule->start_time)
+            ? $schedule->getScheduledStartForDate($todayStr)
+            : null;
+
+        return [$schedule, $todayStr, $scheduledStart];
+    }
+
+    /**
+     * Cari record terbuka untuk clock-out: prioritas record hari ini,
+     * fallback ke record shift lintas hari kemarin yang belum pulang.
+     */
+    protected function resolveClockOutRecord(Pegawai $employee, Carbon $now): ?Attendance
+    {
+        $today = $now->toDateString();
+
+        $attendance = Attendance::where('pegawai_id', $employee->id)
+            ->whereDate('tanggal', $today)
+            ->whereIn('status', ['hadir', 'terlambat', 'menunggu_approval'])
+            ->whereNotNull('clock_in')
+            ->first();
+
+        if ($attendance) {
+            return $attendance;
+        }
+
+        $yesterdayStr = $now->copy()->subDay()->toDateString();
+        $candidate = Attendance::where('pegawai_id', $employee->id)
+            ->whereDate('tanggal', $yesterdayStr)
+            ->whereIn('status', ['hadir', 'terlambat', 'menunggu_approval'])
+            ->whereNotNull('clock_in')
+            ->whereNull('clock_out')
+            ->first();
+
+        if ($candidate && $employee->shiftTemplate) {
+            $ySchedule = $employee->shiftTemplate->getScheduleForDay(
+                Carbon::parse($yesterdayStr)->dayOfWeek
+            );
+            if ($ySchedule && !$ySchedule->is_day_off && $ySchedule->isOvernight()) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -297,13 +469,9 @@ class AttendanceService
     public function processClockOut(Pegawai $employee, array $data): Attendance
     {
         $now = Carbon::now();
-        $today = $now->toDateString();
 
-        $attendance = Attendance::where('pegawai_id', $employee->id)
-            ->whereDate('tanggal', $today)
-            ->whereIn('status', ['hadir', 'terlambat', 'menunggu_approval'])
-            ->whereNotNull('clock_in')
-            ->first();
+        // Cari record terbuka: hari ini dulu, fallback ke shift lintas hari kemarin.
+        $attendance = $this->resolveClockOutRecord($employee, $now);
 
         if (!$attendance) {
             throw ValidationException::withMessages([
@@ -326,22 +494,10 @@ class AttendanceService
         $faceScore = (float) ($data['face_score'] ?? 0.0);
         $isMock = (bool) ($data['is_mock_location'] ?? false);
 
-        $office = $attendance->officeLocation ?? $employee->officeLocation;
-        if (!$office) {
-            $office = OfficeLocation::where('is_active', true)->first();
-        }
-
-        $distance = null;
-        $isWithinRadius = false;
-        if ($office) {
-            $distance = $this->geofenceService->calculateDistance(
-                $userLat,
-                $userLon,
-                $office->latitude,
-                $office->longitude
-            );
-            $isWithinRadius = $distance <= $office->radius_meters;
-        }
+        // Lokasi boleh berbeda dengan lokasi clock-in (misal dosen pindah kampus
+        // di siang hari): sah selama masih salah satu lokasi yang ditugaskan.
+        [$office, $distance, $isWithinRadius, $nearestOffice, $nearestDistance, $checkedCount] =
+            $this->resolveOfficeForCoordinates($employee, $userLat, $userLon);
 
         $rejectionReasons = [];
         if ($isMock) {
@@ -351,16 +507,25 @@ class AttendanceService
             $rejectionReasons[] = "Akurasi GPS tidak memadai ({$accuracy}m, batas maksimal {$maxGpsAccuracy}m).";
         }
         if ($office && !$isWithinRadius) {
-            $rejectionReasons[] = "Di luar area kantor (Jarak: {$distance}m, radius diizinkan: {$office->radius_meters}m).";
+            $rejectionReasons[] = "Di luar area kantor (terdekat: {$nearestOffice->name}, jarak {$nearestDistance}m, radius {$nearestOffice->radius_meters}m; {$checkedCount} lokasi absen diperiksa).";
         }
         if ($faceScore < $minFaceScore) {
             $rejectionReasons[] = "Skor pengenalan wajah rendah ({$faceScore}, batas minimal {$minFaceScore}).";
         }
 
-        $dayOfWeek = $now->dayOfWeek;
+        // Jadwal dihitung dari tanggal dinas record (duty date), bukan tanggal sekarang,
+        // agar shift lintas hari (22:00-06:00) memakai jam pulang keesokan harinya.
+        $dutyDateStr = Carbon::parse($attendance->getAttribute('tanggal'))->toDateString();
+        $today = $dutyDateStr;
+
         $schedule = null;
         if ($employee->shiftTemplate) {
-            $schedule = $employee->shiftTemplate->getScheduleForDay($dayOfWeek);
+            $schedule = $employee->shiftTemplate->getScheduleForDay(
+                Carbon::parse($dutyDateStr)->dayOfWeek
+            );
+        }
+        if (!$schedule) {
+            $schedule = $employee->shiftTemplate?->getScheduleForDay($now->dayOfWeek);
         }
 
         $earlyLeaveToleranceMinutes = $schedule
@@ -376,11 +541,12 @@ class AttendanceService
 
         $earlyLeaveMinutes = 0;
         if ($schedule && !$schedule->is_day_off && $schedule->end_time && !$isHolidayForEmployee) {
-            $scheduledEnd = Carbon::parse("{$today} {$schedule->end_time}");
+            // getScheduledEndForDate otomatis +1 hari untuk shift lintas hari.
+            $scheduledEnd = $schedule->getScheduledEndForDate($dutyDateStr);
             $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyLeaveToleranceMinutes);
 
             if ($now->lessThan($earliestClockOut)) {
-                $rejectionReasons[] = "Presensi pulang belum dibuka. Presensi pulang untuk shift ini ({$schedule->end_time}) baru dapat dilakukan mulai pukul {$earliestClockOut->format('H:i')} (toleransi pulang cepat: {$earlyLeaveToleranceMinutes} menit).";
+                $rejectionReasons[] = "Presensi pulang belum dibuka. Presensi pulang untuk shift ini ({$schedule->start_time} - {$schedule->end_time}) baru dapat dilakukan mulai pukul {$earliestClockOut->format('H:i')} (toleransi pulang cepat: {$earlyLeaveToleranceMinutes} menit).";
             } elseif ($now->lessThan($scheduledEnd)) {
                 $earlyLeaveMinutes = (int) $now->diffInMinutes($scheduledEnd, false);
                 if ($earlyLeaveMinutes < 0) {
@@ -406,6 +572,14 @@ class AttendanceService
             'clock_out_is_mock_location' => $isMock,
             'early_leave_minutes' => $earlyLeaveMinutes,
         ];
+
+        // Penanda bila pulang dari lokasi berbeda dengan lokasi masuk (multi-lokasi).
+        if ($office && (int) $attendance->office_location_id !== (int) $office->id) {
+            $locationNote = "Pulang dari lokasi: {$office->name} (jarak {$distance}m).";
+            $clockOutData['notes'] = !empty($attendance->notes)
+                ? $attendance->notes . ' ' . $locationNote
+                : $locationNote;
+        }
 
         if (!empty($data['notes']) || !empty($data['catatan'])) {
             $customNote = $data['notes'] ?? $data['catatan'];

@@ -191,6 +191,7 @@ class PegawaiController extends Controller
             'unitKerja',
             'shiftTemplate',
             'officeLocation',
+            'additionalOffices',
             'riwayatJabatan.jabatan',
             'riwayatJabatan.jabatanFungsional',
             'riwayatPendidikan',

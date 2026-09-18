@@ -210,6 +210,47 @@ class Pegawai extends Model
         return $this->belongsTo(OfficeLocation::class, 'office_location_id');
     }
 
+    /**
+     * Lokasi absen tambahan (multi-lokasi) selain lokasi utama.
+     * Contoh: dosen mengajar di kampus/gedung lain.
+     */
+    public function additionalOffices()
+    {
+        return $this->belongsToMany(
+            OfficeLocation::class,
+            'simpeg_pegawai_office_locations',
+            'pegawai_id',
+            'office_location_id'
+        )->withTimestamps();
+    }
+
+    /**
+     * Seluruh lokasi absen yang sah: lokasi utama + tambahan yang aktif.
+     *
+     * @return \Illuminate\Support\Collection<int, OfficeLocation>
+     */
+    public function getAllowedOfficeLocations()
+    {
+        $offices = collect();
+
+        $primary = $this->officeLocation;
+        if ($primary && $primary->is_active) {
+            $offices->push($primary);
+        }
+
+        $additional = $this->relationLoaded('additionalOffices')
+            ? $this->additionalOffices->where('is_active', true)
+            : $this->additionalOffices()->where('simpeg_office_locations.is_active', true)->get();
+
+        foreach ($additional as $office) {
+            if (!$offices->contains('id', $office->id)) {
+                $offices->push($office);
+            }
+        }
+
+        return $offices->values();
+    }
+
     public function shiftTemplate()
     {
         return $this->belongsTo(ShiftTemplate::class, 'shift_template_id');

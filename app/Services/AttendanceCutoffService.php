@@ -56,6 +56,15 @@ class AttendanceCutoffService
                 continue;
             }
 
+            // Shift lintas hari (misal 22:00-06:00) yang belum selesai jangan
+            // ditandai Alfa — beri kesempatan clock-in susulan / clock-out pagi.
+            if ($schedule->isOvernight()) {
+                $scheduledEnd = $schedule->getScheduledEndForDate($dateStr);
+                if (Carbon::now()->lessThan($scheduledEnd)) {
+                    continue;
+                }
+            }
+
             // Cek rekaman presensi pada hari tersebut
             $existing = Attendance::where('pegawai_id', $employee->id)
                 ->whereDate('tanggal', $dateStr)

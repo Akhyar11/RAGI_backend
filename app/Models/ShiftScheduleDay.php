@@ -21,6 +21,8 @@ class ShiftScheduleDay extends Model
         'is_day_off',
         'late_tolerance_minutes',
         'early_leave_tolerance_minutes',
+        'max_early_clock_in_minutes',
+        'max_late_clock_in_minutes',
         'applies_national_holidays',
     ];
 
@@ -29,6 +31,8 @@ class ShiftScheduleDay extends Model
         'is_day_off' => 'boolean',
         'late_tolerance_minutes' => 'integer',
         'early_leave_tolerance_minutes' => 'integer',
+        'max_early_clock_in_minutes' => 'integer',
+        'max_late_clock_in_minutes' => 'integer',
         'applies_national_holidays' => 'boolean',
     ];
 
@@ -76,6 +80,41 @@ class ShiftScheduleDay extends Model
         return (int) SystemSetting::get('early_leave_tolerance_minutes', 15);
     }
 
+    /**
+     * Batas buka absen lebih awal (menit sebelum jam mulai shift).
+     * Hierarki: hari -> template -> SystemSetting (default 60).
+     */
+    public function getMaxEarlyClockInMinutes(): int
+    {
+        if ($this->max_early_clock_in_minutes !== null) {
+            return (int) $this->max_early_clock_in_minutes;
+        }
+
+        if ($this->shiftTemplate && $this->shiftTemplate->max_early_clock_in_minutes !== null) {
+            return (int) $this->shiftTemplate->max_early_clock_in_minutes;
+        }
+
+        return (int) SystemSetting::get('max_early_clock_in_minutes', 60);
+    }
+
+    /**
+     * Batas maksimal keterlambatan clock-in (menit setelah jam mulai shift).
+     * Hierarki: hari -> template -> SystemSetting (default 240).
+     * Nilai 0 = tanpa batas (selalu terima keterlambatan sebagai 'terlambat').
+     */
+    public function getMaxLateClockInMinutes(): int
+    {
+        if ($this->max_late_clock_in_minutes !== null) {
+            return (int) $this->max_late_clock_in_minutes;
+        }
+
+        if ($this->shiftTemplate && $this->shiftTemplate->max_late_clock_in_minutes !== null) {
+            return (int) $this->shiftTemplate->max_late_clock_in_minutes;
+        }
+
+        return (int) SystemSetting::get('max_late_clock_in_minutes', 240);
+    }
+
     public function getDayNameAttribute(): string
     {
         return match ($this->day_of_week) {
@@ -88,5 +127,40 @@ class ShiftScheduleDay extends Model
             6 => 'Sabtu',
             default => 'Unknown',
         };
+    }
+
+    /**
+     * Apakah jadwal ini lintas hari (pulang keesokan harinya)?
+     * Contoh: satpam malam 22:00 - 06:00 (end <= start).
+     */
+    public function isOvernight(): bool
+    {
+        if ($this->is_day_off || empty($this->start_time) || empty($this->end_time)) {
+            return false;
+        }
+
+        return substr((string) $this->end_time, 0, 5) <= substr((string) $this->start_time, 0, 5);
+    }
+
+    /**
+     * Jam mulai shift pada tanggal dinas (duty date) tertentu.
+     */
+    public function getScheduledStartForDate(string $date): \Carbon\Carbon
+    {
+        return \Carbon\Carbon::parse("{$date} {$this->start_time}");
+    }
+
+    /**
+     * Jam selesai shift pada tanggal dinas tertentu.
+     * Untuk shift lintas hari, otomatis +1 hari dari tanggal dinas.
+     */
+    public function getScheduledEndForDate(string $date): \Carbon\Carbon
+    {
+        $end = \Carbon\Carbon::parse("{$date} {$this->end_time}");
+        if ($this->isOvernight()) {
+            $end->addDay();
+        }
+
+        return $end;
     }
 }

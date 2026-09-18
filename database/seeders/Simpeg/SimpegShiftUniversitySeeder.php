@@ -35,6 +35,7 @@ class SimpegShiftUniversitySeeder extends Seeder
                 'late_tolerance_minutes' => 15,
                 'early_leave_tolerance_minutes' => 15,
                 'max_early_clock_in_minutes' => 60,
+                'max_late_clock_in_minutes' => 240,
                 'applies_national_holidays' => true,
             ]
         );
@@ -57,6 +58,7 @@ class SimpegShiftUniversitySeeder extends Seeder
                 'late_tolerance_minutes' => 30,
                 'early_leave_tolerance_minutes' => 30,
                 'max_early_clock_in_minutes' => 90,
+                'max_late_clock_in_minutes' => 360,
                 'applies_national_holidays' => true,
             ]
         );
@@ -79,6 +81,7 @@ class SimpegShiftUniversitySeeder extends Seeder
                 'late_tolerance_minutes' => 10,
                 'early_leave_tolerance_minutes' => 5,
                 'max_early_clock_in_minutes' => 45,
+                'max_late_clock_in_minutes' => 180,
                 'applies_national_holidays' => false,
             ]
         );
@@ -101,6 +104,7 @@ class SimpegShiftUniversitySeeder extends Seeder
                 'late_tolerance_minutes' => 10,
                 'early_leave_tolerance_minutes' => 5,
                 'max_early_clock_in_minutes' => 45,
+                'max_late_clock_in_minutes' => 180,
                 'applies_national_holidays' => false,
             ]
         );
@@ -123,6 +127,7 @@ class SimpegShiftUniversitySeeder extends Seeder
                 'late_tolerance_minutes' => 10,
                 'early_leave_tolerance_minutes' => 5,
                 'max_early_clock_in_minutes' => 45,
+                'max_late_clock_in_minutes' => 180,
                 'applies_national_holidays' => false,
             ]
         );
@@ -145,6 +150,7 @@ class SimpegShiftUniversitySeeder extends Seeder
                 'late_tolerance_minutes' => 15,
                 'early_leave_tolerance_minutes' => 10,
                 'max_early_clock_in_minutes' => 60,
+                'max_late_clock_in_minutes' => 240,
                 'applies_national_holidays' => true,
             ]
         );

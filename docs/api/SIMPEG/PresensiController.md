@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1` dan `/api/simpeg`  
 > **Autentikasi**: Bearer Token (Passport/Sanctum) / X-API-KEY (Integrasi)  
 > **Dibuat**: 2026-09-14  
-> **Diperbarui**: 2026-09-17 (RBAC murni tanpa user_type statis, dynamic sorting sort_by & sort_dir pada realtime log presensi)
+> **Diperbarui**: 2026-09-18 (jendela `max_late_clock_in_minutes` + shift lintas hari 22:00-06:00)
 
 Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Python port 8001), geofencing Haversine, dan jadwal shift dinamis yang digunakan oleh aplikasi **Mobile Android (Flutter)** dan dashboard **SIMPEG Web**.
 
@@ -54,6 +54,9 @@ Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Py
 | POST | `/api/simpeg/presensi/fingerprint/sync` | Sinkronisasi batch punch log mesin absensi biometrik | ✅ Bearer |
 | POST | `/api/simpeg/presensi/daily-cutoff` | Eksekusi cut-off harian untuk menandai pegawai tidak hadir sebagai Alfa | ✅ Bearer |
 | POST | `/api/simpeg/presensi/shift-assign-bulk` | Penugasan kelompok shift secara massal ke pegawai / unit kerja | ✅ Bearer |
+| GET | `/api/simpeg/presensi/pegawai/{id}/office-locations` | Lokasi absen sah pegawai (utama + tambahan) | ✅ Bearer |
+| PUT | `/api/simpeg/presensi/pegawai/{id}/office-locations` | Atur lokasi absen tambahan pegawai | ✅ Bearer |
+| POST | `/api/simpeg/presensi/office-assign-bulk` | Tugaskan lokasi tambahan massal (misal semua dosen) | ✅ Bearer |
 
 ---
 
@@ -196,12 +199,29 @@ Mengambil status presensi hari ini, authoritative server time (anti clock-tamper
       "end_time": "17:00:00",
       "late_tolerance_minutes": 15,
       "early_leave_tolerance_minutes": 15,
-      "is_day_off": false
+      "max_early_clock_in_minutes": 60,
+      "max_late_clock_in_minutes": 240,
+      "is_day_off": false,
+      "is_overnight": false,
+      "duty_date": "2026-09-17"
     },
+    "office": {
+      "id": 1,
+      "name": "Politeknik Indonusa Surakarta",
+      "latitude": -7.5675,
+      "longitude": 110.8036,
+      "radius_meters": 150
+    },
+    "allowed_offices": [
+      { "id": 1, "name": "Politeknik Indonusa Surakarta", "latitude": -7.5675, "longitude": 110.8036, "radius_meters": 150 },
+      { "id": 2, "name": "Gedung Kuliah Kampus 2", "latitude": -7.6, "longitude": 110.85, "radius_meters": 150 }
+    ],
     "attendance": null
   }
 }
 ```
+
+> `allowed_offices` = seluruh titik absen sah pegawai (utama + tambahan multi-lokasi); mobile dapat menampilkan semua pin geofence. Clock-in/out diterima bila masuk radius salah satu titik.
 
 ---
 
@@ -262,6 +282,8 @@ Mencatat presensi pulang karyawan. Nilai `face_score` dan `is_mock_location` ber
   "notes": "Pulang kerja"
 }
 ```
+
+> **Shift lintas hari (misal satpam 22:00-06:00):** clock-out pagi (misal Selasa 06:05) otomatis menutup record tanggal dinas kemarin (Senin), bukan mencari record hari ini. Endpoint `today`/`todayStatus` di jam 00:xx-06:xx menampilkan record dinas kemarin yang masih terbuka (`can_clock_out: true`) dengan `schedule.is_overnight: true` dan `schedule.duty_date` = tanggal dinas. Clock-in 00:xx (misal 00:30) tercatat sebagai `terlambat` pada tanggal dinas kemarin. Cut-off menunda Alfa sampai jam pulang shift terlewati.
 
 ---
 
