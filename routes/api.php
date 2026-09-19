@@ -617,6 +617,18 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::delete('master/setting-tarif/{id}', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'destroy']);
     Route::get('master/program-studi', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'getProgramStudiList']);
 
+    // Pembayaran Mahasiswa - Pengaturan Tarif Komponen Biaya (Zero Hardcode, Katalog Biaya, Multi-Tarif Prodi & Angkatan)
+    Route::prefix('pembayaran-mahasiswa')->group(function () {
+        Route::get('tarif', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'index']);
+        Route::post('tarif', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'store']);
+        Route::get('tarif/{id}', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'show']);
+        Route::put('tarif/{id}', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'update']);
+        Route::delete('tarif/{id}', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'destroy']);
+        Route::get('katalog-biaya', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'katalogBiaya']);
+        Route::get('prodi-list', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'prodiList']);
+        Route::get('summary', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'summary']);
+    });
+
     // Pengaturan On/Off Skema Golongan UKT
     Route::get('settings/golongan-ukt', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getUktSetting']);
     Route::post('settings/golongan-ukt', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'updateUktSetting']);

@@ -384,12 +384,23 @@ class MenuSeeder extends Seeder
                 'order_index' => 1,
             ],
             [
-                'name' => 'KEUANGAN MAHASISWA',
+                'name' => 'PEMBAYARAN MAHASISWA',
+                'url' => '#pembayaran_mhs_sikeu',
+                'icon' => 'FaCreditCard',
+                'module' => 'sikeu',
+                'permission_slug' => 'sikeu.dashboard.read',
+                'order_index' => 2,
+                'children' => [
+                    ['name' => 'Pengaturan Tarif', 'url' => '/sikeu/pembayaran-mahasiswa/tarif', 'icon' => 'FaDollarSign', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
+                ]
+            ],
+            [
+                'name' => 'KEUANGAN MAHASISWA (LEGACY)',
                 'url' => '#mhs_sikeu',
                 'icon' => 'FaGraduationCap',
                 'module' => 'sikeu',
                 'permission_slug' => 'sikeu.dashboard.read',
-                'order_index' => 2,
+                'order_index' => 3,
                 'children' => [
                     ['name' => 'Pengaturan Tarif & Beasiswa', 'url' => '/sikeu/mahasiswa/tarif', 'icon' => 'FaDollarSign', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
                     ['name' => 'Potongan & Keringanan Khusus', 'url' => '/sikeu/mahasiswa/potongan', 'icon' => 'FaSparkles', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 2],
