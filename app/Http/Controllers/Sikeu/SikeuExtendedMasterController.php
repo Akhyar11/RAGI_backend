@@ -11,6 +11,7 @@ use App\Models\Sikeu\PotonganMahasiswa;
 use App\Models\Sikeu\PotonganTagihan;
 use App\Models\Sikeu\TagihanMahasiswa;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class SikeuExtendedMasterController extends Controller
@@ -441,6 +442,8 @@ class SikeuExtendedMasterController extends Controller
             'nomor_sk' => 'nullable|string|max:100',
             'keterangan' => 'nullable|string',
             'status' => 'nullable|in:aktif,nonaktif,selesai',
+            'tagihan_id' => 'nullable|integer',
+            'sync_unpaid_bills' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -458,31 +461,136 @@ class SikeuExtendedMasterController extends Controller
             }
         }
 
-        $item = PotonganMahasiswa::create([
-            'mahasiswa_id' => $data['mahasiswa_id'],
-            'nim' => $nim ?? ('NIM-' . $data['mahasiswa_id']),
-            'nama_mahasiswa' => $namaMahasiswa ?? ('Mahasiswa #' . $data['mahasiswa_id']),
-            'nama_potongan' => $data['nama_potongan'],
-            'tipe_potongan' => $data['tipe_potongan'],
-            'nilai_potongan' => $data['nilai_potongan'],
-            'master_biaya_id' => $data['master_biaya_id'] ?? null,
-            'semester' => $data['semester'] ?? null,
-            'tahun_akademik' => $data['tahun_akademik'] ?? null,
-            'berlaku_mulai' => $data['berlaku_mulai'] ?? null,
-            'berlaku_sampai' => $data['berlaku_sampai'] ?? null,
-            'nomor_sk' => $data['nomor_sk'] ?? null,
-            'keterangan' => $data['keterangan'] ?? null,
-            'status' => $data['status'] ?? 'aktif',
-            'diinput_oleh' => auth()->id(),
-        ]);
+        try {
+            DB::beginTransaction();
 
-        $item->load(['masterBiaya', 'inputter']);
+            $item = PotonganMahasiswa::create([
+                'mahasiswa_id' => $data['mahasiswa_id'],
+                'nim' => $nim ?? ('NIM-' . $data['mahasiswa_id']),
+                'nama_mahasiswa' => $namaMahasiswa ?? ('Mahasiswa #' . $data['mahasiswa_id']),
+                'nama_potongan' => $data['nama_potongan'],
+                'tipe_potongan' => $data['tipe_potongan'],
+                'nilai_potongan' => $data['nilai_potongan'],
+                'master_biaya_id' => $data['master_biaya_id'] ?? null,
+                'semester' => $data['semester'] ?? null,
+                'tahun_akademik' => $data['tahun_akademik'] ?? null,
+                'berlaku_mulai' => $data['berlaku_mulai'] ?? null,
+                'berlaku_sampai' => $data['berlaku_sampai'] ?? null,
+                'nomor_sk' => $data['nomor_sk'] ?? null,
+                'keterangan' => $data['keterangan'] ?? null,
+                'status' => $data['status'] ?? 'aktif',
+                'diinput_oleh' => auth()->id(),
+            ]);
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Setting potongan khusus mahasiswa berhasil disimpan',
-            'data' => $item,
-        ], 201);
+            // =========================================================================
+            // AUTO SYNC: Otomatis sinkronisasi & potong tagihan mahasiswa yang belum lunas
+            // =========================================================================
+            $syncedBillsCount = 0;
+            $shouldSync = $request->boolean('sync_unpaid_bills', true);
+
+            if ($shouldSync && ($data['status'] ?? 'aktif') === 'aktif') {
+                $billsQuery = TagihanMahasiswa::with(['details', 'virtualAccounts', 'potonganTagihan'])
+                    ->where(function ($q) use ($data) {
+                        $q->where('mahasiswa_id', $data['mahasiswa_id'])
+                          ->orWhere('calon_mahasiswa_id', $data['mahasiswa_id']);
+                    })
+                    ->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi']);
+
+                if ($request->filled('tagihan_id')) {
+                    $billsQuery->where('id', $request->tagihan_id);
+                } elseif (!empty($data['semester'])) {
+                    $sem = (int)$data['semester'];
+                    $billsQuery->where(function ($sq) use ($sem) {
+                        $sq->where('catatan_approval', 'like', "%Semester {$sem}%")
+                           ->orWhereNull('catatan_approval');
+                    });
+                }
+
+                $unpaidBills = $billsQuery->get();
+
+                foreach ($unpaidBills as $tagihan) {
+                    $totalKotor = (float)$tagihan->total_tagihan + (float)$tagihan->total_denda;
+                    $currentPotongan = (float)$tagihan->total_potongan;
+                    $currentBayar = (float)$tagihan->total_bayar;
+                    $sisaTagihan = max(0, $totalKotor - $currentPotongan - $currentBayar);
+
+                    if ($sisaTagihan <= 0) {
+                        continue;
+                    }
+
+                    $baseNominal = $sisaTagihan;
+                    if (!empty($item->master_biaya_id)) {
+                        $comp = $tagihan->details->firstWhere('master_biaya_id', $item->master_biaya_id);
+                        if ($comp) {
+                            $baseNominal = max(0, (float)$comp->nominal - (float)$comp->potongan);
+                        }
+                    }
+
+                    if ($item->tipe_potongan === 'persen') {
+                        $nominalPotongan = round(($baseNominal * (float)$item->nilai_potongan) / 100, 2);
+                    } else {
+                        $nominalPotongan = (float)$item->nilai_potongan;
+                    }
+
+                    $nominalPotongan = min($nominalPotongan, $sisaTagihan);
+
+                    if ($nominalPotongan > 0) {
+                        PotonganTagihan::create([
+                            'tagihan_id' => $tagihan->id,
+                            'tipe' => 'diskon',
+                            'nominal_potongan' => $nominalPotongan,
+                            'keterangan' => 'Potongan Khusus: ' . $item->nama_potongan . ($item->nomor_sk ? " (SK: {$item->nomor_sk})" : ''),
+                            'diinput_oleh' => auth()->id() ?? 1,
+                        ]);
+
+                        $newTotalPotongan = (float)PotonganTagihan::where('tagihan_id', $tagihan->id)->sum('nominal_potongan');
+                        $tagihan->total_potongan = $newTotalPotongan;
+                        $newSisa = max(0, $totalKotor - $newTotalPotongan - $currentBayar);
+
+                        if ($newSisa <= 0) {
+                            $tagihan->status = 'lunas';
+                        } elseif ($currentBayar > 0) {
+                            $tagihan->status = 'sebagian';
+                        }
+                        $tagihan->save();
+
+                        // Update nominal Virtual Account yang aktif
+                        foreach ($tagihan->virtualAccounts as $va) {
+                            $va->nominal = $newSisa;
+                            if ($newSisa <= 0) {
+                                $va->status = 'dibayar';
+                            }
+                            $va->save();
+                        }
+
+                        $syncedBillsCount++;
+                    }
+                }
+            }
+
+            DB::commit();
+
+            $item->load(['masterBiaya', 'inputter']);
+
+            $msg = 'Setting potongan khusus mahasiswa berhasil disimpan';
+            if ($syncedBillsCount > 0) {
+                $msg .= " dan otomatis diterapkan pada {$syncedBillsCount} tagihan belum lunas.";
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => $msg,
+                'data' => $item,
+                'synced_bills_count' => $syncedBillsCount,
+            ], 201);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal menyimpan potongan khusus mahasiswa: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function updatePotonganMahasiswa(Request $request, $id)

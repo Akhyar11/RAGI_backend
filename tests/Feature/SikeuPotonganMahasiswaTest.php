@@ -190,4 +190,131 @@ class SikeuPotonganMahasiswaTest extends TestCase
             'id' => $item->id,
         ]);
     }
+
+    public function test_store_potongan_otomatis_sync_ke_tagihan_belum_lunas_dan_update_va(): void
+    {
+        $biaya = $this->makeKomponen('BIAYA_SYNC', 'Biaya Sync Tagihan');
+
+        $tagihan = \App\Models\Sikeu\TagihanMahasiswa::create([
+            'mahasiswa_id' => 998,
+            'nomor_tagihan' => 'INV-SYNC-998',
+            'total_tagihan' => 2000000,
+            'total_potongan' => 0,
+            'total_denda' => 0,
+            'total_bayar' => 0,
+            'status' => 'belum_bayar',
+            'jatuh_tempo' => now()->addDays(30),
+        ]);
+
+        \App\Models\Sikeu\DetailTagihan::create([
+            'tagihan_id' => $tagihan->id,
+            'master_biaya_id' => $biaya->id,
+            'nominal' => 2000000,
+            'potongan' => 0,
+            'nominal_bersih' => 2000000,
+        ]);
+
+        $va = \App\Models\Sikeu\VirtualAccount::create([
+            'tagihan_id' => $tagihan->id,
+            'bank_kode' => 'BNI',
+            'bank_nama' => 'Bank Negara Indonesia',
+            'va_number' => '9881234567899980',
+            'nominal' => 2000000,
+            'status' => 'aktif',
+            'expired_at' => now()->addDays(30),
+        ]);
+
+        $payload = [
+            'mahasiswa_id' => 998,
+            'nim' => '20260998',
+            'nama_mahasiswa' => 'Mahasiswa Sync Test',
+            'nama_potongan' => 'Keringanan UKT 500rb',
+            'tipe_potongan' => 'nominal',
+            'nilai_potongan' => 500000,
+            'status' => 'aktif',
+            'sync_unpaid_bills' => true,
+        ];
+
+        $response = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/master/potongan-mahasiswa', $payload);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'status' => 'success',
+                'synced_bills_count' => 1,
+            ]);
+
+        // Verifikasi database: record potongan_tagihan terbentuk
+        $this->assertDatabaseHas('sikeu_potongan_tagihan', [
+            'tagihan_id' => $tagihan->id,
+            'nominal_potongan' => 500000,
+        ]);
+
+        // Verifikasi tagihan total_potongan terupdate
+        $tagihan->refresh();
+        $this->assertEquals(500000, (float)$tagihan->total_potongan);
+        $this->assertEquals('belum_bayar', $tagihan->status);
+
+        // Verifikasi nominal VA terpotong menjadi 1.500.000
+        $va->refresh();
+        $this->assertEquals(1500000, (float)$va->nominal);
+        $this->assertEquals('aktif', $va->status);
+    }
+
+    public function test_store_potongan_melunasi_tagihan_dan_nonaktifkan_va(): void
+    {
+        $biaya = $this->makeKomponen('BIAYA_LUNAS', 'Biaya Lunas Full');
+
+        $tagihan = \App\Models\Sikeu\TagihanMahasiswa::create([
+            'mahasiswa_id' => 997,
+            'nomor_tagihan' => 'INV-SYNC-997',
+            'total_tagihan' => 1000000,
+            'total_potongan' => 0,
+            'total_denda' => 0,
+            'total_bayar' => 0,
+            'status' => 'belum_bayar',
+            'jatuh_tempo' => now()->addDays(30),
+        ]);
+
+        $va = \App\Models\Sikeu\VirtualAccount::create([
+            'tagihan_id' => $tagihan->id,
+            'bank_kode' => 'MANDIRI',
+            'bank_nama' => 'Bank Mandiri',
+            'va_number' => '8881234567899970',
+            'nominal' => 1000000,
+            'status' => 'aktif',
+            'expired_at' => now()->addDays(30),
+        ]);
+
+        $payload = [
+            'mahasiswa_id' => 997,
+            'nim' => '20260997',
+            'nama_mahasiswa' => 'Mahasiswa Lunas Test',
+            'nama_potongan' => 'Beasiswa Full 100 Persen',
+            'tipe_potongan' => 'persen',
+            'nilai_potongan' => 100,
+            'tagihan_id' => $tagihan->id,
+            'status' => 'aktif',
+            'sync_unpaid_bills' => true,
+        ];
+
+        $response = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/master/potongan-mahasiswa', $payload);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'status' => 'success',
+                'synced_bills_count' => 1,
+            ]);
+
+        // Tagihan menjadi lunas
+        $tagihan->refresh();
+        $this->assertEquals(1000000, (float)$tagihan->total_potongan);
+        $this->assertEquals('lunas', $tagihan->status);
+
+        // VA menjadi status dibayar/lunas karena sisa tagihan 0
+        $va->refresh();
+        $this->assertEquals(0, (float)$va->nominal);
+        $this->assertEquals('dibayar', $va->status);
+    }
 }
