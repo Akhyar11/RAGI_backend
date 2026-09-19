@@ -204,7 +204,7 @@ class SikeuMasterController extends Controller
         $search = trim($request->query('q', ''));
 
         try {
-            // Search across Siakad Mahasiswa
+            // 1. Search across Siakad Mahasiswa
             $siakadStudents = collect();
             try {
                 $siakadQuery = \App\Models\Siakad\Mahasiswa::with('programStudi');
@@ -212,7 +212,8 @@ class SikeuMasterController extends Controller
                     $siakadQuery->where(function ($sub) use ($search) {
                         $sub->where('nim', 'like', "%{$search}%")
                             ->orWhere('nama_lengkap', 'like', "%{$search}%")
-                            ->orWhere('nik', 'like', "%{$search}%");
+                            ->orWhere('nik', 'like', "%{$search}%")
+                            ->orWhere('telepon', 'like', "%{$search}%");
                         if (is_numeric($search)) {
                             $sub->orWhere('id', (int)$search);
                         }
@@ -223,10 +224,34 @@ class SikeuMasterController extends Controller
                 // Ignore if table not yet migrated
             }
 
-            // Search across MahasiswaTipeTagihan
+            // 2. Search across SPMB Calon Mahasiswa (Mahasiswa baru belum punya NIM / pendaftar)
+            $spmbCalonStudents = collect();
+            try {
+                $spmbQuery = \App\Models\Spmb\PendaftaranCalonMhs::with([
+                    'programStudi',
+                    'gelombangPenerimaan.tahunAkademik'
+                ]);
+                if (!empty($search)) {
+                    $spmbQuery->where(function ($sub) use ($search) {
+                        $sub->where('no_pendaftaran', 'like', "%{$search}%")
+                            ->orWhere('nama_lengkap', 'like', "%{$search}%")
+                            ->orWhere('nik', 'like', "%{$search}%")
+                            ->orWhere('nim', 'like', "%{$search}%")
+                            ->orWhere('no_hp', 'like', "%{$search}%");
+                        if (is_numeric($search)) {
+                            $sub->orWhere('id', (int)$search);
+                        }
+                    });
+                }
+                $spmbCalonStudents = $spmbQuery->orderBy('id', 'desc')->limit(20)->get();
+            } catch (\Throwable $e) {
+                // Ignore
+            }
+
+            // 3. Search across MahasiswaTipeTagihan
             $tipeTagihanStudents = collect();
             try {
-                $tipeQuery = MahasiswaTipeTagihan::query();
+                $tipeQuery = \App\Models\Sikeu\MahasiswaTipeTagihan::query();
                 if (!empty($search)) {
                     $tipeQuery->where(function ($sub) use ($search) {
                         $sub->where('nim', 'like', "%{$search}%")
@@ -242,33 +267,43 @@ class SikeuMasterController extends Controller
                 // Ignore
             }
 
-            // Also search by tagihan nomor / mahasiswa_id in Tagihan
+            // 4. Also search by tagihan nomor -> pluck mahasiswa_id and calon_mahasiswa_id
             $tagihanMhsIds = [];
+            $tagihanCalonIds = [];
             try {
                 if (!empty($search)) {
-                    $tagihanMhsIds = TagihanMahasiswa::where('nomor_tagihan', 'like', "%{$search}%")
-                        ->limit(10)
-                        ->pluck('mahasiswa_id')
-                        ->toArray();
+                    $matchedTagihans = TagihanMahasiswa::where('nomor_tagihan', 'like', "%{$search}%")
+                        ->limit(15)
+                        ->get(['mahasiswa_id', 'calon_mahasiswa_id']);
+                    $tagihanMhsIds = $matchedTagihans->pluck('mahasiswa_id')->filter()->toArray();
+                    $tagihanCalonIds = $matchedTagihans->pluck('calon_mahasiswa_id')->filter()->toArray();
                 }
             } catch (\Throwable $e) {
                 // Ignore
             }
 
-            $studentIds = collect()
+            $siakadIds = collect()
                 ->merge($siakadStudents->pluck('id'))
                 ->merge($tipeTagihanStudents->pluck('mahasiswa_id'))
                 ->merge($tagihanMhsIds)
                 ->filter()
                 ->unique()
-                ->take(30);
+                ->take(25);
 
-            // If empty and search is empty, return empty list (jangan fabrikasi data)
-            if ($studentIds->isEmpty() && empty($search)) {
-                $studentIds = collect();
+            $calonIds = collect()
+                ->merge($spmbCalonStudents->pluck('id'))
+                ->merge($tagihanCalonIds)
+                ->filter()
+                ->unique()
+                ->take(20);
+
+            // If empty and search is empty, return empty
+            if ($siakadIds->isEmpty() && $calonIds->isEmpty() && empty($search)) {
+                return response()->json(['status' => 'success', 'data' => []]);
             }
 
-            $results = $studentIds->map(function ($mhsId) {
+            // Process Siakad Students
+            $resultsSiakad = $siakadIds->map(function ($mhsId) {
                 $siakad = null;
                 try {
                     $siakad = \App\Models\Siakad\Mahasiswa::with('programStudi')->find($mhsId);
@@ -276,15 +311,15 @@ class SikeuMasterController extends Controller
 
                 $tipe = null;
                 try {
-                    $tipe = MahasiswaTipeTagihan::where('mahasiswa_id', $mhsId)->first();
+                    $tipe = \App\Models\Sikeu\MahasiswaTipeTagihan::where('mahasiswa_id', $mhsId)->first();
                 } catch (\Throwable $e) {}
 
-                $nim = $siakad?->nim ?? $tipe?->nim ?? ('-');
+                $nim = $siakad?->nim ?? $tipe?->nim ?? null;
                 $nama = $siakad?->nama_lengkap ?? $tipe?->nama_mahasiswa ?? ('Mahasiswa #' . $mhsId);
                 $prodi = $siakad?->programStudi?->nama ?? $siakad?->programStudi?->nama_prodi ?? '-';
                 $angkatan = $siakad?->angkatan ?? $tipe?->tahun_angkatan ?? null;
-                $jalur = $tipe?->jalur_kelas ?? '-';
-                $kelompokUkt = $tipe?->kelompok_ukt ?? 3;
+                $jalur = $tipe?->jalur_kelas ?? ($siakad?->jalur_masuk ?? 'Reguler');
+                $kelompokUkt = $tipe?->kelompok_ukt ?? ($siakad?->kelompok_ukt ?? 3);
 
                 // Unpaid bills
                 $bills = collect();
@@ -313,7 +348,12 @@ class SikeuMasterController extends Controller
                 return [
                     'id' => (int)$mhsId,
                     'mahasiswa_id' => (int)$mhsId,
-                    'nim' => $nim,
+                    'calon_mahasiswa_id' => null,
+                    'tipe_referensi' => 'mahasiswa',
+                    'is_calon_mahasiswa' => false,
+                    'nim' => $nim ?: '-',
+                    'no_pendaftaran' => null,
+                    'nik' => $siakad?->nik ?? null,
                     'nama_mahasiswa' => $nama,
                     'prodi' => $prodi,
                     'tahun_angkatan' => (int)$angkatan,
@@ -344,7 +384,79 @@ class SikeuMasterController extends Controller
                         ];
                     }),
                 ];
-            })->values();
+            });
+
+            // Process SPMB Calon Mahasiswa (Belum punya NIM / Mahasiswa Baru)
+            $resultsCalon = $calonIds->map(function ($calonId) {
+                $calon = null;
+                try {
+                    $calon = \App\Models\Spmb\PendaftaranCalonMhs::with(['programStudi', 'gelombangPenerimaan.tahunAkademik'])->find($calonId);
+                } catch (\Throwable $e) {}
+
+                if (!$calon) return null;
+
+                $nim = $calon->nim;
+                $nama = $calon->nama_lengkap ?? ('Calon Mhs #' . $calonId);
+                $prodi = $calon->programStudi?->nama ?? '-';
+                $tahun = $calon->gelombangPenerimaan?->tahunAkademik?->tahun ?? date('Y');
+                $jalur = 'SPMB Baru';
+
+                // Unpaid bills for calon mahasiswa
+                $bills = collect();
+                try {
+                    $bills = TagihanMahasiswa::with(['details.masterBiaya', 'potonganTagihan', 'dendaTagihan'])
+                        ->where('calon_mahasiswa_id', $calonId)
+                        ->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi'])
+                        ->get();
+                } catch (\Throwable $e) {}
+
+                $totalUnpaid = $bills->sum(function ($b) {
+                    $bersih = (float)($b->total_tagihan + $b->total_denda - $b->total_potongan);
+                    return max(0, $bersih - (float)$b->total_bayar);
+                });
+
+                return [
+                    'id' => (int)$calonId,
+                    'mahasiswa_id' => null,
+                    'calon_mahasiswa_id' => (int)$calonId,
+                    'tipe_referensi' => 'calon_mahasiswa',
+                    'is_calon_mahasiswa' => true,
+                    'nim' => $nim ?: '-',
+                    'no_pendaftaran' => $calon->no_pendaftaran,
+                    'nik' => $calon->nik,
+                    'nama_mahasiswa' => $nama,
+                    'prodi' => $prodi,
+                    'tahun_angkatan' => (int)$tahun,
+                    'jalur_kelas' => $jalur,
+                    'kelompok_ukt' => 1,
+                    'unpaid_bills_count' => $bills->count(),
+                    'total_unpaid_amount' => $totalUnpaid,
+                    'has_unpaid_previous_dispensation' => false,
+                    'tagihans' => $bills->map(function ($b) {
+                        $bersih = (float)($b->total_tagihan + $b->total_denda - $b->total_potongan);
+                        $jt = null;
+                        if ($b->jatuh_tempo) {
+                            $jt = (is_object($b->jatuh_tempo) && method_exists($b->jatuh_tempo, 'format'))
+                                ? $b->jatuh_tempo->format('Y-m-d')
+                                : (string)$b->jatuh_tempo;
+                        }
+
+                        return [
+                            'id' => $b->id,
+                            'tagihan_id' => $b->id,
+                            'nomor_tagihan' => $b->nomor_tagihan,
+                            'total_tagihan' => (float)$b->total_tagihan,
+                            'total_bayar' => (float)$b->total_bayar,
+                            'total_potongan' => (float)$b->total_potongan,
+                            'sisa' => max(0, $bersih - (float)$b->total_bayar),
+                            'status' => $b->status,
+                            'jatuh_tempo' => $jt,
+                        ];
+                    }),
+                ];
+            })->filter();
+
+            $results = $resultsSiakad->concat($resultsCalon)->values();
 
             return response()->json([
                 'status' => 'success',
@@ -357,6 +469,78 @@ class SikeuMasterController extends Controller
                 'data' => []
             ]);
         }
+    }
+
+    /**
+     * GET /api/v1/sikeu/master/angkatan-list
+     * Mendapatkan daftar angkatan unik dari database SIAKAD & penetapan tipe tagihan
+     */
+    public function getAngkatanList()
+    {
+        $siakadAngkatan = collect();
+        try {
+            $siakadAngkatan = \App\Models\Siakad\Mahasiswa::whereNotNull('angkatan')
+                ->pluck('angkatan')
+                ->map(fn($v) => (string)$v)
+                ->filter();
+        } catch (\Throwable $e) {}
+
+        $tipeAngkatan = collect();
+        try {
+            $tipeAngkatan = \App\Models\Sikeu\MahasiswaTipeTagihan::whereNotNull('tahun_angkatan')
+                ->pluck('tahun_angkatan')
+                ->map(fn($v) => (string)$v)
+                ->filter();
+        } catch (\Throwable $e) {}
+
+        $merged = $siakadAngkatan->merge($tipeAngkatan)->unique()->sortDesc()->values();
+
+        if ($merged->isEmpty()) {
+            $currYear = (int)date('Y');
+            $merged = collect([$currYear, $currYear - 1, $currYear - 2, $currYear - 3])->map(fn($v) => (string)$v);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $merged
+        ]);
+    }
+
+    /**
+     * GET /api/v1/sikeu/master/tahun-akademik/aktif
+     * Mendapatkan tahun akademik aktif dari database
+     */
+    public function getActiveTahunAkademik()
+    {
+        $active = null;
+        try {
+            $active = \App\Models\Spmb\MasterTahunAkademik::where('is_active', true)->first();
+            if (!$active) {
+                $active = \App\Models\Spmb\MasterTahunAkademik::orderBy('id', 'desc')->first();
+            }
+        } catch (\Throwable $e) {}
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $active
+        ]);
+    }
+
+    /**
+     * GET /api/v1/sikeu/master/tahun-akademik
+     * Mendapatkan seluruh daftar tahun akademik
+     */
+    public function getTahunAkademikList()
+    {
+        $list = collect();
+        try {
+            $list = \App\Models\Spmb\MasterTahunAkademik::orderBy('id', 'desc')->get();
+        } catch (\Throwable $e) {}
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $list
+        ]);
     }
 
     // ==========================================

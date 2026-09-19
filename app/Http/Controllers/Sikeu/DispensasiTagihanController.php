@@ -38,20 +38,34 @@ class DispensasiTagihanController extends Controller
             });
         }
 
+        $query->with(['tagihan', 'mahasiswa.programStudi', 'tipeTagihanMahasiswa']);
+
         $dispensasi = $query->orderBy('created_at', 'desc')->paginate($request->input('per_page', 15));
 
-        // Augment with previous unpaid dispensation warning for pimpinan view
-        $items = collect($dispensasi->items())->map(function ($d) {
-            $prevUnpaidCount = DispensasiTagihan::where('mahasiswa_id', $d->mahasiswa_id)
-                ->where('id', '!=', $d->id)
+        // Batch compute previous unpaid dispensation count to eliminate N+1 query
+        $mhsIds = collect($dispensasi->items())->pluck('mahasiswa_id')->unique()->filter()->values();
+        $unpaidCounts = [];
+        if ($mhsIds->isNotEmpty()) {
+            $unpaidCounts = DispensasiTagihan::whereIn('mahasiswa_id', $mhsIds)
                 ->where('status', 'approved')
                 ->whereHas('tagihan', function($q) {
                     $q->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi']);
                 })
-                ->count();
+                ->selectRaw('mahasiswa_id, count(*) as total_unpaid')
+                ->groupBy('mahasiswa_id')
+                ->pluck('total_unpaid', 'mahasiswa_id')
+                ->toArray();
+        }
 
-            $mhs = \App\Models\Siakad\Mahasiswa::with('programStudi')->find($d->mahasiswa_id);
-            $tipeMhs = \App\Models\Sikeu\MahasiswaTipeTagihan::where('mahasiswa_id', $d->mahasiswa_id)->first();
+        // Augment with previous unpaid dispensation warning for pimpinan view
+        $items = collect($dispensasi->items())->map(function ($d) use ($unpaidCounts) {
+            $prevUnpaidCount = $unpaidCounts[$d->mahasiswa_id] ?? 0;
+            if ($d->status === 'approved' && $d->tagihan && in_array($d->tagihan->status, ['belum_bayar', 'sebagian', 'dispensasi']) && $prevUnpaidCount > 0) {
+                $prevUnpaidCount -= 1;
+            }
+
+            $mhs = $d->mahasiswa;
+            $tipeMhs = $d->tipeTagihanMahasiswa;
 
             $dArray = $d->toArray();
             $dArray['has_unpaid_previous_dispensation'] = $prevUnpaidCount > 0;

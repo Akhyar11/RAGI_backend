@@ -44,6 +44,13 @@ class TagihanApprovalController extends Controller
     {
         $tagihan = TagihanMahasiswa::findOrFail($id);
 
+        if ($tagihan->status_approval === 'approved') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tagihan sudah disetujui sebelumnya.',
+            ], 422);
+        }
+
         try {
             DB::beginTransaction();
 
@@ -98,10 +105,17 @@ class TagihanApprovalController extends Controller
      */
     public function rejectTagihan(Request $request, $id)
     {
+        $tagihan = TagihanMahasiswa::findOrFail($id);
+
+        if ($tagihan->status_approval === 'rejected') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tagihan sudah ditolak sebelumnya.',
+            ], 422);
+        }
+
         try {
             DB::beginTransaction();
-
-            $tagihan = TagihanMahasiswa::findOrFail($id);
 
             $tagihan->update([
                 'status' => 'batal',
@@ -134,6 +148,13 @@ class TagihanApprovalController extends Controller
     public function approveDispensasi(Request $request, $id)
     {
         $dispensasi = DispensasiTagihan::with('tagihan')->findOrFail($id);
+
+        if ($dispensasi->status === 'approved') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Dispensasi pembayaran sudah disetujui sebelumnya.',
+            ], 422);
+        }
 
         try {
             DB::beginTransaction();
@@ -175,10 +196,17 @@ class TagihanApprovalController extends Controller
      */
     public function rejectDispensasi(Request $request, $id)
     {
+        $dispensasi = DispensasiTagihan::with('tagihan')->findOrFail($id);
+
+        if ($dispensasi->status === 'rejected') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Dispensasi pembayaran sudah ditolak sebelumnya.',
+            ], 422);
+        }
+
         try {
             DB::beginTransaction();
-
-            $dispensasi = DispensasiTagihan::with('tagihan')->findOrFail($id);
 
             $dispensasi->update([
                 'status' => 'rejected',

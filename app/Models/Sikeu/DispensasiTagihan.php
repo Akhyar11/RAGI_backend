@@ -39,4 +39,14 @@ class DispensasiTagihan extends Model
     {
         return $this->belongsTo(TagihanMahasiswa::class, 'tagihan_id');
     }
+
+    public function mahasiswa()
+    {
+        return $this->belongsTo(\App\Models\Siakad\Mahasiswa::class, 'mahasiswa_id');
+    }
+
+    public function tipeTagihanMahasiswa()
+    {
+        return $this->belongsTo(MahasiswaTipeTagihan::class, 'mahasiswa_id', 'mahasiswa_id');
+    }
 }

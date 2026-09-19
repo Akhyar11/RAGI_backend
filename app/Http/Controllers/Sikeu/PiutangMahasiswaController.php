@@ -25,6 +25,7 @@ class PiutangMahasiswaController extends Controller
         $query = TagihanMahasiswa::with([
             'mahasiswa.programStudi',
             'tipeTagihanMahasiswa',
+            'calonMahasiswa.programStudi',
             'tahunAkademik',
             'details.masterBiaya',
             'pembayarans',
@@ -66,18 +67,19 @@ class PiutangMahasiswaController extends Controller
         });
 
         $totalPiutang = max(0, ($totalTagihan + $totalDenda - $totalPotongan) - $totalBayar);
-        $totalMahasiswaTunggakan = $allTagihans->pluck('mahasiswa_id')->unique()->count();
+        $totalMahasiswaTunggakan = $allTagihans->pluck('mahasiswa_id')->filter()->unique()->count() + $allTagihans->pluck('calon_mahasiswa_id')->filter()->unique()->count();
         $totalRecordDispensasi = $allTagihans->where('status', 'dispensasi')->count();
 
         // Transform data output
         $formattedData = collect($paginated->items())->map(function ($t) use ($cutoffDate) {
             $mhs = $t->mahasiswa;
             $tipeMhs = $t->tipeTagihanMahasiswa;
+            $calon = $t->calonMahasiswa;
 
-            $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ('-');
-            $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $t->mahasiswa_id);
-            $angkatanVal = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? null;
-            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? '-';
+            $nim = $mhs?->nim ?? $tipeMhs?->nim ?? $calon?->nim ?? ($calon?->no_pendaftaran ?: '-');
+            $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? $calon?->nama_lengkap ?? ('Mahasiswa #' . ($t->mahasiswa_id ?? $t->calon_mahasiswa_id ?? '-'));
+            $angkatanVal = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? ($calon ? date('Y') : null);
+            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? $calon?->programStudi?->nama ?? '-';
 
             $totalBayarRow = $cutoffDate
                 ? (float)$t->pembayarans->where('status', 'success')->filter(function ($p) use ($cutoffDate) {
@@ -94,11 +96,14 @@ class PiutangMahasiswaController extends Controller
                 'id' => $t->id,
                 'nomor_tagihan' => $t->nomor_tagihan,
                 'mahasiswa_id' => $t->mahasiswa_id,
+                'calon_mahasiswa_id' => $t->calon_mahasiswa_id,
+                'no_pendaftaran' => $calon?->no_pendaftaran,
+                'is_calon_mahasiswa' => (bool)$calon,
                 'nim' => $nim,
                 'nama_mahasiswa' => $nama,
                 'angkatan' => (int)$angkatanVal,
                 'program_studi' => $prodi,
-                'program_studi_id' => $mhs?->program_studi_id,
+                'program_studi_id' => $mhs?->program_studi_id ?? $calon?->program_studi_id,
                 'tahun_akademik_id' => $t->tahun_akademik_id,
                 'tahun_akademik' => $t->tahunAkademik?->nama ?? ($t->tahun_akademik_id ? ('TA #' . $t->tahun_akademik_id) : '-'),
                 'total_tagihan' => (float)$t->total_tagihan,
@@ -210,31 +215,27 @@ class PiutangMahasiswaController extends Controller
                     body { font-family: Segoe UI, Arial, sans-serif; font-size: 11px; }
                     table { border-collapse: collapse; width: 100%; }
                     .header-title { font-size: 14px; font-weight: bold; text-align: center; color: #1e3a8a; }
-                    .header-sub { font-size: 12px; font-weight: bold; text-align: center; color: #334155; }
-                    .header-info { font-size: 10px; font-style: italic; text-align: center; color: #64748b; }
-                    th { background-color: #1e40af; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #1e3a8a; padding: 8px 6px; }
-                    td { border: 1px solid #cbd5e1; padding: 6px; font-size: 11px; }
-                    .text-center { text-align: center; }
-                    .text-right { text-align: right; }
+                    table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 11px; }
+                    th, td { border: 1px solid #cbd5e1; padding: 6px 8px; }
+                    th { background-color: #0f172a; color: #ffffff; text-align: left; }
                     .num-format { mso-number-format:"\#\,\#\#0"; text-align: right; }
                     .str-format { mso-number-format:"\@"; }
-                    .summary-row { background-color: #e2e8f0; font-weight: bold; border-top: 2px solid #0f172a; }
-                    .badge-lunas { color: #166534; font-weight: bold; }
-                    .badge-belum { color: #991b1b; font-weight: bold; }
-                    .badge-sebagian { color: #854d0e; font-weight: bold; }
+                    .text-center { text-align: center; }
+                    .total-row { font-weight: bold; background-color: #f1f5f9; }
+                    .badge-lunas { background-color: #dcfce7; color: #15803d; font-weight: bold; }
+                    .badge-sebagian { background-color: #fef9c3; color: #a16207; font-weight: bold; }
+                    .badge-belum { background-color: #fee2e2; color: #b91c1c; font-weight: bold; }
                 </style>
             </head>
             <body>
+                <h2>REKAPITULASI PIUTANG MAHASISWA & INVOICE AKTIF</h2>
+                <p>Dicetak pada: ' . date('d F Y H:i:s') . ' | Filter Cutoff: ' . ($cutoffDate ?: 'Semua') . '</p>
                 <table>
-                    <tr><td colspan="14" class="header-title">UNIVERSITAS SSO CAMPUS</td></tr>
-                    <tr><td colspan="14" class="header-sub">DIREKTORAT KEUANGAN & AKUNTANSI — LAPORAN POSISI PIUTANG MAHASISWA</td></tr>
-                    <tr><td colspan="14" class="header-info">' . htmlspecialchars($filterInfo) . '</td></tr>
-                    <tr><td colspan="14"></td></tr>
                     <thead>
                         <tr>
                             <th>NO</th>
                             <th>NOMOR TAGIHAN</th>
-                            <th>NIM</th>
+                            <th>NIM / NO. DAFTAR</th>
                             <th>NAMA MAHASISWA</th>
                             <th>ANGKATAN</th>
                             <th>PROGRAM STUDI</th>
@@ -262,11 +263,12 @@ class PiutangMahasiswaController extends Controller
             foreach ($tagihans as $t) {
                 $mhs = $t->mahasiswa;
                 $tipeMhs = $t->tipeTagihanMahasiswa;
+                $calon = $t->calonMahasiswa;
 
-                $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ($t->mahasiswa_id ? (string)$t->mahasiswa_id : '-');
-                $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $t->mahasiswa_id);
-                $angkatanVal = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? '-';
-                $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? '-';
+                $nim = $mhs?->nim ?? $tipeMhs?->nim ?? $calon?->nim ?? ($calon?->no_pendaftaran ?: ($t->mahasiswa_id ? (string)$t->mahasiswa_id : '-'));
+                $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? $calon?->nama_lengkap ?? ('Mahasiswa #' . ($t->mahasiswa_id ?? $t->calon_mahasiswa_id ?? '-'));
+                $angkatanVal = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? ($calon ? date('Y') : '-');
+                $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? $calon?->programStudi?->nama ?? '-';
                 $taNama = $t->tahunAkademik?->nama ?? ($t->tahun_akademik_id ? ('TA #' . $t->tahun_akademik_id) : '-');
 
                 $totalBayarRow = $cutoffDate
@@ -371,8 +373,13 @@ class PiutangMahasiswaController extends Controller
         }
 
         if (!empty($programStudiId) && $programStudiId !== 'all') {
-            $query->whereHas('mahasiswa', function ($m) use ($programStudiId) {
-                $m->where('program_studi_id', (int)$programStudiId);
+            $query->where(function ($q) use ($programStudiId) {
+                $q->whereHas('mahasiswa', function ($m) use ($programStudiId) {
+                    $m->where('program_studi_id', (int)$programStudiId);
+                })
+                ->orWhereHas('calonMahasiswa', function ($cm) use ($programStudiId) {
+                    $cm->where('program_studi_id', (int)$programStudiId);
+                });
             });
         }
 
@@ -380,13 +387,20 @@ class PiutangMahasiswaController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('nomor_tagihan', 'like', "%{$search}%")
                   ->orWhere('mahasiswa_id', 'like', "%{$search}%")
+                  ->orWhere('calon_mahasiswa_id', 'like', "%{$search}%")
                   ->orWhereHas('mahasiswa', function ($m) use ($search) {
                       $m->where('nim', 'like', "%{$search}%")
-                        ->orWhere('nama_lengkap', 'like', "%{$search}%");
+                        ->orWhere('nama_lengkap', 'like', "%{$search}%")
+                        ->orWhere('nik', 'like', "%{$search}%");
                   })
                   ->orWhereHas('tipeTagihanMahasiswa', function ($tm) use ($search) {
                       $tm->where('nim', 'like', "%{$search}%")
                         ->orWhere('nama_mahasiswa', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('calonMahasiswa', function ($cm) use ($search) {
+                      $cm->where('no_pendaftaran', 'like', "%{$search}%")
+                        ->orWhere('nama_lengkap', 'like', "%{$search}%")
+                        ->orWhere('nik', 'like', "%{$search}%");
                   });
             });
         }

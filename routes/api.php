@@ -555,6 +555,9 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
 
     // Pencarian Mahasiswa untuk Tagihan & Dispensasi
     Route::get('mahasiswa-search', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'searchMahasiswa']);
+    Route::get('master/angkatan-list', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getAngkatanList']);
+    Route::get('master/tahun-akademik/aktif', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getActiveTahunAkademik']);
+    Route::get('master/tahun-akademik', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getTahunAkademikList']);
 
     // Portal Tagihan & Invoice Mahasiswa Mandiri
     Route::get('mahasiswa/payment-channels', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'paymentChannels']);

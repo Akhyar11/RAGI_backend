@@ -206,6 +206,7 @@ class ExternalTagihanController extends Controller
             'tagihan.details.masterBiaya',
             'tagihan.mahasiswa.programStudi',
             'tagihan.tipeTagihanMahasiswa',
+            'tagihan.calonMahasiswa.programStudi',
             'virtualAccount'
         ]);
 
@@ -232,8 +233,10 @@ class ExternalTagihanController extends Controller
                   ->orWhereHas('tagihan', function ($tq) use ($search) {
                       $tq->where('nomor_tagihan', 'like', "%{$search}%")
                          ->orWhere('mahasiswa_id', 'like', "%{$search}%")
-                         ->orWhereHas('mahasiswa', fn($m) => $m->where('nim', 'like', "%{$search}%")->orWhere('nama_lengkap', 'like', "%{$search}%"))
-                         ->orWhereHas('tipeTagihanMahasiswa', fn($tm) => $tm->where('nim', 'like', "%{$search}%")->orWhere('nama_mahasiswa', 'like', "%{$search}%"));
+                         ->orWhere('calon_mahasiswa_id', 'like', "%{$search}%")
+                         ->orWhereHas('mahasiswa', fn($m) => $m->where('nim', 'like', "%{$search}%")->orWhere('nama_lengkap', 'like', "%{$search}%")->orWhere('nik', 'like', "%{$search}%"))
+                         ->orWhereHas('tipeTagihanMahasiswa', fn($tm) => $tm->where('nim', 'like', "%{$search}%")->orWhere('nama_mahasiswa', 'like', "%{$search}%"))
+                         ->orWhereHas('calonMahasiswa', fn($cm) => $cm->where('no_pendaftaran', 'like', "%{$search}%")->orWhere('nama_lengkap', 'like', "%{$search}%")->orWhere('nik', 'like', "%{$search}%"));
                   });
             });
         }
@@ -246,19 +249,22 @@ class ExternalTagihanController extends Controller
             $t = $p->tagihan;
             $mhs = $t?->mahasiswa;
             $tipeMhs = $t?->tipeTagihanMahasiswa;
+            $calon = $t?->calonMahasiswa;
 
-            $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ($t?->mahasiswa_id ? (string)$t->mahasiswa_id : '-');
-            $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . ($t?->mahasiswa_id ?? '-'));
-            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? '-';
+            $nim = $mhs?->nim ?? $tipeMhs?->nim ?? $calon?->nim ?? ($calon?->no_pendaftaran ?: ($t?->mahasiswa_id ? (string)$t->mahasiswa_id : '-'));
+            $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? $calon?->nama_lengkap ?? ('Mahasiswa #' . ($t?->mahasiswa_id ?? $t?->calon_mahasiswa_id ?? '-'));
+            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? $calon?->programStudi?->nama ?? '-';
 
             $rincian = $t?->details?->map(function ($d) {
                 return $d->keterangan ?: ($d->masterBiaya->nama ?? 'Komponen Biaya');
-            })->filter()->implode(', ') ?: ($t?->catatan_approval ?? 'Tagihan Semester');
+            })->filter()->implode(', ') ?: ($t?->catatan_approval ?? 'Tagihan Mahasiswa');
 
             return [
                 'id' => $p->id,
                 'kode_transaksi' => $p->kode_transaksi,
                 'nim' => $nim,
+                'no_pendaftaran' => $calon?->no_pendaftaran,
+                'is_calon_mahasiswa' => (bool)$calon,
                 'nama_mahasiswa' => $nama,
                 'program_studi' => $prodi,
                 'rincian_pembayaran' => $rincian,
@@ -267,6 +273,7 @@ class ExternalTagihanController extends Controller
                     'id' => $t?->id,
                     'nomor_tagihan' => $t?->nomor_tagihan,
                     'mahasiswa_id' => $t?->mahasiswa_id,
+                    'calon_mahasiswa_id' => $t?->calon_mahasiswa_id,
                     'total_tagihan' => (float)($t?->total_tagihan ?? 0),
                     'total_bayar' => (float)($t?->total_bayar ?? 0),
                     'status' => $t?->status,

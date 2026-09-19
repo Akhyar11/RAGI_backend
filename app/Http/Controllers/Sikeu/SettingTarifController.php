@@ -222,7 +222,7 @@ class SettingTarifController extends Controller
      */
     public function getProgramStudiList(Request $request)
     {
-        $prodis = \App\Models\Spmb\MasterProgramStudi::orderBy('nama', 'asc')->get([
+        $prodis = \App\Models\Siakad\ProgramStudi::orderBy('nama', 'asc')->get([
             'id', 'kode_prodi', 'nama', 'jenjang', 'is_active'
         ]);
 

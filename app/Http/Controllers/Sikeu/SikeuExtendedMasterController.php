@@ -561,7 +561,8 @@ class SikeuExtendedMasterController extends Controller
             'potonganTagihan',
             'virtualAccount',
             'mahasiswa.programStudi',
-            'tipeTagihanMahasiswa'
+            'tipeTagihanMahasiswa',
+            'calonMahasiswa.programStudi',
         ]);
 
         if ($request->filled('status') && $request->status !== 'all') {
@@ -578,7 +579,10 @@ class SikeuExtendedMasterController extends Controller
 
         if ($request->filled('program_studi_id') && $request->program_studi_id !== 'all') {
             $prodiId = (int)$request->program_studi_id;
-            $query->whereHas('mahasiswa', fn($m) => $m->where('program_studi_id', $prodiId));
+            $query->where(function ($q) use ($prodiId) {
+                $q->whereHas('mahasiswa', fn($m) => $m->where('program_studi_id', $prodiId))
+                  ->orWhereHas('calonMahasiswa', fn($cm) => $cm->where('program_studi_id', $prodiId));
+            });
         }
 
         if ($request->filled('jalur_kelas') && $request->jalur_kelas !== 'all') {
@@ -591,8 +595,10 @@ class SikeuExtendedMasterController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('nomor_tagihan', 'like', "%{$search}%")
                   ->orWhere('mahasiswa_id', 'like', "%{$search}%")
-                  ->orWhereHas('mahasiswa', fn($m) => $m->where('nim', 'like', "%{$search}%")->orWhere('nama_lengkap', 'like', "%{$search}%"))
-                  ->orWhereHas('tipeTagihanMahasiswa', fn($tm) => $tm->where('nim', 'like', "%{$search}%")->orWhere('nama_mahasiswa', 'like', "%{$search}%"));
+                  ->orWhere('calon_mahasiswa_id', 'like', "%{$search}%")
+                  ->orWhereHas('mahasiswa', fn($m) => $m->where('nim', 'like', "%{$search}%")->orWhere('nama_lengkap', 'like', "%{$search}%")->orWhere('nik', 'like', "%{$search}%"))
+                  ->orWhereHas('tipeTagihanMahasiswa', fn($tm) => $tm->where('nim', 'like', "%{$search}%")->orWhere('nama_mahasiswa', 'like', "%{$search}%"))
+                  ->orWhereHas('calonMahasiswa', fn($cm) => $cm->where('no_pendaftaran', 'like', "%{$search}%")->orWhere('nama_lengkap', 'like', "%{$search}%")->orWhere('nik', 'like', "%{$search}%"));
             });
         }
 
@@ -601,26 +607,34 @@ class SikeuExtendedMasterController extends Controller
         $mapped = collect($tagihans->items())->map(function ($item) {
             $mhs = $item->mahasiswa;
             $tipe = $item->tipeTagihanMahasiswa;
+            $calon = $item->calonMahasiswa;
 
             $totalBersih = (float)($item->total_tagihan + $item->total_denda - $item->total_potongan);
             $sisa = max(0, $totalBersih - (float)$item->total_bayar);
 
+            $nim = $mhs?->nim ?? $tipe?->nim ?? $calon?->nim ?? ($calon?->no_pendaftaran ?: '-');
+            $nama = $mhs?->nama_lengkap ?? $tipe?->nama_mahasiswa ?? $calon?->nama_lengkap ?? ('Mahasiswa #' . ($item->mahasiswa_id ?? $item->calon_mahasiswa_id ?? '-'));
+            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? $calon?->programStudi?->nama ?? '-';
+            $angkatan = (int)($mhs?->angkatan ?? $tipe?->tahun_angkatan ?? date('Y'));
+            $jalur = $tipe?->jalur_kelas ?? ($mhs?->jalur_masuk ?? ($calon ? 'SPMB Baru' : 'Reguler'));
+
             return [
                 'id' => $item->id,
                 'nomor' => $item->nomor_tagihan,
-                'nim' => $mhs?->nim ?? $tipe?->nim ?? ('2024' . str_pad($item->mahasiswa_id, 4, '0', STR_PAD_LEFT)),
-                'nama' => $mhs?->nama_lengkap ?? $tipe?->nama_mahasiswa ?? ('Mahasiswa #' . $item->mahasiswa_id),
-                'angkatan' => $mhs?->angkatan ?? $tipe?->tahun_angkatan ?? 2025,
-                'jalur' => $tipe?->jalur_kelas ?? 'Reguler',
+                'nim' => $nim,
+                'no_pendaftaran' => $calon?->no_pendaftaran,
+                'nama' => $nama,
+                'angkatan' => $angkatan,
+                'jalur' => $jalur,
                 'kelompok_ukt' => 'Level ' . ($tipe?->kelompok_ukt ?? 3),
-                'prodi' => $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika',
-                'program_studi_id' => $mhs?->program_studi_id,
+                'prodi' => $prodi,
+                'program_studi_id' => $mhs?->program_studi_id ?? $calon?->program_studi_id,
                 'total' => (float)$item->total_tagihan,
                 'total_potongan' => (float)$item->total_potongan,
                 'total_bayar' => (float)$item->total_bayar,
                 'sisa' => $sisa,
                 'status' => $item->status,
-                'jatuhTempo' => $item->jatuh_tempo ? $item->jatuh_tempo->format('Y-m-d') : '2026-08-31',
+                'jatuhTempo' => $item->jatuh_tempo ? $item->jatuh_tempo->format('Y-m-d') : null,
                 'source' => $item->source_system ?? 'SIAKAD',
             ];
         });
@@ -650,6 +664,9 @@ class SikeuExtendedMasterController extends Controller
             'virtualAccounts',
             'pembayarans',
             'dispensasis',
+            'mahasiswa.programStudi',
+            'tipeTagihanMahasiswa',
+            'calonMahasiswa.programStudi',
         ])->find($id);
 
         if (!$tagihan) {
@@ -702,11 +719,13 @@ class SikeuExtendedMasterController extends Controller
 
         $mhs = $tagihan->mahasiswa;
         $tipe = $tagihan->tipeTagihanMahasiswa ?? \App\Models\Sikeu\MahasiswaTipeTagihan::where('mahasiswa_id', $tagihan->mahasiswa_id)->first();
-        $nim = $mhs?->nim ?? $tipe?->nim ?? ('2024' . str_pad($tagihan->mahasiswa_id, 4, '0', STR_PAD_LEFT));
-        $nama = $mhs?->nama_lengkap ?? $tipe?->nama_mahasiswa ?? ('Mahasiswa #' . $tagihan->mahasiswa_id);
-        $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika';
-        $angkatan = (int)($mhs?->angkatan ?? $tipe?->tahun_angkatan ?? 2025);
-        $semester = !empty($tagihan->catatan_approval) ? str_replace('Tagihan masal ', '', $tagihan->catatan_approval) : 'Semester Ganjil 2026/2027';
+        $calon = $tagihan->calonMahasiswa;
+
+        $nim = $mhs?->nim ?? $tipe?->nim ?? $calon?->nim ?? ($calon?->no_pendaftaran ?: '-');
+        $nama = $mhs?->nama_lengkap ?? $tipe?->nama_mahasiswa ?? $calon?->nama_lengkap ?? ('Mahasiswa #' . ($tagihan->mahasiswa_id ?? $tagihan->calon_mahasiswa_id ?? '-'));
+        $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? $calon?->programStudi?->nama ?? '-';
+        $angkatan = (int)($mhs?->angkatan ?? $tipe?->tahun_angkatan ?? date('Y'));
+        $semester = !empty($tagihan->catatan_approval) ? str_replace('Tagihan masal ', '', $tagihan->catatan_approval) : 'Tagihan Berjalan';
 
         return response()->json([
             'status' => 'success',
@@ -714,10 +733,12 @@ class SikeuExtendedMasterController extends Controller
                 'id' => $tagihan->id,
                 'nomor_tagihan' => $tagihan->nomor_tagihan,
                 'mahasiswa_id' => $tagihan->mahasiswa_id,
+                'calon_mahasiswa_id' => $tagihan->calon_mahasiswa_id,
+                'no_pendaftaran' => $calon?->no_pendaftaran,
                 'nim' => $nim,
                 'nama_mahasiswa' => $nama,
                 'tahun_angkatan' => $angkatan,
-                'jalur_kelas' => $tipe?->jalur_kelas ?? 'Reguler',
+                'jalur_kelas' => $tipe?->jalur_kelas ?? ($calon ? 'SPMB Baru' : 'Reguler'),
                 'program_studi' => $prodi,
                 'semester' => $semester,
                 'kelompok_ukt' => 'Level ' . ($tipe?->kelompok_ukt ?? 3),
@@ -727,7 +748,7 @@ class SikeuExtendedMasterController extends Controller
                 'total_bayar' => (float)$tagihan->total_bayar,
                 'sisa_tagihan' => $sisaTagihan,
                 'status' => $tagihan->status,
-                'jatuh_tempo' => $tagihan->jatuh_tempo ? (is_object($tagihan->jatuh_tempo) ? $tagihan->jatuh_tempo->format('Y-m-d') : (string)$tagihan->jatuh_tempo) : '2026-08-31',
+                'jatuh_tempo' => $tagihan->jatuh_tempo ? (is_object($tagihan->jatuh_tempo) ? $tagihan->jatuh_tempo->format('Y-m-d') : (string)$tagihan->jatuh_tempo) : null,
                 'source_system' => $tagihan->source_system ?? 'SIAKAD',
                 'details' => $itemsMapped,
                 'grouped_details' => $groupedDetails,
