@@ -464,7 +464,7 @@ Route::middleware('auth:api')->prefix('sippm')->group(function () {
 | SIKEU (Keuangan, Akuntansi, & Pajak) Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
+Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->prefix('v1/sikeu')->group(function () {
     // API Tagihan Eksternal (SPMB, SIAKAD, SIMPEG, SIPPM)
     Route::post('tagihan/external', [App\Http\Controllers\Sikeu\ExternalTagihanController::class, 'createExternalBill']);
 
@@ -627,6 +627,7 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
 
     // SPMB Payment Callback / Webhook Integration
     Route::post('callback/spmb/{calonMahasiswaId}', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'handleSpmbPaymentCallback']);
+    Route::post('callback/va-paid', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'vaPaymentCallback']);
     Route::get('checkout/lookup-va', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'lookupVa']);
 
     // Dashboard Executive Summary & Live Xendit Balance

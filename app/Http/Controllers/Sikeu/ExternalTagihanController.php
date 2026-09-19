@@ -247,9 +247,9 @@ class ExternalTagihanController extends Controller
             $mhs = $t?->mahasiswa;
             $tipeMhs = $t?->tipeTagihanMahasiswa;
 
-            $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($t?->mahasiswa_id ?? 1, 4, '0', STR_PAD_LEFT));
-            $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . ($t?->mahasiswa_id ?? 1));
-            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika';
+            $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ($t?->mahasiswa_id ? (string)$t->mahasiswa_id : '-');
+            $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . ($t?->mahasiswa_id ?? '-'));
+            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? '-';
 
             $rincian = $t?->details?->map(function ($d) {
                 return $d->keterangan ?: ($d->masterBiaya->nama ?? 'Komponen Biaya');

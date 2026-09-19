@@ -46,6 +46,7 @@ class Mahasiswa extends Model
         'angkatan',
         'tanggal_masuk',
         'jalur_masuk',
+        'kelompok_ukt',
         'jenis_pendaftaran',
         'status',
         'dosen_wali_id',
@@ -58,6 +59,7 @@ class Mahasiswa extends Model
         'tanggal_lahir' => 'date',
         'tanggal_masuk' => 'date',
         'angkatan' => 'integer',
+        'kelompok_ukt' => 'integer',
     ];
 
     protected $appends = ['ipk'];

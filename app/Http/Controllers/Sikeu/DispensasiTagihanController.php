@@ -125,6 +125,9 @@ class DispensasiTagihanController extends Controller
             'diajukan_oleh' => auth()->id() ?? $tagihan->mahasiswa_id,
         ]);
 
+        // Update status tagihan menjadi dispensasi
+        $tagihan->update(['status' => 'dispensasi']);
+
         return response()->json([
             'status' => 'success',
             'message' => 'Permohonan dispensasi pembayaran berhasil diajukan dan menunggu approval pimpinan.',

@@ -90,12 +90,14 @@ class PendaftaranCalonMhs extends Model
         'ipk_pt',
         'nim_pt',
         'tahun_lulus_pt',
+        'kelompok_ukt',
     ];
 
     protected $casts = [
         'tanggal_lahir' => 'date',
         'diverifikasi_at' => 'datetime',
         'nilai_rata_rapor' => 'decimal:2',
+        'kelompok_ukt' => 'integer',
     ];
 
     public function gelombangPenerimaan()
@@ -135,7 +137,7 @@ class PendaftaranCalonMhs extends Model
 
     public function tipeJalur()
     {
-        return $this->belongsTo(\App\Models\Spmb\MasterTipeJalur::class, 'master_tipe_jalur_id');
+        return $this->belongsTo(\App\Models\MasterTipeJalur::class, 'master_tipe_jalur_id');
     }
 
     public function tipe_jalur()

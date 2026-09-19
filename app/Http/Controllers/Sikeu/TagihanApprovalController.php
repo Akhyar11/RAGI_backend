@@ -57,7 +57,12 @@ class TagihanApprovalController extends Controller
 
             // Generate VA if not created
             if ($tagihan->virtualAccounts()->count() === 0) {
-                $vaNumber = '888' . date('ymd') . str_pad($tagihan->id, 5, '0', STR_PAD_LEFT);
+                $mhsNim = $tagihan->mahasiswa?->nim ?? $tagihan->tipeTagihanMahasiswa?->nim ?? $tagihan->mahasiswa_id;
+                $cleanId = preg_replace('/[^0-9]/', '', (string)$mhsNim);
+                if (empty($cleanId)) {
+                    $cleanId = str_pad($tagihan->id, 8, '0', STR_PAD_LEFT);
+                }
+                $vaNumber = '88012' . $cleanId;
                 $sisaTagihan = max(0, (float) $tagihan->total_tagihan + (float) $tagihan->total_denda - (float) $tagihan->total_potongan - (float) $tagihan->total_bayar);
                 VirtualAccount::create([
                     'tagihan_id' => $tagihan->id,
@@ -93,21 +98,33 @@ class TagihanApprovalController extends Controller
      */
     public function rejectTagihan(Request $request, $id)
     {
-        $tagihan = TagihanMahasiswa::findOrFail($id);
+        try {
+            DB::beginTransaction();
 
-        $tagihan->update([
-            'status' => 'batal',
-            'status_approval' => 'rejected',
-            'disetujui_oleh' => auth()->id() ?? 1,
-            'tanggal_approval' => now(),
-            'catatan_approval' => $request->input('catatan', 'Ditolak oleh pimpinan'),
-        ]);
+            $tagihan = TagihanMahasiswa::findOrFail($id);
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Tagihan eksternal ditolak oleh pimpinan.',
-            'data' => $tagihan
-        ]);
+            $tagihan->update([
+                'status' => 'batal',
+                'status_approval' => 'rejected',
+                'disetujui_oleh' => auth()->id() ?? 1,
+                'tanggal_approval' => now(),
+                'catatan_approval' => $request->input('catatan', 'Ditolak oleh pimpinan'),
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Tagihan eksternal ditolak oleh pimpinan.',
+                'data' => $tagihan
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal menolak tagihan: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -158,19 +175,39 @@ class TagihanApprovalController extends Controller
      */
     public function rejectDispensasi(Request $request, $id)
     {
-        $dispensasi = DispensasiTagihan::findOrFail($id);
+        try {
+            DB::beginTransaction();
 
-        $dispensasi->update([
-            'status' => 'rejected',
-            'disetujui_oleh' => auth()->id() ?? 1,
-            'tanggal_persetujuan' => now(),
-            'catatan_pimpinan' => $request->input('catatan', 'Dispensasi pembayaran ditolak oleh pimpinan.'),
-        ]);
+            $dispensasi = DispensasiTagihan::with('tagihan')->findOrFail($id);
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Permohonan dispensasi pembayaran ditolak oleh pimpinan.',
-            'data' => $dispensasi
-        ]);
+            $dispensasi->update([
+                'status' => 'rejected',
+                'disetujui_oleh' => auth()->id() ?? 1,
+                'tanggal_persetujuan' => now(),
+                'catatan_pimpinan' => $request->input('catatan', 'Dispensasi pembayaran ditolak oleh pimpinan.'),
+            ]);
+
+            // Revert status tagihan kembali ke belum_bayar / sebagian jika tagihan berstatus dispensasi
+            $tagihan = $dispensasi->tagihan;
+            if ($tagihan && $tagihan->status === 'dispensasi') {
+                $totalBersih = (float)($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan);
+                $newStatus = (float)$tagihan->total_bayar >= $totalBersih ? 'lunas' : ((float)$tagihan->total_bayar > 0 ? 'sebagian' : 'belum_bayar');
+                $tagihan->update(['status' => $newStatus]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Permohonan dispensasi pembayaran ditolak oleh pimpinan.',
+                'data' => $dispensasi
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal menolak dispensasi: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

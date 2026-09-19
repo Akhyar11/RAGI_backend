@@ -540,25 +540,112 @@ class SikeuMasterController extends Controller
 
     public function indexStudentBillingTypes(Request $request)
     {
-        $perPage = min(100, $request->integer('per_page', 15));
-        $query = \App\Models\Sikeu\MahasiswaTipeTagihan::query();
+        // Auto-sinkronisasi transparan: pastikan setiap mahasiswa di SIAKAD memiliki entitas tipe tagihan di SIKEU
+        try {
+            $unsyncedMhs = \App\Models\Siakad\Mahasiswa::whereNotIn('id', function ($q) {
+                $q->select('mahasiswa_id')->from('sikeu_mahasiswa_tipe_tagihan')->whereNotNull('mahasiswa_id');
+            })->get();
 
-        if ($request->filled('q')) {
-            $search = $request->q;
-            $query->where('nama_mahasiswa', 'like', "%{$search}%")
-                  ->orWhere('nim', 'like', "%{$search}%");
+            foreach ($unsyncedMhs as $m) {
+                \App\Models\Sikeu\MahasiswaTipeTagihan::create([
+                    'mahasiswa_id' => $m->id,
+                    'nim' => $m->nim ?? ('NIM-' . $m->id),
+                    'nama_mahasiswa' => $m->nama_lengkap ?? ('Mahasiswa #' . $m->id),
+                    'tahun_angkatan' => $m->angkatan ?? (int)date('Y'),
+                    'jalur_kelas' => !empty($m->jalur_masuk) ? $m->jalur_masuk : 'Reguler',
+                    'kelompok_ukt' => $m->kelompok_ukt ?? 3,
+                    'status_pendaftaran' => $m->status ?? 'AKTIF',
+                    'catatan_perubahan' => 'Sinkronisasi otomatis sistem terintegrasi',
+                ]);
+            }
+        } catch (\Throwable $e) {
+            // Lanjutkan jika ada pengecualian minor
         }
 
-        $data = $query->orderBy('id', 'desc')->paginate($perPage);
+        $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+        $query = \App\Models\Sikeu\MahasiswaTipeTagihan::with(['mahasiswa.programStudi', 'beasiswa.beasiswa']);
+
+        // 1. Filter Pencarian Nama / NIM
+        if ($request->filled('q') || $request->filled('search')) {
+            $term = $request->input('q') ?: $request->input('search');
+            $query->where(function ($sq) use ($term) {
+                $sq->where('nama_mahasiswa', 'like', "%{$term}%")
+                   ->orWhere('nim', 'like', "%{$term}%");
+            });
+        }
+
+        // 2. Filter Tahun Angkatan
+        if ($request->filled('angkatan') || $request->filled('tahun_angkatan')) {
+            $angkatan = $request->input('angkatan') ?: $request->input('tahun_angkatan');
+            $query->where('tahun_angkatan', (int)$angkatan);
+        }
+
+        // 3. Filter Program Studi
+        if ($request->filled('program_studi_id') || $request->filled('prodi_id')) {
+            $prodiId = (int)($request->input('program_studi_id') ?: $request->input('prodi_id'));
+            $query->whereHas('mahasiswa', function ($mq) use ($prodiId) {
+                $mq->where('program_studi_id', $prodiId);
+            });
+        }
+
+        // 4. Filter Jalur Kelas
+        if ($request->filled('jalur_kelas')) {
+            $query->where('jalur_kelas', $request->input('jalur_kelas'));
+        }
+
+        // 5. Filter Golongan UKT
+        if ($request->filled('kelompok_ukt')) {
+            $query->where('kelompok_ukt', (int)$request->input('kelompok_ukt'));
+        }
+
+        // 6. Sorting
+        $sortBy = $request->input('sort_by', $request->input('orderBy', 'id'));
+        $sortDir = strtolower($request->input('sort_dir', $request->input('orderDir', 'desc'))) === 'asc' ? 'asc' : 'desc';
+        $allowedSort = ['id', 'nim', 'nama_mahasiswa', 'tahun_angkatan', 'jalur_kelas', 'kelompok_ukt'];
+        if (!in_array($sortBy, $allowedSort)) {
+            $sortBy = 'id';
+        }
+        $query->orderBy($sortBy, $sortDir);
+
+        $data = $query->paginate($perPage);
+
+        $items = $data->getCollection()->map(function ($item) {
+            $prodiNama = $item->mahasiswa?->programStudi?->nama ?? null;
+            $prodiJenjang = $item->mahasiswa?->programStudi?->jenjang ?? null;
+            $prodiText = $prodiNama ? ($prodiJenjang ? "{$prodiJenjang} {$prodiNama}" : $prodiNama) : null;
+
+            return [
+                'id' => $item->id,
+                'mahasiswa_id' => $item->mahasiswa_id,
+                'nim' => $item->nim,
+                'nama_mahasiswa' => $item->nama_mahasiswa,
+                'tahun_angkatan' => $item->tahun_angkatan,
+                'jalur_kelas' => $item->jalur_kelas,
+                'kelompok_ukt' => $item->kelompok_ukt,
+                'status_pendaftaran' => $item->status_pendaftaran,
+                'catatan_perubahan' => $item->catatan_perubahan,
+                'program_studi_id' => $item->mahasiswa?->program_studi_id,
+                'prodi' => $prodiText,
+                'beasiswa' => $item->beasiswa ? [
+                    'id' => $item->beasiswa->id,
+                    'nama' => $item->beasiswa->beasiswa?->nama ?? 'Beasiswa',
+                    'kode' => $item->beasiswa->beasiswa?->kode,
+                ] : null,
+                'created_at' => $item->created_at,
+                'updated_at' => $item->updated_at,
+            ];
+        });
 
         return response()->json([
             'status' => 'success',
-            'data' => $data->items(),
+            'data' => $items,
             'meta' => [
                 'current_page' => $data->currentPage(),
                 'per_page' => $data->perPage(),
                 'total' => $data->total(),
                 'last_page' => $data->lastPage(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem(),
             ]
         ]);
     }
@@ -576,21 +663,27 @@ class SikeuMasterController extends Controller
             return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
         }
 
+        $kelompokUkt = (int)$request->kelompok_ukt;
+        $jalurKelas = $request->jalur_kelas;
+
         $item = \App\Models\Sikeu\MahasiswaTipeTagihan::updateOrCreate(
             ['mahasiswa_id' => $request->mahasiswa_id],
             [
                 'nim' => $request->nim ?? ('NIM-' . $request->mahasiswa_id),
                 'nama_mahasiswa' => $request->nama_mahasiswa ?? ('Mahasiswa #' . $request->mahasiswa_id),
                 'tahun_angkatan' => $request->tahun_angkatan,
-                'jalur_kelas' => $request->jalur_kelas,
-                'kelompok_ukt' => $request->kelompok_ukt,
+                'jalur_kelas' => $jalurKelas,
+                'kelompok_ukt' => $kelompokUkt,
                 'catatan_perubahan' => $request->catatan_perubahan ?? 'Penetapan tipe tagihan',
             ]
         );
 
+        // Otomatis sinkronkan ke SIAKAD & SPMB
+        $this->syncStudentTypeToSiakadAndSpmb($item, $kelompokUkt, $jalurKelas);
+
         return response()->json([
             'status' => 'success',
-            'message' => 'Tipe tagihan mahasiswa berhasil ditetapkan',
+            'message' => 'Tipe tagihan mahasiswa berhasil ditetapkan dan disinkronkan ke SIAKAD & SPMB',
             'data' => $item
         ]);
     }
@@ -598,17 +691,82 @@ class SikeuMasterController extends Controller
     public function updateStudentBillingType(Request $request, $id)
     {
         $item = \App\Models\Sikeu\MahasiswaTipeTagihan::findOrFail($id);
-        $item->update($request->only([
-            'jalur_kelas',
-            'kelompok_ukt',
-            'catatan_perubahan'
-        ]));
+
+        $kelompokUkt = $request->filled('kelompok_ukt') ? (int)$request->kelompok_ukt : $item->kelompok_ukt;
+        $jalurKelas = $request->filled('jalur_kelas') ? $request->jalur_kelas : $item->jalur_kelas;
+
+        $item->update([
+            'jalur_kelas' => $jalurKelas,
+            'kelompok_ukt' => $kelompokUkt,
+            'catatan_perubahan' => $request->input('catatan_perubahan', $item->catatan_perubahan),
+        ]);
+
+        // Otomatis sinkronkan ke SIAKAD & SPMB
+        $this->syncStudentTypeToSiakadAndSpmb($item, $kelompokUkt, $jalurKelas);
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Tipe tagihan mahasiswa berhasil diperbarui',
+            'message' => 'Tipe tagihan mahasiswa berhasil diperbarui dan disinkronkan ke SIAKAD & SPMB',
             'data' => $item
         ]);
+    }
+
+    /**
+     * Helper internal: sinkronisasi otomatis tipe golongan & jalur ke SIAKAD dan SPMB
+     */
+    protected function syncStudentTypeToSiakadAndSpmb(\App\Models\Sikeu\MahasiswaTipeTagihan $item, int $kelompokUkt, string $jalurKelas): void
+    {
+        // 1. Sinkronisasi ke SIAKAD (siakad_mahasiswa)
+        $mhs = null;
+        if (!empty($item->mahasiswa_id)) {
+            $mhs = \App\Models\Siakad\Mahasiswa::find($item->mahasiswa_id);
+        }
+        if (!$mhs && !empty($item->nim)) {
+            $mhs = \App\Models\Siakad\Mahasiswa::where('nim', $item->nim)->first();
+        }
+
+        if ($mhs) {
+            $updateSiakad = [];
+            if (\Illuminate\Support\Facades\Schema::hasColumn('siakad_mahasiswa', 'kelompok_ukt')) {
+                $updateSiakad['kelompok_ukt'] = $kelompokUkt;
+            }
+            if (!empty($jalurKelas) && \Illuminate\Support\Facades\Schema::hasColumn('siakad_mahasiswa', 'jalur_masuk')) {
+                $updateSiakad['jalur_masuk'] = $jalurKelas;
+            }
+            if (!empty($updateSiakad)) {
+                $mhs->update($updateSiakad);
+            }
+        }
+
+        // 2. Sinkronisasi ke SPMB (spmb_pendaftaran_calon_mhs)
+        $pendaftaran = null;
+        if (!empty($item->nim)) {
+            $pendaftaran = \App\Models\Spmb\PendaftaranCalonMhs::where('nim', $item->nim)->first();
+        }
+        if (!$pendaftaran && $mhs && !empty($mhs->user_id)) {
+            $pendaftaran = \App\Models\Spmb\PendaftaranCalonMhs::where('user_id', $mhs->user_id)->first();
+        }
+        if (!$pendaftaran && $mhs && !empty($mhs->nik)) {
+            $pendaftaran = \App\Models\Spmb\PendaftaranCalonMhs::where('nik', $mhs->nik)->first();
+        }
+
+        if ($pendaftaran) {
+            $updateSpmb = [];
+            if (\Illuminate\Support\Facades\Schema::hasColumn('spmb_pendaftaran_calon_mhs', 'kelompok_ukt')) {
+                $updateSpmb['kelompok_ukt'] = $kelompokUkt;
+            }
+            if (!empty($jalurKelas)) {
+                $tipeJalur = \App\Models\MasterTipeJalur::where('nama', $jalurKelas)
+                    ->orWhere('kode', strtolower($jalurKelas))
+                    ->first();
+                if ($tipeJalur) {
+                    $updateSpmb['master_tipe_jalur_id'] = $tipeJalur->id;
+                }
+            }
+            if (!empty($updateSpmb)) {
+                $pendaftaran->update($updateSpmb);
+            }
+        }
     }
 
     /**
@@ -635,7 +793,7 @@ class SikeuMasterController extends Controller
                     'nama_mahasiswa' => $mhs->nama_lengkap ?? ('Mahasiswa #' . $mhs->id),
                     'tahun_angkatan' => $mhs->angkatan ?? (int)date('Y'),
                     'jalur_kelas' => !empty($mhs->jalur_masuk) ? $mhs->jalur_masuk : 'Reguler',
-                    'kelompok_ukt' => 3, // default golongan UKT 3
+                    'kelompok_ukt' => $mhs->kelompok_ukt ?? 3,
                     'status_pendaftaran' => $mhs->status ?? 'AKTIF',
                     'catatan_perubahan' => 'Sinkronisasi otomatis master SIAKAD/SPMB',
                 ]

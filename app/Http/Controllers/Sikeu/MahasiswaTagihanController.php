@@ -48,8 +48,8 @@ class MahasiswaTagihanController extends Controller
 
             // 3. Check by Email
             if (!empty($user->email)) {
-                $tipeByEmail = MahasiswaTipeTagihan::where('nama_mahasiswa', 'like', "%{$user->username}%")->first();
-                if ($tipeByEmail) return $tipeByEmail->mahasiswa_id;
+                $mhsByEmail = \App\Models\Siakad\Mahasiswa::where('email', $user->email)->first();
+                if ($mhsByEmail) return $mhsByEmail->id;
             }
 
             // 4. Check if user has direct Tagihan
@@ -145,9 +145,9 @@ class MahasiswaTagihanController extends Controller
                 'bank_nama' => $t->virtualAccount->bank_nama ?? 'Bank BNI',
                 'mahasiswa' => [
                     'nama' => $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $t->mahasiswa_id),
-                    'nim' => $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($t->mahasiswa_id, 4, '0', STR_PAD_LEFT)),
-                    'prodi' => $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika',
-                    'angkatan' => $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? 2023,
+                    'nim' => $mhs?->nim ?? $tipeMhs?->nim ?? ($t->mahasiswa_id ? (string)$t->mahasiswa_id : '-'),
+                    'prodi' => $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? '-',
+                    'angkatan' => $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? null,
                 ],
                 'details' => $t->details->map(function ($d) {
                     return [
@@ -353,8 +353,8 @@ class MahasiswaTagihanController extends Controller
             'mahasiswa' => [
                 'nama' => $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $tagihan->mahasiswa_id),
                 'nim' => $nim,
-                'prodi' => $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika',
-                'angkatan' => $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? 2024,
+                'prodi' => $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? '-',
+                'angkatan' => $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? null,
             ],
             'virtual_account' => [
                 'bank' => $tagihan->virtualAccount->bank_nama ?? ('Bank ' . $bankCode),
@@ -430,10 +430,10 @@ class MahasiswaTagihanController extends Controller
         $mhs = $firstTagihan->mahasiswa;
         $tipeMhs = $firstTagihan->tipeTagihanMahasiswa;
 
-        $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($mahasiswaId, 4, '0', STR_PAD_LEFT));
+        $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ($mahasiswaId ? (string)$mahasiswaId : '-');
         $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $mahasiswaId);
-        $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika';
-        $angkatan = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? 2023;
+        $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? '-';
+        $angkatan = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? null;
 
         $totalTagihan = 0;
         $totalPotongan = 0;
@@ -512,7 +512,7 @@ class MahasiswaTagihanController extends Controller
 
     /**
      * POST /api/v1/sikeu/mahasiswa/pay-bills
-     * Process student self-payment for all or selected bills
+     * Process student self-payment initiation or simulation for all or selected bills
      */
     public function payBills(Request $request)
     {
@@ -522,6 +522,7 @@ class MahasiswaTagihanController extends Controller
             'channel_bayar' => 'nullable|string',
             'bank_kode' => 'nullable|string',
             'catatan' => 'nullable|string|max:255',
+            'simulate' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -556,7 +557,9 @@ class MahasiswaTagihanController extends Controller
 
             $bankKode = strtoupper($request->input('bank_kode', 'BNI'));
             $channel = $request->input('channel_bayar', 'VA_' . $bankKode);
+            $isSimulation = $request->boolean('simulate', false);
             $createdPayments = [];
+            $virtualAccounts = [];
             $totalPaidAll = 0;
 
             foreach ($tagihans as $tagihan) {
@@ -564,73 +567,90 @@ class MahasiswaTagihanController extends Controller
                 $sisa = max(0, $totalBersih - (float)$tagihan->total_bayar);
 
                 if ($sisa <= 0) {
-                    continue; // Already paid
+                    continue; // Sudah lunas
                 }
 
                 $prefixTrx = str_starts_with($channel, 'VA_') ? 'VA' : (str_starts_with($channel, 'QRIS') ? 'QRS' : 'XND');
                 $trxCode = 'TRX-' . $prefixTrx . '-' . date('Ymd') . '-' . Str::upper(Str::random(5));
 
-                // Update / create Virtual Account if matched
-                if (!$tagihan->virtualAccount || $tagihan->virtualAccount->bank_kode !== $bankKode) {
-                    $mhsNim = $tagihan->mahasiswa?->nim ?? $tagihan->tipeTagihanMahasiswa?->nim ?? $tagihan->mahasiswa_id;
-                    $expectedVaNumber = $this->computeVaNumber($bankKode, $mhsNim);
-                    $va = VirtualAccount::updateOrCreate(
-                        ['tagihan_id' => $tagihan->id],
-                        [
-                            'va_number' => $expectedVaNumber,
-                            'bank_kode' => $bankKode,
-                            'bank_nama' => $bankKode === 'QRIS' ? 'QRIS Indonesia' : ('Bank ' . $bankKode),
-                            'nominal' => $sisa,
-                            'expired_at' => now()->addDays(30),
-                            'status' => 'dibayar',
-                        ]
-                    );
-                    $tagihan->load('virtualAccount');
-                } else {
-                    $tagihan->virtualAccount->update(['status' => 'dibayar']);
-                }
+                // Update / create Virtual Account
+                $mhsNim = $tagihan->mahasiswa?->nim ?? $tagihan->tipeTagihanMahasiswa?->nim ?? $tagihan->mahasiswa_id;
+                $expectedVaNumber = $this->computeVaNumber($bankKode, $mhsNim);
+                $vaStatus = $isSimulation ? 'dibayar' : 'aktif';
 
-                $pembayaran = Pembayaran::create([
-                    'tagihan_id' => $tagihan->id,
-                    'virtual_account_id' => $tagihan->virtualAccount?->id,
-                    'kode_transaksi' => $trxCode,
-                    'jumlah_bayar' => $sisa,
-                    'waktu_bayar' => now(),
-                    'channel_bayar' => $channel,
-                    'bank_pengirim' => $bankKode,
-                    'status' => 'success',
-                    'diverifikasi_oleh' => auth()->id() ?? 1,
-                    'catatan' => $request->input('catatan', 'Pelunasan Mandiri Mahasiswa via ' . $channel),
-                ]);
+                $va = VirtualAccount::updateOrCreate(
+                    ['tagihan_id' => $tagihan->id],
+                    [
+                        'va_number' => $expectedVaNumber,
+                        'bank_kode' => $bankKode,
+                        'bank_nama' => $bankKode === 'QRIS' ? 'QRIS Indonesia' : ('Bank ' . $bankKode),
+                        'nominal' => $sisa,
+                        'expired_at' => now()->addDays(30),
+                        'status' => $vaStatus,
+                    ]
+                );
+                $tagihan->load('virtualAccount');
 
-                // Update Tagihan
-                $tagihan->total_bayar = (float)$tagihan->total_bayar + $sisa;
-                $tagihan->status = 'lunas';
-                $tagihan->save();
-
-                // Auto Jurnal Akuntansi via shared service (satu-satunya penulis jurnal pembayaran)
-                \App\Services\Sikeu\AutoJournalService::recordStudentPaymentJournal($tagihan, (float) $sisa);
-
-                $totalPaidAll += $sisa;
-                $createdPayments[] = [
-                    'kode_transaksi' => $trxCode,
+                $virtualAccounts[] = [
                     'tagihan_id' => $tagihan->id,
                     'nomor_tagihan' => $tagihan->nomor_tagihan,
-                    'jumlah_bayar' => $sisa,
-                    'channel' => $channel,
+                    'va_number' => $va->va_number,
+                    'bank_nama' => $va->bank_nama,
                     'bank_kode' => $bankKode,
+                    'nominal' => $sisa,
+                    'expired_at' => $va->expired_at ? $va->expired_at->format('Y-m-d H:i:s') : null,
+                    'status' => $vaStatus,
                 ];
+
+                // Jika simulasi pembayaran langsung (sandbox mode)
+                if ($isSimulation) {
+                    $pembayaran = Pembayaran::create([
+                        'tagihan_id' => $tagihan->id,
+                        'virtual_account_id' => $va->id,
+                        'kode_transaksi' => $trxCode,
+                        'jumlah_bayar' => $sisa,
+                        'waktu_bayar' => now(),
+                        'channel_bayar' => $channel,
+                        'bank_pengirim' => $bankKode,
+                        'status' => 'success',
+                        'diverifikasi_oleh' => auth()->id() ?? 1,
+                        'catatan' => $request->input('catatan', 'Pelunasan Mandiri via ' . $channel . ' (Simulasi Sandbox)'),
+                    ]);
+
+                    $tagihan->total_bayar = (float)$tagihan->total_bayar + $sisa;
+                    $tagihan->status = 'lunas';
+                    $tagihan->save();
+
+                    \App\Services\Sikeu\AutoJournalService::recordStudentPaymentJournal($tagihan, (float) $sisa);
+
+                    $createdPayments[] = [
+                        'kode_transaksi' => $trxCode,
+                        'tagihan_id' => $tagihan->id,
+                        'nomor_tagihan' => $tagihan->nomor_tagihan,
+                        'jumlah_bayar' => $sisa,
+                        'channel' => $channel,
+                        'bank_kode' => $bankKode,
+                    ];
+                }
+
+                $totalPaidAll += $sisa;
             }
 
             DB::commit();
 
+            $message = $isSimulation
+                ? 'Simulasi pembayaran via ' . $channel . ' berhasil diverifikasi lunas!'
+                : 'Virtual Account ' . $bankKode . ' berhasil diterbitkan. Silakan lakukan pembayaran ke nomor VA sebelum batas tempo.';
+
             return response()->json([
                 'status' => 'success',
-                'message' => 'Pembayaran tagihan via ' . $channel . ' berhasil diproses dan diverifikasi lunas!',
+                'message' => $message,
                 'data' => [
                     'total_paid' => $totalPaidAll,
                     'channel' => $channel,
                     'bank_kode' => $bankKode,
+                    'is_simulation' => $isSimulation,
+                    'virtual_accounts' => $virtualAccounts,
                     'payments' => $createdPayments,
                 ]
             ]);
@@ -639,6 +659,110 @@ class MahasiswaTagihanController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Gagal memproses pembayaran: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * POST /api/v1/sikeu/callback/va-paid
+     * Webhook / Callback handler from Bank / Payment Gateway when a student pays their Virtual Account.
+     */
+    public function vaPaymentCallback(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'va_number' => 'required|string',
+            'nominal' => 'required|numeric|min:1',
+            'status' => 'required|in:paid,success,settlement',
+            'order_id' => 'nullable|string',
+            'bank_kode' => 'nullable|string',
+            'channel' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validasi webhook callback VA gagal.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $vaNumber = $request->input('va_number');
+            $nominal = (float)$request->input('nominal');
+            $orderId = $request->input('order_id', 'TRX-VA-' . date('Ymd') . '-' . Str::upper(Str::random(5)));
+            $bankKode = strtoupper($request->input('bank_kode', 'BNI'));
+            $channel = $request->input('channel', 'VA_' . $bankKode);
+
+            // Idempotency check
+            $existing = Pembayaran::where('kode_transaksi', $orderId)->first();
+            if ($existing) {
+                DB::commit();
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Pembayaran sudah pernah diproses sebelumnya (idempotent).',
+                    'data' => [
+                        'pembayaran' => $existing,
+                        'tagihan' => $existing->tagihan,
+                    ]
+                ]);
+            }
+
+            $va = VirtualAccount::with('tagihan')->where('va_number', $vaNumber)->first();
+            if (!$va || !$va->tagihan) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Virtual account {$vaNumber} tidak ditemukan dalam sistem.",
+                ], 404);
+            }
+
+            $tagihan = $va->tagihan;
+            $va->update(['status' => 'dibayar']);
+
+            $pembayaran = Pembayaran::create([
+                'tagihan_id' => $tagihan->id,
+                'virtual_account_id' => $va->id,
+                'kode_transaksi' => $orderId,
+                'jumlah_bayar' => $nominal,
+                'waktu_bayar' => now(),
+                'channel_bayar' => $channel,
+                'bank_pengirim' => $bankKode,
+                'status' => 'success',
+                'diverifikasi_oleh' => auth()->id() ?? 1,
+                'catatan' => 'Pelunasan via Webhook Bank ' . $bankKode . ' (VA: ' . $vaNumber . ')',
+            ]);
+
+            // Update Tagihan
+            $newTotalBayar = (float)$tagihan->total_bayar + $nominal;
+            $totalBersih = (float)($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan);
+            $newStatus = $newTotalBayar >= $totalBersih ? 'lunas' : ($newTotalBayar > 0 ? 'sebagian' : 'belum_bayar');
+
+            $tagihan->update([
+                'total_bayar' => $newTotalBayar,
+                'status' => $newStatus,
+            ]);
+
+            // Auto Jurnal Akuntansi
+            \App\Services\Sikeu\AutoJournalService::recordStudentPaymentJournal($tagihan, $nominal);
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Callback pembayaran VA berhasil diproses. Tagihan dinyatakan lunas.',
+                'data' => [
+                    'pembayaran' => $pembayaran,
+                    'tagihan' => $tagihan->fresh(),
+                ]
+            ]);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal memproses callback VA: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -695,10 +819,10 @@ class MahasiswaTagihanController extends Controller
                 'status' => $p->status,
                 'catatan' => $p->catatan,
                 'mahasiswa' => [
-                    'nama' => $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . ($t?->mahasiswa_id ?? 1)),
-                    'nim' => $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($t?->mahasiswa_id ?? 1, 4, '0', STR_PAD_LEFT)),
-                    'prodi' => $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika',
-                    'angkatan' => $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? 2023,
+                    'nama' => $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . ($t?->mahasiswa_id ?? '-')),
+                    'nim' => $mhs?->nim ?? $tipeMhs?->nim ?? ($t?->mahasiswa_id ? (string)$t->mahasiswa_id : '-'),
+                    'prodi' => $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? '-',
+                    'angkatan' => $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? null,
                 ],
                 'details' => $t?->details?->map(function ($d) {
                     return [

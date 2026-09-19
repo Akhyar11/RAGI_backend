@@ -21,6 +21,26 @@ class SikeuExtendedMasterController extends Controller
 
     public function indexJalurKelas()
     {
+        // Mengambil data master jalur dari Modul SPMB (MasterTipeJalur) secara terintegrasi
+        try {
+            $spmbJalur = \App\Models\MasterTipeJalur::orderBy('id', 'asc')->get();
+            if ($spmbJalur->isNotEmpty()) {
+                $data = $spmbJalur->map(function ($item) {
+                    return [
+                        'id' => $item->id,
+                        'kode' => strtoupper($item->kode),
+                        'nama_jalur' => $item->nama,
+                        'deskripsi' => 'Dikonfigurasi terpusat melalui Modul SPMB',
+                        'is_active' => true,
+                        'sumber' => 'SPMB',
+                    ];
+                });
+                return response()->json(['status' => 'success', 'data' => $data]);
+            }
+        } catch (\Throwable $e) {
+            // Fallback ke tabel sikeu jika diperlukan
+        }
+
         $data = JalurKelas::orderBy('id', 'asc')->get();
         return response()->json(['status' => 'success', 'data' => $data]);
     }

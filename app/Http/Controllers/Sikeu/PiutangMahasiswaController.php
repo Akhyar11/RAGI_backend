@@ -25,6 +25,7 @@ class PiutangMahasiswaController extends Controller
         $query = TagihanMahasiswa::with([
             'mahasiswa.programStudi',
             'tipeTagihanMahasiswa',
+            'tahunAkademik',
             'details.masterBiaya',
             'pembayarans',
             'dispensasis' => function ($q) {
@@ -99,7 +100,7 @@ class PiutangMahasiswaController extends Controller
                 'program_studi' => $prodi,
                 'program_studi_id' => $mhs?->program_studi_id,
                 'tahun_akademik_id' => $t->tahun_akademik_id,
-                'tahun_akademik' => '2025/2026 Ganjil',
+                'tahun_akademik' => $t->tahunAkademik?->nama ?? ($t->tahun_akademik_id ? ('TA #' . $t->tahun_akademik_id) : '-'),
                 'total_tagihan' => (float)$t->total_tagihan,
                 'total_potongan' => (float)$t->total_potongan,
                 'total_denda' => (float)$t->total_denda,
@@ -162,6 +163,7 @@ class PiutangMahasiswaController extends Controller
         $query = TagihanMahasiswa::with([
             'mahasiswa.programStudi',
             'tipeTagihanMahasiswa',
+            'tahunAkademik',
             'pembayarans',
         ]);
 
@@ -261,10 +263,11 @@ class PiutangMahasiswaController extends Controller
                 $mhs = $t->mahasiswa;
                 $tipeMhs = $t->tipeTagihanMahasiswa;
 
-                $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ('2024' . str_pad($t->mahasiswa_id, 4, '0', STR_PAD_LEFT));
+                $nim = $mhs?->nim ?? $tipeMhs?->nim ?? ($t->mahasiswa_id ? (string)$t->mahasiswa_id : '-');
                 $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $t->mahasiswa_id);
-                $angkatanVal = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? 2025;
-                $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? 'Teknik Informatika';
+                $angkatanVal = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? '-';
+                $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? '-';
+                $taNama = $t->tahunAkademik?->nama ?? ($t->tahun_akademik_id ? ('TA #' . $t->tahun_akademik_id) : '-');
 
                 $totalBayarRow = $cutoffDate
                     ? (float)$t->pembayarans->where('status', 'success')->filter(function ($p) use ($cutoffDate) {
@@ -293,7 +296,7 @@ class PiutangMahasiswaController extends Controller
                     <td>" . htmlspecialchars($nama) . "</td>
                     <td class=\"text-center\">{$angkatanVal}</td>
                     <td>" . htmlspecialchars($prodi) . "</td>
-                    <td class=\"text-center\">2025/2026 Ganjil</td>
+                    <td class=\"text-center\">" . htmlspecialchars($taNama) . "</td>
                     <td class=\"num-format\">" . (float)$t->total_tagihan . "</td>
                     <td class=\"num-format\">" . (float)$t->total_potongan . "</td>
                     <td class=\"num-format\">" . (float)$t->total_denda . "</td>

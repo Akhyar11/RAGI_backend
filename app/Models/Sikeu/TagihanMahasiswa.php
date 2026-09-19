@@ -46,6 +46,11 @@ class TagihanMahasiswa extends Model
         return $this->belongsTo(\App\Models\Siakad\Mahasiswa::class, 'mahasiswa_id');
     }
 
+    public function tahunAkademik()
+    {
+        return $this->belongsTo(\App\Models\Spmb\MasterTahunAkademik::class, 'tahun_akademik_id');
+    }
+
     public function tipeTagihanMahasiswa()
     {
         return $this->belongsTo(MahasiswaTipeTagihan::class, 'mahasiswa_id', 'mahasiswa_id');

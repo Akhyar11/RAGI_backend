@@ -31,7 +31,7 @@ class PembayaranKasirController extends Controller
             'tagihan_id' => 'nullable|integer|exists:sikeu_tagihan_mahasiswa,id',
             'tagihan_ids' => 'nullable|array',
             'tagihan_ids.*' => 'integer|exists:sikeu_tagihan_mahasiswa,id',
-            'jumlah_bayar' => 'required|numeric|min:0',
+            'jumlah_bayar' => 'required|numeric|min:1',
             'channel_bayar' => 'required|in:LOKET_TUNAI,LOKET_TRANSFER',
             'potongan' => 'nullable|numeric|min:0',
             'alasan_potongan' => 'nullable|string|max:255',
@@ -146,7 +146,7 @@ class PembayaranKasirController extends Controller
 
                 // 2. Alokasikan pembayaran kasir
                 $alokasiBayar = min($remainingBayar, $currentSisa);
-                if ($alokasiBayar > 0 || (count($tagihans) === 1 && $remainingBayar >= 0)) {
+                if ($alokasiBayar > 0) {
                     $allocationIndex++;
                     $kodeTransaksi = $batchKodeTransaksi . '-' . $allocationIndex;
                     $pembayaran = Pembayaran::create([
@@ -332,6 +332,13 @@ class PembayaranKasirController extends Controller
 
         try {
             DB::beginTransaction();
+
+            // Tentukan tahun akademik aktif jika tidak diinput
+            $tahunAkademikId = $request->input('tahun_akademik_id');
+            if (!$tahunAkademikId) {
+                $activeTa = \App\Models\Spmb\MasterTahunAkademik::where('is_active', true)->first();
+                $tahunAkademikId = $activeTa?->id ?? 1;
+            }
 
             // 1. Load setting tarif yang aktif & cocok
             $tarifQuery = SettingTarif::with('masterBiaya')
@@ -540,7 +547,7 @@ class PembayaranKasirController extends Controller
 
                 $tagihan = TagihanMahasiswa::create([
                     'mahasiswa_id' => $mhs->mahasiswa_id,
-                    'tahun_akademik_id' => 1,
+                    'tahun_akademik_id' => $tahunAkademikId,
                     'nomor_tagihan' => $nomorTagihan,
                     'total_tagihan' => $totalNominal,
                     'total_potongan' => $totalSemuaPotongan,
@@ -879,10 +886,16 @@ class PembayaranKasirController extends Controller
             $nomorTagihan = 'INV-LOKET-' . date('Ymd') . '-' . strtoupper(Str::random(4));
             $catatanTransaksi = $request->catatan ?: ('Pembayaran Kasir Loket ' . date('d/m/Y'));
 
+            $tahunAkademikId = $request->input('tahun_akademik_id');
+            if (!$tahunAkademikId) {
+                $activeTa = \App\Models\Spmb\MasterTahunAkademik::where('is_active', true)->first();
+                $tahunAkademikId = $activeTa?->id ?? 1;
+            }
+
             // 1. Create Tagihan
             $tagihan = TagihanMahasiswa::create([
                 'mahasiswa_id' => $mhsId,
-                'tahun_akademik_id' => 1,
+                'tahun_akademik_id' => $tahunAkademikId,
                 'nomor_tagihan' => $nomorTagihan,
                 'total_tagihan' => $totalNominal,
                 'total_potongan' => $potongan,

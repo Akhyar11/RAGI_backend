@@ -43,6 +43,9 @@ class SpmbKonversiService
                     }
                 })->first();
 
+            $jalurKelasNama = $pendaftaran->tipeJalur?->nama ?? $pendaftaran->jalur_masuk ?? 'Reguler';
+            $kelompokUkt = $pendaftaran->kelompok_ukt ?? 3;
+
             if (!$mahasiswa) {
                 $mahasiswa = Mahasiswa::create([
                     'user_id' => $pendaftaran->user_id,
@@ -58,10 +61,22 @@ class SpmbKonversiService
                     'angkatan' => $angkatan,
                     'tanggal_masuk' => now()->toDateString(),
                     'status' => 'aktif',
+                    'kelompok_ukt' => $kelompokUkt,
+                    'jalur_masuk' => $jalurKelasNama,
                 ]);
             } else {
+                $updateMhs = [];
                 if (empty($mahasiswa->nim)) {
-                    $mahasiswa->update(['nim' => $nim]);
+                    $updateMhs['nim'] = $nim;
+                }
+                if (empty($mahasiswa->kelompok_ukt)) {
+                    $updateMhs['kelompok_ukt'] = $kelompokUkt;
+                }
+                if (empty($mahasiswa->jalur_masuk)) {
+                    $updateMhs['jalur_masuk'] = $jalurKelasNama;
+                }
+                if (!empty($updateMhs)) {
+                    $mahasiswa->update($updateMhs);
                 }
             }
 
@@ -82,8 +97,8 @@ class SpmbKonversiService
                     'nim' => $nim,
                     'nama_mahasiswa' => $pendaftaran->nama_lengkap,
                     'tahun_angkatan' => $angkatan,
-                    'jalur_kelas' => $pendaftaran->jalur_masuk ?? 'Reguler',
-                    'kelompok_ukt' => 3, // Default Golongan UKT 3
+                    'jalur_kelas' => $jalurKelasNama,
+                    'kelompok_ukt' => $kelompokUkt,
                     'status_pendaftaran' => 'SPMB_DITERIMA',
                     'catatan_perubahan' => 'Auto-sync otomatis dari konversi SPMB',
                 ]

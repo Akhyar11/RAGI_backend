@@ -32,6 +32,19 @@ class CheckMenuAccess
         // Daftar ulang mandiri
         'POST /spmb/daftar-ulang/{pendaftaran_id}/generate-tagihan',
         'POST /spmb/daftar-ulang/{pendaftaran_id}/konfirmasi',
+        // SIKEU Portal Mahasiswa (Self-Service)
+        'GET /sikeu/mahasiswa/payment-channels',
+        'GET /sikeu/mahasiswa/tagihan',
+        'GET /sikeu/mahasiswa/invoice/{id}',
+        'POST /sikeu/mahasiswa/invoice-batch',
+        'GET /sikeu/mahasiswa/riwayat-pembayaran',
+        'POST /sikeu/mahasiswa/pay-bills',
+        'POST /sikeu/dispensasi',
+        'GET /sikeu/dispensasi/{id}',
+        // SIKEU Payment Callbacks & Webhooks
+        'POST /sikeu/callback/va-paid',
+        'POST /sikeu/callback/spmb/{calonMahasiswaId}',
+        'GET /sikeu/checkout/lookup-va',
     ];
 
     /**
