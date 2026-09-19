@@ -324,6 +324,73 @@ class PembayaranKasirController extends Controller
     }
 
     /**
+     * GET /api/v1/sikeu/tagihan/preview-mass-target
+     * Preview count and sample of students targeted for mass bill activation.
+     */
+    public function previewMassTarget(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'tahun_angkatan' => 'required|integer|min:2020|max:2040',
+            'jalur_kelas' => 'required|string',
+            'program_studi_id' => 'nullable|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validasi preview target gagal',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $tipeQuery = \App\Models\Sikeu\MahasiswaTipeTagihan::where('tahun_angkatan', $request->tahun_angkatan)
+            ->where('jalur_kelas', $request->jalur_kelas)
+            ->where('is_active', true);
+
+        if ($request->filled('program_studi_id')) {
+            $tipeQuery->whereHas('mahasiswa', function ($mq) use ($request) {
+                $mq->where('program_studi_id', $request->program_studi_id);
+            });
+        }
+
+        $tipeList = $tipeQuery->get();
+
+        if ($tipeList->isNotEmpty()) {
+            $mahasiswaList = $tipeList->map(function ($item) {
+                return [
+                    'mahasiswa_id' => $item->mahasiswa_id,
+                    'nim' => $item->nim,
+                    'nama_mahasiswa' => $item->nama_mahasiswa,
+                ];
+            });
+        } else {
+            $siakadQuery = \App\Models\Siakad\Mahasiswa::where('angkatan', $request->tahun_angkatan)
+                ->where('status', 'aktif');
+
+            if ($request->filled('program_studi_id')) {
+                $siakadQuery->where('program_studi_id', $request->program_studi_id);
+            }
+
+            $siakadList = $siakadQuery->get();
+            $mahasiswaList = $siakadList->map(function ($item) {
+                return [
+                    'mahasiswa_id' => $item->id,
+                    'nim' => $item->nim,
+                    'nama_mahasiswa' => $item->nama_lengkap,
+                ];
+            });
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'total_mahasiswa' => $mahasiswaList->count(),
+                'sample_mahasiswa' => $mahasiswaList->take(5)->values(),
+            ]
+        ]);
+    }
+
+    /**
      * POST /api/v1/sikeu/tagihan/generate-mass
      * Generate semester bills in bulk for all matching students with auto-beasiswa and Virtual Account.
      */
@@ -631,7 +698,7 @@ class PembayaranKasirController extends Controller
                 \App\Models\Sikeu\VirtualAccount::updateOrCreate(
                     ['tagihan_id' => $tagihan->id],
                     [
-                        'va_number' => '88012' . str_pad($mhs->nim ? preg_replace('/[^0-9]/', '', $mhs->nim) : $mhs->mahasiswa_id, 10, '0', STR_PAD_LEFT),
+                        'va_number' => \App\Services\Sikeu\VaNumberService::generate($mhs->nim ?: $mhs->mahasiswa_id),
                         'bank_kode' => 'BNI',
                         'bank_nama' => 'Bank BNI',
                         'nominal' => max(0, $totalNominal - $totalSemuaPotongan),

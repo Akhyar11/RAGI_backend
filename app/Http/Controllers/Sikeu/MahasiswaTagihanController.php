@@ -295,18 +295,20 @@ class MahasiswaTagihanController extends Controller
 
         switch (strtoupper($bankCode)) {
             case 'MANDIRI':
-                return '88800' . str_pad($cleanId, 8, '0', STR_PAD_LEFT);
+                return \App\Services\Sikeu\VaNumberService::generate($cleanId, '70012');
             case 'BRI':
-                return '70012' . str_pad($cleanId, 8, '0', STR_PAD_LEFT);
+                return \App\Services\Sikeu\VaNumberService::generate($cleanId, '12345');
+            case 'BSI':
+                return \App\Services\Sikeu\VaNumberService::generate($cleanId, '70012');
             case 'BCA':
-                return '10204' . str_pad($cleanId, 8, '0', STR_PAD_LEFT);
+                return \App\Services\Sikeu\VaNumberService::generate($cleanId, '10204');
             case 'PERMATA':
-                return '85220' . str_pad($cleanId, 8, '0', STR_PAD_LEFT);
+                return \App\Services\Sikeu\VaNumberService::generate($cleanId, '85220');
             case 'QRIS':
                 return 'QRIS-' . date('ymd') . '-' . str_pad($cleanId, 6, '0', STR_PAD_LEFT);
             case 'BNI':
             default:
-                return '88012' . $cleanId;
+                return \App\Services\Sikeu\VaNumberService::generate($cleanId);
         }
     }
 

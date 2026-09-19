@@ -189,7 +189,18 @@ class DispensasiTagihanController extends Controller
     {
         $dispensasi = DispensasiTagihan::with(['tagihan.details.masterBiaya'])->findOrFail($id);
 
+        if ($dispensasi->status !== 'approved') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Hanya dispensasi yang telah disetujui pimpinan yang dapat dicetak surat buktinya.',
+            ], 422);
+        }
+
         $mhs = \App\Models\Siakad\Mahasiswa::with('programStudi')->find($dispensasi->mahasiswa_id);
+
+        $secretKey = config('app.key') ?: 'sikeu-signature-salt';
+        $signatureRaw = hash_hmac('sha256', "DISP-{$dispensasi->id}-{$dispensasi->mahasiswa_id}-{$dispensasi->jatuh_tempo_baru}", $secretKey);
+        $signatureHash = 'SIG-DISP-' . strtoupper(substr($signatureRaw, 0, 16));
 
         $bukti = [
             'nomor_dispensasi' => 'DISP-' . date('Y') . '-' . str_pad($dispensasi->id, 5, '0', STR_PAD_LEFT),
@@ -218,7 +229,7 @@ class DispensasiTagihanController extends Controller
             'pejabat_approver' => [
                 'nama' => $dispensasi->disetujui_oleh ? $this->approverName($dispensasi->disetujui_oleh) : '',
                 'jabatan' => 'Wakil Rektor II / Kabag Keuangan',
-                'digital_signature_hash' => 'SIG-DISP-' . md5($dispensasi->id . 'OK'),
+                'digital_signature_hash' => $signatureHash,
             ]
         ];
 

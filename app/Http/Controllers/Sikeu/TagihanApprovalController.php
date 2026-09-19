@@ -15,23 +15,58 @@ class TagihanApprovalController extends Controller
      * GET /api/v1/sikeu/approvals
      * List all pending external bills & dispensations requiring leadership approval.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $pendingTagihan = TagihanMahasiswa::where('status_approval', 'pending')
+        $pendingTagihanQuery = TagihanMahasiswa::where('status_approval', 'pending')
             ->orWhere('status', 'pending_approval')
-            ->orderBy('created_at', 'desc')
-            ->get();
+            ->orderBy('created_at', 'desc');
 
-        $pendingDispensasi = DispensasiTagihan::with(['tagihan'])
+        $pendingDispensasiQuery = DispensasiTagihan::with(['tagihan'])
             ->where('status', 'pending')
-            ->orderBy('created_at', 'desc')
-            ->get();
+            ->orderBy('created_at', 'desc');
+
+        $perPage = min(100, $request->integer('per_page', 20));
+
+        if ($request->has('page') || $request->has('per_page')) {
+            $tagihanPaginated = $pendingTagihanQuery->paginate($perPage, ['*'], 'page_tagihan');
+            $dispensasiPaginated = $pendingDispensasiQuery->paginate($perPage, ['*'], 'page_dispensasi');
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'tagihan_pending' => $tagihanPaginated->items(),
+                    'dispensasi_pending' => $dispensasiPaginated->items(),
+                ],
+                'meta' => [
+                    'current_page' => $tagihanPaginated->currentPage(),
+                    'per_page' => $perPage,
+                    'tagihan' => [
+                        'total' => $tagihanPaginated->total(),
+                        'current_page' => $tagihanPaginated->currentPage(),
+                        'last_page' => $tagihanPaginated->lastPage(),
+                    ],
+                    'dispensasi' => [
+                        'total' => $dispensasiPaginated->total(),
+                        'current_page' => $dispensasiPaginated->currentPage(),
+                        'last_page' => $dispensasiPaginated->lastPage(),
+                    ],
+                ]
+            ]);
+        }
+
+        $tagihanItems = $pendingTagihanQuery->get();
+        $dispensasiItems = $pendingDispensasiQuery->get();
 
         return response()->json([
             'status' => 'success',
             'data' => [
-                'tagihan_pending' => $pendingTagihan,
-                'dispensasi_pending' => $pendingDispensasi,
+                'tagihan_pending' => $tagihanItems,
+                'dispensasi_pending' => $dispensasiItems,
+            ],
+            'meta' => [
+                'total_tagihan_pending' => $tagihanItems->count(),
+                'total_dispensasi_pending' => $dispensasiItems->count(),
+                'total_all' => $tagihanItems->count() + $dispensasiItems->count(),
             ]
         ]);
     }
@@ -65,11 +100,7 @@ class TagihanApprovalController extends Controller
             // Generate VA if not created
             if ($tagihan->virtualAccounts()->count() === 0) {
                 $mhsNim = $tagihan->mahasiswa?->nim ?? $tagihan->tipeTagihanMahasiswa?->nim ?? $tagihan->mahasiswa_id;
-                $cleanId = preg_replace('/[^0-9]/', '', (string)$mhsNim);
-                if (empty($cleanId)) {
-                    $cleanId = str_pad($tagihan->id, 8, '0', STR_PAD_LEFT);
-                }
-                $vaNumber = '88012' . $cleanId;
+                $vaNumber = \App\Services\Sikeu\VaNumberService::generate($mhsNim);
                 $sisaTagihan = max(0, (float) $tagihan->total_tagihan + (float) $tagihan->total_denda - (float) $tagihan->total_potongan - (float) $tagihan->total_bayar);
                 VirtualAccount::create([
                     'tagihan_id' => $tagihan->id,

@@ -202,12 +202,46 @@ class SettingTarifController extends Controller
     }
 
     /**
+     * GET /api/v1/sikeu/master/setting-tarif/{id}
+     * Get single setting tarif details.
+     */
+    public function show($id)
+    {
+        $setting = SettingTarif::with(['masterBiaya', 'programStudi'])->findOrFail($id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Detail setting tarif berhasil dimuat.',
+            'data' => $setting,
+        ]);
+    }
+
+    /**
      * DELETE /api/v1/sikeu/master/setting-tarif/{id}
      * Delete a setting tarif.
      */
     public function destroy($id)
     {
         $setting = SettingTarif::findOrFail($id);
+
+        // Periksa apakah jenis biaya ini sudah pernah digunakan pada detail tagihan mahasiswa
+        $isUsed = \App\Models\Sikeu\DetailTagihan::where('master_biaya_id', $setting->master_biaya_id)
+            ->whereHas('tagihan', function ($q) use ($setting) {
+                if ($setting->program_studi_id) {
+                    $q->whereHas('mahasiswa', function ($m) use ($setting) {
+                        $m->where('program_studi_id', $setting->program_studi_id);
+                    });
+                }
+            })
+            ->exists();
+
+        if ($isUsed) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Setting tarif tidak dapat dihapus karena komponen biaya ini sudah pernah digunakan pada tagihan mahasiswa.',
+            ], 422);
+        }
+
         $setting->delete();
 
         return response()->json([

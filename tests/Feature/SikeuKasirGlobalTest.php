@@ -214,4 +214,124 @@ class SikeuKasirGlobalTest extends TestCase
         $this->assertEquals(0, (float)$tagihan->total_potongan);
         $this->assertEquals('belum_bayar', $tagihan->status);
     }
+
+    public function test_va_number_service_generates_consistent_format()
+    {
+        $va = \App\Services\Sikeu\VaNumberService::generate('20261001');
+        $this->assertEquals('880120020261001', $va);
+
+        $vaCustom = \App\Services\Sikeu\VaNumberService::generate('123456', '70012');
+        $this->assertEquals('700120000123456', $vaCustom);
+    }
+
+    public function test_cetak_bukti_fails_if_dispensasi_not_approved()
+    {
+        $prodi = \App\Models\Spmb\MasterProgramStudi::firstOrCreate(
+            ['id' => 1],
+            ['kode_prodi' => 'TI', 'nama' => 'Teknik Informatika', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        $mhs = \App\Models\Siakad\Mahasiswa::firstOrCreate(
+            ['nim' => '2026999901'],
+            [
+                'nama_lengkap' => 'Dispensasi Test Mhs',
+                'program_studi_id' => $prodi->id,
+                'angkatan' => 2026,
+                'status' => 'aktif',
+            ]
+        );
+
+        $tagihan = TagihanMahasiswa::create([
+            'mahasiswa_id' => $mhs->id,
+            'nomor_tagihan' => 'INV-TEST-DISP-' . uniqid(),
+            'total_tagihan' => 3000000,
+            'status' => 'belum_bayar',
+            'tahun_akademik_id' => 1,
+        ]);
+
+        $disp = \App\Models\Sikeu\DispensasiTagihan::create([
+            'mahasiswa_id' => $mhs->id,
+            'tagihan_id' => $tagihan->id,
+            'tipe_dispensasi' => 'penundaan_jatuh_tempo',
+            'nominal_per_cicilan' => 1000000,
+            'jatuh_tempo_baru' => now()->addMonth()->toDateString(),
+            'status' => 'pending',
+            'alasan' => 'Menunggu pencairan dana beasiswa',
+        ]);
+
+        // Trying to print unapproved dispensation should return 422
+        $res = $this->withHeaders($this->headers())
+            ->getJson("/api/v1/sikeu/dispensasi/{$disp->id}/cetak-bukti");
+
+        $res->assertStatus(422);
+        $res->assertJsonPath('status', 'error');
+
+        // Approve it and try again
+        $disp->update(['status' => 'approved', 'disetujui_oleh' => $this->admin->id, 'tanggal_persetujuan' => now()]);
+
+        $resApproved = $this->withHeaders($this->headers())
+            ->getJson("/api/v1/sikeu/dispensasi/{$disp->id}/cetak-bukti");
+
+        $resApproved->assertStatus(200);
+        $resApproved->assertJsonPath('status', 'success');
+        $resApproved->assertJsonStructure([
+            'status',
+            'data' => [
+                'nomor_dispensasi',
+                'status',
+                'mahasiswa',
+                'tagihan',
+                'pejabat_approver' => ['digital_signature_hash']
+            ]
+        ]);
+        $this->assertStringStartsWith('SIG-DISP-', $resApproved->json('data.pejabat_approver.digital_signature_hash'));
+    }
+
+    public function test_setting_tarif_show_and_protected_destroy()
+    {
+        $biaya = MasterBiaya::firstOrCreate(
+            ['kode' => 'TEST-BIAYA-TARIF'],
+            ['nama' => 'Biaya Ujian Praktikum Test', 'tipe' => 'praktikum', 'is_active' => true]
+        );
+
+        $tarif = \App\Models\Sikeu\SettingTarif::create([
+            'master_biaya_id' => $biaya->id,
+            'tahun_angkatan' => 2026,
+            'jalur_kelas' => 'REGULER',
+            'nominal' => 750000,
+            'is_active' => true,
+        ]);
+
+        // Test show
+        $resShow = $this->withHeaders($this->headers())
+            ->getJson("/api/v1/sikeu/master/setting-tarif/{$tarif->id}");
+
+        $resShow->assertStatus(200);
+        $resShow->assertJsonPath('status', 'success');
+        $resShow->assertJsonPath('data.id', $tarif->id);
+
+        // Delete without tagihan should succeed
+        $resDel = $this->withHeaders($this->headers())
+            ->deleteJson("/api/v1/sikeu/master/setting-tarif/{$tarif->id}");
+
+        $resDel->assertStatus(200);
+        $resDel->assertJsonPath('status', 'success');
+    }
+
+    public function test_preview_mass_target_returns_correct_structure()
+    {
+        $res = $this->withHeaders($this->headers())
+            ->getJson('/api/v1/sikeu/tagihan/preview-mass-target?tahun_angkatan=2026&jalur_kelas=REGULER');
+
+        $res->assertStatus(200);
+        $res->assertJsonPath('status', 'success');
+        $res->assertJsonStructure([
+            'status',
+            'data' => [
+                'total_mahasiswa',
+                'sample_mahasiswa',
+            ]
+        ]);
+    }
 }
+

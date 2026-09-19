@@ -489,6 +489,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
 
     // Tagihan Mahasiswa List & Detail
     Route::get('tagihan', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'indexTagihan']);
+    Route::get('tagihan/preview-mass-target', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'previewMassTarget']);
     Route::get('tagihan/{id}', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'showTagihan']);
     Route::post('tagihan/{id}/potongan', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'addAdHocPotonganTagihan']);
     Route::delete('tagihan/potongan/{potonganId}', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'deleteAdHocPotonganTagihan']);
@@ -611,6 +612,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     // Setting Tarif per Angkatan/Prodi/Semester
     Route::get('master/setting-tarif', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'index']);
     Route::post('master/setting-tarif', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'store']);
+    Route::get('master/setting-tarif/{id}', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'show']);
     Route::put('master/setting-tarif/{id}', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'update']);
     Route::delete('master/setting-tarif/{id}', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'destroy']);
     Route::get('master/program-studi', [App\Http\Controllers\Sikeu\SettingTarifController::class, 'getProgramStudiList']);
