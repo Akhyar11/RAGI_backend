@@ -32,7 +32,7 @@ class SkpService
      */
     public function list(array $filters, $user)
     {
-        $query = PenilaianKinerja::with(['pegawai.unitKerja', 'pejabatPenilai', 'evaluator']);
+        $query = PenilaianKinerja::with(['pegawai.unitKerja', 'pegawai.dosen.programStudi', 'pejabatPenilai', 'evaluator']);
 
         $isAdmin = $user->isAdmin() || $user->hasPermission('simpeg.kinerja.manage');
         $userPegawaiId = $user->pegawai?->id;

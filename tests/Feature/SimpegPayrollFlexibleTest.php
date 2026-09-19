@@ -259,4 +259,67 @@ class SimpegPayrollFlexibleTest extends TestCase
         // Tunjangan fungsional harus merefleksikan Lektor dari database (1.250.000)
         $this->assertEquals(1250000, (float) $gaji->total_tunjangan_fungsional);
     }
+
+    public function test_inactive_komponen_toggle_and_exclusion(): void
+    {
+        // 1. Ambil komponen aktif
+        $komponen = MasterKomponenGaji::first();
+        $this->assertNotNull($komponen);
+
+        // 2. Toggle status menjadi nonaktif (is_active = false)
+        $resUpdate = $this->actingAs($this->admin, 'api')->putJson("/api/simpeg/payroll/komponen/{$komponen->id}", [
+            'is_active' => false,
+        ]);
+        $resUpdate->assertStatus(200);
+        $this->assertDatabaseHas('simpeg_master_komponen_gaji', [
+            'id' => $komponen->id,
+            'is_active' => false,
+        ]);
+
+        // 3. getPegawaiKomponen tidak boleh menyertakan komponen yang dinonaktifkan
+        $resPegKomponen = $this->actingAs($this->admin, 'api')->getJson("/api/simpeg/payroll/pegawai/{$this->pegawai->id}/komponen");
+        $resPegKomponen->assertStatus(200);
+
+        $komponenIds = collect($resPegKomponen->json('data.komponen'))->pluck('komponen_gaji_id')->all();
+        $this->assertNotContains($komponen->id, $komponenIds);
+    }
+
+    public function test_can_get_and_save_pegawai_komponen_customizations(): void
+    {
+        // 1. Ambil salah satu komponen aktif
+        $activeKomp = MasterKomponenGaji::where('is_active', true)->first();
+        $this->assertNotNull($activeKomp);
+
+        // 2. Simpan kustomisasi komponen pegawai (nominal_kustom, catatan, toggle is_active)
+        $saveRes = $this->actingAs($this->admin, 'api')->postJson("/api/simpeg/payroll/pegawai/{$this->pegawai->id}/komponen", [
+            'komponen' => [
+                [
+                    'komponen_gaji_id' => $activeKomp->id,
+                    'nominal_kustom' => 7500000,
+                    'is_active' => true,
+                    'catatan' => 'SK Insentif Khusus Rektor',
+                ],
+            ],
+        ]);
+        $saveRes->assertStatus(200);
+
+        // 3. Verifikasi tersimpan di database simpeg_pegawai_komponen_gaji
+        $this->assertDatabaseHas('simpeg_pegawai_komponen_gaji', [
+            'pegawai_id' => $this->pegawai->id,
+            'komponen_gaji_id' => $activeKomp->id,
+            'nominal_kustom' => 7500000,
+            'is_active' => true,
+            'catatan' => 'SK Insentif Khusus Rektor',
+        ]);
+
+        // 4. Verifikasi ketika di-fetch kembali
+        $getRes = $this->actingAs($this->admin, 'api')->getJson("/api/simpeg/payroll/pegawai/{$this->pegawai->id}/komponen");
+        $getRes->assertStatus(200);
+
+        $pegKomponenList = collect($getRes->json('data.komponen'));
+        $matched = $pegKomponenList->firstWhere('komponen_gaji_id', $activeKomp->id);
+        $this->assertNotNull($matched);
+        $this->assertEquals(7500000, $matched['nominal_kustom']);
+        $this->assertEquals('SK Insentif Khusus Rektor', $matched['catatan']);
+    }
 }

@@ -43,9 +43,9 @@ Aturan Baku (STRICT — setiap aturan bernomor, nilai hanya dari baris baru):
 4. WAJIB Form Request Store*/Update*Request di `app/Http/Requests`; DILARANG validasi inline.
    - SALAH: `$request->validate([...])` atau `Validator::make(...)` di Controller.
    - BENAR: `php artisan make:request StoreItemRequest`, `public function store(StoreItemRequest $request)`, `public function update(UpdateItemRequest $request, Model $m)`.
-5. WAJIB try-catch operasi berisiko + kode HTTP tepat; DILARANG 500 tanpa Log.
-   - SALAH: `catch{ return 500 tanpa Log::error }`, `POST create` balas 200, validasi gagal balas 500, not-found balas 200.
-   - BENAR: `200` (GET/PUT/PATCH/DELETE ok), `201` (POST create), `400` (bad request), `403` (forbidden), `404` (not found), `422` (validasi), `500` (unexpected + `Log::error($e)`).
+5. WAJIB kode HTTP tepat & delegasi error ke Global Exception Handler; DILARANG 500 manual tanpa Log.
+   - SALAH: catch manual 500 tanpa Log::error, POST create balas 200, validasi gagal balas 500, not-found balas 200.
+   - BENAR: 200 (GET/PUT/PATCH/DELETE ok), 201 (POST create), 400 (bad request), 403 (forbidden), 404 (not found), 422 (validasi), dan error tak terduga didelegasikan ke global exception handler bootstrap/app.php (jangan menelan error dengan try-catch umum di controller).
 6. WAJIB SoftDeletes: respons destroy + endpoint restore opsional.
    - SALAH: model pakai `SoftDeletes` tapi `destroy` tidak menjelaskan soft-delete / tidak ada `POST /resource/{id}/restore` saat dibutuhkan.
    - BENAR: `use SoftDeletes;`, `destroy` mengembalikan status soft-delete, opsional `POST /resource/{id}/restore`.

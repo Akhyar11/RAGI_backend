@@ -284,6 +284,8 @@ Mengembalikan payload yang persis sama dengan respons *Login sukses tanpa 2FA* (
 **200 OK**
 ```json
 {
+    "status": "success",
+    "message": "Profil pengguna berhasil diambil",
     "data": {
         "id": 1,
         "username": "budi.santoso",
@@ -294,7 +296,9 @@ Mengembalikan payload yang persis sama dengan respons *Login sukses tanpa 2FA* (
         "is_verified": false,
         "last_login_at": "2026-07-28T14:05:00.000000Z",
         "created_at": "2026-07-28T14:00:00.000000Z",
-        "updated_at": "2026-07-28T14:05:00.000000Z"
+        "updated_at": "2026-07-28T14:05:00.000000Z",
+        "roles": [],
+        "pegawai": null
     }
 }
 ```

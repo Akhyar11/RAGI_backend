@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Simpeg;
 use App\Http\Controllers\Controller;
 use App\Models\Simpeg\DokumenPegawai;
 use App\Services\Storage\FileStorageService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -14,18 +15,16 @@ class DokumenController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.dokumen.read') && !$user->hasPermission('simpeg.dokumen.create') && !$user->hasPermission('simpeg.dokumen.manage') && !$user->isAdmin()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Anda tidak memiliki hak akses (permission) untuk melihat Dokumen E-File.'
-            ], 403);
+        $isPrivileged = $user->hasRole('superadmin') || $user->hasRole('admin');
+        if (!$user->hasPermission('simpeg.dokumen.read') && !$user->hasPermission('simpeg.dokumen.create') && !$user->hasPermission('simpeg.dokumen.manage') && !$isPrivileged) {
+            throw new AuthorizationException('Anda tidak memiliki hak akses (permission) untuk melihat Dokumen E-File.');
         }
 
-        $query = DokumenPegawai::with('pegawai');
+        $query = DokumenPegawai::with(['pegawai.unitKerja', 'pegawai.dosen.programStudi']);
 
         if ($request->has('pegawai_id')) {
             $query->where('pegawai_id', $request->pegawai_id);
-        } elseif (!$user->isAdmin() && !$user->hasPermission('simpeg.dokumen.manage')) {
+        } elseif (!$isPrivileged && !$user->hasPermission('simpeg.dokumen.manage')) {
             // Non-admin hanya bisa melihat dokumen miliknya sendiri
             $pegId = $user->pegawai?->id;
             if ($pegId) {
@@ -35,15 +34,49 @@ class DokumenController extends Controller
             }
         }
 
-        if ($request->has('jenis_dokumen')) {
+        if ($request->filled('jenis_dokumen')) {
             $query->where('jenis_dokumen', $request->jenis_dokumen);
         }
 
-        $dokumen = $query->latest()->get();
+        if ($request->filled('search')) {
+            $search = (string) $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('nama_dokumen', 'like', "%{$search}%")
+                  ->orWhereHas('pegawai', function ($qp) use ($search) {
+                      $qp->where('nama_lengkap', 'like', "%{$search}%")
+                         ->orWhere('nip', 'like', "%{$search}%")
+                         ->orWhere('nidn', 'like', "%{$search}%")
+                         ->orWhere('nuptk', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Sorting
+        $allowedSort = ['created_at', 'nama_dokumen', 'jenis_dokumen'];
+        $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        $perPage = min(100, $request->integer('per_page', 15));
+        $paginated = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
-            'data' => $dokumen,
+            'message' => 'Data dokumen berhasil diambil',
+            'data' => $paginated->items(),
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'last_page' => $paginated->lastPage(),
+                'from' => $paginated->firstItem(),
+                'to' => $paginated->lastItem(),
+            ],
+            'filters' => [
+                'search' => (string) $request->input('search', ''),
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+            ],
         ]);
     }
 

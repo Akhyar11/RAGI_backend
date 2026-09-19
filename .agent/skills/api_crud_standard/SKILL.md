@@ -130,11 +130,15 @@ $query->orderBy($sortBy, $sortOrder);
 
 ---
 
-## 5. Error Handling
+## 5. Error Handling & Try-Catch Policy
 
-- Gunakan `try-catch` untuk operasi yang berisiko.
-- Kembalikan status HTTP yang tepat: `200`, `201`, `400`, `403`, `404`, `422`, `500`.
-- Jangan pernah mengembalikan `500` tanpa logging.
+- **DILARANG** menggunakan blok `try-catch (\Throwable $e)` umum di dalam Controller.
+- Seluruh error tak terduga (seperti database error, unhandled logic) WAJIB didelegasikan ke Global Exception Handler di `bootstrap/app.php` agar format respons JSON konsisten dan error validasi (422), model not found (404), serta hak akses (403) tidak tertelan menjadi 500.
+- Kembalikan status HTTP yang tepat: `200` (OK), `201` (Created), `400` (Bad Request), `403` (Forbidden), `404` (Not Found), `422` (Unprocessable Entity).
+- Blok `try-catch` HANYA diizinkan pada kondisi berikut:
+  1. **Di Service Layer**: Untuk operasi non-blocking yang tidak boleh menggagalkan transaksi utama (misalnya pencatatan audit log `AuditLogService::record(...)` atau pengiriman notifikasi/email eksternal).
+  2. **Exception Bisnis Spesifik**: Di Controller/Service jika menangkap domain exception tertentu untuk memetakan respons khusus (misalnya `catch (PaymentGatewayException $e)`).
+- DILARANG mengembalikan HTTP 500 manual tanpa pencatatan log via `\Log::error($e)`.
 
 ---
 

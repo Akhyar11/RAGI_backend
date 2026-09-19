@@ -40,6 +40,9 @@ class SuratTugas extends Model
         'catatan_approval',
         'approved_by',
         'approved_at',
+        'nominal_disetujui',
+        'sikeu_pencairan_id',
+        'status_pencairan',
     ];
 
     protected $casts = [
@@ -48,6 +51,7 @@ class SuratTugas extends Model
         'tanggal_mulai' => 'date',
         'tanggal_selesai' => 'date',
         'estimasi_biaya' => 'decimal:2',
+        'nominal_disetujui' => 'decimal:2',
         'biaya_realisasi' => 'decimal:2',
         'tanggal_upload_lpj' => 'datetime',
         'approved_at' => 'datetime',
@@ -83,5 +87,10 @@ class SuratTugas extends Model
         return $this->belongsToMany(Pegawai::class, 'simpeg_surat_tugas_anggota', 'surat_tugas_id', 'pegawai_id')
             ->withPivot('peran', 'keterangan')
             ->withTimestamps();
+    }
+
+    public function pencairanKas()
+    {
+        return $this->belongsTo(\App\Models\Sikeu\PengajuanPencairanKas::class, 'sikeu_pencairan_id');
     }
 }

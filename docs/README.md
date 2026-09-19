@@ -58,21 +58,21 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
-| SikeuMasterController | Master Tarif UKT, Tarif SPMB, Jalur Kelas, Jenis Biaya, & Beasiswa | [docs/api/Sikeu/SikeuMasterController.md](api/Sikeu/SikeuMasterController.md) |
-| ExternalTagihanController | Penerbitan Tagihan Eksternal & Riwayat Pembayaran | [docs/api/Sikeu/ExternalTagihanController.md](api/Sikeu/ExternalTagihanController.md) |
-| SpmBSikeuCallbackController | Webhook Callback Integrasi Pelunasan Biaya SPMB | [docs/api/Sikeu/SpmBSikeuCallbackController.md](api/Sikeu/SpmBSikeuCallbackController.md) |
-| SpmbIntegration | Rangkuman Integrasi Tarif & Callback SPMB | [docs/api/Sikeu/SpmbIntegration.md](api/Sikeu/SpmbIntegration.md) |
-| MahasiswaTagihanController | Portal Tagihan Mahasiswa Mandiri & Invoice | [docs/api/Sikeu/MahasiswaTagihanController.md](api/Sikeu/MahasiswaTagihanController.md) |
-| PiutangMahasiswaController | Rekapitulasi Piutang Mahasiswa & Export Excel | [docs/api/Sikeu/PiutangMahasiswaController.md](api/Sikeu/PiutangMahasiswaController.md) |
-| DispensasiTagihanController | Permohonan Dispensasi Tagihan & Cetak Bukti | [docs/api/Sikeu/DispensasiTagihanController.md](api/Sikeu/DispensasiTagihanController.md) |
-| TagihanApprovalController | Approval Pimpinan untuk Tagihan & Dispensasi | [docs/api/Sikeu/TagihanApprovalController.md](api/Sikeu/TagihanApprovalController.md) |
-| UnitKasController | Master Unit Kas & Saldo Operasional | [docs/api/Sikeu/UnitKasController.md](api/Sikeu/UnitKasController.md) |
-| PengajuanKasController | Pengajuan & Persetujuan Pencairan Kas Unit | [docs/api/Sikeu/PengajuanKasController.md](api/Sikeu/PengajuanKasController.md) |
-| PemasukanKampusController | Pencatatan Pemasukan Hibah, Donatur, & Kerjasama | [docs/api/Sikeu/PemasukanKampusController.md](api/Sikeu/PemasukanKampusController.md) |
-| AkuntansiController | Chart of Accounts (COA), Jurnal Umum, & Buku Besar | [docs/api/Sikeu/AkuntansiController.md](api/Sikeu/AkuntansiController.md) |
-| PaymentGatewayConfigController | Pengaturan Provider Payment Gateway (Midtrans/Xendit) | [docs/api/Sikeu/PaymentGatewayConfigController.md](api/Sikeu/PaymentGatewayConfigController.md) |
-| SettingTarifController | Konfigurasi Tarif Biaya per Angkatan, Prodi, & Semester | [docs/api/Sikeu/SettingTarifController.md](api/Sikeu/SettingTarifController.md) |
-| PembayaranKasirController | Pembayaran Kasir/Loket Tunai & Non-Tunai, Koreksi Transaksi, & Tagihan Masal | [docs/api/Sikeu/PembayaranKasirController.md](api/Sikeu/PembayaranKasirController.md) |
+| SikeuMasterController | Master Tarif UKT, Tarif SPMB, Jalur Kelas, Jenis Biaya, & Beasiswa | [docs/api/SIKEU/SikeuMasterController.md](api/SIKEU/SikeuMasterController.md) |
+| ExternalTagihanController | Penerbitan Tagihan Eksternal & Riwayat Pembayaran | [docs/api/SIKEU/ExternalTagihanController.md](api/SIKEU/ExternalTagihanController.md) |
+| SpmBSikeuCallbackController | Webhook Callback Integrasi Pelunasan Biaya SPMB | [docs/api/SIKEU/SpmBSikeuCallbackController.md](api/SIKEU/SpmBSikeuCallbackController.md) |
+| SpmbIntegration | Rangkuman Integrasi Tarif & Callback SPMB | [docs/api/SIKEU/SpmbIntegration.md](api/SIKEU/SpmbIntegration.md) |
+| MahasiswaTagihanController | Portal Tagihan Mahasiswa Mandiri & Invoice | [docs/api/SIKEU/MahasiswaTagihanController.md](api/SIKEU/MahasiswaTagihanController.md) |
+| PiutangMahasiswaController | Rekapitulasi Piutang Mahasiswa & Export Excel | [docs/api/SIKEU/PiutangMahasiswaController.md](api/SIKEU/PiutangMahasiswaController.md) |
+| DispensasiTagihanController | Permohonan Dispensasi Tagihan & Cetak Bukti | [docs/api/SIKEU/DispensasiTagihanController.md](api/SIKEU/DispensasiTagihanController.md) |
+| TagihanApprovalController | Approval Pimpinan untuk Tagihan & Dispensasi | [docs/api/SIKEU/TagihanApprovalController.md](api/SIKEU/TagihanApprovalController.md) |
+| UnitKasController | Master Unit Kas & Saldo Operasional | [docs/api/SIKEU/UnitKasController.md](api/SIKEU/UnitKasController.md) |
+| PengajuanKasController | Pengajuan pencairan kas operasional unit, panjar dinas, persetujuan & penolakan | [docs/api/SIKEU/PengajuanKasController.md](api/SIKEU/PengajuanKasController.md) |
+| PemasukanKampusController | Pencatatan Pemasukan Hibah, Donatur, & Kerjasama | [docs/api/SIKEU/PemasukanKampusController.md](api/SIKEU/PemasukanKampusController.md) |
+| AkuntansiController | Chart of Accounts (COA), Jurnal Umum, & Buku Besar | [docs/api/SIKEU/AkuntansiController.md](api/SIKEU/AkuntansiController.md) |
+| PaymentGatewayConfigController | Pengaturan Provider Payment Gateway (Midtrans/Xendit) | [docs/api/SIKEU/PaymentGatewayConfigController.md](api/SIKEU/PaymentGatewayConfigController.md) |
+| SettingTarifController | Konfigurasi Tarif Biaya per Angkatan, Prodi, & Semester | [docs/api/SIKEU/SettingTarifController.md](api/SIKEU/SettingTarifController.md) |
+| PembayaranKasirController | Pembayaran Kasir/Loket Tunai & Non-Tunai, Koreksi Transaksi, & Tagihan Masal | [docs/api/SIKEU/PembayaranKasirController.md](api/SIKEU/PembayaranKasirController.md) |
 
 ---
 
@@ -84,13 +84,17 @@
 | PresensiMasterSettingController | Master pengaturan presensi: parameter sistem, lokasi kantor, multi-tipe shift, & kalender libur | [docs/api/SIMPEG/PresensiMasterSettingController.md](api/SIMPEG/PresensiMasterSettingController.md) |
 | AttendanceDataApi | Spesifikasi API integrasi data absensi & rekapitulasi kehadiran | [docs/api/SIMPEG/ATTENDANCE_DATA_API.md](api/SIMPEG/ATTENDANCE_DATA_API.md) |
 | AttendanceApi | Spesifikasi teknis integrasi & sinkronisasi SIMPEG | [docs/api/SIMPEG/ATTENDANCE_API.md](api/SIMPEG/ATTENDANCE_API.md) |
-| KompetensiController | Kompetensi dosen: Sertifikasi dosen, riwayat tes kemampuan, & pelatihan/diklat | [docs/api/simpeg/KompetensiController.md](api/simpeg/KompetensiController.md) |
-| SuratTugasController | Surat tugas dinas luar, armada/driver, tim rombongan, persetujuan, auto-presensi, & LPJ | [docs/api/simpeg/SuratTugasController.md](api/simpeg/SuratTugasController.md) |
-| IzinJamKerjaController | Izin parsial jam kerja (keluar kantor, datang terlambat, pulang awal) & integrasi presensi | [docs/api/simpeg/IzinJamKerjaController.md](api/simpeg/IzinJamKerjaController.md) |
-| SkPegawaiController | Arsip | SkPegawaiController | Arsip & pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/simpeg/SkPegawaiController.md](api/simpeg/SkPegawaiController.md) | pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/simpeg/SkPegawaiController.md](api/simpeg/SkPegawaiController.md) |
-| PenilaianKinerjaController | Sasaran Kinerja Pegawai (SKP) butir-per-butir | SkPegawaiController | Arsip & pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/simpeg/SkPegawaiController.md](api/simpeg/SkPegawaiController.md) | evaluasi capaian BKD | [docs/api/simpeg/PenilaianKinerjaController.md](api/simpeg/PenilaianKinerjaController.md) |
-| TridharmaDossierController | Agregasi portofolio Tridharma terpadu (SIAKAD, SIPPM, SIMPEG) | [docs/api/simpeg/TridharmaDossierController.md](api/simpeg/TridharmaDossierController.md) |
-| PayrollController | Penggajian fleksibel, master komponen insentif, honor SKS, PPh 21, | SkPegawaiController | Arsip & pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/simpeg/SkPegawaiController.md](api/simpeg/SkPegawaiController.md) | posting kas SIKEU | [docs/api/simpeg/PayrollController.md](api/simpeg/PayrollController.md) |
+| KompetensiController | Kompetensi dosen: Sertifikasi dosen, riwayat tes kemampuan, & pelatihan/diklat | [docs/api/SIMPEG/KompetensiController.md](api/SIMPEG/KompetensiController.md) |
+| SuratTugasController | Surat tugas dinas luar, armada/driver, tim rombongan, persetujuan, auto-presensi, & LPJ | [docs/api/SIMPEG/SuratTugasController.md](api/SIMPEG/SuratTugasController.md) |
+| IzinJamKerjaController | Izin parsial jam kerja (keluar kantor, datang terlambat, pulang awal) & integrasi presensi | [docs/api/SIMPEG/IzinJamKerjaController.md](api/SIMPEG/IzinJamKerjaController.md) |
+| SkPegawaiController | Arsip & pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/SIMPEG/SkPegawaiController.md](api/SIMPEG/SkPegawaiController.md) |
+| PenilaianKinerjaController | Sasaran Kinerja Pegawai (SKP) butir-per-butir & evaluasi capaian BKD | [docs/api/SIMPEG/PenilaianKinerjaController.md](api/SIMPEG/PenilaianKinerjaController.md) |
+| TridharmaDossierController | Agregasi portofolio Tridharma terpadu (SIAKAD, SIPPM, SIMPEG) | [docs/api/SIMPEG/TridharmaDossierController.md](api/SIMPEG/TridharmaDossierController.md) |
+| PayrollController | Penggajian fleksibel, master komponen insentif, honor SKS, PPh 21, & posting kas SIKEU | [docs/api/SIMPEG/PayrollController.md](api/SIMPEG/PayrollController.md) |
+| PegawaiKomponenGajiController | Kustomisasi konfigurasi komponen gaji spesifik pegawai | [docs/api/SIMPEG/PegawaiKomponenGajiController.md](api/SIMPEG/PegawaiKomponenGajiController.md) |
+| UsulanJafungController | Usulan kenaikan jabatan fungsional dosen, angka kredit & verifikasi SK | [docs/api/SIMPEG/UsulanJafungController.md](api/SIMPEG/UsulanJafungController.md) |
+| CutiController | Pengajuan cuti pegawai terintegrasi, validasi durasi, approval & notifikasi | [docs/api/SIMPEG/CutiController.md](api/SIMPEG/CutiController.md) |
+| DokumenController | E-File arsip dokumen kepegawaian, secure view & dynamic watermark | [docs/api/SIMPEG/DokumenController.md](api/SIMPEG/DokumenController.md) |
 
 ---
 

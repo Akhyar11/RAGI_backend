@@ -109,7 +109,7 @@ class AutoJournalService
             $jurnal = JurnalUmum::create([
                 'nomor_jurnal' => $nomorJurnal,
                 'tanggal_jurnal' => date('Y-m-d'),
-                'jenis_sumber' => strtoupper($sourceSystem) . '_PENCAIRAN',
+                'jenis_sumber' => 'pencairan_kas',
                 'referensi_id' => $referensiId,
                 'keterangan' => $keterangan,
                 'status_posting' => 'posted',

@@ -285,7 +285,9 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         return response()->json([
-            'data' => $request->user()->load(['roles', 'roles.permissions'])
+            'status' => 'success',
+            'message' => 'Profil pengguna berhasil diambil',
+            'data' => $request->user()->load(['roles', 'roles.permissions', 'pegawai'])
         ]);
     }
 

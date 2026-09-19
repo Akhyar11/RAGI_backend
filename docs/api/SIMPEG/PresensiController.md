@@ -342,28 +342,116 @@ Mengecek konektivitas dan kesiapan microservice Python yang berjalan di port 800
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
-| GET | `/api/simpeg/presensi` | Daftar presensi (Realtime biometrik atau `type=bundle`) dengan filter & dynamic sorting (`sort_by`, `sort_dir`) | ✅ Bearer |
-| POST | `/api/simpeg/presensi/{id}/approve` | Persetujuan manual HR (clock-in hari libur / upaya ditolak) | ✅ Bearer (`simpeg.presensi.manage`) |
-| POST | `/api/simpeg/presensi/keterangan` | Tetapkan keterangan ketidakhadiran (izin/sakit/dinas/alfa) untuk pegawai terjadwal masuk tanpa log | ✅ Bearer (`simpeg.presensi.manage`) |
-| GET | `/api/simpeg/presensi/recap?pegawai_id=&month=&year=` | Rekap bulanan per pegawai (silang cuti disetujui) | ✅ Bearer |
+| GET | `/api/simpeg/presensi` | Daftar presensi (Realtime biometrik atau `type=bundle`) dengan filter & dynamic sorting (`sort_by`, `sort_order`) | ✅ Bearer |
+| POST | `/api/simpeg/presensi/{id}/approve` | Persetujuan manual HR (clock-in hari libur / upaya ditolak) | ✅ Bearer |
+| POST | `/api/simpeg/presensi/keterangan` | Tetapkan keterangan ketidakhadiran (izin/sakit/dinas/alfa) untuk pegawai terjadwal masuk tanpa log | ✅ Bearer |
+| GET | `/api/simpeg/presensi/recap` | Rekap bulanan per pegawai (silang cuti disetujui) | ✅ Bearer |
 
 > Clock-in valid langsung tercatat `hadir`/`terlambat` tanpa verifikasi. Verifikasi manual hanya untuk clock-in di hari libur jadwal shift (`menunggu_approval`) dan upaya yang ditolak validasi (`ditolak`).
 
 ### GET `/api/simpeg/presensi`
 
-**Query Parameters:**
-- `type`: `bundle` untuk melihat daftar periode presensi / bundle bulanan, atau kosongkan untuk realtime biometrik logs.
-- `search`: Pencarian nama atau NIP pegawai (atau nama periode jika mode bundle).
-- `status`: Filter status kehadiran (`hadir`, `terlambat`, `izin`, `sakit`, `dinas`, `alfa`, dll).
-- `tanggal`: Filter tanggal presensi format `YYYY-MM-DD`.
-- `sort_by`: Kolom pengurutan (`tanggal`, `clock_in`, `clock_out`, `status_kehadiran`, `id`, `created_at`). Default: `created_at`.
-- `sort_dir`: Arah pengurutan (`asc` atau `desc`). Default: `desc`.
-- `page`: Nomor halaman pagination. Default: 1.
-- `per_page`: Jumlah baris data per halaman. Default: 10 / 15.
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `type` | string | ❌ | — | `bundle` untuk melihat daftar periode presensi, atau kosongkan untuk realtime biometrik logs |
+| `search` | string | ❌ | — | Pencarian nama, NIP, NIDN, NUPTK |
+| `status` | string | ❌ | — | Filter status kehadiran (`hadir`, `terlambat`, `izin`, `sakit`, `dinas`, `alfa`) |
+| `tanggal` | date | ❌ | — | Filter tanggal presensi format YYYY-MM-DD |
+| `start_date` | date | ❌ | — | Tanggal awal rentang presensi |
+| `end_date` | date | ❌ | — | Tanggal akhir rentang presensi |
+| `month` | integer | ❌ | — | Bulan (1-12) |
+| `year` | integer | ❌ | — | Tahun (contoh: 2026) |
+| `sort_by` | string | ❌ | `created_at` | Kolom pengurutan (`created_at`, `tanggal`, `clock_in`, `clock_out`, `status_kehadiran`, `id`) |
+| `sort_order` | string | ❌ | `desc` | Arah pengurutan: `asc` / `desc` |
+| `per_page` | integer | ❌ | `15` | Jumlah baris data per halaman (maks. 100) |
+| `page` | integer | ❌ | `1` | Nomor halaman pagination |
 
 **Hak Akses RBAC:**
 - Pengguna dengan permission `simpeg.presensi.manage` / `simpeg.presensi.read` atau role `admin_simpeg` / `admin` dapat melihat presensi seluruh pegawai.
 - Karyawan biasa tanpa permission di atas secara otomatis difilter hanya melihat log presensi milik dirinya sendiri (`pegawai_id`).
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Data presensi biometrik berhasil diambil",
+    "data": [
+        {
+            "id": 101,
+            "employee_id": 10,
+            "tanggal": "2026-09-19",
+            "clock_in": "07:45:00",
+            "clock_out": "16:05:00",
+            "status_kehadiran": "hadir",
+            "employee": {
+                "id": 10,
+                "nama_lengkap": "Dr. Siti Aminah, M.Kom",
+                "nip": "198501012010122001"
+            }
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    },
+    "filters": {
+        "search": "",
+        "status": "",
+        "tanggal": "",
+        "start_date": "",
+        "end_date": "",
+        "month": "",
+        "year": "",
+        "sort_by": "created_at",
+        "sort_order": "desc"
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses melihat data presensi."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Parameter query tidak valid.",
+    "errors": {
+        "per_page": [
+            "Nilai per_page harus berupa angka."
+        ]
+    }
+}
+```
 
 
 ### POST `/api/simpeg/presensi/keterangan`

@@ -17,6 +17,7 @@ use App\Models\Simpeg\Pegawai;
 use App\Models\Simpeg\PegawaiKomponenGaji;
 use App\Services\Simpeg\PayrollCalculationService;
 use App\Services\Simpeg\SikeuIntegrationService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -40,7 +41,7 @@ class PayrollController extends Controller
             ], 403);
         }
 
-        $query = GajiPegawai::with(['pegawai.unitKerja', 'jurnal', 'pengeluaranKampus']);
+        $query = GajiPegawai::with(['pegawai.unitKerja', 'pegawai.dosen.programStudi', 'jurnal', 'pengeluaranKampus']);
 
         // Scope pegawai jika bukan admin/payroll manager
         if (!$user->isAdmin() && !$user->hasPermission('simpeg.payroll.manage')) {
@@ -69,7 +70,9 @@ class PayrollController extends Controller
                 $q->where('periode_bulan_tahun', 'like', "%{$search}%")
                   ->orWhereHas('pegawai', function ($qp) use ($search) {
                       $qp->where('nama_lengkap', 'like', "%{$search}%")
-                         ->orWhere('nip', 'like', "%{$search}%");
+                         ->orWhere('nip', 'like', "%{$search}%")
+                         ->orWhere('nidn', 'like', "%{$search}%")
+                         ->orWhere('nuptk', 'like', "%{$search}%");
                   });
             });
         }
@@ -83,12 +86,12 @@ class PayrollController extends Controller
         }
 
         $allowedSorts = ['periode_bulan_tahun', 'gaji_bersih', 'total_tunjangan', 'total_potongan', 'created_at', 'id'];
-        $sortBy = in_array($request->query('sort_by'), $allowedSorts) ? $request->query('sort_by') : 'periode_bulan_tahun';
+        $sortBy = in_array($request->query('sort_by'), $allowedSorts, true) ? $request->query('sort_by') : 'created_at';
         $sortOrder = strtolower($request->query('sort_dir', $request->query('sort_order', 'desc'))) === 'asc' ? 'asc' : 'desc';
 
         $query->orderBy($sortBy, $sortOrder);
 
-        $perPage = min(100, $request->integer('limit', $request->integer('per_page', 15)));
+        $perPage = min(100, $request->integer('per_page', 15));
         $payroll = $query->paginate($perPage);
 
         return response()->json([
@@ -104,11 +107,9 @@ class PayrollController extends Controller
                 'to' => $payroll->lastItem(),
             ],
             'filters' => [
-                'search' => $request->search,
-                'periode' => $request->periode,
-                'status_transfer' => $request->status_transfer,
+                'search' => (string) $request->input('search', ''),
                 'sort_by' => $sortBy,
-                'sort_dir' => $sortOrder,
+                'sort_order' => $sortOrder,
             ],
         ]);
     }
@@ -364,93 +365,6 @@ class PayrollController extends Controller
         ]);
     }
 
-    // ── KOMPONEN GAJI SPESIFIK PEGAWAI ─────────────────────────
-
-    /**
-     * GET /api/simpeg/payroll/pegawai/{pegawaiId}/komponen
-     * Ambil konfigurasi komponen gaji milik pegawai tertentu
-     */
-    public function getPegawaiKomponen(Request $request, int $pegawaiId): JsonResponse
-    {
-        $user = $request->user();
-        if (!$user->hasPermission('simpeg.payroll.read') && !$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Anda tidak memiliki hak akses melihat konfigurasi komponen pegawai.'
-            ], 403);
-        }
-
-        $pegawai = Pegawai::findOrFail($pegawaiId);
-        $masterKomponens = MasterKomponenGaji::where('is_active', true)->orderBy('urutan', 'asc')->get();
-        $customs = PegawaiKomponenGaji::where('pegawai_id', $pegawaiId)->get()->keyBy('komponen_gaji_id');
-
-        $result = $masterKomponens->map(function ($mk) use ($customs) {
-            $cust = $customs->get($mk->id);
-            return [
-                'komponen_gaji_id' => $mk->id,
-                'kode' => $mk->kode,
-                'nama' => $mk->nama,
-                'jenis' => $mk->jenis,
-                'tipe_nilai' => $mk->tipe_nilai,
-                'nilai_default' => (float) $mk->nilai_default,
-                'nominal_kustom' => $cust && $cust->nominal_kustom !== null ? (float) $cust->nominal_kustom : null,
-                'is_active' => $cust ? (bool) $cust->is_active : (bool) $mk->is_active,
-                'catatan' => $cust?->catatan,
-            ];
-        });
-
-        return response()->json([
-            'status' => 'success',
-            'data' => [
-                'pegawai' => $pegawai,
-                'komponen' => $result,
-            ],
-        ]);
-    }
-
-    /**
-     * POST /api/simpeg/payroll/pegawai/{pegawaiId}/komponen
-     * Simpan / timpa konfigurasi komponen gaji pegawai
-     */
-    public function savePegawaiKomponen(Request $request, int $pegawaiId): JsonResponse
-    {
-        $user = $request->user();
-        if (!$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Anda tidak memiliki hak akses mengatur komponen gaji pegawai.'
-            ], 403);
-        }
-
-        $pegawai = Pegawai::findOrFail($pegawaiId);
-
-        $validated = $request->validate([
-            'komponen' => 'required|array',
-            'komponen.*.komponen_gaji_id' => 'required|exists:simpeg_master_komponen_gaji,id',
-            'komponen.*.nominal_kustom' => 'nullable|numeric|min:0',
-            'komponen.*.is_active' => 'boolean',
-            'komponen.*.catatan' => 'nullable|string',
-        ]);
-
-        foreach ($validated['komponen'] as $item) {
-            PegawaiKomponenGaji::updateOrCreate(
-                [
-                    'pegawai_id' => $pegawaiId,
-                    'komponen_gaji_id' => $item['komponen_gaji_id'],
-                ],
-                [
-                    'nominal_kustom' => $item['nominal_kustom'] ?? null,
-                    'is_active' => $item['is_active'] ?? true,
-                    'catatan' => $item['catatan'] ?? null,
-                ]
-            );
-        }
-
-        return response()->json([
-            'status' => 'success',
-            'message' => "Konfigurasi komponen gaji untuk {$pegawai->nama_lengkap} berhasil disimpan.",
-        ]);
-    }
 
     // ── MASTER SKALA GAJI POKOK (MASA KERJA) ──────────────────
 

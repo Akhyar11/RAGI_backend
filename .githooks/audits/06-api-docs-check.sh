@@ -10,14 +10,18 @@ OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
 MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
 if [ -n "$DIFF_TARGET" ]; then
-    STAGED_DIFF=$(git diff "$DIFF_TARGET" -- "app/Http/Controllers/**" "docs/**")
+    STAGED_DIFF=$(git diff "$DIFF_TARGET" -M -- "app/Http/Controllers/**" "docs/**")
 else
-    STAGED_DIFF=$(git diff --cached -- "app/Http/Controllers/**" "docs/**")
+    STAGED_DIFF=$(git diff --cached -M -- "app/Http/Controllers/**" "docs/**")
 fi
 
 if [ -z "$STAGED_DIFF" ]; then
     echo "ℹ️ [Audit API Documentation] Tidak ada perubahan controller/docs yang diuji. Skip."
     exit 0
+fi
+
+if [ ${#STAGED_DIFF} -gt 100000 ]; then
+    STAGED_DIFF=$(echo "$STAGED_DIFF" | grep -E '^(\+\+\+|---|\+\s*|diff|@@)' | head -c 100000)
 fi
 
 # DEEP AI AUDIT

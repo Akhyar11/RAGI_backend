@@ -279,8 +279,9 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::put('payroll/bracket-pph21/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'updateBracketPph21']);
 
     // Komponen Gaji Pegawai
-    Route::get('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PayrollController::class, 'getPegawaiKomponen']);
-    Route::post('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PayrollController::class, 'savePegawaiKomponen']);
+    Route::get('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'show']);
+    Route::put('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'update']);
+    Route::post('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'update']);
 
     // Rekapan Payroll, Detail Slip & Eksekusi SIKEU
     Route::get('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'index']);
@@ -291,6 +292,10 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 
     Route::get('usulan-jafung', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'index']);
     Route::post('usulan-jafung', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'store']);
+    Route::get('usulan-jafung/{id}', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'show']);
+    Route::put('usulan-jafung/{id}', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'update']);
+    Route::post('usulan-jafung/{id}', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'update']);
+    Route::delete('usulan-jafung/{id}', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'destroy']);
 
     // Penilaian Kinerja & SKP Butir-per-Butir
     Route::get('penilaian-kinerja/masters', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'masters']);
@@ -484,6 +489,7 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::get('pengajuan-kas', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'index']);
     Route::post('pengajuan-kas', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'store']);
     Route::post('pengajuan-kas/{id}/approve', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'approve']);
+    Route::post('pengajuan-kas/{id}/reject', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'reject']);
 
 
 

@@ -42,6 +42,17 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Siakad\Mahasiswa::observe(\App\Observers\MahasiswaObserver::class);
         \App\Models\Siakad\KonversiTransfer::observe(\App\Observers\KonversiTransferObserver::class);
 
+        // SIKEU Observers
+        \App\Models\Sikeu\PengajuanPencairanKas::observe(\App\Observers\Sikeu\PengajuanPencairanKasObserver::class);
+        \App\Models\Sikeu\PengeluaranKampus::observe(\App\Observers\Sikeu\PengeluaranKampusObserver::class);
+        \App\Models\Sikeu\UnitKas::observe(\App\Observers\Sikeu\UnitKasObserver::class);
+        \App\Models\Sikeu\TransaksiKasUnit::observe(\App\Observers\Sikeu\TransaksiKasUnitObserver::class);
+
+        // SIMPEG Observers
+        \App\Models\Simpeg\SuratTugas::observe(\App\Observers\Simpeg\SuratTugasObserver::class);
+        \App\Models\Simpeg\UsulanJafung::observe(\App\Observers\Simpeg\UsulanJafungObserver::class);
+        \App\Models\Simpeg\PegawaiKomponenGaji::observe(\App\Observers\Simpeg\PegawaiKomponenGajiObserver::class);
+
         // SINAPRA Policies
         Gate::policy(\App\Models\Gedung::class, \App\Policies\Sinapra\GedungPolicy::class);
         Gate::policy(\App\Models\Ruangan::class, \App\Policies\Sinapra\RuanganPolicy::class);
