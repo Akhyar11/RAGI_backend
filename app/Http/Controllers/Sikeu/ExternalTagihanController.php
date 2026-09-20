@@ -311,4 +311,92 @@ class ExternalTagihanController extends Controller
             ]
         ]);
     }
+
+    /**
+     * Public Payment Receipt Verification Endpoint
+     * Accessible by scanning QR Code on printed physical receipt
+     */
+    public function validasiPembayaranPublik(string $kode_transaksi)
+    {
+        $pembayaran = \App\Models\Sikeu\Pembayaran::where('kode_transaksi', $kode_transaksi)
+            ->with([
+                'tagihan.details.masterBiaya',
+                'tagihan.mahasiswa.programStudi',
+                'tagihan.tipeTagihanMahasiswa',
+                'tagihan.calonMahasiswa.programStudi',
+                'virtualAccount',
+            ])
+            ->first();
+
+        if (!$pembayaran) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Dokumen transaksi pembayaran tidak ditemukan atau tidak valid.',
+                'data' => null,
+            ], 404);
+        }
+
+        $t = $pembayaran->tagihan;
+        $mhs = $t?->mahasiswa;
+        $tipeMhs = $t?->tipeTagihanMahasiswa;
+        $calon = $t?->calonMahasiswa;
+
+        $nim = $mhs?->nim ?? $tipeMhs?->nim ?? $calon?->nim ?? ($calon?->no_pendaftaran ?: ($t?->mahasiswa_id ? (string)$t->mahasiswa_id : '-'));
+        $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? $calon?->nama_lengkap ?? ('Mahasiswa #' . ($t?->mahasiswa_id ?? $t?->calon_mahasiswa_id ?? '-'));
+        $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? $calon?->programStudi?->nama ?? '-';
+        $angkatan = $mhs?->tahun_angkatan ?? $mhs?->angkatan ?? $calon?->tahun_akademik ?? null;
+
+        $rincian = $t?->details?->map(function ($d) {
+            return $d->keterangan ?: ($d->masterBiaya->nama ?? 'Komponen Biaya');
+        })->filter()->implode(', ') ?: ($t?->catatan_approval ?? 'Tagihan Mahasiswa');
+
+        $isValid = ($pembayaran->status === 'success');
+        $channelName = match ($pembayaran->channel_bayar) {
+            'LOKET_TUNAI' => 'Tunai di Loket Kasir Kampus',
+            'LOKET_TRANSFER' => 'Transfer Manual Rekening Resmi Kampus',
+            default => 'Virtual Account Online (Xendit)',
+        };
+
+        $kasirName = match ($pembayaran->channel_bayar) {
+            'LOKET_TUNAI', 'LOKET_TRANSFER' => 'Petugas Administrasi Keuangan (Loket Kasir Kampus)',
+            default => 'Sistem Payment Gateway (Xendit)',
+        };
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $isValid
+                ? 'Dokumen pembayaran sah dan terverifikasi di sistem keuangan kampus.'
+                : 'Catatan transaksi ditemukan namun berstatus: ' . strtoupper($pembayaran->status),
+            'data' => [
+                'kode_transaksi' => $pembayaran->kode_transaksi,
+                'status' => $pembayaran->status,
+                'is_valid' => $isValid,
+                'verified_at' => now()->format('Y-m-d H:i:s'),
+                'waktu_bayar' => $pembayaran->waktu_bayar ? (is_object($pembayaran->waktu_bayar) && method_exists($pembayaran->waktu_bayar, 'format') ? $pembayaran->waktu_bayar->format('Y-m-d H:i:s') : (string)$pembayaran->waktu_bayar) : null,
+                'jumlah_bayar' => (float)$pembayaran->jumlah_bayar,
+                'channel_bayar' => $pembayaran->channel_bayar,
+                'channel_label' => $channelName,
+                'kasir' => $kasirName,
+                'catatan' => $pembayaran->catatan,
+                'mahasiswa' => [
+                    'nama_mahasiswa' => $nama,
+                    'nim' => $nim,
+                    'no_pendaftaran' => $calon?->no_pendaftaran,
+                    'is_calon_mahasiswa' => (bool)$calon,
+                    'program_studi' => $prodi,
+                    'tahun_angkatan' => $angkatan,
+                ],
+                'tagihan' => [
+                    'id' => $t?->id,
+                    'nomor_tagihan' => $t?->nomor_tagihan,
+                    'uraian' => $rincian,
+                    'total_tagihan' => (float)($t?->total_tagihan ?? 0),
+                    'total_bayar' => (float)($t?->total_bayar ?? 0),
+                    'sisa' => (float)($t?->sisa ?? 0),
+                    'status' => $t?->status,
+                ],
+                'security_hash' => hash('sha256', $pembayaran->kode_transaksi . '|' . $pembayaran->jumlah_bayar . '|' . ($pembayaran->waktu_bayar ?? '')),
+            ],
+        ]);
+    }
 }

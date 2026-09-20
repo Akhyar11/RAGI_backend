@@ -681,6 +681,9 @@ Route::middleware('auth:api')->prefix('sikeu')->group(function () {
 // Public Printable Document Route (Accessible directly via browser link)
 Route::get('sippm/pengumuman/{id}/html-draft', [App\Http\Controllers\Sippm\PengumumanSippmController::class, 'renderDraftHtml']);
 
+// Public Payment Receipt Verification Route (Accessible by scanning QR Code on physical receipt)
+Route::get('v1/sikeu/pembayaran/validasi/{kode_transaksi}', [App\Http\Controllers\Sikeu\ExternalTagihanController::class, 'validasiPembayaranPublik']);
+
 /*
 |--------------------------------------------------------------------------
 | SINAPRA (Sarana, Prasarana, & Aset) Routes
