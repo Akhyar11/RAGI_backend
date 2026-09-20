@@ -636,19 +636,9 @@ class PembayaranMahasiswaTarifController extends Controller
                 ]);
             }
 
-            // 3. Terbitkan Virtual Account standar (88012 standard)
-            $vaNumber = VaNumberService::generate($identifier);
-            $va = VirtualAccount::create([
-                'tagihan_id' => $tagihan->id,
-                'va_number' => $vaNumber,
-                'bank_kode' => 'BANK_KAMPUS',
-                'bank_nama' => 'Bank Mitra Kampus Terintegrasi',
-                'nominal' => $totalNominal,
-                'expired_at' => now()->addDays(30),
-                'status' => $isDirectCashier ? 'dibayar' : 'aktif',
-            ]);
-
-            // 4. Jika mode bayar loket kasir, langsung catat pembayaran
+            // 3. Jika mode bayar loket kasir, langsung catat pembayaran tunai/transfer fisik di loket
+            // Catatan: Jika mode terbitkan tagihan online, nomor VA/QRIS akan digenerate secara otomatis via Xendit
+            // saat mahasiswa memilih saluran pembayaran (BCA, Mandiri, BNI, BRI, QRIS, dll) di portal mahasiswa.
             $pembayaran = null;
             if ($isDirectCashier) {
                 $channel = $modePembayaran === 'bayar_loket_tunai' ? 'LOKET_TUNAI' : 'LOKET_TRANSFER';
@@ -656,7 +646,7 @@ class PembayaranMahasiswaTarifController extends Controller
 
                 $pembayaran = Pembayaran::create([
                     'tagihan_id' => $tagihan->id,
-                    'virtual_account_id' => $va->id,
+                    'virtual_account_id' => null,
                     'kode_transaksi' => $kodeBayar,
                     'jumlah_bayar' => $totalNominal,
                     'waktu_bayar' => now(),
@@ -674,11 +664,11 @@ class PembayaranMahasiswaTarifController extends Controller
                 'status' => 'success',
                 'message' => $isDirectCashier
                     ? 'Tagihan dan transaksi pembayaran kasir loket berhasil diproses.'
-                    : 'Tagihan mahasiswa dan nomor Virtual Account berhasil diterbitkan.',
+                    : 'Tagihan mahasiswa berhasil diterbitkan. Pembayaran dan nomor VA akan digenerate otomatis via Xendit saat mahasiswa memilih saluran pembayaran di portal.',
                 'data' => [
                     'tagihan' => $tagihan->load(['detailTagihan.masterBiaya', 'virtualAccount']),
                     'nomor_tagihan' => $tagihan->nomor_tagihan,
-                    'va_number' => $va->va_number,
+                    'va_number' => null,
                     'total_tagihan' => $totalNominal,
                     'status' => $tagihan->status,
                     'nama_mahasiswa' => $namaMhs,
@@ -1052,17 +1042,8 @@ class PembayaranMahasiswaTarifController extends Controller
                     ]);
                 }
 
-                $vaNumber = VaNumberService::generate($student->nim ?: (string)$student->id);
-                VirtualAccount::create([
-                    'tagihan_id' => $tagihan->id,
-                    'va_number' => $vaNumber,
-                    'bank_kode' => 'BANK_KAMPUS',
-                    'bank_nama' => 'Bank Mitra Kampus Terintegrasi',
-                    'nominal' => $studentTotal,
-                    'expired_at' => \Carbon\Carbon::parse($request->jatuh_tempo)->endOfDay(),
-                    'status' => 'aktif',
-                ]);
-
+                // Catatan: Nomor VA/QRIS tidak digenerate statis di sini.
+                // Mahasiswa akan memilih saluran pembayaran (BCA, Mandiri, BNI, BRI, QRIS, dll) via Xendit di portal mahasiswa.
                 $createdCount++;
                 $totalNominalGenerated += $studentTotal;
             }

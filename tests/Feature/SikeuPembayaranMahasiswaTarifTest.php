@@ -294,7 +294,7 @@ class SikeuPembayaranMahasiswaTarifTest extends TestCase
         $this->assertEquals('spesifik_prodi', $labItem['cakupan']);
     }
 
-    public function test_store_tagihan_mahasiswa_dengan_komponen_dinamis_dan_va(): void
+    public function test_store_tagihan_mahasiswa_dengan_komponen_dinamis(): void
     {
         $prodiTI = MasterProgramStudi::firstOrCreate(
             ['kode_prodi' => 'TI99'],
@@ -335,11 +335,14 @@ class SikeuPembayaranMahasiswaTarifTest extends TestCase
                 'data' => [
                     'status' => 'belum_bayar',
                     'total_tagihan' => 3000000,
+                    'va_number' => null,
                 ]
             ]);
 
-        $this->assertNotNull($res->json('data.va_number'));
-        $this->assertStringStartsWith('88012', $res->json('data.va_number'));
+        $this->assertNull($res->json('data.va_number'));
+        $this->assertDatabaseMissing('sikeu_virtual_account', [
+            'tagihan_id' => $res->json('data.tagihan.id'),
+        ]);
     }
 
     public function test_store_tagihan_mahasiswa_mode_bayar_langsung_kasir_lunas(): void
