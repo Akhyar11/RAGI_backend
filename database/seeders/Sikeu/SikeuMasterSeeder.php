@@ -202,17 +202,6 @@ class SikeuMasterSeeder extends Seeder
                 'is_active' => true,
                 'keterangan' => 'Praktikum & Lab Komputer Prodi Teknik Informatika',
             ],
-            // Angkatan 2023 - TI - Karyawan
-            [
-                'master_biaya_id' => $jbUkt->id,
-                'tahun_angkatan' => 2023,
-                'program_studi_id' => $prodiTIId,
-                'semester' => null,
-                'jalur_kelas' => 'Karyawan',
-                'nominal' => 4500000.00,
-                'is_active' => true,
-                'keterangan' => 'UKT Kelas Karyawan Angkatan 2023 Teknik Informatika',
-            ],
             // Angkatan 2024 - Global Kampus - Reguler
             [
                 'master_biaya_id' => $jbUkt->id,

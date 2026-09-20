@@ -627,6 +627,9 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
         Route::get('katalog-biaya', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'katalogBiaya']);
         Route::get('prodi-list', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'prodiList']);
         Route::get('summary', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'summary']);
+        Route::get('tarif-mahasiswa', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'tarifMahasiswa']);
+        Route::get('tagihan', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'indexTagihan']);
+        Route::post('tagihan', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'storeTagihan']);
     });
 
     // Pengaturan On/Off Skema Golongan UKT

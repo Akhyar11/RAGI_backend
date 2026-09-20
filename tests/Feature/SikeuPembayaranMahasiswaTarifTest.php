@@ -6,6 +6,7 @@ use App\Models\Sikeu\DetailTagihan;
 use App\Models\Sikeu\MasterBiaya;
 use App\Models\Sikeu\SettingTarif;
 use App\Models\Sikeu\TagihanMahasiswa;
+use App\Models\Siakad\Mahasiswa;
 use App\Models\Spmb\MasterProgramStudi;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
@@ -61,7 +62,7 @@ class SikeuPembayaranMahasiswaTarifTest extends TestCase
             ->assertJson(['status' => 'success']);
     }
 
-    public function test_store_multi_tarif_untuk_komponen_biaya_sama_dengan_prodi_dan_angkatan_berbeda(): void
+    public function test_store_multi_tarif_untuk_komponen_biaya_sama_dengan_prodi_berbeda(): void
     {
         $biaya = MasterBiaya::firstOrCreate(
             ['kode' => 'SPP_MULTI'],
@@ -126,36 +127,268 @@ class SikeuPembayaranMahasiswaTarifTest extends TestCase
                 ]
             ]);
 
-        // 3. Variasi Tarif Ketiga: SPP untuk Semua Prodi (Global) Angkatan 2025: Rp 4.000.000
-        $payloadGlobal = [
-            'master_biaya_id' => $biaya->id,
-            'tahun_angkatan' => 2025,
-            'program_studi_id' => null, // Berlaku semua prodi
-            'nominal' => 4000000,
-            'keterangan' => 'Tarif SPP Semua Prodi Angkatan 2025',
-            'is_active' => true,
-        ];
-
-        $res3 = $this->withHeaders($this->headers())
-            ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/tarif', $payloadGlobal);
-
-        $res3->assertStatus(201)
-            ->assertJson([
-                'status' => 'success',
-                'data' => [
-                    'master_biaya_id' => $biaya->id,
-                    'tahun_angkatan' => 2025,
-                    'program_studi_id' => null,
-                    'nominal' => 4000000,
-                ]
-            ]);
-
-        // 4. Verifikasi kombinasi duplikat ditolak (422)
+        // 3. Verifikasi kombinasi duplikat ditolak (422)
         $resDuplikat = $this->withHeaders($this->headers())
             ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/tarif', $payloadTI);
 
         $resDuplikat->assertStatus(422)
             ->assertJson(['status' => 'error']);
+    }
+
+    public function test_tidak_bisa_input_tarif_jika_sudah_ada_tarif_aktif_semua_prodi(): void
+    {
+        $biaya = MasterBiaya::firstOrCreate(
+            ['kode' => 'UKT_GLOBAL_TEST'],
+            ['nama' => 'UKT Global Kampus', 'tipe' => 'spp', 'nominal_standar' => 3500000, 'is_active' => true]
+        );
+
+        $prodi = MasterProgramStudi::firstOrCreate(
+            ['kode_prodi' => 'MN01'],
+            ['nama' => 'Manajemen', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        // Pasang tarif aktif untuk Semua Program Studi (Global)
+        SettingTarif::create([
+            'master_biaya_id' => $biaya->id,
+            'tahun_angkatan' => 2027,
+            'program_studi_id' => null,
+            'nominal' => 3500000,
+            'jalur_kelas' => 'Reguler',
+            'is_active' => true,
+        ]);
+
+        // Coba input tarif baru untuk prodi spesifik pada angkatan & biaya yang sama -> Wajib ditolak 422
+        $resProdi = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/tarif', [
+                'master_biaya_id' => $biaya->id,
+                'tahun_angkatan' => 2027,
+                'program_studi_id' => $prodi->id,
+                'nominal' => 3600000,
+                'is_active' => true,
+            ]);
+
+        $resProdi->assertStatus(422)
+            ->assertJson([
+                'status' => 'error',
+                'message' => 'Komponen biaya ini sudah disetting aktif untuk Semua Program Studi pada angkatan ini. Tidak perlu menginputkan tarif lagi.',
+            ]);
+
+        // Coba input lagi untuk Semua Program Studi -> Wajib ditolak 422
+        $resGlobal = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/tarif', [
+                'master_biaya_id' => $biaya->id,
+                'tahun_angkatan' => 2027,
+                'program_studi_id' => null,
+                'nominal' => 3700000,
+                'is_active' => true,
+            ]);
+
+        $resGlobal->assertStatus(422)
+            ->assertJson(['status' => 'error']);
+    }
+
+    public function test_tidak_bisa_input_tarif_global_jika_sudah_ada_tarif_prodi_aktif(): void
+    {
+        $biaya = MasterBiaya::firstOrCreate(
+            ['kode' => 'LAB_TEST_2028'],
+            ['nama' => 'Biaya Praktikum Khusus', 'tipe' => 'praktikum', 'nominal_standar' => 800000, 'is_active' => true]
+        );
+
+        $prodi = MasterProgramStudi::firstOrCreate(
+            ['kode_prodi' => 'TI02'],
+            ['nama' => 'Teknik Informatika Khusus', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        // Pasang tarif prodi aktif
+        SettingTarif::create([
+            'master_biaya_id' => $biaya->id,
+            'tahun_angkatan' => 2028,
+            'program_studi_id' => $prodi->id,
+            'nominal' => 800000,
+            'jalur_kelas' => 'Reguler',
+            'is_active' => true,
+        ]);
+
+        // Coba input tarif Semua Program Studi (Global) padahal sudah ada tarif prodi -> Wajib ditolak 422
+        $resGlobal = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/tarif', [
+                'master_biaya_id' => $biaya->id,
+                'tahun_angkatan' => 2028,
+                'program_studi_id' => null,
+                'nominal' => 750000,
+                'is_active' => true,
+            ]);
+
+        $resGlobal->assertStatus(422)
+            ->assertJson([
+                'status' => 'error',
+                'message' => 'Sudah terdapat tarif aktif spesifik per program studi untuk komponen biaya ini pada angkatan ini. Harap nonaktifkan tarif prodi terlebih dahulu jika ingin menerapkan satu tarif untuk Semua Program Studi.',
+            ]);
+    }
+
+    public function test_get_tarif_dinamis_mahasiswa_sesuai_hierarki(): void
+    {
+        $prodiTI = MasterProgramStudi::firstOrCreate(
+            ['kode_prodi' => 'TI99'],
+            ['nama' => 'Teknik Komputer', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        $mhs = Mahasiswa::firstOrCreate(
+            ['nim' => '20290001'],
+            [
+                'nama_lengkap' => 'Budi Santoso Test',
+                'program_studi_id' => $prodiTI->id,
+                'angkatan' => 2029,
+                'status' => 'aktif',
+            ]
+        );
+
+        $biayaSPP = MasterBiaya::firstOrCreate(
+            ['kode' => 'SPP_2029'],
+            ['nama' => 'SPP Semester Angkatan 2029', 'tipe' => 'spp', 'nominal_standar' => 3000000, 'is_active' => true]
+        );
+
+        $biayaLab = MasterBiaya::firstOrCreate(
+            ['kode' => 'LAB_2029'],
+            ['nama' => 'Praktikum Lab Komputer 2029', 'tipe' => 'praktikum', 'nominal_standar' => 600000, 'is_active' => true]
+        );
+
+        // 1. SPP disetting Global (Semua Prodi) = Rp 3.200.000
+        SettingTarif::create([
+            'master_biaya_id' => $biayaSPP->id,
+            'tahun_angkatan' => 2029,
+            'program_studi_id' => null,
+            'nominal' => 3200000,
+            'jalur_kelas' => 'Reguler',
+            'is_active' => true,
+        ]);
+
+        // 2. Praktikum disetting spesifik Prodi TI = Rp 650.000
+        SettingTarif::create([
+            'master_biaya_id' => $biayaLab->id,
+            'tahun_angkatan' => 2029,
+            'program_studi_id' => $prodiTI->id,
+            'nominal' => 650000,
+            'jalur_kelas' => 'Reguler',
+            'is_active' => true,
+        ]);
+
+        $res = $this->withHeaders($this->headers())
+            ->getJson("/api/v1/sikeu/pembayaran-mahasiswa/tarif-mahasiswa?mahasiswa_id={$mhs->id}");
+
+        $res->assertStatus(200)
+            ->assertJson(['status' => 'success'])
+            ->assertJsonPath('data.mahasiswa.nim', '20290001')
+            ->assertJsonPath('data.tahun_angkatan', 2029);
+
+        $items = collect($res->json('data.komponen_tarif'));
+        $sppItem = $items->firstWhere('kode', 'SPP_2029');
+        $labItem = $items->firstWhere('kode', 'LAB_2029');
+
+        $this->assertNotNull($sppItem);
+        $this->assertEquals(3200000, $sppItem['nominal']);
+        $this->assertEquals('global_kampus', $sppItem['cakupan']);
+
+        $this->assertNotNull($labItem);
+        $this->assertEquals(650000, $labItem['nominal']);
+        $this->assertEquals('spesifik_prodi', $labItem['cakupan']);
+    }
+
+    public function test_store_tagihan_mahasiswa_dengan_komponen_dinamis_dan_va(): void
+    {
+        $prodiTI = MasterProgramStudi::firstOrCreate(
+            ['kode_prodi' => 'TI99'],
+            ['nama' => 'Teknik Komputer', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        $mhs = Mahasiswa::firstOrCreate(
+            ['nim' => '20290002'],
+            ['nama_lengkap' => 'Siti Nurhaliza', 'program_studi_id' => $prodiTI->id, 'angkatan' => 2029, 'status' => 'aktif']
+        );
+
+        $biaya = MasterBiaya::firstOrCreate(
+            ['kode' => 'SPP_BILL_TEST'],
+            ['nama' => 'SPP Tagihan Test', 'tipe' => 'spp', 'nominal_standar' => 3000000, 'is_active' => true]
+        );
+
+        $payload = [
+            'mahasiswa_id' => $mhs->id,
+            'semester' => 1,
+            'jatuh_tempo' => date('Y-m-d', strtotime('+30 days')),
+            'catatan' => 'Tagihan Semester 1',
+            'mode_pembayaran' => 'terbitkan_tagihan',
+            'items' => [
+                [
+                    'master_biaya_id' => $biaya->id,
+                    'nominal' => 3000000,
+                    'keterangan' => 'Tagihan SPP',
+                ],
+            ],
+        ];
+
+        $res = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/tagihan', $payload);
+
+        $res->assertStatus(201)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'status' => 'belum_bayar',
+                    'total_tagihan' => 3000000,
+                ]
+            ]);
+
+        $this->assertNotNull($res->json('data.va_number'));
+        $this->assertStringStartsWith('88012', $res->json('data.va_number'));
+    }
+
+    public function test_store_tagihan_mahasiswa_mode_bayar_langsung_kasir_lunas(): void
+    {
+        $prodiTI = MasterProgramStudi::firstOrCreate(
+            ['kode_prodi' => 'TI99'],
+            ['nama' => 'Teknik Komputer', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        $mhs = Mahasiswa::firstOrCreate(
+            ['nim' => '20290003'],
+            ['nama_lengkap' => 'Ahmad Kasir', 'program_studi_id' => $prodiTI->id, 'angkatan' => 2029, 'status' => 'aktif']
+        );
+
+        $biaya = MasterBiaya::firstOrCreate(
+            ['kode' => 'DPP_CASHIER'],
+            ['nama' => 'DPP Gedung', 'tipe' => 'lainnya', 'nominal_standar' => 2500000, 'is_active' => true]
+        );
+
+        $payload = [
+            'mahasiswa_id' => $mhs->id,
+            'semester' => 1,
+            'jatuh_tempo' => date('Y-m-d'),
+            'catatan' => 'Bayar tunai di loket kasir',
+            'mode_pembayaran' => 'bayar_loket_tunai',
+            'jumlah_bayar' => 2500000,
+            'items' => [
+                [
+                    'master_biaya_id' => $biaya->id,
+                    'nominal' => 2500000,
+                    'keterangan' => 'DPP',
+                ],
+            ],
+        ];
+
+        $res = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/tagihan', $payload);
+
+        $res->assertStatus(201)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'status' => 'lunas',
+                    'total_tagihan' => 2500000,
+                ]
+            ]);
+
+        $this->assertNotNull($res->json('data.pembayaran'));
+        $this->assertEquals('success', $res->json('data.pembayaran.status'));
     }
 
     public function test_index_dan_filter_tarif(): void
