@@ -168,14 +168,19 @@ class PembayaranMahasiswaPotonganController extends Controller
                 'diinput_oleh_nama' => $item->inputter?->name ?? 'Admin Keuangan',
                 'created_at' => $item->created_at ? $item->created_at->format('Y-m-d H:i:s') : null,
                 'tagihan_list' => $item->potonganTagihan->map(function ($pt) {
+                    $tagihan = $pt->tagihan;
+                    $totalBersih = $tagihan ? (float)($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan) : 0;
+                    $sisa = $tagihan ? max(0, $totalBersih - (float)$tagihan->total_bayar) : 0;
                     return [
                         'id' => $pt->id,
                         'tagihan_id' => $pt->tagihan_id,
-                        'nomor_tagihan' => $pt->tagihan?->nomor_tagihan ?? '-',
+                        'nomor_tagihan' => $tagihan?->nomor_tagihan ?? '-',
                         'nominal_potongan' => (float)$pt->nominal_potongan,
-                        'total_tagihan' => (float)($pt->tagihan?->total_tagihan ?? 0),
-                        'total_bayar' => (float)($pt->tagihan?->total_bayar ?? 0),
-                        'status_tagihan' => $pt->tagihan?->status ?? '-',
+                        'total_tagihan' => (float)($tagihan?->total_tagihan ?? 0),
+                        'total_bayar' => (float)($tagihan?->total_bayar ?? 0),
+                        'sisa' => $sisa,
+                        'status_tagihan' => $tagihan?->status ?? '-',
+                        'jatuh_tempo' => $tagihan?->jatuh_tempo ? (is_object($tagihan->jatuh_tempo) && method_exists($tagihan->jatuh_tempo, 'format') ? $tagihan->jatuh_tempo->format('Y-m-d') : (string)$tagihan->jatuh_tempo) : null,
                         'created_at' => $pt->created_at ? $pt->created_at->format('Y-m-d H:i') : null,
                     ];
                 }),
@@ -195,13 +200,15 @@ class PembayaranMahasiswaPotonganController extends Controller
             'is_calon_mahasiswa' => 'nullable|boolean',
             'tipe_referensi' => 'nullable|string|in:mahasiswa,calon_mahasiswa',
             'nama_potongan' => 'required|string|max:150',
-            'nomor_sk' => 'nullable|string|max:100',
+            'nomor_sk' => 'required|string|max:100',
             'keterangan' => 'nullable|string|max:500',
             'status' => 'nullable|in:aktif,nonaktif',
             'target_bills' => 'required|array|min:1',
             'target_bills.*.tagihan_id' => 'required|integer|exists:sikeu_tagihan_mahasiswa,id',
             'target_bills.*.nominal_potongan' => 'required|numeric|min:1',
             'target_bills.*.mode_potongan' => 'nullable|string|in:seluruhnya,nominal',
+        ], [
+            'nomor_sk.required' => 'Nomor SK / Dasar Keputusan wajib diisi sebagai bukti persetujuan pemberian potongan.',
         ]);
 
         if ($validator->fails()) {

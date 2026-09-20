@@ -429,16 +429,21 @@ class PembayaranMahasiswaTarifController extends Controller
 
             $selectedTarif = $prodiTarif ?: $globalTarif;
 
+            // HANYA sertakan komponen biaya jika benar-benar telah disetting di Pengaturan Tarif untuk angkatan ini
+            if (!$selectedTarif) {
+                continue;
+            }
+
             $applicableTarifs[] = [
-                'setting_tarif_id' => $selectedTarif?->id,
+                'setting_tarif_id' => $selectedTarif->id,
                 'master_biaya_id' => $mb->id,
                 'kode' => $mb->kode,
                 'nama' => $mb->nama,
                 'tipe' => $mb->tipe,
-                'nominal' => $selectedTarif ? (float)$selectedTarif->nominal : (float)$mb->nominal_standar,
+                'nominal' => (float)$selectedTarif->nominal,
                 'is_recurring' => (bool)$mb->is_recurring,
-                'cakupan' => $selectedTarif ? ($selectedTarif->program_studi_id !== null ? 'spesifik_prodi' : 'global_kampus') : 'standar_katalog',
-                'keterangan' => $selectedTarif?->keterangan,
+                'cakupan' => $selectedTarif->program_studi_id !== null ? 'spesifik_prodi' : 'global_kampus',
+                'keterangan' => $selectedTarif->keterangan,
             ];
         }
 
@@ -883,11 +888,11 @@ class PembayaranMahasiswaTarifController extends Controller
             $rincian = [];
 
             foreach ($komponenBiaya as $kb) {
-                // Hierarki tarif: spesifik prodi -> global prodi null -> nominal standar
+                // Hierarki tarif: spesifik prodi -> global prodi null (tanpa fallback statis nominal standar)
                 $tarif = $tarifs->first(fn($t) => $t->master_biaya_id == $kb->id && $t->program_studi_id == $mhs->program_studi_id)
                       ?? $tarifs->first(fn($t) => $t->master_biaya_id == $kb->id && $t->program_studi_id === null);
 
-                $nom = $tarif ? (float)$tarif->nominal : (float)$kb->nominal_standar;
+                $nom = $tarif ? (float)$tarif->nominal : 0;
                 if ($nom > 0) {
                     $mhsNominal += $nom;
                     $rincian[] = [
@@ -997,11 +1002,11 @@ class PembayaranMahasiswaTarifController extends Controller
                     if ($hasCustom) {
                         $nominal = (float)$reqItem['nominal'];
                     } else {
-                        // Ambil dari tarif: spesifik prodi -> global -> nominal standar
+                        // Ambil dari tarif: spesifik prodi -> global (tanpa fallback statis nominal standar)
                         $tarif = $tarifs->first(fn($t) => $t->master_biaya_id == $mbId && $t->program_studi_id == $student->program_studi_id)
                               ?? $tarifs->first(fn($t) => $t->master_biaya_id == $mbId && $t->program_studi_id === null);
 
-                        $nominal = $tarif ? (float)$tarif->nominal : (float)($masterBiayas[$mbId]?->nominal_standar ?? 0);
+                        $nominal = $tarif ? (float)$tarif->nominal : 0;
                     }
 
                     if ($nominal > 0) {

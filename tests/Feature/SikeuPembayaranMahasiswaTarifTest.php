@@ -645,4 +645,26 @@ class SikeuPembayaranMahasiswaTarifTest extends TestCase
         $this->assertDatabaseMissing('sikeu_tagihan_mahasiswa', ['id' => $t1->id]);
         $this->assertDatabaseMissing('sikeu_tagihan_mahasiswa', ['id' => $t2->id]);
     }
+
+    public function test_tarif_mahasiswa_returns_empty_when_angkatan_not_configured_in_setting_tarif(): void
+    {
+        $prodi = MasterProgramStudi::firstOrCreate(
+            ['kode_prodi' => 'INF-TEST'],
+            ['nama' => 'Informatika Test', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        // Angkatan 2099 belum pernah disetting di SettingTarif
+        $mhs = Mahasiswa::firstOrCreate(
+            ['nim' => 'TEST_ANGK_2099'],
+            ['nama_lengkap' => 'Mahasiswa Belum Setting Tarif', 'angkatan' => 2099, 'program_studi_id' => $prodi->id, 'status' => 'aktif']
+        );
+
+        $res = $this->withHeaders($this->headers())
+            ->getJson("/api/v1/sikeu/pembayaran-mahasiswa/tarif-mahasiswa?mahasiswa_id={$mhs->id}");
+
+        $res->assertStatus(200)
+            ->assertJson(['status' => 'success'])
+            ->assertJsonPath('data.tahun_angkatan', 2099)
+            ->assertJsonCount(0, 'data.komponen_tarif');
+    }
 }

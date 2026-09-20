@@ -299,6 +299,7 @@ class SikeuPembayaranMahasiswaPotonganTest extends TestCase
         $payload = [
             'mahasiswa_id' => $mhs->id,
             'nama_potongan' => 'Potongan Revert Test',
+            'nomor_sk' => 'SK/REVERT/2026/001',
             'target_bills' => [
                 [
                     'tagihan_id' => $tagihan->id,
@@ -332,5 +333,45 @@ class SikeuPembayaranMahasiswaPotonganTest extends TestCase
         $va->refresh();
         $this->assertEquals(2000000, (float)$va->nominal);
         $this->assertEquals('aktif', $va->status);
+    }
+
+    public function test_nomor_sk_is_required_for_potongan(): void
+    {
+        $mhs = Mahasiswa::create([
+            'nim' => '2023' . rand(1000, 9999),
+            'nama_lengkap' => 'Eko SK Required',
+            'program_studi_id' => $this->prodi->id,
+            'angkatan' => 2023,
+            'status' => 'aktif',
+        ]);
+
+        $tagihan = TagihanMahasiswa::create([
+            'mahasiswa_id' => $mhs->id,
+            'nomor_tagihan' => 'INV-SK-REQ-' . Str::random(5),
+            'total_tagihan' => 1000000,
+            'total_potongan' => 0,
+            'total_bayar' => 0,
+            'status' => 'belum_bayar',
+            'jatuh_tempo' => now()->addDays(10),
+        ]);
+
+        // Kirim tanpa nomor_sk
+        $payload = [
+            'mahasiswa_id' => $mhs->id,
+            'nama_potongan' => 'Potongan Tanpa SK',
+            'target_bills' => [
+                [
+                    'tagihan_id' => $tagihan->id,
+                    'mode_potongan' => 'nominal',
+                    'nominal_potongan' => 500000,
+                ],
+            ],
+        ];
+
+        $res = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/potongan', $payload);
+
+        $res->assertStatus(422)
+            ->assertJsonStructure(['errors' => ['nomor_sk']]);
     }
 }
