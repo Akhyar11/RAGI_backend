@@ -409,11 +409,17 @@ class PembayaranMahasiswaTarifController extends Controller
             ->where('is_active', true)
             ->get();
 
-        // Kelompokkan tarif per master_biaya_id dan tentukan tarif yang berlaku
+        // Kelompokkan tarif per master_biaya_id
         $grouped = $tarifs->groupBy('master_biaya_id');
         $applicableTarifs = [];
 
-        foreach ($grouped as $masterBiayaId => $items) {
+        // Ambil seluruh komponen biaya dinamis aktif dari katalog
+        $dynamicMasterBiayas = MasterBiaya::where('is_active', true)
+            ->where('skema_tarif', 'dinamis')
+            ->get();
+
+        foreach ($dynamicMasterBiayas as $mb) {
+            $items = $grouped->get($mb->id, collect());
             // 1. Cek apakah ada tarif spesifik prodi mahasiswa
             $prodiTarif = $prodiId ? $items->firstWhere('program_studi_id', $prodiId) : null;
             // 2. Cek apakah ada tarif global kampus (Semua Program Studi)
@@ -423,19 +429,17 @@ class PembayaranMahasiswaTarifController extends Controller
 
             $selectedTarif = $prodiTarif ?: $globalTarif;
 
-            if ($selectedTarif && $selectedTarif->masterBiaya) {
-                $applicableTarifs[] = [
-                    'setting_tarif_id' => $selectedTarif->id,
-                    'master_biaya_id' => $selectedTarif->master_biaya_id,
-                    'kode' => $selectedTarif->masterBiaya->kode,
-                    'nama' => $selectedTarif->masterBiaya->nama,
-                    'tipe' => $selectedTarif->masterBiaya->tipe,
-                    'nominal' => (float)$selectedTarif->nominal,
-                    'is_recurring' => (bool)$selectedTarif->masterBiaya->is_recurring,
-                    'cakupan' => $selectedTarif->program_studi_id !== null ? 'spesifik_prodi' : 'global_kampus',
-                    'keterangan' => $selectedTarif->keterangan,
-                ];
-            }
+            $applicableTarifs[] = [
+                'setting_tarif_id' => $selectedTarif?->id,
+                'master_biaya_id' => $mb->id,
+                'kode' => $mb->kode,
+                'nama' => $mb->nama,
+                'tipe' => $mb->tipe,
+                'nominal' => $selectedTarif ? (float)$selectedTarif->nominal : (float)$mb->nominal_standar,
+                'is_recurring' => (bool)$mb->is_recurring,
+                'cakupan' => $selectedTarif ? ($selectedTarif->program_studi_id !== null ? 'spesifik_prodi' : 'global_kampus') : 'standar_katalog',
+                'keterangan' => $selectedTarif?->keterangan,
+            ];
         }
 
         // Urutkan berdasarkan kode komponen
