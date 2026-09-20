@@ -241,9 +241,16 @@ class ExternalTagihanController extends Controller
             });
         }
 
-        $pembayaran = $query->orderBy('waktu_bayar', 'desc')
-            ->orderBy('id', 'desc')
-            ->paginate($perPage);
+        $sortBy = $request->input('sort_by', 'waktu_bayar');
+        $sortOrder = strtolower($request->input('sort_order', $request->input('sort_dir', 'desc'))) === 'asc' ? 'asc' : 'desc';
+        if (in_array($sortBy, ['waktu_bayar', 'jumlah_bayar', 'kode_transaksi', 'id', 'created_at', 'status'])) {
+            $query->orderBy($sortBy, $sortOrder);
+        } else {
+            $query->orderBy('waktu_bayar', 'desc');
+        }
+        $query->orderBy('id', 'desc');
+
+        $pembayaran = $query->paginate($perPage);
 
         $mappedItems = collect($pembayaran->items())->map(function ($p) {
             $t = $p->tagihan;
