@@ -630,6 +630,8 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
         Route::get('tarif-mahasiswa', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'tarifMahasiswa']);
         Route::get('tagihan', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'indexTagihan']);
         Route::post('tagihan', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'storeTagihan']);
+        Route::delete('tagihan/{id}', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'destroyTagihan']);
+        Route::post('tagihan/batch-delete', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'batchDestroyTagihan']);
         Route::get('mass-tagihan/preview', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'previewMassTagihan']);
         Route::post('mass-tagihan', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'storeMassTagihan']);
         Route::get('potongan', [App\Http\Controllers\Sikeu\PembayaranMahasiswaPotonganController::class, 'index']);

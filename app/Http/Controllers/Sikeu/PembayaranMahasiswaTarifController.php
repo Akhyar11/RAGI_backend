@@ -690,6 +690,128 @@ class PembayaranMahasiswaTarifController extends Controller
     }
 
     /**
+     * DELETE /api/v1/sikeu/pembayaran-mahasiswa/tagihan/{id}
+     * Menghapus 1 tagihan mahasiswa secara aman.
+     */
+    public function destroyTagihan($id)
+    {
+        $tagihan = TagihanMahasiswa::with(['pembayarans', 'potonganTagihan'])->findOrFail($id);
+
+        if ((float)$tagihan->total_bayar > 0 || $tagihan->status === 'lunas' || $tagihan->pembayarans->where('status', 'success')->isNotEmpty()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tagihan tidak dapat dihapus karena sudah terdapat transaksi pembayaran yang tercatat. Lakukan pembatalan/koreksi pembayaran kasir terlebih dahulu.',
+            ], 422);
+        }
+
+        if ($tagihan->potonganTagihan->isNotEmpty() || (float)$tagihan->total_potongan > 0) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tagihan memiliki alokasi potongan mahasiswa. Batalkan potongan terkait pada menu Potongan Mahasiswa terlebih dahulu.',
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $tagihan->virtualAccounts()->delete();
+            $tagihan->detailTagihan()->delete();
+            $tagihan->dispensasis()->delete();
+            $tagihan->dendaTagihan()->delete();
+            $tagihan->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Tagihan {$tagihan->nomor_tagihan} berhasil dihapus.",
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal menghapus tagihan: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * POST /api/v1/sikeu/pembayaran-mahasiswa/tagihan/batch-delete
+     * Menghapus banyak tagihan mahasiswa sekaligus (batch delete).
+     */
+    public function batchDestroyTagihan(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'tagihan_ids' => 'required|array|min:1',
+            'tagihan_ids.*' => 'integer|exists:sikeu_tagihan_mahasiswa,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validasi penghapusan tagihan gagal.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $tagihans = TagihanMahasiswa::with(['pembayarans', 'potonganTagihan'])
+            ->whereIn('id', $request->tagihan_ids)
+            ->get();
+
+        $paidBills = $tagihans->filter(function ($b) {
+            return (float)$b->total_bayar > 0 || $b->status === 'lunas' || $b->pembayarans->where('status', 'success')->isNotEmpty();
+        });
+
+        if ($paidBills->isNotEmpty()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Terdapat {$paidBills->count()} tagihan yang sudah memiliki riwayat pembayaran sehingga tidak dapat dihapus.",
+            ], 422);
+        }
+
+        $discountedBills = $tagihans->filter(function ($b) {
+            return $b->potonganTagihan->isNotEmpty() || (float)$b->total_potongan > 0;
+        });
+
+        if ($discountedBills->isNotEmpty()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Terdapat {$discountedBills->count()} tagihan yang terikat alokasi potongan mahasiswa. Batalkan potongan terkait terlebih dahulu.",
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $deletedCount = 0;
+            foreach ($tagihans as $tagihan) {
+                $tagihan->virtualAccounts()->delete();
+                $tagihan->detailTagihan()->delete();
+                $tagihan->dispensasis()->delete();
+                $tagihan->dendaTagihan()->delete();
+                $tagihan->delete();
+                $deletedCount++;
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Berhasil menghapus {$deletedCount} tagihan mahasiswa.",
+                'data' => [
+                    'deleted_count' => $deletedCount,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal menghapus tagihan secara massal: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * GET /api/v1/sikeu/pembayaran-mahasiswa/katalog-biaya
      * Mengambil katalog komponen biaya aktif untuk opsi dropdown.
      * Hanya mengambil komponen biaya dengan skema tarif dinamis yang dikonfigurasikan di /sikeu/master.

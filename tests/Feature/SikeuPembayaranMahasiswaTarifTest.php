@@ -572,4 +572,77 @@ class SikeuPembayaranMahasiswaTarifTest extends TestCase
             'source_system' => 'sikeu_pembayaran_mahasiswa_massal',
         ]);
     }
+
+    public function test_delete_tagihan_satuan(): void
+    {
+        $prodi = MasterProgramStudi::firstOrCreate(
+            ['kode_prodi' => 'INF-TEST'],
+            ['nama' => 'Informatika Test', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        $mhs = Mahasiswa::firstOrCreate(
+            ['nim' => 'TEST_DEL_01'],
+            ['nama_lengkap' => 'Mahasiswa Delete Test', 'angkatan' => 2026, 'program_studi_id' => $prodi->id, 'status' => 'aktif']
+        );
+
+        $tagihan = TagihanMahasiswa::create([
+            'mahasiswa_id' => $mhs->id,
+            'nomor_tagihan' => 'INV-TEST-DEL-1',
+            'total_tagihan' => 1000000,
+            'status' => 'belum_bayar',
+            'tahun_akademik_id' => 1,
+            'source_system' => 'sikeu_test',
+        ]);
+
+        $res = $this->withHeaders($this->headers())
+            ->deleteJson("/api/v1/sikeu/pembayaran-mahasiswa/tagihan/{$tagihan->id}");
+
+        $res->assertStatus(200)
+            ->assertJson(['status' => 'success']);
+
+        $this->assertDatabaseMissing('sikeu_tagihan_mahasiswa', ['id' => $tagihan->id]);
+    }
+
+    public function test_batch_delete_tagihan(): void
+    {
+        $prodi = MasterProgramStudi::firstOrCreate(
+            ['kode_prodi' => 'INF-TEST'],
+            ['nama' => 'Informatika Test', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        $mhs = Mahasiswa::firstOrCreate(
+            ['nim' => 'TEST_BATCH_DEL'],
+            ['nama_lengkap' => 'Mahasiswa Batch Test', 'angkatan' => 2026, 'program_studi_id' => $prodi->id, 'status' => 'aktif']
+        );
+
+        $t1 = TagihanMahasiswa::create([
+            'mahasiswa_id' => $mhs->id,
+            'nomor_tagihan' => 'INV-BATCH-1',
+            'total_tagihan' => 500000,
+            'status' => 'belum_bayar',
+            'tahun_akademik_id' => 1,
+            'source_system' => 'sikeu_test',
+        ]);
+
+        $t2 = TagihanMahasiswa::create([
+            'mahasiswa_id' => $mhs->id,
+            'nomor_tagihan' => 'INV-BATCH-2',
+            'total_tagihan' => 750000,
+            'status' => 'belum_bayar',
+            'tahun_akademik_id' => 1,
+            'source_system' => 'sikeu_test',
+        ]);
+
+        $res = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/tagihan/batch-delete', [
+                'tagihan_ids' => [$t1->id, $t2->id],
+            ]);
+
+        $res->assertStatus(200)
+            ->assertJson(['status' => 'success'])
+            ->assertJsonPath('data.deleted_count', 2);
+
+        $this->assertDatabaseMissing('sikeu_tagihan_mahasiswa', ['id' => $t1->id]);
+        $this->assertDatabaseMissing('sikeu_tagihan_mahasiswa', ['id' => $t2->id]);
+    }
 }
