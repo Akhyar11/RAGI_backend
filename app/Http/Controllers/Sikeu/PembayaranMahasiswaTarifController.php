@@ -476,6 +476,14 @@ class PembayaranMahasiswaTarifController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->filled('jatuh_tempo_dari')) {
+            $query->whereDate('jatuh_tempo', '>=', $request->jatuh_tempo_dari);
+        }
+
+        if ($request->filled('jatuh_tempo_sampai')) {
+            $query->whereDate('jatuh_tempo', '<=', $request->jatuh_tempo_sampai);
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -499,6 +507,10 @@ class PembayaranMahasiswaTarifController extends Controller
             $mhs = $isCalon ? $item->calonMahasiswa : $item->mahasiswa;
             $va = $item->virtualAccount ?? $item->virtualAccounts->first();
 
+            $totalBersih = max(0, (float)($item->total_tagihan + (float)($item->total_denda ?? 0) - (float)$item->total_potongan));
+            $sisa = max(0, $totalBersih - (float)$item->total_bayar);
+            $kelebihanBayar = max(0, (float)$item->total_bayar - $totalBersih);
+
             return [
                 'id' => $item->id,
                 'nomor_tagihan' => $item->nomor_tagihan,
@@ -511,7 +523,8 @@ class PembayaranMahasiswaTarifController extends Controller
                 'total_tagihan' => (float)$item->total_tagihan,
                 'total_potongan' => (float)$item->total_potongan,
                 'total_bayar' => (float)$item->total_bayar,
-                'sisa' => max(0, (float)$item->total_tagihan - (float)$item->total_potongan - (float)$item->total_bayar),
+                'sisa' => $sisa,
+                'kelebihan_bayar' => $kelebihanBayar,
                 'status' => $item->status,
                 'jatuh_tempo' => $item->jatuh_tempo ? $item->jatuh_tempo->format('Y-m-d') : null,
                 'va_number' => $va?->va_number,
@@ -1105,5 +1118,139 @@ class PembayaranMahasiswaTarifController extends Controller
                 'total_katalog_biaya' => $totalKatalog,
             ],
         ]);
+    }
+
+    /**
+     * POST /api/v1/sikeu/pembayaran-mahasiswa/alihkan-pembayaran
+     * Mengalihkan pembayaran / kelebihan bayar dari satu tagihan ke tagihan lain milik mahasiswa yang sama.
+     */
+    public function alihkanPembayaran(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'source_tagihan_id' => 'required|integer|exists:sikeu_tagihan_mahasiswa,id',
+            'target_tagihan_id' => 'required|integer|exists:sikeu_tagihan_mahasiswa,id|different:source_tagihan_id',
+            'nominal' => 'required|numeric|min:1',
+            'alasan' => 'required|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validasi pengalihan pembayaran gagal.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $source = TagihanMahasiswa::findOrFail($request->source_tagihan_id);
+            $target = TagihanMahasiswa::findOrFail($request->target_tagihan_id);
+
+            // Pastikan kedua tagihan milik mahasiswa/calon mahasiswa yang sama
+            $sameStudent = ($source->mahasiswa_id && $source->mahasiswa_id === $target->mahasiswa_id)
+                || ($source->calon_mahasiswa_id && $source->calon_mahasiswa_id === $target->calon_mahasiswa_id);
+
+            if (!$sameStudent) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Pengalihan pembayaran hanya dapat dilakukan antar tagihan milik mahasiswa yang sama.',
+                ], 422);
+            }
+
+            // Validasi dana yang tersedia di tagihan sumber
+            $availableSourceBayar = (float)$source->total_bayar;
+            if ($availableSourceBayar <= 0) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Tagihan asal #{$source->nomor_tagihan} belum memiliki riwayat pembayaran yang dapat dialihkan.",
+                ], 422);
+            }
+
+            $nominal = (float)$request->nominal;
+            if ($nominal > $availableSourceBayar) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Nominal pengalihan (Rp " . number_format($nominal, 0, ',', '.') . ") melebihi total dana terbayar pada tagihan asal (Rp " . number_format($availableSourceBayar, 0, ',', '.') . ").",
+                ], 422);
+            }
+
+            // Validasi sisa tunggakan di tagihan target
+            $targetBersih = max(0, (float)$target->total_tagihan + (float)($target->total_denda ?? 0) - (float)$target->total_potongan);
+            $targetSisa = max(0, $targetBersih - (float)$target->total_bayar);
+
+            if ($targetSisa <= 0) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Tagihan tujuan #{$target->nomor_tagihan} sudah lunas, tidak memerlukan pengalihan pembayaran.",
+                ], 422);
+            }
+
+            if ($nominal > ($targetSisa + 100)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Nominal pengalihan (Rp " . number_format($nominal, 0, ',', '.') . ") melebihi sisa tunggakan tagihan tujuan (Rp " . number_format($targetSisa, 0, ',', '.') . ").",
+                ], 422);
+            }
+
+            // 1. Kurangi total_bayar pada tagihan sumber
+            $newSourceBayar = max(0, (float)$source->total_bayar - $nominal);
+            $sourceBersih = max(0, (float)$source->total_tagihan + (float)($source->total_denda ?? 0) - (float)$source->total_potongan);
+            $newSourceStatus = 'belum_bayar';
+            if ($newSourceBayar >= $sourceBersih && $sourceBersih > 0) {
+                $newSourceStatus = 'lunas';
+            } elseif ($newSourceBayar > 0) {
+                $newSourceStatus = 'sebagian';
+            } elseif ($sourceBersih <= 0) {
+                $newSourceStatus = 'lunas';
+            }
+
+            $source->update([
+                'total_bayar' => $newSourceBayar,
+                'status' => $newSourceStatus,
+            ]);
+
+            // 2. Tambah total_bayar pada tagihan tujuan dan catat record Pembayaran
+            $newTargetBayar = (float)$target->total_bayar + $nominal;
+            $newTargetStatus = ($newTargetBayar >= $targetBersih) ? 'lunas' : 'sebagian';
+
+            $target->update([
+                'total_bayar' => $newTargetBayar,
+                'status' => $newTargetStatus,
+            ]);
+
+            $kodeTrx = 'ALIKH-' . date('YmdHis') . '-' . rand(100, 999);
+            $pembayaran = Pembayaran::create([
+                'tagihan_id' => $target->id,
+                'virtual_account_id' => null,
+                'kode_transaksi' => $kodeTrx,
+                'jumlah_bayar' => $nominal,
+                'waktu_bayar' => now(),
+                'channel_bayar' => 'PENGALIHAN_DANA',
+                'bank_pengirim' => 'INTERNAL_KAMPUS',
+                'catatan' => 'Dialihkan dari Tagihan #' . $source->nomor_tagihan . ' (' . $request->alasan . ')',
+                'status' => 'success',
+                'diverifikasi_oleh' => auth()->id(),
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Berhasil mengalihkan dana sebesar Rp " . number_format($nominal, 0, ',', '.') . " dari tagihan #{$source->nomor_tagihan} ke tagihan #{$target->nomor_tagihan}.",
+                'data' => [
+                    'source_tagihan' => $source->fresh(),
+                    'target_tagihan' => $target->fresh(),
+                    'pembayaran' => $pembayaran,
+                ],
+            ]);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengalihkan pembayaran: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

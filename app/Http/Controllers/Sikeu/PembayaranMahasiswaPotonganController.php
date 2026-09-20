@@ -279,23 +279,28 @@ class PembayaranMahasiswaPotonganController extends Controller
                 }
             }
 
-            $totalBersih = (float)($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan);
-            $sisaTagihan = max(0, $totalBersih - (float)$tagihan->total_bayar);
-
-            if ($sisaTagihan <= 0) {
+            $maxPotonganAvailable = max(0, (float)$tagihan->total_tagihan - (float)$tagihan->total_potongan);
+            if ($maxPotonganAvailable <= 0) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => "Tagihan #{$tagihan->nomor_tagihan} sudah lunas dan tidak dapat diberikan potongan lagi.",
+                    'message' => "Tagihan #{$tagihan->nomor_tagihan} sudah mendapatkan potongan maksimal (100%).",
                 ], 422);
             }
 
-            $mode = $billInput['mode_potongan'] ?? 'nominal';
-            $nominalPotongan = ($mode === 'seluruhnya') ? $sisaTagihan : (float)$billInput['nominal_potongan'];
+            $totalBersih = max(0, (float)($tagihan->total_tagihan + (float)($tagihan->total_denda ?? 0) - (float)$tagihan->total_potongan));
+            $sisaTagihan = max(0, $totalBersih - (float)$tagihan->total_bayar);
 
-            if ($nominalPotongan > $sisaTagihan) {
+            $mode = $billInput['mode_potongan'] ?? 'nominal';
+            // Jika tagihan sudah lunas (misal mahasiswa sudah bayar namun kemudian dapat beasiswa), 
+            // potongan penuh dihitung dari sisa plafon tagihan, sehingga menciptakan saldo lebih bayar yang dapat dialihkan.
+            $nominalPotongan = ($mode === 'seluruhnya')
+                ? ($sisaTagihan > 0 ? $sisaTagihan : $maxPotonganAvailable)
+                : (float)$billInput['nominal_potongan'];
+
+            if ($nominalPotongan > $maxPotonganAvailable) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => "Nominal potongan (Rp " . number_format($nominalPotongan, 0, ',', '.') . ") pada tagihan #{$tagihan->nomor_tagihan} melebihi sisa tagihan (Rp " . number_format($sisaTagihan, 0, ',', '.') . ").",
+                    'message' => "Nominal potongan (Rp " . number_format($nominalPotongan, 0, ',', '.') . ") pada tagihan #{$tagihan->nomor_tagihan} melebihi batas plafon tagihan yang belum terpotong (Rp " . number_format($maxPotonganAvailable, 0, ',', '.') . ").",
                 ], 422);
             }
 

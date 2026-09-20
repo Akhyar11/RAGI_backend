@@ -374,4 +374,53 @@ class SikeuPembayaranMahasiswaPotonganTest extends TestCase
         $res->assertStatus(422)
             ->assertJsonStructure(['errors' => ['nomor_sk']]);
     }
+
+    public function test_potongan_beasiswa_bisa_diberikan_pada_tagihan_yang_sudah_lunas_menghasilkan_kelebihan_bayar(): void
+    {
+        $mhs = Mahasiswa::create([
+            'nim' => '2023' . rand(1000, 9999),
+            'nama_lengkap' => 'Fani Beasiswa Pasca Bayar',
+            'program_studi_id' => $this->prodi->id,
+            'angkatan' => 2023,
+            'status' => 'aktif',
+        ]);
+
+        // Tagihan 2.000.000 sudah dibayar lunas sebelumnya oleh mahasiswa
+        $tagihan = TagihanMahasiswa::create([
+            'mahasiswa_id' => $mhs->id,
+            'nomor_tagihan' => 'INV-LUNAS-BEASISWA-' . Str::random(5),
+            'total_tagihan' => 2000000,
+            'total_potongan' => 0,
+            'total_bayar' => 2000000,
+            'status' => 'lunas',
+            'jatuh_tempo' => now()->addDays(10),
+        ]);
+
+        // Belakangan keluar SK Beasiswa 100% (2.000.000)
+        $payload = [
+            'mahasiswa_id' => $mhs->id,
+            'nama_potongan' => 'Beasiswa Prestasi Akademik',
+            'nomor_sk' => 'SK/REK/2026/088',
+            'keterangan' => 'Beasiswa susulan setelah pembayaran',
+            'target_bills' => [
+                [
+                    'tagihan_id' => $tagihan->id,
+                    'mode_potongan' => 'seluruhnya',
+                    'nominal_potongan' => 2000000,
+                ],
+            ],
+        ];
+
+        $res = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/potongan', $payload);
+
+        $res->assertStatus(201)
+            ->assertJson(['status' => 'success'])
+            ->assertJsonPath('data.total_nominal_potongan', 2000000);
+
+        $tagihan->refresh();
+        $this->assertEquals(2000000, (float)$tagihan->total_potongan);
+        $this->assertEquals(2000000, (float)$tagihan->total_bayar);
+        $this->assertEquals('lunas', $tagihan->status);
+    }
 }

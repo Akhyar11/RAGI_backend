@@ -638,6 +638,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
         Route::post('potongan', [App\Http\Controllers\Sikeu\PembayaranMahasiswaPotonganController::class, 'store']);
         Route::get('potongan/{id}', [App\Http\Controllers\Sikeu\PembayaranMahasiswaPotonganController::class, 'show']);
         Route::delete('potongan/{id}', [App\Http\Controllers\Sikeu\PembayaranMahasiswaPotonganController::class, 'destroy']);
+        Route::post('alihkan-pembayaran', [App\Http\Controllers\Sikeu\PembayaranMahasiswaTarifController::class, 'alihkanPembayaran']);
     });
 
     // Pengaturan On/Off Skema Golongan UKT

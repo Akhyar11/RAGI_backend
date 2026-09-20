@@ -878,7 +878,7 @@ class PembayaranKasirController extends Controller
             $tipeMhs = MahasiswaTipeTagihan::where('mahasiswa_id', $id)->first();
         }
 
-        $bills = TagihanMahasiswa::with(['details.masterBiaya', 'potonganTagihan', 'dendaTagihan', 'virtualAccount', 'tahunAkademik'])
+        $billsQuery = TagihanMahasiswa::with(['details.masterBiaya', 'potonganTagihan', 'dendaTagihan', 'virtualAccount', 'tahunAkademik'])
             ->where(function ($q) use ($id, $isCalon) {
                 if ($isCalon) {
                     $q->where('calon_mahasiswa_id', $id);
@@ -886,14 +886,19 @@ class PembayaranKasirController extends Controller
                     $q->where('mahasiswa_id', $id)
                       ->orWhere('calon_mahasiswa_id', $id);
                 }
-            })
-            ->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi'])
-            ->orderBy('id', 'asc')
-            ->get();
+            });
+
+        if (!request()->boolean('include_lunas')) {
+            $billsQuery->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi']);
+        }
+
+        $bills = $billsQuery->orderBy('id', 'asc')->get();
 
         $mappedBills = $bills->map(function ($b) {
-            $totalBersih = (float)($b->total_tagihan + $b->total_denda - $b->total_potongan);
+            $totalBersih = max(0, (float)($b->total_tagihan + (float)($b->total_denda ?? 0) - (float)$b->total_potongan));
             $sisa = max(0, $totalBersih - (float)$b->total_bayar);
+            $kelebihanBayar = max(0, (float)$b->total_bayar - $totalBersih);
+            $maxPotonganAvailable = max(0, (float)$b->total_tagihan - (float)$b->total_potongan);
             
             $namaKomponen = $b->details->map(function ($d) {
                 return !empty($d->keterangan) ? $d->keterangan : ($d->masterBiaya->nama ?? 'Komponen Biaya');
@@ -917,9 +922,11 @@ class PembayaranKasirController extends Controller
                 'periode_label' => $b->tahunAkademik?->nama ?? (!empty($b->catatan_approval) ? str_replace('Tagihan masal ', '', $b->catatan_approval) : 'Tagihan Berjalan'),
                 'total_tagihan' => (float)$b->total_tagihan,
                 'total_potongan' => (float)$b->total_potongan,
-                'total_denda' => (float)$b->total_denda,
+                'total_denda' => (float)($b->total_denda ?? 0),
                 'total_bayar' => (float)$b->total_bayar,
                 'sisa' => $sisa,
+                'kelebihan_bayar' => $kelebihanBayar,
+                'max_potongan_available' => $maxPotonganAvailable,
                 'status' => $b->status,
                 'jatuh_tempo' => $jt,
                 'details' => $b->details->map(fn($d) => [

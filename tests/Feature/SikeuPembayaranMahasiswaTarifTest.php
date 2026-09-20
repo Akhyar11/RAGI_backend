@@ -670,4 +670,113 @@ class SikeuPembayaranMahasiswaTarifTest extends TestCase
             ->assertJsonPath('data.tahun_angkatan', 2099)
             ->assertJsonCount(0, 'data.komponen_tarif');
     }
+
+    public function test_filter_range_date_jatuh_tempo_tagihan(): void
+    {
+        $prodi = MasterProgramStudi::firstOrCreate(
+            ['kode_prodi' => 'INF-TEST'],
+            ['nama' => 'Informatika Test', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        $mhs = Mahasiswa::firstOrCreate(
+            ['nim' => 'TEST_JT_FILTER'],
+            ['nama_lengkap' => 'Mahasiswa JT Filter', 'angkatan' => 2026, 'program_studi_id' => $prodi->id, 'status' => 'aktif']
+        );
+
+        // Tagihan 1: Jatuh tempo 2026-10-15
+        $t1 = TagihanMahasiswa::create([
+            'mahasiswa_id' => $mhs->id,
+            'nomor_tagihan' => 'INV-JT-01-' . uniqid(),
+            'total_tagihan' => 1000000,
+            'total_bayar' => 0,
+            'status' => 'belum_bayar',
+            'jatuh_tempo' => '2026-10-15',
+        ]);
+
+        // Tagihan 2: Jatuh tempo 2026-11-20
+        $t2 = TagihanMahasiswa::create([
+            'mahasiswa_id' => $mhs->id,
+            'nomor_tagihan' => 'INV-JT-02-' . uniqid(),
+            'total_tagihan' => 1500000,
+            'total_bayar' => 0,
+            'status' => 'belum_bayar',
+            'jatuh_tempo' => '2026-11-20',
+        ]);
+
+        // Filter range mencakup hanya t1
+        $res = $this->withHeaders($this->headers())
+            ->getJson("/api/v1/sikeu/pembayaran-mahasiswa/tagihan?jatuh_tempo_dari=2026-10-01&jatuh_tempo_sampai=2026-10-31");
+
+        $res->assertStatus(200);
+        $ids = collect($res->json('data'))->pluck('id')->toArray();
+        $this->assertContains($t1->id, $ids);
+        $this->assertNotContains($t2->id, $ids);
+    }
+
+    public function test_alihkan_pembayaran_antar_tagihan_mahasiswa_yang_sama(): void
+    {
+        $prodi = MasterProgramStudi::firstOrCreate(
+            ['kode_prodi' => 'INF-TEST'],
+            ['nama' => 'Informatika Test', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        $mhs = Mahasiswa::firstOrCreate(
+            ['nim' => 'TEST_ALIKH_01'],
+            ['nama_lengkap' => 'Mahasiswa Alih Dana', 'angkatan' => 2026, 'program_studi_id' => $prodi->id, 'status' => 'aktif']
+        );
+
+        // Tagihan 1 (Sumber): Awalnya bayar 3.000.000, lalu dapat beasiswa atau kelebihan bayar
+        $source = TagihanMahasiswa::create([
+            'mahasiswa_id' => $mhs->id,
+            'nomor_tagihan' => 'INV-SRC-' . uniqid(),
+            'total_tagihan' => 3000000,
+            'total_potongan' => 2000000, // Misal dapat beasiswa 2jt susulan
+            'total_bayar' => 3000000,    // Sebelumnya sudah bayar full 3jt
+            'status' => 'lunas',
+            'jatuh_tempo' => '2026-10-01',
+        ]);
+
+        // Tagihan 2 (Target): Tagihan semester berikutnya 2.500.000 belum bayar
+        $target = TagihanMahasiswa::create([
+            'mahasiswa_id' => $mhs->id,
+            'nomor_tagihan' => 'INV-TGT-' . uniqid(),
+            'total_tagihan' => 2500000,
+            'total_potongan' => 0,
+            'total_bayar' => 0,
+            'status' => 'belum_bayar',
+            'jatuh_tempo' => '2026-11-01',
+        ]);
+
+        // Alihkan kelebihan bayar 2.000.000 dari source ke target
+        $payload = [
+            'source_tagihan_id' => $source->id,
+            'target_tagihan_id' => $target->id,
+            'nominal' => 2000000,
+            'alasan' => 'Pengalihan kelebihan pembayaran karena memperoleh beasiswa',
+        ];
+
+        $res = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/alihkan-pembayaran', $payload);
+
+        $res->assertStatus(200)
+            ->assertJson(['status' => 'success']);
+
+        $source->refresh();
+        $target->refresh();
+
+        // Source bayar berkurang dari 3jt jadi 1jt (pas dengan net tagihan 3jt - 2jt = 1jt)
+        $this->assertEquals(1000000, (float)$source->total_bayar);
+        $this->assertEquals('lunas', $source->status);
+
+        // Target bayar bertambah 2jt (sebagian dari 2.5jt)
+        $this->assertEquals(2000000, (float)$target->total_bayar);
+        $this->assertEquals('sebagian', $target->status);
+
+        // Record pembayaran tercatat pada target
+        $this->assertDatabaseHas('sikeu_pembayaran', [
+            'tagihan_id' => $target->id,
+            'channel_bayar' => 'PENGALIHAN_DANA',
+            'jumlah_bayar' => 2000000,
+        ]);
+    }
 }
