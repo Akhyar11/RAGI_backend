@@ -394,22 +394,8 @@ class MenuSeeder extends Seeder
                     ['name' => 'Pengaturan Tarif', 'url' => '/sikeu/pembayaran-mahasiswa/tarif', 'icon' => 'FaDollarSign', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
                     ['name' => 'Input Tagihan', 'url' => '/sikeu/pembayaran-mahasiswa/tagihan', 'icon' => 'FaFileInvoiceDollar', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 2],
                     ['name' => 'Potongan Mahasiswa', 'url' => '/sikeu/pembayaran-mahasiswa/potongan', 'icon' => 'FaPercent', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 3],
-                ]
-            ],
-            [
-                'name' => 'KEUANGAN MAHASISWA (LEGACY)',
-                'url' => '#mhs_sikeu',
-                'icon' => 'FaGraduationCap',
-                'module' => 'sikeu',
-                'permission_slug' => 'sikeu.dashboard.read',
-                'order_index' => 3,
-                'children' => [
-                    ['name' => 'Pengaturan Tarif & Beasiswa', 'url' => '/sikeu/mahasiswa/tarif', 'icon' => 'FaDollarSign', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
-                    ['name' => 'Potongan & Keringanan Khusus', 'url' => '/sikeu/mahasiswa/potongan', 'icon' => 'FaSparkles', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 2],
-                    ['name' => 'Tagihan SPP & UKT', 'url' => '/sikeu/tagihan', 'icon' => 'FaCreditCard', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 3],
-                    ['name' => 'Pembayaran & Kasir Loket', 'url' => '/sikeu/pembayaran', 'icon' => 'FaMoneyBillWave', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pembayaran.read', 'order_index' => 4],
-                    ['name' => 'Piutang Mahasiswa', 'url' => '/sikeu/piutang', 'icon' => 'FaExclamationTriangle', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 5],
-                    ['name' => 'Dispensasi Pembayaran', 'url' => '/sikeu/dispensasi', 'icon' => 'FaClipboardCheck', 'module' => 'sikeu', 'permission_slug' => 'sikeu.dispensasi.read', 'order_index' => 6],
+                    ['name' => 'Piutang Mahasiswa', 'url' => '/sikeu/piutang', 'icon' => 'FaExclamationTriangle', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 4],
+                    ['name' => 'Dispensasi Pembayaran', 'url' => '/sikeu/dispensasi', 'icon' => 'FaClipboardCheck', 'module' => 'sikeu', 'permission_slug' => 'sikeu.dispensasi.read', 'order_index' => 5],
                 ]
             ],
             [
