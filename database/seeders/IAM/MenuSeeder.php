@@ -393,6 +393,7 @@ class MenuSeeder extends Seeder
                 'children' => [
                     ['name' => 'Pengaturan Tarif', 'url' => '/sikeu/pembayaran-mahasiswa/tarif', 'icon' => 'FaDollarSign', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
                     ['name' => 'Input Tagihan', 'url' => '/sikeu/pembayaran-mahasiswa/tagihan', 'icon' => 'FaFileInvoiceDollar', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 2],
+                    ['name' => 'Potongan Mahasiswa', 'url' => '/sikeu/pembayaran-mahasiswa/potongan', 'icon' => 'FaPercent', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 3],
                 ]
             ],
             [

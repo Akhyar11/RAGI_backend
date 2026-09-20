@@ -13,7 +13,7 @@ class PotonganTagihan extends Model
 
     protected $fillable = [
         'tagihan_id',
-
+        'potongan_mahasiswa_id',
         'tipe',
         'nominal_potongan',
         'keterangan',
@@ -27,6 +27,11 @@ class PotonganTagihan extends Model
     public function tagihan()
     {
         return $this->belongsTo(TagihanMahasiswa::class, 'tagihan_id');
+    }
+
+    public function potonganMahasiswa()
+    {
+        return $this->belongsTo(PotonganMahasiswa::class, 'potongan_mahasiswa_id');
     }
 
     public function inputter()
