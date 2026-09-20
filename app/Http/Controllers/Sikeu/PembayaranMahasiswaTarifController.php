@@ -488,7 +488,7 @@ class PembayaranMahasiswaTarifController extends Controller
         $items = collect($paginated->items())->map(function ($item) {
             $isCalon = (bool)$item->calon_mahasiswa_id;
             $mhs = $isCalon ? $item->calonMahasiswa : $item->mahasiswa;
-            $va = $item->virtualAccount->first();
+            $va = $item->virtualAccount ?? $item->virtualAccounts->first();
 
             return [
                 'id' => $item->id,
@@ -688,17 +688,273 @@ class PembayaranMahasiswaTarifController extends Controller
     /**
      * GET /api/v1/sikeu/pembayaran-mahasiswa/katalog-biaya
      * Mengambil katalog komponen biaya aktif untuk opsi dropdown.
+     * Hanya mengambil komponen biaya dengan skema tarif dinamis yang dikonfigurasikan di /sikeu/master.
      */
     public function katalogBiaya()
     {
         $biaya = MasterBiaya::where('is_active', true)
+            ->where('skema_tarif', 'dinamis')
             ->orderBy('kode', 'asc')
-            ->get(['id', 'kode', 'nama', 'tipe', 'nominal_standar', 'is_recurring']);
+            ->get(['id', 'kode', 'nama', 'tipe', 'skema_tarif', 'nominal_standar', 'is_recurring']);
 
         return response()->json([
             'status' => 'success',
             'data' => $biaya,
         ]);
+    }
+
+    /**
+     * GET /api/v1/sikeu/pembayaran-mahasiswa/mass-tagihan/preview
+     * Simulasi dan pratinjau penerbitan tagihan massal per angkatan & program studi.
+     */
+    public function previewMassTagihan(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'tahun_angkatan' => 'required|integer|min:2000|max:2050',
+            'program_studi_id' => 'nullable|integer|exists:spmb_master_program_studi,id',
+            'master_biaya_ids' => 'nullable|array',
+            'master_biaya_ids.*' => 'integer|exists:sikeu_master_biaya,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validasi pratinjau tagihan massal gagal.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $tahunAngkatan = (int)$request->tahun_angkatan;
+        $prodiId = $request->filled('program_studi_id') ? (int)$request->program_studi_id : null;
+
+        $studentsQuery = Mahasiswa::with('programStudi')
+            ->where('angkatan', $tahunAngkatan);
+
+        if ($prodiId) {
+            $studentsQuery->where('program_studi_id', $prodiId);
+        }
+
+        $students = $studentsQuery->get();
+
+        // Komponen biaya yang akan ditagihkan (hanya skema dinamis)
+        $biayaQuery = MasterBiaya::where('is_active', true)->where('skema_tarif', 'dinamis');
+        if ($request->filled('master_biaya_ids') && is_array($request->master_biaya_ids)) {
+            $biayaQuery->whereIn('id', $request->master_biaya_ids);
+        }
+        $komponenBiaya = $biayaQuery->get(['id', 'kode', 'nama', 'tipe', 'nominal_standar']);
+
+        // Ambil pengaturan tarif untuk angkatan ini
+        $tarifs = SettingTarif::where('is_active', true)
+            ->where('tahun_angkatan', $tahunAngkatan)
+            ->whereIn('master_biaya_id', $komponenBiaya->pluck('id'))
+            ->get();
+
+        $totalEstimasiNominal = 0;
+        $sampleMahasiswa = [];
+
+        foreach ($students as $index => $mhs) {
+            $mhsNominal = 0;
+            $rincian = [];
+
+            foreach ($komponenBiaya as $kb) {
+                // Hierarki tarif: spesifik prodi -> global prodi null -> nominal standar
+                $tarif = $tarifs->first(fn($t) => $t->master_biaya_id == $kb->id && $t->program_studi_id == $mhs->program_studi_id)
+                      ?? $tarifs->first(fn($t) => $t->master_biaya_id == $kb->id && $t->program_studi_id === null);
+
+                $nom = $tarif ? (float)$tarif->nominal : (float)$kb->nominal_standar;
+                if ($nom > 0) {
+                    $mhsNominal += $nom;
+                    $rincian[] = [
+                        'master_biaya_id' => $kb->id,
+                        'nama' => $kb->nama,
+                        'nominal' => $nom,
+                    ];
+                }
+            }
+
+            $totalEstimasiNominal += $mhsNominal;
+
+            if ($index < 10) {
+                $sampleMahasiswa[] = [
+                    'id' => $mhs->id,
+                    'nim' => $mhs->nim ?: '-',
+                    'nama_lengkap' => $mhs->nama_lengkap,
+                    'prodi' => $mhs->programStudi?->nama ?? '-',
+                    'total_nominal' => $mhsNominal,
+                    'rincian' => $rincian,
+                ];
+            }
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pratinjau tagihan massal berhasil dikalkulasi.',
+            'data' => [
+                'tahun_angkatan' => $tahunAngkatan,
+                'program_studi_id' => $prodiId,
+                'total_mahasiswa' => $students->count(),
+                'total_estimasi_nominal' => $totalEstimasiNominal,
+                'komponen_biaya' => $komponenBiaya,
+                'sample_mahasiswa' => $sampleMahasiswa,
+            ],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/sikeu/pembayaran-mahasiswa/mass-tagihan
+     * Menerbitkan tagihan massal untuk seluruh mahasiswa dalam satu angkatan dan/atau prodi.
+     */
+    public function storeMassTagihan(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'tahun_angkatan' => 'required|integer|min:2000|max:2050',
+            'program_studi_id' => 'nullable|integer|exists:spmb_master_program_studi,id',
+            'semester' => 'required|integer|min:1|max:14',
+            'jatuh_tempo' => 'required|date',
+            'catatan' => 'nullable|string|max:500',
+            'items' => 'required|array|min:1',
+            'items.*.master_biaya_id' => 'required|integer|exists:sikeu_master_biaya,id',
+            'items.*.nominal' => 'nullable|numeric|min:0',
+            'items.*.keterangan' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validasi tagihan massal gagal.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $tahunAngkatan = (int)$request->tahun_angkatan;
+        $prodiId = $request->filled('program_studi_id') ? (int)$request->program_studi_id : null;
+
+        $studentsQuery = Mahasiswa::where('angkatan', $tahunAngkatan);
+        if ($prodiId) {
+            $studentsQuery->where('program_studi_id', $prodiId);
+        }
+
+        $students = $studentsQuery->get();
+
+        if ($students->isEmpty()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Tidak ditemukan mahasiswa aktif pada angkatan {$tahunAngkatan}" . ($prodiId ? " untuk program studi yang dipilih." : "."),
+            ], 422);
+        }
+
+        $activeTa = MasterTahunAkademik::where('is_active', true)->first();
+        $taId = $activeTa?->id ?? 1;
+
+        $biayaIds = collect($request->items)->pluck('master_biaya_id')->unique()->toArray();
+        $tarifs = SettingTarif::where('is_active', true)
+            ->where('tahun_angkatan', $tahunAngkatan)
+            ->whereIn('master_biaya_id', $biayaIds)
+            ->get();
+
+        $masterBiayas = MasterBiaya::whereIn('id', $biayaIds)->get()->keyBy('id');
+
+        try {
+            DB::beginTransaction();
+
+            $createdCount = 0;
+            $totalNominalGenerated = 0;
+
+            foreach ($students as $student) {
+                $studentItems = [];
+                $studentTotal = 0;
+
+                foreach ($request->items as $reqItem) {
+                    $mbId = (int)$reqItem['master_biaya_id'];
+                    $hasCustom = isset($reqItem['nominal']) && is_numeric($reqItem['nominal']) && (float)$reqItem['nominal'] > 0;
+
+                    if ($hasCustom) {
+                        $nominal = (float)$reqItem['nominal'];
+                    } else {
+                        // Ambil dari tarif: spesifik prodi -> global -> nominal standar
+                        $tarif = $tarifs->first(fn($t) => $t->master_biaya_id == $mbId && $t->program_studi_id == $student->program_studi_id)
+                              ?? $tarifs->first(fn($t) => $t->master_biaya_id == $mbId && $t->program_studi_id === null);
+
+                        $nominal = $tarif ? (float)$tarif->nominal : (float)($masterBiayas[$mbId]?->nominal_standar ?? 0);
+                    }
+
+                    if ($nominal > 0) {
+                        $studentItems[] = [
+                            'master_biaya_id' => $mbId,
+                            'nominal' => $nominal,
+                            'keterangan' => $reqItem['keterangan'] ?? null,
+                        ];
+                        $studentTotal += $nominal;
+                    }
+                }
+
+                if ($studentTotal <= 0 || empty($studentItems)) {
+                    continue;
+                }
+
+                $nomorTagihan = 'INV-MHS-' . date('Ymd') . '-' . strtoupper(Str::random(5));
+                $tagihan = TagihanMahasiswa::create([
+                    'mahasiswa_id' => $student->id,
+                    'calon_mahasiswa_id' => null,
+                    'tipe_referensi' => 'mahasiswa',
+                    'tahun_akademik_id' => $taId,
+                    'nomor_tagihan' => $nomorTagihan,
+                    'total_tagihan' => $studentTotal,
+                    'total_potongan' => 0,
+                    'total_denda' => 0,
+                    'total_bayar' => 0,
+                    'status' => 'belum_bayar',
+                    'requires_approval' => false,
+                    'source_system' => 'sikeu_pembayaran_mahasiswa_massal',
+                    'jatuh_tempo' => $request->jatuh_tempo,
+                    'catatan_approval' => $request->catatan ?: ('Tagihan Massal Angkatan ' . $tahunAngkatan . ' - Semester ' . $request->semester),
+                ]);
+
+                foreach ($studentItems as $si) {
+                    DetailTagihan::create([
+                        'tagihan_id' => $tagihan->id,
+                        'master_biaya_id' => $si['master_biaya_id'],
+                        'nominal' => $si['nominal'],
+                        'potongan' => 0,
+                        'nominal_bersih' => $si['nominal'],
+                        'keterangan' => $si['keterangan'],
+                    ]);
+                }
+
+                $vaNumber = VaNumberService::generate($student->nim ?: (string)$student->id);
+                VirtualAccount::create([
+                    'tagihan_id' => $tagihan->id,
+                    'va_number' => $vaNumber,
+                    'bank_kode' => 'BANK_KAMPUS',
+                    'bank_nama' => 'Bank Mitra Kampus Terintegrasi',
+                    'nominal' => $studentTotal,
+                    'expired_at' => \Carbon\Carbon::parse($request->jatuh_tempo)->endOfDay(),
+                    'status' => 'aktif',
+                ]);
+
+                $createdCount++;
+                $totalNominalGenerated += $studentTotal;
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Berhasil menerbitkan {$createdCount} tagihan massal untuk angkatan {$tahunAngkatan}.",
+                'data' => [
+                    'created_count' => $createdCount,
+                    'total_nominal' => $totalNominalGenerated,
+                    'tahun_angkatan' => $tahunAngkatan,
+                    'program_studi_id' => $prodiId,
+                ],
+            ], 201);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal memproses tagihan massal: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

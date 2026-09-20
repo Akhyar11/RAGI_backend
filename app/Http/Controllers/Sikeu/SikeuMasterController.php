@@ -54,6 +54,7 @@ class SikeuMasterController extends Controller
             'kode' => 'required|string|unique:sikeu_master_biaya,kode',
             'nama' => 'required|string',
             'tipe' => 'required|string',
+            'skema_tarif' => 'nullable|string|in:dinamis,flat',
             'nominal_standar' => 'nullable|numeric|min:0',
             'deskripsi' => 'nullable|string',
             'module_codes' => 'nullable|array',
@@ -66,10 +67,16 @@ class SikeuMasterController extends Controller
             return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
         }
 
+        $skemaTarif = $request->input('skema_tarif');
+        if (!$skemaTarif) {
+            $skemaTarif = in_array(strtolower($request->tipe), ['spp', 'ukt', 'sks', 'praktikum']) ? 'dinamis' : 'flat';
+        }
+
         $biaya = MasterBiaya::create([
             'kode' => strtoupper($request->kode),
             'nama' => $request->nama,
             'tipe' => $request->tipe,
+            'skema_tarif' => $skemaTarif,
             'nominal_standar' => $request->nominal_standar ?? 0,
             'deskripsi' => $request->deskripsi,
             'is_recurring' => true,
@@ -104,6 +111,7 @@ class SikeuMasterController extends Controller
         $validator = Validator::make($request->all(), [
             'nama' => 'sometimes|string',
             'tipe' => 'sometimes|string',
+            'skema_tarif' => 'sometimes|string|in:dinamis,flat',
             'nominal_standar' => 'sometimes|numeric|min:0',
             'deskripsi' => 'nullable|string',
             'is_active' => 'sometimes|boolean',
@@ -117,7 +125,7 @@ class SikeuMasterController extends Controller
             return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
         }
 
-        $biaya->update($request->only(['nama', 'tipe', 'nominal_standar', 'deskripsi', 'is_active', 'is_recurring']));
+        $biaya->update($request->only(['nama', 'tipe', 'skema_tarif', 'nominal_standar', 'deskripsi', 'is_active', 'is_recurring']));
 
         $moduleCodes = null;
         if ($request->has('module_ids') && is_array($request->module_ids)) {

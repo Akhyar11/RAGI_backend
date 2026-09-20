@@ -462,4 +462,114 @@ class SikeuPembayaranMahasiswaTarifTest extends TestCase
             'id' => $tarif->id,
         ]);
     }
+
+    public function test_katalog_biaya_hanya_mengembalikan_skema_dinamis(): void
+    {
+        MasterBiaya::create([
+            'kode' => 'FLAT_TEST',
+            'nama' => 'Biaya Flat Non-Dinamis',
+            'tipe' => 'wisuda',
+            'skema_tarif' => 'flat',
+            'nominal_standar' => 500000,
+            'is_active' => true,
+        ]);
+
+        MasterBiaya::create([
+            'kode' => 'DINAMIS_TEST',
+            'nama' => 'Biaya Kuliah Dinamis',
+            'tipe' => 'spp',
+            'skema_tarif' => 'dinamis',
+            'nominal_standar' => 0,
+            'is_active' => true,
+        ]);
+
+        $res = $this->withHeaders($this->headers())
+            ->getJson('/api/v1/sikeu/pembayaran-mahasiswa/katalog-biaya');
+
+        $res->assertStatus(200);
+        $katalog = collect($res->json('data'));
+
+        $this->assertTrue($katalog->contains('kode', 'DINAMIS_TEST'));
+        $this->assertFalse($katalog->contains('kode', 'FLAT_TEST'));
+    }
+
+    public function test_index_tagihan_sukses_tanpa_error_500(): void
+    {
+        $res = $this->withHeaders($this->headers())
+            ->getJson('/api/v1/sikeu/pembayaran-mahasiswa/tagihan');
+
+        $res->assertStatus(200)
+            ->assertJson(['status' => 'success'])
+            ->assertJsonStructure([
+                'status',
+                'message',
+                'data',
+                'meta' => ['current_page', 'per_page', 'total'],
+            ]);
+    }
+
+    public function test_preview_dan_generate_mass_tagihan(): void
+    {
+        $prodi = MasterProgramStudi::firstOrCreate(
+            ['kode_prodi' => 'INF-TEST'],
+            ['nama' => 'Informatika Test', 'jenjang' => 'S1', 'is_active' => true]
+        );
+
+        $mhs1 = Mahasiswa::create([
+            'nim' => 'TEST2023001',
+            'nama_lengkap' => 'Mahasiswa Mass 1',
+            'angkatan' => 2023,
+            'program_studi_id' => $prodi->id,
+            'status' => 'aktif',
+        ]);
+
+        $biaya = MasterBiaya::firstOrCreate(
+            ['kode' => 'MASS_TEST_FEE'],
+            ['nama' => 'Biaya Massal Test', 'tipe' => 'spp', 'skema_tarif' => 'dinamis', 'nominal_standar' => 2000000, 'is_active' => true]
+        );
+
+        SettingTarif::create([
+            'master_biaya_id' => $biaya->id,
+            'tahun_angkatan' => 2023,
+            'program_studi_id' => null, // Global
+            'nominal' => 2500000,
+            'is_active' => true,
+        ]);
+
+        // 1. Test Preview Mass Tagihan
+        $resPreview = $this->withHeaders($this->headers())
+            ->getJson('/api/v1/sikeu/pembayaran-mahasiswa/mass-tagihan/preview?tahun_angkatan=2023');
+
+        $resPreview->assertStatus(200)
+            ->assertJson(['status' => 'success'])
+            ->assertJsonPath('data.tahun_angkatan', 2023);
+
+        $this->assertGreaterThanOrEqual(1, $resPreview->json('data.total_mahasiswa'));
+
+        // 2. Test Store Mass Tagihan
+        $resStore = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/pembayaran-mahasiswa/mass-tagihan', [
+                'tahun_angkatan' => 2023,
+                'semester' => 3,
+                'jatuh_tempo' => now()->addMonth()->format('Y-m-d'),
+                'catatan' => 'Tagihan Massal Angkatan 2023',
+                'items' => [
+                    [
+                        'master_biaya_id' => $biaya->id,
+                        'nominal' => 2500000,
+                    ],
+                ],
+            ]);
+
+        $resStore->assertStatus(201)
+            ->assertJson(['status' => 'success']);
+
+        $this->assertGreaterThanOrEqual(1, $resStore->json('data.created_count'));
+
+        $this->assertDatabaseHas('sikeu_tagihan_mahasiswa', [
+            'mahasiswa_id' => $mhs1->id,
+            'status' => 'belum_bayar',
+            'source_system' => 'sikeu_pembayaran_mahasiswa_massal',
+        ]);
+    }
 }

@@ -15,6 +15,7 @@ class MasterBiaya extends Model
         'kode',
         'nama',
         'tipe',
+        'skema_tarif',
         'nominal_standar',
         'deskripsi',
         'is_recurring',
