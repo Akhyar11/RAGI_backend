@@ -140,7 +140,7 @@ class UserService
             'token' => $token,
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $targetUser->load('roles'),
+            'user' => $targetUser->load(['roles', 'roles.permissions']),
             'impersonated_by' => [
                 'id' => $admin->id,
                 'username' => $admin->username,
