@@ -11,6 +11,15 @@ class StoreUserRequest extends FormRequest
         return true; // Dihandle oleh Policy / ensureAdmin
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('password') && !$this->has('password_confirmation')) {
+            $this->merge([
+                'password_confirmation' => $this->password,
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         return [
