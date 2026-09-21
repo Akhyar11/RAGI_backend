@@ -17,4 +17,14 @@ class SpmbKuotaProdi extends Model
         'kuota_total',
         'kuota_terisi',
     ];
+
+    public function tahunAkademik()
+    {
+        return $this->belongsTo(MasterTahunAkademik::class, 'tahun_akademik_id');
+    }
+
+    public function programStudi()
+    {
+        return $this->belongsTo(MasterProgramStudi::class, 'program_studi_id');
+    }
 }

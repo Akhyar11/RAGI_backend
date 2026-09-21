@@ -3,11 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Http\Requests\IAM\StoreUserRequest;
+use App\Http\Requests\IAM\UpdateUserRequest;
+use App\Services\IAM\UserService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
+    public function __construct(protected UserService $userService) {}
+
     /**
      * Check if current user is admin
      */
@@ -29,8 +34,9 @@ class UserController extends Controller
 
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('username', 'like', "%{$search}%")
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('username', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%");
             });
         }
@@ -44,11 +50,14 @@ class UserController extends Controller
         }
 
         if ($request->filled('name')) {
-            $query->where('username', 'like', "%{$request->name}%");
+            $query->where(function ($q) use ($request) {
+                $q->where('name', 'like', "%{$request->name}%")
+                  ->orWhere('username', 'like', "%{$request->name}%");
+            });
         }
 
         if ($request->filled('role_id')) {
-            $query->whereHas('roles', function($q) use ($request) {
+            $query->whereHas('roles', function ($q) use ($request) {
                 $q->where('core_roles.id', $request->role_id);
             });
         }
@@ -57,52 +66,53 @@ class UserController extends Controller
             $query->whereDate('created_at', $request->created_at);
         }
 
-        $orderBy = $request->input('order_by', 'id');
-        $allowedSorts = ['id', 'username', 'email', 'created_at', 'is_active', 'is_verified'];
-        if (!in_array($orderBy, $allowedSorts)) {
-            $orderBy = 'id';
-        }
+        $allowedSorts = ['id', 'name', 'username', 'email', 'created_at', 'is_active', 'is_verified'];
+        $sortBy = in_array($request->sort_by, $allowedSorts) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
 
-        $orderDir = strtolower($request->input('order_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
-        $query->orderBy($orderBy, $orderDir);
+        $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
 
-        $limit = (int) $request->input('limit', 15);
-        if ($limit < 1 || $limit > 100) $limit = 15;
+        $users = $query->with('roles')->paginate($perPage);
 
-        $users = $query->with('roles')->paginate($limit);
-        return response()->json($users);
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data user berhasil dimuat.',
+            'data' => $users->items(),
+            'meta' => [
+                'current_page' => $users->currentPage(),
+                'per_page' => $users->perPage(),
+                'total' => $users->total(),
+                'last_page' => $users->lastPage(),
+                'from' => $users->firstItem(),
+                'to' => $users->lastItem(),
+            ],
+            'filters' => [
+                'search' => $request->search,
+                'name' => $request->name,
+                'is_active' => $request->is_active,
+                'is_verified' => $request->is_verified,
+                'role_id' => $request->role_id,
+                'created_at' => $request->created_at,
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+            ],
+        ]);
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(StoreUserRequest $request)
     {
         $this->ensureAdmin();
         
-        $request->validate([
-            'username' => 'required|string|unique:core_users',
-            'email' => 'required|string|email|unique:core_users',
-            'password' => 'required|string|min:8|confirmed',
-            'phone' => 'nullable|string',
-            // user_type removed
-            'is_active' => 'boolean',
-            'is_verified' => 'boolean',
-        ]);
-
-        $user = User::create([
-            'username' => $request->username,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'phone' => $request->phone,
-            // user_type removed
-            'is_active' => $request->has('is_active') ? $request->is_active : true,
-            'is_verified' => $request->has('is_verified') ? $request->is_verified : false,
-        ]);
+        $user = $this->userService->create($request->validated());
 
         return response()->json([
-            'message' => 'User created successfully',
-            'data' => $user
+            'status' => 'success',
+            'message' => 'User berhasil dibuat.',
+            'data' => $user,
         ], 201);
     }
 
@@ -112,37 +122,27 @@ class UserController extends Controller
     public function show(User $user)
     {
         $this->ensureAdmin();
-        return response()->json(['data' => $user]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data user berhasil dimuat.',
+            'data' => $user->load('roles'),
+        ]);
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, User $user)
+    public function update(UpdateUserRequest $request, User $user)
     {
         $this->ensureAdmin();
 
-        $request->validate([
-            'username' => 'sometimes|string|unique:core_users,username,'.$user->id,
-            'email' => 'sometimes|string|email|unique:core_users,email,'.$user->id,
-            'password' => 'sometimes|string|min:8|confirmed',
-            'phone' => 'nullable|string',
-            // user_type removed
-            'is_active' => 'boolean',
-            'is_verified' => 'boolean',
-        ]);
-
-        $data = $request->only(['username', 'email', 'phone', 'is_active', 'is_verified']);
-        
-        if ($request->filled('password')) {
-            $data['password'] = Hash::make($request->password);
-        }
-
-        $user->update($data);
+        $updatedUser = $this->userService->update($user, $request->validated());
 
         return response()->json([
-            'message' => 'User updated successfully',
-            'data' => $user
+            'status' => 'success',
+            'message' => 'User berhasil diperbarui.',
+            'data' => $updatedUser,
         ]);
     }
 
@@ -155,7 +155,12 @@ class UserController extends Controller
         $user->delete();
         
         return response()->json([
-            'message' => 'User deleted successfully'
+            'status' => 'success',
+            'message' => 'User berhasil dihapus.',
+            'data' => [
+                'id' => $user->id,
+                'deleted_at' => $user->deleted_at ? $user->deleted_at->toISOString() : now()->toISOString(),
+            ],
         ]);
     }
 
@@ -206,4 +211,55 @@ class UserController extends Controller
             'data' => $user,
         ]);
     }
+
+    /**
+     * Impersonate a user (Merasuki pengguna).
+     */
+    public function impersonate(Request $request, $id)
+    {
+        $this->ensureAdmin();
+
+        $targetUser = User::with('roles')->findOrFail($id);
+        $admin = $request->user();
+
+        $result = $this->userService->impersonate($targetUser, $admin);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Berhasil merasuki pengguna {$targetUser->name}.",
+            'data' => $result,
+        ]);
+    }
+
+    /**
+     * Leave impersonation mode (Keluar dari mode rasuki).
+     */
+    public function leaveImpersonate(Request $request)
+    {
+        $user = $request->user();
+        if ($user && $user->currentAccessToken()) {
+            try {
+                \App\Services\AuditLogService::record(
+                    module: 'IAM',
+                    action: 'logout',
+                    tableName: 'core_users',
+                    recordId: $user->id,
+                    oldValues: ['impersonation_ended' => true],
+                    newValues: null,
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
+            $user->currentAccessToken()->delete();
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Sesi impersonasi berhasil diakhiri.',
+            'data' => null,
+        ]);
+    }
 }
+

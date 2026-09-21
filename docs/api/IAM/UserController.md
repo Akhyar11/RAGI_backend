@@ -1,28 +1,33 @@
 # UserController
 
-> **Modul**: IAM & Auth Center  
+> **Modul**: IAM  
 > **Base URL**: `/api/admin/users`  
-> **Autentikasi**: Bearer Token (Passport) — Semua endpoint  
-> **Otorisasi**: Hanya `user_type = admin`  
-> **Dibuat**: 2026-07-28  
-> **Diperbarui**: 2026-07-28
+> **Autentikasi**: Bearer Token (Sanctum)  
+> **Dibuat/Diperbarui**: 2026-09-21  
 
-## Daftar Endpoint
-
-| Method | Endpoint | Fungsi | Auth | Role |
-|---|---|---|---|---|
-| GET | `/api/admin/users` | Daftar semua pengguna | ✅ | Admin |
-| POST | `/api/admin/users` | Buat pengguna baru | ✅ | Admin |
-| GET | `/api/admin/users/{id}` | Detail pengguna | ✅ | Admin |
-| PUT | `/api/admin/users/{id}` | Perbarui data pengguna | ✅ | Admin |
-| PATCH | `/api/admin/users/{id}/status` | Toggle status aktif/non-aktif | ✅ | Admin |
-| DELETE | `/api/admin/users/{id}` | Hapus pengguna (soft delete) | ✅ | Admin |
+Dokumentasi API untuk manajemen akun pengguna, penugasan peran (roles), aktivasi status, perubahan kata sandi, dan penghapusan pengguna (soft delete). Endpoint ini dibatasi khusus untuk Super Admin.
 
 ---
 
-## GET /api/admin/users
+## Daftar Endpoint
 
-> Mengembalikan daftar semua pengguna dengan pagination.
+| Method | Endpoint | Fungsi | Auth |
+|---|---|---|---|
+| GET | `/api/admin/users` | Mendapatkan daftar pengguna berpaginasi | ✅ Super Admin |
+| POST | `/api/admin/users` | Menambahkan pengguna baru & penugasan role | ✅ Super Admin |
+| GET | `/api/admin/users/{id}` | Menampilkan detail pengguna beserta perannya | ✅ Super Admin |
+| PUT | `/api/admin/users/{id}` | Memperbarui informasi pengguna & sinkronisasi role | ✅ Super Admin |
+| DELETE | `/api/admin/users/{id}` | Menghapus pengguna secara soft delete | ✅ Super Admin |
+| PATCH | `/api/admin/users/{id}/status` | Mengaktifkan atau menonaktifkan pengguna | ✅ Super Admin |
+| POST | `/api/admin/users/{id}/change-password` | Mengubah password pengguna oleh admin | ✅ Super Admin |
+| POST | `/api/admin/users/{id}/impersonate` | Merasuki pengguna & terbitkan token impersonasi | ✅ Super Admin |
+| POST | `/api/admin/users/leave-impersonate` | Mengakhiri sesi mode impersonasi pengguna | ✅ Super Admin |
+
+---
+
+## [GET] /api/admin/users
+
+> Menampilkan daftar seluruh akun pengguna dengan dukungan filter multi-kriteria, pencarian nama/username/email, whitelist pengurutan, dan paginasi standar.
 
 ### Headers
 
@@ -33,57 +38,169 @@
 
 ### Query Parameters
 
-| Parameter | Type | Required | Default | Deskripsi |
-|---|---|---|---|---|
-| `search` | string | ❌ | — | Cari berdasarkan username atau email |
-| `sort_by` | string | ❌ | `created_at` | Kolom pengurutan: `username`, `email`, `user_type`, `created_at` |
-| `sort_order` | string | ❌ | `desc` | Arah urutan: `asc` / `desc` |
-| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
-| `page` | integer | ❌ | `1` | Halaman yang diminta |
-| `user_type` | string | ❌ | — | Filter berdasarkan tipe: `mahasiswa`, `dosen`, `tendik`, `admin`, `calon_mhs` |
+| Parameter | Type | Default | Deskripsi |
+|---|---|---|---|
+| `search` | string | - | Kata kunci pencarian (name, username, email) |
+| `name` | string | - | Filter spesifik berdasarkan nama pengguna |
+| `is_active` | boolean | - | Filter status aktif (`true` / `false` / `1` / `0`) |
+| `is_verified` | boolean | - | Filter status verifikasi akun |
+| `role_id` | integer | - | Filter pengguna yang memiliki ID role tertentu |
+| `created_at` | string | - | Filter tanggal pendaftaran akun (format `YYYY-MM-DD`) |
+| `sort_by` | string | `created_at` | Kolom pengurutan (`id`, `name`, `username`, `email`, `created_at`, `is_active`, `is_verified`) |
+| `sort_order` | string | `desc` | Arah urutan: `asc` / `desc` |
+| `per_page` | integer | `15` | Jumlah data per halaman (1 s/d 100) |
+| `page` | integer | `1` | Nomor halaman data |
 
 ### Response Sukses
 
 **200 OK**
 ```json
 {
-    "current_page": 1,
+    "status": "success",
+    "message": "Data user berhasil dimuat.",
     "data": [
         {
             "id": 1,
-            "username": "budi.santoso",
-            "email": "budi@kampus.ac.id",
+            "username": "superadmin",
+            "name": "Super Administrator",
+            "email": "superadmin@kampus.ac.id",
             "phone": "081234567890",
-            "user_type": "mahasiswa",
+            "referral_code": "REF-SUP001",
             "is_active": true,
             "is_verified": true,
-            "last_login_at": "2026-07-28T14:05:00.000000Z",
-            "created_at": "2026-07-28T14:00:00.000000Z",
-            "updated_at": "2026-07-28T14:00:00.000000Z"
+            "last_login_at": "2026-09-21T08:00:00.000000Z",
+            "created_at": "2026-09-21T00:00:00.000000Z",
+            "updated_at": "2026-09-21T08:00:00.000000Z",
+            "roles": [
+                {
+                    "id": 1,
+                    "name": "Super Admin",
+                    "slug": "super_admin"
+                }
+            ]
         }
     ],
-    "first_page_url": "http://localhost:8000/api/admin/users?page=1",
-    "last_page": 7,
-    "per_page": 15,
-    "total": 100
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    },
+    "filters": {
+        "search": null,
+        "name": null,
+        "is_active": null,
+        "is_verified": null,
+        "role_id": null,
+        "created_at": null,
+        "sort_by": "created_at",
+        "sort_order": "desc"
+    }
 }
 ```
 
 ### Response Error
 
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
 **403 Forbidden**
 ```json
 {
     "status": "error",
-    "message": "Unauthorized action. Only admins can access this resource."
+    "message": "Anda tidak memiliki akses superadmin."
 }
 ```
 
 ---
 
-## POST /api/admin/users
+## [POST] /api/admin/users
 
-> Membuat pengguna baru. Hanya dapat dilakukan oleh Admin.
+> Mendaftarkan pengguna baru oleh Super Admin dan menetapkan perannya secara otomatis dalam transaksi database.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "username": "dosen.andi",
+    "name": "Dr. Andi Wijaya, M.T.",
+    "email": "andi@kampus.ac.id",
+    "password": "Password123!",
+    "password_confirmation": "Password123!",
+    "phone": "081234567890",
+    "is_active": true,
+    "is_verified": true,
+    "roles": [2]
+}
+```
+
+### Response Sukses
+
+**201 Created**
+```json
+{
+    "status": "success",
+    "message": "User berhasil dibuat.",
+    "data": {
+        "id": 2,
+        "username": "dosen.andi",
+        "name": "Dr. Andi Wijaya, M.T.",
+        "email": "andi@kampus.ac.id",
+        "phone": "081234567890",
+        "referral_code": "REF-ANDI01",
+        "is_active": true,
+        "is_verified": true,
+        "created_at": "2026-09-21T10:00:00.000000Z",
+        "updated_at": "2026-09-21T10:00:00.000000Z",
+        "roles": [
+            {
+                "id": 2,
+                "name": "Dosen",
+                "slug": "dosen"
+            }
+        ]
+    }
+}
+```
+
+### Response Error
+
+**422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "username": [
+            "Username sudah digunakan."
+        ],
+        "email": [
+            "Email sudah terdaftar."
+        ]
+    }
+}
+```
+
+---
+
+## [GET] /api/admin/users/{id}
+
+> Mengambil informasi detail satu akun pengguna berdasarkan ID.
 
 ### Headers
 
@@ -91,83 +208,32 @@
 |---|---|---|
 | `Authorization` | `Bearer {token}` | ✅ |
 | `Accept` | `application/json` | ✅ |
-| `Content-Type` | `application/json` | ✅ |
-
-### Request Body
-
-```json
-{
-    "username": "siti.rahayu",
-    "email": "siti@kampus.ac.id",
-    "password": "rahasia123",
-    "password_confirmation": "rahasia123",
-    "phone": "082345678901",
-    "user_type": "dosen",
-    "is_active": true,
-    "is_verified": true
-}
-```
-
-| Field | Type | Required | Validasi |
-|---|---|---|---|
-| `username` | string | ✅ | Unik |
-| `email` | string | ✅ | Format email valid, unik |
-| `password` | string | ✅ | Minimum 8 karakter |
-| `password_confirmation` | string | ✅ | Harus sama dengan `password` |
-| `phone` | string | ❌ | — |
-| `user_type` | string | ✅ | Enum: `mahasiswa`, `dosen`, `tendik`, `admin`, `calon_mhs` |
-| `is_active` | boolean | ❌ | Default: `true` |
-| `is_verified` | boolean | ❌ | Default: `false` |
-
-### Response Sukses
-
-**201 Created**
-```json
-{
-    "message": "User created successfully",
-    "data": {
-        "id": 42,
-        "username": "siti.rahayu",
-        "email": "siti@kampus.ac.id",
-        "phone": "082345678901",
-        "user_type": "dosen",
-        "is_active": true,
-        "is_verified": true,
-        "last_login_at": null,
-        "created_at": "2026-07-28T15:00:00.000000Z",
-        "updated_at": "2026-07-28T15:00:00.000000Z"
-    }
-}
-```
-
----
-
-## GET /api/admin/users/{id}
-
-> Mengembalikan detail satu pengguna berdasarkan ID.
-
-### Path Parameters
-
-| Parameter | Type | Deskripsi |
-|---|---|---|
-| `id` | integer | ID pengguna |
 
 ### Response Sukses
 
 **200 OK**
 ```json
 {
+    "status": "success",
+    "message": "Data user berhasil dimuat.",
     "data": {
-        "id": 42,
-        "username": "siti.rahayu",
-        "email": "siti@kampus.ac.id",
-        "phone": "082345678901",
-        "user_type": "dosen",
+        "id": 2,
+        "username": "dosen.andi",
+        "name": "Dr. Andi Wijaya, M.T.",
+        "email": "andi@kampus.ac.id",
+        "phone": "081234567890",
+        "referral_code": "REF-ANDI01",
         "is_active": true,
         "is_verified": true,
-        "last_login_at": null,
-        "created_at": "2026-07-28T15:00:00.000000Z",
-        "updated_at": "2026-07-28T15:00:00.000000Z"
+        "created_at": "2026-09-21T10:00:00.000000Z",
+        "updated_at": "2026-09-21T10:00:00.000000Z",
+        "roles": [
+            {
+                "id": 2,
+                "name": "Dosen",
+                "slug": "dosen"
+            }
+        ]
     }
 }
 ```
@@ -178,15 +244,77 @@
 ```json
 {
     "status": "error",
-    "message": "User tidak ditemukan."
+    "message": "Pengguna tidak ditemukan."
 }
 ```
 
 ---
 
-## PUT /api/admin/users/{id}
+## [PUT] /api/admin/users/{id}
 
-> Memperbarui data pengguna. Semua field bersifat opsional (partial update).
+> Memperbarui data pengguna dan menyinkronkan daftar peran secara atomik.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "username": "dosen.andi",
+    "name": "Prof. Dr. Andi Wijaya, M.T.",
+    "email": "andi@kampus.ac.id",
+    "phone": "081234567899",
+    "is_active": true,
+    "is_verified": true,
+    "roles": [2, 3]
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "User berhasil diperbarui.",
+    "data": {
+        "id": 2,
+        "username": "dosen.andi",
+        "name": "Prof. Dr. Andi Wijaya, M.T.",
+        "email": "andi@kampus.ac.id",
+        "phone": "081234567899",
+        "referral_code": "REF-ANDI01",
+        "is_active": true,
+        "is_verified": true,
+        "created_at": "2026-09-21T10:00:00.000000Z",
+        "updated_at": "2026-09-21T10:30:00.000000Z",
+        "roles": [
+            {
+                "id": 2,
+                "name": "Dosen",
+                "slug": "dosen"
+            },
+            {
+                "id": 3,
+                "name": "Kaprodi",
+                "slug": "kaprodi"
+            }
+        ]
+    }
+}
+```
+
+---
+
+## [DELETE] /api/admin/users/{id}
+
+> Menghapus akun pengguna menggunakan mekanisme Soft Delete (`deleted_at`). Akun tidak dihapus permanen dari database. Password dan token tidak dikembalikan dalam response demi keamanan.
 
 ### Headers
 
@@ -194,56 +322,66 @@
 |---|---|---|
 | `Authorization` | `Bearer {token}` | ✅ |
 | `Accept` | `application/json` | ✅ |
-| `Content-Type` | `application/json` | ✅ |
-
-### Request Body
-
-```json
-{
-    "username": "siti.rahayu.updated",
-    "user_type": "tendik",
-    "is_active": false
-}
-```
-
-| Field | Type | Required | Validasi |
-|---|---|---|---|
-| `username` | string | ❌ | Unik kecuali milik user sendiri |
-| `email` | string | ❌ | Format email, unik kecuali milik user sendiri |
-| `password` | string | ❌ | Minimum 8 karakter |
-| `password_confirmation` | string | ⚠️ | Wajib jika `password` diisi |
-| `phone` | string | ❌ | — |
-| `user_type` | string | ❌ | Enum valid |
-| `is_active` | boolean | ❌ | — |
-| `is_verified` | boolean | ❌ | — |
 
 ### Response Sukses
 
 **200 OK**
 ```json
 {
-    "message": "User updated successfully",
+    "status": "success",
+    "message": "User berhasil dihapus.",
     "data": {
-        "id": 42,
-        "username": "siti.rahayu.updated",
-        "user_type": "tendik",
-        "is_active": false,
-        "updated_at": "2026-07-28T16:00:00.000000Z"
+        "id": 2,
+        "deleted_at": "2026-09-21T10:35:00.000000Z"
     }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki akses superadmin."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Pengguna tidak ditemukan."
 }
 ```
 
 ---
 
-## PATCH /api/admin/users/{id}/status
+## [PATCH] /api/admin/users/{id}/status
 
-> Mengubah status aktif/non-aktif (`is_active`) seorang pengguna tanpa mengirim keseluruhan data profil.
+> Mengaktifkan atau menonaktifkan akun pengguna oleh administrator.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+| `Accept` | `application/json` | ✅ |
 
 ### Request Body
 
 ```json
 {
-    "is_active": "boolean, required"
+    "is_active": false
 }
 ```
 
@@ -255,33 +393,254 @@
     "status": "success",
     "message": "User berhasil dinonaktifkan.",
     "data": {
-        "id": 1,
-        "username": "budi.santoso",
-        "is_active": false,
-        "..." : "..."
+        "id": 2,
+        "name": "Anisa Rahmawati",
+        "username": "dosen",
+        "email": "dosen@kampus.ac.id",
+        "is_active": false
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki akses superadmin."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "User tidak ditemukan."
+}
+```
+
+**422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "is_active": [
+            "Bidang is active wajib diisi."
+        ]
     }
 }
 ```
 
 ---
 
-## DELETE /api/admin/users/{id}
+## [POST] /api/admin/users/{id}/change-password
 
-> Melakukan **soft delete** pada pengguna. Data tidak benar-benar dihapus dari database, hanya ditandai `deleted_at`.
+> Mengubah kata sandi pengguna oleh administrator tanpa memerlukan kata sandi lama.
 
-### Path Parameters
+### Headers
 
-| Parameter | Type | Deskripsi |
+| Key | Value | Required |
 |---|---|---|
-| `id` | integer | ID pengguna yang akan dihapus |
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "password": "PasswordBaru#2026",
+    "password_confirmation": "PasswordBaru#2026"
+}
+```
 
 ### Response Sukses
 
 **200 OK**
 ```json
 {
-    "message": "User deleted successfully"
+    "status": "success",
+    "message": "Password pengguna dosen berhasil diperbarui.",
+    "data": {
+        "id": 2,
+        "name": "Anisa Rahmawati",
+        "username": "dosen",
+        "email": "dosen@kampus.ac.id"
+    }
 }
 ```
 
-> ⚠️ Pengguna yang sudah dihapus tidak akan muncul di endpoint `GET /api/admin/users` dan tidak bisa login. Data tetap tersimpan di database dengan kolom `deleted_at` berisi timestamp penghapusan.
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki akses superadmin."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "User tidak ditemukan."
+}
+```
+
+**422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "password": [
+            "Password minimal harus 6 karakter.",
+            "Konfirmasi password tidak cocok."
+        ]
+    }
+}
+```
+
+---
+
+## [POST] /api/admin/users/{id}/impersonate
+
+> Merasuki pengguna dan menerbitkan access token atas nama target user. Seluruh aktivitas impersonasi dicatat dalam Audit Log untuk akuntabilitas.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Berhasil merasuki pengguna Anisa Rahmawati.",
+    "data": {
+        "token": "2|abc123xyz...",
+        "access_token": "2|abc123xyz...",
+        "token_type": "Bearer",
+        "user": {
+            "id": 2,
+            "name": "Anisa Rahmawati",
+            "username": "dosen",
+            "email": "dosen@kampus.ac.id",
+            "referral_code": "REF-DOS002",
+            "roles": [
+                {
+                    "id": 2,
+                    "name": "Dosen",
+                    "slug": "dosen"
+                }
+            ]
+        },
+        "impersonated_by": {
+            "id": 1,
+            "username": "superadmin",
+            "name": "Super Administrator"
+        }
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki akses superadmin."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "User tidak ditemukan."
+}
+```
+
+**422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "user_id": [
+            "Anda tidak dapat merasuki akun Anda sendiri."
+        ]
+    }
+}
+```
+
+---
+
+## [POST] /api/admin/users/leave-impersonate
+
+> Mengakhiri sesi impersonasi dengan mencabut token impersonasi yang aktif.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Sesi impersonasi berhasil diakhiri.",
+    "data": null
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+---
+
+> **Catatan Keamanan:** Atribut `password` dan `remember_token` selalu disembunyikan dan tidak pernah dikembalikan dalam respon API apa pun. Operasi penghapusan bersifat Soft Delete sehingga data historis pada log dan relasi akademik tetap terjaga. Sesi impersonasi dilindungi oleh autentikasi ganda dan tercatat pada jejak Audit Log sistem.
+

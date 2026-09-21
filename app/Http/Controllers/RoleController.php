@@ -16,7 +16,7 @@ class RoleController extends Controller
     {
         $this->authorize('viewAny', Role::class);
 
-        $perPage = min(100, $request->integer('per_page', 15));
+        $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
         $query = Role::query()->with('permissions');
 
         // Sembunyikan roles terestriksi dari non-pengelola IAM.
@@ -26,13 +26,32 @@ class RoleController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('slug', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%");
             });
         }
 
-        $allowedSortColumns = ['created_at', 'updated_at', 'name'];
-        $sortBy = in_array($request->sort_by, $allowedSortColumns) ? $request->sort_by : 'created_at';
-        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        if ($request->filled('name')) {
+            $query->where('name', 'like', "%{$request->name}%");
+        }
+
+        if ($request->filled('slug')) {
+            $query->where('slug', 'like', "%{$request->slug}%");
+        }
+
+        if ($request->filled('description')) {
+            $query->where('description', 'like', "%{$request->description}%");
+        }
+
+        if ($request->filled('created_at')) {
+            $query->whereDate('created_at', $request->created_at);
+        }
+
+        $allowedSortColumns = ['id', 'name', 'slug', 'description', 'created_at', 'updated_at'];
+        $sortByInput = $request->input('sort_by', $request->input('order_by', 'created_at'));
+        $sortBy = in_array($sortByInput, $allowedSortColumns) ? $sortByInput : 'created_at';
+        $sortOrderInput = $request->input('sort_order', $request->input('order_dir', 'desc'));
+        $sortOrder = strtolower($sortOrderInput) === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
         $data = $query->paginate($perPage);

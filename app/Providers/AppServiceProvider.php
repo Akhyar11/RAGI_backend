@@ -37,6 +37,7 @@ class AppServiceProvider extends ServiceProvider
         // SPMB Observers
         \App\Models\Spmb\PendaftaranCalonMhs::observe(\App\Observers\Spmb\PendaftaranCalonMhsObserver::class);
         \App\Models\Spmb\GelombangPenerimaan::observe(\App\Observers\Spmb\GelombangPenerimaanObserver::class);
+        \App\Models\Spmb\SpmbKuotaProdi::observe(\App\Observers\Spmb\SpmbKuotaProdiObserver::class);
 
         // SIAKAD Observers
         \App\Models\Siakad\Mahasiswa::observe(\App\Observers\MahasiswaObserver::class);

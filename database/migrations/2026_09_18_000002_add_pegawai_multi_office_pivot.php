@@ -21,7 +21,7 @@ return new class extends Migration
                 $table->foreignId('office_location_id')->constrained('simpeg_office_locations')->cascadeOnDelete();
                 $table->timestamps();
 
-                $table->unique(['pegawai_id', 'office_location_id']);
+                $table->unique(['pegawai_id', 'office_location_id'], 'pegawai_office_loc_unique');
                 $table->index('office_location_id');
             });
         }

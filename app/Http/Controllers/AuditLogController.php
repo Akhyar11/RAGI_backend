@@ -16,24 +16,58 @@ class AuditLogController extends Controller
         // Pastikan hanya admin (atau user ber-permission) yang bisa melihat
         Gate::authorize('viewAny', AuditLog::class);
 
-        $query = AuditLog::with('user:id,username,email')
-            ->orderBy('created_at', 'desc');
+        $query = AuditLog::with('user:id,username,name,email');
 
-        // Fitur pencarian berdasarkan module, action, table_name
+        // Fitur pencarian bebas
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('module', 'like', "%{$search}%")
                   ->orWhere('action', 'like', "%{$search}%")
-                  ->orWhere('table_name', 'like', "%{$search}%");
+                  ->orWhere('table_name', 'like', "%{$search}%")
+                  ->orWhere('ip_address', 'like', "%{$search}%")
+                  ->orWhere('payload', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('username', 'like', "%{$search}%")
+                         ->orWhere('name', 'like', "%{$search}%")
+                         ->orWhere('email', 'like', "%{$search}%");
+                  });
             });
         }
 
-        // Fitur filter berdasarkan user_id spesifik
+        if ($request->filled('username')) {
+            $username = $request->input('username');
+            $query->whereHas('user', function ($uq) use ($username) {
+                $uq->where('username', 'like', "%{$username}%")
+                   ->orWhere('name', 'like', "%{$username}%");
+            });
+        }
+
+        if ($request->filled('action')) {
+            $query->where('action', 'like', "%{$request->action}%");
+        }
+
+        if ($request->filled('ip_address')) {
+            $query->where('ip_address', 'like', "%{$request->ip_address}%");
+        }
+
+        if ($request->filled('payload')) {
+            $query->where('payload', 'like', "%{$request->payload}%");
+        }
+
+        if ($request->filled('created_at')) {
+            $query->whereDate('created_at', $request->created_at);
+        }
+
         if ($userId = $request->input('user_id')) {
             $query->where('user_id', $userId);
         }
 
-        $perPage = $request->input('per_page', 15);
+        $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+        $allowedSortColumns = ['id', 'user_id', 'action', 'ip_address', 'module', 'table_name', 'created_at'];
+        $sortBy = in_array($request->sort_by, $allowedSortColumns) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
+
         $logs = $query->paginate($perPage);
 
         return response()->json([
@@ -50,9 +84,14 @@ class AuditLogController extends Controller
             ],
             'filters' => [
                 'search' => $search,
+                'username' => $request->username,
+                'action' => $request->action,
+                'ip_address' => $request->ip_address,
+                'payload' => $request->payload,
+                'created_at' => $request->created_at,
                 'user_id' => $userId ?? null,
-                'sort_by' => 'created_at',
-                'sort_order' => 'desc',
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
             ]
         ]);
     }

@@ -34,7 +34,8 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
-| — | *Belum diimplementasikan* | — |
+| MasterSpmbController | Master referensi SPMB (Tahun Akademik, Jalur, Gelombang, Opsi) | [docs/api/SPMB/MasterSpmbController.md](api/SPMB/MasterSpmbController.md) |
+| SpmbKuotaProdiController | Manajemen kuota penerimaan calon mahasiswa baru per program studi | [docs/api/SPMB/SpmbKuotaProdiController.md](api/SPMB/SpmbKuotaProdiController.md) |
 
 ---
 

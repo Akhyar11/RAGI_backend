@@ -15,10 +15,11 @@
 | POST | `/api/auth/login` | Autentikasi dengan email & password | ❌ Publik |
 | POST | `/api/auth/mfa/login-verify`| Verifikasi TOTP untuk login tahap 2 | ❌ Publik |
 | POST | `/api/auth/refresh` | Perbarui access token dengan refresh token | ❌ Publik |
-| GET | `/api/auth/me` | Mendapatkan data pengguna yang sedang login | ✅ Passport |
-| POST | `/api/auth/logout` | Menghapus token aktif (logout) | ✅ Required |
-| POST | `/api/auth/logout-all` | Logout dari semua perangkat & app | ✅ Required |
-| POST | `/api/auth/change-password` | Ganti password + paksa login ulang | ✅ Required |
+| GET | `/api/auth/me` | Mendapatkan data pengguna yang sedang login | ✅ Authenticated |
+| GET | `/api/auth/profile` | Mendapatkan detail profil dan peran pengguna | ✅ Authenticated |
+| POST | `/api/auth/logout` | Menghapus token aktif (logout) | ✅ Authenticated |
+| POST | `/api/auth/logout-all` | Logout dari semua perangkat & app | ✅ Authenticated |
+| POST | `/api/auth/change-password` | Ganti password + paksa login ulang | ✅ Authenticated |
 
 ---
 
@@ -153,8 +154,10 @@
     "requires_2fa": false,
     "data": {
         "id": 1,
+        "name": "Super Admin",
         "username": "admin",
         "email": "admin@kampus.ac.id",
+        "referral_code": "REF-ABC123",
         "user_type": "admin",
         "is_active": 1,
         "is_verified": 1,
@@ -288,8 +291,10 @@ Mengembalikan payload yang persis sama dengan respons *Login sukses tanpa 2FA* (
     "message": "Profil pengguna berhasil diambil",
     "data": {
         "id": 1,
+        "name": "Budi Santoso",
         "username": "budi.santoso",
         "email": "budi@kampus.ac.id",
+        "referral_code": "REF-XYZ789",
         "phone": "081234567890",
         "user_type": "mahasiswa",
         "is_active": true,
@@ -310,6 +315,52 @@ Mengembalikan payload yang persis sama dengan respons *Login sukses tanpa 2FA* (
 {
     "status": "error",
     "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+---
+
+## GET /api/auth/profile
+
+> Mengembalikan data detail pengguna yang sedang login beserta informasi nama lengkap, kode referral, dan daftar perannya.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Data profil berhasil dimuat.",
+    "data": {
+        "user": {
+            "id": 1,
+            "name": "Budi Santoso",
+            "username": "budi.santoso",
+            "email": "budi@kampus.ac.id",
+            "referral_code": "REF-XYZ789",
+            "is_active": true,
+            "is_verified": true
+        },
+        "roles": ["admin"],
+        "permissions": []
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
 }
 ```
 

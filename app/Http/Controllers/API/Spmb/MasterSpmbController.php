@@ -172,11 +172,11 @@ class MasterSpmbController extends Controller
     {
         $query = JalurMasuk::query();
 
-        if ($request->filled('name')) {
-            $name = $request->input('name');
-            $query->where(function ($q) use ($name) {
-                $q->where('nama', 'like', "%{$name}%")
-                  ->orWhere('kode', 'like', "%{$name}%");
+        if ($request->filled('search') || $request->filled('name')) {
+            $search = $request->input('search', $request->input('name'));
+            $query->where(function ($q) use ($search) {
+                $q->where('nama', 'like', "%{$search}%")
+                  ->orWhere('kode', 'like', "%{$search}%");
             });
         }
 
@@ -184,29 +184,34 @@ class MasterSpmbController extends Controller
             $query->where('is_active', filter_var($request->input('status'), FILTER_VALIDATE_BOOLEAN));
         }
 
-        $sortBy = $request->input('sort_by', $request->input('orderBy', 'created_at'));
-        $sortDir = $request->input('sort_dir', $request->input('orderDir', 'desc'));
         $allowedSorts = ['id', 'kode', 'nama', 'created_at'];
-        if (in_array($sortBy, $allowedSorts)) {
-            $query->orderBy($sortBy, $sortDir === 'asc' ? 'asc' : 'desc');
-        } else {
-            $query->orderBy('created_at', 'desc');
-        }
+        $sortBy = in_array($request->sort_by, $allowedSorts) ? $request->sort_by : 'created_at';
+        $sortOrder = in_array(strtolower($request->input('sort_order', $request->input('sort_dir', 'desc'))), ['asc', 'desc'])
+            ? strtolower($request->input('sort_order', $request->input('sort_dir', 'desc')))
+            : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
 
-        $limit = $request->input('limit', 10);
-        $paginated = $query->paginate($limit);
+        $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+        $paginated = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
+            'message' => 'Data jalur penerimaan berhasil dimuat.',
             'data' => $paginated->items(),
             'meta' => [
                 'current_page' => $paginated->currentPage(),
-                'from' => $paginated->firstItem(),
-                'last_page' => $paginated->lastPage(),
                 'per_page' => $paginated->perPage(),
-                'to' => $paginated->lastItem(),
                 'total' => $paginated->total(),
-            ]
+                'last_page' => $paginated->lastPage(),
+                'from' => $paginated->firstItem(),
+                'to' => $paginated->lastItem(),
+            ],
+            'filters' => [
+                'search' => $request->search,
+                'status' => $request->status,
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+            ],
         ]);
     }
 
@@ -285,12 +290,87 @@ class MasterSpmbController extends Controller
     /**
      * Get all Gelombang Penerimaan (Active)
      */
-    public function getGelombang(): JsonResponse
+    public function getGelombang(Request $request): JsonResponse
     {
-        $gelombang = GelombangPenerimaan::with(['jalurMasuk', 'masterBiaya', 'tahunAkademik'])->orderBy('tanggal_buka', 'desc')->get();
+        $query = GelombangPenerimaan::with(['jalurMasuk', 'masterBiaya', 'tahunAkademik']);
+
+        if ($request->filled('nama')) {
+            $query->where('nama', 'like', '%' . $request->nama . '%');
+        }
+
+        if ($request->filled('jalur_masuk_id')) {
+            $query->where('jalur_masuk_id', $request->jalur_masuk_id);
+        }
+
+        if ($request->filled('tanggal_buka')) {
+            $query->whereDate('tanggal_buka', '>=', $request->tanggal_buka);
+        }
+
+        if ($request->filled('tanggal_tutup')) {
+            $query->whereDate('tanggal_tutup', '<=', $request->tanggal_tutup);
+        }
+
+        if ($request->filled('kuota')) {
+            if ($request->kuota === 'tersedia') {
+                $query->whereRaw('(kuota_total - COALESCE(kuota_terisi, 0)) > 0');
+            } elseif ($request->kuota === 'penuh') {
+                $query->whereRaw('(kuota_total - COALESCE(kuota_terisi, 0)) <= 0');
+            }
+        }
+
+        if ($request->filled('biaya')) {
+            if ($request->biaya === 'gratis') {
+                $query->where(function ($q) {
+                    $q->whereNull('biaya_pendaftaran')->orWhere('biaya_pendaftaran', 0);
+                });
+            } elseif ($request->biaya === 'berbayar') {
+                $query->where('biaya_pendaftaran', '>', 0);
+            }
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('nama', 'like', "%{$search}%");
+            });
+        }
+
+        $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+        $allowedSortColumns = ['id', 'nama', 'tanggal_buka', 'tanggal_tutup', 'kuota_total', 'biaya_pendaftaran', 'status', 'created_at'];
+        $sortBy = in_array($request->sort_by, $allowedSortColumns) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        $paginated = $query->paginate($perPage);
+
         return response()->json([
             'status' => 'success',
-            'data' => $gelombang
+            'message' => 'Data gelombang berhasil dimuat.',
+            'data' => $paginated->items(),
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'last_page' => $paginated->lastPage(),
+                'from' => $paginated->firstItem(),
+                'to' => $paginated->lastItem(),
+            ],
+            'filters' => [
+                'search' => $request->search,
+                'nama' => $request->nama,
+                'jalur_masuk_id' => $request->jalur_masuk_id,
+                'tanggal_buka' => $request->tanggal_buka,
+                'tanggal_tutup' => $request->tanggal_tutup,
+                'kuota' => $request->kuota,
+                'biaya' => $request->biaya,
+                'status' => $request->status,
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+            ],
         ]);
     }
 
@@ -302,6 +382,7 @@ class MasterSpmbController extends Controller
         $gelombang = GelombangPenerimaan::with(['jalurMasuk', 'masterBiaya', 'tahunAkademik'])->findOrFail($id);
         return response()->json([
             'status' => 'success',
+            'message' => 'Data detail gelombang berhasil dimuat.',
             'data' => $gelombang
         ]);
     }
