@@ -178,6 +178,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::apiResource('jabatan', App\Http\Controllers\Simpeg\JabatanController::class);
     Route::get('jabatan-fungsional', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'index']);
     Route::post('jabatan-fungsional', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'store']);
+    Route::get('jabatan-fungsional/master/golongan', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'getGolongan']);
 
     // Pegawai
     Route::get('pegawai/template', [App\Http\Controllers\Simpeg\PegawaiController::class, 'downloadTemplate']);
@@ -488,6 +489,7 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     // Pengajuan Kas
     Route::get('pengajuan-kas', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'index']);
     Route::post('pengajuan-kas', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'store']);
+    Route::get('pengajuan-kas/master/status', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'getMasterStatus']);
     Route::post('pengajuan-kas/{id}/approve', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'approve']);
     Route::post('pengajuan-kas/{id}/reject', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'reject']);
 
@@ -641,6 +643,7 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     // Pengeluaran Kampus & Vendor / Petty Cash Operasional
     Route::get('pengeluaran', [App\Http\Controllers\Sikeu\PengeluaranKampusController::class, 'index']);
     Route::post('pengeluaran', [App\Http\Controllers\Sikeu\PengeluaranKampusController::class, 'store']);
+    Route::get('pengeluaran/master/kategori', [App\Http\Controllers\Sikeu\PengeluaranKampusController::class, 'getKategori']);
     Route::get('pengeluaran/{id}', [App\Http\Controllers\Sikeu\PengeluaranKampusController::class, 'show']);
 
     // Pajak Kampus (PPh 21, PPh 23, PPN 11%) & Setor NTPN

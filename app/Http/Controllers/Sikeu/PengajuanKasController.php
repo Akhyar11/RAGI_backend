@@ -122,4 +122,25 @@ class PengajuanKasController extends Controller
             'data' => $updated,
         ], 200);
     }
+
+    /**
+     * GET /api/v1/sikeu/pengajuan-kas/master/status
+     * Return distinct status values from pengajuan_pencairan_kas.
+     */
+    public function getMasterStatus()
+    {
+        $statuses = PengajuanPencairanKas::select('status')
+            ->distinct()
+            ->orderBy('status')
+            ->pluck('status')
+            ->map(fn($s) => [
+                'value' => $s,
+                'label' => ucwords(str_replace('_', ' ', $s)),
+            ]);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $statuses,
+        ]);
+    }
 }
