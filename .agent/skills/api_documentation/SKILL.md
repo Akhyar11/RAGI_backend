@@ -85,7 +85,7 @@ Gunakan template berikut untuk **setiap** file dokumentasi controller:
     "email": "string, required, format email",
     "password": "string, required (min: 8), only for store",
     "phone": "string, nullable",
-    "user_type": "enum: mahasiswa|dosen|tendik|admin|calon_mhs"
+    "role_id": "integer, required, exists:iam_roles,id"
 }
 ```
 
@@ -101,7 +101,13 @@ Gunakan template berikut untuk **setiap** file dokumentasi controller:
         "username": "budi.santoso",
         "email": "budi@kampus.ac.id",
         "phone": "081234567890",
-        "user_type": "mahasiswa",
+        "roles": [
+            {
+                "id": 5,
+                "name": "Mahasiswa",
+                "slug": "mahasiswa"
+            }
+        ],
         "is_active": true,
         "is_verified": false,
         "last_login_at": null,

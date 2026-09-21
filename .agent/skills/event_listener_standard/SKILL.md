@@ -89,6 +89,7 @@ php artisan make:listener SPMB/CreateUserAccount --event=MahasiswaDiterima
 namespace App\Listeners\SPMB;
 
 use App\Events\SPMB\MahasiswaDiterima;
+use App\Models\Role;
 use App\Services\IAM\UserService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
@@ -102,11 +103,12 @@ class CreateUserAccount implements ShouldQueue
     public function handle(MahasiswaDiterima $event): void
     {
         $pendaftaran = $event->hasilSeleksi->pendaftaran;
+        $mahasiswaRole = Role::where('slug', 'mahasiswa')->first();
 
         $this->userService->create([
-            'username'  => $pendaftaran->no_pendaftaran,
-            'email'     => $pendaftaran->email ?? null,
-            'user_type' => 'mahasiswa',
+            'username' => $pendaftaran->no_pendaftaran,
+            'email'    => $pendaftaran->email ?? null,
+            'role_id'  => $mahasiswaRole?->id,
         ]);
     }
 }

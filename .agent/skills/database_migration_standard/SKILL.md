@@ -9,11 +9,16 @@ Dengan total ~137 tabel di seluruh ekosistem, konsistensi dalam pembuatan migras
 
 ---
 
-## 1. Konvensi Penamaan Tabel
+## 1. Konvensi Penamaan Tabel & Wajib Prefix Modul
 
-- Gunakan `snake_case` jamak dalam Bahasa Indonesia sesuai ERD.
-- Prefix modul **TIDAK** diperlukan untuk tabel utama modul, tapi diperlukan untuk tabel relasi antar-modul.
-- Contoh: `mahasiswa`, `dosen`, `mata_kuliah`, `krs`, `krs_detail`
+- Gunakan `snake_case` jamak dalam Bahasa Indonesia/Inggris sesuai domain modul.
+- **WAJIB PREFIX MODUL:** Seluruh tabel baru dan model Eloquent **WAJIB** diawali dengan *prefix* resmi modul terkait (`Schema::create('modul_nama_tabel')` dan `protected $table = 'modul_nama_tabel';`).
+  - Prefix resmi yang sah: `core_`, `iam_`, `spmb_`, `siakad_`, `sikeu_`, `simpeg_`, `sinapra_`, `sippm_`, `lms_`, `oauth_`, `sso_`, `upm_`.
+  - Pengecualian sah (tabel internal framework): `sessions`, `cache`, `jobs`, `failed_jobs`, `job_batches`, `migrations`, `password_resets`, `password_reset_tokens`, `personal_access_tokens`, `audit_logs`.
+- Contoh tabel berprefix:
+  - SIAKAD: `siakad_mahasiswa`, `siakad_dosen`, `siakad_mata_kuliah`, `siakad_krs`, `siakad_krs_detail`
+  - IAM: `iam_users`, `iam_roles`, `iam_permissions`, `iam_user_roles`, `iam_role_permissions`
+  - SPMB: `spmb_pendaftar`, `spmb_gelombang`, `spmb_jalur_masuk`, `spmb_berkas`
 
 ---
 
@@ -75,13 +80,13 @@ Selalu gunakan `constrained()` dengan `onDelete` yang tepat:
 
 ```php
 // Data anak IKUT TERHAPUS jika parent dihapus
-$table->foreignId('gelombang_id')->constrained('gelombang_penerimaan')->onDelete('cascade');
+$table->foreignId('gelombang_id')->constrained('spmb_gelombang_penerimaan')->onDelete('cascade');
 
-// Data anak SET NULL jika parent dihapus (untuk optional FK)
-$table->foreignId('assigned_by')->nullable()->constrained('users')->onDelete('set null');
+// Data anak SET NULL jika parent dihapus (untuk optional FK berprefix)
+$table->foreignId('assigned_by')->nullable()->constrained('iam_users')->onDelete('set null');
 
 // Data anak TIDAK BOLEH dihapus jika masih ada referensi
-$table->foreignId('program_studi_id')->constrained()->onDelete('restrict');
+$table->foreignId('program_studi_id')->constrained('siakad_program_studi')->onDelete('restrict');
 ```
 
 ---
@@ -94,11 +99,11 @@ Urutan `Schema::dropIfExists` di method `down()` **WAJIB** kebalikan dari urutan
 public function down(): void
 {
     // Hapus tabel yang punya FK duluan
-    Schema::dropIfExists('role_permissions');
-    Schema::dropIfExists('user_roles');
+    Schema::dropIfExists('iam_role_permissions');
+    Schema::dropIfExists('iam_user_roles');
     // Baru hapus tabel induk
-    Schema::dropIfExists('permissions');
-    Schema::dropIfExists('roles');
+    Schema::dropIfExists('iam_permissions');
+    Schema::dropIfExists('iam_roles');
 }
 ```
 
@@ -121,10 +126,10 @@ public function down(): void
 ## 8. Contoh Migrasi Lengkap yang Ideal
 
 ```php
-Schema::create('mahasiswa', function (Blueprint $table) {
+Schema::create('siakad_mahasiswa', function (Blueprint $table) {
     $table->id();
-    $table->foreignId('user_id')->constrained()->onDelete('cascade');
-    $table->foreignId('program_studi_id')->constrained()->onDelete('restrict');
+    $table->foreignId('user_id')->constrained('iam_users')->onDelete('cascade');
+    $table->foreignId('program_studi_id')->constrained('siakad_program_studi')->onDelete('restrict');
     $table->string('nim', 20)->unique();
     $table->string('nama_lengkap', 100);
     $table->string('nik', 20)->unique()->nullable();

@@ -98,7 +98,7 @@ Setiap endpoint `index` **WAJIB** mendukung setidaknya filter berikut:
 | `?sort_by=` | Kolom yang dipakai untuk pengurutan | `?sort_by=created_at` |
 | `?sort_order=` | Arah pengurutan (`asc` atau `desc`) | `?sort_order=desc` |
 
-Tambahkan filter spesifik per modul sesuai kebutuhan (contoh: `?user_type=` untuk endpoint `/users`).
+Tambahkan filter spesifik per modul sesuai kebutuhan (contoh: `?role=` atau `?role_id=` untuk endpoint `/users`).
 
 ### Contoh Implementasi Filter:
 ```php
@@ -127,6 +127,8 @@ $query->orderBy($sortBy, $sortOrder);
 - **WAJIB** menggunakan `Form Request` terpisah (`php artisan make:request`) untuk metode `store` dan `update`, **bukan** `$request->validate()` langsung di controller.
 - Nama file Form Request: `Store{ModelName}Request.php` dan `Update{ModelName}Request.php`.
 - Lokasi: `app/Http/Requests/`.
+- **DILARANG `in:STATIS` untuk Data Referensi / Master Dinamis:** Validasi dropdown atau entitas domain WAJIB menggunakan `exists:nama_tabel,id` (contoh: `'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id'`). Dilarang keras `'jalur_masuk' => 'in:REGULER,KARYAWAN'`. Validasi `in:` HANYA sah untuk parameter teknis UI/query seperti arah sort (`'sort_order' => 'in:asc,desc'`) atau enum status workflow internal yang statis (`in:disetujui,ditolak`).
+- **DILARANG Atribut `user_type`:** Dilarang menyertakan atau memvalidasi field `user_type` di Form Request manapun. Gunakan relasi role (`role_id` atau array roles).
 
 ---
 
