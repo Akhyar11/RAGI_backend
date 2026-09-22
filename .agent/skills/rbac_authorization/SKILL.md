@@ -15,7 +15,7 @@ Setelah sistem Role dan Permission tersedia di database, gunakan mekanisme berik
 Request → Middleware (auth:sanctum) → Policy/Gate Check → Controller
 ```
 
-Jangan pernah meletakkan logika `if ($user->user_type === 'admin')` secara manual di Controller. Gunakan Gate atau Policy.
+Jangan pernah melakukan pengecekan otorisasi manual atau memeriksa string kolom statis. Gunakan selalu Gate, Policy, atau relasi RBAC (`hasRole`, `hasPermission`). **DILARANG KERAS** menggunakan atribut atau kata `user_type` di seluruh baris kode.
 
 ---
 
@@ -30,8 +30,8 @@ use App\Models\User;
 public function boot(): void
 {
     Gate::before(function (User $user, string $ability) {
-        // Super admin bypass semua permission
-        if ($user->user_type === 'admin' && $user->roles->contains('slug', 'super-admin')) {
+        // Super admin bypass semua permission via relasi role
+        if ($user->hasRole('super-admin')) {
             return true;
         }
     });

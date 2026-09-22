@@ -108,7 +108,10 @@ Edit file `bootstrap/app.php` untuk menangkap semua exception:
 
 ## 4. Aturan Penting
 
-- **JANGAN** gunakan `try-catch` di controller hanya untuk menangkap exception umum yang sudah ditangani oleh global handler.
-- **BOLEH** gunakan `try-catch` untuk exception bisnis spesifik yang perlu response khusus.
+- **DILARANG** menggunakan blok `try-catch (\Throwable $e)` umum di dalam Controller. Serahkan seluruh penanganan error tak terduga ke Global Exception Handler di `bootstrap/app.php`.
+- **HINDARI** penelanan error (*error swallowing*) yang mengubah exception validasi (422), not found (404), atau authorization (403) menjadi 500.
+- **BOLEH** gunakan `try-catch`:
+  1. Di dalam Service Layer untuk operasi non-blocking yang tidak boleh menggagalkan transaksi utama (misalnya `AuditLogService::record(...)` atau pengiriman notifikasi eksternal).
+  2. Di Controller HANYA untuk menangkap exception bisnis spesifik yang membutuhkan HTTP status code atau struktur respons khusus.
 - Semua error level `500` **WAJIB** di-log menggunakan `\Log::error($e)`.
 - Aktifkan `APP_DEBUG=false` di environment production.

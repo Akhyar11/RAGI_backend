@@ -27,7 +27,7 @@ class CutiController extends Controller
             ], 403);
         }
 
-        $query = PengajuanCuti::with(['pegawai', 'approver', 'masterJenisCuti']);
+        $query = PengajuanCuti::with(['pegawai.unitKerja', 'pegawai.dosen.programStudi', 'approver', 'masterJenisCuti']);
 
         if ($request->has('pegawai_id')) {
             $query->where('pegawai_id', $request->pegawai_id);
@@ -38,12 +38,15 @@ class CutiController extends Controller
             }
         }
 
-        if ($request->filled('master_jenis_cuti_id')) {
-            $query->where('master_jenis_cuti_id', $request->master_jenis_cuti_id);
+        $masterJenisCutiId = $request->filled('master_jenis_cuti_id') ? (int) $request->master_jenis_cuti_id : null;
+        if ($masterJenisCutiId) {
+            $query->where('master_jenis_cuti_id', $masterJenisCutiId);
         }
 
-        if ($request->has('status_approval') && $request->status_approval !== '') {
-            $query->where('status_approval', $request->status_approval);
+        $allowedStatus = ['menunggu', 'disetujui', 'ditolak'];
+        $statusApproval = in_array($request->status_approval, $allowedStatus, true) ? $request->status_approval : '';
+        if ($statusApproval !== '') {
+            $query->where('status_approval', $statusApproval);
         }
 
         if ($request->filled('search')) {
@@ -52,7 +55,9 @@ class CutiController extends Controller
                 $q->where('alasan', 'like', "%{$search}%")
                   ->orWhereHas('pegawai', function ($qp) use ($search) {
                       $qp->where('nama_lengkap', 'like', "%{$search}%")
-                         ->orWhere('nip', 'like', "%{$search}%");
+                         ->orWhere('nip', 'like', "%{$search}%")
+                         ->orWhere('nidn', 'like', "%{$search}%")
+                         ->orWhere('nuptk', 'like', "%{$search}%");
                   })
                   ->orWhereHas('masterJenisCuti', function ($qm) use ($search) {
                       $qm->where('nama', 'like', "%{$search}%");
@@ -61,36 +66,31 @@ class CutiController extends Controller
         }
 
         // Sorting
-        $sortBy = in_array($request->sort_by, ['tanggal_mulai', 'tanggal_selesai', 'jumlah_hari', 'created_at']) 
-            ? $request->sort_by 
-            : 'created_at';
-        $sortOrder = strtolower($request->sort_dir ?? $request->sort_order ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        $allowedSort = ['created_at', 'tanggal_mulai', 'tanggal_selesai', 'jumlah_hari'];
+        $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
-        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
-            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
-            $paginated = $query->paginate($perPage);
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Data retrieved successfully',
-                'data' => $paginated->items(),
-                'meta' => [
-                    'current_page' => $paginated->currentPage(),
-                    'per_page' => $paginated->perPage(),
-                    'total' => $paginated->total(),
-                    'last_page' => $paginated->lastPage(),
-                    'from' => $paginated->firstItem(),
-                    'to' => $paginated->lastItem(),
-                ],
-            ]);
-        }
-
-        $cuti = $query->get();
+        $perPage = min(100, $request->integer('per_page', 15));
+        $paginated = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
-            'data' => $cuti,
+            'message' => 'Data cuti berhasil diambil',
+            'data' => $paginated->items(),
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'last_page' => $paginated->lastPage(),
+                'from' => $paginated->firstItem(),
+                'to' => $paginated->lastItem(),
+            ],
+            'filters' => [
+                'search' => (string) $request->input('search', ''),
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+            ],
         ]);
     }
 

@@ -130,6 +130,7 @@ class AuthController extends Controller
                     'name' => $employee->nama_lengkap ?: $user->username,
                     'username' => $user->username,
                     'email' => $user->email,
+                    'referral_code' => $user->referral_code,
                     'roles' => $user->roles->pluck('slug')->values(),
                 ],
                 'employee' => [
@@ -194,9 +195,10 @@ class AuthController extends Controller
             'data' => [
                 'user' => [
                     'id' => $user->id,
-                    'name' => $employee->nama_lengkap ?: $user->username,
+                    'name' => $user->name ?: ($employee->nama_lengkap ?: $user->username),
                     'username' => $user->username,
                     'email' => $user->email,
+                    'referral_code' => $user->referral_code,
                     'roles' => $user->roles->pluck('slug')->values(),
                 ],
                 'employee' => [

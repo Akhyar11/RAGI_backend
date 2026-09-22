@@ -11,7 +11,7 @@ class PermissionController extends Controller
     {
         $this->authorize('viewAny', Permission::class);
 
-        $perPage = min(100, $request->integer('per_page', 50));
+        $perPage = min(100, $request->integer('per_page', 15));
         $query = Permission::query();
 
         if ($request->filled('search')) {

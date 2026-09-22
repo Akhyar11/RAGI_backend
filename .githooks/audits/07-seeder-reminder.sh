@@ -20,6 +20,10 @@ if [ -z "$STAGED_DIFF" ]; then
     exit 0
 fi
 
+if [ ${#STAGED_DIFF} -gt 80000 ]; then
+    STAGED_DIFF=$(echo "$STAGED_DIFF" | grep -E '^(\+\+\+|---|\+\s*|diff|@@)' | head -c 80000)
+fi
+
 # DEEP AI AUDIT
 PROMPT_FILE=$(mktemp)
 
@@ -70,12 +74,12 @@ EOF
 
 AI_EXIT_CODE=1
 if [ "$AI_ENGINE" != "agy" ] && [ -x "$OPENCODE_BIN" ]; then
-    RESULT=$(timeout 20s "$OPENCODE_BIN" run --pure -m "$MODEL" "$(cat "$PROMPT_FILE")" 2>&1)
+    RESULT=$(timeout 120s "$OPENCODE_BIN" run --pure -m "$MODEL" "$(cat "$PROMPT_FILE")" 2>&1)
     AI_EXIT_CODE=$?
 fi
 
 if [ $AI_EXIT_CODE -ne 0 ] && command -v agy &> /dev/null; then
-    RESULT=$(timeout 30s agy --model gemini-3.8-flash-low --print "$(cat "$PROMPT_FILE")" 2>&1)
+    RESULT=$(timeout 120s agy --model gemini-3.8-flash-low --print "$(cat "$PROMPT_FILE")" 2>&1)
     AI_EXIT_CODE=$?
 fi
 

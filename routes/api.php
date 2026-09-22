@@ -93,6 +93,9 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::apiResource('users', App\Http\Controllers\UserController::class);
     Route::patch('users/{id}/status', [App\Http\Controllers\UserController::class, 'toggleStatus']);
     Route::put('users/{id}/password', [App\Http\Controllers\UserController::class, 'changePassword']);
+    Route::post('users/{id}/impersonate', [App\Http\Controllers\UserController::class, 'impersonate']);
+    Route::post('users/leave-impersonate', [App\Http\Controllers\UserController::class, 'leaveImpersonate']);
+    Route::get('impersonate-status', [App\Http\Controllers\UserController::class, 'impersonateStatus']);
     
     Route::apiResource('roles', App\Http\Controllers\RoleController::class);
     Route::apiResource('permissions', App\Http\Controllers\PermissionController::class);
@@ -178,6 +181,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::apiResource('jabatan', App\Http\Controllers\Simpeg\JabatanController::class);
     Route::get('jabatan-fungsional', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'index']);
     Route::post('jabatan-fungsional', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'store']);
+    Route::get('jabatan-fungsional/master/golongan', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'getGolongan']);
 
     // Pegawai
     Route::get('pegawai/template', [App\Http\Controllers\Simpeg\PegawaiController::class, 'downloadTemplate']);
@@ -279,8 +283,9 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::put('payroll/bracket-pph21/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'updateBracketPph21']);
 
     // Komponen Gaji Pegawai
-    Route::get('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PayrollController::class, 'getPegawaiKomponen']);
-    Route::post('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PayrollController::class, 'savePegawaiKomponen']);
+    Route::get('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'show']);
+    Route::put('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'update']);
+    Route::post('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'update']);
 
     // Rekapan Payroll, Detail Slip & Eksekusi SIKEU
     Route::get('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'index']);
@@ -291,6 +296,10 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 
     Route::get('usulan-jafung', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'index']);
     Route::post('usulan-jafung', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'store']);
+    Route::get('usulan-jafung/{id}', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'show']);
+    Route::put('usulan-jafung/{id}', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'update']);
+    Route::post('usulan-jafung/{id}', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'update']);
+    Route::delete('usulan-jafung/{id}', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'destroy']);
 
     // Penilaian Kinerja & SKP Butir-per-Butir
     Route::get('penilaian-kinerja/masters', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'masters']);
@@ -483,7 +492,9 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     // Pengajuan Kas
     Route::get('pengajuan-kas', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'index']);
     Route::post('pengajuan-kas', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'store']);
+    Route::get('pengajuan-kas/master/status', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'getMasterStatus']);
     Route::post('pengajuan-kas/{id}/approve', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'approve']);
+    Route::post('pengajuan-kas/{id}/reject', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'reject']);
 
     // Pengajuan Operasional (4 tahap: sarpras -> keuangan -> direktur + pencairan + LPJ + jurnal otomatis)
     Route::get('pengajuan-operasional', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'index']);
@@ -709,6 +720,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     // Pengeluaran Kampus & Vendor / Petty Cash Operasional
     Route::get('pengeluaran', [App\Http\Controllers\Sikeu\PengeluaranKampusController::class, 'index']);
     Route::post('pengeluaran', [App\Http\Controllers\Sikeu\PengeluaranKampusController::class, 'store']);
+    Route::get('pengeluaran/master/kategori', [App\Http\Controllers\Sikeu\PengeluaranKampusController::class, 'getKategori']);
     Route::get('pengeluaran/{id}', [App\Http\Controllers\Sikeu\PengeluaranKampusController::class, 'show']);
 
     // Pajak Kampus (PPh 21, PPh 23, PPN 11%) & Setor NTPN

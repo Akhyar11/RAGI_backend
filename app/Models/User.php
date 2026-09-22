@@ -14,9 +14,11 @@ use Laravel\Passport\HasApiTokens;
 
 #[Fillable([
     'username',
+    'name',
     'email',
     'password',
     'phone',
+    'referral_code',
     'is_active',
     'is_verified',
     'last_login_at',
@@ -80,7 +82,50 @@ class User extends Authenticatable
             });
     }
 
-    protected $appends = ['is_superadmin', 'is_admin'];
+    protected $appends = ['is_superadmin', 'is_admin', 'referral_code'];
+
+    public function getNameAttribute($value): ?string
+    {
+        if (!empty($value)) {
+            return $value;
+        }
+
+        if ($this->relationLoaded('pegawai') && $this->pegawai?->nama_lengkap) {
+            return $this->pegawai->nama_lengkap;
+        }
+
+        return $this->username ?? '';
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function ($user) {
+            if (empty($user->referral_code)) {
+                $user->referral_code = static::generateUniqueReferralCode();
+            }
+        });
+    }
+
+    public static function generateUniqueReferralCode(): string
+    {
+        do {
+            $code = 'REF-' . strtoupper(\Illuminate\Support\Str::random(6));
+        } while (static::where('referral_code', $code)->exists());
+
+        return $code;
+    }
+
+    public function getReferralCodeAttribute($value): ?string
+    {
+        if (empty($value) && $this->exists) {
+            $code = static::generateUniqueReferralCode();
+            $this->attributes['referral_code'] = $code;
+            $this->saveQuietly();
+            return $code;
+        }
+
+        return $value;
+    }
 
     public function isSuperAdmin(): bool
     {

@@ -1,22 +1,53 @@
-# API Dokumentasi: Audit Logs
+# AuditLogController
 
-Dokumentasi ini menjelaskan _endpoint_ untuk membaca rekam jejak sistem (Audit Logs). Endpoint ini hanya dapat diakses oleh *Super Admin* atau pengguna dengan permission `view-audit-logs`.
+> **Modul**: IAM  
+> **Base URL**: `/api/admin/audit-logs`  
+> **Autentikasi**: Bearer Token (Sanctum)  
+> **Dibuat/Diperbarui**: 2026-09-21  
 
-**Base URL:** `/api/admin/audit-logs`
+Dokumentasi API untuk pembacaan dan pemantauan rekam jejak aktivitas sistem (Audit Logs). Endpoint ini dibatasi untuk pengguna dengan wewenang pemeriksaan log (Super Admin atau pemilik permission `view-audit-logs`).
 
-## 1. List Audit Logs
-Menampilkan daftar aktivitas sistem dengan dukungan paginasi, pencarian, dan filter.
+---
 
-**Endpoint:** `GET /api/admin/audit-logs`  
-**Auth Required:** Yes (Bearer Token)
+## Daftar Endpoint
 
-### Parameter Query (Opsional)
-- `page` (int): Halaman saat ini (default: 1).
-- `per_page` (int): Jumlah data per halaman (default: 15).
-- `search` (string): Mencari berdasarkan module, action, atau table_name.
-- `user_id` (int): Memfilter log berdasarkan ID pengguna spesifik.
+| Method | Endpoint | Fungsi | Auth |
+|---|---|---|---|
+| GET | `/api/admin/audit-logs` | Menampilkan daftar aktivitas audit sistem berpaginasi | ✅ Super Admin |
+| GET | `/api/admin/audit-logs/{id}` | Menampilkan detail satu catatan audit log | ✅ Super Admin |
 
-### Response Sukses (200 OK)
+---
+
+## [GET] /api/admin/audit-logs
+
+> Mengambil daftar rekaman audit log dengan filter modular, pencarian multi-kolom, pengurutan whitelist, dan paginasi standar.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Default | Deskripsi |
+|---|---|---|---|
+| `search` | string | - | Kata kunci pencarian (module, action, table_name, ip_address, payload, username, email) |
+| `username` | string | - | Filter berdasarkan username atau nama pengguna |
+| `action` | string | - | Filter aksi (login, create, update, delete, restore, dll.) |
+| `ip_address` | string | - | Filter alamat IP |
+| `payload` | string | - | Filter isi payload log |
+| `created_at` | string | - | Filter berdasarkan tanggal pencatatan log (format `YYYY-MM-DD`) |
+| `user_id` | integer | - | Filter ID pengguna yang melakukan aksi |
+| `sort_by` | string | `created_at` | Kolom pengurutan (`id`, `user_id`, `action`, `ip_address`, `module`, `table_name`, `created_at`) |
+| `sort_order` | string | `desc` | Arah pengurutan (`asc`, `desc`) |
+| `per_page` | integer | `15` | Jumlah rekaman per halaman (1 s/d 100) |
+| `page` | integer | `1` | Nomor halaman data |
+
+### Response Sukses
+
+**200 OK**
 ```json
 {
     "status": "success",
@@ -27,22 +58,24 @@ Menampilkan daftar aktivitas sistem dengan dukungan paginasi, pencarian, dan fil
             "user_id": 1,
             "module": "IAM",
             "action": "update",
-            "table_name": "users",
+            "table_name": "core_users",
             "record_id": 3,
             "old_values": {
+                "name": "Budi Santoso",
                 "phone": "08123456789"
             },
             "new_values": {
+                "name": "Budi Santoso M.Kom",
                 "phone": "08111111111"
             },
             "ip_address": "127.0.0.1",
             "user_agent": "Mozilla/5.0 ...",
-            "created_at": "2026-07-29T10:00:00.000000Z",
+            "created_at": "2026-09-21T10:00:00.000000Z",
             "user": {
                 "id": 1,
                 "username": "superadmin",
-                "email": "superadmin@kampus.ac.id",
-                "user_type": "admin"
+                "name": "Super Administrator",
+                "email": "superadmin@kampus.ac.id"
             }
         }
     ],
@@ -56,6 +89,11 @@ Menampilkan daftar aktivitas sistem dengan dukungan paginasi, pencarian, dan fil
     },
     "filters": {
         "search": null,
+        "username": null,
+        "action": null,
+        "ip_address": null,
+        "payload": null,
+        "created_at": null,
         "user_id": null,
         "sort_by": "created_at",
         "sort_order": "desc"
@@ -63,13 +101,40 @@ Menampilkan daftar aktivitas sistem dengan dukungan paginasi, pencarian, dan fil
 }
 ```
 
-## 2. Detail Audit Log
-Menampilkan rincian satu catatan log secara spesifik.
+### Response Error
 
-**Endpoint:** `GET /api/admin/audit-logs/{id}`  
-**Auth Required:** Yes (Bearer Token)
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
 
-### Response Sukses (200 OK)
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk melihat audit log."
+}
+```
+
+---
+
+## [GET] /api/admin/audit-logs/{id}
+
+> Menampilkan rincian lengkap dari satu catatan audit log spesifik.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
 ```json
 {
     "status": "success",
@@ -77,12 +142,32 @@ Menampilkan rincian satu catatan log secara spesifik.
     "data": {
         "id": 12,
         "user_id": 1,
-        // ...
+        "module": "IAM",
+        "action": "update",
+        "table_name": "core_users",
+        "record_id": 3,
+        "old_values": {
+            "phone": "08123456789"
+        },
+        "new_values": {
+            "phone": "08111111111"
+        },
+        "ip_address": "127.0.0.1",
+        "user_agent": "Mozilla/5.0 ...",
+        "created_at": "2026-09-21T10:00:00.000000Z",
+        "user": {
+            "id": 1,
+            "username": "superadmin",
+            "name": "Super Administrator",
+            "email": "superadmin@kampus.ac.id"
+        }
     }
 }
 ```
 
-### Response Gagal (404 Not Found)
+### Response Error
+
+**404 Not Found**
 ```json
 {
     "status": "error",

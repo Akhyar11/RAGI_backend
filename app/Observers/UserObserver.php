@@ -12,13 +12,20 @@ class UserObserver
      */
     public function created(User $user): void
     {
-        AuditLogService::record(
-            module: 'IAM',
-            action: 'create',
-            tableName: 'core_users',
-            recordId: $user->id,
-            newValues: $user->toArray()
-        );
+        try {
+            $newValues = collect($user->toArray())->except(['password', 'remember_token'])->toArray();
+            AuditLogService::record(
+                module: 'IAM',
+                action: 'create',
+                tableName: 'core_users',
+                recordId: $user->id,
+                oldValues: null,
+                newValues: $newValues,
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**
@@ -28,14 +35,21 @@ class UserObserver
     {
         // Hindari logging jika hanya `last_login_at` yang berubah (itu dicover oleh action: 'login')
         if ($user->wasChanged() && !$user->wasChanged('last_login_at')) {
-            AuditLogService::record(
-                module: 'IAM',
-                action: 'update',
-                tableName: 'core_users',
-                recordId: $user->id,
-                oldValues: $user->getOriginal(),
-                newValues: $user->getChanges()
-            );
+            try {
+                $changes = collect($user->getChanges())->except(['password', 'remember_token'])->toArray();
+                $oldValues = collect($user->getOriginal())->only(array_keys($changes))->except(['password', 'remember_token'])->toArray();
+                AuditLogService::record(
+                    module: 'IAM',
+                    action: 'update',
+                    tableName: 'core_users',
+                    recordId: $user->id,
+                    oldValues: $oldValues,
+                    newValues: $changes,
+                    request: request()
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
     }
 
@@ -44,13 +58,20 @@ class UserObserver
      */
     public function deleted(User $user): void
     {
-        AuditLogService::record(
-            module: 'IAM',
-            action: 'delete',
-            tableName: 'core_users',
-            recordId: $user->id,
-            oldValues: $user->toArray()
-        );
+        try {
+            $oldValues = collect($user->toArray())->except(['password', 'remember_token'])->toArray();
+            AuditLogService::record(
+                module: 'IAM',
+                action: 'delete',
+                tableName: 'core_users',
+                recordId: $user->id,
+                oldValues: $oldValues,
+                newValues: null,
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**
@@ -58,11 +79,16 @@ class UserObserver
      */
     public function restored(User $user): void
     {
-        AuditLogService::record(
-            module: 'IAM',
-            action: 'restore',
-            tableName: 'core_users',
-            recordId: $user->id
-        );
+        try {
+            AuditLogService::record(
+                module: 'IAM',
+                action: 'restore',
+                tableName: 'core_users',
+                recordId: $user->id,
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }

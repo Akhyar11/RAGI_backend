@@ -115,9 +115,50 @@ class UserSessionController extends Controller
     {
         if (!$request->user()->isSuperAdmin()) abort(403);
 
-        $query = UserSessionIam::with('user:id,username,email')->orderBy('created_at', 'desc');
-            
-        $perPage = $request->input('per_page', 15);
+        $query = UserSessionIam::with('user:id,username,name,email');
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('ip_address', 'like', "%{$search}%")
+                  ->orWhere('user_agent', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('username', 'like', "%{$search}%")
+                         ->orWhere('name', 'like', "%{$search}%")
+                         ->orWhere('email', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        if ($request->filled('user_id')) {
+            $query->where('user_id', $request->user_id);
+        }
+
+        if ($request->filled('username')) {
+            $query->whereHas('user', function ($uq) use ($request) {
+                $uq->where('username', 'like', "%{$request->username}%")
+                   ->orWhere('name', 'like', "%{$request->username}%");
+            });
+        }
+
+        if ($request->filled('ip_address')) {
+            $query->where('ip_address', 'like', "%{$request->ip_address}%");
+        }
+
+        if ($request->filled('user_agent')) {
+            $query->where('user_agent', 'like', "%{$request->user_agent}%");
+        }
+
+        if ($request->filled('created_at')) {
+            $query->whereDate('created_at', $request->created_at);
+        }
+
+        $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+        $allowedSortColumns = ['id', 'user_id', 'ip_address', 'created_at', 'user_agent'];
+        $sortBy = in_array($request->sort_by, $allowedSortColumns) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
+
         $sessions = $query->paginate($perPage);
 
         return response()->json([
@@ -133,9 +174,14 @@ class UserSessionController extends Controller
                 'to' => $sessions->lastItem(),
             ],
             'filters' => [
-                'search' => null,
-                'sort_by' => 'created_at',
-                'sort_order' => 'desc',
+                'search' => $request->search,
+                'user_id' => $request->user_id,
+                'username' => $request->username,
+                'ip_address' => $request->ip_address,
+                'user_agent' => $request->user_agent,
+                'created_at' => $request->created_at,
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
             ]
         ]);
     }

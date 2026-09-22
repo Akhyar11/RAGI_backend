@@ -290,4 +290,101 @@ class SimpegSuratTugasTest extends TestCase
             'id' => $suratTugas->id,
         ]);
     }
+
+    public function test_surat_tugas_approval_sikeu_disbursement_and_lpj_flow()
+    {
+        Storage::fake('public');
+
+        $kategori = MasterKategoriKegiatanTugas::first();
+        $transportasi = MasterJenisTransportasi::first();
+
+        // 0. Siapkan Unit Kas SIKEU
+        \App\Models\Sikeu\UnitKas::create([
+            'unit_kerja_id' => $this->ketua->unit_kerja_id,
+            'nama_kas' => 'Kas Utama Kampus',
+            'saldo_awal' => 100000000,
+            'saldo_saat_ini' => 100000000,
+            'status' => true,
+        ]);
+
+        // 1. Buat surat tugas
+        $suratTugas = SuratTugas::create([
+            'pegawai_id' => $this->ketua->id,
+            'kategori_kegiatan_id' => $kategori->id,
+            'jenis_transportasi_id' => $transportasi->id,
+            'nama_kegiatan' => 'Kunjungan Industri & Kerjasama',
+            'tempat_berangkat' => 'Bandung',
+            'lokasi_tujuan' => 'Surabaya',
+            'tanggal_berangkat' => '2026-10-10',
+            'tanggal_kembali' => '2026-10-12',
+            'tanggal_mulai' => '2026-10-10',
+            'tanggal_selesai' => '2026-10-12',
+            'maksud_tujuan' => 'Inisiasi MoU',
+            'estimasi_biaya' => 3500000,
+            'status' => 'diajukan',
+        ]);
+
+        // 2. Approve surat tugas dengan nominal_disetujui 3.000.000
+        $approveResponse = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/simpeg/surat-tugas/{$suratTugas->id}/approve", [
+                'status' => 'disetujui',
+                'nomor_surat' => 'ST/IND/001/2026',
+                'nominal_disetujui' => 3000000,
+                'catatan_approval' => 'Disetujui untuk akomodasi dan tiket kereta',
+            ]);
+
+        $approveResponse->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.status_pencairan', 'belum_cair')
+            ->assertJsonPath('data.nominal_disetujui', '3000000.00');
+
+        $suratTugasFresh = $suratTugas->fresh();
+        $this->assertNotNull($suratTugasFresh->sikeu_pencairan_id);
+
+        $this->assertDatabaseHas('sikeu_pengajuan_pencairan_kas', [
+            'id' => $suratTugasFresh->sikeu_pencairan_id,
+            'status' => 'pending_keuangan',
+            'nominal_disetujui' => 3000000,
+        ]);
+
+        // 3. Admin SIKEU mencairkan dana di endpoint /api/v1/sikeu/pengajuan-kas/{id}/approve
+        $cairkanResponse = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/v1/sikeu/pengajuan-kas/{$suratTugasFresh->sikeu_pencairan_id}/approve", [
+                'nominal_disetujui' => 3000000,
+            ]);
+
+        $cairkanResponse->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.status', 'dicairkan');
+
+        // Status pencairan di surat tugas otomatis sudah_cair
+        $this->assertEquals('sudah_cair', $suratTugas->fresh()->status_pencairan);
+
+        // Terbit riwayat pengeluaran kas kampus
+        $this->assertDatabaseHas('sikeu_pengeluaran_kampus', [
+            'kategori' => 'kegiatan',
+            'nominal' => 3000000,
+            'status_pembayaran' => 'lunas',
+        ]);
+
+        // 4. Pegawai mengunggah berkas LPJ
+        $fileLpj = UploadedFile::fake()->create('berkas_lpj_resmi.pdf', 500, 'application/pdf');
+        $lpjResponse = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/simpeg/surat-tugas/{$suratTugas->id}/lpj", [
+                'file_lpj' => $fileLpj,
+                'laporan_kegiatan' => 'Kunjungan terlaksana dengan lancar dan menghasilkan draf MoU.',
+                'biaya_realisasi' => 2950000,
+            ]);
+
+        $lpjResponse->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.status', 'selesai')
+            ->assertJsonPath('data.biaya_realisasi', '2950000.00');
+
+        // Pengeluaran kas kampus tersinkronisasi
+        $this->assertDatabaseHas('sikeu_pengeluaran_kampus', [
+            'kategori' => 'kegiatan',
+            'nominal' => 2950000,
+        ]);
+    }
 }

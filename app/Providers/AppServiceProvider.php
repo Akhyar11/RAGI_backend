@@ -37,10 +37,22 @@ class AppServiceProvider extends ServiceProvider
         // SPMB Observers
         \App\Models\Spmb\PendaftaranCalonMhs::observe(\App\Observers\Spmb\PendaftaranCalonMhsObserver::class);
         \App\Models\Spmb\GelombangPenerimaan::observe(\App\Observers\Spmb\GelombangPenerimaanObserver::class);
+        \App\Models\Spmb\SpmbKuotaProdi::observe(\App\Observers\Spmb\SpmbKuotaProdiObserver::class);
 
         // SIAKAD Observers
         \App\Models\Siakad\Mahasiswa::observe(\App\Observers\MahasiswaObserver::class);
         \App\Models\Siakad\KonversiTransfer::observe(\App\Observers\KonversiTransferObserver::class);
+
+        // SIKEU Observers
+        \App\Models\Sikeu\PengajuanPencairanKas::observe(\App\Observers\Sikeu\PengajuanPencairanKasObserver::class);
+        \App\Models\Sikeu\PengeluaranKampus::observe(\App\Observers\Sikeu\PengeluaranKampusObserver::class);
+        \App\Models\Sikeu\UnitKas::observe(\App\Observers\Sikeu\UnitKasObserver::class);
+        \App\Models\Sikeu\TransaksiKasUnit::observe(\App\Observers\Sikeu\TransaksiKasUnitObserver::class);
+
+        // SIMPEG Observers
+        \App\Models\Simpeg\SuratTugas::observe(\App\Observers\Simpeg\SuratTugasObserver::class);
+        \App\Models\Simpeg\UsulanJafung::observe(\App\Observers\Simpeg\UsulanJafungObserver::class);
+        \App\Models\Simpeg\PegawaiKomponenGaji::observe(\App\Observers\Simpeg\PegawaiKomponenGajiObserver::class);
 
         // SINAPRA Policies
         Gate::policy(\App\Models\Gedung::class, \App\Policies\Sinapra\GedungPolicy::class);

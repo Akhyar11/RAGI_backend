@@ -135,10 +135,12 @@ class PayrollCalculationService
                 ->first();
         }
 
-        $defaultGajiPokok = $skalaGaji ? (float) $skalaGaji->nominal_gaji : 4500000.0;
+        $kompGapok = $masterKomponens->firstWhere('kode', 'GAJI_POKOK');
+        $fallbackGajiPokok = $kompGapok ? (float) $kompGapok->nilai_default : 4500000.0;
+        $defaultGajiPokok = $skalaGaji ? (float) $skalaGaji->nominal_gaji : $fallbackGajiPokok;
         $gajiPokokKeterangan = $skalaGaji
             ? "Masa Kerja: {$masaKerjaTahun} Thn ({$skalaGaji->nama_skala})"
-            : "Masa Kerja: {$masaKerjaTahun} Thn (Skala Standar)";
+            : "Masa Kerja: {$masaKerjaTahun} Thn (Tarif Standar)";
 
         // 7. Iterasi Komponen Gaji & Hitung Butir-per-Butir
         $detailItems = [];
@@ -289,5 +291,32 @@ class PayrollCalculationService
         }
 
         return $gajiPegawai->fresh(['details', 'pegawai']);
+    }
+
+    /**
+     * Simpan kustomisasi komponen gaji seorang pegawai dalam database transaction.
+     */
+    public function savePegawaiKomponen(int $pegawaiId, array $data): void
+    {
+        $komponenList = isset($data['komponen']) && is_array($data['komponen'])
+            ? $data['komponen']
+            : $data;
+
+        DB::transaction(function () use ($pegawaiId, $komponenList) {
+            foreach ($komponenList as $item) {
+                $nominal = $item['nominal_kustom'] ?? $item['nilai_kustom'] ?? null;
+                PegawaiKomponenGaji::updateOrCreate(
+                    [
+                        'pegawai_id' => $pegawaiId,
+                        'komponen_gaji_id' => $item['komponen_gaji_id'],
+                    ],
+                    [
+                        'nominal_kustom' => $nominal,
+                        'is_active' => $item['is_active'] ?? true,
+                        'catatan' => $item['catatan'] ?? null,
+                    ]
+                );
+            }
+        });
     }
 }

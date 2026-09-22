@@ -98,13 +98,17 @@ $roles = [
 $admin = User::updateOrCreate(
     ['email' => env('SUPER_ADMIN_EMAIL', 'superadmin@kampus.ac.id')],
     [
-        'username'  => 'superadmin',
-        'password'  => Hash::make(env('SUPER_ADMIN_PASSWORD', 'password')),
-        'user_type' => 'admin',
-        'is_active' => true,
+        'username'    => 'superadmin',
+        'password'    => Hash::make(env('SUPER_ADMIN_PASSWORD', 'password')),
+        'is_active'   => true,
         'is_verified' => true,
     ]
 );
+
+$superAdminRole = Role::where('slug', 'super-admin')->first();
+if ($superAdminRole && !$admin->roles->contains($superAdminRole->id)) {
+    $admin->roles()->attach($superAdminRole->id);
+}
 ```
 
 > ⚠️ **PENTING**: Password admin **WAJIB** dibaca dari `.env`, bukan di-hardcode.

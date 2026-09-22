@@ -28,10 +28,14 @@ Controller ini menangani manajemen *Role* (Peran) dan *Permission* (Hak Akses) u
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `search` | string | ❌ | — | Cari berdasarkan nama/deskripsi role |
-| `sort_by` | string | ❌ | `created_at` | Kolom pengurutan (`created_at`, `updated_at`, `name`) |
+| `search` | string | ❌ | — | Cari nama, slug, atau deskripsi role |
+| `name` | string | ❌ | — | Filter spesifik berdasarkan nama role |
+| `slug` | string | ❌ | — | Filter spesifik berdasarkan slug role |
+| `description` | string | ❌ | — | Filter spesifik berdasarkan deskripsi role |
+| `created_at` | string | ❌ | — | Filter berdasarkan tanggal pembuatan (format `YYYY-MM-DD`) |
+| `sort_by` | string | ❌ | `created_at` | Kolom pengurutan (`id`, `name`, `slug`, `description`, `created_at`, `updated_at`) |
 | `sort_order` | string | ❌ | `desc` | Arah urutan: `asc` / `desc` |
-| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (1 s/d 100) |
 | `page` | integer | ❌ | `1` | Halaman yang diminta |
 
 ### Response Sukses (200 OK)
@@ -60,6 +64,10 @@ Controller ini menangani manajemen *Role* (Peran) dan *Permission* (Hak Akses) u
     },
     "filters": {
         "search": null,
+        "name": null,
+        "slug": null,
+        "description": null,
+        "created_at": null,
         "sort_by": "created_at",
         "sort_order": "desc",
         "restricted_roles_excluded": true

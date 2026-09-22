@@ -84,4 +84,14 @@ class PengajuanPencairanKas extends Model
     {
         return $this->hasMany(ApprovalHistoryPencairan::class, 'pengajuan_id');
     }
+
+    public function pemohon()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'pemohon_id');
+    }
+
+    public function suratTugas()
+    {
+        return $this->hasOne(\App\Models\Simpeg\SuratTugas::class, 'sikeu_pencairan_id');
+    }
 }

@@ -98,7 +98,7 @@ Setiap endpoint `index` **WAJIB** mendukung setidaknya filter berikut:
 | `?sort_by=` | Kolom yang dipakai untuk pengurutan | `?sort_by=created_at` |
 | `?sort_order=` | Arah pengurutan (`asc` atau `desc`) | `?sort_order=desc` |
 
-Tambahkan filter spesifik per modul sesuai kebutuhan (contoh: `?user_type=` untuk endpoint `/users`).
+Tambahkan filter spesifik per modul sesuai kebutuhan (contoh: `?role=` atau `?role_id=` untuk endpoint `/users`).
 
 ### Contoh Implementasi Filter:
 ```php
@@ -127,14 +127,20 @@ $query->orderBy($sortBy, $sortOrder);
 - **WAJIB** menggunakan `Form Request` terpisah (`php artisan make:request`) untuk metode `store` dan `update`, **bukan** `$request->validate()` langsung di controller.
 - Nama file Form Request: `Store{ModelName}Request.php` dan `Update{ModelName}Request.php`.
 - Lokasi: `app/Http/Requests/`.
+- **DILARANG `in:STATIS` untuk Data Referensi / Master Dinamis:** Validasi dropdown atau entitas domain WAJIB menggunakan `exists:nama_tabel,id` (contoh: `'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id'`). Dilarang keras `'jalur_masuk' => 'in:REGULER,KARYAWAN'`. Validasi `in:` HANYA sah untuk parameter teknis UI/query seperti arah sort (`'sort_order' => 'in:asc,desc'`) atau enum status workflow internal yang statis (`in:disetujui,ditolak`).
+- **DILARANG Atribut `user_type`:** Dilarang menyertakan atau memvalidasi field `user_type` di Form Request manapun. Gunakan relasi role (`role_id` atau array roles).
 
 ---
 
-## 5. Error Handling
+## 5. Error Handling & Try-Catch Policy
 
-- Gunakan `try-catch` untuk operasi yang berisiko.
-- Kembalikan status HTTP yang tepat: `200`, `201`, `400`, `403`, `404`, `422`, `500`.
-- Jangan pernah mengembalikan `500` tanpa logging.
+- **DILARANG** menggunakan blok `try-catch (\Throwable $e)` umum di dalam Controller.
+- Seluruh error tak terduga (seperti database error, unhandled logic) WAJIB didelegasikan ke Global Exception Handler di `bootstrap/app.php` agar format respons JSON konsisten dan error validasi (422), model not found (404), serta hak akses (403) tidak tertelan menjadi 500.
+- Kembalikan status HTTP yang tepat: `200` (OK), `201` (Created), `400` (Bad Request), `403` (Forbidden), `404` (Not Found), `422` (Unprocessable Entity).
+- Blok `try-catch` HANYA diizinkan pada kondisi berikut:
+  1. **Di Service Layer**: Untuk operasi non-blocking yang tidak boleh menggagalkan transaksi utama (misalnya pencatatan audit log `AuditLogService::record(...)` atau pengiriman notifikasi/email eksternal).
+  2. **Exception Bisnis Spesifik**: Di Controller/Service jika menangkap domain exception tertentu untuk memetakan respons khusus (misalnya `catch (PaymentGatewayException $e)`).
+- DILARANG mengembalikan HTTP 500 manual tanpa pencatatan log via `\Log::error($e)`.
 
 ---
 

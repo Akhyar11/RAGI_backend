@@ -7,10 +7,12 @@ use App\Models\Simpeg\MasterJenisTransportasi;
 use App\Models\Simpeg\MasterKategoriKegiatanTugas;
 use App\Models\Simpeg\SuratTugas;
 use App\Models\Simpeg\SuratTugasAnggota;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class SuratTugasService
 {
@@ -67,6 +69,7 @@ class SuratTugasService
             'jenisTransportasi',
             'anggota.pegawai.unitKerja',
             'approver',
+            'pencairanKas',
         ]);
 
         $canManageAll = $user->isAdmin() || $user->hasPermission('simpeg.surat_tugas.approve');
@@ -136,6 +139,7 @@ class SuratTugasService
             'jenisTransportasi',
             'anggota.pegawai.unitKerja',
             'approver',
+            'pencairanKas',
         ])->findOrFail($id);
 
         $canManageAll = $user->isAdmin() || $user->hasPermission('simpeg.surat_tugas.approve');
@@ -145,7 +149,7 @@ class SuratTugasService
             $isAnggota = $suratTugas->anggota->pluck('pegawai_id')->contains($pegawaiId);
 
             if (!$isKetua && !$isAnggota) {
-                abort(403, 'Anda tidak memiliki akses ke surat tugas ini.');
+                throw new AuthorizationException('Anda tidak memiliki akses ke surat tugas ini.');
             }
         }
 
@@ -215,10 +219,12 @@ class SuratTugasService
         if (!$canManageAll) {
             $pegawaiId = $user->pegawai?->id;
             if ($suratTugas->pegawai_id !== $pegawaiId) {
-                abort(403, 'Hanya ketua tugas atau admin yang dapat mengubah surat tugas.');
+                throw new AuthorizationException('Hanya ketua tugas atau admin yang dapat mengubah surat tugas.');
             }
             if (!in_array($suratTugas->status, ['draft', 'diajukan', 'ditolak'])) {
-                abort(422, 'Surat tugas yang telah disetujui/selesai tidak dapat diubah.');
+                throw ValidationException::withMessages([
+                    'status' => ['Surat tugas yang telah disetujui/selesai tidak dapat diubah.'],
+                ]);
             }
         }
 
@@ -277,10 +283,12 @@ class SuratTugasService
     {
         $canApprove = $user->isAdmin() || $user->hasPermission('simpeg.surat_tugas.approve');
         if (!$canApprove) {
-            abort(403, 'Anda tidak memiliki hak untuk menyetujui surat tugas.');
+            throw new AuthorizationException('Anda tidak memiliki hak untuk menyetujui surat tugas.');
         }
 
         return DB::transaction(function () use ($suratTugas, $data, $fileSuratTugas, $user) {
+            $nominalDisetujui = isset($data['nominal_disetujui']) ? (float) $data['nominal_disetujui'] : 0;
+
             $updatePayload = [
                 'status' => $data['status'],
                 'catatan_approval' => $data['catatan_approval'] ?? null,
@@ -290,6 +298,46 @@ class SuratTugasService
 
             if ($data['status'] === 'disetujui') {
                 $updatePayload['nomor_surat'] = $data['nomor_surat'];
+                $updatePayload['nominal_disetujui'] = $nominalDisetujui;
+
+                // Integrasi SIKEU: Jika tugas berbiaya (> 0), teruskan antrean pencairan dana ke SIKEU
+                if ($nominalDisetujui > 0) {
+                    $unitKas = \App\Models\Sikeu\UnitKas::where('status', true)->first() ?? \App\Models\Sikeu\UnitKas::first();
+                    $unitKasId = $unitKas?->id;
+                    $unitKerjaId = $suratTugas->pegawai?->unit_kerja_id;
+
+                    $nomorPengajuan = 'CAIR-ST-' . date('Ymd') . '-' . sprintf('%04d', $suratTugas->id);
+
+                    $attributes = [
+                        'unit_kerja_id' => $unitKerjaId,
+                        'unit_kas_id' => $unitKasId,
+                        'pemohon_id' => $suratTugas->pegawai?->user_id ?? $user->id,
+                        'judul_pengajuan' => 'Panjar Perjalanan Dinas: ' . $suratTugas->nama_kegiatan,
+                        'deskripsi' => 'Pencairan panjar dana tugas dinas No. ' . $data['nomor_surat'] . ' ke ' . $suratTugas->lokasi_tujuan . ' an. ' . ($suratTugas->pegawai?->nama_lengkap ?? 'Pegawai'),
+                        'nominal_diajukan' => $suratTugas->estimasi_biaya ?? $nominalDisetujui,
+                        'nominal_disetujui' => $nominalDisetujui,
+                        'jenis_pengajuan' => 'kegiatan',
+                        'status' => 'pending_keuangan',
+                        'approved_pimpinan_by' => $user->id,
+                        'approved_pimpinan_at' => now(),
+                    ];
+
+                    $pengajuanKas = \App\Models\Sikeu\PengajuanPencairanKas::where('nomor_pengajuan', $nomorPengajuan)->first();
+                    if ($pengajuanKas) {
+                        $pengajuanKas->update($attributes);
+                    } else {
+                        $pengajuanKas = \App\Models\Sikeu\PengajuanPencairanKas::create(array_merge(
+                            ['nomor_pengajuan' => $nomorPengajuan],
+                            $attributes
+                        ));
+                    }
+
+                    $updatePayload['sikeu_pencairan_id'] = $pengajuanKas->id;
+                    $updatePayload['status_pencairan'] = 'belum_cair';
+                } else {
+                    // Non-biaya / Pelatihan daring Zoom -> Bypass SIKEU
+                    $updatePayload['status_pencairan'] = 'tidak_perlu';
+                }
             }
 
             if ($fileSuratTugas) {
@@ -310,6 +358,7 @@ class SuratTugasService
 
     /**
      * Upload berkas LPJ dan pelaporan kegiatan setelah kembali dinas
+     * HANYA penanggung jawab (ketua) atau Admin/Approver yang berhak mengunggah LPJ
      */
     public function uploadLpj(SuratTugas $suratTugas, array $data, UploadedFile $fileLpj, $user): SuratTugas
     {
@@ -317,27 +366,51 @@ class SuratTugasService
         if (!$canManageAll) {
             $pegawaiId = $user->pegawai?->id;
             $isKetua = $suratTugas->pegawai_id === $pegawaiId;
-            $isAnggota = $suratTugas->anggota->pluck('pegawai_id')->contains($pegawaiId);
 
-            if (!$isKetua && !$isAnggota) {
-                abort(403, 'Anda tidak berhak mengunggah LPJ pada surat tugas ini.');
+            if (!$isKetua) {
+                throw new AuthorizationException('Hanya penanggung jawab kegiatan yang berhak mengunggah berkas LPJ.');
             }
         }
 
         if (!in_array($suratTugas->status, ['disetujui', 'selesai'])) {
-            abort(422, 'LPJ hanya dapat diunggah untuk surat tugas yang telah disetujui.');
+            throw ValidationException::withMessages([
+                'status' => ['LPJ hanya dapat diunggah untuk surat tugas yang telah disetujui.'],
+            ]);
         }
 
         return DB::transaction(function () use ($suratTugas, $data, $fileLpj, $user) {
             $this->deleteFile($suratTugas->file_lpj);
             $filePath = $this->handleFileUpload($fileLpj, 'lpj');
 
+            $biayaRealisasi = array_key_exists('biaya_realisasi', $data) && $data['biaya_realisasi'] !== ''
+                ? $data['biaya_realisasi']
+                : ($suratTugas->nominal_disetujui > 0 ? $suratTugas->biaya_realisasi : 0);
+
             $suratTugas->update([
                 'file_lpj' => $filePath,
                 'laporan_kegiatan' => $data['laporan_kegiatan'] ?? $suratTugas->laporan_kegiatan,
-                'biaya_realisasi' => array_key_exists('biaya_realisasi', $data) ? $data['biaya_realisasi'] : $suratTugas->biaya_realisasi,
+                'biaya_realisasi' => $biayaRealisasi,
+                'tanggal_upload_lpj' => now(),
                 'status' => 'selesai',
             ]);
+
+            // Sinkronisasi berkas LPJ dan realisasi ke transaksi pengeluaran kas SIKEU bila terhubung
+            if ($suratTugas->sikeu_pencairan_id) {
+                $pengeluaran = \App\Models\Sikeu\PengeluaranKampus::where('nomor_transaksi', 'like', '%-' . sprintf('%04d', $suratTugas->sikeu_pencairan_id))->first();
+                if ($pengeluaran) {
+                    $pengeluaranUpdate = [
+                        'file_bukti_bayar' => $filePath,
+                    ];
+                    if ($biayaRealisasi > 0) {
+                        $pengeluaranUpdate['nominal'] = $biayaRealisasi;
+                        $pengeluaranUpdate['net_dibayarkan'] = $biayaRealisasi;
+                    }
+                    if (!str_contains($pengeluaran->keterangan, '[LPJ Terunggah]')) {
+                        $pengeluaranUpdate['keterangan'] = $pengeluaran->keterangan . ' [LPJ Terunggah: Realisasi Rp ' . number_format((float)$biayaRealisasi, 0, ',', '.') . ']';
+                    }
+                    $pengeluaran->update($pengeluaranUpdate);
+                }
+            }
 
             return $this->getById($suratTugas->id, $user);
         });
@@ -352,10 +425,12 @@ class SuratTugasService
         if (!$canManageAll) {
             $pegawaiId = $user->pegawai?->id;
             if ($suratTugas->pegawai_id !== $pegawaiId) {
-                abort(403, 'Hanya pemohon atau admin yang dapat menghapus pengajuan.');
+                throw new AuthorizationException('Hanya pemohon atau admin yang dapat menghapus pengajuan.');
             }
             if (!in_array($suratTugas->status, ['draft', 'diajukan', 'ditolak'])) {
-                abort(422, 'Surat tugas yang telah disetujui tidak dapat dihapus.');
+                throw ValidationException::withMessages([
+                    'status' => ['Surat tugas yang telah disetujui tidak dapat dihapus.'],
+                ]);
             }
         }
 

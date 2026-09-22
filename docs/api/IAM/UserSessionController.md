@@ -1,17 +1,163 @@
-# API Dokumentasi: Session & Devices Management
+# UserSessionController
 
-Dokumentasi ini menjelaskan *endpoints* untuk mengelola perangkat dan sesi yang aktif dari pengguna (berdasarkan token Passport).
+> **Modul**: IAM  
+> **Base URL**: `/api/admin/sessions` & `/api/auth/sessions`  
+> **Autentikasi**: Bearer Token (Passport)  
+> **Dibuat/Diperbarui**: 2026-09-21  
 
-**Base URL:** `/api/auth/sessions`  
-*(Catatan: endpoint ini berada di bawah prefix `/api/auth/` berdasarkan struktur routing terbaru)*
+Dokumentasi API untuk pemantauan dan pengelolaan sesi login aktif dari pengguna berdasarkan token Passport.
 
-## 1. List Active Sessions
-Menampilkan daftar perangkat (sesi login) yang sedang aktif untuk pengguna yang sedang *login*.
+---
 
-**Endpoint:** `GET /api/auth/sessions`  
-**Auth Required:** Yes (Bearer Token)
+## Daftar Endpoint
 
-### Response Sukses (200 OK)
+| Method | Endpoint | Fungsi | Auth |
+|---|---|---|---|
+| GET | `/api/auth/sessions` | Menampilkan daftar sesi login aktif milik pengguna saat ini | ✅ Authenticated |
+| DELETE | `/api/auth/sessions/{id}` | Mencabut sesi pada perangkat tertentu | ✅ Authenticated |
+| DELETE | `/api/auth/sessions/others` | Mencabut semua sesi lain kecuali perangkat saat ini | ✅ Authenticated |
+| GET | `/api/admin/sessions` | Menampilkan seluruh sesi aktif di sistem berpaginasi | ✅ Super Admin |
+| DELETE | `/api/admin/sessions/{id}` | Memutuskan paksa (force logout) sesi pengguna tertentu | ✅ Super Admin |
+
+---
+
+## [GET] /api/admin/sessions
+
+> Mengambil daftar seluruh sesi aktif pengguna di sistem dengan dukungan pencarian multi-kolom, filter spesifik, pengurutan whitelist, dan paginasi standar.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Default | Deskripsi |
+|---|---|---|---|
+| `search` | string | - | Kata kunci pencarian (ip_address, user_agent, username, name, email) |
+| `user_id` | integer | - | Filter berdasarkan ID pengguna spesifik |
+| `username` | string | - | Filter berdasarkan username atau nama pengguna |
+| `ip_address` | string | - | Filter berdasarkan alamat IP |
+| `user_agent` | string | - | Filter berdasarkan peramban / platform |
+| `created_at` | string | - | Filter tanggal pembuatan sesi (format `YYYY-MM-DD`) |
+| `sort_by` | string | `created_at` | Kolom pengurutan (`id`, `user_id`, `ip_address`, `created_at`, `user_agent`) |
+| `sort_order` | string | `desc` | Arah urutan: `asc` / `desc` |
+| `per_page` | integer | `15` | Jumlah sesi per halaman (1 s/d 100) |
+| `page` | integer | `1` | Nomor halaman data |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Data retrieved successfully",
+    "data": [
+        {
+            "id": 5,
+            "user_id": 1,
+            "token": "e4f5a89...",
+            "ip_address": "192.168.1.1",
+            "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+            "created_at": "2026-09-21T10:00:00.000000Z",
+            "user": {
+                "id": 1,
+                "username": "superadmin",
+                "name": "Super Administrator",
+                "email": "superadmin@kampus.ac.id"
+            }
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    },
+    "filters": {
+        "search": null,
+        "user_id": null,
+        "username": null,
+        "ip_address": null,
+        "user_agent": null,
+        "created_at": null,
+        "sort_by": "created_at",
+        "sort_order": "desc"
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki akses superadmin."
+}
+```
+
+---
+
+## [DELETE] /api/admin/sessions/{id}
+
+> Memutuskan atau mencabut paksa sesi milik pengguna mana saja di sistem (Force Logout).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Sesi berhasil diputus paksa (force logout)."
+}
+```
+
+### Response Error
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Sesi tidak ditemukan."
+}
+```
+
+---
+
+## [GET] /api/auth/sessions
+
+> Menampilkan daftar perangkat dan sesi aktif untuk akun yang saat ini sedang login.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
 ```json
 {
     "status": "success",
@@ -22,9 +168,8 @@ Menampilkan daftar perangkat (sesi login) yang sedang aktif untuk pengguna yang 
             "user_id": 3,
             "token": "d748f2a1b9...",
             "ip_address": "127.0.0.1",
-            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...",
-            "expires_at": null,
-            "created_at": "2026-07-29T10:00:00.000000Z"
+            "user_agent": "Mozilla/5.0 (X11; Linux x86_64)...",
+            "created_at": "2026-09-21T10:00:00.000000Z"
         }
     ],
     "meta": {
@@ -45,67 +190,20 @@ Menampilkan daftar perangkat (sesi login) yang sedang aktif untuk pengguna yang 
 
 ---
 
-## [GET] /api/admin/sessions
+## [DELETE] /api/auth/sessions/{id}
 
-> Mengambil daftar seluruh sesi aktif yang ada di dalam sistem (Admin only). Mendukung paginasi.
+> Menghapus / logout dari suatu perangkat tertentu berdasarkan ID sesi.
 
-### Query Parameters
+### Headers
 
-Sama seperti GET list standar (mendukung `per_page` dll).
-
-### Response Sukses
-
-**200 OK**
-```json
-{
-    "status": "success",
-    "message": "Data retrieved successfully",
-    "data": [
-        {
-            "id": 5,
-            "user_id": 1,
-            "token": "e4f5a...",
-            "ip_address": "192.168.1.1",
-            "user_agent": "Mozilla/5.0...",
-            "created_at": "2026-07-29T10:00:00.000000Z",
-            "user": {
-                "id": 1,
-                "username": "budi.admin",
-                "email": "admin@kampus.ac.id"
-            }
-        }
-    ],
-    "meta": {
-        "current_page": 1,
-        "per_page": 15,
-        "total": 100
-    }
-}
-```
-
----
-
-## [DELETE] /api/admin/sessions/{id}
-
-> Memutuskan / mencabut paksa sesi milik pengguna mana saja berdasarkan ID Sesi di tabel `user_sessions_iam` (Force Logout).
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
 
 ### Response Sukses
 
 **200 OK**
-```json
-{
-    "status": "success",
-    "message": "Sesi berhasil diputus paksa (force logout)."
-}
-```
-
-## 2. Revoke Sesi (Logout Perangkat Tertentu)
-Menghapus (logout paksa) sesi dari suatu perangkat berdasarkan `id` tabel `user_sessions_iam`.
-
-**Endpoint:** `DELETE /api/auth/sessions/{id}`  
-**Auth Required:** Yes (Bearer Token)
-
-### Response Sukses (200 OK)
 ```json
 {
     "status": "success",
@@ -113,8 +211,9 @@ Menghapus (logout paksa) sesi dari suatu perangkat berdasarkan `id` tabel `user_
 }
 ```
 
-### Response Gagal (404 Not Found)
-Jika ID tidak ditemukan atau milik user lain.
+### Response Error
+
+**404 Not Found**
 ```json
 {
     "status": "error",
@@ -122,16 +221,25 @@ Jika ID tidak ditemukan atau milik user lain.
 }
 ```
 
-## 3. Revoke Semua Sesi Lain
-Me-*revoke* semua sesi yang ada **kecuali** sesi (perangkat) yang sedang digunakan saat ini. Berguna jika pengguna merasa akunnya diretas.
+---
 
-**Endpoint:** `DELETE /api/auth/sessions/others`  
-**Auth Required:** Yes (Bearer Token)
+## [DELETE] /api/auth/sessions/others
 
-### Response Sukses (200 OK)
+> Mencabut seluruh token dan sesi aktif lainnya selain perangkat yang sedang digunakan saat ini.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
 ```json
 {
     "status": "success",
-    "message": "3 sesi lain berhasil dihapus (logout dari perangkat lain)."
+    "message": "2 sesi lain berhasil dihapus (logout dari perangkat lain)."
 }
 ```

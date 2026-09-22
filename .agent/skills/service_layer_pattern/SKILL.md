@@ -63,8 +63,12 @@ class UserService
                 'username' => $data['username'],
                 'email'    => $data['email'],
                 'password' => Hash::make($data['password']),
-                'user_type' => $data['user_type'],
             ]);
+
+            // Hubungkan role jika disediakan (RBAC)
+            if (!empty($data['role_id'])) {
+                $user->roles()->attach($data['role_id']);
+            }
 
             // Logika bisnis tambahan di sini
             // (misal: kirim email, catat audit log, dll.)

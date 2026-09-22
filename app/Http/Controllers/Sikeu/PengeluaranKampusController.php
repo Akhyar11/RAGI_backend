@@ -262,4 +262,25 @@ class PengeluaranKampusController extends Controller
             'data' => $item
         ]);
     }
+
+    /**
+     * GET /api/v1/sikeu/pengeluaran/master/kategori
+     * Return distinct kategori values from pengeluaran_kampus table.
+     */
+    public function getKategori()
+    {
+        $kategori = PengeluaranKampus::select('kategori')
+            ->distinct()
+            ->orderBy('kategori')
+            ->pluck('kategori')
+            ->map(fn($k) => [
+                'value' => $k,
+                'label' => ucwords(str_replace('_', ' ', $k)),
+            ]);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $kategori,
+        ]);
+    }
 }
