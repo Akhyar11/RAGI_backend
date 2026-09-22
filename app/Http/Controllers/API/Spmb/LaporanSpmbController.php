@@ -20,25 +20,25 @@ class LaporanSpmbController extends Controller
             ->get();
 
         // 2. Lulus per Prodi (Tabel Relasi Join ke master program studi)
-        $perProdi = DB::table('hasil_seleksi')
-            ->join('master_program_studi', 'hasil_seleksi.program_studi_diterima_id', '=', 'master_program_studi.id')
-            ->where('hasil_seleksi.status', \App\Models\Spmb\HasilSeleksi::STATUS_LULUS)
-            ->select('master_program_studi.nama as nama_prodi', 'program_studi_diterima_id', DB::raw('count(*) as total_lulus'))
-            ->groupBy('program_studi_diterima_id', 'master_program_studi.nama')
+        $perProdi = DB::table('spmb_hasil_seleksi')
+            ->join('siakad_program_studi', 'spmb_hasil_seleksi.program_studi_diterima_id', '=', 'siakad_program_studi.id')
+            ->where('spmb_hasil_seleksi.status', \App\Models\Spmb\HasilSeleksi::STATUS_LULUS)
+            ->select('siakad_program_studi.nama as nama_prodi', 'program_studi_diterima_id', DB::raw('count(*) as total_lulus'))
+            ->groupBy('program_studi_diterima_id', 'siakad_program_studi.nama')
             ->get();
 
         // 3. Pendaftar per Gelombang
-        $perGelombang = PendaftaranCalonMhs::join('gelombang_penerimaan', 'pendaftaran_calon_mhs.gelombang_id', '=', 'gelombang_penerimaan.id')
-            ->select('gelombang_penerimaan.nama as nama_gelombang', DB::raw('count(pendaftaran_calon_mhs.id) as total'))
-            ->groupBy('gelombang_penerimaan.nama')
+        $perGelombang = PendaftaranCalonMhs::join('spmb_gelombang_penerimaan', 'spmb_pendaftaran_calon_mhs.gelombang_id', '=', 'spmb_gelombang_penerimaan.id')
+            ->select('spmb_gelombang_penerimaan.nama as nama_gelombang', DB::raw('count(spmb_pendaftaran_calon_mhs.id) as total'))
+            ->groupBy('spmb_gelombang_penerimaan.nama')
             ->get();
 
         // 4. Data Funnel Pendaftar (Funneling conversion)
         $totalPendaftar = PendaftaranCalonMhs::count();
         $totalBayar = PendaftaranCalonMhs::where('status_pembayaran', PendaftaranCalonMhs::STATUS_PEMBAYARAN_LUNAS)->count();
         $totalVerifikasi = PendaftaranCalonMhs::where('status', PendaftaranCalonMhs::STATUS_LULUS_ADMINISTRASI)->count();
-        $totalLulus = DB::table('hasil_seleksi')->where('status', \App\Models\Spmb\HasilSeleksi::STATUS_LULUS)->count();
-        $totalDaftarUlang = DB::table('hasil_seleksi')->where('status_daftar_ulang', 'lunas')->count();
+        $totalLulus = DB::table('spmb_hasil_seleksi')->where('status', \App\Models\Spmb\HasilSeleksi::STATUS_LULUS)->count();
+        $totalDaftarUlang = DB::table('spmb_hasil_seleksi')->where('status_daftar_ulang', 'lunas')->count();
 
         $funnelData = [
             ['label' => 'Total Pendaftar', 'value' => $totalPendaftar],

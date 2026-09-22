@@ -34,8 +34,13 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
-| MasterSpmbController | Master referensi SPMB (Tahun Akademik, Jalur, Gelombang, Opsi) | [docs/api/SPMB/MasterSpmbController.md](api/SPMB/MasterSpmbController.md) |
+| MasterSpmbController | Master referensi SPMB (Tahun Akademik, Jalur, Gelombang, Opsi, Rincian Beban Pendaftaran) | [docs/api/SPMB/MasterSpmbController.md](api/SPMB/MasterSpmbController.md) |
 | SpmbKuotaProdiController | Manajemen kuota penerimaan calon mahasiswa baru per program studi | [docs/api/SPMB/SpmbKuotaProdiController.md](api/SPMB/SpmbKuotaProdiController.md) |
+| MasterBiayaSpmbController | Master biaya SPMB per gelombang & program studi | [docs/api/SPMB/MasterBiayaSpmbController.md](api/SPMB/MasterBiayaSpmbController.md) |
+| TarifUktSpmbController (DIHAPUS) | Pengganti: MasterBiayaSpmbController (beban pendaftaran/daftar ulang) | [docs/api/SPMB/TarifUktSpmbController.md](api/SPMB/TarifUktSpmbController.md) |
+| CalonMahasiswaController | Alur pendaftaran calon mahasiswa (biodata, berkas, tagihan, VA) | [docs/api/SPMB/CalonMahasiswaController.md](api/SPMB/CalonMahasiswaController.md) |
+| DaftarUlangController | Tagihan & konfirmasi daftar ulang calon mahasiswa lulus | [docs/api/SPMB/DaftarUlangController.md](api/SPMB/DaftarUlangController.md) |
+| LaporanSpmbController | Statistik & export laporan pendaftaran SPMB | [docs/api/SPMB/LaporanSpmbController.md](api/SPMB/LaporanSpmbController.md) |
 
 ---
 
@@ -52,6 +57,10 @@
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
 | FeederSyncController | Sinkronisasi Neo Feeder PDDikti (Dosen, Penugasan, Ajar, Mahasiswa, Kelas) | [docs/api/SIAKAD/FeederSyncController.md](api/SIAKAD/FeederSyncController.md) |
+| AkademikController | Master akademik (Tahun Akademik, Fakultas, Prodi, Kurikulum, Mata Kuliah, Dosen) | [docs/api/SIAKAD/AkademikController.md](api/SIAKAD/AkademikController.md) |
+| MahasiswaController | Data mahasiswa, NIM, konversi transfer, dan penugasan PA | [docs/api/SIAKAD/MahasiswaController.md](api/SIAKAD/MahasiswaController.md) |
+| ObeController | Kurikulum OBE (CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, Nilai) | [docs/api/SIAKAD/ObeController.md](api/SIAKAD/ObeController.md) |
+| PerkuliahanController | Kelas, KRS, nilai, transkrip, pertemuan & absensi | [docs/api/SIAKAD/PerkuliahanController.md](api/SIAKAD/PerkuliahanController.md) |
 
 ---
 

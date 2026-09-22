@@ -6,7 +6,7 @@ use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\DosenPenugasan;
 use App\Models\Siakad\DosenPengampu;
-use App\Models\Spmb\MasterTahunAkademik;
+use App\Models\Siakad\TahunAkademik;
 use App\Models\Siakad\Kurikulum;
 use App\Models\Siakad\MataKuliah;
 use App\Models\Siakad\Kelas;
@@ -1363,7 +1363,7 @@ class NeoFeederSyncService
     public function syncBatchPenugasanDosen($userId = null)
     {
         // Auto-generate penugasan awal dari siakad_dosen jika tabel siakad_dosen_penugasan masih kosong
-        $activeTa = MasterTahunAkademik::where('is_active', true)->first() ?: MasterTahunAkademik::latest()->first();
+        $activeTa = TahunAkademik::where('is_active', true)->first() ?: TahunAkademik::latest()->first();
         if ($activeTa) {
             $dosens = Dosen::whereNotNull('program_studi_id')->get();
             foreach ($dosens as $dsn) {

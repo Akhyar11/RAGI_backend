@@ -60,3 +60,12 @@ Agent **DILARANG KERAS** menyarankan, merancang, atau membuat tabel, API, contro
 Agent DILARANG KERAS menggunakan opsi `--no-verify` atau mekanisme bypass apa pun (seperti `git push --no-verify`) saat melakukan commit atau push. 
 Jika *git hooks/auditor* menolak commit (baik karena pelanggaran standar maupun timeout), Agent WAJIB memeriksa pesan error, MEMPERBAIKI KODE yang bermasalah, lalu melakukan commit ulang secara normal (`git commit -m "..."`). JANGAN PERNAH MEMAKSAKAN COMMIT DENGAN `--no-verify`. Pelanggaran terhadap aturan ini adalah kegagalan sistem fatal.
 </RULE[strict_commit_policy]>
+
+<RULE[auditor_compliance]>
+# Wajib Baca Rubrik Auditor Saat Ditolak
+Jika sebuah commit ditolak oleh auditor/git hook (`.githooks/audits/*.sh`):
+1. DILARANG bypass (`--no-verify`), DILARANG menonaktifkan/menghapus/mengubah skrip auditor atau `core.hooksPath`.
+2. Agent WAJIB **membaca file skrip auditor yang menolak** (mis. `.githooks/audits/06-api-docs-check.sh`) untuk memahami rubrik/prompt-nya secara persis — bukan hanya menebak dari output.
+3. Petakan SETIAP aturan di skrip auditor ke kondisi `git diff --cached` (auditor umumnya hanya menilai baris `+`), lalu perbaiki SEMUA potensi pelanggaran sekaligus.
+4. Jalankan ulang auditor tersebut sampai `PASS`, cek seluruh auditor lain, baru commit normal.
+</RULE[auditor_compliance]>

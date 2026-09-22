@@ -5,7 +5,6 @@ namespace App\Models\Siakad;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Spmb\MasterProgramStudi;
-use App\Models\Spmb\MasterTahunAkademik;
 
 class DosenPenugasan extends Model
 {
@@ -45,7 +44,7 @@ class DosenPenugasan extends Model
 
     public function tahunAkademik()
     {
-        return $this->belongsTo(MasterTahunAkademik::class, 'tahun_akademik_id');
+        return $this->belongsTo(TahunAkademik::class, 'tahun_akademik_id');
     }
 
     public function pengampuKelas()

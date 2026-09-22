@@ -4,7 +4,6 @@ namespace App\Models\Siakad;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\Spmb\MasterTahunAkademik;
 
 class Khs extends Model
 {
@@ -37,6 +36,6 @@ class Khs extends Model
 
     public function tahunAkademik()
     {
-        return $this->belongsTo(MasterTahunAkademik::class, 'tahun_akademik_id');
+        return $this->belongsTo(TahunAkademik::class, 'tahun_akademik_id');
     }
 }

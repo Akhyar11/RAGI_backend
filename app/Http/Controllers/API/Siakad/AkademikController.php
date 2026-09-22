@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\API\Siakad;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Siakad\StoreTahunAkademikRequest;
+use App\Http\Requests\Siakad\UpdateModePenilaianRequest;
 use Illuminate\Http\Request;
 use App\Models\Siakad\Fakultas;
 use App\Models\Siakad\ProgramStudi;
@@ -11,14 +13,14 @@ use App\Models\Siakad\MataKuliah;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\Kelas;
-use App\Models\Spmb\MasterTahunAkademik;
+use App\Models\Siakad\TahunAkademik;
 use Illuminate\Validation\Rule;
 
 class AkademikController extends Controller
 {
     public function dashboardSummary()
     {
-        $taAktif = MasterTahunAkademik::where('is_active', true)->first();
+        $taAktif = TahunAkademik::where('is_active', true)->first();
         $totalMhsAktif = Mahasiswa::where('status', 'aktif')->count();
         $totalDosen = Dosen::where('is_active', true)->count();
         $totalKelas = Kelas::when($taAktif, fn($q) => $q->where('tahun_akademik_id', $taAktif->id))->count();
@@ -42,7 +44,7 @@ class AkademikController extends Controller
     public function listTahunAkademik(Request $request)
     {
         $user = $request->user();
-        $query = MasterTahunAkademik::query();
+        $query = TahunAkademik::query();
 
         // Jika request berasal dari mahasiswa (atau menyertakan mahasiswa_id)
         $mhs = $user ? Mahasiswa::where('user_id', $user->id)->first() : null;
@@ -68,21 +70,9 @@ class AkademikController extends Controller
         ]);
     }
 
-    public function storeTahunAkademik(Request $request)
+    public function storeTahunAkademik(StoreTahunAkademikRequest $request)
     {
-        $request->validate([
-            'kode' => 'required|string|unique:spmb_master_tahun_akademik,kode',
-            'nama' => 'required|string|max:255',
-            'tahun_mulai' => 'nullable|integer',
-            'tahun_selesai' => 'nullable|integer',
-            'is_active' => 'boolean',
-        ]);
-
-        if ($request->boolean('is_active')) {
-            MasterTahunAkademik::query()->update(['is_active' => false]);
-        }
-
-        $ta = MasterTahunAkademik::create($request->all());
+        $ta = app(\App\Services\Siakad\TahunAkademikService::class)->create($request->validated());
 
         return response()->json([
             'status' => 'success',
@@ -93,13 +83,9 @@ class AkademikController extends Controller
 
     public function setActiveTahunAkademik(Request $request, $id)
     {
-        $target = MasterTahunAkademik::findOrFail($id);
+        $target = TahunAkademik::findOrFail($id);
 
-        // Nonaktifkan semua tahun akademik lain
-        MasterTahunAkademik::query()->update(['is_active' => false]);
-
-        // Aktifkan tahun akademik terpilih
-        $target->update(['is_active' => true]);
+        app(\App\Services\Siakad\TahunAkademikService::class)->setActive($target);
 
         return response()->json([
             'status' => 'success',
@@ -609,15 +595,11 @@ class AkademikController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Prasyarat mata kuliah berhasil dihapus']);
     }
 
-    public function updateModePenilaian(Request $request, $id)
+    public function updateModePenilaian(UpdateModePenilaianRequest $request, $id)
     {
-        $request->validate([
-            'mode_penilaian' => 'required|in:full_obe,semi_obe,konvensional',
-        ]);
-        
-        $ta = \App\Models\Spmb\MasterTahunAkademik::findOrFail($id);
-        $ta->update(['mode_penilaian' => $request->mode_penilaian]);
-        
+        $ta = TahunAkademik::findOrFail($id);
+        app(\App\Services\Siakad\TahunAkademikService::class)->updateModePenilaian($ta, $request->validated()['mode_penilaian']);
+
         return response()->json([
             'status' => 'success',
             'message' => 'Mode penilaian periode akademik berhasil diperbarui.',

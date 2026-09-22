@@ -1,9 +1,6 @@
 # CalonMahasiswaController
 
-> **Modul**: SPMB  
-> **Base URL**: `/api/spmb/pendaftaran`  
-> **Autentikasi**: Bearer Token (Sanctum)  
-> **Diperbarui**: 2026-09-10  
+> **Modul**: SPMB / **Base URL**: `/api/spmb/pendaftaran` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-25  
 
 ## Daftar Endpoint
 
@@ -57,7 +54,7 @@
 
 ## [POST] /api/spmb/pendaftaran/biodata
 
-> Menyimpan draft pendaftaran calon mahasiswa per langkah (multi-step wizard).
+> Menyimpan draft pendaftaran calon mahasiswa per langkah (multi-step wizard). Saat tagihan pertama diterbitkan, rincian diambil dari komponen Master Biaya (gelombang + prodi) yang ditandai `dibebankan_saat_pendaftaran` sebagai **beban awal**; bila belum dikonfigurasi, fallback ke tarif SIKEU / `biaya_pendaftaran` gelombang. Kolom `tahun_akademik_id` tidak lagi dikirim pada payload tagihan.
 
 ### Headers
 

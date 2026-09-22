@@ -379,6 +379,7 @@ Route::prefix('spmb')->group(function () {
     Route::get('gelombang', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getGelombang']);
     Route::get('tahun-akademik', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getTahunAkademik']);
     Route::get('tarif', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getTarifSpmb']);
+    Route::get('biaya-pendaftaran', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getBiayaPendaftaran']);
     Route::get('master-tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getMasterTipeJalur']);
     Route::get('referensi/{tipe}', [App\Http\Controllers\System\MasterReferensiController::class, 'getByTipe']);
     Route::get('berkas-requirement', [\App\Http\Controllers\API\Spmb\BerkasRequirementController::class, 'index']);
@@ -390,9 +391,26 @@ Route::middleware('auth:api')->prefix('spmb')->group(function () {
     Route::get('laporan/export', [App\Http\Controllers\API\Spmb\LaporanSpmbController::class, 'exportCsv']);
 });
 
+Route::middleware(['auth:api', 'can:spmb.manage'])->prefix('spmb')->group(function () {
+    Route::get('master/komponen-biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'getKomponen']);
+    Route::get('master/komponen-biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'showKomponen']);
+    Route::post('master/komponen-biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'storeKomponen']);
+    Route::put('master/komponen-biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'updateKomponen']);
+    Route::delete('master/komponen-biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'destroyKomponen']);
+    Route::post('master/komponen-biaya/{id}/restore', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'restoreKomponen']);
+
+    Route::get('master/biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'index']);
+    Route::get('master/biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'show']);
+    Route::post('master/biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'store']);
+    Route::put('master/biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'update']);
+    Route::delete('master/biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'destroy']);
+    Route::post('master/biaya/{id}/restore', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'restore']);
+    Route::post('master/biaya/batch', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'batchUpdate']);
+    Route::post('master/biaya/copy-from-gelombang', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'copyFromGelombang']);
+});
+
 Route::middleware('auth:api')->prefix('spmb')->group(function () {
     Route::apiResource('master/berkas-requirement', \App\Http\Controllers\API\Spmb\BerkasRequirementController::class)->except(['index']);
-    Route::apiResource('master/tarif-ukt', \App\Http\Controllers\API\Spmb\TarifUktSpmbController::class);
     Route::post('master-tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'storeMasterTipeJalur']);
     Route::put('master-tipe-jalur/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'updateMasterTipeJalur']);
     Route::delete('master-tipe-jalur/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'destroyMasterTipeJalur']);

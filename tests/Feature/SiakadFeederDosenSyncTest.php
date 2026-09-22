@@ -669,7 +669,7 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertNotNull($dosen);
         // Harus null dan TIDAK fallback ke MasterProgramStudi::first() atau buat PRODI-DEFAULT
         $this->assertNull($dosen->program_studi_id);
-        $this->assertDatabaseMissing('spmb_master_program_studi', ['kode_prodi' => 'PRODI-DEFAULT']);
+        $this->assertDatabaseMissing('siakad_program_studi', ['kode_prodi' => 'PRODI-DEFAULT']);
     }
 
     public function test_pull_dosen_pagination_loops_beyond_500_records()

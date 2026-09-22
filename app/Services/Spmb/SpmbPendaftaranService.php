@@ -89,7 +89,11 @@ class SpmbPendaftaranService
             // Cek Kuota jika meluluskan
             if ($dataSeleksi['status'] === 'lulus' && !empty($dataSeleksi['program_studi_diterima_id'])) {
                 $gelombang = $pendaftaran->gelombangPenerimaan;
-                $kuotaProdi = \App\Models\Spmb\SpmbKuotaProdi::where('tahun_akademik_id', $gelombang->tahun_akademik_id ?? 1)
+                $tahunAkademikId = \App\Models\Siakad\TahunAkademik::query()
+                    ->where('is_active', true)
+                    ->orderByDesc('kode')
+                    ->value('id') ?? 1;
+                $kuotaProdi = \App\Models\Spmb\SpmbKuotaProdi::where('tahun_akademik_id', $tahunAkademikId)
                     ->where('program_studi_id', $dataSeleksi['program_studi_diterima_id'])
                     ->first();
                 

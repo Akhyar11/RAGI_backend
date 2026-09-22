@@ -214,7 +214,7 @@ class PermissionSeeder extends Seeder
 
             // ── MODUL SPMB (PENERIMAAN MAHASISWA BARU) ──────────────────────
             ['name' => 'Portal Calon Mahasiswa', 'slug' => 'spmb.student.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Akses dashboard & formulir registrasi calon mahasiswa'],
-            ['name' => 'Kelola Admin SPMB', 'slug' => 'spmb.admin.manage', 'module' => 'spmb', 'action' => 'update', 'description' => 'Akses penuh pengelolaan data & administrasi SPMB'],
+            ['name' => 'Kelola Admin SPMB', 'slug' => 'spmb.manage', 'module' => 'spmb', 'action' => 'update', 'description' => 'Akses penuh pengelolaan data & administrasi SPMB'],
 
             // ── MODUL SIAKAD (GRANULAR LEVEL PERMISSION) ──────────
             ['name' => 'Lihat Dashboard Akademik', 'slug' => 'siakad.dashboard.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat dashboard akademik sesuai role'],

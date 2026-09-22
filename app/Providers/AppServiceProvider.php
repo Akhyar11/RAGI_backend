@@ -38,10 +38,15 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Spmb\PendaftaranCalonMhs::observe(\App\Observers\Spmb\PendaftaranCalonMhsObserver::class);
         \App\Models\Spmb\GelombangPenerimaan::observe(\App\Observers\Spmb\GelombangPenerimaanObserver::class);
         \App\Models\Spmb\SpmbKuotaProdi::observe(\App\Observers\Spmb\SpmbKuotaProdiObserver::class);
+        \App\Models\Spmb\MasterBiaya::observe(\App\Observers\Spmb\MasterBiayaObserver::class);
+        \App\Models\Spmb\MasterBiayaItem::observe(\App\Observers\Spmb\MasterBiayaItemObserver::class);
+        \App\Models\Spmb\MasterKomponenBiaya::observe(\App\Observers\Spmb\MasterKomponenBiayaObserver::class);
 
         // SIAKAD Observers
         \App\Models\Siakad\Mahasiswa::observe(\App\Observers\MahasiswaObserver::class);
         \App\Models\Siakad\KonversiTransfer::observe(\App\Observers\KonversiTransferObserver::class);
+        \App\Models\Siakad\TahunAkademik::observe(\App\Observers\Siakad\TahunAkademikObserver::class);
+        \App\Models\Siakad\ProgramStudi::observe(\App\Observers\Siakad\ProgramStudiObserver::class);
 
         // SIKEU Observers
         \App\Models\Sikeu\PengajuanPencairanKas::observe(\App\Observers\Sikeu\PengajuanPencairanKasObserver::class);
@@ -67,6 +72,10 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(function (User $user, string $ability) {
             // Super admin bypass semua permission (dinamis berdasarkan system_settings superadmin_role)
             if ($user->isSuperAdmin()) {
+                return true;
+            }
+
+            if ($user->hasPermission($ability)) {
                 return true;
             }
         });
