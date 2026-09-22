@@ -26,6 +26,7 @@ class DispensasiTagihan extends Model
         'disetujui_oleh',
         'tanggal_persetujuan',
         'catatan_pimpinan',
+        'signature_hash',
     ];
 
     protected $casts = [
@@ -48,5 +49,51 @@ class DispensasiTagihan extends Model
     public function tipeTagihanMahasiswa()
     {
         return $this->belongsTo(MahasiswaTipeTagihan::class, 'mahasiswa_id', 'mahasiswa_id');
+    }
+
+    /**
+     * Ringkasan pembayaran cicilan "beneran": hanya pembayaran sukses yang
+     * tercatat SETELAH skema dispensasi disetujui (atau diajukan bila belum
+     * disetujui). Pembayaran sebelum dispensasi ada BUKAN cicilan.
+     *
+     * @return array{count: int, total: float}
+     */
+    public function cicilanPaymentsSummary(): array
+    {
+        $this->loadMissing('tagihan.pembayarans');
+
+        $cutoff = $this->tanggal_persetujuan ?? $this->created_at;
+        $mark = $cutoff ? \Illuminate\Support\Carbon::parse($cutoff) : null;
+
+        $count = 0;
+        $total = 0;
+        foreach ($this->tagihan?->pembayarans ?? [] as $p) {
+            if ($p->status !== 'success') {
+                continue;
+            }
+            $waktu = $p->waktu_bayar ? \Illuminate\Support\Carbon::parse($p->waktu_bayar) : null;
+            if ($mark && $waktu && $waktu->lt($mark)) {
+                continue;
+            }
+            $count++;
+            $total += (float) $p->jumlah_bayar;
+        }
+
+        return ['count' => $count, 'total' => $total];
+    }
+
+    /**
+     * Bangun hash tanda tangan digital surat dispensasi.
+     * Dipakai saat approval, cetak bukti, dan verifikasi publik QR.
+     */
+    public static function makeSignatureHash(int $id, $mahasiswaId, $jatuhTempoBaru): string
+    {
+        if ($jatuhTempoBaru instanceof \DateTimeInterface) {
+            $jatuhTempoBaru = $jatuhTempoBaru->format('Y-m-d');
+        }
+        $secretKey = config('app.key') ?: 'sikeu-signature-salt';
+        $raw = hash_hmac('sha256', "DISP-{$id}-{$mahasiswaId}-{$jatuhTempoBaru}", $secretKey);
+
+        return 'SIG-DISP-' . strtoupper(substr($raw, 0, 16));
     }
 }

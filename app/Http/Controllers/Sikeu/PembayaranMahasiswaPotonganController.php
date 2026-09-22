@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Sikeu;
 
 use App\Http\Controllers\Controller;
+use App\Services\AuditLogService;
 use App\Models\Sikeu\PotonganMahasiswa;
 use App\Models\Sikeu\PotonganTagihan;
 use App\Models\Sikeu\TagihanMahasiswa;
@@ -380,9 +381,25 @@ class PembayaranMahasiswaPotonganController extends Controller
                     'sisa_akhir' => $newSisa,
                     'status_akhir' => $tagihan->status,
                 ];
+
+                // Jurnal potongan: Dr Beban Beasiswa & Potongan / Cr Piutang
+                \App\Services\Sikeu\JurnalSikeuService::jurnalPotongan($tagihan, $nomPotongan, 'Potongan: ' . $potongan->nama_potongan);
             }
 
             DB::commit();
+
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'create',
+                tableName: 'sikeu_potongan_mahasiswa',
+                recordId: $potongan->id,
+                newValues: [
+                    'nama_potongan' => $potongan->nama_potongan,
+                    'total_nominal_potongan' => $totalNominalSemuaPotongan,
+                    'impacted_bills' => $impactedBills,
+                ],
+                request: $request,
+            );
 
             return response()->json([
                 'status' => 'success',
@@ -417,6 +434,7 @@ class PembayaranMahasiswaPotonganController extends Controller
 
             foreach ($potonganTagihans as $pt) {
                 $tagihan = $pt->tagihan;
+                $reversedNominal = (float)$pt->nominal_potongan;
                 $pt->delete();
 
                 if ($tagihan) {
@@ -444,12 +462,23 @@ class PembayaranMahasiswaPotonganController extends Controller
                         }
                         $va->save();
                     }
+
+                    // Pembalik jurnal potongan: Dr Piutang / Cr Beban
+                    \App\Services\Sikeu\JurnalSikeuService::jurnalPembatalanPotongan($tagihan, $reversedNominal, 'Pembatalan potongan ' . $item->nama_potongan);
                 }
             }
 
             $item->delete();
 
             DB::commit();
+
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'delete',
+                tableName: 'sikeu_potongan_mahasiswa',
+                recordId: $id,
+                oldValues: ['nama_potongan' => $item->nama_potongan, 'nilai_potongan' => (float) $item->nilai_potongan],
+            );
 
             return response()->json([
                 'status' => 'success',

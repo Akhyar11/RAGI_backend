@@ -13,7 +13,7 @@ class UnitKasController extends Controller
      */
     public function index()
     {
-        $unitKas = UnitKas::all();
+        $unitKas = UnitKas::with('akunKeuangan')->get();
         return response()->json([
             'status' => 'success',
             'data' => $unitKas
@@ -28,20 +28,34 @@ class UnitKasController extends Controller
         $validated = $request->validate([
             'nama_kas' => 'required|string',
             'tipe_kas' => 'nullable|string',
+            'kanal' => 'nullable|in:tunai,bank_manual,bank_h2h,xendit',
+            'akun_keuangan_id' => 'nullable|exists:sikeu_akun_keuangan,id',
             'deskripsi' => 'nullable|string',
             'status' => 'nullable|boolean',
             'is_kabag_kas' => 'nullable|boolean',
-            'bank_name' => 'nullable|string',
-            'bank_account_name' => 'nullable|string',
-            'bank_account_number' => 'nullable|string',
+            'bank_name' => 'nullable|required_if:kanal,bank_manual|in:BNI,BSN',
+            'bank_account_name' => 'nullable|required_if:kanal,bank_manual|string|max:100',
+            'bank_account_number' => 'nullable|required_if:kanal,bank_manual|string|max:50',
             'penanggung_jawab' => 'nullable|string',
             'saldo_awal' => 'nullable|numeric',
             'saldo_saat_ini' => 'nullable|numeric',
         ]);
 
+        if (!empty($validated['akun_keuangan_id'])) {
+            $akun = \App\Models\Sikeu\AkunKeuangan::find($validated['akun_keuangan_id']);
+            if (!$akun || $akun->kelompok !== 'aset') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Akun pemetaan kas harus akun kelompok aset (kas-bank 101/102).',
+                ], 422);
+            }
+        }
+
         $unitKas = UnitKas::create([
             'nama_kas' => $validated['nama_kas'],
             'tipe_kas' => $validated['tipe_kas'] ?? 'operasional',
+            'kanal' => $validated['kanal'] ?? 'bank_manual',
+            'akun_keuangan_id' => $validated['akun_keuangan_id'] ?? null,
             'deskripsi' => $validated['deskripsi'] ?? null,
             'status' => $validated['status'] ?? true,
             'is_kabag_kas' => $validated['is_kabag_kas'] ?? false,
@@ -73,14 +87,26 @@ class UnitKasController extends Controller
         $validated = $request->validate([
             'nama_kas' => 'required|string',
             'tipe_kas' => 'nullable|string',
+            'kanal' => 'nullable|in:tunai,bank_manual,bank_h2h,xendit',
+            'akun_keuangan_id' => 'nullable|exists:sikeu_akun_keuangan,id',
             'deskripsi' => 'nullable|string',
             'status' => 'nullable|boolean',
-            'bank_name' => 'nullable|string',
-            'bank_account_name' => 'nullable|string',
-            'bank_account_number' => 'nullable|string',
+            'bank_name' => 'nullable|required_if:kanal,bank_manual|in:BNI,BSN',
+            'bank_account_name' => 'nullable|required_if:kanal,bank_manual|string|max:100',
+            'bank_account_number' => 'nullable|required_if:kanal,bank_manual|string|max:50',
             'penanggung_jawab' => 'nullable|string',
             'saldo_saat_ini' => 'nullable|numeric',
         ]);
+
+        if (!empty($validated['akun_keuangan_id'])) {
+            $akun = \App\Models\Sikeu\AkunKeuangan::find($validated['akun_keuangan_id']);
+            if (!$akun || $akun->kelompok !== 'aset') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Akun pemetaan kas harus akun kelompok aset (kas-bank 101/102).',
+                ], 422);
+            }
+        }
 
         $unitKas->update($validated);
 

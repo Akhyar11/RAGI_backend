@@ -75,3 +75,45 @@
   }
 }
 ```
+
+---
+
+### Response Khusus Petugas Kas Kecil (Scoping Role PJ Kas Kecil)
+Bila request berasal dari user dengan role `petugas_kas_kecil` (non-admin), backend secara otomatis menyaring data agar hanya menyajikan saldo petty cash dan transaksi unit kas kecil yang dipegang:
+
+```json
+{
+  "status": "success",
+  "message": "Ringkasan kas kecil unit penanggung jawab berhasil dimuat",
+  "data": {
+    "filter": {
+      "start_date": "2026-09-01",
+      "end_date": "2026-09-30",
+      "has_filter": true
+    },
+    "is_petugas_kas_kecil": true,
+    "metrics": {
+      "saldo_saat_ini": 2115000,
+      "saldo_awal": 2500000,
+      "total_pengeluaran": 385000,
+      "total_transaksi": 4,
+      "pengajuan_pending": 1,
+      "unit_count": 1
+    },
+    "unit_kas": [
+      {
+        "id": 8,
+        "nama_kas": "Kas Kecil FTI",
+        "saldo_awal": "2500000.00",
+        "saldo_saat_ini": "2115000.00",
+        "penanggung_jawab_id": 56,
+        "fakultas": { "id": 1, "nama": "Fakultas Teknologi Informasi" },
+        "akun_keuangan": { "id": 2, "kode_akun": "101.02", "nama_akun": "Kas Unit Fakultas / Petty Cash" }
+      }
+    ],
+    "recent_transaksis": [...],
+    "recent_pengajuans": [...]
+  }
+}
+```
+

@@ -16,7 +16,11 @@ class TagihanMahasiswa extends Model
         'calon_mahasiswa_id',
         'tipe_referensi',
         'tahun_akademik_id',
+        'semester',
         'nomor_tagihan',
+        'h2h_billing_id',
+        'h2h_id_tagihan',
+        'h2h_custid',
         'total_tagihan',
         'total_potongan',
         'total_denda',
@@ -32,7 +36,7 @@ class TagihanMahasiswa extends Model
     ];
 
     protected $casts = [
-        'total_tagihan' => 'decimal:2',
+        'semester' => 'integer',        'total_tagihan' => 'decimal:2',
         'total_potongan' => 'decimal:2',
         'total_denda' => 'decimal:2',
         'total_bayar' => 'decimal:2',

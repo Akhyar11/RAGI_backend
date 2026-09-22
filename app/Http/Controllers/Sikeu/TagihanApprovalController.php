@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Sikeu;
 
 use App\Http\Controllers\Controller;
+use App\Services\AuditLogService;
 use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\DispensasiTagihan;
 use App\Models\Sikeu\VirtualAccount;
@@ -195,6 +196,7 @@ class TagihanApprovalController extends Controller
                 'disetujui_oleh' => auth()->id() ?? 1,
                 'tanggal_persetujuan' => now(),
                 'catatan_pimpinan' => $request->input('catatan', 'Dispensasi pembayaran disetujui oleh pimpinan.'),
+                'signature_hash' => DispensasiTagihan::makeSignatureHash($dispensasi->id, $dispensasi->mahasiswa_id, $dispensasi->jatuh_tempo_baru),
             ]);
 
             // Update tagihan status and due date
@@ -204,7 +206,19 @@ class TagihanApprovalController extends Controller
                 'jatuh_tempo' => $dispensasi->jatuh_tempo_baru ?? $tagihan->jatuh_tempo,
             ]);
 
+            // Memorandum dispensasi (bernilai nol, tanpa efek saldo)
+            \App\Services\Sikeu\JurnalSikeuService::memoDispensasi($dispensasi->fresh('tagihan'));
+
             DB::commit();
+
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'approve',
+                tableName: 'sikeu_dispensasi_tagihan',
+                recordId: $dispensasi->id,
+                newValues: ['status' => 'approved', 'signature_hash' => $dispensasi->fresh()->signature_hash],
+                request: $request,
+            );
 
             return response()->json([
                 'status' => 'success',
@@ -255,6 +269,15 @@ class TagihanApprovalController extends Controller
             }
 
             DB::commit();
+
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'reject',
+                tableName: 'sikeu_dispensasi_tagihan',
+                recordId: $dispensasi->id,
+                newValues: ['status' => 'rejected'],
+                request: $request,
+            );
 
             return response()->json([
                 'status' => 'success',

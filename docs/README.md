@@ -73,6 +73,8 @@
 | PaymentGatewayConfigController | Pengaturan Provider Payment Gateway (Midtrans/Xendit) | [docs/api/Sikeu/PaymentGatewayConfigController.md](api/Sikeu/PaymentGatewayConfigController.md) |
 | SettingTarifController | Konfigurasi Tarif Biaya per Angkatan, Prodi, & Semester | [docs/api/Sikeu/SettingTarifController.md](api/Sikeu/SettingTarifController.md) |
 | PembayaranKasirController | Pembayaran Kasir/Loket Tunai & Non-Tunai, Koreksi Transaksi, & Tagihan Masal | [docs/api/Sikeu/PembayaranKasirController.md](api/Sikeu/PembayaranKasirController.md) |
+| PembayaranMahasiswaTarifController | Tarif per angkatan & prodi, tagihan individu/massal (guard duplikat semester), & proteksi hapus per angkatan | [docs/api/Sikeu/PembayaranMahasiswaTarifController.md](api/Sikeu/PembayaranMahasiswaTarifController.md) |
+| KasKecilController | Kas Kecil (Petty Cash): unit per fakultas, transaksi keluar, pengajuan/top-up & persetujuan dengan jurnal otomatis | [docs/api/Sikeu/KasKecilController.md](api/Sikeu/KasKecilController.md) |
 
 ---
 

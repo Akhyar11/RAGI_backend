@@ -485,6 +485,31 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::post('pengajuan-kas', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'store']);
     Route::post('pengajuan-kas/{id}/approve', [App\Http\Controllers\Sikeu\PengajuanKasController::class, 'approve']);
 
+    // Pengajuan Operasional (4 tahap: sarpras -> keuangan -> direktur + pencairan + LPJ + jurnal otomatis)
+    Route::get('pengajuan-operasional', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'index']);
+    Route::post('pengajuan-operasional', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'store']);
+    Route::get('pengajuan-operasional/{id}', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'show']);
+    Route::post('pengajuan-operasional/{id}/approve', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'approve']);
+    Route::post('pengajuan-operasional/{id}/pencairan', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'pencairan']);
+    Route::post('pengajuan-operasional/{id}/lpj', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'simpanLpj']);
+    Route::post('lpj/{id}/verifikasi', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'verifikasiLpj']);
+    Route::get('referensi/fakultas', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'listFakultas']);
+    Route::get('referensi/ruangan', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'listRuangan']);
+
+    // Kas Kecil (Petty Cash): transaksi keluar petugas + pengajuan kas langsung
+    Route::get('kas-kecil/referensi/kategori', [App\Http\Controllers\Sikeu\KasKecilController::class, 'referensiKategori']);
+    Route::get('kas-kecil/referensi/petugas', [App\Http\Controllers\Sikeu\KasKecilController::class, 'referensiPetugas']);
+    Route::post('kas-kecil/pengajuan/{id}/approve', [App\Http\Controllers\Sikeu\KasKecilController::class, 'pengajuanApprove']);
+    Route::post('kas-kecil/pengajuan/{id}/reject', [App\Http\Controllers\Sikeu\KasKecilController::class, 'pengajuanReject']);
+    Route::delete('kas-kecil/pengajuan/{id}', [App\Http\Controllers\Sikeu\KasKecilController::class, 'pengajuanDestroy']);
+    Route::get('kas-kecil', [App\Http\Controllers\Sikeu\KasKecilController::class, 'index']);
+    Route::post('kas-kecil', [App\Http\Controllers\Sikeu\KasKecilController::class, 'store']);
+    Route::get('kas-kecil/{id}', [App\Http\Controllers\Sikeu\KasKecilController::class, 'show']);
+    Route::put('kas-kecil/{id}', [App\Http\Controllers\Sikeu\KasKecilController::class, 'update']);
+    Route::get('kas-kecil/{id}/transaksi', [App\Http\Controllers\Sikeu\KasKecilController::class, 'transaksiIndex']);
+    Route::post('kas-kecil/{id}/transaksi', [App\Http\Controllers\Sikeu\KasKecilController::class, 'transaksiStore']);
+    Route::get('kas-kecil/{id}/pengajuan', [App\Http\Controllers\Sikeu\KasKecilController::class, 'pengajuanIndex']);
+    Route::post('kas-kecil/{id}/pengajuan', [App\Http\Controllers\Sikeu\KasKecilController::class, 'pengajuanStore']);
 
 
     // Tagihan Mahasiswa List & Detail
@@ -563,10 +588,13 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     // Portal Tagihan & Invoice Mahasiswa Mandiri
     Route::get('mahasiswa/payment-channels', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'paymentChannels']);
     Route::get('mahasiswa/tagihan', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'myBills']);
+    Route::get('mahasiswa/rekening-tujuan', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'rekeningTujuan']);
     Route::get('mahasiswa/invoice/{id}', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'generateInvoice']);
     Route::post('mahasiswa/invoice-batch', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'generateBatchInvoice']);
     Route::get('mahasiswa/riwayat-pembayaran', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'myPaymentHistory']);
     Route::post('mahasiswa/pay-bills', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'payBills']);
+    Route::post('pembayaran/manual-upload', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'uploadBuktiManual']);
+    Route::post('pembayaran/manual-init', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'manualInit']);
 
     // Piutang Mahasiswa & Export Excel
     Route::get('piutang', [App\Http\Controllers\Sikeu\PiutangMahasiswaController::class, 'index']);
@@ -577,9 +605,15 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::post('dispensasi', [App\Http\Controllers\Sikeu\DispensasiTagihanController::class, 'store']);
     Route::get('dispensasi/{id}', [App\Http\Controllers\Sikeu\DispensasiTagihanController::class, 'show']);
     Route::get('dispensasi/{id}/cetak-bukti', [App\Http\Controllers\Sikeu\DispensasiTagihanController::class, 'cetakBukti']);
+    Route::delete('dispensasi/{id}', [App\Http\Controllers\Sikeu\DispensasiTagihanController::class, 'destroy']);
 
     // Riwayat Pembayaran Mahasiswa
     Route::get('pembayaran', [App\Http\Controllers\Sikeu\ExternalTagihanController::class, 'indexPembayaran']);
+
+    // H2H BTN Syariah (bridge Go): terbitkan billing VA + sinkron terbayar
+    Route::post('tagihan/{id}/terbitkan-h2h', [App\Http\Controllers\Sikeu\BsnH2hController::class, 'terbitkan']);
+    Route::post('h2h/sync', [App\Http\Controllers\Sikeu\BsnH2hController::class, 'sync']);
+    Route::get('h2h/status', [App\Http\Controllers\Sikeu\BsnH2hController::class, 'status']);
 
     // Approval Pimpinan (Tagihan & Dispensasi)
     Route::get('approvals', [App\Http\Controllers\Sikeu\TagihanApprovalController::class, 'index']);
@@ -597,8 +631,16 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::post('akuntansi/coa', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'storeCoa']);
     Route::get('akuntansi/jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'indexJurnal']);
     Route::post('akuntansi/jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'storeJurnal']);
+    Route::get('akuntansi/jurnal/{id}', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'showJurnal']);
+    Route::put('akuntansi/jurnal/{id}', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'updateJurnal']);
+    Route::delete('akuntansi/jurnal/{id}', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'destroyJurnal']);
     Route::get('akuntansi/buku-besar', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'bukuBesar']);
     Route::get('akuntansi/laporan', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'laporanKeuangan']);
+    Route::get('periode', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'indexPeriode']);
+    Route::post('periode', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'storePeriode']);
+    Route::post('periode/{id}/tutup', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'tutupPeriode']);
+    Route::get('pengaturan-jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'indexPrefixSetting']);
+    Route::put('pengaturan-jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'updatePrefixSetting']);
 
     // Master Tarif SPMB (Jalur & Gelombang)
     Route::get('master/tarif-spmb', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'indexTarifSpmb']);
@@ -650,6 +692,8 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::post('pembayaran/kasir', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'processPayment']);
     Route::post('pembayaran/direct-cashier', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'directCashierPayment']);
     Route::post('pembayaran/{id}/koreksi', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'koreksiPayment']);
+    Route::post('pembayaran/{id}/approve-manual', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'approveManual']);
+    Route::post('pembayaran/{id}/reject-manual', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'rejectManual']);
 
     // Generate Tagihan Semester Masal
     Route::post('tagihan/generate-mass', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'generateMassTagihan']);
@@ -683,6 +727,9 @@ Route::get('sippm/pengumuman/{id}/html-draft', [App\Http\Controllers\Sippm\Pengu
 
 // Public Payment Receipt Verification Route (Accessible by scanning QR Code on physical receipt)
 Route::get('v1/sikeu/pembayaran/validasi/{kode_transaksi}', [App\Http\Controllers\Sikeu\ExternalTagihanController::class, 'validasiPembayaranPublik']);
+
+// Public Dispensasi Letter Verification Route (Accessible by scanning QR Code on printed letter)
+Route::get('v1/sikeu/dispensasi/validasi/{signature_hash}', [App\Http\Controllers\Sikeu\DispensasiTagihanController::class, 'validasiDispensasiPublik']);
 
 /*
 |--------------------------------------------------------------------------

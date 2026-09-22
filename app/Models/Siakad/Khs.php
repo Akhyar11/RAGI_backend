@@ -19,6 +19,7 @@ class Khs extends Model
         'total_sks_semester',
         'sks_kumulatif',
         'ipk',
+        'is_locked',
     ];
 
     protected $casts = [
@@ -26,6 +27,7 @@ class Khs extends Model
         'ipk' => 'decimal:2',
         'total_sks_semester' => 'integer',
         'sks_kumulatif' => 'integer',
+        'is_locked' => 'boolean',
     ];
 
     public function mahasiswa()

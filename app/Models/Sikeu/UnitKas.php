@@ -13,8 +13,11 @@ class UnitKas extends Model
 
     protected $fillable = [
         'unit_kerja_id',
+        'fakultas_id',
+        'akun_keuangan_id',
         'nama_kas',
         'tipe_kas',
+        'kanal',
         'bank_name',
         'bank_account_number',
         'bank_account_name',
@@ -39,8 +42,33 @@ class UnitKas extends Model
         return $this->hasMany(PengajuanPencairanKas::class, 'unit_kas_id');
     }
 
+    public function akunKeuangan()
+    {
+        return $this->belongsTo(AkunKeuangan::class, 'akun_keuangan_id');
+    }
+
     public function transaksis()
     {
         return $this->hasMany(TransaksiKasUnit::class, 'unit_kas_id');
+    }
+
+    public function fakultas()
+    {
+        return $this->belongsTo(\App\Models\Siakad\Fakultas::class, 'fakultas_id');
+    }
+
+    public function penanggungJawab()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'penanggung_jawab_id');
+    }
+
+    public function kasKecilTransaksis()
+    {
+        return $this->hasMany(KasKecilTransaksi::class, 'unit_kas_id');
+    }
+
+    public function kasKecilPengajuans()
+    {
+        return $this->hasMany(KasKecilPengajuan::class, 'unit_kas_id');
     }
 }

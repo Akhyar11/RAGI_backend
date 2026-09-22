@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Sikeu;
 use App\Http\Controllers\Controller;
 use App\Models\Sikeu\DispensasiTagihan;
 use App\Models\Sikeu\JurnalUmum;
+use App\Models\Sikeu\KasKecilPengajuan;
+use App\Models\Sikeu\KasKecilTransaksi;
 use App\Models\Sikeu\PaymentGatewayConfig;
 use App\Models\Sikeu\PemasukanKampus;
 use App\Models\Sikeu\Pembayaran;
@@ -30,6 +32,78 @@ class SikeuDashboardController extends Controller
             $hasDateFilter = !empty($startDate) && !empty($endDate);
             $startDateTime = $hasDateFilter ? $startDate . ' 00:00:00' : null;
             $endDateTime = $hasDateFilter ? $endDate . ' 23:59:59' : null;
+
+            $user = $request->user();
+            $isAdminKeuangan = $user && (
+                $user->hasRole('operator_sikeu')
+                || $user->hasRole('kabag_keuangan')
+                || $user->hasRole('admin_keuangan_akuntansi')
+            );
+            $isPetugasKasKecil = $user && (
+                $user->hasRole('petugas_kas_kecil') || $user->hasRole('petugas_kaskecil')
+            ) && !$user->isSuperAdmin() && !$user->isAdmin() && !$isAdminKeuangan;
+
+            // Khusus Petugas Kas Kecil: Hanya tampilkan unit petty cash & transaksi dari unit miliknya
+            if ($isPetugasKasKecil) {
+                $myUnits = UnitKas::with(['fakultas', 'akunKeuangan'])
+                    ->where('penanggung_jawab_id', $user->id)
+                    ->where('tipe_kas', 'petty_cash')
+                    ->get();
+
+                $myUnitIds = $myUnits->pluck('id')->toArray();
+
+                $totalSaldoSaatIni = (float) $myUnits->sum('saldo_saat_ini');
+                $totalSaldoAwal = (float) $myUnits->sum('saldo_awal');
+
+                $transaksiQuery = KasKecilTransaksi::with(['kategori', 'unitKas.fakultas'])
+                    ->whereIn('unit_kas_id', $myUnitIds)
+                    ->when($hasDateFilter, function ($q) use ($startDate, $endDate) {
+                        $q->whereDate('tanggal_transaksi', '>=', $startDate)
+                            ->whereDate('tanggal_transaksi', '<=', $endDate);
+                    })
+                    ->orderBy('tanggal_transaksi', 'desc')
+                    ->orderBy('id', 'desc');
+
+                $totalPengeluaranKasKecil = (float) (clone $transaksiQuery)->sum('nominal');
+                $recentTransaksis = $transaksiQuery->take(15)->get();
+
+                $pengajuanQuery = KasKecilPengajuan::with(['unitKas.fakultas'])
+                    ->whereIn('unit_kas_id', $myUnitIds)
+                    ->when($hasDateFilter, function ($q) use ($startDate, $endDate) {
+                        $q->whereDate('created_at', '>=', $startDate)
+                            ->whereDate('created_at', '<=', $endDate);
+                    })
+                    ->orderBy('created_at', 'desc');
+
+                $recentPengajuans = $pengajuanQuery->take(10)->get();
+                $pendingPengajuanCount = KasKecilPengajuan::whereIn('unit_kas_id', $myUnitIds)
+                    ->where('status', 'pending_keuangan')
+                    ->count();
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Ringkasan kas kecil unit penanggung jawab berhasil dimuat',
+                    'data' => [
+                        'filter' => [
+                            'start_date' => $startDate,
+                            'end_date' => $endDate,
+                            'has_filter' => $hasDateFilter,
+                        ],
+                        'is_petugas_kas_kecil' => true,
+                        'metrics' => [
+                            'saldo_saat_ini' => $totalSaldoSaatIni,
+                            'saldo_awal' => $totalSaldoAwal,
+                            'total_pengeluaran' => $totalPengeluaranKasKecil,
+                            'total_transaksi' => (clone $transaksiQuery)->count(),
+                            'pengajuan_pending' => $pendingPengajuanCount,
+                            'unit_count' => $myUnits->count(),
+                        ],
+                        'unit_kas' => $myUnits,
+                        'recent_transaksis' => $recentTransaksis,
+                        'recent_pengajuans' => $recentPengajuans,
+                    ]
+                ]);
+            }
 
             // 1. Total Penerimaan (Mahasiswa Lunas/Sebagian + Pemasukan Eksternal/Hibah)
             if ($hasDateFilter) {

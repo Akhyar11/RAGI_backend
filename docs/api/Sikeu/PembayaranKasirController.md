@@ -99,9 +99,12 @@
 
 ### Catatan Tambahan
 
-> - Setiap pembayaran kasir otomatis menghasilkan **Jurnal Umum** (Debet: Kas, Kredit: Pendapatan).
+> - Basis akrual: penerbitan tagihan mencatat `Dr 103.01 Piutang / Cr 401.01 (UKT) atau 401.02 (SPMB)`; pembayaran mencatat `Dr Kas/Bank / Cr 103.01 Piutang`; koreksi membaliknya (`Dr Piutang / Cr Kas`).
+> - Setiap pembayaran kasir otomatis menghasilkan **Jurnal Umum**; bila COA wajib belum terkonfigurasi, transaksi **gagal eksplisit** (tidak lagi diam-diam tanpa jurnal).
 > - Sistem memeriksa `sikeu_periode_akuntansi` untuk memastikan transaksi tidak jatuh pada periode yang sudah ditutup.
 > - Status tagihan otomatis berubah ke `lunas` jika total bayar ≥ total bersih, atau `sebagian` jika belum cukup.
+> - **Alokasi FIFO per komponen**: setiap pembayaran didistribusikan ke rincian (`sikeu_detail_tagihan.terbayar`) mulai dari komponen tertua; koreksi/pengalihan keluar mengembalikannya secara LIFO. Kekurangan per komponen = `nominal_bersih − terbayar`, terlihat di `details[].sisa` (unpaid-bills), `rincian_komponen[].sisa` (list tagihan), dan `kuitansi.rincian_komponen`.
+> - Berlaku untuk calon mahasiswa (daftar ulang/SPMB) maupun mahasiswa aktif (UKT): kasir dapat memproses keduanya, bahkan campuran dalam satu batch, karena alokasi berbasis `tagihan_id`.
 
 ---
 

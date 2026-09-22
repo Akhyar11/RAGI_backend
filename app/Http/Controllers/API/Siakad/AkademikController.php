@@ -164,6 +164,9 @@ class AkademikController extends Controller
     public function destroyFakultas($id)
     {
         $fakultas = Fakultas::findOrFail($id);
+        if ($fakultas->programStudis()->exists()) {
+            return response()->json(['status' => 'error', 'message' => 'Fakultas tidak dapat dihapus karena masih memiliki program studi.'], 422);
+        }
         $fakultas->delete();
 
         return response()->json([
@@ -235,6 +238,9 @@ class AkademikController extends Controller
     public function destroyProgramStudi($id)
     {
         $prodi = ProgramStudi::findOrFail($id);
+        if (Kurikulum::where('program_studi_id', $prodi->id)->exists() || Mahasiswa::where('program_studi_id', $prodi->id)->exists()) {
+            return response()->json(['status' => 'error', 'message' => 'Program studi tidak dapat dihapus karena masih memiliki kurikulum/mahasiswa.'], 422);
+        }
         $prodi->delete();
 
         return response()->json([
@@ -312,6 +318,9 @@ class AkademikController extends Controller
     public function destroyKurikulum($id)
     {
         $kurikulum = Kurikulum::findOrFail($id);
+        if ($kurikulum->mataKuliahs()->exists()) {
+            return response()->json(['status' => 'error', 'message' => 'Kurikulum tidak dapat dihapus karena masih memiliki mata kuliah.'], 422);
+        }
         $kurikulum->delete();
 
         return response()->json([
@@ -365,12 +374,12 @@ class AkademikController extends Controller
             'nama' => 'required|string|max:255',
             'sks_teori' => 'required|integer|min:0',
             'sks_praktik' => 'required|integer|min:0',
-            'semester_anjuran' => 'required|integer|min:1|max:8',
+            'semester_anjuran' => 'required|integer|min:1|max:14',
             'tipe' => 'required|in:wajib,pilihan,wajib_prodi',
         ]);
 
         $totalSks = $request->sks_teori + $request->sks_praktik;
-        $mk = MataKuliah::create(array_merge($request->all(), ['total_sks' => $totalSks]));
+        $mk = MataKuliah::create(array_merge($request->only(['kurikulum_id', 'kode_mk', 'nama', 'sks_teori', 'sks_praktik', 'semester_anjuran', 'tipe']), ['total_sks' => $totalSks]));
 
         return response()->json([
             'status' => 'success',
@@ -386,12 +395,12 @@ class AkademikController extends Controller
             'nama' => 'required|string|max:255',
             'sks_teori' => 'required|integer|min:0',
             'sks_praktik' => 'required|integer|min:0',
-            'semester_anjuran' => 'required|integer|min:1|max:8',
+            'semester_anjuran' => 'required|integer|min:1|max:14',
             'tipe' => 'required|in:wajib,pilihan,wajib_prodi',
         ]);
 
         $totalSks = $request->sks_teori + $request->sks_praktik;
-        $mk->update(array_merge($request->all(), ['total_sks' => $totalSks]));
+        $mk->update(array_merge($request->only(['nama', 'sks_teori', 'sks_praktik', 'semester_anjuran', 'tipe']), ['total_sks' => $totalSks]));
 
         return response()->json([
             'status' => 'success',
@@ -403,6 +412,9 @@ class AkademikController extends Controller
     public function destroyMataKuliah($id)
     {
         $mk = MataKuliah::findOrFail($id);
+        if (Kelas::where('mata_kuliah_id', $mk->id)->exists()) {
+            return response()->json(['status' => 'error', 'message' => 'Mata kuliah tidak dapat dihapus karena sudah dipakai di kelas perkuliahan.'], 422);
+        }
         $mk->delete();
 
         return response()->json([
@@ -540,12 +552,61 @@ class AkademikController extends Controller
     public function destroyDosen($id)
     {
         $dosen = Dosen::findOrFail($id);
+        if (\App\Models\Siakad\DosenPengampu::where('dosen_id', $dosen->id)->exists() || Mahasiswa::where('dosen_wali_id', $dosen->id)->exists()) {
+            return response()->json(['status' => 'error', 'message' => 'Dosen tidak dapat dihapus karena masih menjadi pengampu/PA.'], 422);
+        }
         $dosen->delete();
 
         return response()->json([
             'status' => 'success',
             'message' => 'Dosen berhasil dihapus'
         ]);
+    }
+
+    // --- PRASYARAT MATA KULIAH CRUD (BAAK) ---
+    public function listPrasyaratMk(Request $request)
+    {
+        $query = \App\Models\Siakad\PrasyaratMk::with(['mataKuliah', 'prasyarat']);
+        if ($request->filled('mata_kuliah_id')) {
+            $query->where('mata_kuliah_id', $request->mata_kuliah_id);
+        }
+        $perPage = min(100, $request->integer('per_page', 15));
+        $data = $query->paginate($perPage);
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data prasyarat mata kuliah berhasil dimuat',
+            'data' => $data->items(),
+            'meta' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+            ],
+        ]);
+    }
+
+    public function storePrasyaratMk(Request $request)
+    {
+        $validated = $request->validate([
+            'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
+            'prasyarat_id' => 'required|exists:siakad_mata_kuliah,id|different:mata_kuliah_id',
+            'tipe' => 'required|in:lulus,pernah_ambil',
+            'nilai_minimum' => 'nullable|numeric|min:0|max:100',
+        ]);
+        $exists = \App\Models\Siakad\PrasyaratMk::where('mata_kuliah_id', $validated['mata_kuliah_id'])
+            ->where('prasyarat_id', $validated['prasyarat_id'])->exists();
+        if ($exists) {
+            return response()->json(['status' => 'error', 'message' => 'Prasyarat tersebut sudah terdaftar.'], 422);
+        }
+        $prasyarat = \App\Models\Siakad\PrasyaratMk::create($validated);
+        return response()->json(['status' => 'success', 'message' => 'Prasyarat mata kuliah berhasil ditambahkan', 'data' => $prasyarat->load(['mataKuliah', 'prasyarat'])], 201);
+    }
+
+    public function destroyPrasyaratMk($id)
+    {
+        $prasyarat = \App\Models\Siakad\PrasyaratMk::findOrFail($id);
+        $prasyarat->delete();
+        return response()->json(['status' => 'success', 'message' => 'Prasyarat mata kuliah berhasil dihapus']);
     }
 
     public function updateModePenilaian(Request $request, $id)

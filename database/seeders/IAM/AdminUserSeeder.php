@@ -192,10 +192,52 @@ class AdminUserSeeder extends Seeder
         $roleOperatorSikeu = Role::where('slug', 'operator_sikeu')->first();
         $roleKabagKeuangan = Role::where('slug', 'kabag_keuangan')->first();
         $rolePimpinan = Role::where('slug', 'pimpinan')->first();
+        $roleKeuAkuntansi = Role::where('slug', 'admin_keuangan_akuntansi')->first();
+        $roleKeuPembayaran = Role::where('slug', 'admin_keuangan_pembayaran')->first();
 
         if ($kasirSikeu && $roleOperatorSikeu) $assignRole($kasirSikeu->id, $roleOperatorSikeu->id, $admin->id);
         if ($kabagKeuangan && $roleKabagKeuangan) $assignRole($kabagKeuangan->id, $roleKabagKeuangan->id, $admin->id);
         if ($pimpinanUser && $rolePimpinan) $assignRole($pimpinanUser->id, $rolePimpinan->id, $admin->id);
         if ($mhsTestUser && $roleMhs) $assignRole($mhsTestUser->id, $roleMhs->id, $admin->id);
+
+        // ── SIKEU FINANCE ADMINS ────────────────────────────────────
+        $keuAkuntansi = $createOrRestoreUser(
+            'admin.keu.akuntansi@kampus.ac.id',
+            [
+                'username'    => 'admin_keu_akuntansi',
+                'password'    => Hash::make('password'),
+                'is_active'   => true,
+                'is_verified' => true,
+            ]
+        );
+
+        $keuPembayaran = $createOrRestoreUser(
+            'admin.keu.pembayaran@kampus.ac.id',
+            [
+                'username'    => 'admin_keu_pembayaran',
+                'password'    => Hash::make('password'),
+                'is_active'   => true,
+                'is_verified' => true,
+            ]
+        );
+
+        if ($keuAkuntansi && $roleKeuAkuntansi) $assignRole($keuAkuntansi->id, $roleKeuAkuntansi->id, $admin->id);
+        if ($keuPembayaran && $roleKeuPembayaran) $assignRole($keuPembayaran->id, $roleKeuPembayaran->id, $admin->id);
+
+        // ── KAS KECIL TEST USER ──────────────────────────────────────
+        $petugasKasKecilUser = $createOrRestoreUser(
+            'petugas.kaskecil@kampus.ac.id',
+            [
+                'username'    => 'petugas_kas_kecil',
+                'password'    => Hash::make('password'),
+                'is_active'   => true,
+                'is_verified' => true,
+            ]
+        );
+
+        $rolePetugasKasKecil = Role::where('slug', 'petugas_kas_kecil')->first();
+        if ($petugasKasKecilUser && $rolePetugasKasKecil) {
+            $assignRole($petugasKasKecilUser->id, $rolePetugasKasKecil->id, $admin->id);
+        }
     }
 }

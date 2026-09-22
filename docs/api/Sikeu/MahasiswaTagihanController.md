@@ -11,6 +11,11 @@
 |---|---|---|---|
 | GET | `/api/v1/sikeu/mahasiswa/tagihan` | Portal rincian tagihan semester mahasiswa aktif | ✅ Mahasiswa |
 | GET | `/api/v1/sikeu/mahasiswa/invoice/{id}` | Unduh / Generate Surat Invoice Tagihan Resmi | ✅ Mahasiswa |
+| GET | `/api/v1/sikeu/mahasiswa/rekening-tujuan` | Rekening kampus tujuan transfer manual — hanya bank_manual BNI/BSN aktif bernomor rekening (tanpa saldo) | ✅ Mahasiswa |
+| POST | `/api/v1/sikeu/pembayaran/manual-init` | Inisiasi transfer manual: kunci nominal + kode unik 1-499 per tagihan (`nominal_transfer = jumlah + kode`). Idempoten: kombinasi tagihan + rekening + nominal yang sama mengembalikan kode yang sudah ada (`reused: true`); ganti rekening/nominal → kode baru | ✅ Mahasiswa |
+| POST | `/api/v1/sikeu/pembayaran/manual-upload` | Unggah bukti transfer manual — mode `pembayaran_id` (lampirkan ke inisiasi) atau legacy (`tagihan_id` + rekening + nominal, kode unik dibuat otomatis) | ✅ Mahasiswa |
+
+> **Penguncian menunggu validasi**: tagihan yang punya pembayaran manual `pending` berbukti dikunci untuk pembayaran lain (`pay-bills`, `manual-init`, `manual-upload` → 422) sampai disetujui/ditolak. `myBills` menyertakan `pending_verification` dan `last_rejection` (alasan penolakan keuangan).
 
 ---
 

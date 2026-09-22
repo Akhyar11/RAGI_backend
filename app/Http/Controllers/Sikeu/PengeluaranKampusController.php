@@ -79,6 +79,7 @@ class PengeluaranKampusController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'kategori' => 'required|in:operasional,pemeliharaan,laboratorium,kegiatan,honorarium,lainnya',
+            'akun_beban_id' => 'nullable|exists:sikeu_akun_keuangan,id',
             'nominal' => 'required|numeric|min:1000',
             'tanggal_transaksi' => 'required|date',
             'nama_vendor' => 'required|string|max:255',
@@ -129,10 +130,45 @@ class PengeluaranKampusController extends Controller
                 $unitKas->decrement('saldo_saat_ini', $netDibayarkan);
             }
 
-            // Accounting COA mapping
-            $akunBeban = AkunKeuangan::where('kelompok', 'beban')->first();
-            $akunKas = AkunKeuangan::where('kelompok', 'aset')->first();
-            $akunUtangPajak = AkunKeuangan::where('kelompok', 'liabilitas')->first();
+            // Accounting COA mapping: beban mengikuti kategori, utang mengikuti jenis pajak.
+            // (Sebelumnya selalu memakai akun pertama tiap kelompok sehingga seluruh
+            // beban menumpuk di 501.01 dan seluruh utang pajak di 201.01.)
+            // Pengguna boleh meng-override akun beban secara eksplisit lewat akun_beban_id
+            // (mis. operasional yang ternyata belanja ATK, bukan listrik/air/internet).
+            $akunBeban = null;
+            if ($request->filled('akun_beban_id')) {
+                $akunBeban = AkunKeuangan::where('id', $request->akun_beban_id)
+                    ->where('kelompok', 'beban')
+                    ->first();
+                if (!$akunBeban) {
+                    DB::rollBack();
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Akun beban yang dipilih tidak valid (harus akun kelompok beban).',
+                    ], 422);
+                }
+            }
+            if (!$akunBeban) {
+                $kodeBeban = match ($request->kategori) {
+                    'honorarium' => '501.01',
+                    'pemeliharaan' => '502.02',
+                    'laboratorium' => '502.03',
+                    default => '502.01',
+                };
+                $akunBeban = AkunKeuangan::where('kode_akun', $kodeBeban)->first()
+                    ?? AkunKeuangan::where('kelompok', 'beban')->first();
+            }
+            $akunKas = \App\Services\Sikeu\JurnalSikeuService::akunKasUnit($unitKas, '101.01');
+            $kodeUtangPajak = match ($jenisPajak) {
+                'pph_21' => '202.01',
+                'pph_23' => '202.02',
+                'ppn_11' => '202.03',
+                default => null,
+            };
+            $akunUtangPajak = $kodeUtangPajak
+                ? AkunKeuangan::where('kode_akun', $kodeUtangPajak)->first()
+                : null;
+            $akunUtangPajak ??= AkunKeuangan::where('kelompok', 'liabilitas')->first();
 
             $pengeluaran = PengeluaranKampus::create([
                 'nomor_transaksi' => $nomorTransaksi,
@@ -156,7 +192,7 @@ class PengeluaranKampusController extends Controller
             // Automatic Balanced Journal Posting
             if ($akunBeban && $akunKas) {
                 $jurnal = JurnalUmum::create([
-                    'nomor_jurnal' => 'JRN-EXP-' . date('Ymd') . '-' . Str::random(4),
+                    'nomor_jurnal' => \App\Services\Sikeu\JurnalSikeuService::prefix('pengeluaran') . '-' . date('Ymd') . '-' . Str::random(4),
                     'tanggal_jurnal' => $request->tanggal_transaksi,
                     'jenis_sumber' => 'pengeluaran_manual',
                     'referensi_id' => $pengeluaran->id,

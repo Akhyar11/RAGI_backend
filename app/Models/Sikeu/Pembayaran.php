@@ -14,11 +14,14 @@ class Pembayaran extends Model
     protected $fillable = [
         'tagihan_id',
         'virtual_account_id',
+        'unit_kas_id',
         'kode_transaksi',
         'jumlah_bayar',
+        'kode_unik',
         'waktu_bayar',
         'channel_bayar',
         'bank_pengirim',
+        'bukti_bayar_path',
         'catatan',
         'status',
         'diverifikasi_oleh',
@@ -37,5 +40,10 @@ class Pembayaran extends Model
     public function virtualAccount()
     {
         return $this->belongsTo(VirtualAccount::class, 'virtual_account_id');
+    }
+
+    public function unitKas()
+    {
+        return $this->belongsTo(UnitKas::class, 'unit_kas_id');
     }
 }

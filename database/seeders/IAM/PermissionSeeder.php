@@ -157,6 +157,25 @@ class PermissionSeeder extends Seeder
             ['name' => 'Kelola Master Biaya & UKT', 'slug' => 'sikeu.master.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengelola jenis biaya & tarif UKT'],
             ['name' => 'Kelola Unit Kas', 'slug' => 'sikeu.kas.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengelola kas unit & petty cash'],
             ['name' => 'Kelola Akuntansi & Jurnal', 'slug' => 'sikeu.akuntansi.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengelola COA, Jurnal Umum, & Buku Besar'],
+            ['name' => 'Lihat Pengajuan Operasional', 'slug' => 'sikeu.pengajuan.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat daftar & rincian pengajuan operasional'],
+            ['name' => 'Buat Pengajuan Operasional', 'slug' => 'sikeu.pengajuan.create', 'module' => 'sikeu', 'action' => 'create', 'description' => 'Membuat pengajuan barang / non-barang baru'],
+            ['name' => 'Approve Pengajuan Operasional', 'slug' => 'sikeu.pengajuan.approve', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Menyetujui tahap sarpras / keuangan / direktur'],
+            ['name' => 'Reject Pengajuan Operasional', 'slug' => 'sikeu.pengajuan.reject', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Menolak pengajuan operasional'],
+            ['name' => 'Verifikasi LPJ Operasional', 'slug' => 'sikeu.lpj.verify', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Memverifikasi LPJ & menerbitkan jurnal realisasi'],
+            ['name' => 'Lihat Akuntansi & Jurnal', 'slug' => 'sikeu.akuntansi.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat Jurnal Umum, Buku Besar, & COA'],
+            ['name' => 'Lihat Laporan Keuangan', 'slug' => 'sikeu.laporan.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat laporan keuangan & neraca'],
+            ['name' => 'Lihat Pengeluaran Kas', 'slug' => 'sikeu.pengeluaran.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat pengeluaran & beban operasional'],
+            ['name' => 'Lihat Pemasukan Kas', 'slug' => 'sikeu.pemasukan.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat pemasukan kas non-akademik'],
+            ['name' => 'Lihat Pajak', 'slug' => 'sikeu.pajak.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat data pajak & perpajakan'],
+            ['name' => 'Lihat Unit Kas & Rekening', 'slug' => 'sikeu.unitkas.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat unit kas & rekening bank'],
+            ['name' => 'Kelola Payment Gateway', 'slug' => 'sikeu.paymentgateway.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengatur koneksi Xendit / H2H / rekening manual'],
+            ['name' => 'Lihat Approval Keuangan', 'slug' => 'sikeu.approval.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat antrean approval keuangan'],
+            ['name' => 'Approve Keuangan', 'slug' => 'sikeu.approval.approve', 'module' => 'sikeu', 'action' => 'approve', 'description' => 'Menyetujui antrean approval keuangan'],
+            ['name' => 'Reject Keuangan', 'slug' => 'sikeu.approval.reject', 'module' => 'sikeu', 'action' => 'approve', 'description' => 'Menolak antrean approval keuangan'],
+            ['name' => 'Lihat Kas Kecil', 'slug' => 'sikeu.kaskecil.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat unit, saldo, transaksi, & pengajuan kas kecil'],
+            ['name' => 'Input Transaksi Kas Kecil', 'slug' => 'sikeu.kaskecil.transaksi', 'module' => 'sikeu', 'action' => 'create', 'description' => 'Mencatat transaksi pengeluaran kas kecil (saldo & jurnal otomatis)'],
+            ['name' => 'Ajukan Kas Langsung Kas Kecil', 'slug' => 'sikeu.kaskecil.pengajuan', 'module' => 'sikeu', 'action' => 'create', 'description' => 'Mengajukan pengisian kas langsung / top-up kas kecil'],
+            ['name' => 'Approve Kas Langsung Kas Kecil', 'slug' => 'sikeu.kaskecil.approve', 'module' => 'sikeu', 'action' => 'approve', 'description' => 'Menyetujui / menolak pengajuan kas langsung kas kecil'],
 
             // ── MODUL SINAPRA (SARANA, PRASARANA, & ASET) ─────────────────────────
             ['name' => 'Lihat Dashboard SINAPRA', 'slug' => 'sinapra.dashboard.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat dashboard & ringkasan aset/ruangan'],
@@ -244,6 +263,9 @@ class PermissionSeeder extends Seeder
         $adminSarprasRole = Role::where('slug', 'admin_sarpras')->first();
         $calonMhsRole = Role::where('slug', 'calon_mhs')->first();
         $pimpinanRole = Role::where('slug', 'pimpinan')->first();
+        $adminKeuAkuntansiRole = Role::where('slug', 'admin_keuangan_akuntansi')->first();
+        $adminKeuPembayaranRole = Role::where('slug', 'admin_keuangan_pembayaran')->first();
+        $petugasKasKecilRole = Role::where('slug', 'petugas_kas_kecil')->first();
 
         // 1. Super Admin & Admin -> Semua permissions
         if ($superAdminRole) {
@@ -393,17 +415,75 @@ class PermissionSeeder extends Seeder
                 'simpeg.kinerja.update',
                 'sippm.dashboard.read',
                 'sikeu.dashboard.read',
+                'sikeu.tagihan.read',
+                'sikeu.akuntansi.read',
                 'sikeu.approval.read',
                 'sikeu.approval.approve',
                 'sikeu.approval.reject',
                 'sikeu.dispensasi.read',
                 'sikeu.dispensasi.approve',
                 'sikeu.dispensasi.reject',
+                'sikeu.pengajuan.read',
+                'sikeu.pengajuan.approve',
+                'sikeu.pengajuan.reject',
+                'sikeu.lpj.verify',
                 'sikeu.laporan.read',
             ];
             $perms = Permission::whereIn('slug', $pimpinanSlugs)->get();
             foreach ($perms as $p) {
                 RolePermission::create(['role_id' => $pimpinanRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 12. Admin Keuangan Akuntansi -> Jurnal, Buku Besar, COA, laporan, rekening
+        if ($adminKeuAkuntansiRole) {
+            $akuntansiSlugs = [
+                'sikeu.dashboard.read',
+                'sikeu.akuntansi.read',
+                'sikeu.akuntansi.manage',
+                'sikeu.laporan.read',
+                'sikeu.unitkas.read',
+                'sikeu.kas.manage',
+                'sikeu.pengeluaran.read',
+                'sikeu.pemasukan.read',
+                'sikeu.pajak.read',
+                'sikeu.kaskecil.read',
+                'sikeu.kaskecil.approve',
+            ];
+            $perms = Permission::whereIn('slug', $akuntansiSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::create(['role_id' => $adminKeuAkuntansiRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 13. Admin Keuangan Pembayaran Mahasiswa -> Tagihan, kasir, validasi, gateway
+        if ($adminKeuPembayaranRole) {
+            $pembayaranSlugs = [
+                'sikeu.dashboard.read',
+                'sikeu.tagihan.read',
+                'sikeu.tagihan.create',
+                'sikeu.dispensasi.read',
+                'sikeu.master.manage',
+                'sikeu.unitkas.read',
+                'sikeu.kas.manage',
+                'sikeu.paymentgateway.manage',
+            ];
+            $perms = Permission::whereIn('slug', $pembayaranSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::create(['role_id' => $adminKeuPembayaranRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 14. Petugas Kas Kecil -> lihat unit sendiri, input transaksi keluar, ajukan kas langsung
+        if ($petugasKasKecilRole) {
+            $petugasKasKecilSlugs = [
+                'sikeu.kaskecil.read',
+                'sikeu.kaskecil.transaksi',
+                'sikeu.kaskecil.pengajuan',
+            ];
+            $perms = Permission::whereIn('slug', $petugasKasKecilSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::create(['role_id' => $petugasKasKecilRole->id, 'permission_id' => $p->id]);
             }
         }
     }

@@ -207,7 +207,8 @@ class ExternalTagihanController extends Controller
             'tagihan.mahasiswa.programStudi',
             'tagihan.tipeTagihanMahasiswa',
             'tagihan.calonMahasiswa.programStudi',
-            'virtualAccount'
+            'virtualAccount',
+            'unitKas'
         ]);
 
         if ($request->filled('status')) {
@@ -230,6 +231,7 @@ class ExternalTagihanController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('kode_transaksi', 'like', "%{$search}%")
+                  ->orWhere('kode_unik', 'like', "%{$search}%")
                   ->orWhereHas('tagihan', function ($tq) use ($search) {
                       $tq->where('nomor_tagihan', 'like', "%{$search}%")
                          ->orWhere('mahasiswa_id', 'like', "%{$search}%")
@@ -291,8 +293,17 @@ class ExternalTagihanController extends Controller
                     'bank_nama' => $p->virtualAccount->bank_nama,
                 ] : null,
                 'jumlah_bayar' => (float)$p->jumlah_bayar,
+                'kode_unik' => $p->kode_unik !== null ? (int) $p->kode_unik : null,
+                'nominal_transfer' => (float)$p->jumlah_bayar + (int)($p->kode_unik ?? 0),
                 'waktu_bayar' => $p->waktu_bayar ? (is_object($p->waktu_bayar) && method_exists($p->waktu_bayar, 'format') ? $p->waktu_bayar->format('Y-m-d H:i:s') : (string)$p->waktu_bayar) : null,
                 'channel_bayar' => $p->channel_bayar,
+                'bank_pengirim' => $p->bank_pengirim,
+                'unit_kas' => $p->unitKas ? [
+                    'id' => $p->unitKas->id,
+                    'nama_kas' => $p->unitKas->nama_kas,
+                    'kanal' => $p->unitKas->kanal,
+                ] : null,
+                'bukti_bayar_url' => $p->bukti_bayar_path ? asset(\Illuminate\Support\Facades\Storage::url($p->bukti_bayar_path)) : null,
                 'status' => $p->status,
                 'catatan' => $p->catatan,
             ];

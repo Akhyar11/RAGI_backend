@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Sikeu;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Sikeu\UpdatePaymentGatewayConfigRequest;
 use App\Models\Sikeu\PaymentGatewayConfig;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,41 +36,64 @@ class PaymentGatewayConfigController extends Controller
     }
 
     /**
-     * Update or create a Payment Gateway config
+     * Update or create a Payment Gateway config.
+     *
+     * Catatan: 'bsn_h2h' adalah kanal paralel (BTN Syariah), bukan pengganti
+     * xendit/duitku — mengaktifkannya TIDAK menonaktifkan gateway lain.
      */
-    public function update(Request $request, $gatewayName)
+    public function update(UpdatePaymentGatewayConfigRequest $request, $gatewayName)
     {
-        $request->validate([
-            'environment' => 'required|in:sandbox,production',
-            'api_key' => 'required|string',
-            'public_key' => 'nullable|string',
-            'webhook_token' => 'nullable|string',
-            'is_active' => 'required|boolean',
-            'auto_disbursement_enabled' => 'required|boolean',
-            'account_validation_enabled' => 'required|boolean',
-            'max_disbursement_limit' => 'required|numeric',
-        ]);
+        $gatewayName = strtolower((string) $gatewayName);
+        $data = $request->validated();
 
         DB::beginTransaction();
         try {
-            // If this one is being set to active, deactivate all others
-            if ($request->is_active) {
-                PaymentGatewayConfig::where('gateway_name', '!=', $gatewayName)->update(['is_active' => false]);
+            // H2H berjalan paralel: jangan ubah status gateway lain.
+            // Gateway online (xendit/duitku) tetap saling eksklusif satu sama lain.
+            if ($request->boolean('is_active') && $gatewayName !== 'bsn_h2h') {
+                PaymentGatewayConfig::where('gateway_name', '!=', $gatewayName)
+                    ->where('gateway_name', '!=', 'bsn_h2h')
+                    ->update(['is_active' => false]);
+            }
+
+            $payload = [
+                'environment' => $data['environment'],
+                'is_active' => $data['is_active'] ?? false,
+                'updated_by' => auth()->id() ?? 1,
+            ];
+
+            if ($gatewayName === 'bsn_h2h') {
+                $payload += [
+                    'base_url' => $data['base_url'] ?? null,
+                    'server_location' => $data['server_location'] ?? null,
+                    'api_key_encrypted' => $data['api_key'] ?? null,
+                    'public_key_encrypted' => $data['public_key'] ?? null,
+                    'webhook_token_encrypted' => $data['webhook_token'] ?? null,
+                    'db_host' => $data['db_host'] ?? null,
+                    'db_port' => $data['db_port'] ?? 3306,
+                    'db_name' => $data['db_name'] ?? null,
+                    'db_username' => $data['db_username'] ?? null,
+                    'auto_disbursement_enabled' => $data['auto_disbursement_enabled'] ?? false,
+                    'account_validation_enabled' => $data['account_validation_enabled'] ?? false,
+                    'max_disbursement_limit' => $data['max_disbursement_limit'] ?? 0,
+                ];
+                if (array_key_exists('db_password', $data) && $data['db_password'] !== null && $data['db_password'] !== '') {
+                    $payload['db_password_encrypted'] = $data['db_password'];
+                }
+            } else {
+                $payload += [
+                    'api_key_encrypted' => $data['api_key'],
+                    'public_key_encrypted' => $data['public_key'] ?? null,
+                    'webhook_token_encrypted' => $data['webhook_token'] ?? null,
+                    'auto_disbursement_enabled' => $data['auto_disbursement_enabled'],
+                    'account_validation_enabled' => $data['account_validation_enabled'],
+                    'max_disbursement_limit' => $data['max_disbursement_limit'],
+                ];
             }
 
             $config = PaymentGatewayConfig::updateOrCreate(
                 ['gateway_name' => $gatewayName],
-                [
-                    'environment' => $request->environment,
-                    'api_key_encrypted' => $request->api_key,
-                    'public_key_encrypted' => $request->public_key,
-                    'webhook_token_encrypted' => $request->webhook_token,
-                    'is_active' => $request->is_active,
-                    'auto_disbursement_enabled' => $request->auto_disbursement_enabled,
-                    'account_validation_enabled' => $request->account_validation_enabled,
-                    'max_disbursement_limit' => $request->max_disbursement_limit,
-                    'updated_by' => auth()->id() ?? 1,
-                ]
+                $payload
             );
 
             DB::commit();
@@ -89,10 +113,19 @@ class PaymentGatewayConfigController extends Controller
     }
 
     /**
-     * Get balance for a specific payment gateway
+     * Get balance for a specific payment gateway.
+     * H2H BTN Syariah tidak punya konsep saldo gateway — gunakan GET /h2h/status
+     * untuk diagnostik konektivitas bridge.
      */
     public function balance($gatewayName)
     {
+        if (strtolower((string) $gatewayName) === 'bsn_h2h') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'H2H BTN Syariah tidak memiliki saldo gateway. Gunakan GET /api/v1/sikeu/h2h/status untuk diagnostik bridge.',
+            ], 422);
+        }
+
         $config = PaymentGatewayConfig::where('gateway_name', $gatewayName)->first();
         if (!$config) {
             return response()->json(['status' => 'error', 'message' => 'Config not found'], 404);

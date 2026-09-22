@@ -7,6 +7,8 @@ use App\Http\Controllers\API\Siakad\AkademikController;
 use App\Http\Controllers\API\Siakad\PerkuliahanController;
 use App\Http\Controllers\API\Siakad\ObeController;
 use App\Http\Controllers\API\Siakad\MahasiswaBeasiswaController;
+use App\Http\Controllers\API\Siakad\StatusAkademikController;
+use App\Http\Controllers\API\Siakad\KelulusanController;
 
 /*
 |--------------------------------------------------------------------------
@@ -89,6 +91,10 @@ Route::prefix('akademik')->group(function () {
     Route::post('/dosen', [AkademikController::class, 'storeDosen']);
     Route::put('/dosen/{id}', [AkademikController::class, 'updateDosen']);
     Route::delete('/dosen/{id}', [AkademikController::class, 'destroyDosen']);
+
+    Route::get('/prasyarat-mk', [AkademikController::class, 'listPrasyaratMk']);
+    Route::post('/prasyarat-mk', [AkademikController::class, 'storePrasyaratMk']);
+    Route::delete('/prasyarat-mk/{id}', [AkademikController::class, 'destroyPrasyaratMk']);
 });
 
 // --- Perkuliahan (Kelas, KRS, Nilai, Transkrip) ---
@@ -118,6 +124,25 @@ Route::prefix('perkuliahan')->group(function () {
     Route::post('/kelas/{kelasId}/pertemuan', [PerkuliahanController::class, 'storePertemuan']);
     Route::get('/pertemuan/{pertemuanId}/absensi', [PerkuliahanController::class, 'listAbsensi']);
     Route::post('/pertemuan/{pertemuanId}/absensi', [PerkuliahanController::class, 'storeAbsensi']);
+    Route::get('/kelas/{kelasId}/rekap-absensi', [StatusAkademikController::class, 'rekapAbsensi']);
+    Route::get('/khs', [StatusAkademikController::class, 'listKhs']);
+    Route::patch('/khs/{id}/lock', [StatusAkademikController::class, 'lockKhs']);
+});
+
+// --- Status Akademik & Cuti ---
+Route::prefix('status')->group(function () {
+    Route::get('/cuti', [StatusAkademikController::class, 'listCuti']);
+    Route::post('/cuti', [StatusAkademikController::class, 'storeCuti']);
+    Route::patch('/cuti/{id}/proses', [StatusAkademikController::class, 'prosesCuti']);
+    Route::get('/log', [StatusAkademikController::class, 'listStatusLog']);
+});
+
+// --- Kelulusan / Yudisium ---
+Route::prefix('kelulusan')->group(function () {
+    Route::get('/', [KelulusanController::class, 'index']);
+    Route::get('/sensing', [KelulusanController::class, 'sensing']);
+    Route::get('/cek-syarat/{mahasiswaId}', [KelulusanController::class, 'cekSyarat']);
+    Route::post('/', [KelulusanController::class, 'store']);
 });
 
 // --- OBE (Outcome-Based Education) Endpoints ---

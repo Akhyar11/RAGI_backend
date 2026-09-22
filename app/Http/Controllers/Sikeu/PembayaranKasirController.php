@@ -9,9 +9,6 @@ use App\Models\Sikeu\SettingTarif;
 use App\Models\Sikeu\MasterBiaya;
 use App\Models\Sikeu\DetailTagihan;
 use App\Models\Sikeu\MahasiswaTipeTagihan;
-use App\Models\Sikeu\JurnalUmum;
-use App\Models\Sikeu\DetailJurnalUmum;
-use App\Models\Sikeu\AkunKeuangan;
 use App\Models\Sikeu\PeriodeAkuntansi;
 use App\Models\Sikeu\PotonganTagihan;
 use Illuminate\Http\Request;
@@ -33,6 +30,7 @@ class PembayaranKasirController extends Controller
             'tagihan_ids.*' => 'integer|exists:sikeu_tagihan_mahasiswa,id',
             'jumlah_bayar' => 'required|numeric|min:1',
             'channel_bayar' => 'required|in:LOKET_TUNAI,LOKET_TRANSFER',
+            'unit_kas_id' => 'nullable|integer|exists:sikeu_unit_kas,id',
             'potongan' => 'nullable|numeric|min:0',
             'alasan_potongan' => 'nullable|string|max:255',
             'catatan' => 'nullable|string|max:500',
@@ -64,7 +62,7 @@ class PembayaranKasirController extends Controller
         try {
             DB::beginTransaction();
 
-            $tagihans = TagihanMahasiswa::with('details')
+            $tagihans = TagihanMahasiswa::with(['details.masterBiaya'])
                 ->whereIn('id', $targetTagihanIds)
                 ->orderBy('id', 'asc')
                 ->get();
@@ -117,10 +115,23 @@ class PembayaranKasirController extends Controller
             // Generate kode transaksi unik kasir loket (shared batch code for kuitansi)
             $batchKodeTransaksi = 'TRX-LOKET-' . date('Ymd') . '-' . strtoupper(Str::random(5));
 
+            // Unit kas penerima: eksplisit dari kasir, atau resolve dari channel
+            $unitKasKasir = null;
+            if ($request->filled('unit_kas_id')) {
+                $unitKasKasir = \App\Models\Sikeu\UnitKas::find($request->unit_kas_id);
+            }
+            if (!$unitKasKasir) {
+                $unitKasKasir = \App\Services\Sikeu\JurnalSikeuService::resolveUnitKasUntukChannel(
+                    $request->channel_bayar === 'LOKET_TUNAI' ? 'TUNAI' : 'LOKET_TRANSFER',
+                    null
+                );
+            }
+
             $remainingBayar = (float)$request->jumlah_bayar;
             $remainingPotongan = $potonganTambahanTotal;
             $processedPembayarans = [];
             $paidBillNumbers = [];
+            $rincianAlokasi = [];
             $totalSisaAkhir = 0;
 
             $allocationIndex = 0;
@@ -140,6 +151,8 @@ class PembayaranKasirController extends Controller
                     ]);
                     $tagihan->total_potongan = (float)$tagihan->total_potongan + $potonganItem;
                     $tagihan->save();
+                    // Jurnal potongan: Dr Beban Beasiswa & Potongan / Cr Piutang
+                    \App\Services\Sikeu\JurnalSikeuService::jurnalPotongan($tagihan, $potonganItem, $request->alasan_potongan ?? 'Potongan Kasir Loket');
                     $remainingPotongan -= $potonganItem;
                     $currentSisa = max(0, $currentSisa - $potonganItem);
                 }
@@ -151,6 +164,7 @@ class PembayaranKasirController extends Controller
                     $kodeTransaksi = $batchKodeTransaksi . '-' . $allocationIndex;
                     $pembayaran = Pembayaran::create([
                         'tagihan_id' => $tagihan->id,
+                        'unit_kas_id' => $unitKasKasir?->id,
                         'jumlah_bayar' => $alokasiBayar,
                         'waktu_bayar' => now(),
                         'channel_bayar' => $request->channel_bayar,
@@ -158,6 +172,10 @@ class PembayaranKasirController extends Controller
                         'kode_transaksi' => $kodeTransaksi,
                         'diverifikasi_oleh' => auth()->id(),
                     ]);
+
+                    if ($unitKasKasir) {
+                        $unitKasKasir->increment('saldo_saat_ini', $alokasiBayar);
+                    }
 
                     $newTotalBayar = (float)$tagihan->total_bayar + $alokasiBayar;
                     $totalBersihBaru = (float)($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan);
@@ -168,9 +186,20 @@ class PembayaranKasirController extends Controller
                         'status' => $newStatus,
                     ]);
 
-                    // Auto Jurnal Akuntansi
+                    // Alokasikan pembayaran ke rincian komponen secara FIFO + siapkan rekap per komponen
+                    \App\Models\Sikeu\DetailTagihan::alokasikan($tagihan, $alokasiBayar);
+                    $rincianAlokasi[$tagihan->nomor_tagihan] = $tagihan->details->sortBy('id')->map(function ($d) {
+                        return [
+                            'komponen' => $d->keterangan ?: ($d->masterBiaya->nama ?? 'Komponen Biaya'),
+                            'nominal' => (float) $d->nominal_bersih,
+                            'terbayar' => (float) $d->terbayar,
+                            'sisa' => max(0, (float) $d->nominal_bersih - (float) $d->terbayar),
+                        ];
+                    })->values()->all();
+
+                    // Auto Jurnal Akuntansi (akrual: Dr Kas/Bank kanal / Cr Piutang)
                     if ($alokasiBayar > 0) {
-                        $this->createAutoJurnal($pembayaran, $request->channel_bayar, $tagihan);
+                        \App\Services\Sikeu\JurnalSikeuService::jurnalPembayaranKasir($pembayaran, $request->channel_bayar, $tagihan, $unitKasKasir);
                     }
 
                     $remainingBayar -= $alokasiBayar;
@@ -200,6 +229,7 @@ class PembayaranKasirController extends Controller
                         'nomor_tagihan_list' => $paidBillNumbers,
                         'jumlah_bayar' => (float)$request->jumlah_bayar,
                         'potongan_tambahan' => $potonganTambahanTotal,
+                        'rincian_komponen' => $rincianAlokasi,
                         'channel' => $request->channel_bayar,
                         'sisa_setelah_bayar' => $totalSisaAkhir,
                         'status_tagihan' => $totalSisaAkhir <= 0 ? 'lunas' : 'sebagian',
@@ -216,6 +246,133 @@ class PembayaranKasirController extends Controller
                 'message' => 'Gagal memproses pembayaran: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * POST /api/v1/sikeu/pembayaran/{id}/approve-manual
+     * Keuangan menyetujui bukti transfer manual mahasiswa:
+     * tagihan terupdate, saldo unit kas bertambah, jurnal Dr Kas kanal / Cr Piutang.
+     */
+    public function approveManual(Request $request, $id)
+    {
+        $request->validate(['catatan' => 'nullable|string|max:500']);
+
+        $pembayaran = Pembayaran::with(['tagihan', 'unitKas'])->findOrFail($id);
+        if ($pembayaran->status !== 'pending' || $pembayaran->channel_bayar !== 'MANUAL_TRANSFER') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Hanya bukti transfer manual berstatus pending yang bisa disetujui.',
+            ], 422);
+        }
+
+        $today = now()->toDateString();
+        $periodeTutup = PeriodeAkuntansi::where('status', 'ditutup')
+            ->where('tanggal_mulai', '<=', $today)
+            ->where('tanggal_selesai', '>=', $today)
+            ->first();
+        if ($periodeTutup) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Periode akuntansi \"{$periodeTutup->nama_periode}\" sudah ditutup. Tidak dapat memvalidasi transaksi.",
+            ], 403);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $tagihan = $pembayaran->tagihan;
+            $totalBersih = (float)($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan);
+            $sisa = max(0, $totalBersih - (float)$tagihan->total_bayar);
+            if ((float)$pembayaran->jumlah_bayar > $sisa + 100) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Nominal bukti melebihi sisa tagihan terkini. Tolak dan minta bukti baru.',
+                ], 422);
+            }
+
+            $newTotalBayar = (float)$tagihan->total_bayar + (float)$pembayaran->jumlah_bayar;
+            $newStatus = $newTotalBayar >= $totalBersih ? 'lunas' : ($newTotalBayar > 0 ? 'sebagian' : 'belum_bayar');
+            $tagihan->update(['total_bayar' => $newTotalBayar, 'status' => $newStatus]);
+            \App\Models\Sikeu\DetailTagihan::alokasikan($tagihan, (float)$pembayaran->jumlah_bayar);
+
+            $unitKas = $pembayaran->unitKas;
+            if ($unitKas) {
+                $unitKas->increment('saldo_saat_ini', (float)$pembayaran->jumlah_bayar);
+            }
+
+            \App\Services\Sikeu\JurnalSikeuService::jurnalPembayaranKasir($pembayaran, 'MANUAL_TRANSFER', $tagihan, $unitKas);
+
+            $pembayaran->update([
+                'status' => 'success',
+                'diverifikasi_oleh' => auth()->id(),
+                'catatan' => $request->catatan ?? $pembayaran->catatan,
+            ]);
+
+            \App\Services\AuditLogService::record(
+                module: 'SIKEU',
+                action: 'approve',
+                tableName: 'sikeu_pembayaran',
+                recordId: $pembayaran->id,
+                oldValues: ['status' => 'pending'],
+                newValues: ['status' => 'success', 'tagihan_status' => $newStatus],
+                request: $request,
+            );
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Bukti disetujui. Tagihan {$tagihan->nomor_tagihan} kini {$newStatus}.",
+                'data' => $pembayaran->fresh(['tagihan', 'unitKas']),
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Approve manual gagal: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal menyetujui: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * POST /api/v1/sikeu/pembayaran/{id}/reject-manual
+     * Keuangan menolak bukti transfer manual (dana tidak ditemukan di rekening).
+     */
+    public function rejectManual(Request $request, $id)
+    {
+        $request->validate(['catatan' => 'required|string|min:5|max:500']);
+
+        $pembayaran = Pembayaran::findOrFail($id);
+        if ($pembayaran->status !== 'pending' || $pembayaran->channel_bayar !== 'MANUAL_TRANSFER') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Hanya bukti transfer manual berstatus pending yang bisa ditolak.',
+            ], 422);
+        }
+
+        $pembayaran->update([
+            'status' => 'rejected',
+            'diverifikasi_oleh' => auth()->id(),
+            'catatan' => $request->catatan,
+        ]);
+
+        \App\Services\AuditLogService::record(
+            module: 'SIKEU',
+            action: 'reject',
+            tableName: 'sikeu_pembayaran',
+            recordId: $pembayaran->id,
+            oldValues: ['status' => 'pending'],
+            newValues: ['status' => 'rejected'],
+            request: $request,
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Bukti transfer ditolak. Mahasiswa dapat mengunggah ulang.',
+            'data' => $pembayaran->fresh(),
+        ]);
     }
 
     /**
@@ -278,6 +435,8 @@ class PembayaranKasirController extends Controller
 
                 foreach ($kasirPotongans as $kp) {
                     $tagihan->total_potongan = max(0, (float)$tagihan->total_potongan - (float)$kp->nominal_potongan);
+                    // Pembalik jurnal potongan: Dr Piutang / Cr Beban
+                    \App\Services\Sikeu\JurnalSikeuService::jurnalPembatalanPotongan($tagihan, (float)$kp->nominal_potongan, 'Koreksi ' . $pembayaran->kode_transaksi);
                     $kp->delete();
                 }
             }
@@ -298,8 +457,11 @@ class PembayaranKasirController extends Controller
                 'status' => $newStatus,
             ]);
 
-            // Create reversal jurnal
-            $this->createReversalJurnal($pembayaran, $request->alasan_koreksi);
+            // Kembalikan alokasi per komponen secara LIFO
+            \App\Models\Sikeu\DetailTagihan::kurangi($tagihan, (float)$pembayaran->jumlah_bayar);
+
+            // Create reversal jurnal (akrual: Dr Piutang / Cr Kas)
+            \App\Services\Sikeu\JurnalSikeuService::jurnalKoreksiPembayaran($pembayaran, $request->alasan_koreksi);
 
             DB::commit();
 
@@ -738,109 +900,6 @@ class PembayaranKasirController extends Controller
     /**
      * Helper: Create auto journal entry for a payment.
      */
-    private function createAutoJurnal(Pembayaran $pembayaran, string $channel, TagihanMahasiswa $tagihan)
-    {
-        $isTunai = in_array(strtoupper($channel), ['LOKET_TUNAI', 'TUNAI', 'CASH']);
-        $kodeKas = $isTunai ? '101.01' : '102.01';
-        $akunKas = AkunKeuangan::where('kode_akun', $kodeKas)->first() ?? AkunKeuangan::where('kelompok', 'aset')->first();
-
-        $sourceSystem = strtoupper($tagihan->source_system ?? 'SIAKAD');
-        $kodePendapatan = ($sourceSystem === 'SPMB') ? '401.02' : '401.01';
-        $akunPendapatan = AkunKeuangan::where('kode_akun', $kodePendapatan)->first() ?? AkunKeuangan::where('kelompok', 'pendapatan')->first();
-
-        if (!$akunKas || !$akunPendapatan) {
-            return; // Skip if COA not configured
-        }
-
-        $nomorJurnal = 'JRN-PAY-' . date('Ymd') . '-' . strtoupper(Str::random(4));
-        $channelLabel = $isTunai ? 'Tunai Loket Kasir' : 'Transfer Bank (Non-Tunai)';
-
-        $jurnal = JurnalUmum::create([
-            'nomor_jurnal' => $nomorJurnal,
-            'tanggal_jurnal' => now()->toDateString(),
-            'jenis_sumber' => 'pembayaran_mahasiswa',
-            'referensi_id' => $pembayaran->id,
-            'keterangan' => "Pembayaran {$channelLabel} - {$tagihan->nomor_tagihan}",
-            'status_posting' => 'posted',
-            'total_debet' => $pembayaran->jumlah_bayar,
-            'total_kredit' => $pembayaran->jumlah_bayar,
-            'created_by' => auth()->id(),
-            'posted_by' => auth()->id(),
-            'posted_at' => now(),
-        ]);
-
-        // Debet: Kas Utama / Bank
-        DetailJurnalUmum::create([
-            'jurnal_id' => $jurnal->id,
-            'akun_id' => $akunKas->id,
-            'debet' => $pembayaran->jumlah_bayar,
-            'kredit' => 0,
-            'keterangan' => "Penerimaan {$channelLabel} pembayaran mahasiswa",
-        ]);
-
-        // Kredit: Pendapatan UKT/SPP atau SPMB
-        DetailJurnalUmum::create([
-            'jurnal_id' => $jurnal->id,
-            'akun_id' => $akunPendapatan->id,
-            'debet' => 0,
-            'kredit' => $pembayaran->jumlah_bayar,
-            'keterangan' => "Pengakuan pendapatan {$akunPendapatan->nama_akun}",
-        ]);
-    }
-
-    /**
-     * Helper: Create reversal journal entry.
-     */
-    private function createReversalJurnal(Pembayaran $pembayaran, string $alasan)
-    {
-        $channel = $pembayaran->channel_bayar ?? 'LOKET_TUNAI';
-        $isTunai = in_array(strtoupper($channel), ['LOKET_TUNAI', 'TUNAI', 'CASH']);
-        $kodeKas = $isTunai ? '101.01' : '102.01';
-        $akunKas = AkunKeuangan::where('kode_akun', $kodeKas)->first() ?? AkunKeuangan::where('kelompok', 'aset')->first();
-
-        $sourceSystem = strtoupper($pembayaran->tagihan?->source_system ?? 'SIAKAD');
-        $kodePendapatan = ($sourceSystem === 'SPMB') ? '401.02' : '401.01';
-        $akunPendapatan = AkunKeuangan::where('kode_akun', $kodePendapatan)->first() ?? AkunKeuangan::where('kelompok', 'pendapatan')->first();
-
-        if (!$akunKas || !$akunPendapatan) {
-            return;
-        }
-
-        $nomorJurnal = 'JRN-REV-' . date('Ymd') . '-' . strtoupper(Str::random(4));
-
-        $jurnal = JurnalUmum::create([
-            'nomor_jurnal' => $nomorJurnal,
-            'tanggal_jurnal' => now()->toDateString(),
-            'jenis_sumber' => 'penyesuaian',
-            'referensi_id' => $pembayaran->id,
-            'keterangan' => "KOREKSI PEMBATALAN: {$pembayaran->kode_transaksi} - {$alasan}",
-            'status_posting' => 'posted',
-            'total_debet' => $pembayaran->jumlah_bayar,
-            'total_kredit' => $pembayaran->jumlah_bayar,
-            'created_by' => auth()->id(),
-            'posted_by' => auth()->id(),
-            'posted_at' => now(),
-        ]);
-
-        // Reverse: Debet Pendapatan (cancel revenue)
-        DetailJurnalUmum::create([
-            'jurnal_id' => $jurnal->id,
-            'akun_id' => $akunPendapatan->id,
-            'debet' => $pembayaran->jumlah_bayar,
-            'kredit' => 0,
-            'keterangan' => "Pembalik pendapatan - koreksi " . $pembayaran->kode_transaksi,
-        ]);
-
-        // Reverse: Kredit Kas (return cash)
-        DetailJurnalUmum::create([
-            'jurnal_id' => $jurnal->id,
-            'akun_id' => $akunKas->id,
-            'debet' => 0,
-            'kredit' => $pembayaran->jumlah_bayar,
-            'keterangan' => "Pengembalian kas - koreksi " . $pembayaran->kode_transaksi,
-        ]);
-    }
-
     /**
      * GET /api/v1/sikeu/mahasiswa/{id}/unpaid-bills
      * Get all active/unpaid bills for a specific student (Siakad or SPMB Calon Mahasiswa).
@@ -935,6 +994,8 @@ class PembayaranKasirController extends Controller
                     'nominal' => (float)$d->nominal,
                     'potongan' => (float)$d->potongan,
                     'nominal_bersih' => (float)$d->nominal_bersih,
+                    'terbayar' => (float)$d->terbayar,
+                    'sisa' => max(0, (float)$d->nominal_bersih - (float)$d->terbayar),
                     'keterangan' => $d->keterangan ?? ($d->masterBiaya->nama ?? 'Biaya Kuliah'),
                 ]),
             ];
@@ -1115,6 +1176,12 @@ class PembayaranKasirController extends Controller
                 ]);
             }
 
+            // Distribusikan pembayaran langsung ke rincian komponen secara FIFO
+            DetailTagihan::alokasikan($tagihan, $jumlahBayar);
+
+            // Jurnal akrual penerbitan (Dr Piutang / Cr Pendapatan) + pelunasan (Dr Kas / Cr Piutang)
+            \App\Services\Sikeu\JurnalSikeuService::jurnalPenerbitanTagihan($tagihan);
+
             // 3. Potongan jika ada
             if ($potongan > 0) {
                 PotonganTagihan::create([
@@ -1140,8 +1207,8 @@ class PembayaranKasirController extends Controller
                 'diverifikasi_oleh' => auth()->id(),
             ]);
 
-            // 5. Buat Jurnal Akuntansi Otomatis
-            $this->createAutoJurnal($pembayaran, $request->channel_bayar, $tagihan);
+            // 5. Buat Jurnal Akuntansi Otomatis (akrual: Dr Kas/Bank / Cr Piutang)
+            \App\Services\Sikeu\JurnalSikeuService::jurnalPembayaranKasir($pembayaran, $request->channel_bayar, $tagihan);
 
             DB::commit();
 

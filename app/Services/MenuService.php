@@ -75,33 +75,30 @@ class MenuService
                               $pq->whereIn('slug', $permissionSlugs);
                           });
                 })
-                // 2. ATAU root menu tanpa permission_id tetapi memiliki role yang cocok
+                // 2. ATAU root menu memiliki role yang cocok di tabel pivot menu_roles
                 ->orWhere(function($roleQ) use ($roleIds) {
-                    $roleQ->whereNull('permission_id')
-                          ->whereHas('roles', function($rq) use ($roleIds) {
-                              $rq->whereIn('core_roles.id', $roleIds);
-                          });
+                    $roleQ->whereHas('roles', function($rq) use ($roleIds) {
+                        $rq->whereIn('core_roles.id', $roleIds);
+                    });
                 })
-                // 3. ATAU root menu adalah grup hierarki yang memiliki child yang berizin
+                // 3. ATAU root menu adalah grup hierarki yang memiliki child aktif yang berizin bagi user
                 ->orWhere(function($grp) use ($roleIds, $permissionSlugs) {
-                    $grp->whereNull('permission_id')
-                        ->whereHas('children', function($cq) use ($roleIds, $permissionSlugs) {
-                            $cq->where('is_active', true)
-                               ->where(function($subQ) use ($roleIds, $permissionSlugs) {
-                                   $subQ->where(function($sp) use ($permissionSlugs) {
-                                       $sp->whereNotNull('permission_id')
-                                          ->whereHas('permission', function($pq) use ($permissionSlugs) {
-                                              $pq->whereIn('slug', $permissionSlugs);
-                                          });
-                                   })
-                                   ->orWhere(function($sr) use ($roleIds) {
-                                       $sr->whereNull('permission_id')
-                                          ->whereHas('roles', function($rq) use ($roleIds) {
-                                              $rq->whereIn('core_roles.id', $roleIds);
-                                          });
+                    $grp->whereHas('children', function($cq) use ($roleIds, $permissionSlugs) {
+                        $cq->where('is_active', true)
+                           ->where(function($subQ) use ($roleIds, $permissionSlugs) {
+                               $subQ->where(function($sp) use ($permissionSlugs) {
+                                   $sp->whereNotNull('permission_id')
+                                      ->whereHas('permission', function($pq) use ($permissionSlugs) {
+                                          $pq->whereIn('slug', $permissionSlugs);
+                                      });
+                               })
+                               ->orWhere(function($sr) use ($roleIds) {
+                                   $sr->whereHas('roles', function($rq) use ($roleIds) {
+                                       $rq->whereIn('core_roles.id', $roleIds);
                                    });
                                });
-                        });
+                           });
+                    });
                 });
             });
         }

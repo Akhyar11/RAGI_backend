@@ -23,15 +23,25 @@ class PemasukanKampusController extends Controller
     {
         $query = PemasukanKampus::with(['unitKas', 'akunPendapatan']);
 
-        if ($request->has('sumber')) {
+        if ($request->filled('sumber')) {
             $query->where('sumber_pemasukan', $request->sumber);
         }
 
-        $data = $query->orderBy('tanggal_terima', 'desc')->paginate($request->input('per_page', 15));
+        $perPage = min(100, $request->integer('per_page', 15));
+        $data = $query->orderBy('tanggal_terima', 'desc')->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
-            'data' => $data
+            'message' => 'Data pemasukan kampus berhasil dimuat',
+            'data' => $data->items(),
+            'meta' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem(),
+            ],
         ]);
     }
 
@@ -72,8 +82,7 @@ class PemasukanKampusController extends Controller
             $akunPendapatan = AkunKeuangan::where('kode_akun', $akunKode)->first()
                 ?? AkunKeuangan::where('kelompok', 'pendapatan')->first();
 
-            $akunKas = AkunKeuangan::where('kode_akun', '102.01')->first()
-                ?? AkunKeuangan::where('kelompok', 'aset')->first();
+            $akunKas = \App\Services\Sikeu\JurnalSikeuService::akunKasUnit($unitKas, '102.01');
 
             $nomorTransaksi = 'INC-' . strtoupper($request->sumber_pemasukan) . '-' . date('Ymd') . '-' . Str::random(4);
             $nominal = (float) $request->nominal;
@@ -100,7 +109,7 @@ class PemasukanKampusController extends Controller
             // Auto-journal entry (Debet Bank, Kredit Pendapatan)
             if ($akunKas && $akunPendapatan) {
                 $jurnal = JurnalUmum::create([
-                    'nomor_jurnal' => 'JRN-INC-' . date('Ymd') . '-' . Str::random(4),
+                    'nomor_jurnal' => \App\Services\Sikeu\JurnalSikeuService::prefix('pemasukan') . '-' . date('Ymd') . '-' . Str::random(4),
                     'tanggal_jurnal' => $request->tanggal_terima,
                     'jenis_sumber' => 'pemasukan_hibah',
                     'referensi_id' => $pemasukan->id,

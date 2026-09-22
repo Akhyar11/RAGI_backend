@@ -64,6 +64,23 @@ return [
             ]) : [],
         ],
 
+        // Koneksi baca ke database bridge H2H BTN Syariah (Go, va_billings).
+        // Kredensial via H2H_DB_* di .env; sync polling di BsnH2hService.
+        'mysql_h2h' => [
+            'driver' => 'mysql',
+            'host' => env('H2H_DB_HOST', '127.0.0.1'),
+            'port' => env('H2H_DB_PORT', '3306'),
+            'database' => env('H2H_DB_DATABASE', 'sikeudb'),
+            'username' => env('H2H_DB_USERNAME', 'root'),
+            'password' => env('H2H_DB_PASSWORD', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+        ],
+
         'mysql_demo' => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),

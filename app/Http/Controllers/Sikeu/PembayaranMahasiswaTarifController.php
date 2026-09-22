@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Sikeu;
 
 use App\Http\Controllers\Controller;
+use App\Services\AuditLogService;
+use App\Services\Sikeu\JurnalSikeuService;
 use App\Models\Sikeu\DetailTagihan;
 use App\Models\Sikeu\MasterBiaya;
 use App\Models\Sikeu\Pembayaran;
@@ -49,6 +51,14 @@ class PembayaranMahasiswaTarifController extends Controller
             }
         }
 
+        // Filter Semester (khusus semester tertentu atau umum semua semester)
+        if ($request->has('semester') && $request->semester !== '' && $request->semester !== 'all') {
+            if ($request->semester === 'global' || $request->semester === 'null') {
+                $query->whereNull('semester');
+            } else {
+                $query->where('semester', (int)$request->semester);
+            }
+        }
         // Filter Status Aktif
         if ($request->has('is_active') && $request->is_active !== '') {
             $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
@@ -71,7 +81,7 @@ class PembayaranMahasiswaTarifController extends Controller
         }
 
         // Pengurutan (Sorting)
-        $allowedSortColumns = ['id', 'created_at', 'tahun_angkatan', 'nominal'];
+        $allowedSortColumns = ['id', 'created_at', 'tahun_angkatan', 'semester', 'nominal'];
         $sortBy = in_array($request->sort_by, $allowedSortColumns) ? $request->sort_by : 'id';
         $sortOrder = strtolower($request->sort_order) === 'asc' ? 'asc' : 'desc';
 
@@ -101,6 +111,7 @@ class PembayaranMahasiswaTarifController extends Controller
                 'master_biaya_id' => $request->master_biaya_id,
                 'tahun_angkatan' => $request->tahun_angkatan,
                 'program_studi_id' => $request->program_studi_id,
+                'semester' => $request->semester,
                 'is_active' => $request->is_active,
                 'search' => $request->search,
             ],
@@ -117,6 +128,7 @@ class PembayaranMahasiswaTarifController extends Controller
             'master_biaya_id' => 'required|integer|exists:sikeu_master_biaya,id',
             'tahun_angkatan' => 'required|integer|min:2000|max:2050',
             'program_studi_id' => 'nullable|integer|exists:spmb_master_program_studi,id',
+            'semester' => 'nullable|integer|min:1|max:14',
             'nominal' => 'required|numeric|min:0',
             'keterangan' => 'nullable|string|max:500',
             'is_active' => 'nullable|boolean',
@@ -133,14 +145,28 @@ class PembayaranMahasiswaTarifController extends Controller
         $prodiId = $request->filled('program_studi_id') ? (int)$request->program_studi_id : null;
         $tahunAngkatan = (int)$request->tahun_angkatan;
         $masterBiayaId = (int)$request->master_biaya_id;
+        // Semester null = berlaku semua semester; angka = hanya semester tersebut
+        // (misal biaya lab/magang hanya semester 3 dan 5).
+        $semester = $request->filled('semester') ? (int)$request->semester : null;
 
-        // Rule 1: Jika sudah ada tarif aktif untuk "Semua Program Studi" (Global) pada komponen & angkatan ini,
-        // maka tarif global sudah mencakup seluruh kampus -> dilarang menginputkan tarif baru lagi.
-        $globalActiveExists = SettingTarif::where('master_biaya_id', $masterBiayaId)
+        // Cakupan semester bertabrakan bila salah satunya umum (null) atau sama.
+        // Tarif baru "semua semester" (null) selalu bertabrakan dengan yang ada.
+        $scopeSemester = function ($query) use ($semester) {
+            if ($semester !== null) {
+                $query->where(function ($q) use ($semester) {
+                    $q->whereNull('semester')->orWhere('semester', $semester);
+                });
+            }
+        };
+
+        // Rule 1: Jika sudah ada tarif aktif untuk "Semua Program Studi" (Global) pada komponen,
+        // angkatan, dan cakupan semester ini, maka tarif global sudah mencakup -> dilarang input baru.
+        $globalQuery = SettingTarif::where('master_biaya_id', $masterBiayaId)
             ->where('tahun_angkatan', $tahunAngkatan)
             ->whereNull('program_studi_id')
-            ->where('is_active', true)
-            ->exists();
+            ->where('is_active', true);
+        $scopeSemester($globalQuery);
+        $globalActiveExists = $globalQuery->exists();
 
         if ($globalActiveExists) {
             return response()->json([
@@ -152,11 +178,12 @@ class PembayaranMahasiswaTarifController extends Controller
         // Rule 2: Jika user memilih "Semua Program Studi" (Global),
         // pastikan belum ada tarif spesifik per prodi yang aktif untuk komponen & angkatan ini.
         if ($prodiId === null) {
-            $prodiTarifActiveExists = SettingTarif::where('master_biaya_id', $masterBiayaId)
+            $prodiQuery = SettingTarif::where('master_biaya_id', $masterBiayaId)
                 ->where('tahun_angkatan', $tahunAngkatan)
                 ->whereNotNull('program_studi_id')
-                ->where('is_active', true)
-                ->exists();
+                ->where('is_active', true);
+            $scopeSemester($prodiQuery);
+            $prodiTarifActiveExists = $prodiQuery->exists();
 
             if ($prodiTarifActiveExists) {
                 return response()->json([
@@ -166,7 +193,7 @@ class PembayaranMahasiswaTarifController extends Controller
             }
         }
 
-        // Rule 3: Cek duplikasi kombinasi tepat (master_biaya_id + tahun_angkatan + program_studi_id)
+        // Rule 3: Cek duplikasi kombinasi tepat (master_biaya_id + tahun_angkatan + program_studi_id + semester)
         $existsQuery = SettingTarif::where('master_biaya_id', $masterBiayaId)
             ->where('tahun_angkatan', $tahunAngkatan);
 
@@ -174,6 +201,12 @@ class PembayaranMahasiswaTarifController extends Controller
             $existsQuery->whereNull('program_studi_id');
         } else {
             $existsQuery->where('program_studi_id', $prodiId);
+        }
+
+        if ($semester === null) {
+            $existsQuery->whereNull('semester');
+        } else {
+            $existsQuery->where('semester', $semester);
         }
 
         if ($existsQuery->exists()) {
@@ -187,7 +220,7 @@ class PembayaranMahasiswaTarifController extends Controller
             'master_biaya_id' => $masterBiayaId,
             'tahun_angkatan' => $tahunAngkatan,
             'program_studi_id' => $prodiId,
-            'semester' => null, // Berlaku umum / tahunan sesuai komponen
+            'semester' => $semester,
             'jalur_kelas' => 'Reguler', // Default background agar kompatibel
             'nominal' => $request->nominal,
             'is_active' => $request->boolean('is_active', true),
@@ -229,6 +262,7 @@ class PembayaranMahasiswaTarifController extends Controller
             'master_biaya_id' => 'sometimes|required|integer|exists:sikeu_master_biaya,id',
             'tahun_angkatan' => 'sometimes|required|integer|min:2000|max:2050',
             'program_studi_id' => 'nullable|integer|exists:spmb_master_program_studi,id',
+            'semester' => 'nullable|integer|min:1|max:14',
             'nominal' => 'sometimes|required|numeric|min:0',
             'keterangan' => 'nullable|string|max:500',
             'is_active' => 'nullable|boolean',
@@ -247,10 +281,21 @@ class PembayaranMahasiswaTarifController extends Controller
         $newProdiId = $request->has('program_studi_id')
             ? ($request->filled('program_studi_id') ? (int)$request->program_studi_id : null)
             : $item->program_studi_id;
+        $newSemester = $request->has('semester')
+            ? ($request->filled('semester') ? (int)$request->semester : null)
+            : $item->semester;
         $newIsActive = $request->has('is_active') ? $request->boolean('is_active') : $item->is_active;
 
+        $semesterOverlap = function ($query) use ($newSemester) {
+            if ($newSemester !== null) {
+                $query->where(function ($q) use ($newSemester) {
+                    $q->whereNull('semester')->orWhere('semester', $newSemester);
+                });
+            }
+        };
+
         // Cek duplikasi kombinasi jika kombinasi berubah
-        if ($newBiayaId !== $item->master_biaya_id || $newAngkatan !== $item->tahun_angkatan || $newProdiId !== $item->program_studi_id) {
+        if ($newBiayaId !== $item->master_biaya_id || $newAngkatan !== $item->tahun_angkatan || $newProdiId !== $item->program_studi_id || $newSemester !== $item->semester) {
             $duplicateQuery = SettingTarif::where('id', '!=', $item->id)
                 ->where('master_biaya_id', $newBiayaId)
                 ->where('tahun_angkatan', $newAngkatan);
@@ -261,10 +306,16 @@ class PembayaranMahasiswaTarifController extends Controller
                 $duplicateQuery->where('program_studi_id', $newProdiId);
             }
 
+            if ($newSemester === null) {
+                $duplicateQuery->whereNull('semester');
+            } else {
+                $duplicateQuery->where('semester', $newSemester);
+            }
+
             if ($duplicateQuery->exists()) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Kombinasi tarif untuk komponen biaya, angkatan, dan program studi ini sudah ada pada data lain.',
+                    'message' => 'Kombinasi tarif untuk komponen biaya, angkatan, program studi, dan semester ini sudah ada pada data lain.',
                 ], 422);
             }
         }
@@ -272,12 +323,13 @@ class PembayaranMahasiswaTarifController extends Controller
         // Cek hierarki ketika tarif aktif
         if ($newIsActive) {
             if ($newProdiId !== null) {
-                $hasGlobalActive = SettingTarif::where('id', '!=', $item->id)
+                $globalQuery = SettingTarif::where('id', '!=', $item->id)
                     ->where('master_biaya_id', $newBiayaId)
                     ->where('tahun_angkatan', $newAngkatan)
                     ->whereNull('program_studi_id')
-                    ->where('is_active', true)
-                    ->exists();
+                    ->where('is_active', true);
+                $semesterOverlap($globalQuery);
+                $hasGlobalActive = $globalQuery->exists();
 
                 if ($hasGlobalActive) {
                     return response()->json([
@@ -286,12 +338,13 @@ class PembayaranMahasiswaTarifController extends Controller
                     ], 422);
                 }
             } else {
-                $hasProdiActive = SettingTarif::where('id', '!=', $item->id)
+                $prodiQuery = SettingTarif::where('id', '!=', $item->id)
                     ->where('master_biaya_id', $newBiayaId)
                     ->where('tahun_angkatan', $newAngkatan)
                     ->whereNotNull('program_studi_id')
-                    ->where('is_active', true)
-                    ->exists();
+                    ->where('is_active', true);
+                $semesterOverlap($prodiQuery);
+                $hasProdiActive = $prodiQuery->exists();
 
                 if ($hasProdiActive) {
                     return response()->json([
@@ -306,6 +359,7 @@ class PembayaranMahasiswaTarifController extends Controller
         if ($request->filled('master_biaya_id')) $updateData['master_biaya_id'] = $newBiayaId;
         if ($request->filled('tahun_angkatan')) $updateData['tahun_angkatan'] = $newAngkatan;
         if ($request->has('program_studi_id')) $updateData['program_studi_id'] = $newProdiId;
+        if ($request->has('semester')) $updateData['semester'] = $newSemester;
         if ($request->has('nominal')) $updateData['nominal'] = $request->nominal;
         if ($request->has('is_active')) $updateData['is_active'] = $newIsActive;
         if ($request->has('keterangan')) $updateData['keterangan'] = $request->keterangan;
@@ -327,14 +381,24 @@ class PembayaranMahasiswaTarifController extends Controller
     {
         $item = SettingTarif::findOrFail($id);
 
-        // Proteksi: Cek apakah komponen biaya ini sudah pernah digunakan pada detail tagihan mahasiswa
+        // Proteksi: cek apakah tarif ini benar-benar pernah dipakai menagih.
+        // Penagihan selalu mengambil tarif berdasarkan tahun angkatan mahasiswa
+        // (lihat tarifMahasiswa()), sehingga pemisah angkatan WAJIB ikut dicek:
+        // tarif angkatan 2023 hanya terpakai bila ada tagihan milik mahasiswa
+        // angkatan 2023 (atau calon mahasiswa gelombang tahun mulai 2023)
+        // yang memuat komponen biaya yang sama.
         $isUsed = DetailTagihan::where('master_biaya_id', $item->master_biaya_id)
             ->whereHas('tagihan', function ($q) use ($item) {
-                if ($item->program_studi_id) {
-                    $q->whereHas('mahasiswa', function ($m) use ($item) {
-                        $m->where('program_studi_id', $item->program_studi_id);
+                $q->where(function ($qq) use ($item) {
+                    $qq->whereHas('mahasiswa', function ($m) use ($item) {
+                        $m->where('angkatan', $item->tahun_angkatan);
+                        if ($item->program_studi_id) {
+                            $m->where('program_studi_id', $item->program_studi_id);
+                        }
+                    })->orWhereHas('calonMahasiswa.gelombangPenerimaan.tahunAkademik', function ($t) use ($item) {
+                        $t->where('tahun_mulai', $item->tahun_angkatan);
                     });
-                }
+                });
             })
             ->exists();
 
@@ -409,6 +473,16 @@ class PembayaranMahasiswaTarifController extends Controller
             ->where('is_active', true)
             ->get();
 
+        // Saring berdasarkan semester penagihan bila diminta: tarif umum
+        // (semester null) selalu ikut; tarif khusus hanya bila cocok.
+        // Contoh: biaya lab semester 3 tidak ikut saat menagih semester 1.
+        if ($request->filled('semester')) {
+            $semesterTagih = (int) $request->semester;
+            $tarifs = $tarifs->filter(
+                fn($t) => $t->semester === null || (int) $t->semester === $semesterTagih
+            )->values();
+        }
+
         // Kelompokkan tarif per master_biaya_id
         $grouped = $tarifs->groupBy('master_biaya_id');
         $applicableTarifs = [];
@@ -443,6 +517,8 @@ class PembayaranMahasiswaTarifController extends Controller
                 'nominal' => (float)$selectedTarif->nominal,
                 'is_recurring' => (bool)$mb->is_recurring,
                 'cakupan' => $selectedTarif->program_studi_id !== null ? 'spesifik_prodi' : 'global_kampus',
+                'semester' => $selectedTarif->semester,
+                'cakupan_semester' => $selectedTarif->semester !== null ? ('semester_' . $selectedTarif->semester) : 'semua_semester',
                 'keterangan' => $selectedTarif->keterangan,
             ];
         }
@@ -517,6 +593,7 @@ class PembayaranMahasiswaTarifController extends Controller
                 'mahasiswa_id' => $item->mahasiswa_id,
                 'calon_mahasiswa_id' => $item->calon_mahasiswa_id,
                 'is_calon_mahasiswa' => $isCalon,
+                'semester' => $item->semester,
                 'nim' => $isCalon ? ($mhs?->nim ?: ($mhs?->no_pendaftaran ?: '-')) : ($mhs?->nim ?? '-'),
                 'nama_mahasiswa' => $mhs?->nama_lengkap ?? ($isCalon ? 'Calon Mhs #' . $item->calon_mahasiswa_id : 'Mahasiswa #' . $item->mahasiswa_id),
                 'prodi' => $mhs?->programStudi?->nama ?? '-',
@@ -534,6 +611,8 @@ class PembayaranMahasiswaTarifController extends Controller
                         'master_biaya_id' => $d->master_biaya_id,
                         'nama_biaya' => $d->masterBiaya?->nama ?? 'Komponen Biaya',
                         'nominal' => (float)$d->nominal,
+                        'terbayar' => (float)$d->terbayar,
+                        'sisa' => max(0, (float)$d->nominal_bersih - (float)$d->terbayar),
                     ];
                 }),
             ];
@@ -613,6 +692,31 @@ class PembayaranMahasiswaTarifController extends Controller
             $activeTa = MasterTahunAkademik::where('is_active', true)->first();
             $taId = $activeTa?->id ?? 1;
 
+            $semester = $request->filled('semester') ? (int) $request->semester : null;
+
+            // Guard duplikasi: satu mahasiswa/calon hanya boleh ditagih satu kali
+            // per semester pada tahun akademik yang sama (kecuali tagihan batal).
+            if ($semester) {
+                $dupQuery = TagihanMahasiswa::where('tahun_akademik_id', $taId)
+                    ->where('semester', $semester)
+                    ->where('status', '!=', 'batal');
+                if ($isCalon) {
+                    $dupQuery->where('calon_mahasiswa_id', $calonId);
+                } else {
+                    $dupQuery->where('mahasiswa_id', $mhsId);
+                }
+                $existing = $dupQuery->first();
+                if ($existing) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => "Tagihan semester {$semester} untuk {$namaMhs} sudah pernah diterbitkan ({$existing->nomor_tagihan}, status: {$existing->status}). Hapus atau batalkan tagihan tersebut terlebih dahulu bila ingin menagih ulang.",
+                        'errors' => [
+                            'semester' => ["Mahasiswa ini sudah memiliki tagihan semester {$semester} pada tahun akademik berjalan."],
+                        ],
+                    ], 422);
+                }
+            }
+
             $totalNominal = collect($request->items)->sum('nominal');
             $modePembayaran = $request->mode_pembayaran;
             $isDirectCashier = in_array($modePembayaran, ['bayar_loket_tunai', 'bayar_loket_transfer']);
@@ -625,6 +729,7 @@ class PembayaranMahasiswaTarifController extends Controller
                 'calon_mahasiswa_id' => $isCalon ? $calonId : null,
                 'tipe_referensi' => $isCalon ? 'calon_mahasiswa' : 'mahasiswa',
                 'tahun_akademik_id' => $taId,
+                'semester' => $semester,
                 'nomor_tagihan' => $nomorTagihan,
                 'total_tagihan' => $totalNominal,
                 'total_potongan' => 0,
@@ -649,6 +754,14 @@ class PembayaranMahasiswaTarifController extends Controller
                 ]);
             }
 
+            // Tagihan yang langsung lunas di loket: seluruh komponen dianggap terbayar penuh
+            if ($isDirectCashier) {
+                DetailTagihan::alokasikan($tagihan, $totalNominal);
+            }
+
+            // Jurnal akrual penerbitan: Dr Piutang / Cr Pendapatan
+            JurnalSikeuService::jurnalPenerbitanTagihan($tagihan);
+
             // 3. Jika mode bayar loket kasir, langsung catat pembayaran tunai/transfer fisik di loket
             // Catatan: Jika mode terbitkan tagihan online, nomor VA/QRIS akan digenerate secara otomatis via Xendit
             // saat mahasiswa memilih saluran pembayaran (BCA, Mandiri, BNI, BRI, QRIS, dll) di portal mahasiswa.
@@ -669,9 +782,26 @@ class PembayaranMahasiswaTarifController extends Controller
                     'status' => 'success',
                     'diverifikasi_oleh' => auth()->id(),
                 ]);
+
+                // Jurnal pelunasan: Dr Kas/Bank / Cr Piutang
+                JurnalSikeuService::jurnalPembayaranKasir($pembayaran, $channel, $tagihan);
             }
 
             DB::commit();
+
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'create',
+                tableName: 'sikeu_tagihan_mahasiswa',
+                recordId: $tagihan->id,
+                newValues: [
+                    'nomor_tagihan' => $tagihan->nomor_tagihan,
+                    'semester' => $semester,
+                    'total_tagihan' => $totalNominal,
+                    'mode_pembayaran' => $modePembayaran,
+                ],
+                request: $request,
+            );
 
             return response()->json([
                 'status' => 'success',
@@ -726,9 +856,19 @@ class PembayaranMahasiswaTarifController extends Controller
             $tagihan->detailTagihan()->delete();
             $tagihan->dispensasis()->delete();
             $tagihan->dendaTagihan()->delete();
+            // Pembalik jurnal penerbitan (Dr Pendapatan / Cr Piutang)
+            JurnalSikeuService::jurnalPembatalanTagihan($tagihan);
             $tagihan->delete();
 
             DB::commit();
+
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'delete',
+                tableName: 'sikeu_tagihan_mahasiswa',
+                recordId: $id,
+                oldValues: ['nomor_tagihan' => $tagihan->nomor_tagihan, 'status' => $tagihan->status],
+            );
 
             return response()->json([
                 'status' => 'success',
@@ -797,11 +937,20 @@ class PembayaranMahasiswaTarifController extends Controller
                 $tagihan->detailTagihan()->delete();
                 $tagihan->dispensasis()->delete();
                 $tagihan->dendaTagihan()->delete();
+                JurnalSikeuService::jurnalPembatalanTagihan($tagihan);
                 $tagihan->delete();
                 $deletedCount++;
             }
 
             DB::commit();
+
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'delete',
+                tableName: 'sikeu_tagihan_mahasiswa',
+                newValues: ['tagihan_ids' => $request->tagihan_ids, 'deleted_count' => $deletedCount],
+                request: $request,
+            );
 
             return response()->json([
                 'status' => 'success',
@@ -846,6 +995,7 @@ class PembayaranMahasiswaTarifController extends Controller
         $validator = Validator::make($request->all(), [
             'tahun_angkatan' => 'required|integer|min:2000|max:2050',
             'program_studi_id' => 'nullable|integer|exists:spmb_master_program_studi,id',
+            'semester' => 'nullable|integer|min:1|max:14',
             'master_biaya_ids' => 'nullable|array',
             'master_biaya_ids.*' => 'integer|exists:sikeu_master_biaya,id',
         ]);
@@ -860,6 +1010,7 @@ class PembayaranMahasiswaTarifController extends Controller
 
         $tahunAngkatan = (int)$request->tahun_angkatan;
         $prodiId = $request->filled('program_studi_id') ? (int)$request->program_studi_id : null;
+        $semesterPreview = $request->filled('semester') ? (int)$request->semester : null;
 
         $studentsQuery = Mahasiswa::with('programStudi')
             ->where('angkatan', $tahunAngkatan);
@@ -877,14 +1028,36 @@ class PembayaranMahasiswaTarifController extends Controller
         }
         $komponenBiaya = $biayaQuery->get(['id', 'kode', 'nama', 'tipe', 'nominal_standar']);
 
-        // Ambil pengaturan tarif untuk angkatan ini
-        $tarifs = SettingTarif::where('is_active', true)
+        // Ambil pengaturan tarif untuk angkatan ini (saring semester bila diminta:
+        // tarif umum selalu ikut, tarif khusus hanya bila cocok)
+        $tarifQuery = SettingTarif::where('is_active', true)
             ->where('tahun_angkatan', $tahunAngkatan)
-            ->whereIn('master_biaya_id', $komponenBiaya->pluck('id'))
-            ->get();
+            ->whereIn('master_biaya_id', $komponenBiaya->pluck('id'));
+        if ($semesterPreview !== null) {
+            $tarifQuery->where(function ($q) use ($semesterPreview) {
+                $q->whereNull('semester')->orWhere('semester', $semesterPreview);
+            });
+        }
+        $tarifs = $tarifQuery->get();
+
+        // Tagihan semester ini yang sudah terbit (tahun akademik aktif, belum batal)
+        // agar tidak ditagih ulang dan terlihat siapa yang sudah ditagih.
+        $activeTaId = MasterTahunAkademik::where('is_active', true)->first()?->id ?? 1;
+        $billedMap = [];
+        if ($semesterPreview !== null) {
+            $billedMap = TagihanMahasiswa::where('tahun_akademik_id', $activeTaId)
+                ->where('semester', $semesterPreview)
+                ->where('status', '!=', 'batal')
+                ->whereNotNull('mahasiswa_id')
+                ->pluck('nomor_tagihan', 'mahasiswa_id')
+                ->toArray();
+        }
 
         $totalEstimasiNominal = 0;
         $sampleMahasiswa = [];
+        $daftarMahasiswa = [];
+        $sudahDitagihCount = 0;
+        $komponenNominal = [];
 
         foreach ($students as $index => $mhs) {
             $mhsNominal = 0;
@@ -902,21 +1075,44 @@ class PembayaranMahasiswaTarifController extends Controller
                         'master_biaya_id' => $kb->id,
                         'nama' => $kb->nama,
                         'nominal' => $nom,
+                        'semester' => $tarif->semester,
                     ];
+                    if (!isset($komponenNominal[$kb->id])) {
+                        $komponenNominal[$kb->id] = [
+                            'master_biaya_id' => $kb->id,
+                            'kode' => $kb->kode,
+                            'nama' => $kb->nama,
+                            'nominal_min' => $nom,
+                            'nominal_max' => $nom,
+                        ];
+                    } else {
+                        $komponenNominal[$kb->id]['nominal_min'] = min($komponenNominal[$kb->id]['nominal_min'], $nom);
+                        $komponenNominal[$kb->id]['nominal_max'] = max($komponenNominal[$kb->id]['nominal_max'], $nom);
+                    }
                 }
             }
 
-            $totalEstimasiNominal += $mhsNominal;
+            $sudahDitagih = isset($billedMap[$mhs->id]);
+            if ($sudahDitagih) {
+                $sudahDitagihCount++;
+            } else {
+                $totalEstimasiNominal += $mhsNominal;
+            }
+
+            $row = [
+                'id' => $mhs->id,
+                'nim' => $mhs->nim ?: '-',
+                'nama_lengkap' => $mhs->nama_lengkap,
+                'prodi' => $mhs->programStudi?->nama ?? '-',
+                'total_nominal' => $mhsNominal,
+                'rincian' => $rincian,
+                'sudah_ditagih' => $sudahDitagih,
+                'nomor_tagihan' => $sudahDitagih ? $billedMap[$mhs->id] : null,
+            ];
+            $daftarMahasiswa[] = $row;
 
             if ($index < 10) {
-                $sampleMahasiswa[] = [
-                    'id' => $mhs->id,
-                    'nim' => $mhs->nim ?: '-',
-                    'nama_lengkap' => $mhs->nama_lengkap,
-                    'prodi' => $mhs->programStudi?->nama ?? '-',
-                    'total_nominal' => $mhsNominal,
-                    'rincian' => $rincian,
-                ];
+                $sampleMahasiswa[] = $row;
             }
         }
 
@@ -926,10 +1122,15 @@ class PembayaranMahasiswaTarifController extends Controller
             'data' => [
                 'tahun_angkatan' => $tahunAngkatan,
                 'program_studi_id' => $prodiId,
+                'semester' => $semesterPreview,
                 'total_mahasiswa' => $students->count(),
+                'sudah_ditagih_count' => $sudahDitagihCount,
+                'akan_diterbitkan_count' => $students->count() - $sudahDitagihCount,
                 'total_estimasi_nominal' => $totalEstimasiNominal,
                 'komponen_biaya' => $komponenBiaya,
+                'komponen_terpakai' => array_values($komponenNominal),
                 'sample_mahasiswa' => $sampleMahasiswa,
+                'mahasiswa' => $daftarMahasiswa,
             ],
         ]);
     }
@@ -981,9 +1182,15 @@ class PembayaranMahasiswaTarifController extends Controller
         $taId = $activeTa?->id ?? 1;
 
         $biayaIds = collect($request->items)->pluck('master_biaya_id')->unique()->toArray();
+        // Samakan dengan pratinjau: hanya tarif yang berlaku untuk semester yang ditagih
+        // (umum selalu ikut, khusus hanya bila cocok) agar komponen semester lain tidak ikut tertagih.
+        $requestSemester = (int) $request->semester;
         $tarifs = SettingTarif::where('is_active', true)
             ->where('tahun_angkatan', $tahunAngkatan)
             ->whereIn('master_biaya_id', $biayaIds)
+            ->where(function ($q) use ($requestSemester) {
+                $q->whereNull('semester')->orWhere('semester', $requestSemester);
+            })
             ->get();
 
         $masterBiayas = MasterBiaya::whereIn('id', $biayaIds)->get()->keyBy('id');
@@ -992,7 +1199,18 @@ class PembayaranMahasiswaTarifController extends Controller
             DB::beginTransaction();
 
             $createdCount = 0;
+            $skippedCount = 0;
             $totalNominalGenerated = 0;
+
+            // Guard duplikasi: lewati mahasiswa yang sudah punya tagihan
+            // semester ini pada tahun akademik aktif (kecuali tagihan batal).
+            $alreadyBilledIds = TagihanMahasiswa::where('tahun_akademik_id', $taId)
+                ->where('semester', $requestSemester)
+                ->where('status', '!=', 'batal')
+                ->whereNotNull('mahasiswa_id')
+                ->pluck('mahasiswa_id')
+                ->all();
+            $alreadyBilledIds = array_map('intval', $alreadyBilledIds);
 
             foreach ($students as $student) {
                 $studentItems = [];
@@ -1026,12 +1244,18 @@ class PembayaranMahasiswaTarifController extends Controller
                     continue;
                 }
 
+                if (in_array((int) $student->id, $alreadyBilledIds, true)) {
+                    $skippedCount++;
+                    continue;
+                }
+
                 $nomorTagihan = 'INV-MHS-' . date('Ymd') . '-' . strtoupper(Str::random(5));
                 $tagihan = TagihanMahasiswa::create([
                     'mahasiswa_id' => $student->id,
                     'calon_mahasiswa_id' => null,
                     'tipe_referensi' => 'mahasiswa',
                     'tahun_akademik_id' => $taId,
+                    'semester' => $requestSemester,
                     'nomor_tagihan' => $nomorTagihan,
                     'total_tagihan' => $studentTotal,
                     'total_potongan' => 0,
@@ -1057,17 +1281,33 @@ class PembayaranMahasiswaTarifController extends Controller
 
                 // Catatan: Nomor VA/QRIS tidak digenerate statis di sini.
                 // Mahasiswa akan memilih saluran pembayaran (BCA, Mandiri, BNI, BRI, QRIS, dll) via Xendit di portal mahasiswa.
+                JurnalSikeuService::jurnalPenerbitanTagihan($tagihan);
                 $createdCount++;
                 $totalNominalGenerated += $studentTotal;
             }
 
             DB::commit();
 
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'create',
+                tableName: 'sikeu_tagihan_mahasiswa',
+                newValues: [
+                    'sumber' => 'massal',
+                    'tahun_angkatan' => $tahunAngkatan,
+                    'semester' => $requestSemester,
+                    'created_count' => $createdCount,
+                    'skipped_count' => $skippedCount,
+                ],
+                request: $request,
+            );
+
             return response()->json([
                 'status' => 'success',
-                'message' => "Berhasil menerbitkan {$createdCount} tagihan massal untuk angkatan {$tahunAngkatan}.",
+                'message' => "Berhasil menerbitkan {$createdCount} tagihan massal untuk angkatan {$tahunAngkatan}." . ($skippedCount > 0 ? " {$skippedCount} mahasiswa dilewati karena sudah memiliki tagihan semester {$requestSemester}." : ''),
                 'data' => [
                     'created_count' => $createdCount,
+                    'skipped_count' => $skippedCount,
                     'total_nominal' => $totalNominalGenerated,
                     'tahun_angkatan' => $tahunAngkatan,
                     'program_studi_id' => $prodiId,
@@ -1209,6 +1449,7 @@ class PembayaranMahasiswaTarifController extends Controller
                 'total_bayar' => $newSourceBayar,
                 'status' => $newSourceStatus,
             ]);
+            DetailTagihan::kurangi($source, $nominal);
 
             // 2. Tambah total_bayar pada tagihan tujuan dan catat record Pembayaran
             $newTargetBayar = (float)$target->total_bayar + $nominal;
@@ -1218,6 +1459,7 @@ class PembayaranMahasiswaTarifController extends Controller
                 'total_bayar' => $newTargetBayar,
                 'status' => $newTargetStatus,
             ]);
+            DetailTagihan::alokasikan($target, $nominal);
 
             $kodeTrx = 'ALIKH-' . date('YmdHis') . '-' . rand(100, 999);
             $pembayaran = Pembayaran::create([

@@ -17,6 +17,8 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\IAM\AdminUserSeeder::class,
             \Database\Seeders\IAM\ModuleSeeder::class,
             \Database\Seeders\IAM\MenuSeeder::class,
+            \Database\Seeders\IAM\MenuApprovalTahapSeeder::class,
+            \Database\Seeders\IAM\MenuValidasiManualSeeder::class,
             OauthAppClientSeeder::class,
 
             // SIMPEG Seeders
@@ -45,6 +47,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\Sikeu\SikeuAkuntansiSeeder::class,
             \Database\Seeders\Sikeu\SikeuMasterSeeder::class,
             \Database\Seeders\Sikeu\MahasiswaBillingSeeder::class,
+            \Database\Seeders\Sikeu\SikeuKanalKasSeeder::class,
 
             // SINAPRA Seeders
             \Database\Seeders\Sinapra\SinapraSeeder::class,

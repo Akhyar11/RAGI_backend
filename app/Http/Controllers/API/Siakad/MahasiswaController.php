@@ -90,8 +90,8 @@ class MahasiswaController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
-            'program_studi_id' => 'required|exists:master_program_studi,id',
+        $validated = $request->validate([
+            'program_studi_id' => 'required|exists:spmb_master_program_studi,id',
             'nim' => 'required|string|unique:siakad_mahasiswa,nim',
             'nama_lengkap' => 'required|string|max:255',
             'nik' => 'nullable|string|max:20',
@@ -198,7 +198,7 @@ class MahasiswaController extends Controller
     public function generateNim(Request $request)
     {
         $request->validate([
-            'program_studi_id' => 'required|exists:master_program_studi,id',
+            'program_studi_id' => 'required|exists:spmb_master_program_studi,id',
             'angkatan' => 'required|integer',
             'nama_lengkap' => 'required|string',
             'jenis_kelamin' => 'required|in:L,P',
@@ -483,10 +483,6 @@ class MahasiswaController extends Controller
         if (!$mhs && $request->filled('mahasiswa_id')) {
             $mhs = Mahasiswa::with(['programStudi.fakultas', 'dosenWali', 'konversiTransfer.details.mataKuliahDiakui', 'user'])
                 ->find($request->mahasiswa_id);
-        }
-
-        if (!$mhs) {
-            $mhs = Mahasiswa::with(['programStudi.fakultas', 'dosenWali', 'konversiTransfer.details.mataKuliahDiakui', 'user'])->first();
         }
 
         if (!$mhs) {

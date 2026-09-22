@@ -392,11 +392,11 @@ class MenuSeeder extends Seeder
                 'order_index' => 2,
                 'children' => [
                     ['name' => 'Pengaturan Tarif', 'url' => '/sikeu/pembayaran-mahasiswa/tarif', 'icon' => 'FaDollarSign', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
-                    ['name' => 'Input Tagihan', 'url' => '/sikeu/pembayaran-mahasiswa/tagihan', 'icon' => 'FaFileInvoiceDollar', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 2],
-                    ['name' => 'Bayar Kasir Loket', 'url' => '/sikeu/pembayaran-mahasiswa/bayar', 'icon' => 'FaCashRegister', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 3],
+                    ['name' => 'Input Tagihan', 'url' => '/sikeu/pembayaran-mahasiswa/tagihan', 'icon' => 'FaFileInvoiceDollar', 'module' => 'sikeu', 'order_index' => 2],
+                    ['name' => 'Bayar Kasir Loket', 'url' => '/sikeu/pembayaran-mahasiswa/bayar', 'icon' => 'FaCashRegister', 'module' => 'sikeu', 'order_index' => 3],
                     ['name' => 'Potongan Mahasiswa', 'url' => '/sikeu/pembayaran-mahasiswa/potongan', 'icon' => 'FaPercent', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 4],
                     ['name' => 'Piutang Mahasiswa', 'url' => '/sikeu/piutang', 'icon' => 'FaExclamationTriangle', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 5],
-                    ['name' => 'Dispensasi Pembayaran', 'url' => '/sikeu/dispensasi', 'icon' => 'FaClipboardCheck', 'module' => 'sikeu', 'permission_slug' => 'sikeu.dispensasi.read', 'order_index' => 6],
+                    ['name' => 'Dispensasi Pembayaran', 'url' => '/sikeu/dispensasi', 'icon' => 'FaClipboardCheck', 'module' => 'sikeu', 'order_index' => 6],
                 ]
             ],
             [
@@ -407,10 +407,11 @@ class MenuSeeder extends Seeder
                 'permission_slug' => 'sikeu.dashboard.read',
                 'order_index' => 3,
                 'children' => [
-                    ['name' => 'Pengeluaran Kas', 'url' => '/sikeu/pengeluaran', 'icon' => 'FaList', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pengeluaran.read', 'order_index' => 1],
-                    ['name' => 'Pemasukan Kas Non-Akademik', 'url' => '/sikeu/pemasukan', 'icon' => 'FaList', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pemasukan.read', 'order_index' => 2],
-                    ['name' => 'Approval Pimpinan', 'url' => '/sikeu/approval', 'icon' => 'FaShieldCheck', 'module' => 'sikeu', 'permission_slug' => 'sikeu.approval.manage', 'order_index' => 3],
-                    ['name' => 'Pajak & Perpajakan', 'url' => '/sikeu/pajak', 'icon' => 'FaFileAlt', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pajak.read', 'order_index' => 4],
+                    ['name' => 'Pengajuan Operasional', 'url' => '/sikeu/pengajuan', 'icon' => 'FaFileAlt', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pengajuan.read', 'order_index' => 1],
+                    ['name' => 'Pengeluaran Kas', 'url' => '/sikeu/pengeluaran', 'icon' => 'FaList', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pengeluaran.read', 'order_index' => 2],
+                    ['name' => 'Pemasukan Kas Non-Akademik', 'url' => '/sikeu/pemasukan', 'icon' => 'FaList', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pemasukan.read', 'order_index' => 3],
+                    ['name' => 'Kas Kecil', 'url' => '/sikeu/kas-kecil', 'icon' => 'FaCoins', 'module' => 'sikeu', 'permission_slug' => 'sikeu.kaskecil.read', 'order_index' => 4],
+                    ['name' => 'Pajak & Perpajakan', 'url' => '/sikeu/pajak', 'icon' => 'FaFileAlt', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pajak.read', 'order_index' => 5],
                 ]
             ],
             [
@@ -421,9 +422,11 @@ class MenuSeeder extends Seeder
                 'permission_slug' => 'sikeu.akuntansi.read',
                 'order_index' => 4,
                 'children' => [
-                    ['name' => 'Jurnal Umum', 'url' => '/sikeu/akuntansi/jurnal', 'icon' => 'FaFileAlt', 'module' => 'sikeu', 'permission_slug' => 'sikeu.akuntansi.read', 'order_index' => 1],
-                    ['name' => 'Buku Besar', 'url' => '/sikeu/akuntansi/buku-besar', 'icon' => 'FaBookOpen', 'module' => 'sikeu', 'permission_slug' => 'sikeu.akuntansi.read', 'order_index' => 2],
-                    ['name' => 'Chart of Accounts (COA)', 'url' => '/sikeu/akuntansi/coa', 'icon' => 'FaList', 'module' => 'sikeu', 'permission_slug' => 'sikeu.akuntansi.read', 'order_index' => 3],
+                    ['name' => 'Jurnal Umum', 'url' => '/sikeu/akuntansi/jurnal', 'icon' => 'FaFileAlt', 'module' => 'sikeu', 'order_index' => 1],
+                    ['name' => 'Buku Besar', 'url' => '/sikeu/akuntansi/buku-besar', 'icon' => 'FaBookOpen', 'module' => 'sikeu', 'order_index' => 2],
+                    // Visibilitas via role-menu (tanpa permission) agar tidak bocor
+                    // ke role yang hanya memegang permission read umum.
+                    ['name' => 'Chart of Accounts (COA)', 'url' => '/sikeu/akuntansi/coa', 'icon' => 'FaList', 'module' => 'sikeu', 'order_index' => 3],
                     ['name' => 'Laporan Keuangan', 'url' => '/sikeu/akuntansi/laporan', 'icon' => 'FaChartPie', 'module' => 'sikeu', 'permission_slug' => 'sikeu.akuntansi.read', 'order_index' => 4],
                 ]
             ],
@@ -556,6 +559,100 @@ class MenuSeeder extends Seeder
                 ->pluck('id')
                 ->toArray();
             $dosenRole->menus()->syncWithoutDetaching($dosenSimpegMenuIds);
+        }
+
+        // Portal mandiri mahasiswa: dashboard + tagihan via baseAllowed,
+        // menu DB untuk dispensasi & panduan agar lolos CheckMenuAccess.
+        $mahasiswaRole = \App\Models\Role::where('slug', 'mahasiswa')->first();
+        if ($mahasiswaRole) {
+            $mhsSikeuMenuIds = Menu::where('module', 'sikeu')
+                ->whereIn('url', ['/sikeu', '/sikeu/dispensasi', '/sikeu/panduan'])
+                ->pluck('id')
+                ->toArray();
+            $mahasiswaRole->menus()->syncWithoutDetaching($mhsSikeuMenuIds);
+        }
+
+        // Pimpinan: dashboard + approval direktur + laporan & pantauan (read-only eksekutif).
+        // Tahap sarpras/keuangan disembunyikan; akuntansi hanya laporan; plus piutang.
+        $pimpinanRole = \App\Models\Role::where('slug', 'pimpinan')->first();
+        if ($pimpinanRole) {
+            $pimpinanSikeuMenuIds = Menu::where('module', 'sikeu')
+                ->whereIn('url', [
+                    '/sikeu',
+                    '#pengeluaran_sikeu',
+                    '/sikeu/approval/direktur',
+                    '#akuntansi_sikeu',
+                    '/sikeu/akuntansi/laporan',
+                    '/sikeu/dispensasi',
+                    '/sikeu/pengajuan',
+                    '/sikeu/piutang',
+                    '/sikeu/panduan',
+                ])
+                ->pluck('id')
+                ->toArray();
+            $pimpinanRole->menus()->syncWithoutDetaching($pimpinanSikeuMenuIds);
+        }
+
+        // Admin Keuangan Akuntansi: jurnal, buku besar, COA, laporan, kas & pajak.
+        $adminKeuAkuntansiRole = \App\Models\Role::where('slug', 'admin_keuangan_akuntansi')->first();
+        if ($adminKeuAkuntansiRole) {
+            $akuntansiMenuIds = Menu::where('module', 'sikeu')
+                ->whereIn('url', [
+                    '/sikeu',
+                    '#pengeluaran_sikeu',
+                    '/sikeu/kas-kecil',
+                    '#akuntansi_sikeu',
+                    '/sikeu/akuntansi/jurnal',
+                    '/sikeu/akuntansi/buku-besar',
+                    '/sikeu/akuntansi/coa',
+                    '/sikeu/akuntansi/laporan',
+                    '/sikeu/unit-kas',
+                    '/sikeu/pengeluaran',
+                    '/sikeu/pemasukan',
+                    '/sikeu/pajak',
+                    '/sikeu/panduan',
+                ])
+                ->pluck('id')
+                ->toArray();
+            $adminKeuAkuntansiRole->menus()->syncWithoutDetaching($akuntansiMenuIds);
+        }
+
+        // Petugas Kas Kecil: menu kas kecil + parent groupnya, tanpa menu keuangan lain.
+        $petugasKasKecilRole = \App\Models\Role::where('slug', 'petugas_kas_kecil')->first();
+        if ($petugasKasKecilRole) {
+            $petugasKasKecilMenuIds = Menu::where('module', 'sikeu')
+                ->whereIn('url', [
+                    '/sikeu',
+                    '#pengeluaran_sikeu',
+                    '/sikeu/kas-kecil',
+                ])
+                ->pluck('id')
+                ->toArray();
+            $petugasKasKecilRole->menus()->syncWithoutDetaching($petugasKasKecilMenuIds);
+        }
+
+        // Admin Keuangan Pembayaran Mahasiswa: tagihan, kasir, validasi, gateway.
+        $adminKeuPembayaranRole = \App\Models\Role::where('slug', 'admin_keuangan_pembayaran')->first();
+        if ($adminKeuPembayaranRole) {
+            $pembayaranMenuIds = Menu::where('module', 'sikeu')
+                ->whereIn('url', [
+                    '/sikeu',
+                    '#pembayaran_mhs_sikeu',
+                    '/sikeu/pembayaran-mahasiswa/tarif',
+                    '/sikeu/pembayaran-mahasiswa/tagihan',
+                    '/sikeu/pembayaran-mahasiswa/bayar',
+                    '/sikeu/pembayaran-mahasiswa/potongan',
+                    '/sikeu/piutang',
+                    '/sikeu/dispensasi',
+                    '/sikeu/pembayaran-mahasiswa/validasi-manual',
+                    '/sikeu/dispensasi',
+                    '/sikeu/unit-kas',
+                    '/sikeu/payment-gateway',
+                    '/sikeu/panduan',
+                ])
+                ->pluck('id')
+                ->toArray();
+            $adminKeuPembayaranRole->menus()->syncWithoutDetaching($pembayaranMenuIds);
         }
 
         // Attach SPMB menus to admin-spmb role

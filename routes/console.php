@@ -42,3 +42,6 @@ Artisan::command('module:install-prod {modul=all}', function ($modul = 'all') {
 Schedule::command('sippm:sync-publikasi')->weekly()->onSuccess(function () {
     \Illuminate\Support\Facades\Log::info('Weekly SINTA & Scopus publication sync completed successfully.');
 });
+
+// Polling pembayaran H2H BTN Syariah yang terbayar di bridge Go
+Schedule::command('sikeu:sync-h2h')->everyFiveMinutes()->withoutOverlapping();

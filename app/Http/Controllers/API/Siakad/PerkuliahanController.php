@@ -16,15 +16,18 @@ use App\Models\Siakad\MataKuliah;
 use App\Models\Siakad\KonversiTransferDetail;
 use App\Models\Spmb\MasterTahunAkademik;
 use App\Services\Siakad\SiakadAkademikService;
+use App\Services\Siakad\KrsService;
 use Illuminate\Support\Facades\DB;
 
 class PerkuliahanController extends Controller
 {
     protected SiakadAkademikService $akademikService;
+    protected KrsService $krsService;
 
-    public function __construct(SiakadAkademikService $akademikService)
+    public function __construct(SiakadAkademikService $akademikService, KrsService $krsService)
     {
         $this->akademikService = $akademikService;
+        $this->krsService = $krsService;
     }
 
     public function listKelas(Request $request)
@@ -90,8 +93,8 @@ class PerkuliahanController extends Controller
         $request->validate([
             'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
             'tahun_akademik_id' => 'required|exists:spmb_master_tahun_akademik,id',
-            'program_studi_id' => 'required|exists:master_program_studi,id',
-            'ruangan_id' => 'nullable|exists:ruangan,id',
+            'program_studi_id' => 'required|exists:spmb_master_program_studi,id',
+            'ruangan_id' => 'nullable|exists:sinapra_ruangan,id',
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
             'team_teaching_dosen_ids' => 'nullable|array',
             'team_teaching_dosen_ids.*' => 'exists:siakad_dosen,id',
@@ -119,7 +122,7 @@ class PerkuliahanController extends Controller
                 'hari' => $request->hari,
                 'jam_mulai' => $request->jam_mulai,
                 'jam_selesai' => $request->jam_selesai,
-                'status' => 'aktif',
+                'status' => 'draft',
             ]);
 
             // Dosen Pengampu Utama (yang dilaporkan resmi ke Feeder)
@@ -140,7 +143,7 @@ class PerkuliahanController extends Controller
                         DosenPengampu::create([
                             'kelas_id' => $kelas->id,
                             'dosen_id' => $ttDosenId,
-                            'peran' => 'anggota_team_teaching',
+                            'peran' => 'co_pengampu',
                             'sks_substansi_total' => $mk?->total_sks ?? 3,
                             'rencana_tatap_muka' => 16,
                         ]);
@@ -161,7 +164,7 @@ class PerkuliahanController extends Controller
         $kelas = Kelas::findOrFail($id);
         $request->validate([
             'nama_kelas' => 'required|string|max:255',
-            'ruangan_id' => 'nullable|exists:ruangan,id',
+            'ruangan_id' => 'nullable|exists:sinapra_ruangan,id',
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
             'team_teaching_dosen_ids' => 'nullable|array',
             'team_teaching_dosen_ids.*' => 'exists:siakad_dosen,id',
@@ -203,7 +206,7 @@ class PerkuliahanController extends Controller
                             DosenPengampu::create([
                                 'kelas_id' => $kelas->id,
                                 'dosen_id' => $ttDosenId,
-                                'peran' => 'anggota_team_teaching',
+                                'peran' => 'co_pengampu',
                                 'sks_substansi_total' => $mk?->total_sks ?? 3,
                                 'rencana_tatap_muka' => 16,
                             ]);
@@ -315,17 +318,29 @@ class PerkuliahanController extends Controller
             'krs_ids.*' => 'exists:siakad_krs,id',
         ]);
 
+        $user = $request->user();
+        $dosen = Dosen::where('user_id', $user?->id)->first();
+        $isPrivileged = $user && ($user->isAdmin() || $user->isSuperAdmin() || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+
         $approvedCount = 0;
         $skippedCount = 0;
 
-        $krsList = Krs::whereIn('id', $request->krs_ids)->get();
+        $krsList = Krs::with('mahasiswa')->whereIn('id', $request->krs_ids)->get();
 
         foreach ($krsList as $krs) {
-            if ($krs->locked_by_keuangan) {
+            if ($krs->locked_by_keuangan || $krs->status !== 'diajukan') {
                 $skippedCount++;
                 continue;
             }
+            if (!$isPrivileged) {
+                if (!$dosen || (int) $krs->mahasiswa?->dosen_wali_id !== (int) $dosen->id) {
+                    $skippedCount++;
+                    continue;
+                }
+            }
             $krs->status = 'disetujui';
+            $krs->disetujui_oleh = $dosen?->id ?? $krs->disetujui_oleh;
+            $krs->disetujui_at = now();
             $krs->save();
             $approvedCount++;
         }
@@ -348,9 +363,9 @@ class PerkuliahanController extends Controller
             ->where('user_id', $user?->id)
             ->first();
 
-        if (!$mhs) {
-            // Fallback untuk admin/testing jika tidak ada akun user_id mahasiswa terkait
-            $mhs = Mahasiswa::with(['programStudi', 'dosenWali', 'konversiTransfer.details.mataKuliahDiakui'])->first();
+        if (!$mhs && $request->filled('mahasiswa_id')) {
+            $mhs = Mahasiswa::with(['programStudi', 'dosenWali', 'konversiTransfer.details.mataKuliahDiakui'])
+                ->find($request->mahasiswa_id);
         }
 
         if (!$mhs) {
@@ -360,7 +375,7 @@ class PerkuliahanController extends Controller
         $taId = $request->query('tahun_akademik_id');
         $ta = $taId ? MasterTahunAkademik::find($taId) : MasterTahunAkademik::where('is_active', true)->first();
         if (!$ta) {
-            $ta = MasterTahunAkademik::first();
+            return response()->json(['status' => 'error', 'message' => 'Tahun akademik aktif belum ditetapkan.'], 422);
         }
 
         // Cari atau buat draf KRS semester terpilih
@@ -409,17 +424,25 @@ class PerkuliahanController extends Controller
             foreach ($mhs->konversiTransfer->details as $konv) {
                 $mk = $konv->mataKuliahDiakui;
                 $sks = $mk ? $mk->total_sks : $konv->sks_asal;
-                $huruf = $konv->nilai_huruf_asal;
-                $mutu = 4.0;
-                if ($huruf === 'A-') $mutu = 3.75;
-                elseif ($huruf === 'B+') $mutu = 3.25;
-                elseif ($huruf === 'B') $mutu = 3.00;
-                elseif ($huruf === 'B-') $mutu = 2.75;
-                elseif ($huruf === 'C+') $mutu = 2.25;
-                elseif ($huruf === 'C') $mutu = 2.00;
+                $huruf = strtoupper(trim((string) $konv->nilai_huruf_asal));
+                $mutu = match ($huruf) {
+                    'A' => 4.00,
+                    'A-' => 3.75,
+                    'B+' => 3.25,
+                    'B' => 3.00,
+                    'B-' => 2.75,
+                    'C+' => 2.25,
+                    'C' => 2.00,
+                    'D' => 1.00,
+                    'E' => 0.00,
+                    default => 0.00,
+                };
 
-                $totalSksLulus += $sks;
-                $totalMutu += ($mutu * $sks);
+                // Hanya MK lulus (bukan D/E) yang menambah SKS lulus, tapi mutu tetap dihitung proporsional
+                if ($huruf !== 'D' && $huruf !== 'E' && $huruf !== '') {
+                    $totalSksLulus += $sks;
+                    $totalMutu += ($mutu * $sks);
+                }
             }
         }
 
@@ -428,11 +451,12 @@ class PerkuliahanController extends Controller
             $mutu = (float) $tn->bobot_mutu;
             if ($tn->nilai_huruf !== 'E' && $tn->nilai_huruf !== 'D') {
                 $totalSksLulus += $sks;
+                $totalMutu += ($mutu * $sks);
             }
-            $totalMutu += ($mutu * $sks);
         }
 
         $ipk = $totalSksLulus > 0 ? round($totalMutu / $totalSksLulus, 2) : 0.00;
+        $maxSks = $ipk >= 3.00 ? 24 : ($ipk >= 2.50 ? 22 : ($ipk >= 2.00 ? 20 : 18));
 
         // Hitung IPS semester ini (jika ada nilai final di KRS ini)
         $krsNilai = NilaiMahasiswa::whereHas('krsDetail', fn($q) => $q->where('krs_id', $krs->id))
@@ -453,7 +477,7 @@ class PerkuliahanController extends Controller
             'data' => [
                 'mahasiswa' => $mhs,
                 'krs' => $krs,
-                'max_sks' => 24,
+                'max_sks' => $maxSks,
                 'keuangan_status' => [
                     'has_unpaid_bills' => $hasUnpaidBills,
                     'has_approved_dispensasi' => $hasApprovedKrsDispensasi,
@@ -473,13 +497,22 @@ class PerkuliahanController extends Controller
     {
         $user = $request->user();
         $mhs = Mahasiswa::with(['konversiTransfer.details'])->where('user_id', $user?->id)->first();
-        if (!$mhs) {
-            $mhs = Mahasiswa::with(['konversiTransfer.details'])->first();
+        if (!$mhs && $request->filled('mahasiswa_id')) {
+            $mhs = Mahasiswa::with(['konversiTransfer.details'])->find($request->mahasiswa_id);
+        }
+        if (!$mhs && $request->filled('program_studi_id')) {
+            $mhs = null;
+        }
+        if (!$mhs && !$request->filled('program_studi_id')) {
+            return response()->json(['status' => 'error', 'message' => 'Data mahasiswa tidak ditemukan.'], 404);
         }
 
         $taId = $request->query('tahun_akademik_id');
         $ta = $taId ? MasterTahunAkademik::find($taId) : MasterTahunAkademik::where('is_active', true)->first();
-        $targetTaId = $ta?->id ?? 1;
+        if (!$ta) {
+            return response()->json(['status' => 'error', 'message' => 'Tahun akademik aktif belum ditetapkan.'], 422);
+        }
+        $targetTaId = $ta->id;
 
         $prodiId = $mhs ? $mhs->program_studi_id : $request->program_studi_id;
 
@@ -502,13 +535,6 @@ class PerkuliahanController extends Controller
             ->where('status', 'aktif')
             ->get();
 
-        if ($kelases->isEmpty()) {
-            $kelases = Kelas::with(['mataKuliah.prasyarats.prasyarat', 'ruangan', 'dosenPengampu.dosen'])
-                ->when($prodiId, fn($q) => $q->where('program_studi_id', $prodiId))
-                ->where('status', 'aktif')
-                ->get();
-        }
-
         $results = $kelases->map(function ($k) use ($convertedMkIds, $enrolledKelasIds) {
             $isConverted = in_array($k->mata_kuliah_id, $convertedMkIds);
             $isEnrolled = in_array($k->id, $enrolledKelasIds);
@@ -519,9 +545,9 @@ class PerkuliahanController extends Controller
                 'kode_kelas' => $k->kode_kelas,
                 'nama_kelas' => $k->nama_kelas,
                 'mata_kuliah' => $k->mataKuliah,
-                'ruangan' => $k->ruangan ? $k->ruangan->nama : 'Ruang Teori 101',
-                'dosen_pengampu' => $k->dosenPengampu?->first()?->dosen?->nama_lengkap ?? 'Dr. Ir. Ahmad Santoso, M.Kom',
-                'jadwal' => ($k->hari ? ucfirst($k->hari) : 'Senin') . ', ' . ($k->jam_mulai ? substr($k->jam_mulai, 0, 5) : '08:00') . ' - ' . ($k->jam_selesai ? substr($k->jam_selesai, 0, 5) : '10:30'),
+                'ruangan' => $k->ruangan ? $k->ruangan->nama : null,
+                'dosen_pengampu' => $k->dosenPengampu?->first()?->dosen?->nama_lengkap,
+                'jadwal' => ($k->hari ? ucfirst($k->hari) : null) . ($k->jam_mulai && $k->jam_selesai ? ', ' . substr($k->jam_mulai, 0, 5) . ' - ' . substr($k->jam_selesai, 0, 5) : ''),
                 'sisa_kuota' => $k->kuota_krs,
                 'is_converted' => $isConverted,
                 'is_enrolled' => $isEnrolled,
@@ -540,88 +566,55 @@ class PerkuliahanController extends Controller
     {
         $request->validate([
             'kelas_id' => 'required|exists:siakad_kelas,id',
+            'mahasiswa_id' => 'nullable|exists:siakad_mahasiswa,id',
+            'tahun_akademik_id' => 'nullable|exists:spmb_master_tahun_akademik,id',
         ]);
 
         $user = $request->user();
-        $mhs = Mahasiswa::where('user_id', $user?->id)->first();
-        if (!$mhs) {
-            $mhs = Mahasiswa::first();
-        }
+        $mhs = $this->krsService->resolveMahasiswa($user?->id, $request->input('mahasiswa_id'));
 
         $taId = $request->tahun_akademik_id;
         $ta = $taId ? MasterTahunAkademik::find($taId) : MasterTahunAkademik::where('is_active', true)->first();
-        $targetTaId = $ta?->id ?? 1;
-
-        $kelas = Kelas::with('mataKuliah')->findOrFail($request->kelas_id);
-
-        if ($kelas->kuota_krs <= 0) {
-            return response()->json(['status' => 'error', 'message' => 'Kuota kelas ini sudah penuh.'], 422);
+        if (!$ta) {
+            return response()->json(['status' => 'error', 'message' => 'Tahun akademik aktif belum ditetapkan.'], 422);
         }
 
-        return DB::transaction(function () use ($mhs, $targetTaId, $kelas) {
-            $krs = Krs::firstOrCreate(
-                ['mahasiswa_id' => $mhs->id, 'tahun_akademik_id' => $targetTaId],
-                ['status' => 'draft', 'total_sks_diambil' => 0]
-            );
-
-            // Evaluasi kewajiban keuangan & bypass dispensasi
-            $hasUnpaidBills = \App\Models\Sikeu\TagihanMahasiswa::where('mahasiswa_id', $mhs->id)
-                ->whereIn('status', ['belum_bayar', 'sebagian'])
+        // Gate keuangan SIKEU (tetap sebelum validasi akademik agar pesan tagihan jelas)
+        $krsAwal = Krs::firstOrCreate(
+            ['mahasiswa_id' => $mhs->id, 'tahun_akademik_id' => $ta->id],
+            ['status' => 'draft', 'total_sks_diambil' => 0, 'locked_by_keuangan' => false]
+        );
+        $hasUnpaidBills = \App\Models\Sikeu\TagihanMahasiswa::where('mahasiswa_id', $mhs->id)
+            ->whereIn('status', ['belum_bayar', 'sebagian'])
+            ->exists();
+        if ($hasUnpaidBills) {
+            $hasApprovedKrsDispensasi = \App\Models\Sikeu\DispensasiTagihan::where('mahasiswa_id', $mhs->id)
+                ->where('status', 'approved')
+                ->where('allow_krs', true)
+                ->whereHas('tagihan', fn($q) => $q->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi']))
                 ->exists();
-
-            if ($hasUnpaidBills) {
-                $hasApprovedKrsDispensasi = \App\Models\Sikeu\DispensasiTagihan::where('mahasiswa_id', $mhs->id)
-                    ->where('status', 'approved')
-                    ->where('allow_krs', true)
-                    ->whereHas('tagihan', fn($q) => $q->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi']))
-                    ->exists();
-
-                if (!$hasApprovedKrsDispensasi) {
-                    $krs->locked_by_keuangan = true;
-                    $krs->save();
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => 'KRS terkunci karena Anda memiliki tagihan pembayaran SPP/UKT di SIKEU yang belum diselesaikan. Silakan lunasi tagihan atau ajukan dispensasi keuangan dengan izin bypass KRS.'
-                    ], 422);
-                } else {
-                    $krs->locked_by_keuangan = false;
-                    $krs->save();
-                }
-            } else {
-                if ($krs->locked_by_keuangan) {
-                    $krs->locked_by_keuangan = false;
-                    $krs->save();
-                }
+            if (!$hasApprovedKrsDispensasi) {
+                $krsAwal->locked_by_keuangan = true;
+                $krsAwal->save();
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'KRS terkunci karena Anda memiliki tagihan pembayaran SPP/UKT di SIKEU yang belum diselesaikan. Silakan lunasi tagihan atau ajukan dispensasi keuangan dengan izin bypass KRS.'
+                ], 422);
             }
+            $krsAwal->locked_by_keuangan = false;
+            $krsAwal->save();
+        } elseif ($krsAwal->locked_by_keuangan) {
+            $krsAwal->locked_by_keuangan = false;
+            $krsAwal->save();
+        }
 
-            // Jika sebelumnya sudah disetujui, kembalikan ke draft saat ada revisi/penambahan
-            if ($krs->status === 'disetujui') {
-                $krs->status = 'draft';
-            }
+        [$krs, $kelas] = $this->krsService->addClass($mhs, (int) $ta->id, (int) $request->kelas_id, (float) ($mhs->ipk ?? 0));
 
-            // Tambah detail
-            $detail = KrsDetail::firstOrCreate([
-                'krs_id' => $krs->id,
-                'kelas_id' => $kelas->id,
-            ]);
-
-            // Buat draf nilai mahasiswa
-            NilaiMahasiswa::firstOrCreate(['krs_detail_id' => $detail->id]);
-
-            // Hitung ulang total SKS
-            $totalSks = $krs->krsDetails()->with('kelas.mataKuliah')->get()->sum(fn($d) => $d->kelas?->mataKuliah?->total_sks ?? 0);
-            $krs->total_sks_diambil = $totalSks;
-            $krs->save();
-
-            // Kurangi kuota
-            $kelas->decrement('kuota_krs');
-
-            return response()->json([
-                'status' => 'success',
-                'message' => "Mata kuliah {$kelas->mataKuliah->nama} ({$kelas->mataKuliah->total_sks} SKS) berhasil ditambahkan ke KRS.",
-                'data' => $krs->load('krsDetails.kelas.mataKuliah')
-            ]);
-        });
+        return response()->json([
+            'status' => 'success',
+            'message' => "Mata kuliah {$kelas->mataKuliah->nama} ({$kelas->mataKuliah->total_sks} SKS) berhasil ditambahkan ke KRS.",
+            'data' => $krs->load('krsDetails.kelas.mataKuliah')
+        ]);
     }
 
     public function dropClassFromKrs(Request $request, $detailId)
@@ -656,9 +649,18 @@ class PerkuliahanController extends Controller
     public function reopenKrs(Request $request)
     {
         $user = $request->user();
-        $mhs = Mahasiswa::where('user_id', $user?->id)->first() ?? Mahasiswa::first();
+        $mhs = Mahasiswa::where('user_id', $user?->id)->first();
+        if (!$mhs && $request->filled('mahasiswa_id')) {
+            $mhs = Mahasiswa::find($request->mahasiswa_id);
+        }
+        if (!$mhs) {
+            return response()->json(['status' => 'error', 'message' => 'Data mahasiswa tidak ditemukan.'], 404);
+        }
         $taId = $request->tahun_akademik_id;
         $ta = $taId ? MasterTahunAkademik::find($taId) : MasterTahunAkademik::where('is_active', true)->first();
+        if (!$ta) {
+            return response()->json(['status' => 'error', 'message' => 'Tahun akademik aktif belum ditetapkan.'], 422);
+        }
 
         $krs = Krs::where('mahasiswa_id', $mhs->id)->where('tahun_akademik_id', $ta->id)->first();
         if (!$krs) {
@@ -679,9 +681,17 @@ class PerkuliahanController extends Controller
     {
         $user = $request->user();
         $mhs = Mahasiswa::where('user_id', $user?->id)->first();
-        if (!$mhs) $mhs = Mahasiswa::first();
+        if (!$mhs && $request->filled('mahasiswa_id')) {
+            $mhs = Mahasiswa::find($request->mahasiswa_id);
+        }
+        if (!$mhs) {
+            return response()->json(['status' => 'error', 'message' => 'Data mahasiswa tidak ditemukan.'], 404);
+        }
 
         $taAktif = MasterTahunAkademik::where('is_active', true)->first();
+        if (!$taAktif) {
+            return response()->json(['status' => 'error', 'message' => 'Tahun akademik aktif belum ditetapkan.'], 422);
+        }
         $krs = Krs::where('mahasiswa_id', $mhs->id)->where('tahun_akademik_id', $taAktif->id)->firstOrFail();
 
         if ($krs->total_sks_diambil <= 0) {
@@ -700,7 +710,7 @@ class PerkuliahanController extends Controller
 
     public function approveKrs(Request $request, $id)
     {
-        $krs = Krs::findOrFail($id);
+        $krs = Krs::with('mahasiswa')->findOrFail($id);
 
         if ($krs->locked_by_keuangan) {
             return response()->json([
@@ -708,9 +718,25 @@ class PerkuliahanController extends Controller
                 'message' => 'KRS terkunci karena tagihan mahasiswa di SIKEU belum diselesaikan.'
             ], 422);
         }
+        if ($krs->status !== 'diajukan') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Hanya KRS berstatus diajukan yang dapat disetujui.',
+            ], 422);
+        }
 
         $user = $request->user();
         $dosen = Dosen::where('user_id', $user?->id)->first();
+        $isPrivileged = $user && ($user->isAdmin() || $user->isSuperAdmin() || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+
+        if (!$isPrivileged) {
+            if (!$dosen) {
+                return response()->json(['status' => 'error', 'message' => 'Hanya Dosen PA / Kaprodi yang dapat menyetujui KRS.'], 403);
+            }
+            if ((int) $krs->mahasiswa?->dosen_wali_id !== (int) $dosen->id) {
+                return response()->json(['status' => 'error', 'message' => 'Anda bukan Dosen PA mahasiswa ini. Persetujuan ditolak.'], 403);
+            }
+        }
 
         $krs->update([
             'status' => 'disetujui',
@@ -756,8 +782,10 @@ class PerkuliahanController extends Controller
 
         if ($request->filled('search')) {
             $s = $request->search;
-            $query->whereHas('krsDetail.krs.mahasiswa', fn($mq) => $mq->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nim', 'like', "%{$s}%"))
-                  ->orWhereHas('krsDetail.kelas.mataKuliah', fn($mkq) => $mkq->where('nama', 'like', "%{$s}%"));
+            $query->where(function ($wq) use ($s) {
+                $wq->whereHas('krsDetail.krs.mahasiswa', fn($mq) => $mq->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nim', 'like', "%{$s}%"))
+                   ->orWhereHas('krsDetail.kelas.mataKuliah', fn($mkq) => $mkq->where('nama', 'like', "%{$s}%")->orWhere('kode_mk', 'like', "%{$s}%"));
+            });
         }
 
         if ($request->filled('kelas_id')) {
@@ -869,9 +897,6 @@ class PerkuliahanController extends Controller
         if (!$mhs && $request->filled('mahasiswa_id')) {
             $mhs = Mahasiswa::with(['programStudi.fakultas', 'dosenWali', 'konversiTransfer.details.mataKuliahDiakui'])->find($request->mahasiswa_id);
         }
-        if (!$mhs) {
-            $mhs = Mahasiswa::with(['programStudi.fakultas', 'dosenWali', 'konversiTransfer.details.mataKuliahDiakui'])->first();
-        }
 
         if (!$mhs) {
             return response()->json(['status' => 'error', 'message' => 'Mahasiswa tidak ditemukan.'], 404);
@@ -895,15 +920,23 @@ class PerkuliahanController extends Controller
             foreach ($mhs->konversiTransfer->details as $konv) {
                 $mk = $konv->mataKuliahDiakui;
                 $sks = $mk ? $mk->total_sks : $konv->sks_asal;
-                $huruf = $konv->nilai_huruf_asal;
-                $mutu = 4.0;
-                if ($huruf === 'A-') $mutu = 3.75;
-                elseif ($huruf === 'B+') $mutu = 3.25;
-                elseif ($huruf === 'B') $mutu = 3.00;
-                elseif ($huruf === 'B-') $mutu = 2.75;
-                elseif ($huruf === 'C+') $mutu = 2.25;
-                elseif ($huruf === 'C') $mutu = 2.00;
+                $huruf = strtoupper(trim((string) $konv->nilai_huruf_asal));
+                $mutu = match ($huruf) {
+                    'A' => 4.00,
+                    'A-' => 3.75,
+                    'B+' => 3.25,
+                    'B' => 3.00,
+                    'B-' => 2.75,
+                    'C+' => 2.25,
+                    'C' => 2.00,
+                    'D' => 1.00,
+                    'E' => 0.00,
+                    default => 0.00,
+                };
 
+                if ($huruf === 'D' || $huruf === 'E' || $huruf === '') {
+                    continue;
+                }
                 $bobot = $mutu * $sks;
                 $totalSks += $sks;
                 $totalBobotMutu += $bobot;
@@ -1046,10 +1079,15 @@ class PerkuliahanController extends Controller
             $request->only(['tanggal', 'materi', 'jam_mulai', 'jam_selesai'])
         );
 
-        // Auto create attendance logs for all enrolled students
+        // Auto create attendance logs for all enrolled students (via KRS -> mahasiswa_id)
         $enrolledStudents = \App\Models\Siakad\KrsDetail::where('kelas_id', $kelasId)
-            ->whereHas('krs', fn($q) => $q->where('status', 'disetujui'))
-            ->pluck('mahasiswa_id');
+            ->whereHas('krs', fn($q) => $q->whereIn('status', ['disetujui', 'diajukan']))
+            ->with('krs')
+            ->get()
+            ->map(fn($d) => $d->krs?->mahasiswa_id)
+            ->filter()
+            ->unique()
+            ->values();
 
         foreach ($enrolledStudents as $mhsId) {
             \App\Models\Siakad\AbsensiMahasiswa::firstOrCreate(

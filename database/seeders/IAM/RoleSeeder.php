@@ -92,6 +92,21 @@ class RoleSeeder extends Seeder
                 'slug' => 'admin_spmb',
                 'description' => 'Administrator Penerimaan Mahasiswa Baru (SPMB)',
             ],
+            [
+                'name' => 'Admin Keuangan Akuntansi',
+                'slug' => 'admin_keuangan_akuntansi',
+                'description' => 'Staf keuangan bidang akuntansi: Jurnal Umum, Buku Besar, COA, laporan, & rekening',
+            ],
+            [
+                'name' => 'Admin Keuangan Pembayaran Mahasiswa',
+                'slug' => 'admin_keuangan_pembayaran',
+                'description' => 'Staf keuangan bidang pembayaran mahasiswa: tagihan, kasir, validasi manual, & gateway',
+            ],
+            [
+                'name' => 'Petugas Kas Kecil',
+                'slug' => 'petugas_kas_kecil',
+                'description' => 'Petugas pengelola kas kecil (petty cash) unit: input transaksi keluar, lihat saldo, & mengajukan kas langsung',
+            ],
         ];
 
         foreach ($roles as $role) {

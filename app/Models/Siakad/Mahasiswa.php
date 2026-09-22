@@ -119,14 +119,15 @@ class Mahasiswa extends Model
                 foreach ($konvTransfer->details as $konv) {
                     $mk = $konv->mataKuliahDiakui;
                     $sks = $mk ? $mk->total_sks : $konv->sks_asal;
-                    $huruf = $konv->nilai_huruf_asal;
-                    $mutu = 4.0;
-                    if ($huruf === 'A-') $mutu = 3.75;
-                    elseif ($huruf === 'B+') $mutu = 3.25;
-                    elseif ($huruf === 'B') $mutu = 3.00;
-                    elseif ($huruf === 'B-') $mutu = 2.75;
-                    elseif ($huruf === 'C+') $mutu = 2.25;
-                    elseif ($huruf === 'C') $mutu = 2.00;
+                    $huruf = strtoupper(trim((string) $konv->nilai_huruf_asal));
+                    $mutu = match ($huruf) {
+                        'A' => 4.00, 'A-' => 3.75, 'B+' => 3.25, 'B' => 3.00,
+                        'B-' => 2.75, 'C+' => 2.25, 'C' => 2.00, 'D' => 1.00,
+                        'E' => 0.00, default => 0.00,
+                    };
+                    if ($huruf === 'D' || $huruf === 'E' || $huruf === '') {
+                        continue;
+                    }
 
                     $totalSks += $sks;
                     $totalMutu += ($mutu * $sks);

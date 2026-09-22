@@ -29,9 +29,9 @@ class InstallDummyModuleCommand extends Command
             'sippm' => [
                 '\Database\Seeders\Sippm\SippmSampleDataSeeder'
             ],
-            'sikeu' => [
-                '\Database\Seeders\Sikeu\SikeuDummySeeder'
-            ],
+            // NOTE (2026-09-22): dummy SIKEU dihapus agar data percobaan tidak berisiko
+            // tercampur ke prod. Jalur prod (module:install / install-prod) hanya
+            // menjalankan SikeuAkuntansiSeeder + SikeuMasterSeeder (master murni).
             'spmb' => [
                 '\Database\Seeders\Spmb\MasterProgramStudiSeeder'
             ]

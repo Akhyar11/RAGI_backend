@@ -126,6 +126,8 @@ class MahasiswaTagihanController extends Controller
 
             $mhs = $t->mahasiswa;
             $tipeMhs = $t->tipeTagihanMahasiswa;
+            $pending = $this->pendingVerifikasi($t->id);
+            $rejected = $this->lastRejection($t->id);
 
             return [
                 'id' => $t->id,
@@ -142,7 +144,21 @@ class MahasiswaTagihanController extends Controller
                 'status' => $t->status,
                 'jatuh_tempo' => $t->jatuh_tempo ? (is_object($t->jatuh_tempo) ? $t->jatuh_tempo->format('Y-m-d') : (string)$t->jatuh_tempo) : null,
                 'va_number' => $t->virtualAccount->va_number ?? null,
-                'bank_nama' => $t->virtualAccount->bank_nama ?? 'Bank BNI',
+                'bank_nama' => $t->virtualAccount->bank_nama ?? 'Bank BSN',
+                'h2h_billing_id' => $t->h2h_billing_id,
+                'h2h_id_tagihan' => $t->h2h_id_tagihan,
+                'h2h_custid' => $t->h2h_custid,
+                'pending_verification' => $pending ? [
+                    'kode_transaksi' => $pending->kode_transaksi,
+                    'channel_bayar' => $pending->channel_bayar,
+                    'jumlah_bayar' => (float) $pending->jumlah_bayar,
+                    'waktu_bayar' => $pending->waktu_bayar ? (string) $pending->waktu_bayar : null,
+                ] : null,
+                'last_rejection' => $rejected ? [
+                    'kode_transaksi' => $rejected->kode_transaksi,
+                    'catatan' => $rejected->catatan,
+                    'waktu_bayar' => $rejected->waktu_bayar ? (string) $rejected->waktu_bayar : null,
+                ] : null,
                 'mahasiswa' => [
                     'nama' => $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . $t->mahasiswa_id),
                     'nim' => $mhs?->nim ?? $tipeMhs?->nim ?? ($t->mahasiswa_id ? (string)$t->mahasiswa_id : '-'),
@@ -198,15 +214,15 @@ class MahasiswaTagihanController extends Controller
     {
         $channels = [
             [
-                'id' => 'BNI',
-                'name' => 'Bank BNI (Virtual Account)',
-                'code' => 'BNI',
+                'id' => 'BSN',
+                'name' => 'Bank BSN (Virtual Account H2H)',
+                'code' => 'BSN',
                 'type' => 'VIRTUAL_ACCOUNT',
                 'category' => 'va',
-                'prefix' => '88012',
-                'logo_color' => 'from-orange-600 to-amber-600',
+                'prefix' => '90012',
+                'logo_color' => 'from-teal-700 to-emerald-800',
                 'badge' => 'Otomatis Realtime',
-                'description' => 'Transfer ATM BNI, BNI Mobile Banking, SMS Banking, & Agen 46',
+                'description' => 'VA Host-to-Host BSN (CUSTID = No. Pendaftaran), verifikasi otomatis & masuk saldo BSN',
                 'fee' => 0,
                 'is_active' => true,
             ],
@@ -275,12 +291,235 @@ class MahasiswaTagihanController extends Controller
                 'fee' => 0,
                 'is_active' => true,
             ],
+            [
+                'id' => 'MANUAL',
+                'name' => 'Transfer Manual (BNI / BSN)',
+                'code' => 'MANUAL',
+                'type' => 'MANUAL_TRANSFER',
+                'category' => 'manual',
+                'prefix' => '-',
+                'logo_color' => 'from-slate-600 to-slate-800',
+                'badge' => 'Upload Bukti',
+                'description' => 'Transfer ke rekening BNI/BSN kampus lalu unggah bukti, diverifikasi keuangan',
+                'fee' => 0,
+                'is_active' => true,
+            ],
         ];
 
         return response()->json([
             'status' => 'success',
             'data' => $channels
         ]);
+    }
+
+    /**
+     * GET /api/v1/sikeu/mahasiswa/rekening-tujuan
+     * Daftar rekening kampus tujuan transfer manual untuk mahasiswa.
+     * Hanya bank_manual BNI/BSN yang aktif dan bernomor rekening
+     * (disetting admin/keuangan via menu Unit Kas & Rekening Bank).
+     * Tanpa saldo dan data kas internal lain.
+     */
+    public function rekeningTujuan()
+    {
+        $data = \App\Models\Sikeu\UnitKas::where('status', true)
+            ->where('kanal', 'bank_manual')
+            ->whereIn('bank_name', ['BNI', 'BSN'])
+            ->whereNotNull('bank_account_number')
+            ->where('bank_account_number', '!=', '')
+            ->orderBy('bank_name')
+            ->get(['id', 'nama_kas', 'kanal', 'bank_name', 'bank_account_number', 'bank_account_name']);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * Kode unik transfer manual (1-499, 3 digit) yang belum dipakai
+     * pembayaran pending lain. Dipakai sebagai pembeda di mutasi bank:
+     * nominal_transfer = jumlah_bayar + kode_unik.
+     */
+    protected function generateKodeUnik(): int
+    {
+        $terpakai = Pembayaran::where('status', 'pending')
+            ->whereNotNull('kode_unik')
+            ->pluck('kode_unik')
+            ->map(fn ($v) => (int) $v)
+            ->all();
+
+        for ($i = 0; $i < 30; $i++) {
+            $kode = random_int(1, 499);
+            if (!in_array($kode, $terpakai, true)) {
+                return $kode;
+            }
+        }
+        for ($kode = 1; $kode <= 499; $kode++) {
+            if (!in_array($kode, $terpakai, true)) {
+                return $kode;
+            }
+        }
+
+        throw new \RuntimeException('Stok kode unik habis, hubungi bagian keuangan.');
+    }
+
+    protected function rekeningRingkas($unitKas): array
+    {
+        return [
+            'unit_kas_id' => $unitKas->id,
+            'nama_kas' => $unitKas->nama_kas,
+            'bank_name' => $unitKas->bank_name,
+            'bank_account_number' => $unitKas->bank_account_number,
+            'bank_account_name' => $unitKas->bank_account_name,
+        ];
+    }
+
+    /**
+     * Pembayaran manual yang sedang menunggu validasi keuangan
+     * (sudah ada bukti, belum disetujui/ditolak) untuk satu tagihan.
+     */
+    protected function pendingVerifikasi(int $tagihanId, ?int $exceptId = null): ?Pembayaran
+    {
+        $q = Pembayaran::where('tagihan_id', $tagihanId)
+            ->where('status', 'pending')
+            ->where('channel_bayar', 'MANUAL_TRANSFER')
+            ->whereNotNull('bukti_bayar_path')
+            ->orderBy('id', 'desc');
+        if ($exceptId) {
+            $q->where('id', '!=', $exceptId);
+        }
+
+        return $q->first();
+    }
+
+    /**
+     * Penolakan terakhir (beserta alasan keuangan) untuk satu tagihan.
+     */
+    protected function lastRejection(int $tagihanId): ?Pembayaran
+    {
+        return Pembayaran::where('tagihan_id', $tagihanId)
+            ->where('status', 'rejected')
+            ->orderBy('id', 'desc')
+            ->first();
+    }
+
+    /**
+     * POST /api/v1/sikeu/pembayaran/manual-init
+     * Inisiasi transfer manual: kunci nominal + kode unik per tagihan sebelum
+     * mahasiswa transfer ke BNI/BSN. Mengembalikan nominal_transfer yang harus
+     * ditransfer persis agar mudah ditemukan di mutasi bank.
+     */
+    public function manualInit(\App\Http\Requests\Sikeu\StoreManualInitRequest $request)
+    {
+        $mahasiswaId = $this->resolveMahasiswaId($request);
+        if (!$mahasiswaId) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Identitas mahasiswa tidak ditemukan.',
+            ], 403);
+        }
+
+        $unitKas = \App\Models\Sikeu\UnitKas::find($request->unit_kas_id);
+        if (!$unitKas || !$unitKas->status || $unitKas->kanal !== 'bank_manual'
+            || !in_array(strtoupper((string) $unitKas->bank_name), ['BNI', 'BSN'])
+            || empty($unitKas->bank_account_number)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Rekening tujuan harus bank manual BNI/BSN yang aktif dan bernomor rekening.',
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+            $inits = [];
+
+            foreach ($request->items as $item) {
+                $tagihan = TagihanMahasiswa::find($item['tagihan_id']);
+                if (!$tagihan || (int) $tagihan->mahasiswa_id !== (int) $mahasiswaId) {
+                    throw new \InvalidArgumentException('Tagihan #' . $item['tagihan_id'] . ' bukan milik Anda.');
+                }
+
+                $totalBersih = (float) ($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan);
+                $sisa = max(0, $totalBersih - (float) $tagihan->total_bayar);
+                if ($sisa <= 0) {
+                    throw new \InvalidArgumentException("Tagihan {$tagihan->nomor_tagihan} sudah lunas.");
+                }
+
+                $jumlah = isset($item['jumlah_bayar']) ? (float) $item['jumlah_bayar'] : $sisa;
+                if ($jumlah <= 0 || $jumlah > $sisa) {
+                    throw new \InvalidArgumentException("Nominal tagihan {$tagihan->nomor_tagihan} melebihi sisa (" . number_format($sisa, 0, ',', '.') . ').');
+                }
+
+                if ($this->pendingVerifikasi($tagihan->id)) {
+                    throw new \InvalidArgumentException("Tagihan {$tagihan->nomor_tagihan} sedang menunggu validasi keuangan dan terkunci untuk pembayaran lain.");
+                }
+
+                // Kode unik stabil: pakai ulang inisiasi pending tanpa bukti untuk
+                // kombinasi tagihan + rekening + nominal yang sama. Ganti metode
+                // (rekening) atau nominal → kode baru.
+                $existing = Pembayaran::where('tagihan_id', $tagihan->id)
+                    ->where('unit_kas_id', $unitKas->id)
+                    ->where('status', 'pending')
+                    ->where('channel_bayar', 'MANUAL_TRANSFER')
+                    ->whereNull('bukti_bayar_path')
+                    ->where('jumlah_bayar', $jumlah)
+                    ->orderBy('id', 'desc')
+                    ->first();
+
+                if ($existing && !empty($existing->kode_unik)) {
+                    $kodeUnik = (int) $existing->kode_unik;
+                    $pembayaran = $existing;
+                    $reused = true;
+                } else {
+                    $kodeUnik = $this->generateKodeUnik();
+
+                    $pembayaran = Pembayaran::create([
+                        'tagihan_id' => $tagihan->id,
+                        'unit_kas_id' => $unitKas->id,
+                        'kode_transaksi' => 'TRX-MANUAL-' . date('Ymd') . '-' . strtoupper(Str::random(5)),
+                        'jumlah_bayar' => $jumlah,
+                        'kode_unik' => $kodeUnik,
+                        'waktu_bayar' => null,
+                        'channel_bayar' => 'MANUAL_TRANSFER',
+                        'bank_pengirim' => $unitKas->bank_name,
+                        'catatan' => 'Inisiasi transfer manual, menunggu bukti.',
+                        'status' => 'pending',
+                    ]);
+                    $reused = false;
+                }
+
+                $inits[] = [
+                    'pembayaran_id' => $pembayaran->id,
+                    'tagihan_id' => $tagihan->id,
+                    'nomor_tagihan' => $tagihan->nomor_tagihan,
+                    'jumlah_bayar' => (float) $pembayaran->jumlah_bayar,
+                    'kode_unik' => $kodeUnik,
+                    'kode_unik_tampil' => str_pad((string) $kodeUnik, 3, '0', STR_PAD_LEFT),
+                    'nominal_transfer' => (float) $pembayaran->jumlah_bayar + $kodeUnik,
+                    'reused' => $reused,
+                    'rekening' => $this->rekeningRingkas($unitKas),
+                ];
+            }
+
+            DB::commit();
+
+            $allReused = count($inits) > 0 && collect($inits)->every(fn ($it) => !empty($it['reused']));
+
+            return response()->json([
+                'status' => 'success',
+                'message' => $allReused
+                    ? 'Kode unik sebelumnya dipakai ulang (tidak berubah). Transfer persis sebesar nominal yang tertera lalu unggah buktinya.'
+                    : 'Kode unik diterbitkan. Transfer persis sebesar nominal yang tertera lalu unggah buktinya.',
+                'data' => $inits,
+            ], 201);
+        } catch (\InvalidArgumentException $e) {
+            DB::rollBack();
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Inisiasi transfer manual gagal: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Gagal inisiasi transfer: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -296,6 +535,8 @@ class MahasiswaTagihanController extends Controller
         switch (strtoupper($bankCode)) {
             case 'MANDIRI':
                 return \App\Services\Sikeu\VaNumberService::generate($cleanId, '70012');
+            case 'BSN':
+                return \App\Services\Sikeu\VaNumberService::generate($cleanId, '90012');
             case 'BRI':
                 return \App\Services\Sikeu\VaNumberService::generate($cleanId, '12345');
             case 'BSI':
@@ -321,7 +562,7 @@ class MahasiswaTagihanController extends Controller
         $tagihan = TagihanMahasiswa::with(['details.masterBiaya', 'virtualAccount', 'mahasiswa.programStudi', 'tipeTagihanMahasiswa'])->findOrFail($id);
 
         $sisa = max(0, ($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan) - $tagihan->total_bayar);
-        $bankCode = strtoupper($request->query('bank_kode', $tagihan->virtualAccount->bank_kode ?? 'BNI'));
+        $bankCode = strtoupper($request->query('bank_kode', $tagihan->virtualAccount->bank_kode ?? 'BSN'));
 
         $mhs = $tagihan->mahasiswa;
         $tipeMhs = $tagihan->tipeTagihanMahasiswa;
@@ -406,7 +647,7 @@ class MahasiswaTagihanController extends Controller
         }
 
         $tagihanIds = $request->input('tagihan_ids', []);
-        $bankCode = strtoupper($request->input('bank_kode', 'BNI'));
+        $bankCode = strtoupper($request->input('bank_kode', 'BSN'));
 
         if (empty($tagihanIds) && $request->filled('tagihan_id')) {
             $tagihanIds = [(int)$request->tagihan_id];
@@ -554,10 +795,20 @@ class MahasiswaTagihanController extends Controller
             ], 404);
         }
 
+        // Kunci: tagihan yang bukti transfernya sedang menunggu validasi
+        // tidak boleh dibayar lagi via metode lain sampai ada keputusan.
+        $locked = $tagihans->first(fn ($t) => $this->pendingVerifikasi($t->id));
+        if ($locked) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Tagihan {$locked->nomor_tagihan} sedang menunggu validasi keuangan dan terkunci untuk pembayaran lain.",
+            ], 422);
+        }
+
         try {
             DB::beginTransaction();
 
-            $bankKode = strtoupper($request->input('bank_kode', 'BNI'));
+            $bankKode = strtoupper($request->input('bank_kode', 'BSN'));
             $channel = $request->input('channel_bayar', 'VA_' . $bankKode);
             $isSimulation = $request->boolean('simulate', false);
             $createdPayments = [];
@@ -606,9 +857,14 @@ class MahasiswaTagihanController extends Controller
 
                 // Jika simulasi pembayaran langsung (sandbox mode)
                 if ($isSimulation) {
+                    $unitKasSim = \App\Services\Sikeu\JurnalSikeuService::resolveUnitKasUntukChannel($channel, $bankKode);
+                    if ($unitKasSim) {
+                        $unitKasSim->increment('saldo_saat_ini', $sisa);
+                    }
                     $pembayaran = Pembayaran::create([
                         'tagihan_id' => $tagihan->id,
                         'virtual_account_id' => $va->id,
+                        'unit_kas_id' => $unitKasSim?->id,
                         'kode_transaksi' => $trxCode,
                         'jumlah_bayar' => $sisa,
                         'waktu_bayar' => now(),
@@ -623,7 +879,7 @@ class MahasiswaTagihanController extends Controller
                     $tagihan->status = 'lunas';
                     $tagihan->save();
 
-                    \App\Services\Sikeu\AutoJournalService::recordStudentPaymentJournal($tagihan, (float) $sisa);
+                    \App\Services\Sikeu\AutoJournalService::recordStudentPaymentJournal($tagihan, (float) $sisa, $unitKasSim);
 
                     $createdPayments[] = [
                         'kode_transaksi' => $trxCode,
@@ -694,7 +950,7 @@ class MahasiswaTagihanController extends Controller
             $vaNumber = $request->input('va_number');
             $nominal = (float)$request->input('nominal');
             $orderId = $request->input('order_id', 'TRX-VA-' . date('Ymd') . '-' . Str::upper(Str::random(5)));
-            $bankKode = strtoupper($request->input('bank_kode', 'BNI'));
+            $bankKode = strtoupper($request->input('bank_kode', 'BSN'));
             $channel = $request->input('channel', 'VA_' . $bankKode);
 
             // Idempotency check
@@ -723,9 +979,16 @@ class MahasiswaTagihanController extends Controller
             $tagihan = $va->tagihan;
             $va->update(['status' => 'dibayar']);
 
+            // Resolve kanal penerima (Xendit / VA bank H2H) -> saldo unit kas terkait
+            $unitKasVa = \App\Services\Sikeu\JurnalSikeuService::resolveUnitKasUntukChannel($channel, $bankKode);
+            if ($unitKasVa) {
+                $unitKasVa->increment('saldo_saat_ini', $nominal);
+            }
+
             $pembayaran = Pembayaran::create([
                 'tagihan_id' => $tagihan->id,
                 'virtual_account_id' => $va->id,
+                'unit_kas_id' => $unitKasVa?->id,
                 'kode_transaksi' => $orderId,
                 'jumlah_bayar' => $nominal,
                 'waktu_bayar' => now(),
@@ -733,7 +996,7 @@ class MahasiswaTagihanController extends Controller
                 'bank_pengirim' => $bankKode,
                 'status' => 'success',
                 'diverifikasi_oleh' => auth()->id() ?? 1,
-                'catatan' => 'Pelunasan via Webhook Bank ' . $bankKode . ' (VA: ' . $vaNumber . ')',
+                'catatan' => 'Pelunasan via Webhook Bank ' . $bankKode . ' (VA: ' . $vaNumber . ')' . ($unitKasVa ? " -> {$unitKasVa->nama_kas}" : ''),
             ]);
 
             // Update Tagihan
@@ -747,7 +1010,7 @@ class MahasiswaTagihanController extends Controller
             ]);
 
             // Auto Jurnal Akuntansi
-            \App\Services\Sikeu\AutoJournalService::recordStudentPaymentJournal($tagihan, $nominal);
+            \App\Services\Sikeu\AutoJournalService::recordStudentPaymentJournal($tagihan, $nominal, $unitKasVa);
 
             DB::commit();
 
@@ -790,7 +1053,8 @@ class MahasiswaTagihanController extends Controller
             'tagihan.details.masterBiaya',
             'tagihan.mahasiswa.programStudi',
             'tagihan.tipeTagihanMahasiswa',
-            'virtualAccount'
+            'virtualAccount',
+            'unitKas'
         ])
             ->whereIn('tagihan_id', $tagihanIds)
             ->orderBy('waktu_bayar', 'desc')
@@ -816,10 +1080,14 @@ class MahasiswaTagihanController extends Controller
                 'periode_label' => $periode,
                 'rincian_pembayaran' => $rincian,
                 'jumlah_bayar' => (float)$p->jumlah_bayar,
+                'kode_unik' => $p->kode_unik !== null ? (int) $p->kode_unik : null,
+                'nominal_transfer' => (float)$p->jumlah_bayar + (int)($p->kode_unik ?? 0),
                 'waktu_bayar' => $p->waktu_bayar ? (is_object($p->waktu_bayar) && method_exists($p->waktu_bayar, 'format') ? $p->waktu_bayar->format('Y-m-d H:i:s') : (string)$p->waktu_bayar) : ($p->created_at ? $p->created_at->format('Y-m-d H:i:s') : date('Y-m-d H:i:s')),
                 'channel_bayar' => $p->channel_bayar,
+                'unit_kas_nama' => $p->unitKas?->nama_kas,
                 'status' => $p->status,
                 'catatan' => $p->catatan,
+                'bukti_bayar_url' => $p->bukti_bayar_path ? asset(\Illuminate\Support\Facades\Storage::url($p->bukti_bayar_path)) : null,
                 'mahasiswa' => [
                     'nama' => $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? ('Mahasiswa #' . ($t?->mahasiswa_id ?? '-')),
                     'nim' => $mhs?->nim ?? $tipeMhs?->nim ?? ($t?->mahasiswa_id ? (string)$t->mahasiswa_id : '-'),
@@ -842,5 +1110,163 @@ class MahasiswaTagihanController extends Controller
             'status' => 'success',
             'data' => $data
         ]);
+    }
+
+    /**
+     * POST /api/v1/sikeu/pembayaran/manual-upload
+     * Mahasiswa mengunggah bukti transfer manual ke rekening kampus.
+     * Dua mode:
+     *  A. pembayaran_id (hasil manual-init): lampirkan bukti ke inisiasi berkode unik.
+     *  B. legacy (tagihan_id + unit_kas_id + jumlah_bayar): buat pembayaran pending + kode unik.
+     * Status awal 'pending' — tagihan & jurnal baru berubah saat keuangan approve.
+     */
+    public function uploadBuktiManual(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'pembayaran_id' => 'nullable|integer|exists:sikeu_pembayaran,id',
+            'tagihan_id' => 'required_without:pembayaran_id|integer|exists:sikeu_tagihan_mahasiswa,id',
+            'unit_kas_id' => 'required_without:pembayaran_id|integer|exists:sikeu_unit_kas,id',
+            'jumlah_bayar' => 'required_without:pembayaran_id|numeric|min:1',
+            'tanggal_transfer' => 'required|date|before_or_equal:today',
+            'bukti_transfer' => 'required|file|mimes:jpg,jpeg,png|max:5120',
+            'catatan' => 'nullable|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validasi bukti transfer gagal.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $mahasiswaId = $this->resolveMahasiswaId($request);
+        if (!$mahasiswaId) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Identitas mahasiswa tidak ditemukan.',
+            ], 403);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Mode A: lampirkan bukti ke inisiasi yang sudah berkode unik.
+            if ($request->filled('pembayaran_id')) {
+                $pembayaran = Pembayaran::find($request->pembayaran_id);
+                $tagihan = $pembayaran->tagihan;
+                if (!$tagihan || (int) $tagihan->mahasiswa_id !== (int) $mahasiswaId) {
+                    throw new \InvalidArgumentException('Data pembayaran ini bukan milik Anda.');
+                }
+                if ($pembayaran->status !== 'pending' || !empty($pembayaran->bukti_bayar_path)) {
+                    throw new \InvalidArgumentException('Inisiasi ini sudah diproses, buat inisiasi baru bila diperlukan.');
+                }
+                if ($this->pendingVerifikasi($tagihan->id, (int) $pembayaran->id)) {
+                    throw new \InvalidArgumentException("Tagihan {$tagihan->nomor_tagihan} sedang menunggu validasi keuangan dan terkunci untuk pembayaran lain.");
+                }
+
+                $fileName = Str::uuid() . '.' . $request->file('bukti_transfer')->getClientOriginalExtension();
+                $pembayaran->bukti_bayar_path = $request->file('bukti_transfer')->storeAs(
+                    'sikeu/bukti_transfer/' . date('Y/m'),
+                    $fileName,
+                    'public'
+                );
+                $pembayaran->waktu_bayar = $request->tanggal_transfer;
+                if ($request->filled('catatan')) {
+                    $pembayaran->catatan = $request->catatan;
+                }
+                $pembayaran->save();
+
+                DB::commit();
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Bukti transfer terkirim. Menunggu verifikasi bagian keuangan.',
+                    'data' => array_merge($pembayaran->fresh()->toArray(), [
+                        'nominal_transfer' => (float) $pembayaran->jumlah_bayar + (int) $pembayaran->kode_unik,
+                    ]),
+                ], 200);
+            }
+
+            $tagihan = TagihanMahasiswa::find($request->tagihan_id);
+            if ((int)$tagihan->mahasiswa_id !== (int)$mahasiswaId) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tagihan ini bukan milik Anda.',
+                ], 403);
+            }
+
+            if ($this->pendingVerifikasi($tagihan->id)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Tagihan {$tagihan->nomor_tagihan} sedang menunggu validasi keuangan dan terkunci untuk pembayaran lain.",
+                ], 422);
+            }
+
+            $totalBersih = (float)($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan);
+            $sisa = max(0, $totalBersih - (float)$tagihan->total_bayar);
+            if ($sisa <= 0) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tagihan sudah lunas.',
+                ], 422);
+            }
+            if ((float)$request->jumlah_bayar > $sisa) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Nominal melebihi sisa tagihan (' . number_format($sisa, 0, ',', '.') . ').',
+                ], 422);
+            }
+
+            $unitKas = \App\Models\Sikeu\UnitKas::find($request->unit_kas_id);
+            if (!$unitKas || !$unitKas->status || !in_array($unitKas->kanal, ['tunai', 'bank_manual'])) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Rekening tujuan harus kas tunai atau bank manual yang aktif.',
+                ], 422);
+            }
+
+            $fileName = Str::uuid() . '.' . $request->file('bukti_transfer')->getClientOriginalExtension();
+            $buktiPath = $request->file('bukti_transfer')->storeAs(
+                'sikeu/bukti_transfer/' . date('Y/m'),
+                $fileName,
+                'public'
+            );
+
+            $kodeUnik = $this->generateKodeUnik();
+            $pembayaran = Pembayaran::create([
+                'tagihan_id' => $tagihan->id,
+                'unit_kas_id' => $unitKas->id,
+                'kode_transaksi' => 'TRX-MANUAL-' . date('Ymd') . '-' . strtoupper(Str::random(5)),
+                'jumlah_bayar' => (float)$request->jumlah_bayar,
+                'kode_unik' => $kodeUnik,
+                'waktu_bayar' => $request->tanggal_transfer,
+                'channel_bayar' => 'MANUAL_TRANSFER',
+                'bank_pengirim' => $unitKas->bank_name,
+                'bukti_bayar_path' => $buktiPath,
+                'catatan' => $request->catatan,
+                'status' => 'pending',
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Bukti transfer terkirim. Menunggu verifikasi bagian keuangan.',
+                'data' => array_merge($pembayaran->toArray(), [
+                    'nominal_transfer' => (float) $pembayaran->jumlah_bayar + (int) $kodeUnik,
+                ]),
+            ], 201);
+        } catch (\InvalidArgumentException $e) {
+            DB::rollBack();
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Upload bukti manual gagal: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengunggah bukti: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

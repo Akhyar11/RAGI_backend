@@ -35,6 +35,21 @@ class MahasiswaObserver
                 oldValues: $mahasiswa->getOriginal(),
                 newValues: $mahasiswa->getChanges()
             );
+
+            // Jejak status akademik BAAK (cuti/mangkir/dropout/lulus)
+            if ($mahasiswa->wasChanged('status')) {
+                try {
+                    \App\Models\Siakad\StatusAkademikLog::create([
+                        'mahasiswa_id' => $mahasiswa->id,
+                        'status_lama' => $mahasiswa->getOriginal('status'),
+                        'status_baru' => $mahasiswa->status,
+                        'alasan' => request()->input('alasan_status') ?? request()->input('alasan'),
+                        'diubah_oleh' => auth()->id(),
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::warning('Gagal mencatat status_akademik_log: ' . $e->getMessage());
+                }
+            }
         }
     }
 

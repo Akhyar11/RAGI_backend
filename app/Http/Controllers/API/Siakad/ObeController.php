@@ -45,7 +45,7 @@ class ObeController extends Controller
     public function storeCpl(Request $request)
     {
         $request->validate([
-            'program_studi_id' => 'required|exists:master_program_studi,id',
+            'program_studi_id' => 'required|exists:spmb_master_program_studi,id',
             'kode_cpl' => 'required|string|max:50',
             'kategori' => 'required|in:sikap,pengetahuan,keterampilan_umum,keterampilan_khusus',
             'deskripsi' => 'required|string',
@@ -110,34 +110,6 @@ class ObeController extends Controller
             ->where('kelas_id', $kelasId)
             ->orderBy('urutan')
             ->get();
-
-        // Jika belum ada komponen OBE untuk kelas ini, buat default secara otomatis
-        if ($komponen->isEmpty()) {
-            $cpmks = $kelas->mataKuliah->cpmks;
-            $defaults = [
-                ['nama' => 'Tugas Mandiri & Terstruktur', 'teknik' => 'tugas', 'bobot' => 20, 'cpmk' => $cpmks->first()?->id],
-                ['nama' => 'Kuis & Evaluasi Formatif', 'teknik' => 'kuis', 'bobot' => 15, 'cpmk' => $cpmks->skip(1)->first()?->id ?? $cpmks->first()?->id],
-                ['nama' => 'Ujian Tengah Semester (UTS)', 'teknik' => 'tes_tulis', 'bobot' => 30, 'cpmk' => $cpmks->first()?->id],
-                ['nama' => 'Proyek PBL / Ujian Akhir (UAS)', 'teknik' => 'proyek', 'bobot' => 35, 'cpmk' => $cpmks->last()?->id],
-            ];
-
-            foreach ($defaults as $idx => $def) {
-                KomponenPenilaian::create([
-                    'kelas_id' => $kelasId,
-                    'cpmk_id' => $def['cpmk'],
-                    'nama_komponen' => $def['nama'],
-                    'teknik_penilaian' => $def['teknik'],
-                    'bobot' => $def['bobot'],
-                    'urutan' => $idx + 1,
-                    'is_aktif' => true,
-                ]);
-            }
-
-            $komponen = KomponenPenilaian::with(['cpmk', 'subCpmk'])
-                ->where('kelas_id', $kelasId)
-                ->orderBy('urutan')
-                ->get();
-        }
 
         $totalBobot = $komponen->sum('bobot');
 
@@ -683,46 +655,6 @@ class ObeController extends Controller
 
         $rpsList = $query->orderBy('created_at', 'desc')->get();
 
-        // Jika belum ada RPS untuk mata kuliah, inisiasi otomatis
-        if ($rpsList->isEmpty() && $request->filled('program_studi_id')) {
-            $mks = MataKuliah::whereHas('kurikulum', fn($q) => $q->where('program_studi_id', $request->program_studi_id))->get();
-            $dosenDefault = \App\Models\Siakad\Dosen::first();
-
-            foreach ($mks as $mk) {
-                $rps = \App\Models\Siakad\Rps::create([
-                    'mata_kuliah_id' => $mk->id,
-                    'tahun_ajaran' => '2026/2027',
-                    'semester' => $mk->semester_anjuran ?: 1,
-                    'dosen_pengembang_id' => $dosenDefault?->id,
-                    'koordinator_rmk_id' => $dosenDefault?->id,
-                    'kaprodi_id' => $dosenDefault?->id,
-                    'deskripsi_singkat' => "Mata kuliah {$mk->nama} membekali mahasiswa dengan penguasaan konsep, analisis terapan, dan perancangan luaran terpadu (OBE).",
-                    'pustaka_utama' => "1. Pressman, R. S. (2020). Software Engineering: A Practitioner's Approach.\n2. Tanenbaum, A. S. (2021). Modern Operating Systems.",
-                    'pustaka_pendukung' => "Jurnal Nasional Terakreditasi SINTA & IEEE Xplore.",
-                    'status' => 'disetujui',
-                    'disetujui_at' => now(),
-                ]);
-
-                // Buat 16 pertemuan mingguan default
-                for ($m = 1; $m <= 16; $m++) {
-                    $topik = $m === 8 ? 'Ujian Tengah Semester (Evaluasi CPMK 1 & 2)' : ($m === 16 ? 'Evaluasi Akhir Semester & Presentasi Proyek PBL (CPMK 3)' : "Topik Kajian Modul {$m}: Konsep, Penerapan, & Studi Kasus Lapangan");
-                    \App\Models\Siakad\RpsMingguan::create([
-                        'rps_id' => $rps->id,
-                        'minggu_ke' => $m,
-                        'kemampuan_akhir' => "Sub-CPMK {$m}: Mahasiswa mampu memahami dan menerapkan indikator materi pekan ke-{$m}.",
-                        'bahan_kajian' => $topik,
-                        'bentuk_metode' => 'Kuliah Interaktif, Diskusi, & Problem-Based Learning (PBL)',
-                        'estimasi_waktu' => '2 x 50 Menit',
-                        'pengalaman_belajar' => 'Menganalisis studi kasus nyata dan mengimplementasikan modul tugas terstruktur.',
-                        'indikator_penilaian' => 'Ketepatan analisis, kelengkapan kode/desain, dan keaktifan diskusi.',
-                        'bobot_penilaian' => $m === 8 ? 25.0 : ($m === 16 ? 30.0 : 3.0),
-                    ]);
-                }
-            }
-
-            $rpsList = $query->orderBy('created_at', 'desc')->get();
-        }
-
         return response()->json([
             'status' => 'success',
             'data' => $rpsList
@@ -816,9 +748,13 @@ class ObeController extends Controller
             }
         }
 
-        // 3. Fallback jika admin/dosen menguji tanpa ID spesifik
+        // 3. Admin/dosen wajib menyertakan ID spesifik, tanpa fallback ke mahasiswa pertama
         if (!$mahasiswa) {
-            $mahasiswa = Mahasiswa::with(['programStudi.fakultas'])->first();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Data mahasiswa tidak ditemukan. Sertakan mahasiswa_id yang valid.',
+                'data' => null,
+            ], 404);
         }
 
         if (!$mahasiswa) {
@@ -836,28 +772,6 @@ class ObeController extends Controller
 
         if ($cpls->isEmpty()) {
             $cpls = Cpl::with(['cpmks.mataKuliah'])->get();
-        }
-
-        // Jika belum ada data CPL di database, sediakan standar CPL SN-DIKTI secara otomatis
-        if ($cpls->isEmpty()) {
-            $defaultCpls = [
-                ['kode' => 'CPL-01', 'kategori' => 'sikap', 'deskripsi' => 'Bertakwa kepada Tuhan Yang Maha Esa dan mampu menunjukkan sikap religius serta menjunjung tinggi nilai kemanusiaan.'],
-                ['kode' => 'CPL-02', 'kategori' => 'pengetahuan', 'deskripsi' => 'Menguasai konsep teoretis bidang pengetahuan keilmuan dan rekayasa terapan secara mendalam.'],
-                ['kode' => 'CPL-03', 'kategori' => 'keterampilan_umum', 'deskripsi' => 'Mampu menerapkan pemikiran logis, kritis, sistematis, dan inovatif dalam konteks pengembangan iptek.'],
-                ['kode' => 'CPL-04', 'kategori' => 'keterampilan_khusus', 'deskripsi' => 'Mampu merancang, mengimplementasikan, dan mengevaluasi solusi terpadu berbasis luaran industri modern.'],
-            ];
-
-            foreach ($defaultCpls as $def) {
-                Cpl::create([
-                    'program_studi_id' => $mahasiswa->program_studi_id,
-                    'kode_cpl' => $def['kode'],
-                    'kategori' => $def['kategori'],
-                    'deskripsi' => $def['deskripsi'],
-                    'is_active' => true,
-                ]);
-            }
-
-            $cpls = Cpl::where('program_studi_id', $mahasiswa->program_studi_id)->with(['cpmks.mataKuliah'])->get();
         }
 
         // Ambil data ketercapaian CPMK dari KRS mahasiswa
@@ -997,14 +911,25 @@ class ObeController extends Controller
         $submittedRps = (clone $rpsQuery)->where('status', 'diajukan')->count();
         $draftRps = (clone $rpsQuery)->where('status', 'draft')->count();
 
-        // Rata-rata ketercapaian CPL per kategori
+        // Rata-rata ketercapaian CPL per kategori (dihitung dari data riil, 0 bila belum dinilai)
         $cpls = $cplQuery->get();
         $cplStats = [
-            'sikap' => 88.5,
-            'pengetahuan' => 82.4,
-            'keterampilan_umum' => 85.0,
-            'keterampilan_khusus' => 81.2,
+            'sikap' => 0.0,
+            'pengetahuan' => 0.0,
+            'keterampilan_umum' => 0.0,
+            'keterampilan_khusus' => 0.0,
         ];
+        if ($cpls->isNotEmpty()) {
+            $scores = \App\Models\Siakad\KetercapaianCpmkMahasiswa::with('cpmk.cpl')
+                ->when($prodiId, fn($q) => $q->whereHas('cpmk.cpl', fn($cq) => $cq->where('program_studi_id', $prodiId)))
+                ->get()
+                ->groupBy(fn($r) => $r->cpmk?->cpl?->kategori);
+            foreach ($cplStats as $kat => $val) {
+                if (isset($scores[$kat]) && $scores[$kat]->isNotEmpty()) {
+                    $cplStats[$kat] = round($scores[$kat]->avg(fn($r) => (float) $r->skor_ketercapaian), 1);
+                }
+            }
+        }
 
         return response()->json([
             'status' => 'success',
@@ -1041,7 +966,7 @@ class ObeController extends Controller
     public function storeProfilLulusan(Request $request)
     {
         $request->validate([
-            'program_studi_id' => 'required|exists:master_program_studi,id',
+            'program_studi_id' => 'required|exists:spmb_master_program_studi,id',
             'kode_pl' => 'required|string|max:50',
             'nama' => 'required|string|max:255',
             'deskripsi' => 'required|string',
@@ -1112,7 +1037,7 @@ class ObeController extends Controller
     public function storeBahanKajian(Request $request)
     {
         $request->validate([
-            'program_studi_id' => 'required|exists:master_program_studi,id',
+            'program_studi_id' => 'required|exists:spmb_master_program_studi,id',
             'kode_bk' => 'required|string|max:50',
             'nama_bk' => 'required|string|max:255',
             'deskripsi' => 'nullable|string',

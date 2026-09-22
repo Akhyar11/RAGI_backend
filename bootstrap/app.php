@@ -78,6 +78,16 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
+        // 403 — abort() / AccessDeniedHttpException
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => $e->getMessage() ?: 'Anda tidak memiliki izin untuk melakukan aksi ini.',
+                ], 403);
+            }
+        });
+
         // 401 — Belum login / token tidak valid
         $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, Request $request) {
             if ($request->is('api/*')) {

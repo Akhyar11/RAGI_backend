@@ -27,6 +27,7 @@ class SikeuPembayaranMahasiswaPotonganTest extends TestCase
     {
         parent::setUp();
         $this->artisan('migrate', ['--force' => true]);
+        $this->seed(\Database\Seeders\Sikeu\SikeuAkuntansiSeeder::class);
 
         if (\Laravel\Passport\Client::where('personal_access_client', 1)->doesntExist()) {
             app(\Laravel\Passport\ClientRepository::class)->createPersonalAccessGrantClient('Test Personal Access Client');
@@ -166,6 +167,14 @@ class SikeuPembayaranMahasiswaPotonganTest extends TestCase
 
         $va->refresh();
         $this->assertEquals(2000000, (float)$va->nominal);
+
+        // Jurnal potongan: Dr Beban 504.01 / Cr Piutang 103.01
+        $jurnalPot = \App\Models\Sikeu\JurnalUmum::where('nomor_jurnal', 'like', 'JRN-POT-%')
+            ->where('referensi_id', $tagihan->id)
+            ->first();
+        $this->assertNotNull($jurnalPot);
+        $bebanId = \App\Models\Sikeu\AkunKeuangan::where('kode_akun', '504.01')->first()->id;
+        $this->assertEquals(1000000, (float) \App\Models\Sikeu\DetailJurnalUmum::where('jurnal_id', $jurnalPot->id)->where('akun_id', $bebanId)->first()->debet);
     }
 
     public function test_create_potongan_spmb_calon_mahasiswa_with_full_discount(): void
@@ -333,6 +342,12 @@ class SikeuPembayaranMahasiswaPotonganTest extends TestCase
         $va->refresh();
         $this->assertEquals(2000000, (float)$va->nominal);
         $this->assertEquals('aktif', $va->status);
+
+        // Jurnal pembatalan potongan: Dr Piutang / Cr Beban
+        $jurnalBatal = \App\Models\Sikeu\JurnalUmum::where('nomor_jurnal', 'like', 'JRN-BPT-%')
+            ->where('referensi_id', $tagihan->id)
+            ->first();
+        $this->assertNotNull($jurnalBatal);
     }
 
     public function test_nomor_sk_is_required_for_potongan(): void

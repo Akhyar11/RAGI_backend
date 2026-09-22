@@ -15,6 +15,11 @@ class SiakadAkademikService
     public function hitungKhsDanIpk($mahasiswaId, $tahunAkademikId)
     {
         return DB::transaction(function () use ($mahasiswaId, $tahunAkademikId) {
+            // Jangan timpa KHS yang sudah dikunci/disahkan BAAK
+            $existing = Khs::where('mahasiswa_id', $mahasiswaId)->where('tahun_akademik_id', $tahunAkademikId)->first();
+            if ($existing && (bool) ($existing->is_locked ?? false)) {
+                return $existing;
+            }
             // Ambil semua KRS yang disetujui/dikunci di semester ini
             $krs = Krs::with(['krsDetails.nilaiMahasiswa', 'krsDetails.kelas.mataKuliah'])
                 ->where('mahasiswa_id', $mahasiswaId)
@@ -29,13 +34,11 @@ class SiakadAkademikService
 
             foreach ($krs->krsDetails as $detail) {
                 if ($detail->status != 'aktif') continue;
-                
+                if (!$detail->nilaiMahasiswa || !$detail->nilaiMahasiswa->is_final) continue;
+
                 $sks = $detail->kelas->mataKuliah->total_sks;
                 $totalSksSemester += $sks;
-
-                if ($detail->nilaiMahasiswa && $detail->nilaiMahasiswa->is_final) {
-                    $totalMutuSemester += ($sks * $detail->nilaiMahasiswa->bobot_mutu);
-                }
+                $totalMutuSemester += ($sks * $detail->nilaiMahasiswa->bobot_mutu);
             }
 
             $ips = $totalSksSemester > 0 ? ($totalMutuSemester / $totalSksSemester) : 0;

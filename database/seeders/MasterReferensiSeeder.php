@@ -53,6 +53,14 @@ class MasterReferensiSeeder extends Seeder
             ['tipe' => 'penghasilan_ortu', 'kode' => '3 - 5 Juta', 'nama' => '3 - 5 Juta'],
             ['tipe' => 'penghasilan_ortu', 'kode' => '5 - 10 Juta', 'nama' => '5 - 10 Juta'],
             ['tipe' => 'penghasilan_ortu', 'kode' => '> 10 Juta', 'nama' => '> 10 Juta'],
+
+            // Kategori Transaksi Kas Kecil (SIKEU)
+            ['tipe' => 'kategori_kas_kecil', 'kode' => 'atk', 'nama' => 'Alat Tulis Kantor (ATK)'],
+            ['tipe' => 'kategori_kas_kecil', 'kode' => 'konsumsi_rapat', 'nama' => 'Konsumsi Rapat'],
+            ['tipe' => 'kategori_kas_kecil', 'kode' => 'transportasi', 'nama' => 'Transportasi / Perjalanan Dinas'],
+            ['tipe' => 'kategori_kas_kecil', 'kode' => 'penggandaan', 'nama' => 'Fotokopi & Penggandaan'],
+            ['tipe' => 'kategori_kas_kecil', 'kode' => 'perawatan', 'nama' => 'Perawatan / Perbaikan Kecil'],
+            ['tipe' => 'kategori_kas_kecil', 'kode' => 'lainnya', 'nama' => 'Lainnya'],
         ];
 
         foreach ($referensi as $index => $ref) {

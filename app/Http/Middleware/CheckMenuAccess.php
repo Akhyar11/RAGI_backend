@@ -39,12 +39,20 @@ class CheckMenuAccess
         'POST /sikeu/mahasiswa/invoice-batch',
         'GET /sikeu/mahasiswa/riwayat-pembayaran',
         'POST /sikeu/mahasiswa/pay-bills',
+        'GET /sikeu/mahasiswa/rekening-tujuan',
+        'POST /sikeu/pembayaran/manual-init',
+        'POST /sikeu/pembayaran/manual-upload',
         'POST /sikeu/dispensasi',
         'GET /sikeu/dispensasi/{id}',
         // SIKEU Payment Callbacks & Webhooks
         'POST /sikeu/callback/va-paid',
         'POST /sikeu/callback/spmb/{calonMahasiswaId}',
         'GET /sikeu/checkout/lookup-va',
+        // Kas Kecil: referensi master untuk form (auth tetap wajib, hanya lewat cek menu)
+        'GET /sikeu/kas-kecil/referensi/kategori',
+        'GET /sikeu/kas-kecil/referensi/petugas',
+        // SIKEU referensi master umum untuk form (fakultas): petugas kas kecil non-admin wajib bisa memuat dropdown filter
+        'GET /sikeu/referensi/fakultas',
     ];
 
     /**

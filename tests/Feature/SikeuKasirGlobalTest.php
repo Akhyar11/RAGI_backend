@@ -19,6 +19,7 @@ class SikeuKasirGlobalTest extends TestCase
     {
         parent::setUp();
         $this->artisan('migrate', ['--force' => true]);
+        $this->seed(\Database\Seeders\Sikeu\SikeuAkuntansiSeeder::class);
 
         if (\Laravel\Passport\Client::where('personal_access_client', 1)->doesntExist()) {
             app(\Laravel\Passport\ClientRepository::class)->createPersonalAccessGrantClient('Test Personal Access Client');
@@ -213,6 +214,88 @@ class SikeuKasirGlobalTest extends TestCase
         $this->assertEquals(0, (float)$tagihan->total_bayar);
         $this->assertEquals(0, (float)$tagihan->total_potongan);
         $this->assertEquals('belum_bayar', $tagihan->status);
+    }
+
+    public function test_kasir_alokasi_fifo_per_komponen_dan_koreksi_lifo(): void
+    {
+        $biayaA = MasterBiaya::firstOrCreate(
+            ['kode' => 'FIFO_A'],
+            ['nama' => 'Komponen A FIFO', 'tipe' => 'spp', 'nominal_standar' => 1000000, 'is_active' => true]
+        );
+        $biayaB = MasterBiaya::firstOrCreate(
+            ['kode' => 'FIFO_B'],
+            ['nama' => 'Komponen B FIFO', 'tipe' => 'spp', 'nominal_standar' => 2000000, 'is_active' => true]
+        );
+
+        $tagihan = TagihanMahasiswa::create([
+            'mahasiswa_id' => 1,
+            'tahun_akademik_id' => 1,
+            'nomor_tagihan' => 'INV-FIFO-' . uniqid(),
+            'total_tagihan' => 3000000,
+            'status' => 'belum_bayar',
+            'jatuh_tempo' => now()->addDays(10),
+        ]);
+        $detailA = \App\Models\Sikeu\DetailTagihan::create([
+            'tagihan_id' => $tagihan->id, 'master_biaya_id' => $biayaA->id,
+            'nominal' => 1000000, 'potongan' => 0, 'nominal_bersih' => 1000000,
+        ]);
+        $detailB = \App\Models\Sikeu\DetailTagihan::create([
+            'tagihan_id' => $tagihan->id, 'master_biaya_id' => $biayaB->id,
+            'nominal' => 2000000, 'potongan' => 0, 'nominal_bersih' => 2000000,
+        ]);
+
+        // Bayar parsial 1,5jt: komponen A lunas (1jt), komponen B terbayar 500rb
+        $res = $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sikeu/pembayaran/kasir', [
+                'tagihan_ids' => [$tagihan->id],
+                'jumlah_bayar' => 1500000,
+                'channel_bayar' => 'LOKET_TUNAI',
+            ]);
+
+        $res->assertStatus(201)->assertJson(['status' => 'success']);
+        $this->assertArrayHasKey('rincian_komponen', $res->json('data.kuitansi'));
+
+        $this->assertDatabaseHas('sikeu_detail_tagihan', ['id' => $detailA->id, 'terbayar' => 1000000]);
+        $this->assertDatabaseHas('sikeu_detail_tagihan', ['id' => $detailB->id, 'terbayar' => 500000]);
+
+        // Jurnal pembayaran akrual: Dr Kas / Cr Piutang (bukan pendapatan)
+        $jurnalPay = \App\Models\Sikeu\JurnalUmum::where('nomor_jurnal', 'like', 'JRN-PAY-%')
+            ->where('referensi_id', $res->json('data.pembayaran.id'))
+            ->first();
+        $this->assertNotNull($jurnalPay);
+        $piutangId = \App\Models\Sikeu\AkunKeuangan::where('kode_akun', '103.01')->first()->id;
+        $kreditPiutang = \App\Models\Sikeu\DetailJurnalUmum::where('jurnal_id', $jurnalPay->id)
+            ->where('akun_id', $piutangId)->first();
+        $this->assertEquals(1500000, (float) $kreditPiutang->kredit);
+
+        // Rekap unpaid bills memuat sisa per komponen
+        $bills = $this->withHeaders($this->headers())
+            ->getJson('/api/v1/sikeu/mahasiswa/1/unpaid-bills');
+        $bills->assertStatus(200);
+        $first = collect($bills->json('data.bills'))->firstWhere('id', $tagihan->id);
+        $this->assertNotNull($first);
+        $this->assertEquals(0, $first['details'][0]['sisa']);
+        $this->assertEquals(1500000, $first['details'][1]['sisa']);
+
+        // Koreksi mengembalikan alokasi LIFO: komponen B dulu
+        $pembayaranId = $res->json('data.pembayaran.id');
+        $resKoreksi = $this->withHeaders($this->headers())
+            ->postJson("/api/v1/sikeu/pembayaran/{$pembayaranId}/koreksi", [
+                'alasan_koreksi' => 'Koreksi alokasi FIFO per komponen',
+            ]);
+        $resKoreksi->assertStatus(200);
+
+        $this->assertDatabaseHas('sikeu_detail_tagihan', ['id' => $detailA->id, 'terbayar' => 0]);
+        $this->assertDatabaseHas('sikeu_detail_tagihan', ['id' => $detailB->id, 'terbayar' => 0]);
+
+        // Jurnal koreksi: Dr Piutang / Cr Kas
+        $jurnalRev = \App\Models\Sikeu\JurnalUmum::where('nomor_jurnal', 'like', 'JRN-REV-%')
+            ->where('referensi_id', $pembayaranId)
+            ->first();
+        $this->assertNotNull($jurnalRev);
+        $debetPiutang = \App\Models\Sikeu\DetailJurnalUmum::where('jurnal_id', $jurnalRev->id)
+            ->where('akun_id', $piutangId)->first();
+        $this->assertEquals(1500000, (float) $debetPiutang->debet);
     }
 
     public function test_va_number_service_generates_consistent_format()
