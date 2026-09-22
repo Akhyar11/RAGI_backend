@@ -21,7 +21,8 @@ Dokumentasi API untuk manajemen akun pengguna, penugasan peran (roles), aktivasi
 | PATCH | `/api/admin/users/{id}/status` | Mengaktifkan atau menonaktifkan pengguna | ✅ Super Admin |
 | POST | `/api/admin/users/{id}/change-password` | Mengubah password pengguna oleh admin | ✅ Super Admin |
 | POST | `/api/admin/users/{id}/impersonate` | Merasuki pengguna & terbitkan token impersonasi | ✅ Super Admin |
-| POST | `/api/admin/users/leave-impersonate` | Mengakhiri sesi mode impersonasi pengguna | ✅ Super Admin |
+| POST | `/api/admin/users/leave-impersonate` | Mengakhiri sesi mode impersonasi pengguna | ✅ Auth (pemegang token impersonasi) |
+| GET | `/api/admin/impersonate-status` | Status sesi impersonasi token pemanggil | ✅ Auth (semua user login) |
 
 ---
 
@@ -562,10 +563,15 @@ Dokumentasi API untuk manajemen akun pengguna, penugasan peran (roles), aktivasi
             "id": 1,
             "username": "superadmin",
             "name": "Super Administrator"
-        }
+        },
+        "impersonation_session_id": 12
     }
 }
 ```
+
+> Setiap panggilan mencatat satu baris di tabel `core_impersonation_sessions`
+> (kunci per-token `impersonation_token_id`). Satu admin boleh merasuki akun A
+> di device 1 dan akun B di device 2 secara bersamaan tanpa saling menimpa.
 
 ### Response Error
 
@@ -610,13 +616,15 @@ Dokumentasi API untuk manajemen akun pengguna, penugasan peran (roles), aktivasi
 
 ## [POST] /api/admin/users/leave-impersonate
 
-> Mengakhiri sesi impersonasi dengan mencabut token impersonasi yang aktif.
+> Mengakhiri sesi impersonasi milik token pemanggil saja (sesi device lain
+> milik admin yang sama tidak ikut tertutup) dan menerbitkan token admin baru
+> agar tab baru tanpa simpanan adminToken tetap bisa kembali ke akun admin.
 
 ### Headers
 
 | Key | Value | Required |
 |---|---|---|
-| `Authorization` | `Bearer {token}` | ✅ |
+| `Authorization` | `Bearer {token_impersonasi}` | ✅ |
 | `Accept` | `application/json` | ✅ |
 
 ### Response Sukses
@@ -626,9 +634,98 @@ Dokumentasi API untuk manajemen akun pengguna, penugasan peran (roles), aktivasi
 {
     "status": "success",
     "message": "Sesi impersonasi berhasil diakhiri.",
-    "data": null
+    "data": {
+        "admin": {
+            "id": 1,
+            "username": "superadmin",
+            "name": "Super Administrator"
+        },
+        "access_token": "1|def456uvw...",
+        "token": "1|def456uvw...",
+        "token_type": "Bearer"
+    }
 }
 ```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Tidak sedang dalam mode impersonasi.",
+    "errors": {
+        "impersonation": [
+            "Tidak sedang dalam mode impersonasi."
+        ]
+    }
+}
+```
+
+> Token biasa (bukan token impersonasi) yang memanggil endpoint ini akan
+> ditolak 422 dan TIDAK dicabut — berbeda dari perilaku lama yang menghapus
+> token apapun.
+
+---
+
+## [GET] /api/admin/impersonate-status
+
+> Status sesi impersonasi untuk token pemanggil. Dipakai banner frontend di
+> tab/subdomain baru agar tetap muncul tanpa bergantung pada sessionStorage
+> tab lama. Isolasi per-token: device 1 (token A) dan device 2 (token B)
+> mendapat status masing-masing walaupun admin-nya sama.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses (sedang merasuki)
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Sesi impersonasi aktif.",
+    "data": {
+        "is_impersonating": true,
+        "impersonation_session_id": 12,
+        "started_at": "2026-09-22T10:00:00.000000Z",
+        "impersonated_by": {
+            "id": 1,
+            "username": "superadmin",
+            "name": "Super Administrator"
+        }
+    }
+}
+```
+
+### Response Sukses (tidak merasuki)
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Tidak sedang dalam mode impersonasi.",
+    "data": {
+        "is_impersonating": false
+    }
+}
+```
+
+> Token lawas (dibuat sebelum tabel `core_impersonation_sessions` ada)
+> mengembalikan tambahan `"is_legacy": true` dengan
+> `"impersonation_session_id": null`.
 
 ### Response Error
 

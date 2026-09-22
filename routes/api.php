@@ -95,6 +95,7 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::put('users/{id}/password', [App\Http\Controllers\UserController::class, 'changePassword']);
     Route::post('users/{id}/impersonate', [App\Http\Controllers\UserController::class, 'impersonate']);
     Route::post('users/leave-impersonate', [App\Http\Controllers\UserController::class, 'leaveImpersonate']);
+    Route::get('impersonate-status', [App\Http\Controllers\UserController::class, 'impersonateStatus']);
     
     Route::apiResource('roles', App\Http\Controllers\RoleController::class);
     Route::apiResource('permissions', App\Http\Controllers\PermissionController::class);

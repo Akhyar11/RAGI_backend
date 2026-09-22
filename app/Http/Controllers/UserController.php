@@ -8,6 +8,7 @@ use App\Http\Requests\IAM\UpdateUserRequest;
 use App\Services\IAM\UserService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
@@ -221,8 +222,15 @@ class UserController extends Controller
 
         $targetUser = User::with('roles')->findOrFail($id);
         $admin = $request->user();
+        $adminTokenId = $admin->currentAccessToken()?->id;
 
-        $result = $this->userService->impersonate($targetUser, $admin);
+        $result = $this->userService->impersonate(
+            $targetUser,
+            $admin,
+            $adminTokenId,
+            $request->ip(),
+            $request->userAgent()
+        );
 
         return response()->json([
             'status' => 'success',
@@ -232,33 +240,61 @@ class UserController extends Controller
     }
 
     /**
+     * Status sesi impersonasi aktif untuk token pemanggil.
+     *
+     * Dipakai banner frontend di tab/subdomain baru agar tetap muncul
+     * tanpa bergantung pada sessionStorage tab lama. Isolasi per-token:
+     * device 1 (token A) dan device 2 (token B) mendapat status
+     * masing-masing walaupun admin-nya sama.
+     */
+    public function impersonateStatus(Request $request)
+    {
+        $token = $request->user()?->currentAccessToken();
+        $data = $this->userService->getImpersonationStatus(
+            $token?->id ? (string) $token->id : null,
+            $token?->name ? (string) $token->name : null
+        );
+
+        $message = !empty($data['is_impersonating'])
+            ? (!empty($data['is_legacy']) ? 'Sesi impersonasi aktif (mode kompatibilitas).' : 'Sesi impersonasi aktif.')
+            : 'Tidak sedang dalam mode impersonasi.';
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $message,
+            'data' => $data,
+        ]);
+    }
+
+    /**
      * Leave impersonation mode (Keluar dari mode rasuki).
+     *
+     * Hanya menutup sesi milik token pemanggil — sesi device lain
+     * milik admin yang sama tidak ikut tertutup. Token admin baru
+     * diterbitkan oleh Service agar tab baru tanpa simpanan adminToken
+     * tetap bisa kembali ke akun admin.
      */
     public function leaveImpersonate(Request $request)
     {
         $user = $request->user();
-        if ($user && $user->currentAccessToken()) {
-            try {
-                \App\Services\AuditLogService::record(
-                    module: 'IAM',
-                    action: 'logout',
-                    tableName: 'core_users',
-                    recordId: $user->id,
-                    oldValues: ['impersonation_ended' => true],
-                    newValues: null,
-                    request: $request
-                );
-            } catch (\Throwable $e) {
-                report($e);
-            }
+        $token = $user?->currentAccessToken();
 
-            $user->currentAccessToken()->delete();
+        if (!$token) {
+            throw ValidationException::withMessages([
+                'impersonation' => ['Tidak sedang dalam mode impersonasi.'],
+            ]);
         }
+
+        $data = $this->userService->leaveImpersonation(
+            (string) $token->id,
+            $token->name ? (string) $token->name : null,
+            (int) $user->id
+        );
 
         return response()->json([
             'status' => 'success',
             'message' => 'Sesi impersonasi berhasil diakhiri.',
-            'data' => null,
+            'data' => $data,
         ]);
     }
 }
