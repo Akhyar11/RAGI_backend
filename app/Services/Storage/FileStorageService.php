@@ -184,6 +184,18 @@ class FileStorageService
         }
 
         $diskName = $this->resolveDisk($disk, $private);
+
+        if ($diskName === 'public' && ! $this->isCloudActive()) {
+            try {
+                if (app()->has('request') && request()->hasHeader('host')) {
+                    $root = request()->getSchemeAndHttpHost();
+                    return $root . '/storage/' . $relative;
+                }
+            } catch (\Throwable) {
+                // Abaikan jika dipanggil di luar konteks request HTTP (misal: console/queue)
+            }
+        }
+
         $url = (string) Storage::disk($diskName)->url($relative);
 
         // Disk local/public mengembalikan path relatif (/storage/...) — jadikan absolut.

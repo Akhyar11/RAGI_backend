@@ -207,6 +207,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 
     // Master Jenis Izin & Cuti
     Route::apiResource('master-jenis-cuti', App\Http\Controllers\Simpeg\MasterJenisCutiController::class);
+    Route::apiResource('master/jenis-izin-jam-kerja', App\Http\Controllers\Simpeg\MasterJenisIzinJamKerjaController::class);
 
     // Master Penugasan Dinas (Kategori Kegiatan & Jenis Transportasi)
     Route::apiResource('master/kategori-kegiatan-tugas', App\Http\Controllers\Simpeg\MasterKategoriKegiatanTugasController::class);
@@ -214,6 +215,16 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 
     // Master Kategori Sasaran Kinerja (SKP)
     Route::apiResource('master/kategori-skp', App\Http\Controllers\Simpeg\MasterKategoriSkpController::class);
+
+    // Master Kategori SK Pegawai
+    Route::apiResource('master/kategori-sk', App\Http\Controllers\Simpeg\MasterKategoriSkController::class);
+
+    // Master Kompetensi & Pelatihan Pegawai
+    Route::apiResource('master/jenis-sertifikasi', App\Http\Controllers\Simpeg\MasterJenisSertifikasiController::class);
+    Route::apiResource('master/jenis-tes', App\Http\Controllers\Simpeg\MasterJenisTesController::class);
+    Route::apiResource('master/jenis-pelatihan', App\Http\Controllers\Simpeg\MasterJenisPelatihanController::class);
+    Route::apiResource('master/peran-pelatihan', App\Http\Controllers\Simpeg\MasterPeranPelatihanController::class);
+    Route::apiResource('master/tingkat-kegiatan', App\Http\Controllers\Simpeg\MasterTingkatKegiatanController::class);
 
     Route::get('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'index']);
     Route::post('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'store']);

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Simpeg;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Simpeg\StorePegawaiRequest;
+use App\Http\Requests\Simpeg\UpdatePegawaiRequest;
 use App\Models\Simpeg\Pegawai;
 use App\Services\AuditLogService;
 use App\Services\Simpeg\PegawaiImportService;
@@ -133,42 +135,9 @@ class PegawaiController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StorePegawaiRequest $request)
     {
-        if (!$request->user()->hasPermission('simpeg.pegawai.create') && !$request->user()->hasPermission('simpeg.pegawai.manage')) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Anda tidak memiliki hak akses (permission) untuk menambah Data Pegawai.'
-            ], 403);
-        }
-
-        $request->validate([
-            'user_id' => 'nullable|exists:core_users,id|unique:simpeg_pegawai,user_id',
-            'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
-            'nip' => 'nullable|string|unique:simpeg_pegawai,nip',
-            'nidn' => 'nullable|string|unique:simpeg_pegawai,nidn',
-            'nuptk' => 'nullable|string|unique:simpeg_pegawai,nuptk',
-            'nik' => 'nullable|string|unique:simpeg_pegawai,nik',
-            'nama_lengkap' => 'required|string',
-            'email' => 'nullable|email|unique:core_users,email',
-            'username' => 'nullable|string|unique:core_users,username',
-            'tanggal_lahir' => 'nullable|date',
-            'tempat_lahir' => 'nullable|string',
-            'jenis_kelamin' => 'nullable|in:L,P',
-            'agama' => 'nullable|string',
-            'role_ids' => 'nullable|array',
-            'role_ids.*' => 'exists:core_roles,id',
-            'jenis_pegawai' => 'nullable|string',
-            'status_kepegawaian' => 'nullable|in:pns,non_pns,kontrak,tetap_yayasan',
-            'tanggal_masuk' => 'nullable|date',
-            'status' => 'nullable|in:aktif,non_aktif,pensiun,meninggal',
-            'telepon' => 'nullable|string',
-            'alamat' => 'nullable|string',
-            'shift_template_id' => 'nullable|exists:simpeg_shift_templates,id',
-            'office_location_id' => 'nullable|exists:simpeg_office_locations,id',
-        ]);
-
-        $pegawai = $this->pegawaiService->create($request->all());
+        $pegawai = $this->pegawaiService->create($request->validated());
 
         return response()->json([
             'status' => 'success',
@@ -205,44 +174,11 @@ class PegawaiController extends Controller
         ]);
     }
 
-    public function update(Request $request, $id)
+    public function update(UpdatePegawaiRequest $request, $id)
     {
         $pegawai = Pegawai::findOrFail($id);
 
-        if (!$request->user()->hasPermission('simpeg.pegawai.update') && !$request->user()->hasPermission('simpeg.pegawai.manage')) {
-            if ($pegawai->user_id !== $request->user()->id) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Anda tidak memiliki hak akses (permission) untuk memperbarui Data Pegawai.'
-                ], 403);
-            }
-        }
-
-        $request->validate([
-            'user_id' => 'nullable|exists:core_users,id|unique:simpeg_pegawai,user_id,' . $id,
-            'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
-            'nip' => 'nullable|string|unique:simpeg_pegawai,nip,' . $id,
-            'nidn' => 'nullable|string|unique:simpeg_pegawai,nidn,' . $id,
-            'nuptk' => 'nullable|string|unique:simpeg_pegawai,nuptk,' . $id,
-            'nik' => 'nullable|string|unique:simpeg_pegawai,nik,' . $id,
-            'nama_lengkap' => 'sometimes|string',
-            'tanggal_lahir' => 'nullable|date',
-            'tempat_lahir' => 'nullable|string',
-            'jenis_kelamin' => 'sometimes|in:L,P',
-            'agama' => 'nullable|string',
-            'role_ids' => 'sometimes|array',
-            'role_ids.*' => 'exists:core_roles,id',
-            'jenis_pegawai' => 'nullable|string',
-            'status_kepegawaian' => 'sometimes|in:pns,non_pns,kontrak,tetap_yayasan',
-            'tanggal_masuk' => 'nullable|date',
-            'status' => 'sometimes|in:aktif,non_aktif,pensiun,meninggal',
-            'telepon' => 'nullable|string',
-            'alamat' => 'nullable|string',
-            'shift_template_id' => 'nullable|exists:simpeg_shift_templates,id',
-            'office_location_id' => 'nullable|exists:simpeg_office_locations,id',
-        ]);
-
-        $updated = $this->pegawaiService->update($pegawai, $request->all());
+        $updated = $this->pegawaiService->update($pegawai, $request->validated());
 
         return response()->json([
             'status' => 'success',

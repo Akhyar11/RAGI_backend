@@ -92,6 +92,7 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
+| PegawaiController | Manajemen master data pegawai, multi-role SSO, import massal, & reset biometrik | [docs/api/SIMPEG/PegawaiController.md](api/SIMPEG/PegawaiController.md) |
 | PresensiController | Presensi biometrik mobile (Android Flutter), validasi wajah Python port 8001, shift, geofence, & integrasi | [docs/api/SIMPEG/PresensiController.md](api/SIMPEG/PresensiController.md) |
 | PresensiMasterSettingController | Master pengaturan presensi: parameter sistem, lokasi kantor, multi-tipe shift, & kalender libur | [docs/api/SIMPEG/PresensiMasterSettingController.md](api/SIMPEG/PresensiMasterSettingController.md) |
 | AttendanceDataApi | Spesifikasi API integrasi data absensi & rekapitulasi kehadiran | [docs/api/SIMPEG/ATTENDANCE_DATA_API.md](api/SIMPEG/ATTENDANCE_DATA_API.md) |
@@ -107,6 +108,13 @@
 | UsulanJafungController | Usulan kenaikan jabatan fungsional dosen, angka kredit & verifikasi SK | [docs/api/SIMPEG/UsulanJafungController.md](api/SIMPEG/UsulanJafungController.md) |
 | CutiController | Pengajuan cuti pegawai terintegrasi, validasi durasi, approval & notifikasi | [docs/api/SIMPEG/CutiController.md](api/SIMPEG/CutiController.md) |
 | DokumenController | E-File arsip dokumen kepegawaian, secure view & dynamic watermark | [docs/api/SIMPEG/DokumenController.md](api/SIMPEG/DokumenController.md) |
+| MasterJenisSertifikasiController | Master referensi jenis sertifikasi profesi & keahlian dosen/tendik | [docs/api/SIMPEG/MasterJenisSertifikasiController.md](api/SIMPEG/MasterJenisSertifikasiController.md) |
+| MasterJenisTesController | Master referensi jenis tes kompetensi resmi (TOEFL, TPA, dsb.) | [docs/api/SIMPEG/MasterJenisTesController.md](api/SIMPEG/MasterJenisTesController.md) |
+| MasterJenisPelatihanController | Master klasifikasi pelatihan, diklat, dan bimbingan teknis pegawai | [docs/api/SIMPEG/MasterJenisPelatihanController.md](api/SIMPEG/MasterJenisPelatihanController.md) |
+| MasterPeranPelatihanController | Master peran kepesertaan kegiatan (Peserta, Pemateri, Moderator, Panitia) | [docs/api/SIMPEG/MasterPeranPelatihanController.md](api/SIMPEG/MasterPeranPelatihanController.md) |
+| MasterTingkatKegiatanController | Master tingkat jangkauan kegiatan (Lokal, Wilayah, Nasional, Internasional) | [docs/api/SIMPEG/MasterTingkatKegiatanController.md](api/SIMPEG/MasterTingkatKegiatanController.md) |
+| MasterJenisIzinJamKerjaController | Master jenis dispensasi izin jam kerja, durasi toleransi & aturan potong | [docs/api/SIMPEG/MasterJenisIzinJamKerjaController.md](api/SIMPEG/MasterJenisIzinJamKerjaController.md) |
+| MasterKategoriSkController | Master kategori nomor dan jenis Surat Keputusan (SK) pegawai | [docs/api/SIMPEG/MasterKategoriSkController.md](api/SIMPEG/MasterKategoriSkController.md) |
 
 ---
 
