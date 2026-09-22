@@ -47,6 +47,8 @@ class UserService
                 }
             }
 
+            $this->syncPegawaiForUser($user);
+
             return $user->load('roles');
         });
     }
@@ -93,8 +95,70 @@ class UserService
                 }
             }
 
+            $this->syncPegawaiForUser($user);
+
             return $user->load('roles');
         });
+    }
+
+    /**
+     * Auto sync/create Pegawai record in SIMPEG if User has dosen or tendik role
+     */
+    public function syncPegawaiForUser(User $user): void
+    {
+        try {
+            $user->loadMissing('roles');
+            $roles = $user->roles;
+
+            $hasDosen = $roles->contains(function ($role) {
+                $slug = strtolower($role->slug ?? '');
+                $name = strtolower($role->name ?? '');
+                return str_contains($slug, 'dosen') || str_contains($name, 'dosen');
+            });
+
+            $hasTendik = $roles->contains(function ($role) {
+                $slug = strtolower($role->slug ?? '');
+                $name = strtolower($role->name ?? '');
+                return str_contains($slug, 'tendik') || str_contains($name, 'tendik') || str_contains($slug, 'staf') || str_contains($name, 'staf');
+            });
+
+            if ($hasDosen || $hasTendik) {
+                $pegawai = \App\Models\Simpeg\Pegawai::where('user_id', $user->id)->first();
+                $jenisPegawai = $hasDosen ? 'dosen' : 'tendik';
+
+                if (!$pegawai) {
+                    $pegawai = \App\Models\Simpeg\Pegawai::create([
+                        'user_id' => $user->id,
+                        'nama_lengkap' => $user->name ?: ($user->username ?: 'Pegawai SSO'),
+                        'jenis_pegawai' => $jenisPegawai,
+                        'status_kepegawaian' => 'non_pns',
+                        'status' => 'aktif',
+                        'is_active' => true,
+                        'nip' => (!empty($user->username) && is_numeric($user->username)) ? $user->username : null,
+                    ]);
+                } else {
+                    $pegawai->update([
+                        'nama_lengkap' => $user->name ?: $pegawai->nama_lengkap,
+                        'jenis_pegawai' => $pegawai->jenis_pegawai ?: $jenisPegawai,
+                        'is_active' => true,
+                    ]);
+                }
+
+                if ($jenisPegawai === 'dosen' && class_exists(\App\Models\Siakad\Dosen::class)) {
+                    \App\Models\Siakad\Dosen::firstOrCreate(
+                        ['pegawai_id' => $pegawai->id],
+                        [
+                            'user_id' => $user->id,
+                            'nama' => $pegawai->nama_lengkap,
+                            'nidn' => $pegawai->nip,
+                            'is_active' => true,
+                        ]
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**

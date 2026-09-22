@@ -22,6 +22,12 @@ class RoleAssignmentController extends Controller
 
         $user->roles()->sync($request->roles);
 
+        try {
+            (new \App\Services\IAM\UserService())->syncPegawaiForUser($user);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Roles assigned successfully',

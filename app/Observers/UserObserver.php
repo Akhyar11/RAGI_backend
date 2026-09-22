@@ -26,6 +26,12 @@ class UserObserver
         } catch (\Throwable $e) {
             report($e);
         }
+
+        try {
+            (new \App\Services\IAM\UserService())->syncPegawaiForUser($user);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**
@@ -47,6 +53,12 @@ class UserObserver
                     newValues: $changes,
                     request: request()
                 );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
+            try {
+                (new \App\Services\IAM\UserService())->syncPegawaiForUser($user);
             } catch (\Throwable $e) {
                 report($e);
             }
