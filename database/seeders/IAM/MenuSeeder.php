@@ -403,9 +403,9 @@ class MenuSeeder extends Seeder
                 'order_index' => 2,
                 'children' => [
                     ['name' => 'Pengaturan Tarif', 'url' => '/sikeu/pembayaran-mahasiswa/tarif', 'icon' => 'FaDollarSign', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 1],
-                    ['name' => 'Input Tagihan', 'url' => '/sikeu/pembayaran-mahasiswa/tagihan', 'icon' => 'FaFileInvoiceDollar', 'module' => 'sikeu', 'order_index' => 2],
-                    ['name' => 'Bayar Kasir Loket', 'url' => '/sikeu/pembayaran-mahasiswa/bayar', 'icon' => 'FaCashRegister', 'module' => 'sikeu', 'order_index' => 3],
-                    ['name' => 'Potongan Mahasiswa', 'url' => '/sikeu/pembayaran-mahasiswa/potongan', 'icon' => 'FaPercent', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 4],
+                    ['name' => 'Input Tagihan', 'url' => '/sikeu/pembayaran-mahasiswa/tagihan', 'icon' => 'FaCreditCard', 'module' => 'sikeu', 'order_index' => 2],
+                    ['name' => 'Bayar Kasir Loket', 'url' => '/sikeu/pembayaran-mahasiswa/bayar', 'icon' => 'FaMoneyBillWave', 'module' => 'sikeu', 'order_index' => 3],
+                    ['name' => 'Potongan Mahasiswa', 'url' => '/sikeu/pembayaran-mahasiswa/potongan', 'icon' => 'FaCoins', 'module' => 'sikeu', 'permission_slug' => 'sikeu.master.manage', 'order_index' => 4],
                     ['name' => 'Piutang Mahasiswa', 'url' => '/sikeu/piutang', 'icon' => 'FaExclamationTriangle', 'module' => 'sikeu', 'permission_slug' => 'sikeu.tagihan.read', 'order_index' => 5],
                     ['name' => 'Dispensasi Pembayaran', 'url' => '/sikeu/dispensasi', 'icon' => 'FaClipboardCheck', 'module' => 'sikeu', 'order_index' => 6],
                 ]
