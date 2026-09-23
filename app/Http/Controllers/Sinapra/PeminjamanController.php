@@ -8,7 +8,9 @@ use App\Models\PeminjamanAset;
 use App\Services\Sinapra\PeminjamanService;
 use App\Http\Requests\Sinapra\ApplyPeminjamanRuanganRequest;
 use App\Http\Requests\Sinapra\ApprovePeminjamanRuanganRequest;
+use App\Http\Requests\Sinapra\ApproveLaboranPeminjamanRequest;
 use App\Http\Requests\Sinapra\ApplyPeminjamanAsetRequest;
+use App\Http\Requests\Sinapra\ApprovePeminjamanAsetRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -23,7 +25,7 @@ class PeminjamanController extends Controller
         $this->authorize('viewAny', PeminjamanRuangan::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = PeminjamanRuangan::with(['ruangan.gedung', 'user', 'approver']);
+        $query = PeminjamanRuangan::with(['ruangan.gedung', 'user', 'approver', 'laboranApprover']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -35,6 +37,12 @@ class PeminjamanController extends Controller
 
         if ($request->filled('tanggal')) {
             $query->where('tanggal', $request->tanggal);
+        }
+
+        $user = $request->user();
+        if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
+            $ruanganIds = $user->laboranRuangan()->pluck('sinapra_ruangan.id');
+            $query->whereIn('ruangan_id', $ruanganIds);
         }
 
         if ($request->filled('search')) {
@@ -98,7 +106,25 @@ class PeminjamanController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Detail peminjaman ruangan berhasil diambil',
-            'data' => $peminjaman->load(['ruangan.gedung', 'user', 'approver']),
+            'data' => $peminjaman->load(['ruangan.gedung', 'user', 'approver', 'laboranApprover']),
+        ]);
+    }
+
+    public function approveLaboranRuangan(ApproveLaboranPeminjamanRequest $request, PeminjamanRuangan $peminjaman): JsonResponse
+    {
+        $this->authorize('approveLaboran', $peminjaman);
+
+        $updated = $this->service->approveLaboranRuangan(
+            peminjaman: $peminjaman,
+            laboranId: $request->user()->id,
+            isApproved: $request->boolean('is_approved'),
+            catatanLaboran: $request->input('catatan_laboran')
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $request->boolean('is_approved') ? 'Persetujuan laboran berhasil diverifikasi' : 'Peminjaman ruangan ditolak oleh laboran',
+            'data' => $updated->load(['ruangan', 'user', 'approver', 'laboranApprover']),
         ]);
     }
 
@@ -116,7 +142,7 @@ class PeminjamanController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => $request->boolean('is_approved') ? 'Peminjaman ruangan berhasil disetujui' : 'Peminjaman ruangan ditolak',
-            'data' => $updated->load(['ruangan', 'user', 'approver']),
+            'data' => $updated->load(['ruangan', 'user', 'approver', 'laboranApprover']),
         ]);
     }
 
@@ -127,7 +153,7 @@ class PeminjamanController extends Controller
         $this->authorize('viewAny', PeminjamanAset::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = PeminjamanAset::with(['aset.kategori', 'user', 'approver']);
+        $query = PeminjamanAset::with(['aset.kategori', 'aset.ruangan', 'user', 'approver', 'laboranApprover']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -135,6 +161,12 @@ class PeminjamanController extends Controller
 
         if ($request->filled('aset_id')) {
             $query->where('aset_id', $request->aset_id);
+        }
+
+        $user = $request->user();
+        if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
+            $ruanganIds = $user->laboranRuangan()->pluck('sinapra_ruangan.id');
+            $query->whereHas('aset', fn($a) => $a->whereIn('ruangan_id', $ruanganIds));
         }
 
         if ($request->filled('search')) {
@@ -197,26 +229,43 @@ class PeminjamanController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Detail peminjaman aset berhasil diambil',
-            'data' => $peminjaman->load(['aset.kategori', 'user', 'approver']),
+            'data' => $peminjaman->load(['aset.kategori', 'aset.ruangan', 'user', 'approver', 'laboranApprover']),
         ]);
     }
 
-    public function approveAset(Request $request, PeminjamanAset $peminjaman): JsonResponse
+    public function approveLaboranAset(ApproveLaboranPeminjamanRequest $request, PeminjamanAset $peminjaman): JsonResponse
+    {
+        $this->authorize('approveLaboran', $peminjaman);
+
+        $updated = $this->service->approveLaboranAset(
+            peminjaman: $peminjaman,
+            laboranId: $request->user()->id,
+            isApproved: $request->boolean('is_approved'),
+            catatanLaboran: $request->input('catatan_laboran')
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $request->boolean('is_approved') ? 'Persetujuan laboran berhasil diverifikasi' : 'Peminjaman aset ditolak oleh laboran',
+            'data' => $updated->load(['aset', 'user', 'approver', 'laboranApprover']),
+        ]);
+    }
+
+    public function approveAset(ApprovePeminjamanAsetRequest $request, PeminjamanAset $peminjaman): JsonResponse
     {
         $this->authorize('approve', $peminjaman);
-
-        $request->validate(['is_approved' => 'required|boolean']);
 
         $updated = $this->service->approvePeminjamanAset(
             peminjaman: $peminjaman,
             approverId: $request->user()->id,
-            isApproved: $request->boolean('is_approved')
+            isApproved: $request->boolean('is_approved'),
+            catatanPenolakan: $request->input('catatan_penolakan')
         );
 
         return response()->json([
             'status' => 'success',
             'message' => $request->boolean('is_approved') ? 'Peminjaman aset berhasil disetujui' : 'Peminjaman aset ditolak',
-            'data' => $updated->load(['aset', 'user', 'approver']),
+            'data' => $updated->load(['aset', 'user', 'approver', 'laboranApprover']),
         ]);
     }
 

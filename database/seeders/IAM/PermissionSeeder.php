@@ -211,6 +211,16 @@ class PermissionSeeder extends Seeder
             ['name' => 'Buat Pengajuan Pengadaan', 'slug' => 'sinapra.pengadaan.create', 'module' => 'sinapra', 'action' => 'create', 'description' => 'Mengajukan usulan pengadaan barang baru'],
             ['name' => 'Ubah / Approve Pengadaan', 'slug' => 'sinapra.pengadaan.approve', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Memproses & menyetujui usulan pengadaan'],
             ['name' => 'Hapus Pengajuan Pengadaan', 'slug' => 'sinapra.pengadaan.delete', 'module' => 'sinapra', 'action' => 'delete', 'description' => 'Menghapus usulan pengadaan barang'],
+            ['name' => 'Kelola Penugasan Laboran', 'slug' => 'sinapra.laboran.manage', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Menugaskan staf laboran ke ruangan laboratorium'],
+            ['name' => 'Approve Peminjaman Aset Tahap Laboran', 'slug' => 'sinapra.peminjaman_aset.approve_laboran', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Verifikasi dan persetujuan peminjaman aset lab oleh laboran'],
+            ['name' => 'Approve Peminjaman Ruangan Tahap Laboran', 'slug' => 'sinapra.peminjaman_ruangan.approve_laboran', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Verifikasi dan persetujuan peminjaman ruangan lab oleh laboran'],
+            ['name' => 'Lihat BHP Laboratorium', 'slug' => 'sinapra.bhp.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat daftar bahan habis pakai lab & mutasi stok'],
+            ['name' => 'Kelola BHP Laboratorium', 'slug' => 'sinapra.bhp.manage', 'module' => 'sinapra', 'action' => 'update', 'description' => 'CRUD & transaksi mutasi masuk/keluar BHP lab'],
+            ['name' => 'Lihat Bebas Tanggungan Lab', 'slug' => 'sinapra.bebas_tanggungan.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat permohonan surat bebas tanggungan lab'],
+            ['name' => 'Ajukan Bebas Tanggungan Lab', 'slug' => 'sinapra.bebas_tanggungan.create', 'module' => 'sinapra', 'action' => 'create', 'description' => 'Mengajukan permohonan surat bebas tanggungan lab'],
+            ['name' => 'Approve Bebas Tanggungan Lab', 'slug' => 'sinapra.bebas_tanggungan.approve', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Memverifikasi & menyetujui surat bebas tanggungan lab'],
+            ['name' => 'Lihat Kalibrasi Alat Lab', 'slug' => 'sinapra.kalibrasi.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat jadwal & sertifikat kalibrasi alat presisi'],
+            ['name' => 'Kelola Kalibrasi Alat Lab', 'slug' => 'sinapra.kalibrasi.manage', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Mencatat & memperbarui riwayat kalibrasi alat presisi'],
 
             // ── MODUL SPMB (PENERIMAAN MAHASISWA BARU) ──────────────────────
             ['name' => 'Portal Calon Mahasiswa', 'slug' => 'spmb.student.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Akses dashboard & formulir registrasi calon mahasiswa'],
@@ -240,13 +250,15 @@ class PermissionSeeder extends Seeder
         ];
 
         foreach ($permissions as $perm) {
-            Permission::create([
-                'name' => $perm['name'],
-                'slug' => $perm['slug'],
-                'module' => $perm['module'],
-                'action' => $perm['action'],
-                'description' => $perm['description'],
-            ]);
+            Permission::firstOrCreate(
+                ['slug' => $perm['slug']],
+                [
+                    'name' => $perm['name'],
+                    'module' => $perm['module'],
+                    'action' => $perm['action'],
+                    'description' => $perm['description'],
+                ]
+            );
         }
 
         // ── AUTO MAP ROLE PERMISSIONS ───────────────────────────────
@@ -261,6 +273,7 @@ class PermissionSeeder extends Seeder
         $adminLppmRole = Role::where('slug', 'admin_lppm')->first();
         $adminSimpegRole = Role::where('slug', 'admin_simpeg')->first();
         $adminSarprasRole = Role::where('slug', 'admin_sarpras')->first();
+        $adminLaboratoriumRole = Role::where('slug', 'admin_laboratorium')->first();
         $calonMhsRole = Role::where('slug', 'calon_mhs')->first();
         $pimpinanRole = Role::where('slug', 'pimpinan')->first();
         $adminKeuAkuntansiRole = Role::where('slug', 'admin_keuangan_akuntansi')->first();
@@ -290,10 +303,12 @@ class PermissionSeeder extends Seeder
                 'sikeu.tagihan.read',
                 'sikeu.dispensasi.read',
                 'sikeu.dispensasi.create',
+                'sinapra.bebas_tanggungan.read',
+                'sinapra.bebas_tanggungan.create',
             ];
             $perms = Permission::whereIn('slug', $mhsSlugs)->get();
             foreach ($perms as $p) {
-                RolePermission::create(['role_id' => $mahasiswaRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $mahasiswaRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -386,6 +401,35 @@ class PermissionSeeder extends Seeder
             $sinapraPerms = Permission::where('module', 'sinapra')->get();
             foreach ($sinapraPerms as $p) {
                 RolePermission::create(['role_id' => $adminSarprasRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 7b. Admin Laboratorium (Laboran)
+        if ($adminLaboratoriumRole) {
+            $laboranSlugs = [
+                'sinapra.dashboard.read',
+                'sinapra.ruangan.read',
+                'sinapra.aset.read',
+                'sinapra.aset.create',
+                'sinapra.aset.update',
+                'sinapra.aset.delete',
+                'sinapra.peminjaman_ruangan.read',
+                'sinapra.peminjaman_ruangan.approve_laboran',
+                'sinapra.peminjaman_aset.read',
+                'sinapra.peminjaman_aset.approve_laboran',
+                'sinapra.maintenance.read',
+                'sinapra.maintenance.create',
+                'sinapra.maintenance.update',
+                'sinapra.bhp.read',
+                'sinapra.bhp.manage',
+                'sinapra.bebas_tanggungan.read',
+                'sinapra.bebas_tanggungan.approve',
+                'sinapra.kalibrasi.read',
+                'sinapra.kalibrasi.manage',
+            ];
+            $laboranPerms = Permission::whereIn('slug', $laboranSlugs)->get();
+            foreach ($laboranPerms as $p) {
+                RolePermission::firstOrCreate(['role_id' => $adminLaboratoriumRole->id, 'permission_id' => $p->id]);
             }
         }
 

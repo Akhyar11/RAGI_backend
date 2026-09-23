@@ -27,13 +27,34 @@ class Aset extends Model
         'nilai_buku',
         'kondisi',
         'status',
+        'is_borrowable',
+        'is_lab_asset',
     ];
 
     protected $casts = [
         'tanggal_perolehan' => 'date',
         'harga_perolehan' => 'decimal:2',
         'nilai_buku' => 'decimal:2',
+        'is_borrowable' => 'boolean',
+        'is_lab_asset' => 'boolean',
     ];
+
+    /**
+     * Scope untuk aset yang dapat dipinjam
+     */
+    public function scopeBorrowable($query)
+    {
+        return $query->where('is_borrowable', true);
+    }
+
+    /**
+     * Scope untuk membatasi aset hanya pada lab binaan laboran
+     */
+    public function scopeForLaboran($query, User $user)
+    {
+        $ruanganIds = $user->laboranRuangan()->pluck('sinapra_ruangan.id');
+        return $query->whereIn('ruangan_id', $ruanganIds);
+    }
 
     /**
      * Relasi ke Kategori Aset

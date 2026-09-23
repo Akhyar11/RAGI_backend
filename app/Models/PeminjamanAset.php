@@ -21,13 +21,20 @@ class PeminjamanAset extends Model
         'tanggal_kembali_aktual',
         'kondisi_kembali',
         'status',
+        'laboran_approved_by',
+        'laboran_approved_at',
+        'catatan_laboran',
+        'catatan_penolakan',
         'disetujui_oleh',
+        'admin_approved_at',
     ];
 
     protected $casts = [
         'tanggal_pinjam' => 'date',
         'tanggal_kembali_rencana' => 'date',
         'tanggal_kembali_aktual' => 'date',
+        'laboran_approved_at' => 'datetime',
+        'admin_approved_at' => 'datetime',
     ];
 
     /**
@@ -47,10 +54,18 @@ class PeminjamanAset extends Model
     }
 
     /**
-     * Relasi ke User Approver
+     * Relasi ke User Approver (Admin SINAPRA yang Menyetujui)
      */
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'disetujui_oleh');
+    }
+
+    /**
+     * Relasi ke Laboran Approver
+     */
+    public function laboranApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'laboran_approved_by');
     }
 }

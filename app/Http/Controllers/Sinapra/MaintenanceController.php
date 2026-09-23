@@ -36,6 +36,15 @@ class MaintenanceController extends Controller
             $query->where('ruangan_id', $request->ruangan_id);
         }
 
+        $user = $request->user();
+        if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
+            $ruanganIds = $user->laboranRuangan()->pluck('sinapra_ruangan.id');
+            $query->where(function ($q) use ($ruanganIds) {
+                $q->whereIn('ruangan_id', $ruanganIds)
+                  ->orWhereHas('aset', fn($a) => $a->whereIn('ruangan_id', $ruanganIds));
+            });
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {

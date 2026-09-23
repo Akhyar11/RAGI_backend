@@ -134,6 +134,19 @@ class AsetController extends Controller
             $query->where('status', $request->status);
         }
 
+        $user = $request->user();
+        if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
+            $query->forLaboran($user);
+        }
+
+        if ($request->filled('is_borrowable')) {
+            $query->where('is_borrowable', $request->boolean('is_borrowable'));
+        }
+
+        if ($request->filled('is_lab_asset')) {
+            $query->where('is_lab_asset', $request->boolean('is_lab_asset'));
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -170,6 +183,8 @@ class AsetController extends Controller
                 'ruangan_id' => $request->ruangan_id,
                 'kondisi' => $request->kondisi,
                 'status' => $request->status,
+                'is_borrowable' => $request->is_borrowable,
+                'is_lab_asset' => $request->is_lab_asset,
                 'sort_by' => $sortBy,
                 'sort_order' => $sortOrder,
             ],

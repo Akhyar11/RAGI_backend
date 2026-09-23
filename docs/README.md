@@ -130,11 +130,12 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
-| GedungRuanganController | Manajemen data master Gedung & Ruangan serta cek ketersediaan | [docs/api/SINAPRA/GedungRuanganController.md](api/SINAPRA/GedungRuanganController.md) |
-| AsetController | Inventaris barang/aset, kategori, & kalkulasi penyusutan nilai buku | [docs/api/SINAPRA/AsetController.md](api/SINAPRA/AsetController.md) |
-| PeminjamanController | Permohonan & persetujuan peminjaman ruangan & aset | [docs/api/SINAPRA/PeminjamanController.md](api/SINAPRA/PeminjamanController.md) |
-| MaintenanceController | Tiket pelaporan & pelacakan perawatan/perbaikan barang & ruang | [docs/api/SINAPRA/MaintenanceController.md](api/SINAPRA/MaintenanceController.md) |
-| PengadaanController | Pengajuan usulan pengadaan barang baru & rincian detail | [docs/api/SINAPRA/PengadaanController.md](api/SINAPRA/PengadaanController.md) |
+| GedungRuanganController | Manajemen master Gedung, Ruangan, penugasan laboran lab, & ketersediaan jam | [docs/api/SINAPRA/GedungRuanganController.md](api/SINAPRA/GedungRuanganController.md) |
+| AsetController | Inventaris barang/aset, kategori, scoping laboran lab, & kalkulasi penyusutan nilai buku | [docs/api/SINAPRA/AsetController.md](api/SINAPRA/AsetController.md) |
+| PeminjamanController | Alur persetujuan berjenjang peminjaman ruangan & aset (Laboran Lab & Admin SINAPRA) | [docs/api/SINAPRA/PeminjamanController.md](api/SINAPRA/PeminjamanController.md) |
+| MaintenanceController | Tiket pelaporan, scoping kerusakan aset lab binaan, & pelacakan perbaikan sarpras | [docs/api/SINAPRA/MaintenanceController.md](api/SINAPRA/MaintenanceController.md) |
+| PengadaanController | Usulan pengadaan barang baru, rincian item kebutuhan, & persetujuan status | [docs/api/SINAPRA/PengadaanController.md](api/SINAPRA/PengadaanController.md) |
+| LaboratoriumController | Manajemen operasional lab: stok BHP, surat bebas tanggungan lab, & kalibrasi alat | [docs/api/SINAPRA/LaboratoriumController.md](api/SINAPRA/LaboratoriumController.md) |
 
 ---
 

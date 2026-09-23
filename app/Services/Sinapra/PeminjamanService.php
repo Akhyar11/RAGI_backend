@@ -5,6 +5,7 @@ namespace App\Services\Sinapra;
 use App\Models\PeminjamanRuangan;
 use App\Models\PeminjamanAset;
 use App\Models\Aset;
+use App\Models\Ruangan;
 use App\Services\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Exception;
@@ -28,11 +29,14 @@ class PeminjamanService
             );
 
             if (!$isAvailable) {
-                throw new Exception("Ruangan tidak tersedia pada tanggal dan jam yang dipilih (terdapat bentrok jadwal).");
+                throw new Exception("Ruangan tidak tersedia pada tanggal dan jam yang dipilih (terdapat bentrok jadwal atau perkuliahan).");
             }
 
+            $ruangan = Ruangan::findOrFail($data['ruangan_id']);
+            $isLab = ($ruangan->tipe === 'lab') || $ruangan->laboran()->exists();
+
             $data['user_id'] = $userId;
-            $data['status'] = 'pending';
+            $data['status'] = $isLab ? 'pending_laboran' : 'pending_admin_sinapra';
 
             $peminjaman = PeminjamanRuangan::create($data);
 
@@ -49,7 +53,48 @@ class PeminjamanService
     }
 
     /**
-     * Persetujuan (Approve/Reject) Peminjaman Ruangan oleh Admin Sarpras.
+     * Persetujuan Tahap Laboran untuk Peminjaman Ruangan Laboratorium.
+     */
+    public function approveLaboranRuangan(
+        PeminjamanRuangan $peminjaman,
+        int $laboranId,
+        bool $isApproved,
+        ?string $catatanLaboran = null
+    ): PeminjamanRuangan {
+        return DB::transaction(function () use ($peminjaman, $laboranId, $isApproved, $catatanLaboran) {
+            $oldValues = $peminjaman->toArray();
+
+            if ($isApproved) {
+                $peminjaman->status = 'pending_admin_sinapra';
+            } else {
+                $peminjaman->status = 'ditolak_laboran';
+            }
+
+            $peminjaman->laboran_approved_by = $laboranId;
+            $peminjaman->laboran_approved_at = now();
+            $peminjaman->catatan_laboran = $catatanLaboran;
+            $peminjaman->save();
+
+            try {
+                AuditLogService::record(
+                    module: 'SIAKAD',
+                    action: $isApproved ? 'approve' : 'reject',
+                    tableName: 'peminjaman_ruangan',
+                    recordId: $peminjaman->id,
+                    oldValues: $oldValues,
+                    newValues: $peminjaman->fresh()->toArray(),
+                    request: request()
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
+            return $peminjaman->fresh();
+        });
+    }
+
+    /**
+     * Persetujuan Akhir Peminjaman Ruangan oleh Admin SINAPRA.
      */
     public function approvePeminjamanRuangan(
         PeminjamanRuangan $peminjaman,
@@ -76,11 +121,12 @@ class PeminjamanService
 
                 $peminjaman->status = 'disetujui';
             } else {
-                $peminjaman->status = 'ditolak';
+                $peminjaman->status = 'ditolak_admin_sinapra';
                 $peminjaman->catatan_penolakan = $catatanPenolakan;
             }
 
             $peminjaman->disetujui_oleh = $approverId;
+            $peminjaman->admin_approved_at = now();
             $peminjaman->save();
 
             AuditLogService::record(
@@ -102,14 +148,20 @@ class PeminjamanService
     public function applyPeminjamanAset(array $data, int $userId): PeminjamanAset
     {
         return DB::transaction(function () use ($data, $userId) {
-            $aset = Aset::findOrFail($data['aset_id']);
+            $aset = Aset::with('ruangan')->findOrFail($data['aset_id']);
+
+            if (!$aset->is_borrowable) {
+                throw new Exception("Aset '{$aset->nama}' merupakan aset tetap yang tidak dapat dipinjam.");
+            }
 
             if ($aset->status !== 'tersedia') {
                 throw new Exception("Aset '{$aset->nama}' sedang tidak tersedia untuk dipinjam (status: {$aset->status}).");
             }
 
+            $isLab = $aset->is_lab_asset || ($aset->ruangan && $aset->ruangan->tipe === 'lab');
+
             $data['user_id'] = $userId;
-            $data['status'] = 'pending';
+            $data['status'] = $isLab ? 'pending_laboran' : 'pending_admin_sinapra';
 
             $peminjaman = PeminjamanAset::create($data);
 
@@ -126,14 +178,56 @@ class PeminjamanService
     }
 
     /**
-     * Persetujuan Peminjaman Aset oleh Admin Sarpras.
+     * Persetujuan Tahap Laboran untuk Peminjaman Aset Laboratorium.
+     */
+    public function approveLaboranAset(
+        PeminjamanAset $peminjaman,
+        int $laboranId,
+        bool $isApproved,
+        ?string $catatanLaboran = null
+    ): PeminjamanAset {
+        return DB::transaction(function () use ($peminjaman, $laboranId, $isApproved, $catatanLaboran) {
+            $oldValues = $peminjaman->toArray();
+
+            if ($isApproved) {
+                $peminjaman->status = 'pending_admin_sinapra';
+            } else {
+                $peminjaman->status = 'ditolak_laboran';
+            }
+
+            $peminjaman->laboran_approved_by = $laboranId;
+            $peminjaman->laboran_approved_at = now();
+            $peminjaman->catatan_laboran = $catatanLaboran;
+            $peminjaman->save();
+
+            try {
+                AuditLogService::record(
+                    module: 'SIAKAD',
+                    action: $isApproved ? 'approve' : 'reject',
+                    tableName: 'peminjaman_aset',
+                    recordId: $peminjaman->id,
+                    oldValues: $oldValues,
+                    newValues: $peminjaman->fresh()->toArray(),
+                    request: request()
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
+            return $peminjaman->fresh();
+        });
+    }
+
+    /**
+     * Persetujuan Akhir Peminjaman Aset oleh Admin SINAPRA.
      */
     public function approvePeminjamanAset(
         PeminjamanAset $peminjaman,
         int $approverId,
-        bool $isApproved
+        bool $isApproved,
+        ?string $catatanPenolakan = null
     ): PeminjamanAset {
-        return DB::transaction(function () use ($peminjaman, $approverId, $isApproved) {
+        return DB::transaction(function () use ($peminjaman, $approverId, $isApproved, $catatanPenolakan) {
             $oldValues = $peminjaman->toArray();
 
             if ($isApproved) {
@@ -142,13 +236,15 @@ class PeminjamanService
                     throw new Exception("Aset sedang tidak tersedia untuk dipinjam.");
                 }
 
-                $peminjaman->status = 'dipinjam';
+                $peminjaman->status = 'disetujui';
                 $aset->update(['status' => 'dipinjam']);
             } else {
-                $peminjaman->status = 'terlambat'; // atau dibatalkan
+                $peminjaman->status = 'ditolak_admin_sinapra';
+                $peminjaman->catatan_penolakan = $catatanPenolakan;
             }
 
             $peminjaman->disetujui_oleh = $approverId;
+            $peminjaman->admin_approved_at = now();
             $peminjaman->save();
 
             AuditLogService::record(

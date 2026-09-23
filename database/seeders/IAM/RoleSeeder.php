@@ -88,6 +88,11 @@ class RoleSeeder extends Seeder
                 'description' => 'Administrator Sarana & Prasarana, pengelola aset, ruangan, maintenance, & pengadaan barang',
             ],
             [
+                'name' => 'Admin Laboratorium',
+                'slug' => 'admin_laboratorium',
+                'description' => 'Pengelola operasional laboratorium, aset lab, peminjaman alat lab, & tiket perbaikan lab binaan',
+            ],
+            [
                 'name' => 'Admin SPMB',
                 'slug' => 'admin_spmb',
                 'description' => 'Administrator Penerimaan Mahasiswa Baru (SPMB)',

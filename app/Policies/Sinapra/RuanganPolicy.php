@@ -31,4 +31,9 @@ class RuanganPolicy
     {
         return $user->hasPermission('sinapra.ruangan.delete');
     }
+
+    public function manageLaboran(User $user, Ruangan $ruangan): bool
+    {
+        return $user->hasPermission('sinapra.laboran.manage');
+    }
 }

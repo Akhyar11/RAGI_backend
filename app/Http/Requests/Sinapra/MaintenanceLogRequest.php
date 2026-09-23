@@ -13,9 +13,11 @@ class MaintenanceLogRequest extends FormRequest
 
     public function rules(): array
     {
+        $isUpdate = $this->isMethod('PUT') || $this->isMethod('PATCH');
+
         return [
-            'aset_id' => 'nullable|exists:aset,id|required_without:ruangan_id',
-            'ruangan_id' => 'nullable|exists:ruangan,id|required_without:aset_id',
+            'aset_id' => $isUpdate ? 'nullable|exists:sinapra_aset,id' : 'nullable|exists:sinapra_aset,id|required_without:ruangan_id',
+            'ruangan_id' => $isUpdate ? 'nullable|exists:sinapra_ruangan,id' : 'nullable|exists:sinapra_ruangan,id|required_without:aset_id',
             'judul' => 'required|string|max:150',
             'deskripsi_kerusakan' => 'required|string',
             'prioritas' => 'required|in:rendah,sedang,tinggi,darurat',
@@ -24,7 +26,7 @@ class MaintenanceLogRequest extends FormRequest
             'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
             'biaya' => 'nullable|numeric|min:0',
             'hasil_perbaikan' => 'nullable|string',
-            'status' => 'required|in:dilaporkan,dalam_perbaikan,selesai,dibatalkan',
+            'status' => 'nullable|in:dilaporkan,dalam_perbaikan,selesai,dibatalkan',
             'teknisi_id' => 'nullable|exists:core_users,id',
         ];
     }

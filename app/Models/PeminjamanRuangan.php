@@ -20,12 +20,18 @@ class PeminjamanRuangan extends Model
         'jam_mulai',
         'jam_selesai',
         'status',
+        'laboran_approved_by',
+        'laboran_approved_at',
+        'catatan_laboran',
         'disetujui_oleh',
+        'admin_approved_at',
         'catatan_penolakan',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
+        'laboran_approved_at' => 'datetime',
+        'admin_approved_at' => 'datetime',
     ];
 
     /**
@@ -45,10 +51,18 @@ class PeminjamanRuangan extends Model
     }
 
     /**
-     * Relasi ke User Approver (Yang Menyetujui)
+     * Relasi ke User Approver (Admin SINAPRA yang Menyetujui)
      */
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'disetujui_oleh');
+    }
+
+    /**
+     * Relasi ke Laboran Approver
+     */
+    public function laboranApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'laboran_approved_by');
     }
 }

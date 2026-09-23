@@ -66,4 +66,30 @@ class Ruangan extends Model
     {
         return $this->hasMany(MaintenanceLog::class, 'ruangan_id');
     }
+
+    /**
+     * Relasi ke penugasan laboran
+     */
+    public function laboranRuangan(): HasMany
+    {
+        return $this->hasMany(LaboranRuangan::class, 'ruangan_id');
+    }
+
+    /**
+     * Relasi ke User laboran yang ditugaskan
+     */
+    public function laboran()
+    {
+        return $this->belongsToMany(User::class, 'sinapra_laboran_ruangan', 'ruangan_id', 'user_id')
+            ->withPivot('is_primary')
+            ->withTimestamps();
+    }
+
+    /**
+     * Scope ruangan bertipe laboratorium
+     */
+    public function scopeIsLab($query)
+    {
+        return $query->where('tipe', 'lab');
+    }
 }

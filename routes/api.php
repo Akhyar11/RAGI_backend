@@ -791,6 +791,9 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('ruangan/{ruangan}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'showRuangan']);
     Route::put('ruangan/{ruangan}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'updateRuangan']);
     Route::delete('ruangan/{ruangan}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'destroyRuangan']);
+    Route::get('ruangan/{ruangan}/laboran', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'getLaboran']);
+    Route::post('ruangan/{ruangan}/laboran', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'assignLaboran']);
+    Route::delete('ruangan/{ruangan}/laboran/{user}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'unassignLaboran']);
 
     // Kategori Aset & Aset
     Route::get('kategori-aset', [App\Http\Controllers\Sinapra\AsetController::class, 'indexKategori']);
@@ -810,11 +813,13 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('peminjaman-ruangan', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'indexRuangan']);
     Route::post('peminjaman-ruangan', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'applyRuangan']);
     Route::get('peminjaman-ruangan/{peminjaman}', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'showRuangan']);
+    Route::post('peminjaman-ruangan/{peminjaman}/approve-laboran', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'approveLaboranRuangan']);
     Route::post('peminjaman-ruangan/{peminjaman}/approve', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'approveRuangan']);
 
     Route::get('peminjaman-aset', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'indexAset']);
     Route::post('peminjaman-aset', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'applyAset']);
     Route::get('peminjaman-aset/{peminjaman}', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'showAset']);
+    Route::post('peminjaman-aset/{peminjaman}/approve-laboran', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'approveLaboranAset']);
     Route::post('peminjaman-aset/{peminjaman}/approve', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'approveAset']);
     Route::post('peminjaman-aset/{peminjaman}/kembalikan', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'kembalikanAset']);
 
@@ -831,6 +836,28 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('pengadaan/{pengadaan}', [App\Http\Controllers\Sinapra\PengadaanController::class, 'show']);
     Route::patch('pengadaan/{pengadaan}/status', [App\Http\Controllers\Sinapra\PengadaanController::class, 'updateStatus']);
     Route::delete('pengadaan/{pengadaan}', [App\Http\Controllers\Sinapra\PengadaanController::class, 'destroy']);
+
+    // FASE 4: Manajemen Khusus Laboratorium
+    // 1. Bahan Habis Pakai (BHP Lab)
+    Route::get('lab-bhp', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'indexBhp']);
+    Route::post('lab-bhp', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'storeBhp']);
+    Route::get('lab-bhp/{lab_bhp}', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'showBhp']);
+    Route::put('lab-bhp/{lab_bhp}', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'updateBhp']);
+    Route::delete('lab-bhp/{lab_bhp}', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'destroyBhp']);
+    Route::post('lab-bhp/{lab_bhp}/transaksi', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'transaksiBhp']);
+
+    // 2. Surat Bebas Tanggungan Lab
+    Route::get('bebas-tanggungan', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'indexBebasTanggungan']);
+    Route::post('bebas-tanggungan', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'storeBebasTanggungan']);
+    Route::get('bebas-tanggungan/{bebas_tanggungan}', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'showBebasTanggungan']);
+    Route::post('bebas-tanggungan/{bebas_tanggungan}/approve', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'approveBebasTanggungan']);
+
+    // 3. Kalibrasi Alat Presisi
+    Route::get('alat-kalibrasi', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'indexKalibrasi']);
+    Route::post('alat-kalibrasi', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'storeKalibrasi']);
+    Route::get('alat-kalibrasi/{alat_kalibrasi}', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'showKalibrasi']);
+    Route::put('alat-kalibrasi/{alat_kalibrasi}', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'updateKalibrasi']);
+    Route::delete('alat-kalibrasi/{alat_kalibrasi}', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'destroyKalibrasi']);
 });
 
 

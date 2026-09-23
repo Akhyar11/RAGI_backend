@@ -14,7 +14,7 @@ class ApplyPeminjamanAsetRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'aset_id' => 'required|exists:aset,id',
+            'aset_id' => 'required|exists:sinapra_aset,id',
             'keperluan' => 'required|string|max:500',
             'tanggal_pinjam' => 'required|date|after_or_equal:today',
             'tanggal_kembali_rencana' => 'required|date|after_or_equal:tanggal_pinjam',
