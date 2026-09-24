@@ -16,6 +16,7 @@ class Ruangan extends Model
 
     protected $fillable = [
         'gedung_id',
+        'tipe_ruangan_id',
         'kode',
         'nama',
         'lantai',
@@ -28,12 +29,21 @@ class Ruangan extends Model
     ];
 
     protected $casts = [
+        'tipe_ruangan_id' => 'integer',
         'lantai' => 'integer',
         'kapasitas' => 'integer',
         'ada_ac' => 'boolean',
         'ada_proyektor' => 'boolean',
         'ada_wifi' => 'boolean',
     ];
+
+    /**
+     * Relasi ke Master Tipe Ruangan
+     */
+    public function tipeRuangan(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Sinapra\MasterTipeRuangan::class, 'tipe_ruangan_id');
+    }
 
     /**
      * Relasi ke Gedung

@@ -883,6 +883,21 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     // FASE 6: Kalender Terpadu Ketersediaan Ruangan (SINAPRA + SIAKAD)
     // ─────────────────────────────────────────────────────────────
     Route::get('kalender-ruangan', [App\Http\Controllers\Sinapra\KalenderRuanganController::class, 'index']);
+
+    // ─────────────────────────────────────────────────────────────
+    // MASTER DATA SINAPRA (Tipe Ruangan & Satuan Barang)
+    // ─────────────────────────────────────────────────────────────
+    Route::get('master/tipe-ruangan', [App\Http\Controllers\Sinapra\MasterTipeRuanganController::class, 'index']);
+    Route::post('master/tipe-ruangan', [App\Http\Controllers\Sinapra\MasterTipeRuanganController::class, 'store']);
+    Route::get('master/tipe-ruangan/{tipe_ruangan}', [App\Http\Controllers\Sinapra\MasterTipeRuanganController::class, 'show']);
+    Route::put('master/tipe-ruangan/{tipe_ruangan}', [App\Http\Controllers\Sinapra\MasterTipeRuanganController::class, 'update']);
+    Route::delete('master/tipe-ruangan/{tipe_ruangan}', [App\Http\Controllers\Sinapra\MasterTipeRuanganController::class, 'destroy']);
+
+    Route::get('master/satuan', [App\Http\Controllers\Sinapra\MasterSatuanController::class, 'index']);
+    Route::post('master/satuan', [App\Http\Controllers\Sinapra\MasterSatuanController::class, 'store']);
+    Route::get('master/satuan/{satuan}', [App\Http\Controllers\Sinapra\MasterSatuanController::class, 'show']);
+    Route::put('master/satuan/{satuan}', [App\Http\Controllers\Sinapra\MasterSatuanController::class, 'update']);
+    Route::delete('master/satuan/{satuan}', [App\Http\Controllers\Sinapra\MasterSatuanController::class, 'destroy']);
 });
 
 

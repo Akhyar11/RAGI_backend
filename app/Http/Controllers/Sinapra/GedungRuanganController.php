@@ -124,7 +124,7 @@ class GedungRuanganController extends Controller
         $this->authorize('viewAny', Ruangan::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = Ruangan::with(['gedung', 'laboran']);
+        $query = Ruangan::with(['gedung', 'laboran', 'tipeRuangan']);
 
         $user = $request->user();
         if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
@@ -135,8 +135,15 @@ class GedungRuanganController extends Controller
             $query->where('gedung_id', $request->gedung_id);
         }
 
+        if ($request->filled('tipe_ruangan_id')) {
+            $query->where('tipe_ruangan_id', $request->tipe_ruangan_id);
+        }
+
         if ($request->filled('tipe')) {
-            $query->where('tipe', $request->tipe);
+            $query->where(function ($q) use ($request) {
+                $q->where('tipe', $request->tipe)
+                  ->orWhereHas('tipeRuangan', fn($tq) => $tq->where('kode', $request->tipe));
+            });
         }
 
         if ($request->filled('status')) {
@@ -173,6 +180,7 @@ class GedungRuanganController extends Controller
             'filters' => [
                 'search' => $request->search,
                 'gedung_id' => $request->gedung_id,
+                'tipe_ruangan_id' => $request->tipe_ruangan_id,
                 'tipe' => $request->tipe,
                 'status' => $request->status,
                 'sort_by' => $sortBy,
@@ -190,7 +198,7 @@ class GedungRuanganController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data ruangan berhasil ditambahkan',
-            'data' => $ruangan->load('gedung'),
+            'data' => $ruangan->load(['gedung', 'tipeRuangan']),
         ], 201);
     }
 
@@ -201,7 +209,7 @@ class GedungRuanganController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Detail ruangan berhasil diambil',
-            'data' => $ruangan->load(['gedung', 'aset', 'laboran']),
+            'data' => $ruangan->load(['gedung', 'aset', 'laboran', 'tipeRuangan']),
         ]);
     }
 
@@ -214,7 +222,7 @@ class GedungRuanganController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data ruangan berhasil diperbarui',
-            'data' => $updated->load('gedung'),
+            'data' => $updated->load(['gedung', 'tipeRuangan']),
         ]);
     }
 

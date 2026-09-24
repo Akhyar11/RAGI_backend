@@ -130,7 +130,7 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
-| GedungRuanganController | Manajemen master Gedung, Ruangan, penugasan laboran lab, & ketersediaan jam | [docs/api/SINAPRA/GedungRuanganController.md](api/SINAPRA/GedungRuanganController.md) |
+| GedungRuanganController | Manajemen master Gedung, Ruangan (relasi tipe ruangan), penugasan laboran lab, & ketersediaan jam | [docs/api/SINAPRA/GedungRuanganController.md](api/SINAPRA/GedungRuanganController.md) |
 | AsetController | Inventaris barang/aset, kategori, scoping laboran lab, & kalkulasi penyusutan nilai buku | [docs/api/SINAPRA/AsetController.md](api/SINAPRA/AsetController.md) |
 | PeminjamanController | Alur persetujuan berjenjang peminjaman ruangan & aset (Laboran Lab & Admin SINAPRA) | [docs/api/SINAPRA/PeminjamanController.md](api/SINAPRA/PeminjamanController.md) |
 | MaintenanceController | Tiket pelaporan, scoping kerusakan aset lab binaan, & pelacakan perbaikan sarpras | [docs/api/SINAPRA/MaintenanceController.md](api/SINAPRA/MaintenanceController.md) |
@@ -138,6 +138,8 @@
 | LaboratoriumController | Manajemen operasional lab: stok BHP, surat bebas tanggungan lab, & kalibrasi alat | [docs/api/SINAPRA/LaboratoriumController.md](api/SINAPRA/LaboratoriumController.md) |
 | AuditMutasiDisposalController | Audit stock opname fisik, mutasi aset antar-ruang, & BAP pemutihan/penghapusan aset | [docs/api/SINAPRA/AuditMutasiDisposalController.md](api/SINAPRA/AuditMutasiDisposalController.md) |
 | KalenderRuanganController | Kalender visual & timeline ketersediaan ruangan terpadu (SINAPRA + SIAKAD) | [docs/api/SINAPRA/KalenderRuanganController.md](api/SINAPRA/KalenderRuanganController.md) |
+| MasterTipeRuanganController | Master data tipe ruangan kampus (kelas, laboratorium, dll.) | [docs/api/SINAPRA/MasterTipeRuanganController.md](api/SINAPRA/MasterTipeRuanganController.md) |
+| MasterSatuanController | Master data satuan barang dan aset (unit, pcs, rim, dll.) | [docs/api/SINAPRA/MasterSatuanController.md](api/SINAPRA/MasterSatuanController.md) |
 
 ---
 

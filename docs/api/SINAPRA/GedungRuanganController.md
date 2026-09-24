@@ -4,7 +4,7 @@
 > **Base URL**: `/api/sinapra`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-08-19  
-> **Diperbarui**: 2026-09-23  
+> **Diperbarui**: 2026-09-24  
 
 ## Daftar Endpoint
 
@@ -82,6 +82,378 @@ Deskripsi: Mengambil daftar gedung yang terdaftar dalam sistem.
 }
 ```
 
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+
+---
+
+## GET /api/sinapra/ruangan
+
+Deskripsi: Mengambil daftar ruangan kampus dengan relasi tipe ruangan, gedung, dan laboran.
+
+### Query Parameters
+- `search` (string, optional) - Filter pencarian kode atau nama ruangan.
+- `gedung_id` (integer, optional) - Filter berdasarkan ID gedung.
+- `tipe_ruangan_id` (integer, optional) - Filter relasi master tipe ruangan.
+- `tipe` (string, optional) - Filter kode tipe ruangan (mencakup data legacy atau relasi kode master tipe ruangan).
+- `status` (enum: aktif, maintenance, nonaktif, optional) - Filter status operasional ruangan.
+- `sort_by` (string, default: `created_at`) - Whitelist: `created_at`, `updated_at`, `kode`, `nama`, `kapasitas`, `lantai`.
+- `sort_order` (enum: `asc`, `desc`, default: `desc`) - Urutan data.
+- `per_page` (integer, default: 15, max: 100) - Jumlah data per halaman.
+- `page` (integer, default: 1) - Halaman data yang diambil.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Daftar ruangan berhasil diambil",
+    "data": [
+        {
+            "id": 1,
+            "gedung_id": 1,
+            "tipe_ruangan_id": 1,
+            "kode": "R-101",
+            "nama": "Ruang Kuliah Teori A1",
+            "lantai": 1,
+            "tipe": "kelas",
+            "kapasitas": 40,
+            "luas_m2": 64.0,
+            "ada_ac": true,
+            "ada_proyektor": true,
+            "ada_wifi": true,
+            "status": "aktif",
+            "gedung": {
+                "id": 1,
+                "kode": "GDG-A",
+                "nama": "Gedung Rektorat Utama"
+            },
+            "tipe_ruangan": {
+                "id": 1,
+                "kode": "KELAS",
+                "nama": "Ruang Kelas Teori"
+            },
+            "created_at": "2026-08-19T09:00:00.000000Z",
+            "updated_at": "2026-09-24T18:00:00.000000Z"
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    },
+    "filters": {
+        "search": null,
+        "gedung_id": null,
+        "tipe_ruangan_id": null,
+        "tipe": null,
+        "status": null,
+        "sort_by": "created_at",
+        "sort_order": "desc"
+    }
+}
+```
+
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+
+---
+
+## POST /api/sinapra/ruangan
+
+Deskripsi: Menambahkan data ruangan kampus baru.
+
+### Request Body
+```json
+{
+    "gedung_id": 1,
+    "tipe_ruangan_id": 1,
+    "kode": "R-102",
+    "nama": "Ruang Kuliah Teori A2",
+    "lantai": 1,
+    "tipe": "kelas",
+    "kapasitas": 40,
+    "luas_m2": 64.0,
+    "ada_ac": true,
+    "ada_proyektor": true,
+    "ada_wifi": true,
+    "keterangan": "Dilengkapi smart TV dan sound",
+    "status": "aktif"
+}
+```
+
+### Response Sukses (201 Created)
+```json
+{
+    "status": "success",
+    "message": "Ruangan berhasil ditambahkan",
+    "data": {
+        "id": 2,
+        "gedung_id": 1,
+        "tipe_ruangan_id": 1,
+        "kode": "R-102",
+        "nama": "Ruang Kuliah Teori A2",
+        "lantai": 1,
+        "tipe": "kelas",
+        "kapasitas": 40,
+        "luas_m2": 64.0,
+        "ada_ac": true,
+        "ada_proyektor": true,
+        "ada_wifi": true,
+        "status": "aktif",
+        "gedung": {
+            "id": 1,
+            "nama": "Gedung Rektorat Utama"
+        },
+        "tipe_ruangan": {
+            "id": 1,
+            "kode": "KELAS",
+            "nama": "Ruang Kelas Teori"
+        },
+        "created_at": "2026-09-24T18:00:00.000000Z",
+        "updated_at": "2026-09-24T18:00:00.000000Z"
+    }
+}
+```
+
+### Response Error (422 Unprocessable Content)
+```json
+{
+    "status": "error",
+    "message": "Validasi gagal.",
+    "errors": {
+        "tipe_ruangan_id": [
+            "Tipe ruangan yang dipilih tidak valid."
+        ]
+    }
+}
+```
+
+---
+
+## GET /api/sinapra/ruangan/{id}
+
+Deskripsi: Mengambil detail satu ruangan beserta daftar aset dan staf laboran terkait.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Detail ruangan berhasil diambil",
+    "data": {
+        "id": 1,
+        "gedung_id": 1,
+        "tipe_ruangan_id": 1,
+        "kode": "R-101",
+        "nama": "Ruang Kuliah Teori A1",
+        "lantai": 1,
+        "tipe": "kelas",
+        "kapasitas": 40,
+        "luas_m2": 64.0,
+        "ada_ac": true,
+        "ada_proyektor": true,
+        "ada_wifi": true,
+        "status": "aktif",
+        "gedung": {
+            "id": 1,
+            "kode": "GDG-A",
+            "nama": "Gedung Rektorat Utama"
+        },
+        "tipe_ruangan": {
+            "id": 1,
+            "kode": "KELAS",
+            "nama": "Ruang Kelas Teori"
+        },
+        "aset": [],
+        "laboran": [],
+        "created_at": "2026-08-19T09:00:00.000000Z",
+        "updated_at": "2026-09-24T18:00:00.000000Z"
+    }
+}
+```
+
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+- **404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Ruangan tidak ditemukan."
+}
+```
+
+---
+
+## PUT /api/sinapra/ruangan/{id}
+
+Deskripsi: Memperbarui data ruangan kampus.
+
+### Request Body
+```json
+{
+    "gedung_id": 1,
+    "tipe_ruangan_id": 1,
+    "kode": "R-101",
+    "nama": "Ruang Kuliah Teori A1 (Renovasi)",
+    "lantai": 1,
+    "tipe": "kelas",
+    "kapasitas": 45,
+    "luas_m2": 64.0,
+    "ada_ac": true,
+    "ada_proyektor": true,
+    "ada_wifi": true,
+    "status": "aktif"
+}
+```
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Ruangan berhasil diperbarui",
+    "data": {
+        "id": 1,
+        "gedung_id": 1,
+        "tipe_ruangan_id": 1,
+        "kode": "R-101",
+        "nama": "Ruang Kuliah Teori A1 (Renovasi)",
+        "lantai": 1,
+        "tipe": "kelas",
+        "kapasitas": 45,
+        "luas_m2": 64.0,
+        "ada_ac": true,
+        "ada_proyektor": true,
+        "ada_wifi": true,
+        "status": "aktif",
+        "gedung": {
+            "id": 1,
+            "nama": "Gedung Rektorat Utama"
+        },
+        "tipe_ruangan": {
+            "id": 1,
+            "kode": "KELAS",
+            "nama": "Ruang Kelas Teori"
+        },
+        "created_at": "2026-08-19T09:00:00.000000Z",
+        "updated_at": "2026-09-24T18:15:00.000000Z"
+    }
+}
+```
+
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+- **404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Ruangan tidak ditemukan."
+}
+```
+- **422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "Validasi gagal.",
+    "errors": {
+        "nama": [
+            "Nama ruangan wajib diisi."
+        ]
+    }
+}
+```
+
+---
+
+## DELETE /api/sinapra/ruangan/{id}
+
+Deskripsi: Menghapus data ruangan kampus dengan mekanisme soft-delete.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Ruangan berhasil dihapus",
+    "data": null
+}
+```
+
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+- **404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Ruangan tidak ditemukan."
+}
+```
+
 ---
 
 ## POST /api/sinapra/ruangan/check-ketersediaan
@@ -105,6 +477,34 @@ Deskripsi: Mengecek ketersediaan waktu/jam pemakaian ruangan untuk mencegah bent
     "message": "Ruangan tersedia untuk dipinjam",
     "data": {
         "is_available": true
+    }
+}
+```
+
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+- **422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "Validasi gagal.",
+    "errors": {
+        "jam_selesai": [
+            "Jam selesai harus setelah jam mulai."
+        ]
     }
 }
 ```
@@ -156,6 +556,29 @@ Deskripsi: Mengambil daftar staf laboran yang ditugaskan mengelola ruangan labor
 }
 ```
 
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+- **404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Ruangan tidak ditemukan."
+}
+```
+
 ---
 
 ## POST /api/sinapra/ruangan/{id}/laboran
@@ -185,6 +608,34 @@ Deskripsi: Menugaskan staf laboran ke suatu ruangan laboratorium.
 }
 ```
 
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+- **422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "Validasi gagal.",
+    "errors": {
+        "user_id": [
+            "Pengguna laboran yang dipilih tidak valid."
+        ]
+    }
+}
+```
+
 ---
 
 ## DELETE /api/sinapra/ruangan/{id}/laboran/{userId}
@@ -200,49 +651,31 @@ Deskripsi: Menghapus penugasan laboran dari ruangan.
 }
 ```
 
----
-
-## Response Error Standar
-
-### 401 Unauthorized
+### Response Error
+- **401 Unauthorized**
 ```json
 {
     "status": "error",
     "message": "Unauthenticated."
 }
 ```
-
-### 403 Forbidden
+- **403 Forbidden**
 ```json
 {
     "status": "error",
     "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
 }
 ```
-
-### 404 Not Found
+- **404 Not Found**
 ```json
 {
     "status": "error",
-    "message": "Ruangan tidak ditemukan."
-}
-```
-
-### 422 Unprocessable Entity
-```json
-{
-    "status": "error",
-    "message": "Validasi gagal.",
-    "errors": {
-        "user_id": [
-            "Pengguna laboran yang dipilih tidak valid."
-        ]
-    }
+    "message": "Ruangan atau penugasan laboran tidak ditemukan."
 }
 ```
 
 ---
 
 ## Catatan
-- Penghapusan gedung dan ruangan menggunakan mekanisme soft-delete.
+- Penghapusan gedung dan ruangan menggunakan mekanisme soft-delete (`deleted_at`).
 - Data kredensial dan password tidak dikembalikan dalam response API.

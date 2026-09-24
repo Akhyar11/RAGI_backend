@@ -16,16 +16,17 @@ class RuanganRequest extends FormRequest
         $ruanganId = $this->route('ruangan') ? $this->route('ruangan')->id : null;
 
         return [
-            'gedung_id' => 'required|exists:gedung,id',
-            'kode' => 'required|string|max:50|unique:ruangan,kode,' . $ruanganId,
+            'gedung_id' => 'required|exists:sinapra_gedung,id',
+            'tipe_ruangan_id' => 'nullable|exists:sinapra_master_tipe_ruangan,id',
+            'kode' => 'required|string|max:50|unique:sinapra_ruangan,kode,' . $ruanganId,
             'nama' => 'required|string|max:150',
             'lantai' => 'required|integer|min:1',
-            'tipe' => 'required|in:kelas,lab,kantor,aula,gudang,lainnya',
+            'tipe' => 'nullable|string|max:50',
             'kapasitas' => 'required|integer|min:0',
             'ada_ac' => 'boolean',
             'ada_proyektor' => 'boolean',
             'ada_wifi' => 'boolean',
-            'status' => 'required|in:aktif,maintenance,nonaktif',
+            'status' => 'required|string|max:50',
         ];
     }
 }
