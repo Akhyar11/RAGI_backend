@@ -259,4 +259,35 @@ class AsetController extends Controller
             ],
         ]);
     }
+
+    public function getLabel(Aset $aset): JsonResponse
+    {
+        $this->authorize('view', $aset);
+
+        $labelData = $this->service->generateLabelData($aset);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data label barcode & QR code aset berhasil diambil',
+            'data' => $labelData,
+        ]);
+    }
+
+    public function getBatchLabels(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Aset::class);
+
+        $request->validate([
+            'aset_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'aset_ids.*' => ['integer', 'exists:sinapra_aset,id'],
+        ]);
+
+        $labels = $this->service->generateBatchLabelData($request->input('aset_ids'));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data label barcode & QR code batch aset berhasil diambil',
+            'data' => $labels,
+        ]);
+    }
 }

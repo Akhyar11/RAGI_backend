@@ -804,7 +804,9 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
 
     Route::get('aset', [App\Http\Controllers\Sinapra\AsetController::class, 'index']);
     Route::post('aset', [App\Http\Controllers\Sinapra\AsetController::class, 'store']);
+    Route::post('aset/labels/batch', [App\Http\Controllers\Sinapra\AsetController::class, 'getBatchLabels']);
     Route::get('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'show']);
+    Route::get('aset/{aset}/label', [App\Http\Controllers\Sinapra\AsetController::class, 'getLabel']);
     Route::get('aset/{aset}/hitung-penyusutan', [App\Http\Controllers\Sinapra\AsetController::class, 'hitungPenyusutan']);
     Route::put('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'update']);
     Route::delete('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'destroy']);

@@ -18,6 +18,8 @@
 | GET | `/api/sinapra/aset` | Listing inventaris barang/aset | ✅ |
 | POST | `/api/sinapra/aset` | Tambah aset baru | ✅ |
 | GET | `/api/sinapra/aset/{id}` | Detail aset & riwayat perbaikan/peminjaman | ✅ |
+| GET | `/api/sinapra/aset/{id}/label` | Generate label fisik barcode & QR Code aset | ✅ |
+| POST | `/api/sinapra/aset/labels/batch` | Generate batch label fisik barcode & QR Code | ✅ |
 | GET | `/api/sinapra/aset/{id}/hitung-penyusutan` | Kalkulasi nilai buku & penyusutan aset | ✅ |
 | PUT | `/api/sinapra/aset/{id}` | Update data aset | ✅ |
 | DELETE | `/api/sinapra/aset/{id}` | Soft delete aset | ✅ |
@@ -212,6 +214,80 @@ Deskripsi: Menghapus data inventaris aset secara soft delete.
             "Kategori aset yang dipilih tidak valid."
         ]
     }
+}
+```
+
+---
+
+## GET /api/sinapra/aset/{id}/label
+
+Deskripsi: Mengambil metadata lengkap stiker label inventaris fisik untuk satu aset, termasuk QR Code dalam format SVG resolusi tinggi dan payload verifikasi aset.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Data label barcode & QR code aset berhasil diambil",
+    "data": {
+        "id": 1,
+        "kode_aset": "AST-LAB-001",
+        "nama": "Mikroskop Binokuler Digital",
+        "merk": "Olympus",
+        "model": "CX23",
+        "serial_number": "OLY-2026-991",
+        "kategori": "Peralatan Laboratorium Biologi",
+        "ruangan_id": 5,
+        "lokasi_ruangan": "Laboratorium Biologi Terpadu",
+        "lokasi_gedung": "Gedung Saintek Lt. 3",
+        "tanggal_perolehan": "2026-01-15",
+        "kondisi": "baik",
+        "status": "tersedia",
+        "qr_content": "http://localhost:8000/sinapra/aset/1",
+        "qr_code_svg": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg ...>...</svg>",
+        "instansi": "SISTEM SARANA & PRASARANA KAMPUS"
+    }
+}
+```
+
+---
+
+## POST /api/sinapra/aset/labels/batch
+
+Deskripsi: Mengambil sekumpulan metadata label stiker barcode & QR Code sekaligus untuk pencetakan massal (lembar cetak A4 / kertas stiker berkelanjutan).
+
+### Request Body
+```json
+{
+    "aset_ids": [1, 2, 3]
+}
+```
+
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `aset_ids` | array | ✅ | Array ID aset yang valid pada database. Min: 1, Max: 100. |
+| `aset_ids.*` | integer | ✅ | ID aset fisik `sinapra_aset`. |
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Data label barcode & QR code batch aset berhasil diambil",
+    "data": [
+        {
+            "id": 1,
+            "kode_aset": "AST-LAB-001",
+            "nama": "Mikroskop Binokuler Digital",
+            "qr_code_svg": "<svg ...>...</svg>",
+            "lokasi_ruangan": "Laboratorium Biologi Terpadu"
+        },
+        {
+            "id": 2,
+            "kode_aset": "AST-LAB-002",
+            "nama": "Centrifuge Refrigerated 15000 RPM",
+            "qr_code_svg": "<svg ...>...</svg>",
+            "lokasi_ruangan": "Laboratorium Kimia Analitik"
+        }
+    ]
 }
 ```
 
