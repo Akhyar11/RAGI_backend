@@ -219,22 +219,8 @@ class MenuSeeder extends Seeder
                 'permission_slug' => 'siakad.dashboard.read',
                 'order_index' => 1,
             ],
-            [
-                'name' => 'KRS Semester Aktif',
-                'url' => '/siakad/krs',
-                'icon' => 'FaClipboardCheck',
-                'module' => 'siakad',
-                'permission_slug' => 'siakad.krs.read',
-                'order_index' => 2,
-            ],
-            [
-                'name' => 'Jadwal Kuliah & RPS',
-                'url' => '/siakad/perkuliahan/kelas',
-                'icon' => 'FaCalendarCheck',
-                'module' => 'siakad',
-                'permission_slug' => 'siakad.kelas.read',
-                'order_index' => 3,
-            ],
+            // Catatan: KRS & Jadwal tidak dibuat top-level agar tidak aktif ganda —
+            // sudah ada di grup PERKULIAHAN & OBE di bawah.
             [
                 'name' => 'Hasil Studi (KHS & Transkrip)',
                 'url' => '/siakad/hasil-studi',
