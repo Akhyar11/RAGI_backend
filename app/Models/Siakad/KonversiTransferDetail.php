@@ -15,6 +15,8 @@ class KonversiTransferDetail extends Model
         'nama_mk_asal',
         'sks_asal',
         'nilai_huruf_asal',
+        'status',
+        'catatan_penolakan',
     ];
 
     protected $casts = [

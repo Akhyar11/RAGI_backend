@@ -84,6 +84,23 @@ class Mahasiswa extends Model
         return $this->belongsTo(KonversiTransfer::class, 'konversi_id');
     }
 
+    public function spmbKonversi()
+    {
+        return $this->hasOne(\App\Models\Spmb\KonversiMahasiswa::class, 'mahasiswa_id');
+    }
+
+    public function pendaftaranSpmb()
+    {
+        return $this->hasOneThrough(
+            \App\Models\Spmb\PendaftaranCalonMhs::class,
+            \App\Models\Spmb\KonversiMahasiswa::class,
+            'mahasiswa_id',
+            'id',
+            'id',
+            'pendaftaran_id'
+        );
+    }
+
     public function krs()
     {
         return $this->hasMany(Krs::class, 'mahasiswa_id');

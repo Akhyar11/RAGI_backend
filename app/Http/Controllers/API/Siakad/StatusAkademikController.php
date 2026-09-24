@@ -37,7 +37,7 @@ class StatusAkademikController extends Controller
     {
         $validated = $request->validate([
             'mahasiswa_id' => 'required|exists:siakad_mahasiswa,id',
-            'tahun_akademik_id' => 'required|exists:spmb_master_tahun_akademik,id',
+            'tahun_akademik_id' => 'required|exists:siakad_tahun_akademik,id',
             'alasan' => 'required|string',
             'file_surat' => 'nullable|string|max:255',
         ]);

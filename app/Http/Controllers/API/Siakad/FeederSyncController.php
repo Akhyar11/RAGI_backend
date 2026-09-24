@@ -86,6 +86,7 @@ class FeederSyncController extends Controller
                 'ajar_dosen' => $this->syncService->syncBatchAjarDosen($userId),
                 'mata_kuliah' => $this->syncService->syncBatchMataKuliah($userId),
                 'kelas' => $this->syncService->syncBatchKelasNilai($userId),
+                'prodi' => $this->syncService->syncProgramStudiFromFeeder($userId),
             };
 
             return response()->json([

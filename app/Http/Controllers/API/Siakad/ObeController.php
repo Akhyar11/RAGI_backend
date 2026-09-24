@@ -15,9 +15,13 @@ use App\Models\Siakad\NilaiKomponenMahasiswa;
 use App\Models\Siakad\KetercapaianCpmkMahasiswa;
 use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\NilaiMahasiswa;
+use App\Models\Siakad\BankSoal;
+use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\MataKuliah;
 use App\Services\Siakad\SiakadAkademikService;
+use App\Http\Requests\Siakad\StoreCplRequest;
+use App\Http\Requests\Siakad\StoreKelasKomponenRequest;
 use Illuminate\Support\Facades\DB;
 
 class ObeController extends Controller
@@ -42,18 +46,13 @@ class ObeController extends Controller
         ]);
     }
 
-    public function storeCpl(Request $request)
+    public function storeCpl(StoreCplRequest $request)
     {
-        $request->validate([
-            'program_studi_id' => 'required|exists:siakad_program_studi,id',
-            'kode_cpl' => 'required|string|max:50',
-            'kategori' => 'required|in:sikap,pengetahuan,keterampilan_umum,keterampilan_khusus',
-            'deskripsi' => 'required|string',
-        ]);
+        $validated = $request->validated();
 
         $cpl = Cpl::updateOrCreate(
-            ['program_studi_id' => $request->program_studi_id, 'kode_cpl' => $request->kode_cpl],
-            ['kategori' => $request->kategori, 'deskripsi' => $request->deskripsi, 'is_active' => true]
+            ['program_studi_id' => $validated['program_studi_id'], 'kode_cpl' => $validated['kode_cpl']],
+            ['kategori' => $validated['kategori'], 'deskripsi' => $validated['deskripsi'], 'is_active' => true]
         );
 
         return response()->json([
@@ -111,6 +110,26 @@ class ObeController extends Controller
             ->orderBy('urutan')
             ->get();
 
+        // Auto-sync jika komponen masih kosong dan mata kuliah sudah memiliki CPMK
+        if ($komponen->isEmpty() && $kelas->mataKuliah && $kelas->mataKuliah->cpmks->isNotEmpty()) {
+            $urutan = 1;
+            foreach ($kelas->mataKuliah->cpmks as $cpmk) {
+                KomponenPenilaian::create([
+                    'kelas_id' => $kelasId,
+                    'cpmk_id' => $cpmk->id,
+                    'nama_komponen' => 'Asesmen ' . $cpmk->kode_cpmk,
+                    'teknik_penilaian' => 'tugas',
+                    'bobot' => $cpmk->bobot_persentase > 0 ? $cpmk->bobot_persentase : 25,
+                    'urutan' => $urutan++,
+                    'is_aktif' => true,
+                ]);
+            }
+            $komponen = KomponenPenilaian::with(['cpmk', 'subCpmk'])
+                ->where('kelas_id', $kelasId)
+                ->orderBy('urutan')
+                ->get();
+        }
+
         $totalBobot = $komponen->sum('bobot');
 
         return response()->json([
@@ -125,18 +144,67 @@ class ObeController extends Controller
         ]);
     }
 
-    public function storeKelasKomponen(Request $request, $kelasId)
+    public function syncKelasKomponenFromObe(Request $request, $kelasId)
+    {
+        $kelas = Kelas::with(['mataKuliah.cpmks'])->findOrFail($kelasId);
+        
+        if (!$kelas->mataKuliah || $kelas->mataKuliah->cpmks->isEmpty()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Mata kuliah belum memiliki data CPMK master OBE. Silakan konfigurasikan CPMK terlebih dahulu di menu OBE.'
+            ], 422);
+        }
+
+        // Jangan hapus komponen yang sudah memiliki nilai mahasiswa
+        $komponenIds = KomponenPenilaian::where('kelas_id', $kelasId)->pluck('id');
+        $sudahDinilai = NilaiKomponenMahasiswa::whereIn('komponen_penilaian_id', $komponenIds)->exists();
+        if ($sudahDinilai) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Sinkronisasi dibatalkan: komponen kelas ini sudah memiliki nilai mahasiswa. Hapus/reset nilai terlebih dahulu atau kelola komponen secara manual agar nilai tidak hilang.'
+            ], 422);
+        }
+
+        // Hapus komponen eksisting yang belum ada nilai
+        KomponenPenilaian::where('kelas_id', $kelasId)->delete();
+
+        $urutan = 1;
+        foreach ($kelas->mataKuliah->cpmks as $cpmk) {
+            KomponenPenilaian::create([
+                'kelas_id' => $kelasId,
+                'cpmk_id' => $cpmk->id,
+                'nama_komponen' => 'Asesmen ' . $cpmk->kode_cpmk,
+                'teknik_penilaian' => 'tugas',
+                'bobot' => $cpmk->bobot_persentase > 0 ? $cpmk->bobot_persentase : round(100 / count($kelas->mataKuliah->cpmks), 2),
+                'urutan' => $urutan++,
+                'is_aktif' => true,
+            ]);
+        }
+
+        $komponen = KomponenPenilaian::with(['cpmk', 'subCpmk'])
+            ->where('kelas_id', $kelasId)
+            ->orderBy('urutan')
+            ->get();
+
+        $totalBobot = $komponen->sum('bobot');
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Komponen asesmen kelas berhasil disinkronkan dari Master CPMK OBE mata kuliah.',
+            'data' => [
+                'komponen' => $komponen,
+                'total_bobot' => $totalBobot,
+                'is_valid_100' => round($totalBobot, 2) === 100.00
+            ]
+        ]);
+    }
+
+    public function storeKelasKomponen(StoreKelasKomponenRequest $request, $kelasId)
     {
         $kelas = Kelas::with(['mataKuliah', 'tahunAkademik'])->findOrFail($kelasId);
         $mode = $kelas->tahunAkademik?->mode_penilaian ?? 'semi_obe';
 
         if ($mode === 'full_obe') {
-            $request->validate([
-                'nama_komponen' => 'required|string|max:255',
-                'bobot' => 'required|numeric|min:1|max:100',
-                'id' => 'nullable|exists:siakad_cpmk,id',
-            ]);
-
             if ($request->filled('id')) {
                 $cpmk = Cpmk::findOrFail($request->id);
                 $cpmk->update([
@@ -159,14 +227,6 @@ class ObeController extends Controller
                 'data' => $cpmk
             ]);
         }
-
-        $request->validate([
-            'nama_komponen' => 'required|string|max:255',
-            'bobot' => 'required|numeric|min:1|max:100',
-            'teknik_penilaian' => 'required|in:tes_tulis,tes_lisan,proyek,praktikum,unjuk_kerja,portofolio,partisipatif,tugas,kuis,lainnya',
-            'cpmk_id' => 'nullable|exists:siakad_cpmk,id',
-            'id' => 'nullable|exists:siakad_komponen_penilaian,id',
-        ]);
 
         if ($request->filled('id')) {
             $comp = KomponenPenilaian::findOrFail($request->id);
@@ -222,7 +282,7 @@ class ObeController extends Controller
     // --- Matriks Penilaian OBE Kelas & Rekap Capaian ---
     public function getKelasNilaiObe(Request $request, $kelasId)
     {
-        $kelas = Kelas::with(['mataKuliah.cpmks.cpl', 'programStudi', 'dosenPengampu.dosen', 'tahunAkademik'])->findOrFail($kelasId);
+        $kelas = Kelas::with(['mataKuliah.cpmks.cpl', 'programStudi', 'programStudis', 'dosenPengampu.dosen', 'tahunAkademik'])->findOrFail($kelasId);
         $mode = $kelas->tahunAkademik?->mode_penilaian ?? 'semi_obe';
         
         // 1. Define the components list based on the active mode
@@ -239,6 +299,22 @@ class ObeController extends Controller
         } else {
             // For Semi-OBE and Conventional, use traditional components
             $komponenList = KomponenPenilaian::with('cpmk')->where('kelas_id', $kelasId)->orderBy('urutan')->get();
+            // Auto sync if empty
+            if ($komponenList->isEmpty() && $kelas->mataKuliah && $kelas->mataKuliah->cpmks->isNotEmpty()) {
+                $urutan = 1;
+                foreach ($kelas->mataKuliah->cpmks as $cpmk) {
+                    KomponenPenilaian::create([
+                        'kelas_id' => $kelasId,
+                        'cpmk_id' => $cpmk->id,
+                        'nama_komponen' => 'Asesmen ' . $cpmk->kode_cpmk,
+                        'teknik_penilaian' => 'tugas',
+                        'bobot' => $cpmk->bobot_persentase > 0 ? $cpmk->bobot_persentase : 25,
+                        'urutan' => $urutan++,
+                        'is_aktif' => true,
+                    ]);
+                }
+                $komponenList = KomponenPenilaian::with('cpmk')->where('kelas_id', $kelasId)->orderBy('urutan')->get();
+            }
         }
 
         // Ambil semua mahasiswa yang terdaftar di kelas ini via KRS
@@ -346,17 +422,8 @@ class ObeController extends Controller
                 }
             }
 
-            // Nilai Huruf & Mutu
-            $huruf = 'E';
-            $mutu = 0.00;
-            if ($totalAkhir >= 85) { $huruf = 'A'; $mutu = 4.00; }
-            elseif ($totalAkhir >= 80) { $huruf = 'A-'; $mutu = 3.75; }
-            elseif ($totalAkhir >= 75) { $huruf = 'B+'; $mutu = 3.25; }
-            elseif ($totalAkhir >= 70) { $huruf = 'B'; $mutu = 3.00; }
-            elseif ($totalAkhir >= 65) { $huruf = 'B-'; $mutu = 2.75; }
-            elseif ($totalAkhir >= 60) { $huruf = 'C+'; $mutu = 2.25; }
-            elseif ($totalAkhir >= 55) { $huruf = 'C'; $mutu = 2.00; }
-            elseif ($totalAkhir >= 40) { $huruf = 'D'; $mutu = 1.00; }
+            // Nilai Huruf & Mutu — sumber tunggal: master skala nilai (fallback baku bila kosong)
+            [$huruf, $mutu] = $this->konversiHurufMutu((float) $totalAkhir, $kelas->mataKuliah?->kurikulum?->program_studi_id);
 
             return [
                 'krs_detail_id' => $kd->id,
@@ -378,8 +445,92 @@ class ObeController extends Controller
                 'cpmks' => $mode === 'konvensional' ? [] : $kelas->mataKuliah->cpmks,
                 'peserta' => $peserta,
                 'mode_penilaian' => $mode,
+                'total_bobot_komponen' => round((float) $komponenList->sum('bobot'), 2),
+                'total_bobot_cpmk' => round((float) $kelas->mataKuliah->cpmks->sum('bobot_persentase'), 2),
+                'is_valid_100' => $mode === 'full_obe'
+                    ? abs((float) $kelas->mataKuliah->cpmks->sum('bobot_persentase') - 100.0) < 0.01
+                    : abs((float) $komponenList->sum('bobot') - 100.0) < 0.01,
+                'kelayakan' => $this->kelayakanInputNilai($kelas, $mode, $komponenList),
+                'skala_nilai' => SkalaNilai::where('is_active', true)->orderBy('bobot_indeks', 'desc')->get(),
             ]
         ]);
+    }
+
+    /**
+     * Info kelayakan input nilai kelas: RPS terisi + bobot 100%.
+     *
+     * @return array{boleh:bool, pesan:string|null, rps:array, bobot:array}
+     */
+    private function kelayakanInputNilai(Kelas $kelas, string $mode, $komponenList): array
+    {
+        $mkId = $kelas->mata_kuliah_id;
+        $rps = \App\Models\Siakad\Rps::where('mata_kuliah_id', $mkId)
+            ->withCount('mingguan')
+            ->orderByDesc('id')
+            ->first();
+
+        $rpsInfo = [
+            'ada' => (bool) $rps,
+            'jumlah_pertemuan' => $rps ? (int) $rps->mingguan_count : 0,
+            'status' => $rps?->status,
+            'terisi' => (bool) $rps && (int) $rps->mingguan_count > 0,
+        ];
+
+        if (!$rpsInfo['terisi']) {
+            return [
+                'boleh' => false,
+                'pesan' => 'Pengisian nilai dikunci: RPS mata kuliah ini belum diisi (minimal 1 dari 16 rencana pertemuan mingguan). Lengkapi RPS terlebih dahulu di menu Perkuliahan → Kelola RPS.',
+                'rps' => $rpsInfo,
+                'bobot' => null,
+            ];
+        }
+
+        if ($mode === 'full_obe') {
+            $total = round((float) $kelas->mataKuliah->cpmks->sum('bobot_persentase'), 2);
+            $ok = abs($total - 100.0) < 0.01;
+            return [
+                'boleh' => $ok,
+                'pesan' => $ok ? null : "Pengisian nilai dikunci: total bobot CPMK mata kuliah ini belum genap 100% (saat ini: {$total}%). Lengkapi pemetaan CPMK di menu OBE.",
+                'rps' => $rpsInfo,
+                'bobot' => ['tipe' => 'cpmk', 'total' => $total, 'valid_100' => $ok],
+            ];
+        }
+
+        $total = round((float) $komponenList->sum('bobot'), 2);
+        $ok = abs($total - 100.0) < 0.01;
+        return [
+            'boleh' => $ok,
+            'pesan' => $ok ? null : "Pengisian nilai dikunci: total bobot komponen asesmen kelas ini belum genap 100% (saat ini: {$total}%). Sesuaikan komponen penilaian kelas terlebih dahulu.",
+            'rps' => $rpsInfo,
+            'bobot' => ['tipe' => 'komponen', 'total' => $total, 'valid_100' => $ok],
+        ];
+    }
+
+    /**
+     * Konversi nilai angka ke huruf & mutu via master skala nilai.
+     * Fallback ke rentang baku bila master belum dikonfigurasi.
+     *
+     * @return array{0:string,1:float}
+     */
+    private function konversiHurufMutu(float $nilaiAkhir, ?int $prodiId = null): array
+    {
+        $skala = SkalaNilai::konversiNilai($nilaiAkhir, $prodiId);
+        if ($skala) {
+            return [$skala->nilai_huruf, (float) $skala->bobot_indeks];
+        }
+
+        $huruf = 'E';
+        $mutu = 0.00;
+        if ($nilaiAkhir >= 85) { $huruf = 'A'; $mutu = 4.00; }
+        elseif ($nilaiAkhir >= 80) { $huruf = 'A-'; $mutu = 3.75; }
+        elseif ($nilaiAkhir >= 75) { $huruf = 'B+'; $mutu = 3.25; }
+        elseif ($nilaiAkhir >= 70) { $huruf = 'B'; $mutu = 3.00; }
+        elseif ($nilaiAkhir >= 65) { $huruf = 'B-'; $mutu = 2.75; }
+        elseif ($nilaiAkhir >= 60) { $huruf = 'C+'; $mutu = 2.25; }
+        elseif ($nilaiAkhir >= 55) { $huruf = 'C'; $mutu = 2.00; }
+        elseif ($nilaiAkhir >= 40) { $huruf = 'D'; $mutu = 1.00; }
+
+        return [$huruf, $mutu];
     }
 
     public function saveBulkNilaiObe(Request $request, $kelasId)
@@ -395,6 +546,28 @@ class ObeController extends Controller
         $mode = $kelas->tahunAkademik?->mode_penilaian ?? 'semi_obe';
         $komponenList = KomponenPenilaian::where('kelas_id', $kelasId)->get();
         $isFinalInput = $request->boolean('is_final', false);
+
+        // Kunci prasyarat: RPS terisi + bobot 100%
+        $kelayakan = $this->kelayakanInputNilai($kelas, $mode, $komponenList);
+        if (!$kelayakan['boleh']) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $kelayakan['pesan'],
+                'data' => ['kelayakan' => $kelayakan],
+            ], 422);
+        }
+
+        // Validasi Jadwal Periode Pengisian Nilai (Kecuali jika Admin)
+        $user = $request->user();
+        if ($user && !$user->isAdmin()) {
+            $ta = $kelas->tahunAkademik;
+            if ($ta && $ta->input_nilai_selesai && now()->greaterThan(\Carbon\Carbon::parse($ta->input_nilai_selesai))) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Batas waktu pengisian nilai untuk periode akademik ini telah ditutup (' . \Carbon\Carbon::parse($ta->input_nilai_selesai)->translatedFormat('d F Y') . '). Hubungi Bagian BAAK untuk dispensasi pengisian nilai.'
+                ], 403);
+            }
+        }
 
         DB::transaction(function () use ($request, $kelas, $komponenList, $isFinalInput, $mode) {
             foreach ($request->grades as $g) {
@@ -471,24 +644,15 @@ class ObeController extends Controller
                     }
                 }
 
-                // Sync ke siakad_nilai_mahasiswa
-                $huruf = 'E';
-                $mutu = 0.00;
-                if ($totalAkhir >= 85) { $huruf = 'A'; $mutu = 4.00; }
-                elseif ($totalAkhir >= 80) { $huruf = 'A-'; $mutu = 3.75; }
-                elseif ($totalAkhir >= 75) { $huruf = 'B+'; $mutu = 3.25; }
-                elseif ($totalAkhir >= 70) { $huruf = 'B'; $mutu = 3.00; }
-                elseif ($totalAkhir >= 65) { $huruf = 'B-'; $mutu = 2.75; }
-                elseif ($totalAkhir >= 60) { $huruf = 'C+'; $mutu = 2.25; }
-                elseif ($totalAkhir >= 55) { $huruf = 'C'; $mutu = 2.00; }
-                elseif ($totalAkhir >= 40) { $huruf = 'D'; $mutu = 1.00; }
+                // Sync ke siakad_nilai_mahasiswa — skala dari master
+                [$hurufBulk, $mutuBulk] = $this->konversiHurufMutu((float) $totalAkhir, $kelas->mataKuliah?->kurikulum?->program_studi_id);
 
                 NilaiMahasiswa::updateOrCreate(
                     ['krs_detail_id' => $kd->id],
                     [
                         'nilai_akhir' => round($totalAkhir, 2),
-                        'nilai_huruf' => $huruf,
-                        'bobot_mutu' => $mutu,
+                        'nilai_huruf' => $hurufBulk,
+                        'bobot_mutu' => $mutuBulk,
                         'is_final' => $isFinalInput,
                         'diinput_oleh' => $request->user()?->id,
                     ]
@@ -523,6 +687,29 @@ class ObeController extends Controller
         $mode = $kd->kelas->tahunAkademik?->mode_penilaian ?? 'semi_obe';
         $komponenList = KomponenPenilaian::where('kelas_id', $kelasId)->get();
         $isFinalInput = $request->boolean('is_final', false);
+
+        // Kunci prasyarat: RPS terisi + bobot 100%
+        $kelayakan = $this->kelayakanInputNilai($kd->kelas, $mode, $komponenList);
+        if (!$kelayakan['boleh']) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $kelayakan['pesan'],
+                'data' => ['kelayakan' => $kelayakan],
+            ], 422);
+        }
+
+        // Validasi Jadwal Periode Pengisian Nilai (Kecuali jika Admin)
+        $user = $request->user();
+        if ($user && !$user->isAdmin()) {
+            $ta = $kd->kelas->tahunAkademik;
+            if ($ta && $ta->input_nilai_selesai && now()->greaterThan(\Carbon\Carbon::parse($ta->input_nilai_selesai))) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Batas waktu pengisian nilai untuk periode akademik ini telah ditutup (' . \Carbon\Carbon::parse($ta->input_nilai_selesai)->translatedFormat('d F Y') . '). Hubungi Bagian BAAK untuk dispensasi pengisian nilai.'
+                ], 403);
+            }
+        }
+
         $totalAkhir = 0;
         $scoresInput = $request->scores;
 
@@ -595,24 +782,15 @@ class ObeController extends Controller
                 }
             }
 
-            // Sync ke siakad_nilai_mahasiswa
-            $huruf = 'E';
-            $mutu = 0.00;
-            if ($totalAkhir >= 85) { $huruf = 'A'; $mutu = 4.00; }
-            elseif ($totalAkhir >= 80) { $huruf = 'A-'; $mutu = 3.75; }
-            elseif ($totalAkhir >= 75) { $huruf = 'B+'; $mutu = 3.25; }
-            elseif ($totalAkhir >= 70) { $huruf = 'B'; $mutu = 3.00; }
-            elseif ($totalAkhir >= 65) { $huruf = 'B-'; $mutu = 2.75; }
-            elseif ($totalAkhir >= 60) { $huruf = 'C+'; $mutu = 2.25; }
-            elseif ($totalAkhir >= 55) { $huruf = 'C'; $mutu = 2.00; }
-            elseif ($totalAkhir >= 40) { $huruf = 'D'; $mutu = 1.00; }
+            // Sync ke siakad_nilai_mahasiswa — skala dari master
+            [$hurufSingle, $mutuSingle] = $this->konversiHurufMutu((float) $totalAkhir, $kd->kelas?->mataKuliah?->kurikulum?->program_studi_id);
 
             NilaiMahasiswa::updateOrCreate(
                 ['krs_detail_id' => $kd->id],
                 [
                     'nilai_akhir' => round($totalAkhir, 2),
-                    'nilai_huruf' => $huruf,
-                    'bobot_mutu' => $mutu,
+                    'nilai_huruf' => $hurufSingle,
+                    'bobot_mutu' => $mutuSingle,
                     'is_final' => $isFinalInput,
                     'diinput_oleh' => $request->user()?->id,
                 ]
@@ -644,6 +822,10 @@ class ObeController extends Controller
             $query->whereHas('mataKuliah.kurikulum', fn($q) => $q->where('program_studi_id', $request->program_studi_id));
         }
 
+        if ($request->filled('mata_kuliah_id')) {
+            $query->where('mata_kuliah_id', $request->mata_kuliah_id);
+        }
+
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -664,6 +846,7 @@ class ObeController extends Controller
     public function showRps($id)
     {
         $rps = \App\Models\Siakad\Rps::with([
+            'mataKuliah.cpmks.subCpmks',
             'mataKuliah.cpmks.cpl',
             'mataKuliah.kurikulum.programStudi.fakultas',
             'dosenPengembang',
@@ -672,9 +855,15 @@ class ObeController extends Controller
             'mingguan'
         ])->findOrFail($id);
 
+        // Kelas yang memakai RPS ini (MK sama) beserta jadwal & pengampu — read-only
+        $kelasPemakai = \App\Models\Siakad\Kelas::with(['tahunAkademik', 'ruangan.gedung', 'programStudi', 'dosenPengampu.dosen'])
+            ->where('mata_kuliah_id', $rps->mata_kuliah_id)
+            ->orderByDesc('tahun_akademik_id')
+            ->get(['id', 'mata_kuliah_id', 'tahun_akademik_id', 'program_studi_id', 'ruangan_id', 'kode_kelas', 'nama_kelas', 'hari', 'jam_mulai', 'jam_selesai', 'kapasitas', 'status']);
+
         return response()->json([
             'status' => 'success',
-            'data' => $rps
+            'data' => array_merge($rps->toArray(), ['kelas_pemakai' => $kelasPemakai])
         ]);
     }
 
@@ -776,7 +965,7 @@ class ObeController extends Controller
 
         // Ambil data ketercapaian CPMK dari KRS mahasiswa
         $krsDetails = KrsDetail::whereHas('krs', fn($q) => $q->where('mahasiswa_id', $mahasiswa->id))
-            ->with(['ketercapaianCpmk.cpmk.cpl', 'kelas.mataKuliah', 'nilai'])
+            ->with(['ketercapaianCpmk.cpmk.cpl', 'kelas.mataKuliah', 'krs.tahunAkademik', 'nilai'])
             ->get();
 
         $cplSummary = [];
@@ -826,6 +1015,29 @@ class ObeController extends Controller
                 : 0.0;
         }
 
+        // Rincian per-MK per-semester: MK apa saja yang diambil + capaian CPMK-nya
+        $mkDetails = $krsDetails->map(function ($kd) {
+            $mk = $kd->kelas?->mataKuliah;
+            $cpmkScores = ($kd->ketercapaianCpmk ?? collect())->map(fn($kc) => [
+                'cpmk_id' => $kc->cpmk_id,
+                'kode_cpmk' => $kc->cpmk?->kode_cpmk,
+                'skor' => (float) $kc->skor_ketercapaian,
+                'is_tercapai' => ($kc->status_ketercapaian ?? '') === 'tercapai' || (float) $kc->skor_ketercapaian >= 65.0,
+            ])->values();
+            return [
+                'krs_detail_id' => $kd->id,
+                'tahun_akademik_id' => $kd->krs?->tahun_akademik_id,
+                'semester_label' => $kd->krs?->tahunAkademik?->nama ?? 'Semester',
+                'kode_mk' => $mk?->kode_mk ?? '-',
+                'nama_mk' => $mk?->nama ?? 'Mata Kuliah',
+                'sks' => $mk?->total_sks ?? 0,
+                'nilai_akhir' => $kd->nilai ? (float) $kd->nilai->nilai_akhir : null,
+                'nilai_huruf' => $kd->nilai?->nilai_huruf,
+                'is_final' => (bool) ($kd->nilai?->is_final ?? false),
+                'cpmk_scores' => $cpmkScores,
+            ];
+        })->values();
+
         return response()->json([
             'status' => 'success',
             'data' => [
@@ -834,7 +1046,298 @@ class ObeController extends Controller
                 'radar_kategori' => $radarKategori,
                 'total_cpl' => count($cplSummary),
                 'total_cpl_tercapai' => count(array_filter($cplSummary, fn($c) => $c['skor_rata_rata'] >= 65.0 && $c['total_mata_kuliah_diukur'] > 0)),
+                'mk_details' => $mkDetails,
             ]
+        ]);
+    }
+
+    public function duplicateRps(Request $request, $id)
+    {
+        $request->validate([
+            'tahun_ajaran' => 'required|string|max:20',
+            'semester' => 'nullable|integer|min:1|max:14',
+        ]);
+
+        $source = \App\Models\Siakad\Rps::with('mingguan')->findOrFail($id);
+
+        $copy = DB::transaction(function () use ($source, $request) {
+            $new = \App\Models\Siakad\Rps::create([
+                'mata_kuliah_id' => $source->mata_kuliah_id,
+                'tahun_ajaran' => $request->tahun_ajaran,
+                'semester' => $request->input('semester', $source->semester),
+                'deskripsi_singkat' => $source->deskripsi_singkat,
+                'pustaka_utama' => $source->pustaka_utama,
+                'pustaka_pendukung' => $source->pustaka_pendukung,
+                'dosen_pengembang_id' => $source->dosen_pengembang_id,
+                'koordinator_rmk_id' => $source->koordinator_rmk_id,
+                'kaprodi_id' => $source->kaprodi_id,
+                'status' => 'draft',
+                'catatan_revisi' => null,
+                'disetujui_at' => null,
+            ]);
+
+            foreach ($source->mingguan as $m) {
+                \App\Models\Siakad\RpsMingguan::create([
+                    'rps_id' => $new->id,
+                    'minggu_ke' => $m->minggu_ke,
+                    'kemampuan_akhir' => $m->kemampuan_akhir,
+                    'bahan_kajian' => $m->bahan_kajian,
+                    'bentuk_metode' => $m->bentuk_metode,
+                    'estimasi_waktu' => $m->estimasi_waktu,
+                    'pengalaman_belajar' => $m->pengalaman_belajar,
+                    'indikator_penilaian' => $m->indikator_penilaian,
+                    'bobot_penilaian' => $m->bobot_penilaian,
+                ]);
+            }
+
+            return $new;
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'RPS berhasil diimpor dari periode ' . $source->tahun_ajaran . ' sebagai draft. Silakan sesuaikan perubahannya.',
+            'data' => $copy->load(['mingguan', 'mataKuliah']),
+        ], 201);
+    }
+
+    // --- Grafik Capaian CPL & CPMK (bar + drill-down, ala bau evaluatif) ---
+    public function getGrafikCpl(Request $request)
+    {
+        $request->validate([
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'angkatan' => 'nullable|integer|min:2000|max:2100',
+            'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
+        ]);
+
+        $cpls = Cpl::with('cpmks')
+            ->when($request->filled('program_studi_id'), fn($q) => $q->where('program_studi_id', $request->program_studi_id))
+            ->where('is_active', true)
+            ->orderBy('kode_cpl')
+            ->get();
+
+        $result = $cpls->map(function ($cpl) use ($request) {
+            $cpmkIds = $cpl->cpmks->pluck('id')->toArray();
+            $skor = collect();
+            $mhsIds = [];
+            if (!empty($cpmkIds)) {
+                $rows = KetercapaianCpmkMahasiswa::with('krsDetail.krs')
+                    ->whereIn('cpmk_id', $cpmkIds)
+                    ->when($request->filled('angkatan'), fn($q) => $q->whereHas('krsDetail.krs.mahasiswa', fn($mq) => $mq->where('angkatan', $request->angkatan)))
+                    ->when($request->filled('tahun_akademik_id'), fn($q) => $q->whereHas('krsDetail.krs', fn($kq) => $kq->where('tahun_akademik_id', $request->tahun_akademik_id)))
+                    ->get();
+                $skor = $rows->pluck('skor_ketercapaian')->map(fn($v) => (float) $v);
+                $mhsIds = $rows->map(fn($r) => $r->krsDetail?->krs?->mahasiswa_id)->filter()->unique()->values();
+            }
+
+            $avg = $skor->isNotEmpty() ? round($skor->avg(), 1) : 0.0;
+
+            return [
+                'cpl_id' => $cpl->id,
+                'kode_cpl' => $cpl->kode_cpl,
+                'kategori' => $cpl->kategori,
+                'deskripsi' => $cpl->deskripsi,
+                'skor_rata_rata' => $avg,
+                'is_tercapai' => $skor->isNotEmpty() && $avg >= 65.0,
+                'total_pengukuran' => $skor->count(),
+                'total_mahasiswa' => $mhsIds->count(),
+            ];
+        });
+
+        return response()->json(['status' => 'success', 'data' => $result]);
+    }
+
+    public function getGrafikCpmk(Request $request)
+    {
+        $request->validate([
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'mata_kuliah_id' => 'nullable|exists:siakad_mata_kuliah,id',
+            'angkatan' => 'nullable|integer|min:2000|max:2100',
+            'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
+        ]);
+
+        $mkQuery = MataKuliah::with(['cpmks', 'kurikulum.programStudi'])
+            ->where('is_active', true)
+            ->when($request->filled('mata_kuliah_id'), fn($q) => $q->where('id', $request->mata_kuliah_id))
+            ->when($request->filled('program_studi_id'), fn($q) => $q->whereHas('kurikulum', fn($k) => $k->where('program_studi_id', $request->program_studi_id)))
+            ->orderBy('kode_mk')
+            ->limit(50)
+            ->get();
+
+        $result = $mkQuery->map(function ($mk) use ($request) {
+            $cpmkRows = $mk->cpmks->map(function ($cpmk) use ($request) {
+                $rows = KetercapaianCpmkMahasiswa::with('krsDetail.krs.mahasiswa', 'krsDetail.nilai')
+                    ->where('cpmk_id', $cpmk->id)
+                    ->when($request->filled('angkatan'), fn($q) => $q->whereHas('krsDetail.krs.mahasiswa', fn($mq) => $mq->where('angkatan', $request->angkatan)))
+                    ->when($request->filled('tahun_akademik_id'), fn($q) => $q->whereHas('krsDetail.krs', fn($kq) => $kq->where('tahun_akademik_id', $request->tahun_akademik_id)))
+                    ->get();
+
+                $skor = $rows->pluck('skor_ketercapaian')->map(fn($v) => (float) $v);
+                $avg = $skor->isNotEmpty() ? round($skor->avg(), 1) : 0.0;
+
+                return [
+                    'cpmk_id' => $cpmk->id,
+                    'kode_cpmk' => $cpmk->kode_cpmk,
+                    'deskripsi' => $cpmk->deskripsi,
+                    'bobot_persentase' => (float) $cpmk->bobot_persentase,
+                    'skor_rata_rata' => $avg,
+                    'is_tercapai' => $skor->isNotEmpty() && $avg >= 65.0,
+                    'total_mahasiswa' => $rows->map(fn($r) => $r->krsDetail?->krs?->mahasiswa_id)->filter()->unique()->count(),
+                    // Drill-down level mahasiswa
+                    'mahasiswa' => $rows->map(fn($r) => [
+                        'nim' => $r->krsDetail?->krs?->mahasiswa?->nim,
+                        'nama_lengkap' => $r->krsDetail?->krs?->mahasiswa?->nama_lengkap,
+                        'skor' => (float) $r->skor_ketercapaian,
+                        'is_tercapai' => ((float) $r->skor_ketercapaian) >= 65.0,
+                        'nilai_huruf' => $r->krsDetail?->nilai?->nilai_huruf,
+                    ])->values(),
+                ];
+            });
+
+            return [
+                'mata_kuliah_id' => $mk->id,
+                'kode_mk' => $mk->kode_mk,
+                'nama' => $mk->nama,
+                'total_sks' => $mk->total_sks,
+                'cpmks' => $cpmkRows,
+            ];
+        });
+
+        return response()->json(['status' => 'success', 'data' => $result]);
+    }
+
+    // --- SubCPMK (di bawah CPMK) ---
+    public function getSubCpmk(Request $request)
+    {
+        $request->validate(['cpmk_id' => 'nullable|exists:siakad_cpmk,id']);
+
+        $query = SubCpmk::with('cpmk.mataKuliah')->orderBy('kode_sub_cpmk');
+        if ($request->filled('cpmk_id')) {
+            $query->where('cpmk_id', $request->cpmk_id);
+        }
+
+        return response()->json(['status' => 'success', 'data' => $query->get()]);
+    }
+
+    public function storeSubCpmk(Request $request)
+    {
+        $validated = $request->validate([
+            'id' => 'nullable|exists:siakad_sub_cpmk,id',
+            'cpmk_id' => 'required|exists:siakad_cpmk,id',
+            'kode_sub_cpmk' => 'required|string|max:50',
+            'deskripsi' => 'required|string',
+            'indikator' => 'nullable|string',
+            'bobot_persentase' => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        $sub = SubCpmk::updateOrCreate(['id' => $request->id], $validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'SubCPMK berhasil disimpan',
+            'data' => $sub->load('cpmk.mataKuliah'),
+        ], $request->filled('id') ? 200 : 201);
+    }
+
+    public function deleteSubCpmk($id)
+    {
+        $sub = SubCpmk::findOrFail($id);
+        if ($sub->komponenPenilaians()->exists()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'SubCPMK dipakai komponen penilaian — lepas dulu sebelum dihapus.',
+            ], 422);
+        }
+        $sub->delete();
+
+        return response()->json(['status' => 'success', 'message' => 'SubCPMK berhasil dihapus']);
+    }
+
+    // --- Bank Soal per Sesi/SubCPMK ---
+    public function listSoal(Request $request)
+    {
+        $request->validate([
+            'rps_id' => 'nullable|exists:siakad_rps,id',
+            'rps_mingguan_id' => 'nullable|exists:siakad_rps_mingguan,id',
+        ]);
+
+        $query = BankSoal::with(['mingguan', 'subCpmk.cpmk', 'rps.mataKuliah'])->orderBy('id');
+        if ($request->filled('rps_id')) {
+            $query->where('rps_id', $request->rps_id);
+        }
+        if ($request->filled('rps_mingguan_id')) {
+            $query->where('rps_mingguan_id', $request->rps_mingguan_id);
+        }
+
+        return response()->json(['status' => 'success', 'data' => $query->get()]);
+    }
+
+    public function storeSoal(Request $request)
+    {
+        $validated = $request->validate([
+            'id' => 'nullable|exists:siakad_bank_soal,id',
+            'rps_id' => 'required|exists:siakad_rps,id',
+            'rps_mingguan_id' => 'nullable|exists:siakad_rps_mingguan,id',
+            'sub_cpmk_id' => 'nullable|exists:siakad_sub_cpmk,id',
+            'pertanyaan' => 'required|string',
+            'bobot' => 'nullable|numeric|min:0|max:100',
+            'kunci_jawaban' => 'nullable|string',
+        ]);
+        $validated['dibuat_oleh'] = $request->user()?->id;
+
+        $soal = BankSoal::updateOrCreate(['id' => $request->id], $validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Soal berhasil disimpan',
+            'data' => $soal->load(['mingguan', 'subCpmk.cpmk']),
+        ], $request->filled('id') ? 200 : 201);
+    }
+
+    public function deleteSoal($id)
+    {
+        $soal = BankSoal::findOrFail($id);
+        $soal->delete();
+
+        return response()->json(['status' => 'success', 'message' => 'Soal berhasil dihapus']);
+    }
+
+    // --- Rekap Nilai Kelas (CSV, dibuka di Excel) ---
+    public function rekapKelasCsv($kelasId)
+    {
+        $kelas = Kelas::with(['mataKuliah', 'tahunAkademik', 'programStudi'])->findOrFail($kelasId);
+        $res = $this->getKelasNilaiObe(new Request(), $kelasId);
+        $payload = $res->getData(true)['data'];
+
+        $rows = [];
+        $header = ['NO', 'NIM', 'NAMA'];
+        foreach ($payload['komponen'] as $comp) {
+            $header[] = ($comp['nama_komponen'] ?? 'Komponen') . ' (' . ($comp['bobot'] ?? 0) . '%)';
+        }
+        $header = array_merge($header, ['NILAI_AKHIR', 'HURUF', 'MUTU', 'STATUS']);
+        $rows[] = $header;
+
+        foreach (array_values($payload['peserta']) as $i => $p) {
+            $row = [$i + 1, $p['mahasiswa']['nim'] ?? '', $p['mahasiswa']['nama_lengkap'] ?? ''];
+            foreach ($payload['komponen'] as $comp) {
+                $row[] = $p['scores'][(string) $comp['id']]['nilai_angka'] ?? $p['scores'][$comp['id']]['nilai_angka'] ?? 0;
+            }
+            $row[] = $p['nilai_akhir'];
+            $row[] = $p['nilai_huruf'];
+            $row[] = $p['bobot_mutu'];
+            $row[] = !empty($p['is_final']) ? 'Final' : 'Draft';
+            $rows[] = $row;
+        }
+
+        $output = "\xEF\xBB\xBF";
+        foreach ($rows as $row) {
+            $output .= implode(',', array_map(fn($v) => '"' . str_replace('"', '""', (string) $v) . '"', $row)) . "\n";
+        }
+
+        $fname = 'rekap_nilai_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $kelas->kode_kelas ?? $kelasId) . '.csv';
+
+        return response($output, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $fname . '"',
         ]);
     }
 
@@ -1087,6 +1590,253 @@ class ObeController extends Controller
             'status' => 'success',
             'message' => 'Pemetaan Mata Kuliah ke Bahan Kajian berhasil disimpan',
             'data' => $mk->load('bahanKajians')
+        ]);
+    }
+
+    // --- Matriks Korelasi CPL ↔ Mata Kuliah (Checklist Matrix) ---
+    public function getMatrixCplMk(Request $request)
+    {
+        $prodiId = $request->input('program_studi_id');
+        
+        $cpls = Cpl::where('is_active', true)
+            ->when($prodiId, fn($q) => $q->where('program_studi_id', $prodiId))
+            ->orderBy('kode_cpl')
+            ->get();
+
+        $matakuliahs = MataKuliah::with(['cpls', 'cpmks', 'kurikulum'])
+            ->where('is_active', true)
+            ->when($prodiId, function($q) use ($prodiId) {
+                $q->whereHas('kurikulum', fn($k) => $k->where('program_studi_id', $prodiId));
+            })
+            ->orderBy('semester_anjuran')
+            ->orderBy('kode_mk')
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data matriks CPL dan Mata Kuliah berhasil dimuat',
+            'data' => [
+                'cpls' => $cpls,
+                'matakuliahs' => $matakuliahs,
+            ]
+        ]);
+    }
+
+    public function toggleMatrixCplMk(Request $request)
+    {
+        $request->validate([
+            'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
+            'cpl_id' => 'required|exists:siakad_cpl,id',
+            'is_checked' => 'required|boolean',
+        ]);
+
+        $mk = MataKuliah::findOrFail($request->mata_kuliah_id);
+
+        if ($request->boolean('is_checked')) {
+            $mk->cpls()->syncWithoutDetaching([$request->cpl_id]);
+        } else {
+            $mk->cpls()->detach($request->cpl_id);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Korelasi CPL terhadap mata kuliah berhasil diperbarui',
+            'data' => [
+                'mata_kuliah_id' => $mk->id,
+                'cpl_id' => (int) $request->cpl_id,
+                'is_checked' => $request->boolean('is_checked'),
+            ]
+        ]);
+    }
+
+    // --- Pemantauan & Audit Kelengkapan Pemetaan OBE per Mata Kuliah ---
+    public function getAuditPemetaan(Request $request)
+    {
+        $prodiId = $request->input('program_studi_id');
+        $taId = $request->input('tahun_akademik_id') ?? \App\Models\Spmb\MasterTahunAkademik::where('is_active', true)->value('id');
+
+        $matakuliahs = MataKuliah::with(['cpls', 'cpmks', 'kurikulum.programStudi', 'kelas' => function($k) use ($taId) {
+                if ($taId) $k->where('tahun_akademik_id', $taId);
+                $k->with(['dosenPengampu.dosen', 'krsDetails']);
+            }])
+            ->where('is_active', true)
+            ->when($prodiId, function($q) use ($prodiId) {
+                $q->whereHas('kurikulum', fn($k) => $k->where('program_studi_id', $prodiId));
+            })
+            ->orderBy('semester_default')
+            ->orderBy('kode_mk')
+            ->get();
+
+        $auditList = $matakuliahs->map(function ($mk) {
+            $totalBobotCpmk = (float) $mk->cpmks->sum('bobot_persentase');
+            $cpmkCount = $mk->cpmks->count();
+            $cplCount = $mk->cpls->count();
+
+            // Status Bobot
+            $isBobot100 = abs($totalBobotCpmk - 100.0) < 0.01;
+            $statusBobot = $cpmkCount === 0
+                ? 'belum_ada_cpmk'
+                : ($isBobot100 ? 'lengkap_100' : ($totalBobotCpmk < 100 ? 'kurang_100' : 'lebih_100'));
+
+            // Kelas & Dosen Pengampu Aktif
+            $totalKelas = $mk->kelas->count();
+            $totalMahasiswa = $mk->kelas->sum(fn($k) => $k->krsDetails->where('status', 'aktif')->count());
+            $dosenPengampus = $mk->kelas->flatMap(function($k) {
+                return $k->dosenPengampu->map(fn($dp) => [
+                    'id' => $dp->dosen?->id,
+                    'nama_lengkap' => $dp->dosen?->nama_lengkap,
+                    'peran' => $dp->peran,
+                    'kelas' => $k->nama_kelas,
+                ]);
+            })->filter(fn($d) => !empty($d['nama_lengkap']))->unique('id')->values();
+
+            // Status Kelayakan Penilaian Dosen
+            $siapDinilai = $isBobot100 && $cpmkCount > 0;
+
+            return [
+                'id' => $mk->id,
+                'kode_mk' => $mk->kode_mk,
+                'nama' => $mk->nama,
+                'total_sks' => $mk->total_sks,
+                'semester_default' => $mk->semester_default,
+                'program_studi' => [
+                    'id' => $mk->kurikulum?->programStudi?->id,
+                    'nama' => $mk->kurikulum?->programStudi?->nama,
+                ],
+                'cpl_count' => $cplCount,
+                'cpmk_count' => $cpmkCount,
+                'total_bobot_cpmk' => $totalBobotCpmk,
+                'status_bobot' => $statusBobot,
+                'siap_dinilai' => $siapDinilai,
+                'total_kelas' => $totalKelas,
+                'total_mahasiswa_krs' => $totalMahasiswa,
+                'dosen_pengampu' => $dosenPengampus,
+            ];
+        });
+
+        // Ringkasan Dashboard Audit
+        $totalMk = $auditList->count();
+        $mkSiapDinilai = $auditList->where('siap_dinilai', true)->count();
+        $mkBelum100 = $auditList->where('siap_dinilai', false)->count();
+        $mkTanpaCpmk = $auditList->where('cpmk_count', 0)->count();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data audit pemetaan OBE berhasil dimuat',
+            'data' => [
+                'summary' => [
+                    'total_matakuliah' => $totalMk,
+                    'siap_dinilai' => $mkSiapDinilai,
+                    'belum_lengkap' => $mkBelum100,
+                    'tanpa_cpmk' => $mkTanpaCpmk,
+                    'persentase_kesiapan' => $totalMk > 0 ? round(($mkSiapDinilai / $totalMk) * 100, 1) : 0,
+                ],
+                'audit_items' => $auditList,
+            ]
+        ]);
+    }
+
+    // --- Pemantauan Ketertiban Dosen Menginput Nilai (Integrasi SIMPEG Kinerja) ---
+    public function getDosenKepatuhanNilai(Request $request)
+    {
+        $taId = $request->input('tahun_akademik_id') ?? \App\Models\Spmb\MasterTahunAkademik::where('is_active', true)->value('id');
+        $ta = \App\Models\Spmb\MasterTahunAkademik::find($taId);
+
+        $now = now();
+        $batasNilaiMulai = $ta?->input_nilai_mulai;
+        $batasNilaiSelesai = $ta?->input_nilai_selesai;
+
+        // Ambil seluruh dosen yang mengampu kelas pada tahun akademik ini
+        $kelasQuery = Kelas::with(['dosenPengampu.dosen.pegawai', 'krsDetails.nilai', 'mataKuliah'])
+            ->where('tahun_akademik_id', $taId);
+
+        $kelases = $kelasQuery->get();
+
+        $dosenStats = [];
+
+        foreach ($kelases as $k) {
+            foreach ($k->dosenPengampu as $dp) {
+                if (!$dp->dosen) continue;
+                $dId = $dp->dosen->id;
+
+                if (!isset($dosenStats[$dId])) {
+                    $dosenStats[$dId] = [
+                        'dosen_id' => $dId,
+                        'nama_lengkap' => $dp->dosen->nama_lengkap,
+                        'nidn' => $dp->dosen->nidn,
+                        'nip' => $dp->dosen->nip,
+                        'pegawai_id' => $dp->dosen->pegawai?->id ?? null,
+                        'total_kelas' => 0,
+                        'total_mahasiswa' => 0,
+                        'mahasiswa_dinilai' => 0,
+                        'mahasiswa_final' => 0,
+                        'kelas_selesai' => 0,
+                        'status_kepatuhan' => 'tepat_waktu', // tepat_waktu, dalam_proses, terlambat
+                    ];
+                }
+
+                $dosenStats[$dId]['total_kelas']++;
+                $krsAktif = $k->krsDetails->where('status', 'aktif');
+                $dosenStats[$dId]['total_mahasiswa'] += $krsAktif->count();
+
+                $graded = $krsAktif->filter(fn($kd) => $kd->nilai && $kd->nilai->nilai_angka > 0 || ($kd->nilai && $kd->nilai->nilai_huruf));
+                $finalized = $krsAktif->filter(fn($kd) => $kd->nilai && $kd->nilai->is_final);
+
+                $dosenStats[$dId]['mahasiswa_dinilai'] += $graded->count();
+                $dosenStats[$dId]['mahasiswa_final'] += $finalized->count();
+
+                if ($krsAktif->count() > 0 && $finalized->count() >= $krsAktif->count()) {
+                    $dosenStats[$dId]['kelas_selesai']++;
+                }
+            }
+        }
+
+        // Hitung persentase ketertiban & skor kinerja
+        $result = collect($dosenStats)->values()->map(function ($d) use ($batasNilaiSelesai, $now) {
+            $totalMhs = $d['total_mahasiswa'];
+            $pctFinal = $totalMhs > 0 ? round(($d['mahasiswa_final'] / $totalMhs) * 100, 1) : 100.0;
+            $pctInput = $totalMhs > 0 ? round(($d['mahasiswa_dinilai'] / $totalMhs) * 100, 1) : 100.0;
+
+            // Evaluasi kepatuhan deadline
+            $isDeadlinePassed = $batasNilaiSelesai && $now->greaterThan(\Carbon\Carbon::parse($batasNilaiSelesai));
+            
+            if ($pctFinal >= 100.0) {
+                $statusKepatuhan = 'lengkap_final';
+                $skorKepatuhan = 100.0;
+            } elseif ($isDeadlinePassed) {
+                $statusKepatuhan = 'terlambat';
+                $skorKepatuhan = max(30.0, round($pctFinal * 0.7, 1));
+            } else {
+                $statusKepatuhan = 'sedang_berjalan';
+                $skorKepatuhan = max(50.0, round($pctFinal, 1));
+            }
+
+            return array_merge($d, [
+                'persentase_input' => $pctInput,
+                'persentase_final' => $pctFinal,
+                'status_kepatuhan' => $statusKepatuhan,
+                'skor_kinerja_akademik' => $skorKepatuhan,
+            ]);
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data ketertiban & kepatuhan pengisian nilai dosen berhasil dimuat',
+            'data' => [
+                'tahun_akademik' => $ta,
+                'periode_nilai' => [
+                    'mulai' => $batasNilaiMulai,
+                    'selesai' => $batasNilaiSelesai,
+                    'is_expired' => $batasNilaiSelesai ? $now->greaterThan(\Carbon\Carbon::parse($batasNilaiSelesai)) : false,
+                ],
+                'summary' => [
+                    'total_dosen_mengajar' => $result->count(),
+                    'dosen_selesai_100' => $result->where('status_kepatuhan', 'lengkap_final')->count(),
+                    'dosen_terlambat' => $result->where('status_kepatuhan', 'terlambat')->count(),
+                    'dosen_sedang_berjalan' => $result->where('status_kepatuhan', 'sedang_berjalan')->count(),
+                ],
+                'dosen_kepatuhan' => $result,
+            ]
         ]);
     }
 }

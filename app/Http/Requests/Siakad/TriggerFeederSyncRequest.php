@@ -14,7 +14,7 @@ class TriggerFeederSyncRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'entity_type' => 'required|in:mahasiswa,biodata_mahasiswa,riwayat_pendidikan_mahasiswa,dosen,pull_dosen,mata_kuliah,kelas,penugasan_dosen,ajar_dosen',
+            'entity_type' => 'required|in:mahasiswa,biodata_mahasiswa,riwayat_pendidikan_mahasiswa,dosen,pull_dosen,penugasan_dosen,ajar_dosen,mata_kuliah,kelas,prodi',
         ];
     }
 }

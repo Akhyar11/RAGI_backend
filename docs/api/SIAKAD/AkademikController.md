@@ -15,6 +15,7 @@ Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata
 ## Daftar Endpoint
 
 | Method | Endpoint | Fungsi | Auth |
+| GET | `/api/v1/siakad/akademik/referensi-options?tipe={tipe}` | Opsi dropdown master akademik dari database | ✅ |
 |---|---|---|---|
 | GET | `/api/v1/siakad/akademik/dashboard/summary` | Ringkasan dashboard akademik | ✅ |
 | GET | `/api/v1/siakad/akademik/tahun-akademik` | Daftar tahun akademik | ✅ |

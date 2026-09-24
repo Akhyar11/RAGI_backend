@@ -56,6 +56,7 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
+| AkademikController | Master akademik + opsi referensi dropdown (jenjang, akreditasi, tipe MK, mode penilaian) | [docs/api/SIAKAD/AkademikController.md](api/SIAKAD/AkademikController.md) |
 | FeederSyncController | Sinkronisasi Neo Feeder PDDikti (Dosen, Penugasan, Ajar, Mahasiswa, Kelas) | [docs/api/SIAKAD/FeederSyncController.md](api/SIAKAD/FeederSyncController.md) |
 | AkademikController | Master akademik (Tahun Akademik, Fakultas, Prodi, Kurikulum, Mata Kuliah, Dosen) | [docs/api/SIAKAD/AkademikController.md](api/SIAKAD/AkademikController.md) |
 | MahasiswaController | Data mahasiswa, NIM, konversi transfer, dan penugasan PA | [docs/api/SIAKAD/MahasiswaController.md](api/SIAKAD/MahasiswaController.md) |

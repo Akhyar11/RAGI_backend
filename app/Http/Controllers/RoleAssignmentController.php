@@ -85,15 +85,31 @@ class RoleAssignmentController extends Controller
     {
         Gate::authorize('viewAny', Role::class);
 
-        $query = Role::with('permissions')->orderBy('name');
+        $query = Role::with(['permissions' => function ($q) {
+            $q->orderBy('module')->orderBy('name');
+        }]);
 
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where('name', 'like', "%{$search}%")
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
                   ->orWhere('slug', 'like', "%{$search}%");
+            });
         }
 
-        $roles = $query->paginate($request->integer('per_page', 15));
+        if ($request->filled('role_id')) {
+            $query->where('id', $request->integer('role_id'));
+        }
+
+        $allowedSorts = ['created_at', 'updated_at', 'name'];
+        $sortBy = in_array($request->query('sort_by'), $allowedSorts, true)
+            ? $request->query('sort_by')
+            : 'created_at';
+        $sortOrder = $request->query('sort_order') === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        $perPage = min(100, $request->integer('per_page', 15));
+        $roles = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
@@ -103,7 +119,16 @@ class RoleAssignmentController extends Controller
                 'current_page' => $roles->currentPage(),
                 'per_page' => $roles->perPage(),
                 'total' => $roles->total(),
-            ]
+                'last_page' => $roles->lastPage(),
+                'from' => $roles->firstItem(),
+                'to' => $roles->lastItem(),
+            ],
+            'filters' => [
+                'search' => $request->query('search'),
+                'role_id' => $request->query('role_id'),
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+            ],
         ]);
     }
 }

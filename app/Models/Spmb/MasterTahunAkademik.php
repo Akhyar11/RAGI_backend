@@ -8,4 +8,14 @@ class MasterTahunAkademik extends TahunAkademik
 {
     // Alias model untuk kompatibilitas modul SPMB (merujuk ke tabel siakad_tahun_akademik)
     protected $table = 'siakad_tahun_akademik';
+
+    public function gelombangPenerimaan()
+    {
+        return $this->hasMany(GelombangPenerimaan::class, 'tahun_akademik_id');
+    }
+
+    public function tarifUktSpmb()
+    {
+        return $this->hasMany(TarifUktSpmb::class, 'tahun_akademik_id');
+    }
 }
