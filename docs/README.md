@@ -136,6 +136,7 @@
 | MaintenanceController | Tiket pelaporan, scoping kerusakan aset lab binaan, & pelacakan perbaikan sarpras | [docs/api/SINAPRA/MaintenanceController.md](api/SINAPRA/MaintenanceController.md) |
 | PengadaanController | Usulan pengadaan barang baru, rincian item kebutuhan, & persetujuan status | [docs/api/SINAPRA/PengadaanController.md](api/SINAPRA/PengadaanController.md) |
 | LaboratoriumController | Manajemen operasional lab: stok BHP, surat bebas tanggungan lab, & kalibrasi alat | [docs/api/SINAPRA/LaboratoriumController.md](api/SINAPRA/LaboratoriumController.md) |
+| AuditMutasiDisposalController | Audit stock opname fisik, mutasi aset antar-ruang, & BAP pemutihan/penghapusan aset | [docs/api/SINAPRA/AuditMutasiDisposalController.md](api/SINAPRA/AuditMutasiDisposalController.md) |
 
 ---
 

@@ -87,4 +87,21 @@ class Aset extends Model
     {
         return $this->hasMany(MaintenanceLog::class, 'aset_id');
     }
+
+    /**
+     * Relasi ke Mutasi Aset
+     */
+    public function mutasi(): HasMany
+    {
+        return $this->hasMany(MutasiAset::class, 'aset_id');
+    }
+
+    /**
+     * Relasi ke Disposal Aset
+     */
+    public function disposal(): HasMany
+    {
+        return $this->hasMany(DisposalAset::class, 'aset_id');
+    }
 }
+

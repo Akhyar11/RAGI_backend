@@ -221,6 +221,12 @@ class PermissionSeeder extends Seeder
             ['name' => 'Approve Bebas Tanggungan Lab', 'slug' => 'sinapra.bebas_tanggungan.approve', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Memverifikasi & menyetujui surat bebas tanggungan lab'],
             ['name' => 'Lihat Kalibrasi Alat Lab', 'slug' => 'sinapra.kalibrasi.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat jadwal & sertifikat kalibrasi alat presisi'],
             ['name' => 'Kelola Kalibrasi Alat Lab', 'slug' => 'sinapra.kalibrasi.manage', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Mencatat & memperbarui riwayat kalibrasi alat presisi'],
+            ['name' => 'Lihat Stock Opname', 'slug' => 'sinapra.opname.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat daftar & detail sesi stock opname aset'],
+            ['name' => 'Kelola Stock Opname', 'slug' => 'sinapra.opname.manage', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Membuat sesi & menginput hasil pemeriksaan stock opname'],
+            ['name' => 'Lihat Mutasi Aset', 'slug' => 'sinapra.mutasi.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat riwayat & pengajuan mutasi aset antar-ruang'],
+            ['name' => 'Kelola Mutasi Aset', 'slug' => 'sinapra.mutasi.manage', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Mengajukan & menyetujui mutasi aset antar-ruang'],
+            ['name' => 'Lihat Disposal Aset', 'slug' => 'sinapra.disposal.read', 'module' => 'sinapra', 'action' => 'read', 'description' => 'Melihat daftar BAP pemusnahan & pelelangan aset'],
+            ['name' => 'Kelola Disposal Aset', 'slug' => 'sinapra.disposal.manage', 'module' => 'sinapra', 'action' => 'update', 'description' => 'Mengajukan & memproses BAP pemutihan/disposal aset'],
 
             // ── MODUL SPMB (PENERIMAAN MAHASISWA BARU) ──────────────────────
             ['name' => 'Portal Calon Mahasiswa', 'slug' => 'spmb.student.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Akses dashboard & formulir registrasi calon mahasiswa'],
@@ -426,6 +432,11 @@ class PermissionSeeder extends Seeder
                 'sinapra.bebas_tanggungan.approve',
                 'sinapra.kalibrasi.read',
                 'sinapra.kalibrasi.manage',
+                'sinapra.opname.read',
+                'sinapra.opname.manage',
+                'sinapra.mutasi.read',
+                'sinapra.mutasi.manage',
+                'sinapra.disposal.read',
             ];
             $laboranPerms = Permission::whereIn('slug', $laboranSlugs)->get();
             foreach ($laboranPerms as $p) {

@@ -858,6 +858,26 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('alat-kalibrasi/{alat_kalibrasi}', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'showKalibrasi']);
     Route::put('alat-kalibrasi/{alat_kalibrasi}', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'updateKalibrasi']);
     Route::delete('alat-kalibrasi/{alat_kalibrasi}', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'destroyKalibrasi']);
+
+    // ─────────────────────────────────────────────────────────────
+    // FASE 5: Stock Opname, Mutasi Aset, & Disposal Pemutihan
+    // ─────────────────────────────────────────────────────────────
+    // 1. Stock Opname Fisik
+    Route::get('stock-opname', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'indexStockOpname']);
+    Route::post('stock-opname', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'storeStockOpname']);
+    Route::get('stock-opname/{id}', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'showStockOpname']);
+    Route::put('stock-opname/{id}/items/{itemId}', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'updateStockOpnameItem']);
+    Route::post('stock-opname/{id}/finish', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'finishStockOpname']);
+
+    // 2. Mutasi Aset Antar-Ruangan
+    Route::get('mutasi-aset', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'indexMutasi']);
+    Route::post('mutasi-aset', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'storeMutasi']);
+    Route::post('mutasi-aset/{id}/approve', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'approveMutasi']);
+
+    // 3. Penghapusan / Disposal Aset
+    Route::get('disposal-aset', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'indexDisposal']);
+    Route::post('disposal-aset', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'storeDisposal']);
+    Route::post('disposal-aset/{id}/approve', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'approveDisposal']);
 });
 
 
