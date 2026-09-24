@@ -9,7 +9,7 @@ class UpdateModePenilaianRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return (bool) $this->user()?->can('siakad.master.manage');
     }
 
     public function rules(): array

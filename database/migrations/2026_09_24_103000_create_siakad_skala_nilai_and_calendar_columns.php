@@ -31,29 +31,29 @@ return new class extends Migration
         }
 
         // 2. Tambah kolom batas jadwal kegiatan akademik ke tabel master tahun akademik (Kalender KRS, Nilai, dll)
-        Schema::table('spmb_master_tahun_akademik', function (Blueprint $table) {
-            if (!Schema::hasColumn('spmb_master_tahun_akademik', 'krs_mulai')) {
+        Schema::table('siakad_tahun_akademik', function (Blueprint $table) {
+            if (!Schema::hasColumn('siakad_tahun_akademik', 'krs_mulai')) {
                 $table->date('krs_mulai')->nullable()->after('is_active');
             }
-            if (!Schema::hasColumn('spmb_master_tahun_akademik', 'krs_selesai')) {
+            if (!Schema::hasColumn('siakad_tahun_akademik', 'krs_selesai')) {
                 $table->date('krs_selesai')->nullable()->after('krs_mulai');
             }
-            if (!Schema::hasColumn('spmb_master_tahun_akademik', 'kprs_mulai')) {
+            if (!Schema::hasColumn('siakad_tahun_akademik', 'kprs_mulai')) {
                 $table->date('kprs_mulai')->nullable()->after('krs_selesai');
             }
-            if (!Schema::hasColumn('spmb_master_tahun_akademik', 'kprs_selesai')) {
+            if (!Schema::hasColumn('siakad_tahun_akademik', 'kprs_selesai')) {
                 $table->date('kprs_selesai')->nullable()->after('kprs_mulai');
             }
-            if (!Schema::hasColumn('spmb_master_tahun_akademik', 'perkuliahan_mulai')) {
+            if (!Schema::hasColumn('siakad_tahun_akademik', 'perkuliahan_mulai')) {
                 $table->date('perkuliahan_mulai')->nullable()->after('kprs_selesai');
             }
-            if (!Schema::hasColumn('spmb_master_tahun_akademik', 'perkuliahan_selesai')) {
+            if (!Schema::hasColumn('siakad_tahun_akademik', 'perkuliahan_selesai')) {
                 $table->date('perkuliahan_selesai')->nullable()->after('perkuliahan_mulai');
             }
-            if (!Schema::hasColumn('spmb_master_tahun_akademik', 'input_nilai_mulai')) {
+            if (!Schema::hasColumn('siakad_tahun_akademik', 'input_nilai_mulai')) {
                 $table->date('input_nilai_mulai')->nullable()->after('perkuliahan_selesai');
             }
-            if (!Schema::hasColumn('spmb_master_tahun_akademik', 'input_nilai_selesai')) {
+            if (!Schema::hasColumn('siakad_tahun_akademik', 'input_nilai_selesai')) {
                 $table->date('input_nilai_selesai')->nullable()->after('input_nilai_mulai');
             }
         });
@@ -64,10 +64,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('spmb_master_tahun_akademik', function (Blueprint $table) {
+        Schema::table('siakad_tahun_akademik', function (Blueprint $table) {
             $cols = ['krs_mulai', 'krs_selesai', 'kprs_mulai', 'kprs_selesai', 'perkuliahan_mulai', 'perkuliahan_selesai', 'input_nilai_mulai', 'input_nilai_selesai'];
             foreach ($cols as $c) {
-                if (Schema::hasColumn('spmb_master_tahun_akademik', $c)) {
+                if (Schema::hasColumn('siakad_tahun_akademik', $c)) {
                     $table->dropColumn($c);
                 }
             }

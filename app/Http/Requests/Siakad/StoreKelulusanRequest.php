@@ -16,7 +16,7 @@ class StoreKelulusanRequest extends FormRequest
     {
         return [
             'mahasiswa_id' => 'required|exists:siakad_mahasiswa,id',
-            'tahun_akademik_id' => 'required|exists:spmb_master_tahun_akademik,id',
+            'tahun_akademik_id' => 'required|exists:siakad_tahun_akademik,id',
             'tanggal_sidang' => 'nullable|date',
             'ipk_akhir' => 'required|numeric|min:0|max:4',
             'total_sks' => 'required|integer|min:100',

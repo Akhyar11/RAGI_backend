@@ -4,7 +4,7 @@
 > **Base URL**: `/api/admin`
 > **Autentikasi**: Bearer Token (Sanctum)
 > **Dibuat**: 2026-07-29
-> **Diperbarui**: 2026-07-29
+> **Diperbarui**: 2026-09-24
 
 ## Daftar Endpoint
 
@@ -151,7 +151,10 @@
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
 | `search` | string | ❌ | — | Cari berdasarkan nama role / slug |
-| `per_page` | integer | ❌ | `15` | Jumlah data per halaman |
+| `role_id` | integer | ❌ | — | Filter ke satu role spesifik |
+| `sort_by` | string | ❌ | `created_at` | Kolom pengurutan (`created_at`, `updated_at`, `name`) |
+| `sort_order` | string | ❌ | `desc` | Arah urutan: `asc` / `desc` |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
 | `page` | integer | ❌ | `1` | Halaman yang diminta |
 
 ### Response Sukses

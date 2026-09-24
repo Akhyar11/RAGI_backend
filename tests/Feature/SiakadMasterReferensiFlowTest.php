@@ -75,7 +75,7 @@ class SiakadMasterReferensiFlowTest extends TestCase
             ->assertJsonStructure(['status', 'message', 'data' => ['id', 'jenjang', 'akreditasi']]);
 
         // Baris database-nya sungguhan:
-        $this->assertDatabaseHas('spmb_master_program_studi', [
+        $this->assertDatabaseHas('siakad_program_studi', [
             'kode_prodi' => 'IF',
             'jenjang' => $jenjang,
             'akreditasi' => $akreditasi,
@@ -93,7 +93,7 @@ class SiakadMasterReferensiFlowTest extends TestCase
 
     public function test_alur_form_mata_kuliah_tersimpan_ke_database()
     {
-        $prodiId = DB::table('spmb_master_program_studi')->insertGetId([
+        $prodiId = DB::table('siakad_program_studi')->insertGetId([
             'kode_prodi' => 'IF',
             'nama' => 'Teknik Informatika',
             'jenjang' => $this->masterKode('jenjang_prodi'),
@@ -160,7 +160,7 @@ class SiakadMasterReferensiFlowTest extends TestCase
         ]);
 
         $response->assertStatus(200);
-        $this->assertDatabaseHas('spmb_master_tahun_akademik', [
+        $this->assertDatabaseHas('siakad_tahun_akademik', [
             'id' => $taId,
             'mode_penilaian' => $mode,
         ]);
@@ -173,7 +173,7 @@ class SiakadMasterReferensiFlowTest extends TestCase
 
     public function test_alur_buka_kelas_menyimpan_hari_dari_master()
     {
-        $prodiId = DB::table('spmb_master_program_studi')->insertGetId([
+        $prodiId = DB::table('siakad_program_studi')->insertGetId([
             'kode_prodi' => 'IF',
             'nama' => 'Teknik Informatika',
             'jenjang' => $this->masterKode('jenjang_prodi'),

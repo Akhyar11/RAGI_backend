@@ -30,12 +30,14 @@ class MenuApprovalTahapSeeder extends Seeder
         // tidak bocor ke role yang hanya memegang permission read/approve umum.
         // Tahap direktur tetap memakai sikeu.pengajuan.approve (pimpinan).
         $permission = Permission::where('slug', 'sikeu.pengajuan.approve')->first();
+        $permissionId = $permission?->id;
 
         $menus = [
             [
                 'name' => 'Approval Sarpras',
                 'url' => '/sikeu/approval/sarpras',
                 'icon' => 'FaClipboardCheck',
+                'module' => 'sikeu',
                 'order_index' => 6,
                 'permission_id' => null,
             ],
@@ -43,6 +45,7 @@ class MenuApprovalTahapSeeder extends Seeder
                 'name' => 'Approval Keuangan',
                 'url' => '/sikeu/approval/keuangan',
                 'icon' => 'FaMoneyBillWave',
+                'module' => 'sikeu',
                 'order_index' => 7,
                 'permission_id' => null,
             ],
@@ -50,8 +53,10 @@ class MenuApprovalTahapSeeder extends Seeder
                 'name' => 'Approval Pimpinan',
                 'url' => '/sikeu/approval/direktur',
                 'icon' => 'FaShieldCheck',
+                'module' => 'sikeu',
                 'order_index' => 8,
-                'permission_id' => $permission?->id,
+                'permission_id' => null,
+                'uses_approval_permission' => true,
             ],
         ];
 
@@ -63,8 +68,8 @@ class MenuApprovalTahapSeeder extends Seeder
                     'parent_id' => $parent->id,
                     'name' => $item['name'],
                     'icon' => $item['icon'],
-                    'module' => 'sikeu',
-                    'permission_id' => $item['permission_id'],
+                    'module' => $item['module'],
+                    'permission_id' => ($item['uses_approval_permission'] ?? false) ? $permissionId : null,
                     'order_index' => $item['order_index'],
                     'is_active' => true,
                 ]

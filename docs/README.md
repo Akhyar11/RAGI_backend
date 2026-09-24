@@ -34,8 +34,13 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
-| MasterSpmbController | Master referensi SPMB (Tahun Akademik, Jalur, Gelombang, Opsi) | [docs/api/SPMB/MasterSpmbController.md](api/SPMB/MasterSpmbController.md) |
+| MasterSpmbController | Master referensi SPMB (Tahun Akademik, Jalur, Gelombang, Opsi, Rincian Beban Pendaftaran) | [docs/api/SPMB/MasterSpmbController.md](api/SPMB/MasterSpmbController.md) |
 | SpmbKuotaProdiController | Manajemen kuota penerimaan calon mahasiswa baru per program studi | [docs/api/SPMB/SpmbKuotaProdiController.md](api/SPMB/SpmbKuotaProdiController.md) |
+| MasterBiayaSpmbController | Master biaya SPMB per gelombang & program studi | [docs/api/SPMB/MasterBiayaSpmbController.md](api/SPMB/MasterBiayaSpmbController.md) |
+| TarifUktSpmbController (DIHAPUS) | Pengganti: MasterBiayaSpmbController (beban pendaftaran/daftar ulang) | [docs/api/SPMB/TarifUktSpmbController.md](api/SPMB/TarifUktSpmbController.md) |
+| CalonMahasiswaController | Alur pendaftaran calon mahasiswa (biodata, berkas, tagihan, VA) | [docs/api/SPMB/CalonMahasiswaController.md](api/SPMB/CalonMahasiswaController.md) |
+| DaftarUlangController | Tagihan & konfirmasi daftar ulang calon mahasiswa lulus | [docs/api/SPMB/DaftarUlangController.md](api/SPMB/DaftarUlangController.md) |
+| LaporanSpmbController | Statistik & export laporan pendaftaran SPMB | [docs/api/SPMB/LaporanSpmbController.md](api/SPMB/LaporanSpmbController.md) |
 
 ---
 
@@ -53,6 +58,10 @@
 |---|---|---|
 | AkademikController | Master akademik + opsi referensi dropdown (jenjang, akreditasi, tipe MK, mode penilaian) | [docs/api/SIAKAD/AkademikController.md](api/SIAKAD/AkademikController.md) |
 | FeederSyncController | Sinkronisasi Neo Feeder PDDikti (Dosen, Penugasan, Ajar, Mahasiswa, Kelas) | [docs/api/SIAKAD/FeederSyncController.md](api/SIAKAD/FeederSyncController.md) |
+| AkademikController | Master akademik (Tahun Akademik, Fakultas, Prodi, Kurikulum, Mata Kuliah, Dosen) | [docs/api/SIAKAD/AkademikController.md](api/SIAKAD/AkademikController.md) |
+| MahasiswaController | Data mahasiswa, NIM, konversi transfer, dan penugasan PA | [docs/api/SIAKAD/MahasiswaController.md](api/SIAKAD/MahasiswaController.md) |
+| ObeController | Kurikulum OBE (CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, Nilai) | [docs/api/SIAKAD/ObeController.md](api/SIAKAD/ObeController.md) |
+| PerkuliahanController | Kelas, KRS, nilai, transkrip, pertemuan & absensi | [docs/api/SIAKAD/PerkuliahanController.md](api/SIAKAD/PerkuliahanController.md) |
 
 ---
 
@@ -84,6 +93,7 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
+| PegawaiController | Manajemen master data pegawai, multi-role SSO, import massal, & reset biometrik | [docs/api/SIMPEG/PegawaiController.md](api/SIMPEG/PegawaiController.md) |
 | PresensiController | Presensi biometrik mobile (Android Flutter), validasi wajah Python port 8001, shift, geofence, & integrasi | [docs/api/SIMPEG/PresensiController.md](api/SIMPEG/PresensiController.md) |
 | PresensiMasterSettingController | Master pengaturan presensi: parameter sistem, lokasi kantor, multi-tipe shift, & kalender libur | [docs/api/SIMPEG/PresensiMasterSettingController.md](api/SIMPEG/PresensiMasterSettingController.md) |
 | AttendanceDataApi | Spesifikasi API integrasi data absensi & rekapitulasi kehadiran | [docs/api/SIMPEG/ATTENDANCE_DATA_API.md](api/SIMPEG/ATTENDANCE_DATA_API.md) |
@@ -99,6 +109,13 @@
 | UsulanJafungController | Usulan kenaikan jabatan fungsional dosen, angka kredit & verifikasi SK | [docs/api/SIMPEG/UsulanJafungController.md](api/SIMPEG/UsulanJafungController.md) |
 | CutiController | Pengajuan cuti pegawai terintegrasi, validasi durasi, approval & notifikasi | [docs/api/SIMPEG/CutiController.md](api/SIMPEG/CutiController.md) |
 | DokumenController | E-File arsip dokumen kepegawaian, secure view & dynamic watermark | [docs/api/SIMPEG/DokumenController.md](api/SIMPEG/DokumenController.md) |
+| MasterJenisSertifikasiController | Master referensi jenis sertifikasi profesi & keahlian dosen/tendik | [docs/api/SIMPEG/MasterJenisSertifikasiController.md](api/SIMPEG/MasterJenisSertifikasiController.md) |
+| MasterJenisTesController | Master referensi jenis tes kompetensi resmi (TOEFL, TPA, dsb.) | [docs/api/SIMPEG/MasterJenisTesController.md](api/SIMPEG/MasterJenisTesController.md) |
+| MasterJenisPelatihanController | Master klasifikasi pelatihan, diklat, dan bimbingan teknis pegawai | [docs/api/SIMPEG/MasterJenisPelatihanController.md](api/SIMPEG/MasterJenisPelatihanController.md) |
+| MasterPeranPelatihanController | Master peran kepesertaan kegiatan (Peserta, Pemateri, Moderator, Panitia) | [docs/api/SIMPEG/MasterPeranPelatihanController.md](api/SIMPEG/MasterPeranPelatihanController.md) |
+| MasterTingkatKegiatanController | Master tingkat jangkauan kegiatan (Lokal, Wilayah, Nasional, Internasional) | [docs/api/SIMPEG/MasterTingkatKegiatanController.md](api/SIMPEG/MasterTingkatKegiatanController.md) |
+| MasterJenisIzinJamKerjaController | Master jenis dispensasi izin jam kerja, durasi toleransi & aturan potong | [docs/api/SIMPEG/MasterJenisIzinJamKerjaController.md](api/SIMPEG/MasterJenisIzinJamKerjaController.md) |
+| MasterKategoriSkController | Master kategori nomor dan jenis Surat Keputusan (SK) pegawai | [docs/api/SIMPEG/MasterKategoriSkController.md](api/SIMPEG/MasterKategoriSkController.md) |
 
 ---
 

@@ -55,7 +55,7 @@ $supportedIcons = [
     "FaLock", "FaKey", "FaGraduationCap", "FaUserGraduate", "FaChalkboardTeacher", "FaExchangeAlt", "FaPen",
     "FaSyncAlt", "FaCloudUploadAlt", "FaDatabase", "FaTags", "FaSlidersH", "FaSliders", "FaBars", "FaMenu",
     "FaDesktop", "FaLaptop", "FaMonitor", "FaHistory", "FaCogs", "FaCog", "FaChartBar", "FaSparkles",
-    "FaHourglassHalf", "FaFileSignature", "FaCheckSquare", "FaDollarSign", "FaExclamationTriangle"
+    "FaHourglassHalf", "FaFileSignature", "FaCheckSquare", "FaDollarSign", "FaExclamationTriangle", "FaCoins", "FaTag"
 ];
 
 foreach ($files as $file) {

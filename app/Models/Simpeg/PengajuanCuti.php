@@ -27,6 +27,23 @@ class PengajuanCuti extends Model
         'file_pendukung',
     ];
 
+    protected $appends = [
+        'file_pendukung_url',
+    ];
+
+    public function getFilePendukungUrlAttribute(): ?string
+    {
+        if (empty($this->file_pendukung)) {
+            return null;
+        }
+
+        if (str_starts_with($this->file_pendukung, 'http://') || str_starts_with($this->file_pendukung, 'https://')) {
+            return $this->file_pendukung;
+        }
+
+        return app(\App\Services\Storage\FileStorageService::class)->url($this->file_pendukung);
+    }
+
     public function pegawai(): BelongsTo
     {
         return $this->belongsTo(Pegawai::class, 'pegawai_id');

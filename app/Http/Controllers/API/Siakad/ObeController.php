@@ -1173,7 +1173,7 @@ class ObeController extends Controller
     public function storeProfilLulusan(Request $request)
     {
         $request->validate([
-            'program_studi_id' => 'required|exists:spmb_master_program_studi,id',
+            'program_studi_id' => 'required|exists:siakad_program_studi,id',
             'kode_pl' => 'required|string|max:50',
             'nama' => 'required|string|max:255',
             'deskripsi' => 'required|string',
@@ -1244,7 +1244,7 @@ class ObeController extends Controller
     public function storeBahanKajian(Request $request)
     {
         $request->validate([
-            'program_studi_id' => 'required|exists:spmb_master_program_studi,id',
+            'program_studi_id' => 'required|exists:siakad_program_studi,id',
             'kode_bk' => 'required|string|max:50',
             'nama_bk' => 'required|string|max:255',
             'deskripsi' => 'nullable|string',

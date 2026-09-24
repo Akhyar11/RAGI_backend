@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Spmb;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Spmb\GetBiayaPendaftaranRequest;
 use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\MasterTipeJalur;
@@ -292,7 +293,7 @@ class MasterSpmbController extends Controller
      */
     public function getGelombang(Request $request): JsonResponse
     {
-        $query = GelombangPenerimaan::with(['jalurMasuk', 'masterBiaya', 'tahunAkademik']);
+        $query = GelombangPenerimaan::with(['jalurMasuk']);
 
         if ($request->filled('nama')) {
             $query->where('nama', 'like', '%' . $request->nama . '%');
@@ -379,7 +380,7 @@ class MasterSpmbController extends Controller
      */
     public function showGelombang($id): JsonResponse
     {
-        $gelombang = GelombangPenerimaan::with(['jalurMasuk', 'masterBiaya', 'tahunAkademik'])->findOrFail($id);
+        $gelombang = GelombangPenerimaan::with(['jalurMasuk'])->findOrFail($id);
         return response()->json([
             'status' => 'success',
             'message' => 'Data detail gelombang berhasil dimuat.',
@@ -394,8 +395,6 @@ class MasterSpmbController extends Controller
     {
         $validated = $request->validate([
             'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
-            'tahun_akademik_id' => 'required|integer', // assuming it exists
-            'master_biaya_id' => 'nullable|exists:sikeu_master_biaya,id',
             'nama' => 'required|string',
             'tanggal_buka' => 'required|date',
             'tanggal_tutup' => 'required|date|after_or_equal:tanggal_buka',
@@ -405,17 +404,12 @@ class MasterSpmbController extends Controller
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
 
-        if (empty($validated['biaya_pendaftaran']) && !empty($validated['master_biaya_id'])) {
-            $mb = \App\Models\Sikeu\MasterBiaya::find($validated['master_biaya_id']);
-            $validated['biaya_pendaftaran'] = $mb ? (float)$mb->nominal_standar : 0;
-        }
-
         if ($validated['status'] === 'aktif') {
             $this->deactivateOtherActiveGelombang($validated['jalur_masuk_id']);
         }
 
         $gelombang = GelombangPenerimaan::create($validated);
-        $gelombang->load(['jalurMasuk', 'masterBiaya']);
+        $gelombang->load(['jalurMasuk']);
 
         return response()->json([
             'status' => 'success',
@@ -433,8 +427,6 @@ class MasterSpmbController extends Controller
 
         $validated = $request->validate([
             'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
-            'tahun_akademik_id' => 'required|integer',
-            'master_biaya_id' => 'nullable|exists:sikeu_master_biaya,id',
             'nama' => 'required|string',
             'tanggal_buka' => 'required|date',
             'tanggal_tutup' => 'required|date|after_or_equal:tanggal_buka',
@@ -444,17 +436,12 @@ class MasterSpmbController extends Controller
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
 
-        if (!isset($validated['biaya_pendaftaran']) && !empty($validated['master_biaya_id'])) {
-            $mb = \App\Models\Sikeu\MasterBiaya::find($validated['master_biaya_id']);
-            $validated['biaya_pendaftaran'] = $mb ? (float)$mb->nominal_standar : 0;
-        }
-
         if ($validated['status'] === 'aktif') {
             $this->deactivateOtherActiveGelombang($validated['jalur_masuk_id'], $id);
         }
 
         $gelombang->update($validated);
-        $gelombang->load(['jalurMasuk', 'masterBiaya']);
+        $gelombang->load(['jalurMasuk']);
 
         return response()->json([
             'status' => 'success',
@@ -496,11 +483,50 @@ class MasterSpmbController extends Controller
     }
 
     /**
+     * Rincian komponen biaya (beban awal pendaftaran & daftar ulang)
+     * untuk gelombang + program studi tertentu.
+     */
+    public function getBiayaPendaftaran(GetBiayaPendaftaranRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $service = app(\App\Services\Spmb\MasterBiayaService::class);
+        $gelombangId = (int) $validated['gelombang_id'];
+        $prodiId = (int) $validated['program_studi_id'];
+
+        $map = function ($items) {
+            return $items->map(function ($item) {
+                return [
+                    'komponen_biaya_id' => $item->komponen_biaya_id,
+                    'kode' => $item->komponenBiaya->kode,
+                    'nama' => $item->komponenBiaya->nama,
+                    'kategori' => $item->komponenBiaya->kategori,
+                    'nominal' => (float) $item->nominal,
+                ];
+            })->values();
+        };
+
+        $pendaftaran = $map($service->getKomponenBeban($gelombangId, $prodiId, true));
+        $daftarUlang = $map($service->getKomponenBeban($gelombangId, $prodiId, false));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Rincian biaya pendaftaran berhasil dimuat.',
+            'data' => [
+                'beban_pendaftaran' => $pendaftaran,
+                'total_pendaftaran' => (float) $pendaftaran->sum('nominal'),
+                'beban_daftar_ulang' => $daftarUlang,
+                'total_daftar_ulang' => (float) $daftarUlang->sum('nominal'),
+            ],
+        ]);
+    }
+
+    /**
      * Get all active Program Studi for SPMB
      */
     public function getProgramStudi(Request $request): JsonResponse
     {
-        $query = \App\Models\Spmb\MasterProgramStudi::where('is_active', true);
+        $query = \App\Models\Siakad\ProgramStudi::where('is_active', true);
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -536,26 +562,39 @@ class MasterSpmbController extends Controller
     }
 
     /**
-     * Get all active Tahun Akademik for SPMB
+     * Get all active Tahun Akademik for SPMB (Sumber utama dari SIAKAD)
      */
     public function getTahunAkademik(): JsonResponse
     {
         $tahun = collect();
         try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('spmb_master_tahun_akademik')) {
-                $tahun = \Illuminate\Support\Facades\DB::table('spmb_master_tahun_akademik')
-                    ->select('id', 'kode', 'nama', 'is_active', 'is_current')
+            $tableName = \Illuminate\Support\Facades\Schema::hasTable('siakad_tahun_akademik')
+                ? 'siakad_tahun_akademik'
+                : null;
+
+            if ($tableName) {
+                $tahun = \Illuminate\Support\Facades\DB::table($tableName)
+                    ->whereNull('deleted_at')
+                    ->select(
+                        'id',
+                        'kode',
+                        'nama',
+                        'tahun_mulai',
+                        'tahun_selesai',
+                        'is_active',
+                        \Illuminate\Support\Facades\DB::raw('is_active as is_current')
+                    )
                     ->orderBy('kode', 'desc')
                     ->get();
             }
         } catch (\Throwable $e) {
-            // Graceful fallback if table not migrated yet
+            \Illuminate\Support\Facades\Log::warning('Gagal memuat tahun akademik dari siakad: ' . $e->getMessage());
         }
 
         if ($tahun->isEmpty()) {
             $tahun = collect([
-                ['id' => 1, 'nama' => '2026/2027 Ganjil', 'tahun_mulai' => 2026, 'tahun_selesai' => 2027, 'is_active' => true],
-                ['id' => 2, 'nama' => '2025/2026 Genap', 'tahun_mulai' => 2025, 'tahun_selesai' => 2026, 'is_active' => false],
+                ['id' => 1, 'nama' => '2026/2027 Ganjil', 'tahun_mulai' => 2026, 'tahun_selesai' => 2027, 'is_active' => true, 'is_current' => true],
+                ['id' => 2, 'nama' => '2025/2026 Genap', 'tahun_mulai' => 2025, 'tahun_selesai' => 2026, 'is_active' => false, 'is_current' => false],
             ]);
         }
 

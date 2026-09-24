@@ -15,7 +15,7 @@ class StoreCplRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'program_studi_id' => 'required|exists:spmb_master_program_studi,id',
+            'program_studi_id' => 'required|exists:siakad_program_studi,id',
             'kode_cpl' => 'required|string|max:50',
             'kategori' => ['required', 'string', new MasterReferensiExists('kategori_cpl')],
             'deskripsi' => 'required|string',

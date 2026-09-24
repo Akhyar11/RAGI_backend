@@ -28,48 +28,18 @@ class DaftarUlangController extends Controller
             return response()->json(['message' => 'Tagihan daftar ulang sudah dibuat, silakan lanjutkan pembayaran.'], 400);
         }
 
-        // Cari Biaya Daftar Ulang untuk Prodi bersangkutan
+        // Biaya daftar ulang disusun oleh service (fallback otomatis ke SIKEU).
         $prodiId = $hasil->program_studi_diterima_id ?? $pendaftaran->program_studi_id;
-        $tahunAkademikId = $pendaftaran->gelombang_penerimaan->tahun_akademik_id ?? 1;
-
-        $biayaDaftarUlang = \App\Models\Spmb\TarifUktSpmb::with('masterSikeuBiaya')
-                        ->where('master_program_studi_id', $prodiId)
-                        ->first();
-
-        // Jika biaya daftar ulang di SPMB tidak ada, maka cek ke Master Tarif SIKEU
-        if (!$biayaDaftarUlang) {
-            $biayaDaftarUlang = \App\Models\Sikeu\TarifSpmb::with('masterBiaya')
-                            ->whereHas('masterBiaya', function($q) {
-                                $q->where('kode', 'like', '%UKT%')->orWhere('nama', 'like', '%UKT%');
-                            })->first();
-        }
-
-        // Nominal diambil dari SIKEU master biaya (nominal_standar),
-        // fallback ke nominal TarifSpmb jika memakai sumber SIKEU.
-        if ($biayaDaftarUlang instanceof \App\Models\Spmb\TarifUktSpmb) {
-            $masterBiaya = $biayaDaftarUlang->masterSikeuBiaya;
-            $nominalUKT = $masterBiaya->nominal_standar ?? 5000000;
-            $kodeBiaya = $masterBiaya->kode ?? 'UKT_SMT1';
-        } else {
-            $masterBiaya = $biayaDaftarUlang->masterBiaya ?? null;
-            $nominalUKT = $biayaDaftarUlang->nominal ?? 5000000;
-            $kodeBiaya = $masterBiaya->kode ?? 'UKT_SMT1';
-        }
+        $masterBiayaService = app(\App\Services\Spmb\MasterBiayaService::class);
+        $details = $masterBiayaService->buildDetailBebanDaftarUlang($pendaftaran->gelombang_id, $prodiId);
 
         $payload = [
             'calon_mahasiswa_id' => $pendaftaran_id,
             'tipe_referensi' => 'calon_mahasiswa',
-            'tahun_akademik_id' => $tahunAkademikId,
             'source_system' => 'SPMB',
             'requires_approval' => false,
-            'keterangan' => 'Tagihan Daftar Ulang (UKT) - Pendaftaran ID ' . $pendaftaran_id,
-            'details' => [
-                [
-                    'master_biaya_kode' => $kodeBiaya,
-                    'nominal' => $nominalUKT,
-                    'keterangan' => 'Biaya UKT Semester 1'
-                ]
-            ]
+            'keterangan' => 'Tagihan Daftar Ulang - Pendaftaran ID ' . $pendaftaran_id,
+            'details' => $details,
         ];
 
         $externalReq = Request::create('/api/v1/sikeu/tagihan/external', 'POST', $payload);

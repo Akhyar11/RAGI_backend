@@ -1,35 +1,61 @@
-# AkademikController (SIAKAD)
+# AkademikController
 
-> **Modul**: SIAKAD — Master Data Akademik
-> **Base URL**: `/api/v1/siakad/akademik`
-> **Autentikasi**: Bearer Token (Sanctum)
-> **Dibuat**: 2026-09-25
-> **Diperbarui**: 2026-09-25
+> **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/akademik` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-25
+
+Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata kuliah, dan dosen. Sumber program studi kini tabel `siakad_program_studi`.
+
+## Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ untuk POST/PUT/PATCH |
 
 ## Daftar Endpoint
 
 | Method | Endpoint | Fungsi | Auth |
-|---|---|---|---|
 | GET | `/api/v1/siakad/akademik/referensi-options?tipe={tipe}` | Opsi dropdown master akademik dari database | ✅ |
+|---|---|---|---|
+| GET | `/api/v1/siakad/akademik/dashboard/summary` | Ringkasan dashboard akademik | ✅ |
+| GET | `/api/v1/siakad/akademik/tahun-akademik` | Daftar tahun akademik | ✅ |
+| POST | `/api/v1/siakad/akademik/tahun-akademik` | Tambah tahun akademik | ✅ |
+| PATCH | `/api/v1/siakad/akademik/tahun-akademik/{id}/set-active` | Aktifkan tahun akademik | ✅ |
+| PATCH | `/api/v1/siakad/akademik/tahun-akademik/{id}/mode-penilaian` | Ubah mode penilaian | ✅ |
+| GET | `/api/v1/siakad/akademik/fakultas` | Daftar fakultas | ✅ |
+| POST | `/api/v1/siakad/akademik/fakultas` | Tambah fakultas | ✅ |
+| PUT | `/api/v1/siakad/akademik/fakultas/{id}` | Perbarui fakultas | ✅ |
+| DELETE | `/api/v1/siakad/akademik/fakultas/{id}` | Hapus fakultas | ✅ |
+| GET | `/api/v1/siakad/akademik/prodi` | Daftar program studi | ⚠️ Kondisional |
+| POST | `/api/v1/siakad/akademik/prodi` | Tambah program studi | ✅ |
+| PUT | `/api/v1/siakad/akademik/prodi/{id}` | Perbarui program studi | ✅ |
+| DELETE | `/api/v1/siakad/akademik/prodi/{id}` | Hapus program studi | ✅ |
+| GET | `/api/v1/siakad/akademik/kurikulum` | Daftar kurikulum | ✅ |
+| POST | `/api/v1/siakad/akademik/kurikulum` | Tambah kurikulum | ✅ |
+| PUT | `/api/v1/siakad/akademik/kurikulum/{id}` | Perbarui kurikulum | ✅ |
+| DELETE | `/api/v1/siakad/akademik/kurikulum/{id}` | Hapus kurikulum | ✅ |
+| GET | `/api/v1/siakad/akademik/matakuliah` | Daftar mata kuliah | ✅ |
+| POST | `/api/v1/siakad/akademik/matakuliah` | Tambah mata kuliah | ✅ |
+| PUT | `/api/v1/siakad/akademik/matakuliah/{id}` | Perbarui mata kuliah | ✅ |
+| DELETE | `/api/v1/siakad/akademik/matakuliah/{id}` | Hapus mata kuliah | ✅ |
+| GET | `/api/v1/siakad/akademik/dosen` | Daftar dosen | ✅ |
+| POST | `/api/v1/siakad/akademik/dosen` | Tambah dosen | ✅ |
+| PUT | `/api/v1/siakad/akademik/dosen/{id}` | Perbarui dosen | ✅ |
+| DELETE | `/api/v1/siakad/akademik/dosen/{id}` | Hapus dosen | ✅ |
 
 ---
 
-## GET /api/v1/siakad/akademik/referensi-options
-
-> Sumber tunggal opsi dropdown form master SIAKAD (jenjang prodi, akreditasi, tipe MK, kriteria prasyarat, mode penilaian). frontend WAJIB mengambil dari sini, bukan literal kode.
-
-### Headers
-
-| Key | Value | Required |
-|---|---|---|
-| `Authorization` | `Bearer {token}` | ✅ |
-| `Accept` | `application/json` | ✅ |
+## [GET] /api/v1/siakad/akademik/tahun-akademik
 
 ### Query Parameters
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `tipe` | string | ✅ | — | Kode tipe referensi: `jenjang_prodi`, `akreditasi_prodi`, `tipe_mk`, `tipe_prasyarat_mk`, `mode_penilaian` |
+| `search` | string | ❌ | — | Cari `kode` / `nama` |
+| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `kode`, `nama`, `id` |
+| `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
+| `per_page` | integer | ❌ | `15` | Maks. 100 |
+| `page` | integer | ❌ | `1` | Halaman |
 
 ### Response Sukses
 
@@ -37,11 +63,52 @@
 ```json
 {
     "status": "success",
-    "message": "Opsi referensi akademik berhasil dimuat.",
     "data": [
-        { "kode": "S1", "nama": "Sarjana (S1)", "urutan": 3 },
-        { "kode": "S2", "nama": "Magister (S2)", "urutan": 4 }
-    ]
+        { "id": 1, "kode": "20261", "nama": "2026/2027 Ganjil", "tahun_mulai": 2026, "tahun_selesai": 2027, "is_active": true, "mode_penilaian": "semi_obe" }
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 },
+    "filters": { "search": null, "sort_by": "created_at", "sort_order": "desc" }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+**403 Forbidden**
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+---
+
+## [POST] /api/v1/siakad/akademik/tahun-akademik
+
+> Membutuhkan permission `siakad.master.manage`. Bila `is_active = true`, periode lain otomatis dinonaktifkan dalam satu transaksi.
+
+### Request Body
+
+```json
+{
+    "kode": "20261",
+    "nama": "2026/2027 Ganjil",
+    "tahun_mulai": 2026,
+    "tahun_selesai": 2027,
+    "is_active": true,
+    "mode_penilaian": "semi_obe"
+}
+```
+
+### Response Sukses
+
+**201 Created**
+```json
+{
+    "status": "success",
+    "message": "Periode Tahun Akademik berhasil ditambahkan",
+    "data": { "id": 1, "kode": "20261", "nama": "2026/2027 Ganjil", "is_active": true }
 }
 ```
 
@@ -52,59 +119,102 @@
 {
     "status": "error",
     "message": "Data yang diberikan tidak valid.",
-    "errors": {
-        "tipe": ["Tipe wajib diisi."]
-    }
+    "errors": { "kode": ["The kode has already been taken."] }
 }
 ```
 
+---
+
+## [PATCH] /api/v1/siakad/akademik/tahun-akademik/{id}/set-active
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Tahun Akademik 2026/2027 Ganjil (20261) berhasil diaktifkan sebagai periode semester berjalan.",
+    "data": { "id": 1, "is_active": true }
+}
+```
+
+**404 Not Found**
+```json
+{ "status": "error", "message": "No query results for model [App\\Models\\Siakad\\TahunAkademik] 99." }
+```
+
+---
+
+## [PATCH] /api/v1/siakad/akademik/tahun-akademik/{id}/mode-penilaian
+
+### Request Body
+
+```json
+{ "mode_penilaian": "full_obe" }
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{ "status": "success", "message": "Mode penilaian periode akademik berhasil diperbarui." }
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+**403 Forbidden**
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+**404 Not Found**
+```json
+{ "status": "error", "message": "No query results for model [App\\Models\\Siakad\\TahunAkademik] 99." }
+```
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": { "mode_penilaian": ["The selected mode penilaian is invalid."] }
+}
+```
+
+---
+
+## [GET] /api/v1/siakad/akademik/prodi
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `search` | string | ❌ | — | Cari `nama` / `kode_prodi` |
+| `fakultas_id` | integer | ❌ | — | Filter fakultas |
+| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `nama`, `kode_prodi`, `id` |
+| `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
+| `per_page` | integer | ❌ | `15` | Maks. 100 |
+| `page` | integer | ❌ | `1` | Halaman |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": [
+        { "id": 7, "kode_prodi": "TI01", "nama": "Teknik Informatika", "jenjang": "S1", "is_active": true }
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 }
+}
+```
+
+---
+
 ### Catatan Tambahan
 
-> - Hanya item `is_active = true` modul `siakad`/`global`, terurut `urutan`, `nama`.
-> - Jika tipe belum punya item, `data` berupa array kosong — frontend tampilkan empty state.
-> - Kode item diselaraskan enum validasi backend (PDDIKTI / Neo Feeder): `wajib,pilihan,wajib_prodi`, `lulus,pernah_ambil`, `full_obe,semi_obe,konvensional`.
-
----
-
-## Validasi Master Referensi (Form Request)
-
-Endpoint store/update yang memakai opsi di atas **tidak lagi** memakai `in:STATIS`.
-Validasi via Form Request + rule `App\Rules\MasterReferensiExists`
-(cek `kode` di `spmb_master_referensi` untuk pasangan modul + tipe yang aktif):
-
-| Form Request | Endpoint | Field → tipe referensi |
-|---|---|---|
-| `StoreMataKuliahRequest` | `POST /matakuliah` | `tipe` → `tipe_mk` |
-| `UpdateMataKuliahRequest` | `PUT /matakuliah/{id}` | `tipe` → `tipe_mk` |
-| `StorePrasyaratMkRequest` | `POST /prasyarat-mk` | `tipe` → `tipe_prasyarat_mk` |
-| `UpdateModePenilaianRequest` | `PATCH /tahun-akademik/{id}/mode-penilaian` | `mode_penilaian` → `mode_penilaian` |
-| `StoreProgramStudiRequest` | `POST /prodi` | `jenjang` → `jenjang_prodi`, `akreditasi` → `akreditasi_prodi` |
-| `UpdateProgramStudiRequest` | `PUT /prodi/{id}` | `jenjang` → `jenjang_prodi`, `akreditasi` → `akreditasi_prodi` |
-| `StoreCplRequest` | `POST /cpl` (Obe) | `kategori` → `kategori_cpl` |
-| `StoreKelasKomponenRequest` | `POST /kelas/{kelasId}/komponen` (Obe) | `teknik_penilaian` → `teknik_penilaian` (wajib kecuali mode `full_obe`) |
-| `StoreKelasRequest` | `POST /perkuliahan/kelas` | `hari` → `hari_kuliah` |
-| `UpdateKelasRequest` | `PUT /perkuliahan/kelas/{id}` | `hari` → `hari_kuliah` |
-| `StoreAbsensiRequest` | `POST /perkuliahan/pertemuan/{id}/absensi` | `absensi.*.status` → `status_absensi` |
-| `StoreKelulusanRequest` | `POST /kelulusan` | `predikat` → `predikat_kelulusan` |
-
-> Catatan: kolom `spmb_master_program_studi.akreditasi` dilebarkan 20 → 50
-> agar menampung `Terakreditasi Sementara`.
-> Status workflow (`draft/diajukan/disetujui/...`) dan status mahasiswa
-> SENGAJA tetap `in:` — di-branching di logika bisnis ±15 titik
-> (KrsService, PerkuliahanController, dsb.) sehingga bukan data referensi.
-
----
-
-## Bukti End-to-End (`tests/Feature/SiakadMasterReferensiFlowTest.php`)
-
-5 test, 37 assertions — opsi dibaca DARI database (bukan literal),
-dikirim via API, `assertDatabaseHas` membuktikan baris tersimpan,
-kode ngawur dibuktikan 422:
-
-| Test | Alur |
-|---|---|
-| referensi options | `GET referensi-options?tipe=jenjang_prodi` tidak kosong |
-| prodi | buat fakultas → buat prodi (jenjang+akreditasi dari master) → row ada; `STRATA-NGAWUR` → 422 |
-| matakuliah | buat kurikulum → buat MK (tipe baris ke-3 master) → row ada + `total_sks` = 3; `wajib-ngawur` → 422 |
-| mode penilaian | buat periode → PATCH mode dari master → row berubah; `mode-ngawur` → 422 |
-| buka kelas | MK + periode → buat kelas (hari dari master) → `siakad_kelas.hari` tersimpan |
+> - Seluruh aksi tulis pada `TahunAkademik` dan `ProgramStudi` dicatat oleh observer audit (modul `SIAKAD`).
+> - Soft delete + restore berlaku pada tahun akademik dan program studi.
+> - Password/token tidak pernah dikembalikan pada response.

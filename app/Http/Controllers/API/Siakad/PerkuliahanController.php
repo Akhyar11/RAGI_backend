@@ -15,7 +15,7 @@ use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\Khs;
 use App\Models\Siakad\MataKuliah;
 use App\Models\Siakad\KonversiTransferDetail;
-use App\Models\Spmb\MasterTahunAkademik;
+use App\Models\Siakad\TahunAkademik;
 use App\Services\Siakad\SiakadAkademikService;
 use App\Services\Siakad\KrsService;
 use App\Http\Requests\Siakad\StoreKelasRequest;
@@ -37,7 +37,7 @@ class PerkuliahanController extends Controller
     public function listKelas(Request $request)
     {
         $user = $request->user();
-        $taId = $request->input('tahun_akademik_id') ?? MasterTahunAkademik::where('is_active', true)->value('id');
+        $taId = $request->input('tahun_akademik_id') ?? TahunAkademik::where('is_active', true)->value('id');
 
         $query = Kelas::with(['mataKuliah', 'ruangan.gedung', 'programStudi', 'dosenPengampu.dosen'])
             ->when($taId, fn($q) => $q->where('tahun_akademik_id', $taId));
@@ -473,7 +473,7 @@ class PerkuliahanController extends Controller
         }
 
         $taId = $request->query('tahun_akademik_id');
-        $ta = $taId ? MasterTahunAkademik::find($taId) : MasterTahunAkademik::where('is_active', true)->first();
+        $ta = $taId ? TahunAkademik::find($taId) : TahunAkademik::where('is_active', true)->first();
         if (!$ta) {
             return response()->json(['status' => 'error', 'message' => 'Tahun akademik aktif belum ditetapkan.'], 422);
         }
@@ -608,7 +608,7 @@ class PerkuliahanController extends Controller
         }
 
         $taId = $request->query('tahun_akademik_id');
-        $ta = $taId ? MasterTahunAkademik::find($taId) : MasterTahunAkademik::where('is_active', true)->first();
+        $ta = $taId ? TahunAkademik::find($taId) : TahunAkademik::where('is_active', true)->first();
         if (!$ta) {
             return response()->json(['status' => 'error', 'message' => 'Tahun akademik aktif belum ditetapkan.'], 422);
         }
@@ -667,16 +667,22 @@ class PerkuliahanController extends Controller
         $request->validate([
             'kelas_id' => 'required|exists:siakad_kelas,id',
             'mahasiswa_id' => 'nullable|exists:siakad_mahasiswa,id',
-            'tahun_akademik_id' => 'nullable|exists:spmb_master_tahun_akademik,id',
+            'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
         ]);
 
         $user = $request->user();
         $mhs = $this->krsService->resolveMahasiswa($user?->id, $request->input('mahasiswa_id'));
 
         $taId = $request->tahun_akademik_id;
-        $ta = $taId ? MasterTahunAkademik::find($taId) : MasterTahunAkademik::where('is_active', true)->first();
+        $ta = $taId ? TahunAkademik::find($taId) : TahunAkademik::where('is_active', true)->first();
         if (!$ta) {
             return response()->json(['status' => 'error', 'message' => 'Tahun akademik aktif belum ditetapkan.'], 422);
+        }
+
+        $kelas = Kelas::with('mataKuliah')->findOrFail($request->kelas_id);
+
+        if ($kelas->kuota_krs <= 0) {
+            return response()->json(['status' => 'error', 'message' => 'Kuota kelas ini sudah penuh.'], 422);
         }
 
         // Gate keuangan SIKEU (tetap sebelum validasi akademik agar pesan tagihan jelas)
@@ -757,7 +763,7 @@ class PerkuliahanController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Data mahasiswa tidak ditemukan.'], 404);
         }
         $taId = $request->tahun_akademik_id;
-        $ta = $taId ? MasterTahunAkademik::find($taId) : MasterTahunAkademik::where('is_active', true)->first();
+        $ta = $taId ? TahunAkademik::find($taId) : TahunAkademik::where('is_active', true)->first();
         if (!$ta) {
             return response()->json(['status' => 'error', 'message' => 'Tahun akademik aktif belum ditetapkan.'], 422);
         }
@@ -788,7 +794,7 @@ class PerkuliahanController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Data mahasiswa tidak ditemukan.'], 404);
         }
 
-        $taAktif = MasterTahunAkademik::where('is_active', true)->first();
+        $taAktif = TahunAkademik::where('is_active', true)->first();
         if (!$taAktif) {
             return response()->json(['status' => 'error', 'message' => 'Tahun akademik aktif belum ditetapkan.'], 422);
         }

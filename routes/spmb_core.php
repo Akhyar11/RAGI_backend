@@ -67,3 +67,22 @@ Route::post('daftar-ulang/{pendaftaran_id}/konfirmasi', [DaftarUlangController::
 // Laporan & Export Data
 Route::get('laporan/statistik', [LaporanSpmbController::class, 'statistik']);
 Route::get('laporan/export-csv', [LaporanSpmbController::class, 'exportCsv']);
+
+// Master Biaya SPMB (Dinamis)
+Route::middleware('can:spmb.manage')->group(function () {
+    Route::get('master/komponen-biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'getKomponen']);
+    Route::get('master/komponen-biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'showKomponen']);
+    Route::post('master/komponen-biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'storeKomponen']);
+    Route::put('master/komponen-biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'updateKomponen']);
+    Route::delete('master/komponen-biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'destroyKomponen']);
+    Route::post('master/komponen-biaya/{id}/restore', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'restoreKomponen']);
+
+    Route::get('master/biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'index']);
+    Route::get('master/biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'show']);
+    Route::post('master/biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'store']);
+    Route::put('master/biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'update']);
+    Route::delete('master/biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'destroy']);
+    Route::post('master/biaya/{id}/restore', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'restore']);
+    Route::post('master/biaya/batch', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'batchUpdate']);
+    Route::post('master/biaya/copy-from-gelombang', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'copyFromGelombang']);
+});

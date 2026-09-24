@@ -16,8 +16,8 @@ class StoreKelasRequest extends FormRequest
     {
         return [
             'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
-            'tahun_akademik_id' => 'required|exists:spmb_master_tahun_akademik,id',
-            'program_studi_id' => 'required|exists:spmb_master_program_studi,id',
+            'tahun_akademik_id' => 'required|exists:siakad_tahun_akademik,id',
+            'program_studi_id' => 'required|exists:siakad_program_studi,id',
             'ruangan_id' => 'nullable|exists:sinapra_ruangan,id',
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
             'team_teaching_dosen_ids' => 'nullable|array',

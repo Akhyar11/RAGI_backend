@@ -127,7 +127,7 @@ class PembayaranMahasiswaTarifController extends Controller
         $validator = Validator::make($request->all(), [
             'master_biaya_id' => 'required|integer|exists:sikeu_master_biaya,id',
             'tahun_angkatan' => 'required|integer|min:2000|max:2050',
-            'program_studi_id' => 'nullable|integer|exists:spmb_master_program_studi,id',
+            'program_studi_id' => 'nullable|integer|exists:siakad_program_studi,id',
             'semester' => 'nullable|integer|min:1|max:14',
             'nominal' => 'required|numeric|min:0',
             'keterangan' => 'nullable|string|max:500',
@@ -261,7 +261,7 @@ class PembayaranMahasiswaTarifController extends Controller
         $validator = Validator::make($request->all(), [
             'master_biaya_id' => 'sometimes|required|integer|exists:sikeu_master_biaya,id',
             'tahun_angkatan' => 'sometimes|required|integer|min:2000|max:2050',
-            'program_studi_id' => 'nullable|integer|exists:spmb_master_program_studi,id',
+            'program_studi_id' => 'nullable|integer|exists:siakad_program_studi,id',
             'semester' => 'nullable|integer|min:1|max:14',
             'nominal' => 'sometimes|required|numeric|min:0',
             'keterangan' => 'nullable|string|max:500',
@@ -994,7 +994,7 @@ class PembayaranMahasiswaTarifController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'tahun_angkatan' => 'required|integer|min:2000|max:2050',
-            'program_studi_id' => 'nullable|integer|exists:spmb_master_program_studi,id',
+            'program_studi_id' => 'nullable|integer|exists:siakad_program_studi,id',
             'semester' => 'nullable|integer|min:1|max:14',
             'master_biaya_ids' => 'nullable|array',
             'master_biaya_ids.*' => 'integer|exists:sikeu_master_biaya,id',
@@ -1143,7 +1143,7 @@ class PembayaranMahasiswaTarifController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'tahun_angkatan' => 'required|integer|min:2000|max:2050',
-            'program_studi_id' => 'nullable|integer|exists:spmb_master_program_studi,id',
+            'program_studi_id' => 'nullable|integer|exists:siakad_program_studi,id',
             'semester' => 'required|integer|min:1|max:14',
             'jatuh_tempo' => 'required|date',
             'catatan' => 'nullable|string|max:500',

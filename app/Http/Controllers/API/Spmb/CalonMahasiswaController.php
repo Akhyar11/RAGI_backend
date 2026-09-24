@@ -166,33 +166,19 @@ class CalonMahasiswaController extends Controller
                 'virtual_account' => $existingTagihan->virtualAccount
             ];
         } else {
-            // Fetch tarif using SpmbSikeuService
-            $sikeuService = app(\App\Services\Sikeu\SpmbSikeuService::class);
+            // Beban awal pendaftaran disusun oleh service (termasuk fallback).
+            $masterBiayaService = app(\App\Services\Spmb\MasterBiayaService::class);
             $gelombangId = $pendaftaran->gelombang_id ?? $validated['gelombang_id'] ?? 1;
-            $gelombang = \App\Models\Spmb\GelombangPenerimaan::with('masterBiaya')->find($gelombangId);
-            $nominal = $sikeuService->getTarifPendaftaranSpmb($gelombang->jalur_masuk_id ?? 1, $gelombang->id ?? 1);
-            if ($nominal <= 0) {
-                $nominal = ($gelombang && $gelombang->biaya_pendaftaran > 0) ? (float) $gelombang->biaya_pendaftaran : 250000.00;
-            }
-
-            $biayaKode = ($gelombang && $gelombang->masterBiaya) ? $gelombang->masterBiaya->kode : 'SPMB_ADM';
-            $biayaNama = ($gelombang && $gelombang->masterBiaya) ? $gelombang->masterBiaya->nama : 'Biaya Formulir Pendaftaran SPMB';
+            $details = $masterBiayaService->buildDetailBebanPendaftaran($gelombangId, $pendaftaran->program_studi_id);
 
             // Generate External Bill via internal Request
             $payload = [
                 'calon_mahasiswa_id' => $pendaftaran->id,
                 'tipe_referensi' => 'calon_mahasiswa',
-                'tahun_akademik_id' => $gelombang->tahun_akademik_id ?? 1,
                 'source_system' => 'SPMB',
                 'requires_approval' => false,
                 'keterangan' => 'Pendaftaran SPMB - ' . $namaLengkap,
-                'details' => [
-                    [
-                        'master_biaya_kode' => $biayaKode,
-                        'nominal' => $nominal,
-                        'keterangan' => $biayaNama
-                    ]
-                ]
+                'details' => $details,
             ];
 
             $externalReq = \Illuminate\Http\Request::create('/api/v1/sikeu/tagihan/external', 'POST', $payload);

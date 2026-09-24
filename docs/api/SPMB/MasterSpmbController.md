@@ -1,9 +1,6 @@
 # MasterSpmbController
 
-> **Modul**: SPMB  
-> **Base URL**: `/api/spmb/master`  
-> **Autentikasi**: Bearer Token (Sanctum)  
-> **Dibuat/Diperbarui**: 2026-09-21  
+> **Modul**: SPMB / **Base URL**: `/api/spmb/master` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-25  
 
 Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur pendaftaran, gelombang pendaftaran, dan opsi master SPMB.
 
@@ -17,6 +14,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 | GET | `/api/spmb/master/jalur` | Mendapatkan daftar jalur seleksi penerimaan | ✅ Admin / Staff |
 | GET | `/api/spmb/master/gelombang` | Mendapatkan daftar gelombang penerimaan berpaginasi | ✅ Admin / Staff |
 | GET | `/api/spmb/master/gelombang/{id}` | Mendapatkan detail informasi gelombang penerimaan | ✅ Admin / Staff |
+| GET | `/api/spmb/biaya-pendaftaran` | Rincian beban awal pendaftaran & daftar ulang per gelombang + prodi | ❌ Publik |
 | GET | `/api/spmb/master/options` | Mendapatkan seluruh opsi master SPMB secara ringkas | ✅ Admin / Staff |
 
 ---
@@ -192,9 +190,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
         {
             "id": 1,
             "nama": "Gelombang 1 Reguler 2026/2027",
-            "tahun_akademik_id": 1,
             "jalur_masuk_id": 1,
-            "master_biaya_id": 1,
             "tanggal_buka": "2026-01-01",
             "tanggal_tutup": "2026-04-30",
             "tanggal_pengumuman": "2026-05-05",
@@ -208,15 +204,6 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
                 "id": 1,
                 "nama": "Reguler",
                 "kode": "REG"
-            },
-            "master_biaya": {
-                "id": 1,
-                "nama_biaya": "Pendaftaran S1",
-                "nominal": 250000
-            },
-            "tahun_akademik": {
-                "id": 1,
-                "nama": "2026/2027 Ganjil"
             }
         }
     ],
@@ -286,7 +273,6 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
         "nama": "Gelombang 1 Reguler 2026/2027",
         "tahun_akademik_id": 1,
         "jalur_masuk_id": 1,
-        "master_biaya_id": 1,
         "tanggal_buka": "2026-01-01",
         "tanggal_tutup": "2026-04-30",
         "tanggal_pengumuman": "2026-05-05",
@@ -300,15 +286,6 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
             "id": 1,
             "nama": "Reguler",
             "kode": "REG"
-        },
-        "master_biaya": {
-            "id": 1,
-            "nama_biaya": "Pendaftaran S1",
-            "nominal": 250000
-        },
-        "tahun_akademik": {
-            "id": 1,
-            "nama": "2026/2027 Ganjil"
         }
     }
 }
@@ -337,6 +314,85 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 {
     "status": "error",
     "message": "Gelombang penerimaan tidak ditemukan."
+}
+```
+
+---
+
+## [GET] /api/spmb/biaya-pendaftaran
+
+> Rincian komponen biaya untuk form pendaftaran online: komponen yang dibebankan sebagai **beban awal** dan komponen yang akan dibebankan saat **daftar ulang**. Endpoint bersifat publik (dipakai saat pengisian formulir).
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `gelombang_id` | integer | ✅ | — | ID gelombang (`spmb_gelombang_penerimaan`) |
+| `program_studi_id` | integer | ✅ | — | ID program studi (`siakad_program_studi`) |
+| `search` | string | ❌ | — | Tidak digunakan (endpoint non-paginasi) |
+| `sort_by` | string | ❌ | `created_at` | Tidak digunakan (endpoint non-paginasi) |
+| `sort_order` | string | ❌ | `desc` | Tidak digunakan (endpoint non-paginasi) |
+| `per_page` | integer | ❌ | `15` | Tidak digunakan (endpoint non-paginasi) |
+| `page` | integer | ❌ | `1` | Tidak digunakan (endpoint non-paginasi) |
+
+> Catatan: endpoint ini **non-paginasi** (mengembalikan seluruh komponen beban untuk gelombang+prodi). Response menyertakan `"meta": null` dan `filters`.
+
+### Request Body
+
+```json
+{}
+```
+
+> Endpoint GET tidak memerlukan body.
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Rincian biaya pendaftaran berhasil dimuat.",
+    "data": {
+        "beban_pendaftaran": [
+            { "komponen_biaya_id": 6, "kode": "REG-AWAL", "nama": "Biaya Pendaftaran", "kategori": "pendaftaran", "nominal": 250000 }
+        ],
+        "total_pendaftaran": 250000,
+        "beban_daftar_ulang": [
+            { "komponen_biaya_id": 8, "kode": "SERAGAM", "nama": "Paket Seragam", "kategori": "daftar_ulang", "nominal": 2750000 },
+            { "komponen_biaya_id": 7, "kode": "DPI", "nama": "Dana Pengembangan Institusi", "kategori": "daftar_ulang", "nominal": 9000000 }
+        ],
+        "total_daftar_ulang": 11750000
+    },
+    "meta": null,
+    "filters": { "gelombang_id": 3, "program_studi_id": 7, "search": null, "sort_by": "created_at", "sort_order": "desc" }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** (bila token dikirim tidak valid)
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+**403 Forbidden** (bila endpoint dibatasi izin — pada endpoint publik ini tidak terpicu)
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found**
+```json
+{ "status": "error", "message": "No query results for model [App\\Models\\Spmb\\GelombangPenerimaan] 99." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "gelombang_id": ["The selected gelombang id is invalid."],
+        "program_studi_id": ["The selected program studi id is invalid."]
+    }
 }
 ```
 

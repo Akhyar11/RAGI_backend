@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Ruangan;
 use App\Models\Spmb\MasterProgramStudi;
-use App\Models\Spmb\MasterTahunAkademik;
+use App\Models\Siakad\TahunAkademik;
 
 class Kelas extends Model
 {
@@ -42,7 +42,7 @@ class Kelas extends Model
 
     public function tahunAkademik()
     {
-        return $this->belongsTo(MasterTahunAkademik::class, 'tahun_akademik_id');
+        return $this->belongsTo(TahunAkademik::class, 'tahun_akademik_id');
     }
 
     public function programStudi()
