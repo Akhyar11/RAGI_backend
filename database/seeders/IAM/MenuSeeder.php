@@ -620,6 +620,17 @@ class MenuSeeder extends Seeder
             $operatorSdmRole->menus()->syncWithoutDetaching($simpegMenuIds);
         }
 
+        // Attach all SINAPRA menus to admin_sarpras and admin_laboratorium
+        $sinapraMenuIds = Menu::where('module', 'sinapra')->pluck('id')->toArray();
+        $adminSarprasRole = \App\Models\Role::where('slug', 'admin_sarpras')->first();
+        if ($adminSarprasRole) {
+            $adminSarprasRole->menus()->syncWithoutDetaching($sinapraMenuIds);
+        }
+        $adminLabRole = \App\Models\Role::where('slug', 'admin_laboratorium')->first();
+        if ($adminLabRole) {
+            $adminLabRole->menus()->syncWithoutDetaching($sinapraMenuIds);
+        }
+
         $dosenRole = \App\Models\Role::where('slug', 'dosen')->first();
         if ($dosenRole) {
             $dosenSimpegMenuIds = Menu::where('module', 'simpeg')
