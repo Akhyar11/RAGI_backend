@@ -673,6 +673,16 @@ class MahasiswaController extends Controller
                 $konversi = KonversiTransfer::find($mhs->konversi_id);
             }
 
+            // Konversi yang sudah DISETUJUI terkunci bagi mahasiswa (hubungi BAAK).
+            // Admin/dosen boleh merevisi (mis. koreksi) — status ditentukan ulang di bawah.
+            $isStaff = $user && ($user->hasRole('admin') || $user->hasRole('dosen'));
+            if ($konversi && $konversi->status === 'disetujui' && !$isStaff) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Penyetaraan sudah disetujui dan terkunci. Hubungi BAAK bila ada koreksi.',
+                ], 403);
+            }
+
             if ($konversi) {
                 $konversi->update([
                     'kampus_asal' => $request->kampus_asal,
@@ -720,6 +730,12 @@ class MahasiswaController extends Controller
     public function destroyKonversi($id)
     {
         $konversi = KonversiTransfer::findOrFail($id);
+        if ($konversi->status === 'disetujui') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Konversi yang sudah disetujui tidak dapat dihapus (dokumen akademik resmi). Tolak statusnya terlebih dahulu bila memang batal.',
+            ], 422);
+        }
         Mahasiswa::where('konversi_id', $konversi->id)->update(['konversi_id' => null]);
         $konversi->delete();
 
