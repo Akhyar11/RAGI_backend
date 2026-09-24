@@ -17,6 +17,12 @@ class SinapraReferensiSeeder extends Seeder
             ['kode' => 'status_opname', 'nama' => 'Status Sesi Stock Opname', 'modul' => 'sinapra'],
             ['kode' => 'status_mutasi', 'nama' => 'Status Mutasi Aset', 'modul' => 'sinapra'],
             ['kode' => 'status_disposal', 'nama' => 'Status BAP Penghapusan Aset', 'modul' => 'sinapra'],
+            ['kode' => 'prioritas_maintenance', 'nama' => 'Prioritas Tiket Perawatan', 'modul' => 'sinapra'],
+            ['kode' => 'status_tiket_maintenance', 'nama' => 'Status Pengerjaan Maintenance', 'modul' => 'sinapra'],
+            ['kode' => 'status_kelayakan_kalibrasi', 'nama' => 'Status Kelayakan Alat Lab Kalibrasi', 'modul' => 'sinapra'],
+            ['kode' => 'sumber_anggaran_pengadaan', 'nama' => 'Sumber Anggaran Pengadaan Barang', 'modul' => 'sinapra'],
+            ['kode' => 'kategori_bhp', 'nama' => 'Kategori Bahan Habis Pakai Lab', 'modul' => 'sinapra'],
+            ['kode' => 'satuan_barang', 'nama' => 'Satuan Ukuran Barang & BHP', 'modul' => 'sinapra'],
         ];
 
         foreach ($types as $i => $t) {
@@ -59,6 +65,51 @@ class SinapraReferensiSeeder extends Seeder
             ['tipe' => 'status_disposal', 'kode' => 'diajukan', 'nama' => 'Menunggu Persetujuan', 'urutan' => 1],
             ['tipe' => 'status_disposal', 'kode' => 'disetujui', 'nama' => 'Disetujui Dihapus', 'urutan' => 2],
             ['tipe' => 'status_disposal', 'kode' => 'ditolak', 'nama' => 'Usulan Ditolak', 'urutan' => 3],
+
+            // Prioritas Maintenance
+            ['tipe' => 'prioritas_maintenance', 'kode' => 'rendah', 'nama' => 'Prioritas Rendah', 'urutan' => 1],
+            ['tipe' => 'prioritas_maintenance', 'kode' => 'sedang', 'nama' => 'Prioritas Sedang', 'urutan' => 2],
+            ['tipe' => 'prioritas_maintenance', 'kode' => 'tinggi', 'nama' => 'Prioritas Tinggi', 'urutan' => 3],
+            ['tipe' => 'prioritas_maintenance', 'kode' => 'darurat', 'nama' => 'Darurat / Emergency', 'urutan' => 4],
+
+            // Status Pengerjaan Maintenance
+            ['tipe' => 'status_tiket_maintenance', 'kode' => 'dilaporkan', 'nama' => 'Dilaporkan / Menunggu Penugasan', 'urutan' => 1],
+            ['tipe' => 'status_tiket_maintenance', 'kode' => 'proses', 'nama' => 'Proses Pengerjaan Teknisi', 'urutan' => 2],
+            ['tipe' => 'status_tiket_maintenance', 'kode' => 'selesai', 'nama' => 'Selesai Ditangani', 'urutan' => 3],
+            ['tipe' => 'status_tiket_maintenance', 'kode' => 'batal', 'nama' => 'Dibatalkan', 'urutan' => 4],
+
+            // Status Kelayakan Kalibrasi
+            ['tipe' => 'status_kelayakan_kalibrasi', 'kode' => 'laik', 'nama' => 'Laik Operasional', 'urutan' => 1],
+            ['tipe' => 'status_kelayakan_kalibrasi', 'kode' => 'butuh_perbaikan', 'nama' => 'Butuh Perbaikan / Kalibrasi Ulang', 'urutan' => 2],
+            ['tipe' => 'status_kelayakan_kalibrasi', 'kode' => 'tidak_laik', 'nama' => 'Tidak Laik (Afkir)', 'urutan' => 3],
+
+            // Sumber Anggaran Pengadaan
+            ['tipe' => 'sumber_anggaran_pengadaan', 'kode' => 'apbn', 'nama' => 'Anggaran Pendapatan & Belanja Negara (APBN)', 'urutan' => 1],
+            ['tipe' => 'sumber_anggaran_pengadaan', 'kode' => 'yayasan', 'nama' => 'Kas Dana Yayasan Perguruan Tinggi', 'urutan' => 2],
+            ['tipe' => 'sumber_anggaran_pengadaan', 'kode' => 'boptn', 'nama' => 'Bantuan Operasional PTN (BOPTN)', 'urutan' => 3],
+            ['tipe' => 'sumber_anggaran_pengadaan', 'kode' => 'hibah', 'nama' => 'Hibah Kompetisi / Lembaga Mitra', 'urutan' => 4],
+            ['tipe' => 'sumber_anggaran_pengadaan', 'kode' => 'kas_internal', 'nama' => 'Pendapatan Mandiri / Kas Internal', 'urutan' => 5],
+
+            // Kategori BHP Lab
+            ['tipe' => 'kategori_bhp', 'kode' => 'komponen_elektronik', 'nama' => 'Komponen Elektronik & Robotika', 'urutan' => 1],
+            ['tipe' => 'kategori_bhp', 'kode' => 'reagen_kimia', 'nama' => 'Bahan Kimia & Reagen', 'urutan' => 2],
+            ['tipe' => 'kategori_bhp', 'kode' => 'glassware', 'nama' => 'Alat Gelas & Wadah Reaksi', 'urutan' => 3],
+            ['tipe' => 'kategori_bhp', 'kode' => 'alat_tulis_kantor', 'nama' => 'Alat Tulis Kantor & Kertas', 'urutan' => 4],
+            ['tipe' => 'kategori_bhp', 'kode' => 'consumables_mekanik', 'nama' => 'Consumables Mekanik & Mesin', 'urutan' => 5],
+            ['tipe' => 'kategori_bhp', 'kode' => 'lainnya', 'nama' => 'Bahan Habis Pakai Lainnya', 'urutan' => 6],
+
+            // Satuan Barang
+            ['tipe' => 'satuan_barang', 'kode' => 'unit', 'nama' => 'Unit', 'urutan' => 1],
+            ['tipe' => 'satuan_barang', 'kode' => 'buah', 'nama' => 'Buah', 'urutan' => 2],
+            ['tipe' => 'satuan_barang', 'kode' => 'pcs', 'nama' => 'Pcs (Pieces)', 'urutan' => 3],
+            ['tipe' => 'satuan_barang', 'kode' => 'box', 'nama' => 'Box / Kotak', 'urutan' => 4],
+            ['tipe' => 'satuan_barang', 'kode' => 'rim', 'nama' => 'Rim', 'urutan' => 5],
+            ['tipe' => 'satuan_barang', 'kode' => 'botol', 'nama' => 'Botol', 'urutan' => 6],
+            ['tipe' => 'satuan_barang', 'kode' => 'roll', 'nama' => 'Roll / Gulung', 'urutan' => 7],
+            ['tipe' => 'satuan_barang', 'kode' => 'set', 'nama' => 'Set', 'urutan' => 8],
+            ['tipe' => 'satuan_barang', 'kode' => 'paket', 'nama' => 'Paket', 'urutan' => 9],
+            ['tipe' => 'satuan_barang', 'kode' => 'liter', 'nama' => 'Liter', 'urutan' => 10],
+            ['tipe' => 'satuan_barang', 'kode' => 'meter', 'nama' => 'Meter', 'urutan' => 11],
         ];
 
         foreach ($items as $item) {

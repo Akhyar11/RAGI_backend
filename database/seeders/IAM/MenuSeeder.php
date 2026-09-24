@@ -385,6 +385,41 @@ class MenuSeeder extends Seeder
                 'permission_slug' => 'sinapra.dashboard.read',
                 'order_index' => 5,
             ],
+            [
+                'name' => 'Laboratorium & BHP',
+                'url' => '/sinapra/laboratorium',
+                'icon' => 'FaFlask',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.dashboard.read',
+                'order_index' => 6,
+            ],
+            [
+                'name' => 'Audit & Mutasi',
+                'url' => '/sinapra/audit-mutasi',
+                'icon' => 'FaClipboardCheck',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.dashboard.read',
+                'order_index' => 7,
+            ],
+            [
+                'name' => 'Kalender Ruangan',
+                'url' => '/sinapra/kalender',
+                'icon' => 'FaCalendarAlt',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.dashboard.read',
+                'order_index' => 8,
+            ],
+            [
+                'name' => 'MASTER DATA',
+                'url' => '#master_sinapra',
+                'icon' => 'FaDatabase',
+                'module' => 'sinapra',
+                'order_index' => 9,
+                'children' => [
+                    ['name' => 'Master Referensi', 'url' => '/sinapra/master/referensi', 'icon' => 'FaDatabase', 'module' => 'sinapra', 'order_index' => 1],
+                    ['name' => 'Master Tipe Referensi', 'url' => '/sinapra/master/tipe-referensi', 'icon' => 'FaTags', 'module' => 'sinapra', 'order_index' => 2],
+                ]
+            ],
 
             // ── MODUL SIKEU ───────────────────────────────────────
             [
