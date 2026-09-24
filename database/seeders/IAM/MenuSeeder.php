@@ -388,7 +388,7 @@ class MenuSeeder extends Seeder
             [
                 'name' => 'Laboratorium & BHP',
                 'url' => '/sinapra/laboratorium',
-                'icon' => 'FaFlask',
+                'icon' => 'FaBoxes',
                 'module' => 'sinapra',
                 'permission_slug' => 'sinapra.dashboard.read',
                 'order_index' => 6,
@@ -404,7 +404,7 @@ class MenuSeeder extends Seeder
             [
                 'name' => 'Kalender Ruangan',
                 'url' => '/sinapra/kalender',
-                'icon' => 'FaCalendarAlt',
+                'icon' => 'FaCalendar',
                 'module' => 'sinapra',
                 'permission_slug' => 'sinapra.dashboard.read',
                 'order_index' => 8,

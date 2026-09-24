@@ -40,8 +40,8 @@ class UnitKerjaController extends Controller
         }
 
         $request->validate([
-            'induk_id' => 'nullable|exists:unit_kerja,id',
-            'kode' => 'required|string|unique:unit_kerja,kode',
+            'induk_id' => 'nullable|exists:simpeg_unit_kerja,id',
+            'kode' => 'required|string|unique:simpeg_unit_kerja,kode',
             'nama' => 'required|string',
             'tipe' => 'required|in:rektorat,fakultas,prodi,lp3m,biro,unit',
             'is_active' => 'boolean',
@@ -78,8 +78,8 @@ class UnitKerjaController extends Controller
         $unitKerja = UnitKerja::findOrFail($id);
 
         $request->validate([
-            'induk_id' => 'nullable|exists:unit_kerja,id',
-            'kode' => 'sometimes|string|unique:unit_kerja,kode,' . $id,
+            'induk_id' => 'nullable|exists:simpeg_unit_kerja,id',
+            'kode' => 'sometimes|string|unique:simpeg_unit_kerja,kode,' . $id,
             'nama' => 'sometimes|string',
             'tipe' => 'sometimes|in:rektorat,fakultas,prodi,lp3m,biro,unit',
             'is_active' => 'boolean',
