@@ -433,8 +433,12 @@ class MenuSeeder extends Seeder
                 'module' => 'sinapra',
                 'order_index' => 9,
                 'children' => [
-                    ['name' => 'Master Referensi', 'url' => '/sinapra/master/referensi', 'icon' => 'FaDatabase', 'module' => 'sinapra', 'order_index' => 1],
-                    ['name' => 'Master Tipe Referensi', 'url' => '/sinapra/master/tipe-referensi', 'icon' => 'FaTags', 'module' => 'sinapra', 'order_index' => 2],
+                    ['name' => 'Master Kategori Aset', 'url' => '/sinapra/master/kategori-aset', 'icon' => 'FaTags', 'module' => 'sinapra', 'order_index' => 1],
+                    ['name' => 'Master Tipe Ruangan', 'url' => '/sinapra/master/tipe-ruangan', 'icon' => 'FaDoorOpen', 'module' => 'sinapra', 'order_index' => 2],
+                    ['name' => 'Master Vendor & Rekanan', 'url' => '/sinapra/master/vendor', 'icon' => 'FaHandshake', 'module' => 'sinapra', 'order_index' => 3],
+                    ['name' => 'Master Kategori BHP Lab', 'url' => '/sinapra/master/kategori-bhp', 'icon' => 'FaBoxes', 'module' => 'sinapra', 'order_index' => 4],
+                    ['name' => 'Master Satuan Barang', 'url' => '/sinapra/master/satuan', 'icon' => 'FaRulerCombined', 'module' => 'sinapra', 'order_index' => 5],
+                    ['name' => 'Master Referensi Status & Kondisi', 'url' => '/sinapra/master/referensi', 'icon' => 'FaDatabase', 'module' => 'sinapra', 'order_index' => 6],
                 ]
             ],
 

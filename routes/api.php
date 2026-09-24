@@ -890,8 +890,14 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('kalender-ruangan', [App\Http\Controllers\Sinapra\KalenderRuanganController::class, 'index']);
 
     // ─────────────────────────────────────────────────────────────
-    // MASTER DATA SINAPRA (Tipe Ruangan & Satuan Barang)
+    // MASTER DATA SINAPRA (Pola Dedicated Tables ala SIMPEG)
     // ─────────────────────────────────────────────────────────────
+    Route::get('master/kategori-aset', [App\Http\Controllers\Sinapra\AsetController::class, 'indexKategori']);
+    Route::post('master/kategori-aset', [App\Http\Controllers\Sinapra\AsetController::class, 'storeKategori']);
+    Route::get('master/kategori-aset/{kategori}', [App\Http\Controllers\Sinapra\AsetController::class, 'showKategori']);
+    Route::put('master/kategori-aset/{kategori}', [App\Http\Controllers\Sinapra\AsetController::class, 'updateKategori']);
+    Route::delete('master/kategori-aset/{kategori}', [App\Http\Controllers\Sinapra\AsetController::class, 'destroyKategori']);
+
     Route::get('master/tipe-ruangan', [App\Http\Controllers\Sinapra\MasterTipeRuanganController::class, 'index']);
     Route::post('master/tipe-ruangan', [App\Http\Controllers\Sinapra\MasterTipeRuanganController::class, 'store']);
     Route::get('master/tipe-ruangan/{tipe_ruangan}', [App\Http\Controllers\Sinapra\MasterTipeRuanganController::class, 'show']);
@@ -904,9 +910,6 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::put('master/satuan/{satuan}', [App\Http\Controllers\Sinapra\MasterSatuanController::class, 'update']);
     Route::delete('master/satuan/{satuan}', [App\Http\Controllers\Sinapra\MasterSatuanController::class, 'destroy']);
 
-    // ─────────────────────────────────────────────────────────────
-    // MASTER DATA SINAPRA (Vendor Rekanan & Kategori BHP - FASE 3)
-    // ─────────────────────────────────────────────────────────────
     Route::get('master/vendor', [App\Http\Controllers\Sinapra\MasterVendorController::class, 'index']);
     Route::post('master/vendor', [App\Http\Controllers\Sinapra\MasterVendorController::class, 'store']);
     Route::get('master/vendor/{vendor}', [App\Http\Controllers\Sinapra\MasterVendorController::class, 'show']);
