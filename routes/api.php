@@ -878,6 +878,11 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('disposal-aset', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'indexDisposal']);
     Route::post('disposal-aset', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'storeDisposal']);
     Route::post('disposal-aset/{id}/approve', [App\Http\Controllers\Sinapra\AuditMutasiDisposalController::class, 'approveDisposal']);
+
+    // ─────────────────────────────────────────────────────────────
+    // FASE 6: Kalender Terpadu Ketersediaan Ruangan (SINAPRA + SIAKAD)
+    // ─────────────────────────────────────────────────────────────
+    Route::get('kalender-ruangan', [App\Http\Controllers\Sinapra\KalenderRuanganController::class, 'index']);
 });
 
 

@@ -137,6 +137,7 @@
 | PengadaanController | Usulan pengadaan barang baru, rincian item kebutuhan, & persetujuan status | [docs/api/SINAPRA/PengadaanController.md](api/SINAPRA/PengadaanController.md) |
 | LaboratoriumController | Manajemen operasional lab: stok BHP, surat bebas tanggungan lab, & kalibrasi alat | [docs/api/SINAPRA/LaboratoriumController.md](api/SINAPRA/LaboratoriumController.md) |
 | AuditMutasiDisposalController | Audit stock opname fisik, mutasi aset antar-ruang, & BAP pemutihan/penghapusan aset | [docs/api/SINAPRA/AuditMutasiDisposalController.md](api/SINAPRA/AuditMutasiDisposalController.md) |
+| KalenderRuanganController | Kalender visual & timeline ketersediaan ruangan terpadu (SINAPRA + SIAKAD) | [docs/api/SINAPRA/KalenderRuanganController.md](api/SINAPRA/KalenderRuanganController.md) |
 
 ---
 
