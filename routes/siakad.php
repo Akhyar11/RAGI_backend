@@ -39,12 +39,18 @@ Route::prefix('mahasiswa')->group(function () {
     Route::post('/', [MahasiswaController::class, 'store']);
     Route::post('/generate-nim', [MahasiswaController::class, 'generateNim']);
     Route::post('/generate-missing-nims', [MahasiswaController::class, 'generateMissingNims']);
+    Route::get('/export-nim', [MahasiswaController::class, 'exportNimData']);
+    Route::get('/export-buku-induk', [MahasiswaController::class, 'exportBukuInduk']);
+    Route::patch('/{id}/status', [MahasiswaController::class, 'updateStatus']);
+    Route::post('/import-nim', [MahasiswaController::class, 'importNimData']);
     Route::post('/sync-from-spmb', [MahasiswaController::class, 'syncFromSpmb']);
     Route::get('/konversi', [MahasiswaController::class, 'listKonversi']);
     Route::post('/konversi', [MahasiswaController::class, 'storeKonversi']);
     Route::patch('/konversi/{id}/status', [MahasiswaController::class, 'updateKonversiStatus']);
     Route::delete('/konversi/{id}', [MahasiswaController::class, 'destroyKonversi']);
     Route::post('/bulk-assign-pa', [MahasiswaController::class, 'bulkAssignPa']);
+    Route::post('/bulk-status', [MahasiswaController::class, 'bulkUpdateStatus']);
+    Route::post('/auto-distribute-pa', [MahasiswaController::class, 'autoDistributePa']);
     Route::get('/{id}', [MahasiswaController::class, 'show']);
     Route::put('/{id}', [MahasiswaController::class, 'update']);
     Route::delete('/{id}', [MahasiswaController::class, 'destroy']);
@@ -64,8 +70,15 @@ Route::prefix('civitas/beasiswa')->group(function () {
 Route::prefix('akademik')->group(function () {
     Route::get('/tahun-akademik', [AkademikController::class, 'listTahunAkademik']);
     Route::post('/tahun-akademik', [AkademikController::class, 'storeTahunAkademik']);
+    Route::put('/tahun-akademik/{id}', [AkademikController::class, 'updateTahunAkademik']);
     Route::patch('/tahun-akademik/{id}/set-active', [AkademikController::class, 'setActiveTahunAkademik']);
     Route::patch('/tahun-akademik/{id}/mode-penilaian', [AkademikController::class, 'updateModePenilaian']);
+
+    // Skala Nilai / Grading Scale CRUD
+    Route::get('/skala-nilai', [AkademikController::class, 'listSkalaNilai']);
+    Route::post('/skala-nilai', [AkademikController::class, 'storeSkalaNilai']);
+    Route::put('/skala-nilai/{id}', [AkademikController::class, 'updateSkalaNilai']);
+    Route::delete('/skala-nilai/{id}', [AkademikController::class, 'destroySkalaNilai']);
 
     Route::get('/fakultas', [AkademikController::class, 'listFakultas']);
     Route::post('/fakultas', [AkademikController::class, 'storeFakultas']);
@@ -95,6 +108,8 @@ Route::prefix('akademik')->group(function () {
     Route::get('/prasyarat-mk', [AkademikController::class, 'listPrasyaratMk']);
     Route::post('/prasyarat-mk', [AkademikController::class, 'storePrasyaratMk']);
     Route::delete('/prasyarat-mk/{id}', [AkademikController::class, 'destroyPrasyaratMk']);
+
+    Route::get('/referensi-options', [AkademikController::class, 'listReferensiOptions']);
 });
 
 // --- Perkuliahan (Kelas, KRS, Nilai, Transkrip) ---
@@ -102,10 +117,12 @@ Route::prefix('perkuliahan')->group(function () {
     Route::get('/ref/ruangan', [PerkuliahanController::class, 'getRefRuanganSinapra']);
     Route::get('/kelas', [PerkuliahanController::class, 'listKelas']);
     Route::post('/kelas', [PerkuliahanController::class, 'storeKelas']);
+    Route::get('/kelas/{id}', [PerkuliahanController::class, 'showKelas']);
     Route::put('/kelas/{id}', [PerkuliahanController::class, 'updateKelas']);
     Route::delete('/kelas/{id}', [PerkuliahanController::class, 'destroyKelas']);
 
     Route::get('/krs', [PerkuliahanController::class, 'listKrs']);
+    Route::get('/krs/monitoring', [PerkuliahanController::class, 'monitoringKrsProdi']);
     Route::get('/krs/active', [PerkuliahanController::class, 'getActiveKrs']);
     Route::get('/krs/available-classes', [PerkuliahanController::class, 'getAvailableClasses']);
     Route::post('/krs/add-class', [PerkuliahanController::class, 'addClassToKrs']);
@@ -173,11 +190,21 @@ Route::prefix('obe')->group(function () {
 
     Route::get('/kelas/{kelasId}/komponen', [ObeController::class, 'getKelasKomponen']);
     Route::post('/kelas/{kelasId}/komponen', [ObeController::class, 'storeKelasKomponen']);
+    Route::post('/kelas/{kelasId}/sync-komponen-obe', [ObeController::class, 'syncKelasKomponenFromObe']);
     Route::delete('/komponen/{id}', [ObeController::class, 'deleteKelasKomponen']);
 
     Route::get('/kelas/{kelasId}/nilai', [ObeController::class, 'getKelasNilaiObe']);
     Route::post('/kelas/{kelasId}/nilai', [ObeController::class, 'saveKelasNilaiObe']);
     Route::post('/kelas/{kelasId}/bulk-nilai', [ObeController::class, 'saveBulkNilaiObe']);
+
+    Route::get('/matrix-cpl-mk', [ObeController::class, 'getMatrixCplMk']);
+    Route::post('/matrix-cpl-mk/toggle', [ObeController::class, 'toggleMatrixCplMk']);
+
+    // Pemantauan & Audit Pemetaan OBE
+    Route::get('/audit-pemetaan', [ObeController::class, 'getAuditPemetaan']);
+
+    // Pemantauan Ketertiban Nilai Dosen (Kinerja SIMPEG)
+    Route::get('/dosen-kepatuhan-nilai', [ObeController::class, 'getDosenKepatuhanNilai']);
 
     Route::get('/mahasiswa/portofolio', [ObeController::class, 'getMahasiswaPortofolioObe']);
     Route::get('/mahasiswa/{mahasiswaId}/portofolio', [ObeController::class, 'getMahasiswaPortofolioObe']);

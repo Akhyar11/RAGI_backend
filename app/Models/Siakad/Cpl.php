@@ -46,4 +46,9 @@ class Cpl extends Model
     {
         return $this->belongsToMany(ProfilLulusan::class, 'siakad_profil_lulusan_cpl', 'cpl_id', 'profil_lulusan_id');
     }
+
+    public function mataKuliahs()
+    {
+        return $this->belongsToMany(MataKuliah::class, 'siakad_mata_kuliah_cpl', 'cpl_id', 'mata_kuliah_id');
+    }
 }

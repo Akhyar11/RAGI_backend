@@ -16,6 +16,8 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\IAM\PermissionSeeder::class,
             \Database\Seeders\IAM\ModuleSeeder::class,
             \Database\Seeders\IAM\MenuSeeder::class,
+            \Database\Seeders\IAM\MenuValidasiManualSeeder::class,
+            \Database\Seeders\IAM\MenuApprovalTahapSeeder::class,
             \Database\Seeders\IAM\AdminUserSeeder::class,
         ]);
     }

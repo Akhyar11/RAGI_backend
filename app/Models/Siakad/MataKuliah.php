@@ -55,4 +55,9 @@ class MataKuliah extends Model
     {
         return $this->belongsToMany(BahanKajian::class, 'siakad_mata_kuliah_bahan_kajian', 'mata_kuliah_id', 'bahan_kajian_id');
     }
+
+    public function cpls()
+    {
+        return $this->belongsToMany(Cpl::class, 'siakad_mata_kuliah_cpl', 'mata_kuliah_id', 'cpl_id');
+    }
 }

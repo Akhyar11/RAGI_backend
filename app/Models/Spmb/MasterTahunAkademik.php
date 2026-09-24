@@ -19,12 +19,28 @@ class MasterTahunAkademik extends Model
         'tahun_selesai',
         'is_active',
         'mode_penilaian',
+        'krs_mulai',
+        'krs_selesai',
+        'kprs_mulai',
+        'kprs_selesai',
+        'perkuliahan_mulai',
+        'perkuliahan_selesai',
+        'input_nilai_mulai',
+        'input_nilai_selesai',
     ];
 
     protected $casts = [
         'tahun_mulai' => 'integer',
         'tahun_selesai' => 'integer',
         'is_active' => 'boolean',
+        'krs_mulai' => 'date',
+        'krs_selesai' => 'date',
+        'kprs_mulai' => 'date',
+        'kprs_selesai' => 'date',
+        'perkuliahan_mulai' => 'date',
+        'perkuliahan_selesai' => 'date',
+        'input_nilai_mulai' => 'date',
+        'input_nilai_selesai' => 'date',
     ];
 
     public function gelombangPenerimaan()

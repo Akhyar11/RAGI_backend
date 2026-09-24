@@ -445,35 +445,67 @@ class NeoFeederSyncService
     /**
      * Sinkronisasi Daftar Program Studi Resmi dari Neo Feeder (GetProdi)
      */
-    public function syncProgramStudiFromFeeder()
+    public function syncProgramStudiFromFeeder($userId = null)
     {
+        $log = \App\Models\Siakad\FeederSyncLog::create([
+            'entity_type' => 'prodi',
+            'sync_type' => 'pull',
+            'total_records' => 0,
+            'status' => 'processing',
+            'synced_by' => $userId,
+        ]);
         try {
             $res = $this->feederService->request('GetProdi', ['limit' => 100]);
             $items = $res['data'] ?? [];
+            $success = 0;
+            $failed = 0;
+            $details = [];
             if (isset($items[0])) {
                 foreach ($items as $p) {
-                    $idFeeder = $p['id_prodi'] ?? null;
-                    $kode = $p['kode_program_studi'] ?? '';
-                    $nama = $p['nama_program_studi'] ?? '';
-                    $jenjang = $p['nama_jenjang_pendidikan'] ?? 'D4';
-                    $status = ($p['status'] ?? 'A') === 'A';
-                    $namaLengkap = (str_starts_with($nama, $jenjang . ' ')) ? $nama : "{$jenjang} {$nama}";
+                    try {
+                        $idFeeder = $p['id_prodi'] ?? null;
+                        $kode = $p['kode_program_studi'] ?? '';
+                        $nama = $p['nama_program_studi'] ?? '';
+                        $jenjang = $p['nama_jenjang_pendidikan'] ?? 'D4';
+                        $status = ($p['status'] ?? 'A') === 'A';
+                        $namaLengkap = (str_starts_with($nama, $jenjang . ' ')) ? $nama : "{$jenjang} {$nama}";
 
-                    MasterProgramStudi::updateOrCreate(
-                        ['kode_prodi' => $kode],
-                        [
-                            'nama' => $namaLengkap,
-                            'jenjang' => $jenjang,
-                            'id_feeder' => $idFeeder,
-                            'kode_prodi_dikti' => $kode,
-                            'is_active' => $status,
-                        ]
-                    );
+                        MasterProgramStudi::updateOrCreate(
+                            ['kode_prodi' => $kode],
+                            [
+                                'nama' => $namaLengkap,
+                                'jenjang' => $jenjang,
+                                'id_feeder' => $idFeeder,
+                                'kode_prodi_dikti' => $kode,
+                                'is_active' => $status,
+                            ]
+                        );
+                        $success++;
+                        $details[] = ['kode_prodi' => $kode, 'nama' => $namaLengkap, 'status' => 'success'];
+                    } catch (\Exception $e) {
+                        $failed++;
+                        $details[] = ['kode_prodi' => $p['kode_program_studi'] ?? '-', 'status' => 'failed', 'error' => $e->getMessage()];
+                    }
                 }
             }
+            $log->update([
+                'total_records' => $success + $failed,
+                'success_count' => $success,
+                'failed_count' => $failed,
+                'status' => $failed === 0 ? 'success' : 'partial',
+                'details' => $details,
+                'completed_at' => now(),
+            ]);
         } catch (\Exception $e) {
+            $log->update([
+                'status' => 'failed',
+                'details' => [['status' => 'failed', 'error' => $e->getMessage()]],
+                'completed_at' => now(),
+            ]);
             Log::warning("Gagal sync prodi feeder: " . $e->getMessage());
         }
+
+        return $log;
     }
 
     /**

@@ -12,10 +12,43 @@ use App\Models\Siakad\Dosen;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\Kelas;
 use App\Models\Spmb\MasterTahunAkademik;
+use App\Models\System\MasterReferensi;
+use App\Http\Requests\Siakad\StoreMataKuliahRequest;
+use App\Http\Requests\Siakad\UpdateMataKuliahRequest;
+use App\Http\Requests\Siakad\StorePrasyaratMkRequest;
+use App\Http\Requests\Siakad\UpdateModePenilaianRequest;
+use App\Http\Requests\Siakad\StoreProgramStudiRequest;
+use App\Http\Requests\Siakad\UpdateProgramStudiRequest;
 use Illuminate\Validation\Rule;
 
 class AkademikController extends Controller
 {
+    /**
+     * Opsi dropdown master akademik untuk form SIAKAD.
+     * Sumber: tabel master referensi (modul siakad/global), bukan literal kode.
+     * GET /akademik/referensi-options?tipe=jenjang_prodi
+     */
+    public function listReferensiOptions(Request $request)
+    {
+        $request->validate([
+            'tipe' => 'required|string|max:50',
+        ]);
+
+        $data = MasterReferensi::query()
+            ->where('tipe', $request->tipe)
+            ->whereIn('modul', ['siakad', 'global'])
+            ->where('is_active', true)
+            ->orderBy('urutan')
+            ->orderBy('nama')
+            ->get(['kode', 'nama', 'urutan']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Opsi referensi akademik berhasil dimuat.',
+            'data' => $data,
+        ]);
+    }
+
     public function dashboardSummary()
     {
         $taAktif = MasterTahunAkademik::where('is_active', true)->first();
@@ -76,6 +109,14 @@ class AkademikController extends Controller
             'tahun_mulai' => 'nullable|integer',
             'tahun_selesai' => 'nullable|integer',
             'is_active' => 'boolean',
+            'krs_mulai' => 'nullable|date',
+            'krs_selesai' => 'nullable|date|after_or_equal:krs_mulai',
+            'kprs_mulai' => 'nullable|date',
+            'kprs_selesai' => 'nullable|date|after_or_equal:kprs_mulai',
+            'perkuliahan_mulai' => 'nullable|date',
+            'perkuliahan_selesai' => 'nullable|date|after_or_equal:perkuliahan_mulai',
+            'input_nilai_mulai' => 'nullable|date',
+            'input_nilai_selesai' => 'nullable|date|after_or_equal:input_nilai_mulai',
         ]);
 
         if ($request->boolean('is_active')) {
@@ -89,6 +130,38 @@ class AkademikController extends Controller
             'message' => 'Periode Tahun Akademik berhasil ditambahkan',
             'data' => $ta
         ], 201);
+    }
+
+    public function updateTahunAkademik(Request $request, $id)
+    {
+        $ta = MasterTahunAkademik::findOrFail($id);
+
+        $request->validate([
+            'nama' => 'required|string|max:255',
+            'tahun_mulai' => 'nullable|integer',
+            'tahun_selesai' => 'nullable|integer',
+            'is_active' => 'boolean',
+            'krs_mulai' => 'nullable|date',
+            'krs_selesai' => 'nullable|date',
+            'kprs_mulai' => 'nullable|date',
+            'kprs_selesai' => 'nullable|date',
+            'perkuliahan_mulai' => 'nullable|date',
+            'perkuliahan_selesai' => 'nullable|date',
+            'input_nilai_mulai' => 'nullable|date',
+            'input_nilai_selesai' => 'nullable|date',
+        ]);
+
+        if ($request->boolean('is_active') && !$ta->is_active) {
+            MasterTahunAkademik::query()->update(['is_active' => false]);
+        }
+
+        $ta->update($request->all());
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data dan kalender tahun akademik berhasil diperbarui',
+            'data' => $ta
+        ]);
     }
 
     public function setActiveTahunAkademik(Request $request, $id)
@@ -105,6 +178,81 @@ class AkademikController extends Controller
             'status' => 'success',
             'message' => "Tahun Akademik {$target->nama} ({$target->kode}) berhasil diaktifkan sebagai periode semester berjalan.",
             'data' => $target
+        ]);
+    }
+
+    // --- SKALA NILAI AKADEMIK CRUD ---
+    public function listSkalaNilai(Request $request)
+    {
+        $query = \App\Models\Siakad\SkalaNilai::with('programStudi');
+
+        if ($request->filled('program_studi_id')) {
+            $query->where('program_studi_id', $request->program_studi_id);
+        }
+
+        $data = $query->orderBy('bobot_indeks', 'desc')->get();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data skala nilai berhasil dimuat',
+            'data' => $data,
+        ]);
+    }
+
+    public function storeSkalaNilai(Request $request)
+    {
+        $validated = $request->validate([
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'nilai_huruf' => 'required|string|max:5',
+            'bobot_indeks' => 'required|numeric|min:0|max:4',
+            'batas_bawah' => 'required|numeric|min:0|max:100',
+            'batas_atas' => 'required|numeric|min:0|max:100|gte:batas_bawah',
+            'is_lulus' => 'boolean',
+            'keterangan' => 'nullable|string|max:100',
+            'is_active' => 'boolean',
+        ]);
+
+        $item = \App\Models\Siakad\SkalaNilai::create($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Skala nilai mutu berhasil ditambahkan',
+            'data' => $item->load('programStudi')
+        ], 201);
+    }
+
+    public function updateSkalaNilai(Request $request, $id)
+    {
+        $item = \App\Models\Siakad\SkalaNilai::findOrFail($id);
+
+        $validated = $request->validate([
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'nilai_huruf' => 'required|string|max:5',
+            'bobot_indeks' => 'required|numeric|min:0|max:4',
+            'batas_bawah' => 'required|numeric|min:0|max:100',
+            'batas_atas' => 'required|numeric|min:0|max:100|gte:batas_bawah',
+            'is_lulus' => 'boolean',
+            'keterangan' => 'nullable|string|max:100',
+            'is_active' => 'boolean',
+        ]);
+
+        $item->update($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Skala nilai mutu berhasil diperbarui',
+            'data' => $item->load('programStudi')
+        ]);
+    }
+
+    public function destroySkalaNilai($id)
+    {
+        $item = \App\Models\Siakad\SkalaNilai::findOrFail($id);
+        $item->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Skala nilai mutu berhasil dihapus'
         ]);
     }
 
@@ -193,19 +341,9 @@ class AkademikController extends Controller
         ]);
     }
 
-    public function storeProgramStudi(Request $request)
+    public function storeProgramStudi(StoreProgramStudiRequest $request)
     {
-        $request->validate([
-            'fakultas_id' => 'required|exists:siakad_fakultas,id',
-            'kaprodi_id' => 'nullable|exists:siakad_dosen,id',
-            'kode_prodi' => ['required', 'string', Rule::unique(ProgramStudi::class, 'kode_prodi')],
-            'kode_prodi_dikti' => 'nullable|string|max:50',
-            'nama' => 'required|string|max:255',
-            'jenjang' => 'required|string|max:10',
-            'akreditasi' => 'nullable|string|max:10',
-        ]);
-
-        $prodi = ProgramStudi::create($request->all());
+        $prodi = ProgramStudi::create($request->validated());
 
         return response()->json([
             'status' => 'success',
@@ -214,19 +352,11 @@ class AkademikController extends Controller
         ], 201);
     }
 
-    public function updateProgramStudi(Request $request, $id)
+    public function updateProgramStudi(UpdateProgramStudiRequest $request, $id)
     {
         $prodi = ProgramStudi::findOrFail($id);
-        $request->validate([
-            'fakultas_id' => 'required|exists:siakad_fakultas,id',
-            'kaprodi_id' => 'nullable|exists:siakad_dosen,id',
-            'nama' => 'required|string|max:255',
-            'kode_prodi_dikti' => 'nullable|string|max:50',
-            'jenjang' => 'required|string|max:10',
-            'akreditasi' => 'nullable|string|max:10',
-        ]);
 
-        $prodi->update($request->all());
+        $prodi->update($request->validated());
 
         return response()->json([
             'status' => 'success',
@@ -366,20 +496,12 @@ class AkademikController extends Controller
         ]);
     }
 
-    public function storeMataKuliah(Request $request)
+    public function storeMataKuliah(StoreMataKuliahRequest $request)
     {
-        $request->validate([
-            'kurikulum_id' => 'required|exists:siakad_kurikulum,id',
-            'kode_mk' => 'required|string|unique:siakad_mata_kuliah,kode_mk',
-            'nama' => 'required|string|max:255',
-            'sks_teori' => 'required|integer|min:0',
-            'sks_praktik' => 'required|integer|min:0',
-            'semester_anjuran' => 'required|integer|min:1|max:14',
-            'tipe' => 'required|in:wajib,pilihan,wajib_prodi',
-        ]);
+        $validated = $request->validated();
 
-        $totalSks = $request->sks_teori + $request->sks_praktik;
-        $mk = MataKuliah::create(array_merge($request->only(['kurikulum_id', 'kode_mk', 'nama', 'sks_teori', 'sks_praktik', 'semester_anjuran', 'tipe']), ['total_sks' => $totalSks]));
+        $totalSks = $validated['sks_teori'] + $validated['sks_praktik'];
+        $mk = MataKuliah::create(array_merge($validated, ['total_sks' => $totalSks]));
 
         return response()->json([
             'status' => 'success',
@@ -388,19 +510,13 @@ class AkademikController extends Controller
         ], 201);
     }
 
-    public function updateMataKuliah(Request $request, $id)
+    public function updateMataKuliah(UpdateMataKuliahRequest $request, $id)
     {
         $mk = MataKuliah::findOrFail($id);
-        $request->validate([
-            'nama' => 'required|string|max:255',
-            'sks_teori' => 'required|integer|min:0',
-            'sks_praktik' => 'required|integer|min:0',
-            'semester_anjuran' => 'required|integer|min:1|max:14',
-            'tipe' => 'required|in:wajib,pilihan,wajib_prodi',
-        ]);
+        $validated = $request->validated();
 
-        $totalSks = $request->sks_teori + $request->sks_praktik;
-        $mk->update(array_merge($request->only(['nama', 'sks_teori', 'sks_praktik', 'semester_anjuran', 'tipe']), ['total_sks' => $totalSks]));
+        $totalSks = $validated['sks_teori'] + $validated['sks_praktik'];
+        $mk->update(array_merge($validated, ['total_sks' => $totalSks]));
 
         return response()->json([
             'status' => 'success',
@@ -585,14 +701,9 @@ class AkademikController extends Controller
         ]);
     }
 
-    public function storePrasyaratMk(Request $request)
+    public function storePrasyaratMk(StorePrasyaratMkRequest $request)
     {
-        $validated = $request->validate([
-            'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
-            'prasyarat_id' => 'required|exists:siakad_mata_kuliah,id|different:mata_kuliah_id',
-            'tipe' => 'required|in:lulus,pernah_ambil',
-            'nilai_minimum' => 'nullable|numeric|min:0|max:100',
-        ]);
+        $validated = $request->validated();
         $exists = \App\Models\Siakad\PrasyaratMk::where('mata_kuliah_id', $validated['mata_kuliah_id'])
             ->where('prasyarat_id', $validated['prasyarat_id'])->exists();
         if ($exists) {
@@ -609,14 +720,12 @@ class AkademikController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Prasyarat mata kuliah berhasil dihapus']);
     }
 
-    public function updateModePenilaian(Request $request, $id)
+    public function updateModePenilaian(UpdateModePenilaianRequest $request, $id)
     {
-        $request->validate([
-            'mode_penilaian' => 'required|in:full_obe,semi_obe,konvensional',
-        ]);
-        
+        $validated = $request->validated();
+
         $ta = \App\Models\Spmb\MasterTahunAkademik::findOrFail($id);
-        $ta->update(['mode_penilaian' => $request->mode_penilaian]);
+        $ta->update(['mode_penilaian' => $validated['mode_penilaian']]);
         
         return response()->json([
             'status' => 'success',
