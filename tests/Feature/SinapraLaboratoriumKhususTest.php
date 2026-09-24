@@ -284,4 +284,66 @@ class SinapraLaboratoriumKhususTest extends TestCase
         $ids = collect($resFilter->json('data'))->pluck('id');
         $this->assertTrue($ids->contains($kalibrasiId));
     }
+
+    public function test_early_warnings_endpoint(): void
+    {
+        // 1. Buat BHP yang stoknya menipis
+        LabBhp::create([
+            'ruangan_id' => $this->labTrpl->id,
+            'kode_bhp' => 'BHP-WARN-001',
+            'nama_bhp' => 'Alkohol Kritis 96%',
+            'kategori' => 'Bahan Kimia',
+            'stok_saat_ini' => 1,
+            'stok_minimum' => 5,
+            'satuan' => 'Botol',
+        ]);
+
+        // 2. Buat Kalibrasi yang mendekati kedaluwarsa
+        AlatKalibrasi::create([
+            'aset_id' => $this->mikroskopLabTrpl->id,
+            'institusi_kalibrasi' => 'Badan Kalibrasi Presisi',
+            'nomor_sertifikat' => 'CERT-WARN-01',
+            'tanggal_kalibrasi' => now()->subMonths(11)->toDateString(),
+            'tanggal_kadaluarsa' => now()->addDays(10)->toDateString(),
+            'status_kelayakan' => 'laik',
+        ]);
+
+        // 3. Buat Peminjaman Ruangan yang pending
+        \App\Models\PeminjamanRuangan::create([
+            'ruangan_id' => $this->labTrpl->id,
+            'user_id' => $this->mahasiswa->id,
+            'keperluan' => 'Praktikum Mandiri Robotika',
+            'tanggal' => now()->addDay()->toDateString(),
+            'jam_mulai' => '09:00:00',
+            'jam_selesai' => '12:00:00',
+            'status' => 'pending_laboran',
+        ]);
+
+        Passport::actingAs($this->laboranTrpl);
+
+        $response = $this->getJson('/api/sinapra/laboratorium/early-warnings');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure([
+                'status',
+                'message',
+                'data' => [
+                    'summary' => [
+                        'total_bhp_critical',
+                        'total_kalibrasi_critical',
+                        'total_pending_peminjaman',
+                        'total_warnings',
+                    ],
+                    'bhp_critical',
+                    'kalibrasi_critical',
+                    'pending_peminjaman',
+                ],
+            ]);
+
+        $this->assertGreaterThanOrEqual(1, $response->json('data.summary.total_bhp_critical'));
+        $this->assertGreaterThanOrEqual(1, $response->json('data.summary.total_kalibrasi_critical'));
+        $this->assertGreaterThanOrEqual(1, $response->json('data.summary.total_pending_peminjaman'));
+        $this->assertGreaterThanOrEqual(3, $response->json('data.summary.total_warnings'));
+    }
 }

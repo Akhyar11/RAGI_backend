@@ -840,6 +840,9 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::delete('pengadaan/{pengadaan}', [App\Http\Controllers\Sinapra\PengadaanController::class, 'destroy']);
 
     // FASE 4: Manajemen Khusus Laboratorium
+    // 0. Early Warning System
+    Route::get('laboratorium/early-warnings', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'earlyWarnings']);
+
     // 1. Bahan Habis Pakai (BHP Lab)
     Route::get('lab-bhp', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'indexBhp']);
     Route::post('lab-bhp', [App\Http\Controllers\Sinapra\LaboratoriumController::class, 'storeBhp']);

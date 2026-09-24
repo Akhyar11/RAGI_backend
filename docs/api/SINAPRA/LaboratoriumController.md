@@ -10,6 +10,7 @@
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
+| GET | `/api/sinapra/laboratorium/early-warnings` | Ringkasan peringatan dini (BHP menipis, kalibrasi kedaluwarsa, peminjaman pending) | ✅ |
 | GET | `/api/sinapra/lab-bhp` | Listing inventaris bahan habis pakai (BHP) lab | ✅ |
 | POST | `/api/sinapra/lab-bhp` | Tambah data BHP lab baru | ✅ |
 | GET | `/api/sinapra/lab-bhp/{id}` | Detail item BHP lab & riwayat mutasi stok | ✅ |
@@ -32,6 +33,73 @@
 - `Authorization: Bearer {token}`
 - `Accept: application/json`
 - `Content-Type: application/json`
+
+---
+
+## GET /api/sinapra/laboratorium/early-warnings
+
+Deskripsi: Mengambil ringkasan peringatan dini (Early Warning System) operasional laboratorium secara real-time. Mencakup BHP dengan sisa stok $\le$ batas minimum, instrumen presisi yang masa sertifikat kalibrasinya telah kedaluwarsa atau kurang dari 30 hari lagi, serta permohonan peminjaman ruangan yang butuh persetujuan cepat.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Data peringatan dini operasional laboratorium berhasil diambil",
+    "data": {
+        "summary": {
+            "total_bhp_critical": 2,
+            "total_kalibrasi_critical": 1,
+            "total_pending_peminjaman": 3,
+            "total_warnings": 6
+        },
+        "bhp_critical": [
+            {
+                "id": 1,
+                "kode_bhp": "BHP-001",
+                "nama_bhp": "Alkohol 96%",
+                "stok_saat_ini": 2,
+                "stok_minimum": 5,
+                "satuan": "Liter",
+                "ruangan": {
+                    "id": 3,
+                    "nama": "Lab Kimia Dasar",
+                    "gedung": { "id": 1, "nama": "Gedung Saintek" }
+                }
+            }
+        ],
+        "kalibrasi_critical": [
+            {
+                "id": 1,
+                "aset_id": 4,
+                "kode_aset": "AST-LAB-004",
+                "nama_aset": "Spektrofotometer UV-Vis",
+                "ruangan_nama": "Lab Analitik",
+                "gedung_nama": "Gedung Saintek",
+                "institusi_kalibrasi": "Balai Kalibrasi Nasional",
+                "nomor_sertifikat": "CAL-2025-001",
+                "tanggal_kadaluarsa": "2026-10-10",
+                "status_kelayakan": "laik",
+                "is_expired": false,
+                "days_remaining": 16
+            }
+        ],
+        "pending_peminjaman": [
+            {
+                "id": 12,
+                "ruangan_id": 3,
+                "ruangan_nama": "Lab Kimia Dasar",
+                "gedung_nama": "Gedung Saintek",
+                "peminjam_nama": "Ahmad Dosen",
+                "keperluan": "Praktikum Pengganti Kimia Anorganik",
+                "tanggal": "2026-09-25",
+                "jam_mulai": "08:00",
+                "jam_selesai": "11:00",
+                "status": "pending_laboran"
+            }
+        ]
+    }
+}
+```
 
 ---
 

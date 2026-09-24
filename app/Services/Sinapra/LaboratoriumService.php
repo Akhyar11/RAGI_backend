@@ -8,6 +8,7 @@ use App\Models\LabBhp;
 use App\Models\LabBhpTransaksi;
 use App\Models\LaboranRuangan;
 use App\Models\PeminjamanAset;
+use App\Models\PeminjamanRuangan;
 use App\Models\User;
 use App\Services\AuditLogService;
 use Illuminate\Database\Eloquent\Builder;
@@ -172,6 +173,94 @@ class LaboratoriumService
         }
 
         return $query;
+    }
+
+    /**
+     * Mengambil ringkasan peringatan dini (Early Warning System) laboratorium:
+     * 1. BHP yang stoknya menipis (stok <= stok_minimum)
+     * 2. Instrumen presisi yang masa kalibrasinya kedaluwarsa atau mendekati kedaluwarsa (<= 30 hari)
+     * 3. Permohonan peminjaman ruangan yang bentrok atau butuh persetujuan cepat (pending/pending_laboran)
+     */
+    public function getEarlyWarnings(User $user): array
+    {
+        // 1. BHP Stok Menipis
+        $bhpQuery = $this->getScopedBhpQuery($user)
+            ->with(['ruangan.gedung', 'kategoriBhp', 'satuanData'])
+            ->whereColumn('stok_saat_ini', '<=', 'stok_minimum')
+            ->orderBy('stok_saat_ini', 'asc');
+
+        $bhpCritical = $bhpQuery->get();
+
+        // 2. Kalibrasi Alat Presisi
+        $today = now()->toDateString();
+        $thirtyDaysAhead = now()->addDays(30)->toDateString();
+
+        $kalibrasiQuery = $this->getScopedKalibrasiQuery($user)
+            ->with(['aset.ruangan.gedung', 'vendor'])
+            ->where(function (Builder $q) use ($today, $thirtyDaysAhead) {
+                $q->where('tanggal_kadaluarsa', '<', $today)
+                  ->orWhereBetween('tanggal_kadaluarsa', [$today, $thirtyDaysAhead])
+                  ->orWhere('status_kelayakan', '!=', 'laik');
+            })
+            ->orderBy('tanggal_kadaluarsa', 'asc');
+
+        $kalibrasiCritical = $kalibrasiQuery->get()->map(function (AlatKalibrasi $item) use ($today) {
+            $kadaluarsa = $item->tanggal_kadaluarsa ? $item->tanggal_kadaluarsa->format('Y-m-d') : null;
+            $isExpired = $kadaluarsa && $kadaluarsa < $today;
+            return [
+                'id' => $item->id,
+                'aset_id' => $item->aset_id,
+                'kode_aset' => $item->aset?->kode_aset ?? '-',
+                'nama_aset' => $item->aset?->nama ?? '-',
+                'ruangan_nama' => $item->aset?->ruangan?->nama ?? '-',
+                'gedung_nama' => $item->aset?->ruangan?->gedung?->nama ?? '-',
+                'institusi_kalibrasi' => $item->institusi_kalibrasi,
+                'nomor_sertifikat' => $item->nomor_sertifikat,
+                'tanggal_kadaluarsa' => $kadaluarsa,
+                'status_kelayakan' => $item->status_kelayakan,
+                'is_expired' => $isExpired,
+                'days_remaining' => $kadaluarsa ? (int) now()->diffInDays($item->tanggal_kadaluarsa, false) : 0,
+            ];
+        });
+
+        // 3. Peminjaman Ruangan yang Butuh Persetujuan Cepat / Berpotensi Bentrok
+        $peminjamanQuery = PeminjamanRuangan::with(['ruangan.gedung', 'user'])
+            ->whereIn('status', ['pending', 'pending_laboran', 'pending_admin_sinapra'])
+            ->whereDate('tanggal', '>=', $today)
+            ->orderBy('tanggal', 'asc')
+            ->orderBy('jam_mulai', 'asc');
+
+        if ($this->isLaboranRestricted($user)) {
+            $labRuanganIds = LaboranRuangan::where('user_id', $user->id)->pluck('ruangan_id');
+            $peminjamanQuery->whereIn('ruangan_id', $labRuanganIds);
+        }
+
+        $pendingPeminjaman = $peminjamanQuery->get()->map(function (PeminjamanRuangan $p) {
+            return [
+                'id' => $p->id,
+                'ruangan_id' => $p->ruangan_id,
+                'ruangan_nama' => $p->ruangan?->nama ?? '-',
+                'gedung_nama' => $p->ruangan?->gedung?->nama ?? '-',
+                'peminjam_nama' => $p->user?->name ?? 'Civitas Kampus',
+                'keperluan' => $p->keperluan,
+                'tanggal' => $p->tanggal ? $p->tanggal->format('Y-m-d') : null,
+                'jam_mulai' => substr((string) $p->jam_mulai, 0, 5),
+                'jam_selesai' => substr((string) $p->jam_selesai, 0, 5),
+                'status' => $p->status,
+            ];
+        });
+
+        return [
+            'summary' => [
+                'total_bhp_critical' => $bhpCritical->count(),
+                'total_kalibrasi_critical' => $kalibrasiCritical->count(),
+                'total_pending_peminjaman' => $pendingPeminjaman->count(),
+                'total_warnings' => $bhpCritical->count() + $kalibrasiCritical->count() + $pendingPeminjaman->count(),
+            ],
+            'bhp_critical' => $bhpCritical,
+            'kalibrasi_critical' => $kalibrasiCritical,
+            'pending_peminjaman' => $pendingPeminjaman,
+        ];
     }
 
     /**

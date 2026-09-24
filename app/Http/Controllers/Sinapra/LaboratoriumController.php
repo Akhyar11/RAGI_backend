@@ -22,6 +22,25 @@ class LaboratoriumController extends Controller
         protected LaboratoriumService $laboratoriumService
     ) {}
 
+    /**
+     * Endpoint Peringatan Dini (Early Warning System) Laboratorium:
+     * - BHP mendekati/habis stok
+     * - Kalibrasi alat kedaluwarsa/<30 hari
+     * - Peminjaman ruangan yang pending / butuh perhatian cepat
+     */
+    public function earlyWarnings(Request $request): JsonResponse
+    {
+        Gate::authorize('viewAny', LabBhp::class);
+
+        $data = $this->laboratoriumService->getEarlyWarnings($request->user());
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data peringatan dini operasional laboratorium berhasil diambil',
+            'data' => $data,
+        ]);
+    }
+
     // ─────────────────────────────────────────────────────────────
     // 1. ENDPOINTS: BAHAN HABIS PAKAI (BHP LAB)
     // ─────────────────────────────────────────────────────────────
