@@ -46,7 +46,9 @@ Route::prefix('mahasiswa')->group(function () {
     Route::post('/sync-from-spmb', [MahasiswaController::class, 'syncFromSpmb']);
     Route::get('/konversi', [MahasiswaController::class, 'listKonversi']);
     Route::post('/konversi', [MahasiswaController::class, 'storeKonversi']);
+    Route::put('/konversi/{id}', [MahasiswaController::class, 'updateKonversi']);
     Route::patch('/konversi/{id}/status', [MahasiswaController::class, 'updateKonversiStatus']);
+    Route::post('/konversi/bulk-status', [MahasiswaController::class, 'bulkUpdateKonversiStatus']);
     Route::delete('/konversi/{id}', [MahasiswaController::class, 'destroyKonversi']);
     Route::post('/bulk-assign-pa', [MahasiswaController::class, 'bulkAssignPa']);
     Route::post('/bulk-status', [MahasiswaController::class, 'bulkUpdateStatus']);
@@ -170,6 +172,9 @@ Route::prefix('obe')->group(function () {
     Route::post('/cpl', [ObeController::class, 'storeCpl']);
     Route::get('/cpmk', [ObeController::class, 'getCpmk']);
     Route::post('/cpmk', [ObeController::class, 'storeCpmk']);
+    Route::get('/sub-cpmk', [ObeController::class, 'getSubCpmk']);
+    Route::post('/sub-cpmk', [ObeController::class, 'storeSubCpmk']);
+    Route::delete('/sub-cpmk/{id}', [ObeController::class, 'deleteSubCpmk']);
 
     // --- Profil Lulusan & Bahan Kajian ---
     Route::get('/profil-lulusan', [ObeController::class, 'getProfilLulusan']);
@@ -186,6 +191,10 @@ Route::prefix('obe')->group(function () {
     Route::get('/rps/{id}', [ObeController::class, 'showRps']);
     Route::post('/rps', [ObeController::class, 'storeRps']);
     Route::post('/rps/{id}/duplicate', [ObeController::class, 'duplicateRps']);
+    Route::get('/soal', [ObeController::class, 'listSoal']);
+    Route::post('/soal', [ObeController::class, 'storeSoal']);
+    Route::delete('/soal/{id}', [ObeController::class, 'deleteSoal']);
+    Route::get('/kelas/{kelasId}/rekap-csv', [ObeController::class, 'rekapKelasCsv']);
     Route::post('/rps/{id}/submit', [ObeController::class, 'submitRps']);
     Route::patch('/rps/{id}/approve', [ObeController::class, 'approveRps']);
 
@@ -203,6 +212,8 @@ Route::prefix('obe')->group(function () {
 
     // Pemantauan & Audit Pemetaan OBE
     Route::get('/audit-pemetaan', [ObeController::class, 'getAuditPemetaan']);
+    Route::get('/grafik-cpl', [ObeController::class, 'getGrafikCpl']);
+    Route::get('/grafik-cpmk', [ObeController::class, 'getGrafikCpmk']);
 
     // Pemantauan Ketertiban Nilai Dosen (Kinerja SIMPEG)
     Route::get('/dosen-kepatuhan-nilai', [ObeController::class, 'getDosenKepatuhanNilai']);

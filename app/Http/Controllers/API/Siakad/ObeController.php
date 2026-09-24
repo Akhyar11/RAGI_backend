@@ -15,6 +15,7 @@ use App\Models\Siakad\NilaiKomponenMahasiswa;
 use App\Models\Siakad\KetercapaianCpmkMahasiswa;
 use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\NilaiMahasiswa;
+use App\Models\Siakad\BankSoal;
 use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\MataKuliah;
@@ -845,6 +846,7 @@ class ObeController extends Controller
     public function showRps($id)
     {
         $rps = \App\Models\Siakad\Rps::with([
+            'mataKuliah.cpmks.subCpmks',
             'mataKuliah.cpmks.cpl',
             'mataKuliah.kurikulum.programStudi.fakultas',
             'dosenPengembang',
@@ -1096,6 +1098,247 @@ class ObeController extends Controller
             'message' => 'RPS berhasil diimpor dari periode ' . $source->tahun_ajaran . ' sebagai draft. Silakan sesuaikan perubahannya.',
             'data' => $copy->load(['mingguan', 'mataKuliah']),
         ], 201);
+    }
+
+    // --- Grafik Capaian CPL & CPMK (bar + drill-down, ala bau evaluatif) ---
+    public function getGrafikCpl(Request $request)
+    {
+        $request->validate([
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'angkatan' => 'nullable|integer|min:2000|max:2100',
+            'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
+        ]);
+
+        $cpls = Cpl::with('cpmks')
+            ->when($request->filled('program_studi_id'), fn($q) => $q->where('program_studi_id', $request->program_studi_id))
+            ->where('is_active', true)
+            ->orderBy('kode_cpl')
+            ->get();
+
+        $result = $cpls->map(function ($cpl) use ($request) {
+            $cpmkIds = $cpl->cpmks->pluck('id')->toArray();
+            $skor = collect();
+            $mhsIds = [];
+            if (!empty($cpmkIds)) {
+                $rows = KetercapaianCpmkMahasiswa::with('krsDetail.krs')
+                    ->whereIn('cpmk_id', $cpmkIds)
+                    ->when($request->filled('angkatan'), fn($q) => $q->whereHas('krsDetail.krs.mahasiswa', fn($mq) => $mq->where('angkatan', $request->angkatan)))
+                    ->when($request->filled('tahun_akademik_id'), fn($q) => $q->whereHas('krsDetail.krs', fn($kq) => $kq->where('tahun_akademik_id', $request->tahun_akademik_id)))
+                    ->get();
+                $skor = $rows->pluck('skor_ketercapaian')->map(fn($v) => (float) $v);
+                $mhsIds = $rows->map(fn($r) => $r->krsDetail?->krs?->mahasiswa_id)->filter()->unique()->values();
+            }
+
+            $avg = $skor->isNotEmpty() ? round($skor->avg(), 1) : 0.0;
+
+            return [
+                'cpl_id' => $cpl->id,
+                'kode_cpl' => $cpl->kode_cpl,
+                'kategori' => $cpl->kategori,
+                'deskripsi' => $cpl->deskripsi,
+                'skor_rata_rata' => $avg,
+                'is_tercapai' => $skor->isNotEmpty() && $avg >= 65.0,
+                'total_pengukuran' => $skor->count(),
+                'total_mahasiswa' => $mhsIds->count(),
+            ];
+        });
+
+        return response()->json(['status' => 'success', 'data' => $result]);
+    }
+
+    public function getGrafikCpmk(Request $request)
+    {
+        $request->validate([
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'mata_kuliah_id' => 'nullable|exists:siakad_mata_kuliah,id',
+            'angkatan' => 'nullable|integer|min:2000|max:2100',
+            'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
+        ]);
+
+        $mkQuery = MataKuliah::with(['cpmks', 'kurikulum.programStudi'])
+            ->where('is_active', true)
+            ->when($request->filled('mata_kuliah_id'), fn($q) => $q->where('id', $request->mata_kuliah_id))
+            ->when($request->filled('program_studi_id'), fn($q) => $q->whereHas('kurikulum', fn($k) => $k->where('program_studi_id', $request->program_studi_id)))
+            ->orderBy('kode_mk')
+            ->limit(50)
+            ->get();
+
+        $result = $mkQuery->map(function ($mk) use ($request) {
+            $cpmkRows = $mk->cpmks->map(function ($cpmk) use ($request) {
+                $rows = KetercapaianCpmkMahasiswa::with('krsDetail.krs.mahasiswa', 'krsDetail.nilai')
+                    ->where('cpmk_id', $cpmk->id)
+                    ->when($request->filled('angkatan'), fn($q) => $q->whereHas('krsDetail.krs.mahasiswa', fn($mq) => $mq->where('angkatan', $request->angkatan)))
+                    ->when($request->filled('tahun_akademik_id'), fn($q) => $q->whereHas('krsDetail.krs', fn($kq) => $kq->where('tahun_akademik_id', $request->tahun_akademik_id)))
+                    ->get();
+
+                $skor = $rows->pluck('skor_ketercapaian')->map(fn($v) => (float) $v);
+                $avg = $skor->isNotEmpty() ? round($skor->avg(), 1) : 0.0;
+
+                return [
+                    'cpmk_id' => $cpmk->id,
+                    'kode_cpmk' => $cpmk->kode_cpmk,
+                    'deskripsi' => $cpmk->deskripsi,
+                    'bobot_persentase' => (float) $cpmk->bobot_persentase,
+                    'skor_rata_rata' => $avg,
+                    'is_tercapai' => $skor->isNotEmpty() && $avg >= 65.0,
+                    'total_mahasiswa' => $rows->map(fn($r) => $r->krsDetail?->krs?->mahasiswa_id)->filter()->unique()->count(),
+                    // Drill-down level mahasiswa
+                    'mahasiswa' => $rows->map(fn($r) => [
+                        'nim' => $r->krsDetail?->krs?->mahasiswa?->nim,
+                        'nama_lengkap' => $r->krsDetail?->krs?->mahasiswa?->nama_lengkap,
+                        'skor' => (float) $r->skor_ketercapaian,
+                        'is_tercapai' => ((float) $r->skor_ketercapaian) >= 65.0,
+                        'nilai_huruf' => $r->krsDetail?->nilai?->nilai_huruf,
+                    ])->values(),
+                ];
+            });
+
+            return [
+                'mata_kuliah_id' => $mk->id,
+                'kode_mk' => $mk->kode_mk,
+                'nama' => $mk->nama,
+                'total_sks' => $mk->total_sks,
+                'cpmks' => $cpmkRows,
+            ];
+        });
+
+        return response()->json(['status' => 'success', 'data' => $result]);
+    }
+
+    // --- SubCPMK (di bawah CPMK) ---
+    public function getSubCpmk(Request $request)
+    {
+        $request->validate(['cpmk_id' => 'nullable|exists:siakad_cpmk,id']);
+
+        $query = SubCpmk::with('cpmk.mataKuliah')->orderBy('kode_sub_cpmk');
+        if ($request->filled('cpmk_id')) {
+            $query->where('cpmk_id', $request->cpmk_id);
+        }
+
+        return response()->json(['status' => 'success', 'data' => $query->get()]);
+    }
+
+    public function storeSubCpmk(Request $request)
+    {
+        $validated = $request->validate([
+            'id' => 'nullable|exists:siakad_sub_cpmk,id',
+            'cpmk_id' => 'required|exists:siakad_cpmk,id',
+            'kode_sub_cpmk' => 'required|string|max:50',
+            'deskripsi' => 'required|string',
+            'indikator' => 'nullable|string',
+            'bobot_persentase' => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        $sub = SubCpmk::updateOrCreate(['id' => $request->id], $validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'SubCPMK berhasil disimpan',
+            'data' => $sub->load('cpmk.mataKuliah'),
+        ], $request->filled('id') ? 200 : 201);
+    }
+
+    public function deleteSubCpmk($id)
+    {
+        $sub = SubCpmk::findOrFail($id);
+        if ($sub->komponenPenilaians()->exists()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'SubCPMK dipakai komponen penilaian — lepas dulu sebelum dihapus.',
+            ], 422);
+        }
+        $sub->delete();
+
+        return response()->json(['status' => 'success', 'message' => 'SubCPMK berhasil dihapus']);
+    }
+
+    // --- Bank Soal per Sesi/SubCPMK ---
+    public function listSoal(Request $request)
+    {
+        $request->validate([
+            'rps_id' => 'nullable|exists:siakad_rps,id',
+            'rps_mingguan_id' => 'nullable|exists:siakad_rps_mingguan,id',
+        ]);
+
+        $query = BankSoal::with(['mingguan', 'subCpmk.cpmk', 'rps.mataKuliah'])->orderBy('id');
+        if ($request->filled('rps_id')) {
+            $query->where('rps_id', $request->rps_id);
+        }
+        if ($request->filled('rps_mingguan_id')) {
+            $query->where('rps_mingguan_id', $request->rps_mingguan_id);
+        }
+
+        return response()->json(['status' => 'success', 'data' => $query->get()]);
+    }
+
+    public function storeSoal(Request $request)
+    {
+        $validated = $request->validate([
+            'id' => 'nullable|exists:siakad_bank_soal,id',
+            'rps_id' => 'required|exists:siakad_rps,id',
+            'rps_mingguan_id' => 'nullable|exists:siakad_rps_mingguan,id',
+            'sub_cpmk_id' => 'nullable|exists:siakad_sub_cpmk,id',
+            'pertanyaan' => 'required|string',
+            'bobot' => 'nullable|numeric|min:0|max:100',
+            'kunci_jawaban' => 'nullable|string',
+        ]);
+        $validated['dibuat_oleh'] = $request->user()?->id;
+
+        $soal = BankSoal::updateOrCreate(['id' => $request->id], $validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Soal berhasil disimpan',
+            'data' => $soal->load(['mingguan', 'subCpmk.cpmk']),
+        ], $request->filled('id') ? 200 : 201);
+    }
+
+    public function deleteSoal($id)
+    {
+        $soal = BankSoal::findOrFail($id);
+        $soal->delete();
+
+        return response()->json(['status' => 'success', 'message' => 'Soal berhasil dihapus']);
+    }
+
+    // --- Rekap Nilai Kelas (CSV, dibuka di Excel) ---
+    public function rekapKelasCsv($kelasId)
+    {
+        $kelas = Kelas::with(['mataKuliah', 'tahunAkademik', 'programStudi'])->findOrFail($kelasId);
+        $res = $this->getKelasNilaiObe(new Request(), $kelasId);
+        $payload = $res->getData(true)['data'];
+
+        $rows = [];
+        $header = ['NO', 'NIM', 'NAMA'];
+        foreach ($payload['komponen'] as $comp) {
+            $header[] = ($comp['nama_komponen'] ?? 'Komponen') . ' (' . ($comp['bobot'] ?? 0) . '%)';
+        }
+        $header = array_merge($header, ['NILAI_AKHIR', 'HURUF', 'MUTU', 'STATUS']);
+        $rows[] = $header;
+
+        foreach (array_values($payload['peserta']) as $i => $p) {
+            $row = [$i + 1, $p['mahasiswa']['nim'] ?? '', $p['mahasiswa']['nama_lengkap'] ?? ''];
+            foreach ($payload['komponen'] as $comp) {
+                $row[] = $p['scores'][(string) $comp['id']]['nilai_angka'] ?? $p['scores'][$comp['id']]['nilai_angka'] ?? 0;
+            }
+            $row[] = $p['nilai_akhir'];
+            $row[] = $p['nilai_huruf'];
+            $row[] = $p['bobot_mutu'];
+            $row[] = !empty($p['is_final']) ? 'Final' : 'Draft';
+            $rows[] = $row;
+        }
+
+        $output = "\xEF\xBB\xBF";
+        foreach ($rows as $row) {
+            $output .= implode(',', array_map(fn($v) => '"' . str_replace('"', '""', (string) $v) . '"', $row)) . "\n";
+        }
+
+        $fname = 'rekap_nilai_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $kelas->kode_kelas ?? $kelasId) . '.csv';
+
+        return response($output, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $fname . '"',
+        ]);
     }
 
     public function submitRps($id)

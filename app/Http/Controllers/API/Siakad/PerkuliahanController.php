@@ -547,6 +547,9 @@ class PerkuliahanController extends Controller
 
         if ($mhs->konversiTransfer && $mhs->konversiTransfer->status === 'disetujui' && $mhs->konversiTransfer->details) {
             foreach ($mhs->konversiTransfer->details as $konv) {
+                if (($konv->status ?? 'diakui') === 'ditolak') {
+                    continue;
+                }
                 $mk = $konv->mataKuliahDiakui;
                 $sks = $mk ? $mk->total_sks : $konv->sks_asal;
                 $huruf = strtoupper(trim((string) $konv->nilai_huruf_asal));
@@ -973,6 +976,9 @@ class PerkuliahanController extends Controller
             $totalSksTransfer = 0;
             if (!$khs && $summaryMhs->konversiTransfer && $summaryMhs->konversiTransfer->status === 'disetujui' && $summaryMhs->konversiTransfer->details) {
                 foreach ($summaryMhs->konversiTransfer->details as $konv) {
+                    if (($konv->status ?? 'diakui') === 'ditolak') {
+                        continue;
+                    }
                     $mk = $konv->mataKuliahDiakui;
                     $totalSksTransfer += $mk ? $mk->total_sks : $konv->sks_asal;
                 }
@@ -1101,6 +1107,9 @@ class PerkuliahanController extends Controller
         // Masukkan data konversi transfer jika ada — mutu via master skala nilai
         if ($mhs->konversiTransfer && $mhs->konversiTransfer->status === 'disetujui' && $mhs->konversiTransfer->details) {
             foreach ($mhs->konversiTransfer->details as $konv) {
+                if (($konv->status ?? 'diakui') === 'ditolak') {
+                    continue;
+                }
                 $mk = $konv->mataKuliahDiakui;
                 $sks = $mk ? $mk->total_sks : $konv->sks_asal;
                 $huruf = strtoupper(trim((string) $konv->nilai_huruf_asal));

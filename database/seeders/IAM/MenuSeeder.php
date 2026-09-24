@@ -243,6 +243,7 @@ class MenuSeeder extends Seeder
                     ['name' => 'CPL & Kurikulum', 'url' => '/siakad/obe/cpl', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 5],
                     ['name' => 'CPMK Mata Kuliah', 'url' => '/siakad/obe/cpmk', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 6],
                     ['name' => 'RPS & Verifikasi', 'url' => '/siakad/obe/rps', 'icon' => 'FaFileAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 7],
+                    ['name' => 'Bank Soal', 'url' => '/siakad/obe/soal', 'icon' => 'FaBookOpen', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 8],
                     ['name' => 'Ketertiban Dosen Nilai', 'url' => '/siakad/obe/kepatuhan', 'icon' => 'FaUserCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 8],
                 ]
             ],

@@ -659,7 +659,7 @@ class MahasiswaController extends Controller
             $status = $request->status;
             $user = $request->user();
             
-            if ($user && ($user->hasRole('admin') || $user->hasRole('dosen'))) {
+            if ($user && ($user->isAdmin() || $user->hasRole('dosen'))) {
                 $status = $status ?? 'disetujui';
             } else {
                 // Students can only save as draft or diajukan
@@ -674,8 +674,8 @@ class MahasiswaController extends Controller
             }
 
             // Konversi yang sudah DISETUJUI terkunci bagi mahasiswa (hubungi BAAK).
-            // Admin/dosen boleh merevisi (mis. koreksi) — status ditentukan ulang di bawah.
-            $isStaff = $user && ($user->hasRole('admin') || $user->hasRole('dosen'));
+            // Admin/dosen/superadmin boleh merevisi (mis. koreksi) — status ditentukan ulang di bawah.
+            $isStaff = $user && ($user->isAdmin() || $user->hasRole('dosen'));
             if ($konversi && $konversi->status === 'disetujui' && !$isStaff) {
                 return response()->json([
                     'status' => 'error',
@@ -727,6 +727,18 @@ class MahasiswaController extends Controller
         });
     }
 
+    /**
+     * Update konversi via PUT /konversi/{id} (alias eksplisit agar tidak 405).
+     * Didelegasikan ke storeKonversi (upsert + kunci disetujui tetap berlaku).
+     */
+    public function updateKonversi(Request $request, $id)
+    {
+        $konversi = KonversiTransfer::findOrFail($id);
+        $request->merge(['mahasiswa_id' => $konversi->mahasiswa_id]);
+
+        return $this->storeKonversi($request);
+    }
+
     public function destroyKonversi($id)
     {
         $konversi = KonversiTransfer::findOrFail($id);
@@ -750,21 +762,90 @@ class MahasiswaController extends Controller
         $request->validate([
             'status' => 'required|in:draft,diajukan,disetujui,ditolak',
             'catatan' => 'nullable|string',
+            'details' => 'nullable|array',
+            'details.*.id' => 'required|exists:siakad_konversi_transfer_detail,id',
+            'details.*.status' => 'required|in:diakui,ditolak',
+            'details.*.catatan_penolakan' => 'nullable|string|max:500',
         ]);
 
-        $konversi = KonversiTransfer::findOrFail($id);
-        
-        $konversi->update([
-            'status' => $request->status,
-            'diproses_oleh' => $request->user()?->id,
-            'catatan' => $request->catatan ?? $konversi->catatan,
+        $konversi = KonversiTransfer::with('details')->findOrFail($id);
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $konversi) {
+            // Keputusan per-MK (parsial): tandai diakui/ditolak per baris
+            if ($request->filled('details')) {
+                foreach ($request->details as $d) {
+                    $detail = $konversi->details->firstWhere('id', $d['id']);
+                    if (!$detail) {
+                        continue;
+                    }
+                    $detail->update([
+                        'status' => $d['status'],
+                        'catatan_penolakan' => $d['status'] === 'ditolak' ? ($d['catatan_penolakan'] ?? null) : null,
+                    ]);
+                }
+            }
+
+            // Menyetujui butuh minimal 1 MK diakui; kalau semua ditolak, tolak keseluruhan
+            if ($request->status === 'disetujui' && $konversi->details()->where('status', 'diakui')->count() === 0) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tidak ada MK yang diakui. Tolak keseluruhan usulan (status ditolak) bila memang tidak ada yang memenuhi syarat.',
+                ], 422);
+            }
+
+            $konversi->update([
+                'status' => $request->status,
+                'diproses_oleh' => $request->user()?->id,
+                'catatan' => $request->catatan ?? $konversi->catatan,
+            ]);
+
+            $diakui = $konversi->details()->where('status', 'diakui')->count();
+            $ditolak = $konversi->details()->where('status', 'ditolak')->count();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Status konversi menjadi: {$request->status} ({$diakui} diakui, {$ditolak} ditolak).",
+                'data' => $konversi->load('details.mataKuliahDiakui'),
+            ]);
+        });
+    }
+
+    /**
+     * Verifikasi massal per mahasiswa (checklist): setujui/tolak banyak usulan sekaligus.
+     * Keputusan per-MK tetap lewat verifikasi satuan bila perlu parsial.
+     */
+    public function bulkUpdateKonversiStatus(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1|max:200',
+            'ids.*' => 'exists:siakad_konversi_transfer,id',
+            'status' => 'required|in:disetujui,ditolak',
+            'catatan' => 'nullable|string',
         ]);
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Status konversi transfer berhasil diperbarui menjadi: ' . $request->status,
-            'data' => $konversi->load('details.mataKuliahDiakui')
-        ]);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $validated) {
+            $count = 0;
+            foreach ($validated['ids'] as $id) {
+                $konversi = KonversiTransfer::with('details')->find($id);
+                if (!$konversi || $konversi->status === $validated['status']) {
+                    continue;
+                }
+                if ($validated['status'] === 'disetujui' && $konversi->details()->where('status', 'diakui')->count() === 0) {
+                    continue;
+                }
+                $konversi->update([
+                    'status' => $validated['status'],
+                    'diproses_oleh' => $request->user()?->id,
+                    'catatan' => $validated['catatan'] ?? $konversi->catatan,
+                ]);
+                $count++;
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "{$count} usulan konversi diubah menjadi {$validated['status']}.",
+            ]);
+        });
     }
 
     public function bulkAssignPa(Request $request)
