@@ -27,8 +27,8 @@ class RiwayatController extends Controller
         $pegawai = Pegawai::findOrFail($pegawaiId);
 
         $request->validate([
-            'jabatan_id' => 'nullable|exists:jabatan,id',
-            'jabatan_fungsional_id' => 'nullable|exists:jabatan_fungsional_akademik,id',
+            'jabatan_id' => 'nullable|exists:simpeg_jabatan,id',
+            'jabatan_fungsional_id' => 'nullable|exists:simpeg_jabatan_fungsional_akademik,id',
             'mulai_jabatan' => 'required|date',
             'selesai_jabatan' => 'nullable|date',
             'sk_nomor' => 'nullable|string',

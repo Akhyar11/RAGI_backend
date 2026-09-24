@@ -94,6 +94,8 @@
 |---|---|---|
 | UnitKerjaController | Manajemen struktur organisasi, SOTK kampus, dan unit kerja induk-anak | [docs/api/SIMPEG/UnitKerjaController.md](api/SIMPEG/UnitKerjaController.md) |
 | JabatanController | Formasi jabatan struktural, fungsional, dan teknis pada unit kerja | [docs/api/SIMPEG/JabatanController.md](api/SIMPEG/JabatanController.md) |
+| JabatanFungsionalController | Master jenjang jabatan fungsional akademik dosen dan angka kredit | [docs/api/SIMPEG/JabatanFungsionalController.md](api/SIMPEG/JabatanFungsionalController.md) |
+| RiwayatController | Riwayat penugasan jabatan struktural/fungsional dan riwayat pendidikan pegawai | [docs/api/SIMPEG/RiwayatController.md](api/SIMPEG/RiwayatController.md) |
 | PegawaiController | Manajemen master data pegawai, multi-role SSO, import massal, & reset biometrik | [docs/api/SIMPEG/PegawaiController.md](api/SIMPEG/PegawaiController.md) |
 | PresensiController | Presensi biometrik mobile (Android Flutter), validasi wajah Python port 8001, shift, geofence, & integrasi | [docs/api/SIMPEG/PresensiController.md](api/SIMPEG/PresensiController.md) |
 | PresensiMasterSettingController | Master pengaturan presensi: parameter sistem, lokasi kantor, multi-tipe shift, & kalender libur | [docs/api/SIMPEG/PresensiMasterSettingController.md](api/SIMPEG/PresensiMasterSettingController.md) |

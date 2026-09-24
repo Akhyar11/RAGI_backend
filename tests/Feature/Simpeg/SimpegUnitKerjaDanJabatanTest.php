@@ -173,4 +173,49 @@ class SimpegUnitKerjaDanJabatanTest extends TestCase
             'nama' => 'Ketua LP3M',
         ]);
     }
+
+    public function test_can_create_jabatan_fungsional_successfully()
+    {
+        $payload = [
+            'nama' => 'Tenaga Pengajar',
+            'angka_kredit_min' => 0,
+            'angka_kredit_max' => 100,
+            'golongan' => 'asisten_ahli',
+        ];
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/jabatan-fungsional', $payload);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.nama', 'Tenaga Pengajar');
+
+        $this->assertDatabaseHas('simpeg_jabatan_fungsional_akademik', [
+            'nama' => 'Tenaga Pengajar',
+            'golongan' => 'asisten_ahli',
+        ]);
+    }
+
+    public function test_duplicate_nama_jabatan_fungsional_returns_validation_error()
+    {
+        \App\Models\Simpeg\JabatanFungsionalAkademik::create([
+            'nama' => 'Tenaga Pengajar',
+            'angka_kredit_min' => 0,
+            'angka_kredit_max' => 100,
+            'golongan' => 'asisten_ahli',
+        ]);
+
+        $payload = [
+            'nama' => 'Tenaga Pengajar',
+            'angka_kredit_min' => 50,
+            'angka_kredit_max' => 150,
+            'golongan' => 'lektor',
+        ];
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/jabatan-fungsional', $payload);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['nama']);
+    }
 }

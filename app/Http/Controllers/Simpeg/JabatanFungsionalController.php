@@ -54,7 +54,7 @@ class JabatanFungsionalController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'nama' => 'required|string|unique:jabatan_fungsional_akademik,nama',
+            'nama' => 'required|string|unique:simpeg_jabatan_fungsional_akademik,nama',
             'angka_kredit_min' => 'nullable|integer',
             'angka_kredit_max' => 'nullable|integer',
             'golongan' => 'required|in:asisten_ahli,lektor,lektor_kepala,guru_besar',
