@@ -185,6 +185,7 @@ Route::prefix('obe')->group(function () {
     Route::get('/rps', [ObeController::class, 'listRps']);
     Route::get('/rps/{id}', [ObeController::class, 'showRps']);
     Route::post('/rps', [ObeController::class, 'storeRps']);
+    Route::post('/rps/{id}/duplicate', [ObeController::class, 'duplicateRps']);
     Route::post('/rps/{id}/submit', [ObeController::class, 'submitRps']);
     Route::patch('/rps/{id}/approve', [ObeController::class, 'approveRps']);
 

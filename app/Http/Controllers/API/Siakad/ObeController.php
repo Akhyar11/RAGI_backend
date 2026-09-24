@@ -281,7 +281,7 @@ class ObeController extends Controller
     // --- Matriks Penilaian OBE Kelas & Rekap Capaian ---
     public function getKelasNilaiObe(Request $request, $kelasId)
     {
-        $kelas = Kelas::with(['mataKuliah.cpmks.cpl', 'programStudi', 'dosenPengampu.dosen', 'tahunAkademik'])->findOrFail($kelasId);
+        $kelas = Kelas::with(['mataKuliah.cpmks.cpl', 'programStudi', 'programStudis', 'dosenPengampu.dosen', 'tahunAkademik'])->findOrFail($kelasId);
         $mode = $kelas->tahunAkademik?->mode_penilaian ?? 'semi_obe';
         
         // 1. Define the components list based on the active mode
@@ -821,6 +821,10 @@ class ObeController extends Controller
             $query->whereHas('mataKuliah.kurikulum', fn($q) => $q->where('program_studi_id', $request->program_studi_id));
         }
 
+        if ($request->filled('mata_kuliah_id')) {
+            $query->where('mata_kuliah_id', $request->mata_kuliah_id);
+        }
+
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -1043,6 +1047,55 @@ class ObeController extends Controller
                 'mk_details' => $mkDetails,
             ]
         ]);
+    }
+
+    public function duplicateRps(Request $request, $id)
+    {
+        $request->validate([
+            'tahun_ajaran' => 'required|string|max:20',
+            'semester' => 'nullable|integer|min:1|max:14',
+        ]);
+
+        $source = \App\Models\Siakad\Rps::with('mingguan')->findOrFail($id);
+
+        $copy = DB::transaction(function () use ($source, $request) {
+            $new = \App\Models\Siakad\Rps::create([
+                'mata_kuliah_id' => $source->mata_kuliah_id,
+                'tahun_ajaran' => $request->tahun_ajaran,
+                'semester' => $request->input('semester', $source->semester),
+                'deskripsi_singkat' => $source->deskripsi_singkat,
+                'pustaka_utama' => $source->pustaka_utama,
+                'pustaka_pendukung' => $source->pustaka_pendukung,
+                'dosen_pengembang_id' => $source->dosen_pengembang_id,
+                'koordinator_rmk_id' => $source->koordinator_rmk_id,
+                'kaprodi_id' => $source->kaprodi_id,
+                'status' => 'draft',
+                'catatan_revisi' => null,
+                'disetujui_at' => null,
+            ]);
+
+            foreach ($source->mingguan as $m) {
+                \App\Models\Siakad\RpsMingguan::create([
+                    'rps_id' => $new->id,
+                    'minggu_ke' => $m->minggu_ke,
+                    'kemampuan_akhir' => $m->kemampuan_akhir,
+                    'bahan_kajian' => $m->bahan_kajian,
+                    'bentuk_metode' => $m->bentuk_metode,
+                    'estimasi_waktu' => $m->estimasi_waktu,
+                    'pengalaman_belajar' => $m->pengalaman_belajar,
+                    'indikator_penilaian' => $m->indikator_penilaian,
+                    'bobot_penilaian' => $m->bobot_penilaian,
+                ]);
+            }
+
+            return $new;
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'RPS berhasil diimpor dari periode ' . $source->tahun_ajaran . ' sebagai draft. Silakan sesuaikan perubahannya.',
+            'data' => $copy->load(['mingguan', 'mataKuliah']),
+        ], 201);
     }
 
     public function submitRps($id)

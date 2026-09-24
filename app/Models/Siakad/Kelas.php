@@ -27,12 +27,14 @@ class Kelas extends Model
         'jam_mulai',
         'jam_selesai',
         'status',
+        'is_gabungan',
         'id_feeder',
     ];
 
     protected $casts = [
         'kapasitas' => 'integer',
         'kuota_krs' => 'integer',
+        'is_gabungan' => 'boolean',
     ];
 
     public function mataKuliah()
@@ -48,6 +50,19 @@ class Kelas extends Model
     public function programStudi()
     {
         return $this->belongsTo(MasterProgramStudi::class, 'program_studi_id');
+    }
+
+    /**
+     * Prodi peserta kelas gabungan (selain homebase program_studi_id).
+     */
+    public function programStudis()
+    {
+        return $this->belongsToMany(
+            MasterProgramStudi::class,
+            'siakad_kelas_program_studi',
+            'kelas_id',
+            'program_studi_id'
+        )->withTimestamps();
     }
 
     public function ruangan()

@@ -39,7 +39,7 @@ class PerkuliahanController extends Controller
         $user = $request->user();
         $taId = $request->input('tahun_akademik_id') ?? TahunAkademik::where('is_active', true)->value('id');
 
-        $query = Kelas::with(['mataKuliah', 'ruangan.gedung', 'programStudi', 'dosenPengampu.dosen'])
+        $query = Kelas::with(['mataKuliah', 'ruangan.gedung', 'programStudi', 'programStudis', 'dosenPengampu.dosen'])
             ->when($taId, fn($q) => $q->where('tahun_akademik_id', $taId));
 
         // Jika user adalah dosen, filter jadwal mengajar mereka
@@ -75,8 +75,13 @@ class PerkuliahanController extends Controller
             $prodiId = $request->program_studi_id;
             $query->where(function ($q) use ($prodiId) {
                 $q->where('program_studi_id', $prodiId)
-                  ->orWhereHas('mataKuliah.kurikulum', fn($kq) => $kq->where('program_studi_id', $prodiId));
+                  ->orWhereHas('mataKuliah.kurikulum', fn($kq) => $kq->where('program_studi_id', $prodiId))
+                  ->orWhereHas('programStudis', fn($pq) => $pq->where('siakad_program_studi.id', $prodiId));
             });
+        }
+
+        if ($request->filled('is_gabungan')) {
+            $query->where('is_gabungan', $request->boolean('is_gabungan'));
         }
 
         $data = $query->paginate($request->integer('per_page', 25));
@@ -112,7 +117,15 @@ class PerkuliahanController extends Controller
                 'jam_mulai' => $validated['jam_mulai'],
                 'jam_selesai' => $validated['jam_selesai'],
                 'status' => 'draft',
+                'is_gabungan' => $validated['is_gabungan'] ?? false,
             ]);
+
+            // Prodi peserta kelas gabungan (selalu mencakup homebase)
+            $gabunganIds = collect($validated['gabungan_program_studi_ids'] ?? [])
+                ->push($validated['program_studi_id'])->unique()->values()->toArray();
+            if ($kelas->is_gabungan) {
+                $kelas->programStudis()->sync($gabunganIds);
+            }
 
             // Dosen Pengampu Utama (yang dilaporkan resmi ke Feeder)
             if (!empty($validated['dosen_id'])) {
@@ -143,7 +156,7 @@ class PerkuliahanController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'Kelas perkuliahan berhasil dibuat dengan tim pengajar terdaftar',
-                'data' => $kelas->load(['mataKuliah', 'ruangan', 'dosenPengampu.dosen'])
+                'data' => $kelas->load(['mataKuliah', 'ruangan', 'dosenPengampu.dosen', 'programStudis'])
             ], 201);
         });
     }
@@ -154,6 +167,7 @@ class PerkuliahanController extends Controller
             'mataKuliah.kurikulum.programStudi',
             'tahunAkademik',
             'programStudi',
+            'programStudis',
             'ruangan.gedung',
             'dosenPengampu.dosen.programStudi',
         ])->findOrFail($id);
@@ -179,7 +193,18 @@ class PerkuliahanController extends Controller
                 'hari' => $validated['hari'],
                 'jam_mulai' => $validated['jam_mulai'],
                 'jam_selesai' => $validated['jam_selesai'],
+                'is_gabungan' => $validated['is_gabungan'] ?? $kelas->is_gabungan,
             ]);
+
+            if (array_key_exists('gabungan_program_studi_ids', $validated)) {
+                if ($kelas->is_gabungan) {
+                    $ids = collect($validated['gabungan_program_studi_ids'] ?? [])
+                        ->push($kelas->program_studi_id)->unique()->values()->toArray();
+                    $kelas->programStudis()->sync($ids);
+                } else {
+                    $kelas->programStudis()->detach();
+                }
+            }
 
             if (array_key_exists('dosen_id', $validated) || array_key_exists('team_teaching_dosen_ids', $validated)) {
                 DosenPengampu::where('kelas_id', $kelas->id)->delete();
@@ -629,9 +654,12 @@ class PerkuliahanController extends Controller
             $enrolledKelasIds = $activeKrs->krsDetails()->pluck('kelas_id')->toArray();
         }
 
-        $kelases = Kelas::with(['mataKuliah.prasyarats.prasyarat', 'ruangan', 'dosenPengampu.dosen'])
+        $kelases = Kelas::with(['mataKuliah.prasyarats.prasyarat', 'ruangan', 'dosenPengampu.dosen', 'programStudis'])
             ->where('tahun_akademik_id', $targetTaId)
-            ->when($prodiId, fn($q) => $q->where('program_studi_id', $prodiId))
+            ->when($prodiId, fn($q) => $q->where(function ($qq) use ($prodiId) {
+                $qq->where('program_studi_id', $prodiId)
+                   ->orWhereHas('programStudis', fn($pq) => $pq->where('siakad_program_studi.id', $prodiId));
+            }))
             ->where('status', 'aktif')
             ->get();
 
@@ -649,6 +677,7 @@ class PerkuliahanController extends Controller
                 'dosen_pengampu' => $k->dosenPengampu?->first()?->dosen?->nama_lengkap,
                 'jadwal' => ($k->hari ? ucfirst($k->hari) : null) . ($k->jam_mulai && $k->jam_selesai ? ', ' . substr($k->jam_mulai, 0, 5) . ' - ' . substr($k->jam_selesai, 0, 5) : ''),
                 'sisa_kuota' => $k->kuota_krs,
+                'is_gabungan' => (bool) $k->is_gabungan,
                 'is_converted' => $isConverted,
                 'is_enrolled' => $isEnrolled,
                 'is_full' => $isFull,

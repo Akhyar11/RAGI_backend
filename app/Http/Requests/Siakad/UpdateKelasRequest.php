@@ -25,6 +25,9 @@ class UpdateKelasRequest extends FormRequest
             'hari' => ['required', 'string', new MasterReferensiExists('hari_kuliah')],
             'jam_mulai' => 'required|string',
             'jam_selesai' => 'required|string',
+            'is_gabungan' => 'nullable|boolean',
+            'gabungan_program_studi_ids' => 'nullable|array',
+            'gabungan_program_studi_ids.*' => 'exists:siakad_program_studi,id',
         ];
     }
 
