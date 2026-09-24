@@ -12,6 +12,44 @@ class SinapraVendorKategoriBhpSeeder extends Seeder
 {
     public function run(): void
     {
+        // 0. Seed jenis_rekanan master referensi
+        if (DB::getSchemaBuilder()->hasTable('core_tipe_referensi')) {
+            DB::table('core_tipe_referensi')->updateOrInsert(
+                ['kode' => 'jenis_rekanan'],
+                [
+                    'nama' => 'Jenis Rekanan / Vendor',
+                    'modul' => 'sinapra',
+                    'deskripsi' => 'Klasifikasi jenis rekanan atau vendor di modul sarana & prasarana.',
+                    'urutan' => 25,
+                    'is_active' => true,
+                    'updated_at' => now(),
+                ]
+            );
+        }
+
+        if (DB::getSchemaBuilder()->hasTable('spmb_master_referensi')) {
+            $jenisRekananList = [
+                ['kode' => 'penyedia_barang', 'nama' => 'Penyedia Barang', 'urutan' => 1],
+                ['kode' => 'laboratorium_kalibrasi', 'nama' => 'Laboratorium Kalibrasi', 'urutan' => 2],
+                ['kode' => 'jasa_maintenance', 'nama' => 'Jasa Maintenance', 'urutan' => 3],
+                ['kode' => 'kontraktor', 'nama' => 'Kontraktor', 'urutan' => 4],
+                ['kode' => 'umum', 'nama' => 'Umum', 'urutan' => 5],
+            ];
+
+            foreach ($jenisRekananList as $item) {
+                DB::table('spmb_master_referensi')->updateOrInsert(
+                    ['tipe' => 'jenis_rekanan', 'kode' => $item['kode']],
+                    [
+                        'modul' => 'sinapra',
+                        'nama' => $item['nama'],
+                        'urutan' => $item['urutan'],
+                        'is_active' => true,
+                        'updated_at' => now(),
+                    ]
+                );
+            }
+        }
+
         $vendors = [
             [
                 'kode' => 'VND-LAB-01',
