@@ -15,6 +15,7 @@ class AlatKalibrasi extends Model
 
     protected $fillable = [
         'aset_id',
+        'vendor_id',
         'institusi_kalibrasi',
         'nomor_sertifikat',
         'tanggal_kalibrasi',
@@ -31,5 +32,10 @@ class AlatKalibrasi extends Model
     public function aset(): BelongsTo
     {
         return $this->belongsTo(Aset::class, 'aset_id');
+    }
+
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Sinapra\MasterVendor::class, 'vendor_id');
     }
 }

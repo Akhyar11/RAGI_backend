@@ -4,7 +4,7 @@
 > **Base URL**: `/api/sinapra`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-23  
-> **Diperbarui**: 2026-09-23  
+> **Diperbarui**: 2026-09-24  
 
 ## Daftar Endpoint
 
@@ -42,7 +42,9 @@ Deskripsi: Mengambil daftar bahan habis pakai (BHP) laboratorium. Otomatis difil
 ### Query Parameters
 - `search` (string, optional) - Pencarian nama BHP, kode BHP, atau kategori.
 - `ruangan_id` (integer, optional) - Filter ID ruangan lab.
-- `kategori` (string, optional) - Filter kategori BHP.
+- `kategori_bhp_id` (integer, optional) - Filter ID master kategori BHP.
+- `satuan_id` (integer, optional) - Filter ID master satuan.
+- `kategori` (string, optional) - Filter kategori BHP (string legacy/kode).
 - `sort_by` (string, default: `created_at`) - Whitelist: `created_at`, `nama_bhp`, `kode_bhp`, `stok_saat_ini`, `stok_minimum`.
 - `sort_order` (enum: `asc`, `desc`, default: `desc`) - Urutan data.
 - `per_page` (integer, default: 15, max: 100) - Jumlah data per halaman.
@@ -59,9 +61,11 @@ Deskripsi: Mengambil daftar bahan habis pakai (BHP) laboratorium. Otomatis difil
             "ruangan_id": 2,
             "kode_bhp": "BHP-RJ45-001",
             "nama_bhp": "Konektor RJ45 Cat6",
+            "kategori_bhp_id": 4,
             "kategori": "komponen_elektronik",
             "stok_saat_ini": 120.0,
             "stok_minimum": 20.0,
+            "satuan_id": 2,
             "satuan": "Pcs",
             "spesifikasi": "Gold plated 50u, support Gigabit",
             "lokasi_penyimpanan": "Lemari Komponen Rak B-2",
@@ -74,6 +78,16 @@ Deskripsi: Mengambil daftar bahan habis pakai (BHP) laboratorium. Otomatis difil
                     "id": 1,
                     "nama": "Gedung Teori & Lab"
                 }
+            },
+            "kategori_bhp": {
+                "id": 4,
+                "kode": "KOMP_ELEKTRONIK",
+                "nama": "Komponen Elektronik & Jaringan"
+            },
+            "satuan_data": {
+                "id": 2,
+                "kode": "PCS",
+                "nama": "Pieces"
             }
         }
     ],
@@ -88,6 +102,8 @@ Deskripsi: Mengambil daftar bahan habis pakai (BHP) laboratorium. Otomatis difil
     "filters": {
         "search": null,
         "ruangan_id": null,
+        "kategori_bhp_id": null,
+        "satuan_id": null,
         "kategori": null,
         "sort_by": "created_at",
         "sort_order": "desc"
@@ -107,9 +123,11 @@ Deskripsi: Menambahkan data item bahan habis pakai laboratorium baru.
     "ruangan_id": 2,
     "kode_bhp": "BHP-RJ45-001",
     "nama_bhp": "Konektor RJ45 Cat6",
+    "kategori_bhp_id": 4,
     "kategori": "komponen_elektronik",
     "stok_saat_ini": 100,
     "stok_minimum": 20,
+    "satuan_id": 2,
     "satuan": "Pcs",
     "spesifikasi": "Gold plated 50u, support Gigabit",
     "lokasi_penyimpanan": "Lemari Komponen Rak B-2"
@@ -126,9 +144,11 @@ Deskripsi: Menambahkan data item bahan habis pakai laboratorium baru.
         "ruangan_id": 2,
         "kode_bhp": "BHP-RJ45-001",
         "nama_bhp": "Konektor RJ45 Cat6",
+        "kategori_bhp_id": 4,
         "kategori": "komponen_elektronik",
         "stok_saat_ini": 100.0,
         "stok_minimum": 20.0,
+        "satuan_id": 2,
         "satuan": "Pcs",
         "created_at": "2026-09-23T08:00:00.000000Z"
     }
@@ -335,6 +355,7 @@ Deskripsi: Mengambil daftar instrumen presisi laboratorium beserta status laik d
 
 ### Query Parameters
 - `search` (string, optional) - Pencarian nama instrumen, kode aset, institusi penguji, atau sertifikat.
+- `vendor_id` (integer, optional) - Filter ID master vendor/rekanan kalibrasi.
 - `status_kelayakan` (enum: `laik`, `tidak_laik`, `butuh_perbaikan`, optional) - Filter status fisik kelayakan.
 - `mendekati_kadaluarsa` (boolean, optional) - Filter alat yang masa berlaku kalibrasinya habis dalam 30 hari ke depan.
 - `sort_by` (string, default: `created_at`) - Whitelist: `created_at`, `tanggal_kalibrasi`, `tanggal_kadaluarsa`, `status_kelayakan`.
@@ -351,7 +372,8 @@ Deskripsi: Mengambil daftar instrumen presisi laboratorium beserta status laik d
         {
             "id": 1,
             "aset_id": 5,
-            "institusi_kalibrasi": "Balai Pengujian & Sertifikasi Instrumen Presisi",
+            "vendor_id": 3,
+            "institusi_kalibrasi": "PT Kalibrasi Presisi Utama",
             "nomor_sertifikat": "CERT-KAL-2026-001",
             "tanggal_kalibrasi": "2025-10-15",
             "tanggal_kadaluarsa": "2026-10-15",
@@ -362,6 +384,13 @@ Deskripsi: Mengambil daftar instrumen presisi laboratorium beserta status laik d
                 "id": 5,
                 "kode_aset": "AST-MIC-001",
                 "nama": "Mikroskop Digital Olympus"
+            },
+            "vendor": {
+                "id": 3,
+                "kode": "VND-003",
+                "nama": "PT Kalibrasi Presisi Utama",
+                "kontak_person": "Joko Widodo",
+                "nomor_telepon": "081399887766"
             }
         }
     ],
@@ -375,11 +404,256 @@ Deskripsi: Mengambil daftar instrumen presisi laboratorium beserta status laik d
     },
     "filters": {
         "search": null,
+        "vendor_id": null,
         "status_kelayakan": null,
         "mendekati_kadaluarsa": false,
         "sort_by": "tanggal_kadaluarsa",
         "sort_order": "asc"
     }
+}
+```
+
+---
+
+## POST /api/sinapra/alat-kalibrasi
+
+Deskripsi: Mencatat riwayat dan jadwal kalibrasi alat presisi laboratorium.
+
+### Request Body
+```json
+{
+    "aset_id": 5,
+    "vendor_id": 3,
+    "institusi_kalibrasi": "PT Kalibrasi Presisi Utama",
+    "nomor_sertifikat": "CERT-KAL-2026-001",
+    "tanggal_kalibrasi": "2026-09-24",
+    "tanggal_kadaluarsa": "2027-09-24",
+    "status_kelayakan": "laik",
+    "catatan": "Pemeriksaan akurasi selesai dan memenuhi standar ISO/IEC 17025."
+}
+```
+
+### Response Sukses (201 Created)
+```json
+{
+    "status": "success",
+    "message": "Data kalibrasi alat presisi berhasil ditambahkan",
+    "data": {
+        "id": 1,
+        "aset_id": 5,
+        "vendor_id": 3,
+        "institusi_kalibrasi": "PT Kalibrasi Presisi Utama",
+        "nomor_sertifikat": "CERT-KAL-2026-001",
+        "tanggal_kalibrasi": "2026-09-24",
+        "tanggal_kadaluarsa": "2027-09-24",
+        "status_kelayakan": "laik",
+        "catatan": "Pemeriksaan akurasi selesai dan memenuhi standar ISO/IEC 17025.",
+        "created_at": "2026-09-24T08:00:00.000000Z"
+    }
+}
+```
+
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+- **422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Validasi gagal.",
+    "errors": {
+        "aset_id": [
+            "Aset tidak ditemukan atau bukan merupakan instrumen presisi yang valid."
+        ],
+        "tanggal_kalibrasi": [
+            "Tanggal kalibrasi wajib diisi dengan format tanggal yang valid."
+        ]
+    }
+}
+```
+
+---
+
+## GET /api/sinapra/alat-kalibrasi/{id}
+
+Deskripsi: Mengambil detail rekaman kalibrasi instrumen laboratorium beserta relasi aset dan vendor.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Detail kalibrasi alat presisi berhasil diambil",
+    "data": {
+        "id": 1,
+        "aset_id": 5,
+        "vendor_id": 3,
+        "institusi_kalibrasi": "PT Kalibrasi Presisi Utama",
+        "nomor_sertifikat": "CERT-KAL-2026-001",
+        "tanggal_kalibrasi": "2026-09-24",
+        "tanggal_kadaluarsa": "2027-09-24",
+        "status_kelayakan": "laik",
+        "catatan": "Pemeriksaan akurasi selesai.",
+        "created_at": "2026-09-24T08:00:00.000000Z",
+        "aset": {
+            "id": 5,
+            "kode_aset": "AST-MIC-001",
+            "nama": "Mikroskop Digital Olympus"
+        },
+        "vendor": {
+            "id": 3,
+            "kode": "VND-003",
+            "nama": "PT Kalibrasi Presisi Utama",
+            "kontak_person": "Joko Widodo",
+            "nomor_telepon": "081399887766"
+        }
+    }
+}
+```
+
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+- **404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Rekaman kalibrasi alat presisi tidak ditemukan."
+}
+```
+
+---
+
+## PUT /api/sinapra/alat-kalibrasi/{id}
+
+Deskripsi: Memperbarui data rekaman kalibrasi instrumen laboratorium.
+
+### Request Body
+```json
+{
+    "aset_id": 5,
+    "vendor_id": 3,
+    "institusi_kalibrasi": "PT Kalibrasi Presisi Utama",
+    "nomor_sertifikat": "CERT-KAL-2026-001-REV",
+    "tanggal_kalibrasi": "2026-09-24",
+    "tanggal_kadaluarsa": "2027-09-24",
+    "status_kelayakan": "laik",
+    "catatan": "Sertifikat revisi pemutakhiran telah diunggah."
+}
+```
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Data kalibrasi alat presisi berhasil diperbarui",
+    "data": {
+        "id": 1,
+        "aset_id": 5,
+        "vendor_id": 3,
+        "institusi_kalibrasi": "PT Kalibrasi Presisi Utama",
+        "nomor_sertifikat": "CERT-KAL-2026-001-REV",
+        "tanggal_kalibrasi": "2026-09-24",
+        "tanggal_kadaluarsa": "2027-09-24",
+        "status_kelayakan": "laik",
+        "catatan": "Sertifikat revisi pemutakhiran telah diunggah.",
+        "updated_at": "2026-09-24T09:00:00.000000Z"
+    }
+}
+```
+
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+- **404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Rekaman kalibrasi alat presisi tidak ditemukan."
+}
+```
+- **422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Validasi gagal.",
+    "errors": {
+        "vendor_id": [
+            "Vendor rekanan yang dipilih tidak valid."
+        ]
+    }
+}
+```
+
+---
+
+## DELETE /api/sinapra/alat-kalibrasi/{id}
+
+Deskripsi: Menghapus rekaman kalibrasi instrumen laboratorium (soft-delete).
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Data kalibrasi alat presisi berhasil dihapus"
+}
+```
+
+### Response Error
+- **401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+- **403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+- **404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Rekaman kalibrasi alat presisi tidak ditemukan."
 }
 ```
 

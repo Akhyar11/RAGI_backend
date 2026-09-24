@@ -898,6 +898,21 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('master/satuan/{satuan}', [App\Http\Controllers\Sinapra\MasterSatuanController::class, 'show']);
     Route::put('master/satuan/{satuan}', [App\Http\Controllers\Sinapra\MasterSatuanController::class, 'update']);
     Route::delete('master/satuan/{satuan}', [App\Http\Controllers\Sinapra\MasterSatuanController::class, 'destroy']);
+
+    // ─────────────────────────────────────────────────────────────
+    // MASTER DATA SINAPRA (Vendor Rekanan & Kategori BHP - FASE 3)
+    // ─────────────────────────────────────────────────────────────
+    Route::get('master/vendor', [App\Http\Controllers\Sinapra\MasterVendorController::class, 'index']);
+    Route::post('master/vendor', [App\Http\Controllers\Sinapra\MasterVendorController::class, 'store']);
+    Route::get('master/vendor/{vendor}', [App\Http\Controllers\Sinapra\MasterVendorController::class, 'show']);
+    Route::put('master/vendor/{vendor}', [App\Http\Controllers\Sinapra\MasterVendorController::class, 'update']);
+    Route::delete('master/vendor/{vendor}', [App\Http\Controllers\Sinapra\MasterVendorController::class, 'destroy']);
+
+    Route::get('master/kategori-bhp', [App\Http\Controllers\Sinapra\MasterKategoriBhpController::class, 'index']);
+    Route::post('master/kategori-bhp', [App\Http\Controllers\Sinapra\MasterKategoriBhpController::class, 'store']);
+    Route::get('master/kategori-bhp/{kategori_bhp}', [App\Http\Controllers\Sinapra\MasterKategoriBhpController::class, 'show']);
+    Route::put('master/kategori-bhp/{kategori_bhp}', [App\Http\Controllers\Sinapra\MasterKategoriBhpController::class, 'update']);
+    Route::delete('master/kategori-bhp/{kategori_bhp}', [App\Http\Controllers\Sinapra\MasterKategoriBhpController::class, 'destroy']);
 });
 
 

@@ -140,6 +140,8 @@
 | KalenderRuanganController | Kalender visual & timeline ketersediaan ruangan terpadu (SINAPRA + SIAKAD) | [docs/api/SINAPRA/KalenderRuanganController.md](api/SINAPRA/KalenderRuanganController.md) |
 | MasterTipeRuanganController | Master data tipe ruangan kampus (kelas, laboratorium, dll.) | [docs/api/SINAPRA/MasterTipeRuanganController.md](api/SINAPRA/MasterTipeRuanganController.md) |
 | MasterSatuanController | Master data satuan barang dan aset (unit, pcs, rim, dll.) | [docs/api/SINAPRA/MasterSatuanController.md](api/SINAPRA/MasterSatuanController.md) |
+| MasterVendorController | Master data vendor dan rekanan pengadaan/kalibrasi alat kampus | [docs/api/SINAPRA/MasterVendorController.md](api/SINAPRA/MasterVendorController.md) |
+| MasterKategoriBhpController | Master data kategori bahan habis pakai (BHP) laboratorium | [docs/api/SINAPRA/MasterKategoriBhpController.md](api/SINAPRA/MasterKategoriBhpController.md) |
 
 ---
 

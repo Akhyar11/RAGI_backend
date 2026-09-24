@@ -31,14 +31,16 @@ class LaboratoriumController extends Controller
         Gate::authorize('viewAny', LabBhp::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = $this->laboratoriumService->getScopedBhpQuery($request->user());
+        $query = $this->laboratoriumService->getScopedBhpQuery($request->user())
+            ->with(['ruangan.gedung', 'kategoriBhp', 'satuanData']);
 
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('nama_bhp', 'like', "%{$search}%")
                     ->orWhere('kode_bhp', 'like', "%{$search}%")
-                    ->orWhere('kategori', 'like', "%{$search}%");
+                    ->orWhere('kategori', 'like', "%{$search}%")
+                    ->orWhereHas('kategoriBhp', fn($kq) => $kq->where('nama', 'like', "%{$search}%"));
             });
         }
 
@@ -46,8 +48,19 @@ class LaboratoriumController extends Controller
             $query->where('ruangan_id', $request->integer('ruangan_id'));
         }
 
+        if ($request->filled('kategori_bhp_id')) {
+            $query->where('kategori_bhp_id', $request->integer('kategori_bhp_id'));
+        }
+
+        if ($request->filled('satuan_id')) {
+            $query->where('satuan_id', $request->integer('satuan_id'));
+        }
+
         if ($request->filled('kategori')) {
-            $query->where('kategori', $request->kategori);
+            $query->where(function ($q) use ($request) {
+                $q->where('kategori', $request->kategori)
+                  ->orWhereHas('kategoriBhp', fn($kq) => $kq->where('kode', $request->kategori));
+            });
         }
 
         $allowedSort = ['created_at', 'nama_bhp', 'kode_bhp', 'stok_saat_ini', 'stok_minimum'];
@@ -72,6 +85,8 @@ class LaboratoriumController extends Controller
             'filters' => [
                 'search' => $request->search,
                 'ruangan_id' => $request->ruangan_id,
+                'kategori_bhp_id' => $request->kategori_bhp_id,
+                'satuan_id' => $request->satuan_id,
                 'kategori' => $request->kategori,
                 'sort_by' => $sortBy,
                 'sort_order' => $sortOrder,
@@ -88,7 +103,7 @@ class LaboratoriumController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data BHP lab berhasil ditambahkan',
-            'data' => $bhp->load('ruangan.gedung'),
+            'data' => $bhp->load(['ruangan.gedung', 'kategoriBhp', 'satuanData']),
         ], 201);
     }
 
@@ -99,7 +114,7 @@ class LaboratoriumController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Detail BHP lab berhasil diambil',
-            'data' => $labBhp->load(['ruangan.gedung', 'transaksi.user']),
+            'data' => $labBhp->load(['ruangan.gedung', 'kategoriBhp', 'satuanData', 'transaksi.user']),
         ]);
     }
 
@@ -112,7 +127,7 @@ class LaboratoriumController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data BHP lab berhasil diperbarui',
-            'data' => $labBhp->fresh('ruangan.gedung'),
+            'data' => $labBhp->fresh(['ruangan.gedung', 'kategoriBhp', 'satuanData']),
         ]);
     }
 
@@ -266,18 +281,27 @@ class LaboratoriumController extends Controller
         Gate::authorize('viewAny', AlatKalibrasi::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = $this->laboratoriumService->getScopedKalibrasiQuery($request->user());
+        $query = $this->laboratoriumService->getScopedKalibrasiQuery($request->user())
+            ->with(['aset.ruangan.gedung', 'vendor']);
 
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('institusi_kalibrasi', 'like', "%{$search}%")
                     ->orWhere('nomor_sertifikat', 'like', "%{$search}%")
+                    ->orWhereHas('vendor', function ($vq) use ($search) {
+                        $vq->where('nama', 'like', "%{$search}%")
+                            ->orWhere('kode', 'like', "%{$search}%");
+                    })
                     ->orWhereHas('aset', function ($asetQuery) use ($search) {
                         $asetQuery->where('nama', 'like', "%{$search}%")
                             ->orWhere('kode_aset', 'like', "%{$search}%");
                     });
             });
+        }
+
+        if ($request->filled('vendor_id')) {
+            $query->where('vendor_id', $request->integer('vendor_id'));
         }
 
         if ($request->filled('status_kelayakan')) {
@@ -309,6 +333,7 @@ class LaboratoriumController extends Controller
             ],
             'filters' => [
                 'search' => $request->search,
+                'vendor_id' => $request->vendor_id,
                 'status_kelayakan' => $request->status_kelayakan,
                 'mendekati_kadaluarsa' => $request->boolean('mendekati_kadaluarsa'),
                 'sort_by' => $sortBy,
@@ -321,12 +346,20 @@ class LaboratoriumController extends Controller
     {
         Gate::authorize('create', AlatKalibrasi::class);
 
-        $kalibrasi = AlatKalibrasi::create($request->validated());
+        $payload = $request->validated();
+        if (empty($payload['institusi_kalibrasi']) && !empty($payload['vendor_id'])) {
+            $vendor = \App\Models\Sinapra\MasterVendor::find($payload['vendor_id']);
+            if ($vendor) {
+                $payload['institusi_kalibrasi'] = $vendor->nama;
+            }
+        }
+
+        $kalibrasi = AlatKalibrasi::create($payload);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Data kalibrasi alat berhasil dicatat',
-            'data' => $kalibrasi->load('aset.ruangan.gedung'),
+            'data' => $kalibrasi->load(['aset.ruangan.gedung', 'vendor']),
         ], 201);
     }
 
@@ -337,7 +370,7 @@ class LaboratoriumController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Detail kalibrasi alat berhasil diambil',
-            'data' => $alatKalibrasi->load('aset.ruangan.gedung'),
+            'data' => $alatKalibrasi->load(['aset.ruangan.gedung', 'vendor']),
         ]);
     }
 
@@ -345,12 +378,20 @@ class LaboratoriumController extends Controller
     {
         Gate::authorize('update', $alatKalibrasi);
 
-        $alatKalibrasi->update($request->validated());
+        $payload = $request->validated();
+        if (empty($payload['institusi_kalibrasi']) && !empty($payload['vendor_id'])) {
+            $vendor = \App\Models\Sinapra\MasterVendor::find($payload['vendor_id']);
+            if ($vendor) {
+                $payload['institusi_kalibrasi'] = $vendor->nama;
+            }
+        }
+
+        $alatKalibrasi->update($payload);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Data kalibrasi alat berhasil diperbarui',
-            'data' => $alatKalibrasi->fresh('aset.ruangan.gedung'),
+            'data' => $alatKalibrasi->fresh(['aset.ruangan.gedung', 'vendor']),
         ]);
     }
 

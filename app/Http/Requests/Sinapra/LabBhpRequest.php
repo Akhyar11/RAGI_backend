@@ -25,6 +25,8 @@ class LabBhpRequest extends FormRequest
                 Rule::unique('sinapra_lab_bhp', 'kode_bhp')->ignore($bhpId),
             ],
             'nama_bhp' => $this->isMethod('POST') ? 'required|string|max:150' : 'sometimes|string|max:150',
+            'kategori_bhp_id' => 'nullable|exists:sinapra_master_kategori_bhp,id',
+            'satuan_id' => 'nullable|exists:sinapra_master_satuan,id',
             'kategori' => 'nullable|string|max:50',
             'stok_saat_ini' => 'nullable|numeric|min:0',
             'stok_minimum' => 'nullable|numeric|min:0',

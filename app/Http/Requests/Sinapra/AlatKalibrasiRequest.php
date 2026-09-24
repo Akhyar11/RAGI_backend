@@ -15,7 +15,8 @@ class AlatKalibrasiRequest extends FormRequest
     {
         return [
             'aset_id' => $this->isMethod('POST') ? 'required|exists:sinapra_aset,id' : 'sometimes|exists:sinapra_aset,id',
-            'institusi_kalibrasi' => $this->isMethod('POST') ? 'required|string|max:150' : 'sometimes|string|max:150',
+            'vendor_id' => 'nullable|exists:sinapra_master_vendor,id',
+            'institusi_kalibrasi' => 'nullable|string|max:150',
             'nomor_sertifikat' => 'nullable|string|max:100',
             'tanggal_kalibrasi' => $this->isMethod('POST') ? 'required|date' : 'sometimes|date',
             'tanggal_kadaluarsa' => $this->isMethod('POST') ? 'required|date|after_or_equal:tanggal_kalibrasi' : 'sometimes|date',

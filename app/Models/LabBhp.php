@@ -16,6 +16,8 @@ class LabBhp extends Model
 
     protected $fillable = [
         'ruangan_id',
+        'kategori_bhp_id',
+        'satuan_id',
         'kode_bhp',
         'nama_bhp',
         'kategori',
@@ -34,6 +36,16 @@ class LabBhp extends Model
     public function ruangan(): BelongsTo
     {
         return $this->belongsTo(Ruangan::class, 'ruangan_id');
+    }
+
+    public function kategoriBhp(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Sinapra\MasterKategoriBhp::class, 'kategori_bhp_id');
+    }
+
+    public function satuanData(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Sinapra\MasterSatuan::class, 'satuan_id');
     }
 
     public function transaksi(): HasMany
