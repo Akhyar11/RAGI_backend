@@ -589,6 +589,26 @@ class MenuSeeder extends Seeder
             $dosenRole->menus()->syncWithoutDetaching($dosenSimpegMenuIds);
         }
 
+        // Dosen: portal SIAKAD (jadwal, KRS bimbingan, nilai, CPMK/RPS, hasil studi, panduan)
+        if ($dosenRole) {
+            $dosenSiakadMenuIds = Menu::where('module', 'siakad')
+                ->whereIn('url', [
+                    '/siakad',
+                    '#perkuliahan_siakad',
+                    '/siakad/perkuliahan/kelas',
+                    '/siakad/krs',
+                    '/siakad/nilai',
+                    '/siakad/obe/cpmk',
+                    '/siakad/obe/rps',
+                    '/siakad/hasil-studi',
+                    '/siakad/civitas/mahasiswa',
+                    '/siakad/panduan',
+                ])
+                ->pluck('id')
+                ->toArray();
+            $dosenRole->menus()->syncWithoutDetaching($dosenSiakadMenuIds);
+        }
+
         // Portal mandiri mahasiswa: dashboard + tagihan via baseAllowed,
         // menu DB untuk dispensasi & panduan agar lolos CheckMenuAccess.
         $mahasiswaRole = \App\Models\Role::where('slug', 'mahasiswa')->first();
@@ -598,6 +618,19 @@ class MenuSeeder extends Seeder
                 ->pluck('id')
                 ->toArray();
             $mahasiswaRole->menus()->syncWithoutDetaching($mhsSikeuMenuIds);
+            // Portal SIAKAD mahasiswa: dashboard, KRS, jadwal, hasil studi, panduan
+            $mhsSiakadMenuIds = Menu::where('module', 'siakad')
+                ->whereIn('url', [
+                    '/siakad',
+                    '#perkuliahan_siakad',
+                    '/siakad/perkuliahan/kelas',
+                    '/siakad/krs',
+                    '/siakad/hasil-studi',
+                    '/siakad/panduan',
+                ])
+                ->pluck('id')
+                ->toArray();
+            $mahasiswaRole->menus()->syncWithoutDetaching($mhsSiakadMenuIds);
         }
 
         // Pimpinan: dashboard + approval direktur + laporan & pantauan (read-only eksekutif).
