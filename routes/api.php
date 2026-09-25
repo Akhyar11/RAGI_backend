@@ -25,11 +25,13 @@ Route::prefix('auth')->group(function () {
         ->middleware(['throttle:login', 'turnstile:login']);
 
     Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
-    Route::post('/mfa/login-verify', [AuthController::class, 'mfaLoginVerify']);
+    // Rate limited (6/menit) untuk cegah brute-force kode OTP/MFA
+    Route::post('/mfa/login-verify', [AuthController::class, 'mfaLoginVerify'])
+        ->middleware('throttle:6,1');
 
-    // Rate limited: maks 3 permintaan per 5 menit per IP
+    // Rate limited: maks 3 permintaan per 5 menit per IP + anti-bot Turnstile
     Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword'])
-        ->middleware('throttle:forgot-password');
+        ->middleware(['throttle:forgot-password', 'turnstile:forgot_password']);
     Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']);
     Route::post('/refresh', [AuthController::class, 'refresh']);
 
