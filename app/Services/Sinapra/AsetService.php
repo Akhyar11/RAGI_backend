@@ -7,6 +7,10 @@ use App\Models\Aset;
 use App\Services\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 
 class AsetService
 {
@@ -155,5 +159,53 @@ class AsetService
         $nilaiBuku = max(0, $hargaPerolehan - $totalPenyusutan);
 
         return round($nilaiBuku, 2);
+    }
+
+    /**
+     * Generate metadata label barcode & QR code untuk satu aset fisik.
+     */
+    public function generateLabelData(Aset $aset): array
+    {
+        $aset->loadMissing(['kategori', 'ruangan.gedung']);
+
+        $qrContent = config('app.url') . '/sinapra/aset/' . $aset->id;
+
+        $renderer = new ImageRenderer(
+            new RendererStyle(180, 1),
+            new SvgImageBackEnd()
+        );
+        $writer = new Writer($renderer);
+        $qrSvg = $writer->writeString($qrContent);
+
+        return [
+            'id' => $aset->id,
+            'kode_aset' => $aset->kode_aset,
+            'nama' => $aset->nama,
+            'merk' => $aset->merk,
+            'model' => $aset->model,
+            'serial_number' => $aset->serial_number,
+            'kategori' => $aset->kategori?->nama,
+            'ruangan_id' => $aset->ruangan_id,
+            'lokasi_ruangan' => $aset->ruangan?->nama,
+            'lokasi_gedung' => $aset->ruangan?->gedung?->nama,
+            'tanggal_perolehan' => $aset->tanggal_perolehan?->format('Y-m-d'),
+            'kondisi' => $aset->kondisi,
+            'status' => $aset->status,
+            'qr_content' => $qrContent,
+            'qr_code_svg' => $qrSvg,
+            'instansi' => config('app.name', 'SISTEM SARANA & PRASARANA KAMPUS'),
+        ];
+    }
+
+    /**
+     * Generate metadata label barcode & QR code untuk sekumpulan aset fisik (batch).
+     */
+    public function generateBatchLabelData(array $asetIds): array
+    {
+        $asets = Aset::with(['kategori', 'ruangan.gedung'])
+            ->whereIn('id', $asetIds)
+            ->get();
+
+        return $asets->map(fn (Aset $aset) => $this->generateLabelData($aset))->values()->all();
     }
 }

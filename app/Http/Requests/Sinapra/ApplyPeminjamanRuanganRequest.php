@@ -14,7 +14,7 @@ class ApplyPeminjamanRuanganRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'ruangan_id' => 'required|exists:ruangan,id',
+            'ruangan_id' => 'required|exists:sinapra_ruangan,id',
             'keperluan' => 'required|string|max:500',
             'tanggal' => 'required|date|after_or_equal:today',
             'jam_mulai' => 'required|date_format:H:i',

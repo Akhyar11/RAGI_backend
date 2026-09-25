@@ -57,6 +57,7 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
+| AkademikController | Master akademik + opsi referensi dropdown (jenjang, akreditasi, tipe MK, mode penilaian) | [docs/api/SIAKAD/AkademikController.md](api/SIAKAD/AkademikController.md) |
 | FeederSyncController | Sinkronisasi Neo Feeder PDDikti (Dosen, Penugasan, Ajar, Mahasiswa, Kelas) | [docs/api/SIAKAD/FeederSyncController.md](api/SIAKAD/FeederSyncController.md) |
 | AkademikController | Master akademik (Tahun Akademik, Fakultas, Prodi, Kurikulum, Mata Kuliah, Dosen) | [docs/api/SIAKAD/AkademikController.md](api/SIAKAD/AkademikController.md) |
 | MahasiswaController | Data mahasiswa, NIM, konversi transfer, dan penugasan PA | [docs/api/SIAKAD/MahasiswaController.md](api/SIAKAD/MahasiswaController.md) |
@@ -93,6 +94,10 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
+| UnitKerjaController | Manajemen struktur organisasi, SOTK kampus, dan unit kerja induk-anak | [docs/api/SIMPEG/UnitKerjaController.md](api/SIMPEG/UnitKerjaController.md) |
+| JabatanController | Formasi jabatan struktural, fungsional, dan teknis pada unit kerja | [docs/api/SIMPEG/JabatanController.md](api/SIMPEG/JabatanController.md) |
+| JabatanFungsionalController | Master jenjang jabatan fungsional akademik dosen dan angka kredit | [docs/api/SIMPEG/JabatanFungsionalController.md](api/SIMPEG/JabatanFungsionalController.md) |
+| RiwayatController | Riwayat penugasan jabatan struktural/fungsional dan riwayat pendidikan pegawai | [docs/api/SIMPEG/RiwayatController.md](api/SIMPEG/RiwayatController.md) |
 | PegawaiController | Manajemen master data pegawai, multi-role SSO, import massal, & reset biometrik | [docs/api/SIMPEG/PegawaiController.md](api/SIMPEG/PegawaiController.md) |
 | PresensiController | Presensi biometrik mobile (Android Flutter), validasi wajah Python port 8001, shift, geofence, & integrasi | [docs/api/SIMPEG/PresensiController.md](api/SIMPEG/PresensiController.md) |
 | PresensiMasterSettingController | Master pengaturan presensi: parameter sistem, lokasi kantor, multi-tipe shift, & kalender libur | [docs/api/SIMPEG/PresensiMasterSettingController.md](api/SIMPEG/PresensiMasterSettingController.md) |
@@ -131,11 +136,18 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
-| GedungRuanganController | Manajemen data master Gedung & Ruangan serta cek ketersediaan | [docs/api/SINAPRA/GedungRuanganController.md](api/SINAPRA/GedungRuanganController.md) |
-| AsetController | Inventaris barang/aset, kategori, & kalkulasi penyusutan nilai buku | [docs/api/SINAPRA/AsetController.md](api/SINAPRA/AsetController.md) |
-| PeminjamanController | Permohonan & persetujuan peminjaman ruangan & aset | [docs/api/SINAPRA/PeminjamanController.md](api/SINAPRA/PeminjamanController.md) |
-| MaintenanceController | Tiket pelaporan & pelacakan perawatan/perbaikan barang & ruang | [docs/api/SINAPRA/MaintenanceController.md](api/SINAPRA/MaintenanceController.md) |
-| PengadaanController | Pengajuan usulan pengadaan barang baru & rincian detail | [docs/api/SINAPRA/PengadaanController.md](api/SINAPRA/PengadaanController.md) |
+| GedungRuanganController | Manajemen master Gedung, Ruangan (relasi tipe ruangan), penugasan laboran lab, & ketersediaan jam | [docs/api/SINAPRA/GedungRuanganController.md](api/SINAPRA/GedungRuanganController.md) |
+| AsetController | Inventaris barang/aset, kategori, scoping laboran lab, & kalkulasi penyusutan nilai buku | [docs/api/SINAPRA/AsetController.md](api/SINAPRA/AsetController.md) |
+| PeminjamanController | Alur persetujuan berjenjang peminjaman ruangan & aset (Laboran Lab & Admin SINAPRA) | [docs/api/SINAPRA/PeminjamanController.md](api/SINAPRA/PeminjamanController.md) |
+| MaintenanceController | Tiket pelaporan, scoping kerusakan aset lab binaan, & pelacakan perbaikan sarpras | [docs/api/SINAPRA/MaintenanceController.md](api/SINAPRA/MaintenanceController.md) |
+| PengadaanController | Usulan pengadaan barang baru, rincian item kebutuhan, & persetujuan status | [docs/api/SINAPRA/PengadaanController.md](api/SINAPRA/PengadaanController.md) |
+| LaboratoriumController | Manajemen operasional lab: stok BHP, surat bebas tanggungan lab, & kalibrasi alat | [docs/api/SINAPRA/LaboratoriumController.md](api/SINAPRA/LaboratoriumController.md) |
+| AuditMutasiDisposalController | Audit stock opname fisik, mutasi aset antar-ruang, & BAP pemutihan/penghapusan aset | [docs/api/SINAPRA/AuditMutasiDisposalController.md](api/SINAPRA/AuditMutasiDisposalController.md) |
+| KalenderRuanganController | Kalender visual & timeline ketersediaan ruangan terpadu (SINAPRA + SIAKAD) | [docs/api/SINAPRA/KalenderRuanganController.md](api/SINAPRA/KalenderRuanganController.md) |
+| MasterTipeRuanganController | Master data tipe ruangan kampus (kelas, laboratorium, dll.) | [docs/api/SINAPRA/MasterTipeRuanganController.md](api/SINAPRA/MasterTipeRuanganController.md) |
+| MasterSatuanController | Master data satuan barang dan aset (unit, pcs, rim, dll.) | [docs/api/SINAPRA/MasterSatuanController.md](api/SINAPRA/MasterSatuanController.md) |
+| MasterVendorController | Master data vendor dan rekanan pengadaan/kalibrasi alat kampus | [docs/api/SINAPRA/MasterVendorController.md](api/SINAPRA/MasterVendorController.md) |
+| MasterKategoriBhpController | Master data kategori bahan habis pakai (BHP) laboratorium | [docs/api/SINAPRA/MasterKategoriBhpController.md](api/SINAPRA/MasterKategoriBhpController.md) |
 
 ---
 

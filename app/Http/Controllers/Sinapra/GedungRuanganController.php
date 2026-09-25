@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Sinapra;
 use App\Http\Controllers\Controller;
 use App\Models\Gedung;
 use App\Models\Ruangan;
+use App\Models\User;
 use App\Services\Sinapra\GedungRuanganService;
 use App\Http\Requests\Sinapra\GedungRequest;
 use App\Http\Requests\Sinapra\RuanganRequest;
+use App\Http\Requests\Sinapra\AssignLaboranRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -122,14 +124,26 @@ class GedungRuanganController extends Controller
         $this->authorize('viewAny', Ruangan::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = Ruangan::with('gedung');
+        $query = Ruangan::with(['gedung', 'laboran', 'tipeRuangan']);
+
+        $user = $request->user();
+        if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
+            $query->whereHas('laboran', fn($q) => $q->where('core_users.id', $user->id));
+        }
 
         if ($request->filled('gedung_id')) {
             $query->where('gedung_id', $request->gedung_id);
         }
 
+        if ($request->filled('tipe_ruangan_id')) {
+            $query->where('tipe_ruangan_id', $request->tipe_ruangan_id);
+        }
+
         if ($request->filled('tipe')) {
-            $query->where('tipe', $request->tipe);
+            $query->where(function ($q) use ($request) {
+                $q->where('tipe', $request->tipe)
+                  ->orWhereHas('tipeRuangan', fn($tq) => $tq->where('kode', $request->tipe));
+            });
         }
 
         if ($request->filled('status')) {
@@ -166,6 +180,7 @@ class GedungRuanganController extends Controller
             'filters' => [
                 'search' => $request->search,
                 'gedung_id' => $request->gedung_id,
+                'tipe_ruangan_id' => $request->tipe_ruangan_id,
                 'tipe' => $request->tipe,
                 'status' => $request->status,
                 'sort_by' => $sortBy,
@@ -183,7 +198,7 @@ class GedungRuanganController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data ruangan berhasil ditambahkan',
-            'data' => $ruangan->load('gedung'),
+            'data' => $ruangan->load(['gedung', 'tipeRuangan']),
         ], 201);
     }
 
@@ -194,7 +209,7 @@ class GedungRuanganController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Detail ruangan berhasil diambil',
-            'data' => $ruangan->load(['gedung', 'aset']),
+            'data' => $ruangan->load(['gedung', 'aset', 'laboran', 'tipeRuangan']),
         ]);
     }
 
@@ -207,7 +222,7 @@ class GedungRuanganController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data ruangan berhasil diperbarui',
-            'data' => $updated->load('gedung'),
+            'data' => $updated->load(['gedung', 'tipeRuangan']),
         ]);
     }
 
@@ -227,7 +242,7 @@ class GedungRuanganController extends Controller
     public function checkKetersediaanRuangan(Request $request): JsonResponse
     {
         $request->validate([
-            'ruangan_id' => 'required|exists:ruangan,id',
+            'ruangan_id' => 'required|exists:sinapra_ruangan,id',
             'tanggal' => 'required|date',
             'jam_mulai' => 'required|date_format:H:i',
             'jam_selesai' => 'required|date_format:H:i|after:jam_mulai',
@@ -246,6 +261,73 @@ class GedungRuanganController extends Controller
             'data' => [
                 'is_available' => $available,
             ],
+        ]);
+    }
+
+    public function getLaboran(Request $request, Ruangan $ruangan): JsonResponse
+    {
+        $this->authorize('view', $ruangan);
+
+        $allowedSort = ['created_at', 'name'];
+        $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+
+        $laboran = $this->service->getLaboranByRuangan($ruangan, [
+            'per_page' => min(100, $request->integer('per_page', 15)),
+            'search' => $request->search,
+            'sort_by' => $sortBy,
+            'sort_order' => $sortOrder,
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar laboran ruangan berhasil diambil',
+            'data' => $laboran->items(),
+            'meta' => [
+                'current_page' => $laboran->currentPage(),
+                'per_page' => $laboran->perPage(),
+                'total' => $laboran->total(),
+                'last_page' => $laboran->lastPage(),
+                'from' => $laboran->firstItem(),
+                'to' => $laboran->lastItem(),
+            ],
+            'filters' => [
+                'search' => $request->search,
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+            ],
+        ]);
+    }
+
+    public function assignLaboran(AssignLaboranRequest $request, Ruangan $ruangan): JsonResponse
+    {
+        $this->authorize('manageLaboran', $ruangan);
+
+        $validated = $request->validated();
+
+        $assignment = $this->service->assignLaboran(
+            ruangan: $ruangan,
+            userId: (int) $validated['user_id'],
+            isPrimary: (bool) ($validated['is_primary'] ?? true)
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Laboran berhasil ditugaskan ke ruangan',
+            'data' => $assignment,
+        ], 201);
+    }
+
+    public function unassignLaboran(Ruangan $ruangan, User $user): JsonResponse
+    {
+        $this->authorize('manageLaboran', $ruangan);
+
+        $this->service->unassignLaboran($ruangan, $user->id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Penugasan laboran berhasil dihapus',
+            'data' => null,
         ]);
     }
 }

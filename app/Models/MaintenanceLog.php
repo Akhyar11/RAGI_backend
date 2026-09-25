@@ -35,6 +35,15 @@ class MaintenanceLog extends Model
         'biaya' => 'decimal:2',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function ($model) {
+            if (empty($model->tanggal_lapor)) {
+                $model->tanggal_lapor = now()->toDateString();
+            }
+        });
+    }
+
     /**
      * Relasi ke Aset yang dirawat
      */

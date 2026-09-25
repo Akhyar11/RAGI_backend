@@ -16,9 +16,9 @@ class AsetRequest extends FormRequest
         $asetId = $this->route('aset') ? $this->route('aset')->id : null;
 
         return [
-            'kategori_id' => 'required|exists:kategori_aset,id',
-            'ruangan_id' => 'nullable|exists:ruangan,id',
-            'kode_aset' => 'required|string|max:100|unique:aset,kode_aset,' . $asetId,
+            'kategori_id' => 'required|exists:sinapra_kategori_aset,id',
+            'ruangan_id' => 'nullable|exists:sinapra_ruangan,id',
+            'kode_aset' => 'required|string|max:100|unique:sinapra_aset,kode_aset,' . $asetId,
             'nama' => 'required|string|max:150',
             'merk' => 'nullable|string|max:100',
             'model' => 'nullable|string|max:100',
@@ -28,6 +28,8 @@ class AsetRequest extends FormRequest
             'nilai_buku' => 'nullable|numeric|min:0',
             'kondisi' => 'required|in:baik,rusak_ringan,rusak_berat',
             'status' => 'required|in:tersedia,dipinjam,maintenance,dihapuskan',
+            'is_borrowable' => 'nullable|boolean',
+            'is_lab_asset' => 'nullable|boolean',
         ];
     }
 }

@@ -17,7 +17,7 @@ class MahasiswaController extends Controller
     public function index(Request $request)
     {
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = Mahasiswa::with(['programStudi', 'dosenWali', 'konversiTransfer.details.mataKuliahDiakui']);
+        $query = Mahasiswa::with(['programStudi', 'dosenWali', 'konversiTransfer.details.mataKuliahDiakui', 'spmbKonversi.pendaftaranCalonMhs']);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -184,6 +184,87 @@ class MahasiswaController extends Controller
         ]);
     }
 
+    /**
+     * Ubah status akademik mahasiswa (aktif/cuti/mangkir/dropout/lulus) + catat jejak.
+     * Status 'keluar' dicatat sebagai dropout (DO/mengundurkan diri); kelulusan via Yudisium.
+     */
+    public function updateStatus(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:aktif,cuti,mangkir,dropout,lulus',
+            'alasan' => 'nullable|string|max:500',
+        ]);
+
+        $mhs = Mahasiswa::findOrFail($id);
+        if ($mhs->status !== 'aktif' && $validated['status'] !== 'aktif' && empty($validated['alasan'])) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Alasan wajib diisi untuk perubahan status non-aktif.',
+            ], 422);
+        }
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $mhs, $validated) {
+            $lama = $mhs->status;
+            $mhs->update(['status' => $validated['status']]);
+
+            \App\Models\Siakad\StatusAkademikLog::create([
+                'mahasiswa_id' => $mhs->id,
+                'status_lama' => $lama,
+                'status_baru' => $validated['status'],
+                'alasan' => $validated['alasan'] ?? null,
+                'diubah_oleh' => $request->user()?->id,
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Status mahasiswa diubah dari {$lama} menjadi {$validated['status']}.",
+                'data' => $mhs->fresh()->load(['programStudi', 'dosenWali']),
+            ]);
+        });
+    }
+
+    /**
+     * Ubah status akademik massal (checklist). Khusus status tanpa alasan personal:
+     * aktif/cuti/lulus. Dropout/mangkir wajib per mahasiswa (butuh alasan individual).
+     */
+    public function bulkUpdateStatus(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1|max:500',
+            'ids.*' => 'exists:siakad_mahasiswa,id',
+            'status' => 'required|in:aktif,cuti,lulus',
+            'alasan' => 'nullable|string|max:500',
+        ]);
+
+        if ($validated['status'] !== 'aktif' && empty($validated['alasan'])) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Alasan wajib diisi untuk perubahan status massal non-aktif.',
+            ], 422);
+        }
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $validated) {
+            $list = Mahasiswa::whereIn('id', $validated['ids'])->get();
+            foreach ($list as $mhs) {
+                if ($mhs->status === $validated['status']) continue;
+                $lama = $mhs->status;
+                $mhs->update(['status' => $validated['status']]);
+                \App\Models\Siakad\StatusAkademikLog::create([
+                    'mahasiswa_id' => $mhs->id,
+                    'status_lama' => $lama,
+                    'status_baru' => $validated['status'],
+                    'alasan' => $validated['alasan'] ?? null,
+                    'diubah_oleh' => $request->user()?->id,
+                ]);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => count($list) . " mahasiswa diubah statusnya menjadi {$validated['status']}.",
+            ]);
+        });
+    }
+
     public function destroy($id)
     {
         $mhs = Mahasiswa::findOrFail($id);
@@ -203,11 +284,13 @@ class MahasiswaController extends Controller
             'nama_lengkap' => 'required|string',
             'jenis_kelamin' => 'required|in:L,P',
             'id' => 'nullable|exists:siakad_mahasiswa,id',
+            'custom_nim' => 'nullable|string|max:50',
+            'use_no_pendaftaran' => 'nullable|boolean',
         ]);
 
         if ($request->filled('id')) {
-            $existing = Mahasiswa::find($request->id);
-            if ($existing && !empty($existing->nim)) {
+            $existing = Mahasiswa::with('spmbKonversi.pendaftaranCalonMhs')->find($request->id);
+            if ($existing && !empty($existing->nim) && !$request->filled('custom_nim') && !$request->boolean('use_no_pendaftaran')) {
                 return response()->json([
                     'status' => 'success',
                     'message' => 'Mahasiswa sudah memiliki NIM resmi.',
@@ -216,8 +299,35 @@ class MahasiswaController extends Controller
             }
         }
 
-        $konversiService = app(\App\Services\Spmb\SpmbKonversiService::class);
-        $nim = $konversiService->generateNIM((int)$request->angkatan, (int)$request->program_studi_id);
+        $nim = null;
+        if ($request->filled('custom_nim')) {
+            // 1. NIM manual / format khusus dari kampus (bisa huruf, angka, kode khusus)
+            $nim = trim($request->custom_nim);
+        } elseif ($request->boolean('use_no_pendaftaran') && $request->filled('id')) {
+            // 2. Menggunakan Nomor Pendaftaran SPMB sebagai NIM
+            $mhsCheck = Mahasiswa::with('spmbKonversi.pendaftaranCalonMhs')->find($request->id);
+            $noDaftar = $mhsCheck?->spmbKonversi?->pendaftaranCalonMhs?->no_pendaftaran;
+            if ($noDaftar) {
+                $nim = $noDaftar;
+            }
+        }
+
+        // 3. Fallback jika tidak ada custom NIM atau no pendaftaran: generate standar
+        if (empty($nim)) {
+            $konversiService = app(\App\Services\Spmb\SpmbKonversiService::class);
+            $nim = $konversiService->generateNIM((int)$request->angkatan, (int)$request->program_studi_id);
+        }
+
+        // Cek duplikasi NIM terhadap mahasiswa lain
+        $duplicate = Mahasiswa::where('nim', $nim)
+            ->when($request->filled('id'), fn($q) => $q->where('id', '!=', $request->id))
+            ->first();
+        if ($duplicate) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "NIM '{$nim}' sudah digunakan oleh mahasiswa lain ({$duplicate->nama_lengkap}). Silakan gunakan NIM unik."
+            ], 422);
+        }
 
         if ($request->filled('id')) {
             $mhs = Mahasiswa::findOrFail($request->id);
@@ -236,14 +346,19 @@ class MahasiswaController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => "NIM {$nim} berhasil di-generate untuk mahasiswa.",
-            'data' => $mhs
+            'message' => "NIM {$nim} berhasil diterapkan untuk mahasiswa.",
+            'data' => $mhs->fresh(['programStudi', 'dosenWali', 'spmbKonversi.pendaftaranCalonMhs'])
         ], 201);
     }
 
     public function generateMissingNims(Request $request)
     {
-        $unassigned = Mahasiswa::whereNull('nim')->orWhere('nim', '')->get();
+        $unassigned = Mahasiswa::with('spmbKonversi.pendaftaranCalonMhs')
+            ->where(function ($q) {
+                $q->whereNull('nim')->orWhere('nim', '');
+            })
+            ->get();
+
         if ($unassigned->isEmpty()) {
             return response()->json([
                 'status' => 'success',
@@ -252,22 +367,220 @@ class MahasiswaController extends Controller
             ]);
         }
 
+        $scheme = $request->input('scheme', 'standard'); // standard | no_pendaftaran
         $konversiService = app(\App\Services\Spmb\SpmbKonversiService::class);
         $count = 0;
 
         foreach ($unassigned as $mhs) {
-            $angkatan = $mhs->angkatan ?: (int)date('Y');
-            $prodiId = $mhs->program_studi_id ?: 1;
-            $nim = $konversiService->generateNIM($angkatan, $prodiId);
+            $nim = null;
+            if ($scheme === 'no_pendaftaran') {
+                $noDaftar = $mhs->spmbKonversi?->pendaftaranCalonMhs?->no_pendaftaran;
+                if (!empty($noDaftar) && !Mahasiswa::where('nim', $noDaftar)->where('id', '!=', $mhs->id)->exists()) {
+                    $nim = $noDaftar;
+                }
+            }
+
+            if (empty($nim)) {
+                $angkatan = $mhs->angkatan ?: (int)date('Y');
+                $prodiId = $mhs->program_studi_id ?: 1;
+                $nim = $konversiService->generateNIM($angkatan, $prodiId);
+            }
+
             $mhs->update(['nim' => $nim]);
             $count++;
         }
 
         return response()->json([
             'status' => 'success',
-            'message' => "Berhasil men-generate NIM resmi untuk {$count} mahasiswa yang sebelumnya belum memiliki NIM.",
+            'message' => "Berhasil menetapkan NIM resmi untuk {$count} mahasiswa yang sebelumnya belum memiliki NIM (" . ($scheme === 'no_pendaftaran' ? 'mengutamakan No. Pendaftaran SPMB' : 'Format Standar') . ").",
             'data' => ['generated_count' => $count]
         ]);
+    }
+
+    /**
+     * Export template data mahasiswa (CSV) untuk pemetaan NIM manual / kombinasi karakter
+     */
+    public function exportNimData(Request $request)
+    {
+        $query = Mahasiswa::with(['programStudi', 'spmbKonversi.pendaftaranCalonMhs'])
+            ->where('status', 'aktif');
+
+        if ($request->filled('program_studi_id')) {
+            $query->where('program_studi_id', $request->program_studi_id);
+        }
+        if ($request->filled('angkatan')) {
+            $query->where('angkatan', $request->angkatan);
+        }
+        if ($request->input('status_nim') === 'unassigned') {
+            $query->where(fn($q) => $q->whereNull('nim')->orWhere('nim', ''));
+        }
+
+        $list = $query->orderBy('nama_lengkap')->get();
+
+        $rows = [];
+        $rows[] = ['ID_MAHASISWA', 'NO_PENDAFTARAN_SPMB', 'NIM_SAAT_INI', 'NIM_BARU', 'NAMA_LENGKAP', 'PROGRAM_STUDI', 'ANGKATAN'];
+
+        foreach ($list as $m) {
+            $rows[] = [
+                $m->id,
+                $m->spmbKonversi?->pendaftaranCalonMhs?->no_pendaftaran ?? '',
+                $m->nim ?? '',
+                $m->nim ?? ($m->spmbKonversi?->pendaftaranCalonMhs?->no_pendaftaran ?? ''),
+                $m->nama_lengkap,
+                $m->programStudi?->nama ?? '',
+                $m->angkatan ?? date('Y'),
+            ];
+        }
+
+        $output = '';
+        foreach ($rows as $row) {
+            $output .= implode(',', array_map(function ($val) {
+                return '"' . str_replace('"', '""', (string)$val) . '"';
+            }, $row)) . "\n";
+        }
+
+        return response($output, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="template_penetapan_nim_mahasiswa.csv"',
+        ]);
+    }
+
+    /**
+     * Export Buku Induk — rekapan data mahasiswa per angkatan & program studi (CSV).
+     */
+    public function exportBukuInduk(Request $request)
+    {
+        $request->validate([
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'angkatan' => 'nullable|integer|min:2000|max:2100',
+            'status' => 'nullable|in:aktif,cuti,mangkir,dropout,lulus',
+        ]);
+
+        $query = Mahasiswa::with(['programStudi', 'dosenWali'])
+            ->orderBy('angkatan')
+            ->orderBy('nama_lengkap');
+
+        if ($request->filled('program_studi_id')) {
+            $query->where('program_studi_id', $request->program_studi_id);
+        }
+        if ($request->filled('angkatan')) {
+            $query->where('angkatan', $request->angkatan);
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $list = $query->get();
+
+        $rows = [];
+        $rows[] = ['NO', 'NIM', 'NAMA_LENGKAP', 'NIK', 'JENIS_KELAMIN', 'TEMPAT_LAHIR', 'TANGGAL_LAHIR', 'PROGRAM_STUDI', 'ANGKATAN', 'JALUR_MASUK', 'DOSEN_WALI', 'TELEPON', 'EMAIL', 'STATUS', 'IPK'];
+
+        foreach ($list as $i => $m) {
+            $rows[] = [
+                $i + 1,
+                $m->nim ?? '',
+                $m->nama_lengkap,
+                $m->nik ?? '',
+                $m->jenis_kelamin ?? '',
+                $m->tempat_lahir ?? '',
+                $m->tanggal_lahir ? $m->tanggal_lahir->format('Y-m-d') : '',
+                $m->programStudi?->nama ?? '',
+                $m->angkatan ?? '',
+                $m->jalur_masuk ?? '',
+                $m->dosenWali?->nama_lengkap ?? '',
+                $m->telepon ?? '',
+                $m->email ?? '',
+                $m->status ?? '',
+                is_numeric($m->ipk) ? number_format((float) $m->ipk, 2) : '',
+            ];
+        }
+
+        $output = "\xEF\xBB\xBF";
+        foreach ($rows as $row) {
+            $output .= implode(',', array_map(function ($val) {
+                return '"' . str_replace('"', '""', (string)$val) . '"';
+            }, $row)) . "\n";
+        }
+
+        $suffix = [];
+        if ($request->filled('angkatan')) $suffix[] = $request->angkatan;
+        if ($request->filled('status')) $suffix[] = $request->status;
+        $filename = 'buku_induk_mahasiswa' . ($suffix ? '_' . implode('_', $suffix) : '') . '.csv';
+
+        return response($output, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    /**
+     * Import hasil pemetaan NIM dari file CSV
+     */
+    public function importNimData(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:5120',
+        ]);
+
+        $file = $request->file('file');
+        $handle = fopen($file->getRealPath(), 'r');
+        if (!$handle) {
+            return response()->json(['status' => 'error', 'message' => 'Gagal membaca file CSV.'], 422);
+        }
+
+        $header = fgetcsv($handle, 1000, ',');
+        $updatedCount = 0;
+        $errors = [];
+        $line = 1;
+
+        DB::beginTransaction();
+        try {
+            while (($data = fgetcsv($handle, 1000, ',')) !== false) {
+                $line++;
+                if (count($data) < 4) {
+                    continue;
+                }
+
+                $mhsId = trim($data[0] ?? '');
+                $nimBaru = trim($data[3] ?? '');
+
+                if (empty($mhsId) || empty($nimBaru)) {
+                    continue;
+                }
+
+                $mhs = Mahasiswa::find($mhsId);
+                if (!$mhs) {
+                    $errors[] = "Baris {$line}: Mahasiswa ID {$mhsId} tidak ditemukan.";
+                    continue;
+                }
+
+                // Periksa apakah NIM baru sudah dipakai oleh mahasiswa lain
+                $existing = Mahasiswa::where('nim', $nimBaru)->where('id', '!=', $mhsId)->first();
+                if ($existing) {
+                    $errors[] = "Baris {$line}: NIM '{$nimBaru}' sudah digunakan oleh {$existing->nama_lengkap}.";
+                    continue;
+                }
+
+                $mhs->update(['nim' => $nimBaru]);
+                $updatedCount++;
+            }
+
+            DB::commit();
+            fclose($handle);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Berhasil memperbarui NIM untuk {$updatedCount} mahasiswa." . (count($errors) > 0 ? " (" . count($errors) . " baris dilewati karena duplikasi/data tidak valid)." : ""),
+                'data' => [
+                    'updated_count' => $updatedCount,
+                    'errors' => array_slice($errors, 0, 10),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            fclose($handle);
+            return response()->json(['status' => 'error', 'message' => 'Terjadi kesalahan saat memproses data: ' . $e->getMessage()], 500);
+        }
     }
 
     public function syncFromSpmb(Request $request)
@@ -346,7 +659,7 @@ class MahasiswaController extends Controller
             $status = $request->status;
             $user = $request->user();
             
-            if ($user && ($user->hasRole('admin') || $user->hasRole('dosen'))) {
+            if ($user && ($user->isAdmin() || $user->hasRole('dosen'))) {
                 $status = $status ?? 'disetujui';
             } else {
                 // Students can only save as draft or diajukan
@@ -358,6 +671,16 @@ class MahasiswaController extends Controller
             $konversi = null;
             if ($mhs->konversi_id) {
                 $konversi = KonversiTransfer::find($mhs->konversi_id);
+            }
+
+            // Konversi yang sudah DISETUJUI terkunci bagi mahasiswa (hubungi BAAK).
+            // Admin/dosen/superadmin boleh merevisi (mis. koreksi) — status ditentukan ulang di bawah.
+            $isStaff = $user && ($user->isAdmin() || $user->hasRole('dosen'));
+            if ($konversi && $konversi->status === 'disetujui' && !$isStaff) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Penyetaraan sudah disetujui dan terkunci. Hubungi BAAK bila ada koreksi.',
+                ], 403);
             }
 
             if ($konversi) {
@@ -404,9 +727,27 @@ class MahasiswaController extends Controller
         });
     }
 
+    /**
+     * Update konversi via PUT /konversi/{id} (alias eksplisit agar tidak 405).
+     * Didelegasikan ke storeKonversi (upsert + kunci disetujui tetap berlaku).
+     */
+    public function updateKonversi(Request $request, $id)
+    {
+        $konversi = KonversiTransfer::findOrFail($id);
+        $request->merge(['mahasiswa_id' => $konversi->mahasiswa_id]);
+
+        return $this->storeKonversi($request);
+    }
+
     public function destroyKonversi($id)
     {
         $konversi = KonversiTransfer::findOrFail($id);
+        if ($konversi->status === 'disetujui') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Konversi yang sudah disetujui tidak dapat dihapus (dokumen akademik resmi). Tolak statusnya terlebih dahulu bila memang batal.',
+            ], 422);
+        }
         Mahasiswa::where('konversi_id', $konversi->id)->update(['konversi_id' => null]);
         $konversi->delete();
 
@@ -421,21 +762,90 @@ class MahasiswaController extends Controller
         $request->validate([
             'status' => 'required|in:draft,diajukan,disetujui,ditolak',
             'catatan' => 'nullable|string',
+            'details' => 'nullable|array',
+            'details.*.id' => 'required|exists:siakad_konversi_transfer_detail,id',
+            'details.*.status' => 'required|in:diakui,ditolak',
+            'details.*.catatan_penolakan' => 'nullable|string|max:500',
         ]);
 
-        $konversi = KonversiTransfer::findOrFail($id);
-        
-        $konversi->update([
-            'status' => $request->status,
-            'diproses_oleh' => $request->user()?->id,
-            'catatan' => $request->catatan ?? $konversi->catatan,
+        $konversi = KonversiTransfer::with('details')->findOrFail($id);
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $konversi) {
+            // Keputusan per-MK (parsial): tandai diakui/ditolak per baris
+            if ($request->filled('details')) {
+                foreach ($request->details as $d) {
+                    $detail = $konversi->details->firstWhere('id', $d['id']);
+                    if (!$detail) {
+                        continue;
+                    }
+                    $detail->update([
+                        'status' => $d['status'],
+                        'catatan_penolakan' => $d['status'] === 'ditolak' ? ($d['catatan_penolakan'] ?? null) : null,
+                    ]);
+                }
+            }
+
+            // Menyetujui butuh minimal 1 MK diakui; kalau semua ditolak, tolak keseluruhan
+            if ($request->status === 'disetujui' && $konversi->details()->where('status', 'diakui')->count() === 0) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tidak ada MK yang diakui. Tolak keseluruhan usulan (status ditolak) bila memang tidak ada yang memenuhi syarat.',
+                ], 422);
+            }
+
+            $konversi->update([
+                'status' => $request->status,
+                'diproses_oleh' => $request->user()?->id,
+                'catatan' => $request->catatan ?? $konversi->catatan,
+            ]);
+
+            $diakui = $konversi->details()->where('status', 'diakui')->count();
+            $ditolak = $konversi->details()->where('status', 'ditolak')->count();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Status konversi menjadi: {$request->status} ({$diakui} diakui, {$ditolak} ditolak).",
+                'data' => $konversi->load('details.mataKuliahDiakui'),
+            ]);
+        });
+    }
+
+    /**
+     * Verifikasi massal per mahasiswa (checklist): setujui/tolak banyak usulan sekaligus.
+     * Keputusan per-MK tetap lewat verifikasi satuan bila perlu parsial.
+     */
+    public function bulkUpdateKonversiStatus(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1|max:200',
+            'ids.*' => 'exists:siakad_konversi_transfer,id',
+            'status' => 'required|in:disetujui,ditolak',
+            'catatan' => 'nullable|string',
         ]);
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Status konversi transfer berhasil diperbarui menjadi: ' . $request->status,
-            'data' => $konversi->load('details.mataKuliahDiakui')
-        ]);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $validated) {
+            $count = 0;
+            foreach ($validated['ids'] as $id) {
+                $konversi = KonversiTransfer::with('details')->find($id);
+                if (!$konversi || $konversi->status === $validated['status']) {
+                    continue;
+                }
+                if ($validated['status'] === 'disetujui' && $konversi->details()->where('status', 'diakui')->count() === 0) {
+                    continue;
+                }
+                $konversi->update([
+                    'status' => $validated['status'],
+                    'diproses_oleh' => $request->user()?->id,
+                    'catatan' => $validated['catatan'] ?? $konversi->catatan,
+                ]);
+                $count++;
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "{$count} usulan konversi diubah menjadi {$validated['status']}.",
+            ]);
+        });
     }
 
     public function bulkAssignPa(Request $request)
@@ -456,6 +866,57 @@ class MahasiswaController extends Controller
             'data' => [
                 'updated_count' => $count,
                 'dosen_wali' => $dosen
+            ]
+        ]);
+    }
+
+    /**
+     * Distribusi mahasiswa tanpa Dosen PA secara merata (Round-Robin) ke dosen terpilih
+     */
+    public function autoDistributePa(Request $request)
+    {
+        $request->validate([
+            'dosen_ids' => 'required|array|min:1',
+            'dosen_ids.*' => 'exists:siakad_dosen,id',
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'angkatan' => 'nullable|integer',
+        ]);
+
+        $query = Mahasiswa::whereNull('dosen_wali_id')->where('status', 'aktif');
+
+        if ($request->filled('program_studi_id')) {
+            $query->where('program_studi_id', $request->program_studi_id);
+        }
+        if ($request->filled('angkatan')) {
+            $query->where('angkatan', $request->angkatan);
+        }
+
+        $unassignedMahasiswas = $query->orderBy('nim')->get();
+        if ($unassignedMahasiswas->isEmpty()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tidak ditemukan mahasiswa aktif yang belum memiliki Dosen PA pada kriteria ini.'
+            ], 422);
+        }
+
+        $dosenIds = $request->dosen_ids;
+        $dosenCount = count($dosenIds);
+        $assignedCount = 0;
+
+        DB::transaction(function () use ($unassignedMahasiswas, $dosenIds, $dosenCount, &$assignedCount) {
+            foreach ($unassignedMahasiswas as $index => $mhs) {
+                $targetDosenId = $dosenIds[$index % $dosenCount];
+                $mhs->update(['dosen_wali_id' => $targetDosenId]);
+                $assignedCount++;
+            }
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Berhasil mendistribusikan {$assignedCount} mahasiswa secara merata kepada {$dosenCount} Dosen PA terpilih.",
+            'data' => [
+                'assigned_count' => $assignedCount,
+                'dosen_count' => $dosenCount,
             ]
         ]);
     }

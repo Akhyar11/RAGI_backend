@@ -134,6 +134,19 @@ class AsetController extends Controller
             $query->where('status', $request->status);
         }
 
+        $user = $request->user();
+        if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
+            $query->forLaboran($user);
+        }
+
+        if ($request->filled('is_borrowable')) {
+            $query->where('is_borrowable', $request->boolean('is_borrowable'));
+        }
+
+        if ($request->filled('is_lab_asset')) {
+            $query->where('is_lab_asset', $request->boolean('is_lab_asset'));
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -170,6 +183,8 @@ class AsetController extends Controller
                 'ruangan_id' => $request->ruangan_id,
                 'kondisi' => $request->kondisi,
                 'status' => $request->status,
+                'is_borrowable' => $request->is_borrowable,
+                'is_lab_asset' => $request->is_lab_asset,
                 'sort_by' => $sortBy,
                 'sort_order' => $sortOrder,
             ],
@@ -242,6 +257,37 @@ class AsetController extends Controller
                 'harga_perolehan' => (float) $aset->harga_perolehan,
                 'nilai_buku_saat_ini' => $nilaiBuku,
             ],
+        ]);
+    }
+
+    public function getLabel(Aset $aset): JsonResponse
+    {
+        $this->authorize('view', $aset);
+
+        $labelData = $this->service->generateLabelData($aset);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data label barcode & QR code aset berhasil diambil',
+            'data' => $labelData,
+        ]);
+    }
+
+    public function getBatchLabels(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Aset::class);
+
+        $request->validate([
+            'aset_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'aset_ids.*' => ['integer', 'exists:sinapra_aset,id'],
+        ]);
+
+        $labels = $this->service->generateBatchLabelData($request->input('aset_ids'));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data label barcode & QR code batch aset berhasil diambil',
+            'data' => $labels,
         ]);
     }
 }

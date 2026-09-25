@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Siakad\Kelulusan;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\Krs;
+use App\Http\Requests\Siakad\StoreKelulusanRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -42,19 +43,9 @@ class KelulusanController extends Controller
         ]]);
     }
 
-    public function store(Request $request)
+    public function store(StoreKelulusanRequest $request)
     {
-        $validated = $request->validate([
-            'mahasiswa_id' => 'required|exists:siakad_mahasiswa,id',
-            'tahun_akademik_id' => 'required|exists:spmb_master_tahun_akademik,id',
-            'tanggal_sidang' => 'nullable|date',
-            'ipk_akhir' => 'required|numeric|min:0|max:4',
-            'total_sks' => 'required|integer|min:100',
-            'masa_studi_semester' => 'required|integer|min:1|max:28',
-            'predikat' => 'nullable|in:memuaskan,sangat_memuaskan,cum_laude,dengan_pujian',
-            'nomor_ijazah' => 'nullable|string|max:100|unique:siakad_kelulusan,nomor_ijazah',
-            'tanggal_ijazah' => 'nullable|date',
-        ]);
+        $validated = $request->validated();
         return DB::transaction(function () use ($validated, $request) {
             if ((float) $validated['ipk_akhir'] < 2.00 || (int) $validated['total_sks'] < 144) {
                 return response()->json(['status' => 'error', 'message' => 'Syarat yudisium belum terpenuhi (min IPK 2.00 & 144 SKS).'], 422);

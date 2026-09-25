@@ -36,7 +36,7 @@ class JabatanController extends Controller
         }
 
         $request->validate([
-            'unit_kerja_id' => 'nullable|exists:unit_kerja,id',
+            'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
             'nama' => 'required|string',
             'tipe' => 'required|in:struktural,fungsional,teknis',
             'level_jabatan' => 'integer',
@@ -74,7 +74,7 @@ class JabatanController extends Controller
         $jabatan = Jabatan::findOrFail($id);
 
         $request->validate([
-            'unit_kerja_id' => 'nullable|exists:unit_kerja,id',
+            'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
             'nama' => 'sometimes|string',
             'tipe' => 'sometimes|in:struktural,fungsional,teknis',
             'level_jabatan' => 'integer',

@@ -27,6 +27,19 @@ class PeminjamanRuanganPolicy
         return $user->hasPermission('sinapra.peminjaman_ruangan.approve');
     }
 
+    public function approveLaboran(User $user, PeminjamanRuangan $peminjamanRuangan): bool
+    {
+        if ($user->isSuperAdmin() || $user->hasRole('admin_sarpras')) {
+            return true;
+        }
+
+        if (!$user->hasPermission('sinapra.peminjaman_ruangan.approve_laboran')) {
+            return false;
+        }
+
+        return $peminjamanRuangan->ruangan?->laboran()->where('core_users.id', $user->id)->exists() ?? false;
+    }
+
     public function delete(User $user, PeminjamanRuangan $peminjamanRuangan): bool
     {
         return $user->hasPermission('sinapra.peminjaman_ruangan.delete') || $user->id === $peminjamanRuangan->user_id;

@@ -66,6 +66,13 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Simpeg\UsulanJafung::observe(\App\Observers\Simpeg\UsulanJafungObserver::class);
         \App\Models\Simpeg\PegawaiKomponenGaji::observe(\App\Observers\Simpeg\PegawaiKomponenGajiObserver::class);
 
+        // SINAPRA Observers
+        \App\Models\LabBhp::observe(\App\Observers\Sinapra\LabBhpObserver::class);
+        \App\Models\LabBhpTransaksi::observe(\App\Observers\Sinapra\LabBhpTransaksiObserver::class);
+        \App\Models\BebasTanggungan::observe(\App\Observers\Sinapra\BebasTanggunganObserver::class);
+        \App\Models\AlatKalibrasi::observe(\App\Observers\Sinapra\AlatKalibrasiObserver::class);
+        \App\Models\LaboranRuangan::observe(\App\Observers\Sinapra\LaboranRuanganObserver::class);
+
         // SINAPRA Policies
         Gate::policy(\App\Models\Gedung::class, \App\Policies\Sinapra\GedungPolicy::class);
         Gate::policy(\App\Models\Ruangan::class, \App\Policies\Sinapra\RuanganPolicy::class);
@@ -75,6 +82,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(\App\Models\PeminjamanAset::class, \App\Policies\Sinapra\PeminjamanAsetPolicy::class);
         Gate::policy(\App\Models\MaintenanceLog::class, \App\Policies\Sinapra\MaintenanceLogPolicy::class);
         Gate::policy(\App\Models\PengajuanPengadaan::class, \App\Policies\Sinapra\PengajuanPengadaanPolicy::class);
+        Gate::policy(\App\Models\LabBhp::class, \App\Policies\Sinapra\LabBhpPolicy::class);
+        Gate::policy(\App\Models\BebasTanggungan::class, \App\Policies\Sinapra\BebasTanggunganPolicy::class);
+        Gate::policy(\App\Models\AlatKalibrasi::class, \App\Policies\Sinapra\AlatKalibrasiPolicy::class);
 
         Gate::before(function (User $user, string $ability) {
             // Super admin bypass semua permission (dinamis berdasarkan system_settings superadmin_role)

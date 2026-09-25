@@ -16,6 +16,7 @@ class Ruangan extends Model
 
     protected $fillable = [
         'gedung_id',
+        'tipe_ruangan_id',
         'kode',
         'nama',
         'lantai',
@@ -28,12 +29,21 @@ class Ruangan extends Model
     ];
 
     protected $casts = [
+        'tipe_ruangan_id' => 'integer',
         'lantai' => 'integer',
         'kapasitas' => 'integer',
         'ada_ac' => 'boolean',
         'ada_proyektor' => 'boolean',
         'ada_wifi' => 'boolean',
     ];
+
+    /**
+     * Relasi ke Master Tipe Ruangan
+     */
+    public function tipeRuangan(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Sinapra\MasterTipeRuangan::class, 'tipe_ruangan_id');
+    }
 
     /**
      * Relasi ke Gedung
@@ -65,5 +75,31 @@ class Ruangan extends Model
     public function maintenanceLogs(): HasMany
     {
         return $this->hasMany(MaintenanceLog::class, 'ruangan_id');
+    }
+
+    /**
+     * Relasi ke penugasan laboran
+     */
+    public function laboranRuangan(): HasMany
+    {
+        return $this->hasMany(LaboranRuangan::class, 'ruangan_id');
+    }
+
+    /**
+     * Relasi ke User laboran yang ditugaskan
+     */
+    public function laboran()
+    {
+        return $this->belongsToMany(User::class, 'sinapra_laboran_ruangan', 'ruangan_id', 'user_id')
+            ->withPivot('is_primary')
+            ->withTimestamps();
+    }
+
+    /**
+     * Scope ruangan bertipe laboratorium
+     */
+    public function scopeIsLab($query)
+    {
+        return $query->where('tipe', 'lab');
     }
 }

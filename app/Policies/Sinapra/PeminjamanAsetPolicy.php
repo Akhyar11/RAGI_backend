@@ -27,6 +27,19 @@ class PeminjamanAsetPolicy
         return $user->hasPermission('sinapra.peminjaman_aset.approve');
     }
 
+    public function approveLaboran(User $user, PeminjamanAset $peminjamanAset): bool
+    {
+        if ($user->isSuperAdmin() || $user->hasRole('admin_sarpras')) {
+            return true;
+        }
+
+        if (!$user->hasPermission('sinapra.peminjaman_aset.approve_laboran')) {
+            return false;
+        }
+
+        return $peminjamanAset->aset?->ruangan?->laboran()->where('core_users.id', $user->id)->exists() ?? false;
+    }
+
     public function delete(User $user, PeminjamanAset $peminjamanAset): bool
     {
         return $user->hasPermission('sinapra.peminjaman_aset.delete') || $user->id === $peminjamanAset->user_id;

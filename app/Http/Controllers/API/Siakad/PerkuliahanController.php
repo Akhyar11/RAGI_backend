@@ -11,12 +11,16 @@ use App\Models\Siakad\DosenPengampu;
 use App\Models\Siakad\Krs;
 use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\NilaiMahasiswa;
+use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\Khs;
 use App\Models\Siakad\MataKuliah;
 use App\Models\Siakad\KonversiTransferDetail;
 use App\Models\Siakad\TahunAkademik;
 use App\Services\Siakad\SiakadAkademikService;
 use App\Services\Siakad\KrsService;
+use App\Http\Requests\Siakad\StoreKelasRequest;
+use App\Http\Requests\Siakad\UpdateKelasRequest;
+use App\Http\Requests\Siakad\StoreAbsensiRequest;
 use Illuminate\Support\Facades\DB;
 
 class PerkuliahanController extends Controller
@@ -35,7 +39,7 @@ class PerkuliahanController extends Controller
         $user = $request->user();
         $taId = $request->input('tahun_akademik_id') ?? TahunAkademik::where('is_active', true)->value('id');
 
-        $query = Kelas::with(['mataKuliah', 'ruangan.gedung', 'programStudi', 'dosenPengampu.dosen'])
+        $query = Kelas::with(['mataKuliah', 'ruangan.gedung', 'programStudi', 'programStudis', 'dosenPengampu.dosen'])
             ->when($taId, fn($q) => $q->where('tahun_akademik_id', $taId));
 
         // Jika user adalah dosen, filter jadwal mengajar mereka
@@ -71,8 +75,13 @@ class PerkuliahanController extends Controller
             $prodiId = $request->program_studi_id;
             $query->where(function ($q) use ($prodiId) {
                 $q->where('program_studi_id', $prodiId)
-                  ->orWhereHas('mataKuliah.kurikulum', fn($kq) => $kq->where('program_studi_id', $prodiId));
+                  ->orWhereHas('mataKuliah.kurikulum', fn($kq) => $kq->where('program_studi_id', $prodiId))
+                  ->orWhereHas('programStudis', fn($pq) => $pq->where('siakad_program_studi.id', $prodiId));
             });
+        }
+
+        if ($request->filled('is_gabungan')) {
+            $query->where('is_gabungan', $request->boolean('is_gabungan'));
         }
 
         $data = $query->paginate($request->integer('per_page', 25));
@@ -88,48 +97,41 @@ class PerkuliahanController extends Controller
         ]);
     }
 
-    public function storeKelas(Request $request)
+    public function storeKelas(StoreKelasRequest $request)
     {
-        $request->validate([
-            'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
-            'tahun_akademik_id' => 'required|exists:siakad_tahun_akademik,id',
-            'program_studi_id' => 'required|exists:siakad_program_studi,id',
-            'ruangan_id' => 'nullable|exists:sinapra_ruangan,id',
-            'dosen_id' => 'nullable|exists:siakad_dosen,id',
-            'team_teaching_dosen_ids' => 'nullable|array',
-            'team_teaching_dosen_ids.*' => 'exists:siakad_dosen,id',
-            'kode_kelas' => 'required|string|max:20',
-            'nama_kelas' => 'required|string|max:255',
-            'kapasitas' => 'required|integer|min:1',
-            'kuota_krs' => 'required|integer|min:1',
-            'hari' => 'required|in:senin,selasa,rabu,kamis,jumat,sabtu,minggu',
-            'jam_mulai' => 'required|string',
-            'jam_selesai' => 'required|string',
-        ]);
+        $validated = $request->validated();
 
-        return DB::transaction(function () use ($request) {
-            $mk = MataKuliah::find($request->mata_kuliah_id);
+        return DB::transaction(function () use ($validated) {
+            $mk = MataKuliah::find($validated['mata_kuliah_id']);
 
             $kelas = Kelas::create([
-                'mata_kuliah_id' => $request->mata_kuliah_id,
-                'tahun_akademik_id' => $request->tahun_akademik_id,
-                'program_studi_id' => $request->program_studi_id,
-                'ruangan_id' => $request->ruangan_id,
-                'kode_kelas' => $request->kode_kelas,
-                'nama_kelas' => $request->nama_kelas,
-                'kapasitas' => $request->kapasitas,
-                'kuota_krs' => $request->kuota_krs,
-                'hari' => $request->hari,
-                'jam_mulai' => $request->jam_mulai,
-                'jam_selesai' => $request->jam_selesai,
+                'mata_kuliah_id' => $validated['mata_kuliah_id'],
+                'tahun_akademik_id' => $validated['tahun_akademik_id'],
+                'program_studi_id' => $validated['program_studi_id'],
+                'ruangan_id' => $validated['ruangan_id'] ?? null,
+                'kode_kelas' => $validated['kode_kelas'],
+                'nama_kelas' => $validated['nama_kelas'],
+                'kapasitas' => $validated['kapasitas'],
+                'kuota_krs' => $validated['kuota_krs'],
+                'hari' => $validated['hari'],
+                'jam_mulai' => $validated['jam_mulai'],
+                'jam_selesai' => $validated['jam_selesai'],
                 'status' => 'draft',
+                'is_gabungan' => $validated['is_gabungan'] ?? false,
             ]);
 
+            // Prodi peserta kelas gabungan (selalu mencakup homebase)
+            $gabunganIds = collect($validated['gabungan_program_studi_ids'] ?? [])
+                ->push($validated['program_studi_id'])->unique()->values()->toArray();
+            if ($kelas->is_gabungan) {
+                $kelas->programStudis()->sync($gabunganIds);
+            }
+
             // Dosen Pengampu Utama (yang dilaporkan resmi ke Feeder)
-            if ($request->filled('dosen_id')) {
+            if (!empty($validated['dosen_id'])) {
                 DosenPengampu::create([
                     'kelas_id' => $kelas->id,
-                    'dosen_id' => $request->dosen_id,
+                    'dosen_id' => $validated['dosen_id'],
                     'peran' => 'pengampu_utama',
                     'sks_substansi_total' => $mk?->total_sks ?? 3,
                     'rencana_tatap_muka' => 16,
@@ -137,9 +139,9 @@ class PerkuliahanController extends Controller
             }
 
             // Dosen Team Teaching (Anggota Pengajar Tambahan)
-            if ($request->filled('team_teaching_dosen_ids') && is_array($request->team_teaching_dosen_ids)) {
-                foreach ($request->team_teaching_dosen_ids as $ttDosenId) {
-                    if ($ttDosenId && $ttDosenId != $request->dosen_id) {
+            if (!empty($validated['team_teaching_dosen_ids']) && is_array($validated['team_teaching_dosen_ids'])) {
+                foreach ($validated['team_teaching_dosen_ids'] as $ttDosenId) {
+                    if ($ttDosenId && $ttDosenId != ($validated['dosen_id'] ?? null)) {
                         DosenPengampu::create([
                             'kelas_id' => $kelas->id,
                             'dosen_id' => $ttDosenId,
@@ -154,55 +156,73 @@ class PerkuliahanController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'Kelas perkuliahan berhasil dibuat dengan tim pengajar terdaftar',
-                'data' => $kelas->load(['mataKuliah', 'ruangan', 'dosenPengampu.dosen'])
+                'data' => $kelas->load(['mataKuliah', 'ruangan', 'dosenPengampu.dosen', 'programStudis'])
             ], 201);
         });
     }
 
-    public function updateKelas(Request $request, $id)
+    public function showKelas($id)
+    {
+        $kelas = Kelas::with([
+            'mataKuliah.kurikulum.programStudi',
+            'tahunAkademik',
+            'programStudi',
+            'programStudis',
+            'ruangan.gedung',
+            'dosenPengampu.dosen.programStudi',
+        ])->findOrFail($id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Detail kelas perkuliahan berhasil dimuat',
+            'data' => $kelas,
+        ]);
+    }
+
+    public function updateKelas(UpdateKelasRequest $request, $id)
     {
         $kelas = Kelas::findOrFail($id);
-        $request->validate([
-            'nama_kelas' => 'required|string|max:255',
-            'ruangan_id' => 'nullable|exists:sinapra_ruangan,id',
-            'dosen_id' => 'nullable|exists:siakad_dosen,id',
-            'team_teaching_dosen_ids' => 'nullable|array',
-            'team_teaching_dosen_ids.*' => 'exists:siakad_dosen,id',
-            'kapasitas' => 'required|integer|min:1',
-            'kuota_krs' => 'required|integer|min:1',
-            'hari' => 'required|in:senin,selasa,rabu,kamis,jumat,sabtu,minggu',
-            'jam_mulai' => 'required|string',
-            'jam_selesai' => 'required|string',
-        ]);
+        $validated = $request->validated();
 
-        return DB::transaction(function () use ($request, $kelas) {
-            $kelas->update($request->only([
-                'nama_kelas',
-                'ruangan_id',
-                'kapasitas',
-                'kuota_krs',
-                'hari',
-                'jam_mulai',
-                'jam_selesai',
-            ]));
+        return DB::transaction(function () use ($validated, $kelas) {
+            $kelas->update([
+                'nama_kelas' => $validated['nama_kelas'],
+                'ruangan_id' => $validated['ruangan_id'] ?? null,
+                'kapasitas' => $validated['kapasitas'],
+                'kuota_krs' => $validated['kuota_krs'],
+                'hari' => $validated['hari'],
+                'jam_mulai' => $validated['jam_mulai'],
+                'jam_selesai' => $validated['jam_selesai'],
+                'is_gabungan' => $validated['is_gabungan'] ?? $kelas->is_gabungan,
+            ]);
 
-            if ($request->has('dosen_id') || $request->has('team_teaching_dosen_ids')) {
+            if (array_key_exists('gabungan_program_studi_ids', $validated)) {
+                if ($kelas->is_gabungan) {
+                    $ids = collect($validated['gabungan_program_studi_ids'] ?? [])
+                        ->push($kelas->program_studi_id)->unique()->values()->toArray();
+                    $kelas->programStudis()->sync($ids);
+                } else {
+                    $kelas->programStudis()->detach();
+                }
+            }
+
+            if (array_key_exists('dosen_id', $validated) || array_key_exists('team_teaching_dosen_ids', $validated)) {
                 DosenPengampu::where('kelas_id', $kelas->id)->delete();
                 $mk = $kelas->mataKuliah;
 
-                if ($request->filled('dosen_id')) {
+                if (!empty($validated['dosen_id'])) {
                     DosenPengampu::create([
                         'kelas_id' => $kelas->id,
-                        'dosen_id' => $request->dosen_id,
+                        'dosen_id' => $validated['dosen_id'],
                         'peran' => 'pengampu_utama',
                         'sks_substansi_total' => $mk?->total_sks ?? 3,
                         'rencana_tatap_muka' => 16,
                     ]);
                 }
 
-                if ($request->filled('team_teaching_dosen_ids') && is_array($request->team_teaching_dosen_ids)) {
-                    foreach ($request->team_teaching_dosen_ids as $ttDosenId) {
-                        if ($ttDosenId && $ttDosenId != $request->dosen_id) {
+                if (!empty($validated['team_teaching_dosen_ids']) && is_array($validated['team_teaching_dosen_ids'])) {
+                    foreach ($validated['team_teaching_dosen_ids'] as $ttDosenId) {
+                        if ($ttDosenId && $ttDosenId != ($validated['dosen_id'] ?? null)) {
                             DosenPengampu::create([
                                 'kelas_id' => $kelas->id,
                                 'dosen_id' => $ttDosenId,
@@ -298,6 +318,14 @@ class PerkuliahanController extends Controller
             }
         }
 
+        // Filter khusus mahasiswa konversi / transfer yang memerlukan review DPA
+        if ($request->boolean('only_konversi')) {
+            $query->whereHas('mahasiswa', function ($mq) {
+                $mq->whereNotNull('konversi_id')
+                   ->orWhereHas('konversiTransfer');
+            });
+        }
+
         $data = $query->orderBy('created_at', 'desc')->paginate($request->integer('per_page', 25));
 
         return response()->json([
@@ -351,6 +379,103 @@ class PerkuliahanController extends Controller
             'data' => [
                 'approved_count' => $approvedCount,
                 'skipped_count' => $skippedCount,
+            ]
+        ]);
+    }
+
+    /**
+     * Monitoring & Rekapitulasi Progres Pengisian KRS BAAK per Program Studi
+     */
+    public function monitoringKrsProdi(Request $request)
+    {
+        $taId = $request->input('tahun_akademik_id') ?? MasterTahunAkademik::where('is_active', true)->value('id');
+        $tahunAkademik = MasterTahunAkademik::find($taId);
+
+        $prodiQuery = \App\Models\Spmb\MasterProgramStudi::with('fakultas')
+            ->where('is_active', true);
+
+        if ($request->filled('program_studi_id')) {
+            $prodiQuery->where('id', $request->program_studi_id);
+        }
+
+        $prodis = $prodiQuery->orderBy('nama')->get();
+
+        $rekapProdi = [];
+        $totalSemuaMahasiswa = 0;
+        $totalSemuaSudahKrs = 0;
+        $totalSemuaDisetujui = 0;
+        $totalSemuaDiajukan = 0;
+        $totalSemuaDraft = 0;
+        $totalSemuaBelumKrs = 0;
+        $totalSemuaTerkunciKeuangan = 0;
+
+        foreach ($prodis as $prodi) {
+            $mhsAktifCount = Mahasiswa::where('program_studi_id', $prodi->id)
+                ->where('status', 'aktif')
+                ->count();
+
+            $krsRecords = Krs::whereHas('mahasiswa', function ($q) use ($prodi) {
+                $q->where('program_studi_id', $prodi->id)->where('status', 'aktif');
+            })
+            ->where('tahun_akademik_id', $taId)
+            ->get();
+
+            $draftCount = $krsRecords->where('status', 'draft')->count();
+            $diajukanCount = $krsRecords->where('status', 'diajukan')->count();
+            $disetujuiCount = $krsRecords->where('status', 'disetujui')->count();
+            $terkunciKeuanganCount = $krsRecords->where('locked_by_keuangan', true)->count();
+            $sudahKrsCount = $krsRecords->count();
+            $belumKrsCount = max(0, $mhsAktifCount - $sudahKrsCount);
+
+            $persentaseKrs = $mhsAktifCount > 0 ? round(($sudahKrsCount / $mhsAktifCount) * 100, 1) : 0;
+            $persentaseDisetujui = $mhsAktifCount > 0 ? round(($disetujuiCount / $mhsAktifCount) * 100, 1) : 0;
+
+            $rekapProdi[] = [
+                'prodi_id' => $prodi->id,
+                'kode_prodi' => $prodi->kode_prodi,
+                'nama_prodi' => $prodi->nama,
+                'jenjang' => $prodi->jenjang,
+                'fakultas' => $prodi->fakultas?->nama ?? '-',
+                'total_mahasiswa_aktif' => $mhsAktifCount,
+                'sudah_krs' => $sudahKrsCount,
+                'draft' => $draftCount,
+                'diajukan' => $diajukanCount,
+                'disetujui' => $disetujuiCount,
+                'belum_krs' => $belumKrsCount,
+                'terkunci_keuangan' => $terkunciKeuanganCount,
+                'persentase_krs' => $persentaseKrs,
+                'persentase_disetujui' => $persentaseDisetujui,
+            ];
+
+            $totalSemuaMahasiswa += $mhsAktifCount;
+            $totalSemuaSudahKrs += $sudahKrsCount;
+            $totalSemuaDisetujui += $disetujuiCount;
+            $totalSemuaDiajukan += $diajukanCount;
+            $totalSemuaDraft += $draftCount;
+            $totalSemuaBelumKrs += $belumKrsCount;
+            $totalSemuaTerkunciKeuangan += $terkunciKeuanganCount;
+        }
+
+        $overallPersentaseKrs = $totalSemuaMahasiswa > 0 ? round(($totalSemuaSudahKrs / $totalSemuaMahasiswa) * 100, 1) : 0;
+        $overallPersentaseDisetujui = $totalSemuaMahasiswa > 0 ? round(($totalSemuaDisetujui / $totalSemuaMahasiswa) * 100, 1) : 0;
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data monitoring KRS berhasil dimuat',
+            'data' => [
+                'tahun_akademik' => $tahunAkademik,
+                'summary' => [
+                    'total_mahasiswa_aktif' => $totalSemuaMahasiswa,
+                    'total_sudah_krs' => $totalSemuaSudahKrs,
+                    'total_disetujui' => $totalSemuaDisetujui,
+                    'total_diajukan' => $totalSemuaDiajukan,
+                    'total_draft' => $totalSemuaDraft,
+                    'total_belum_krs' => $totalSemuaBelumKrs,
+                    'total_terkunci_keuangan' => $totalSemuaTerkunciKeuangan,
+                    'persentase_krs' => $overallPersentaseKrs,
+                    'persentase_disetujui' => $overallPersentaseDisetujui,
+                ],
+                'prodi' => $rekapProdi,
             ]
         ]);
     }
@@ -422,6 +547,9 @@ class PerkuliahanController extends Controller
 
         if ($mhs->konversiTransfer && $mhs->konversiTransfer->status === 'disetujui' && $mhs->konversiTransfer->details) {
             foreach ($mhs->konversiTransfer->details as $konv) {
+                if (($konv->status ?? 'diakui') === 'ditolak') {
+                    continue;
+                }
                 $mk = $konv->mataKuliahDiakui;
                 $sks = $mk ? $mk->total_sks : $konv->sks_asal;
                 $huruf = strtoupper(trim((string) $konv->nilai_huruf_asal));
@@ -529,9 +657,12 @@ class PerkuliahanController extends Controller
             $enrolledKelasIds = $activeKrs->krsDetails()->pluck('kelas_id')->toArray();
         }
 
-        $kelases = Kelas::with(['mataKuliah.prasyarats.prasyarat', 'ruangan', 'dosenPengampu.dosen'])
+        $kelases = Kelas::with(['mataKuliah.prasyarats.prasyarat', 'ruangan', 'dosenPengampu.dosen', 'programStudis'])
             ->where('tahun_akademik_id', $targetTaId)
-            ->when($prodiId, fn($q) => $q->where('program_studi_id', $prodiId))
+            ->when($prodiId, fn($q) => $q->where(function ($qq) use ($prodiId) {
+                $qq->where('program_studi_id', $prodiId)
+                   ->orWhereHas('programStudis', fn($pq) => $pq->where('siakad_program_studi.id', $prodiId));
+            }))
             ->where('status', 'aktif')
             ->get();
 
@@ -549,6 +680,7 @@ class PerkuliahanController extends Controller
                 'dosen_pengampu' => $k->dosenPengampu?->first()?->dosen?->nama_lengkap,
                 'jadwal' => ($k->hari ? ucfirst($k->hari) : null) . ($k->jam_mulai && $k->jam_selesai ? ', ' . substr($k->jam_mulai, 0, 5) . ' - ' . substr($k->jam_selesai, 0, 5) : ''),
                 'sisa_kuota' => $k->kuota_krs,
+                'is_gabungan' => (bool) $k->is_gabungan,
                 'is_converted' => $isConverted,
                 'is_enrolled' => $isEnrolled,
                 'is_full' => $isFull,
@@ -704,12 +836,37 @@ class PerkuliahanController extends Controller
             return response()->json(['status' => 'error', 'message' => 'KRS masih kosong. Silakan pilih mata kuliah terlebih dahulu.'], 422);
         }
 
+        // Cek apakah mahasiswa merupakan mahasiswa transfer / memiliki usulan konversi
+        $hasKonversi = !empty($mhs->konversi_id) || \App\Models\Siakad\KonversiTransfer::where('mahasiswa_id', $mhs->id)->exists();
+
+        if (!$hasKonversi) {
+            // Mahasiswa Reguler: Otomatis Disetujui Sistem jika tidak ada tunggakan keuangan
+            if ($krs->locked_by_keuangan) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'KRS tidak dapat diajukan/disetujui karena masih terkunci oleh tagihan keuangan (SIKEU).'
+                ], 422);
+            }
+
+            $krs->status = 'disetujui';
+            $krs->disetujui_oleh = $mhs->dosen_wali_id;
+            $krs->disetujui_at = now();
+            $krs->save();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'KRS mahasiswa reguler berhasil diverifikasi dan disetujui secara otomatis oleh sistem.',
+                'data' => $krs
+            ]);
+        }
+
+        // Mahasiswa Konversi / Transfer: Memerlukan validasi & persetujuan Dosen PA
         $krs->status = 'diajukan';
         $krs->save();
 
         return response()->json([
             'status' => 'success',
-            'message' => 'KRS berhasil diajukan ke Dosen Wali untuk persetujuan.',
+            'message' => 'KRS mahasiswa transfer berhasil diajukan ke Dosen Pembimbing Akademik (DPA) untuk peninjauan konversi nilai.',
             'data' => $krs
         ]);
     }
@@ -798,28 +955,39 @@ class PerkuliahanController extends Controller
             $query->whereHas('krsDetail', fn($q) => $q->where('kelas_id', $request->kelas_id));
         }
 
+        if ($request->filled('mahasiswa_id')) {
+            $query->whereHas('krsDetail.krs', fn($q) => $q->where('mahasiswa_id', $request->mahasiswa_id));
+        }
+
         $data = $query->paginate($request->integer('per_page', 50));
 
         // Hitung KHS / Ringkasan IPK jika diminta untuk mahasiswa
         $summary = null;
-        if ($mhs) {
-            $khs = Khs::where('mahasiswa_id', $mhs->id)
+        $summaryMhs = $mhs;
+        if (!$summaryMhs && $request->filled('mahasiswa_id')) {
+            $summaryMhs = Mahasiswa::find($request->mahasiswa_id);
+        }
+        if ($summaryMhs) {
+            $khs = Khs::where('mahasiswa_id', $summaryMhs->id)
                 ->when($taId, fn($q) => $q->where('tahun_akademik_id', $taId))
                 ->latest()
                 ->first();
 
             $totalSksTransfer = 0;
-            if (!$khs && $mhs->konversiTransfer && $mhs->konversiTransfer->status === 'disetujui' && $mhs->konversiTransfer->details) {
-                foreach ($mhs->konversiTransfer->details as $konv) {
+            if (!$khs && $summaryMhs->konversiTransfer && $summaryMhs->konversiTransfer->status === 'disetujui' && $summaryMhs->konversiTransfer->details) {
+                foreach ($summaryMhs->konversiTransfer->details as $konv) {
+                    if (($konv->status ?? 'diakui') === 'ditolak') {
+                        continue;
+                    }
                     $mk = $konv->mataKuliahDiakui;
                     $totalSksTransfer += $mk ? $mk->total_sks : $konv->sks_asal;
                 }
             }
 
             $summary = [
-                'mahasiswa' => $mhs->load('programStudi.fakultas', 'dosenWali'),
+                'mahasiswa' => $summaryMhs->load('programStudi.fakultas', 'dosenWali'),
                 'ips' => (float) ($khs?->ips ?? 0.00),
-                'ipk' => (float) ($khs?->ipk ?? $mhs->ipk),
+                'ipk' => (float) ($khs?->ipk ?? $summaryMhs->ipk),
                 'sks_semester' => (int) ($khs?->total_sks_semester ?? 0),
                 'sks_total' => (int) ($khs?->sks_kumulatif ?? $totalSksTransfer),
             ];
@@ -847,25 +1015,39 @@ class PerkuliahanController extends Controller
             'is_final' => 'nullable|boolean',
         ]);
 
-        $nilai = NilaiMahasiswa::findOrFail($id);
+        $nilai = NilaiMahasiswa::with('krsDetail.kelas.tahunAkademik', 'krsDetail.kelas.mataKuliah.kurikulum')->findOrFail($id);
+        $mode = $nilai->krsDetail?->kelas?->tahunAkademik?->mode_penilaian ?? 'konvensional';
+        if ($mode !== 'konvensional') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Nilai kelas ini dikelola via asesmen OBE (mode: ' . $mode . '). Gunakan menu Penilaian & KHS Kelas (OBE) agar sinkron dengan komponen dan CPMK.'
+            ], 422);
+        }
         $harian = $request->input('nilai_harian', $nilai->nilai_harian);
         $uts = $request->input('nilai_uts', $nilai->nilai_uts);
         $uas = $request->input('nilai_uas', $nilai->nilai_uas);
         $praktik = $request->input('nilai_praktik', $nilai->nilai_praktik);
 
-        // Rumus bobot: 20% harian, 25% uts, 35% uas, 20% praktik
+        // Rumus bobot konvensional: 20% harian, 25% uts, 35% uas, 20% praktik
         $akhir = ($harian * 0.20) + ($uts * 0.25) + ($uas * 0.35) + ($praktik * 0.20);
-        
-        $huruf = 'E';
-        $mutu = 0.00;
-        if ($akhir >= 85) { $huruf = 'A'; $mutu = 4.00; }
-        elseif ($akhir >= 80) { $huruf = 'A-'; $mutu = 3.75; }
-        elseif ($akhir >= 75) { $huruf = 'B+'; $mutu = 3.25; }
-        elseif ($akhir >= 70) { $huruf = 'B'; $mutu = 3.00; }
-        elseif ($akhir >= 65) { $huruf = 'B-'; $mutu = 2.75; }
-        elseif ($akhir >= 60) { $huruf = 'C+'; $mutu = 2.25; }
-        elseif ($akhir >= 55) { $huruf = 'C'; $mutu = 2.00; }
-        elseif ($akhir >= 40) { $huruf = 'D'; $mutu = 1.00; }
+
+        $prodiId = $nilai->krsDetail?->kelas?->mataKuliah?->kurikulum?->program_studi_id;
+        $skala = SkalaNilai::konversiNilai((float) $akhir, $prodiId);
+        if ($skala) {
+            $huruf = $skala->nilai_huruf;
+            $mutu = (float) $skala->bobot_indeks;
+        } else {
+            $huruf = 'E';
+            $mutu = 0.00;
+            if ($akhir >= 85) { $huruf = 'A'; $mutu = 4.00; }
+            elseif ($akhir >= 80) { $huruf = 'A-'; $mutu = 3.75; }
+            elseif ($akhir >= 75) { $huruf = 'B+'; $mutu = 3.25; }
+            elseif ($akhir >= 70) { $huruf = 'B'; $mutu = 3.00; }
+            elseif ($akhir >= 65) { $huruf = 'B-'; $mutu = 2.75; }
+            elseif ($akhir >= 60) { $huruf = 'C+'; $mutu = 2.25; }
+            elseif ($akhir >= 55) { $huruf = 'C'; $mutu = 2.00; }
+            elseif ($akhir >= 40) { $huruf = 'D'; $mutu = 1.00; }
+        }
 
         $nilai->update([
             'nilai_harian' => $harian,
@@ -918,16 +1100,24 @@ class PerkuliahanController extends Controller
         ->get();
 
         $items = [];
-        $totalSks = 0;
+        $totalSksDiambil = 0;
+        $totalSksLulus = 0;
         $totalBobotMutu = 0;
 
-        // Masukkan data konversi transfer jika ada
+        // Masukkan data konversi transfer jika ada — mutu via master skala nilai
         if ($mhs->konversiTransfer && $mhs->konversiTransfer->status === 'disetujui' && $mhs->konversiTransfer->details) {
             foreach ($mhs->konversiTransfer->details as $konv) {
+                if (($konv->status ?? 'diakui') === 'ditolak') {
+                    continue;
+                }
                 $mk = $konv->mataKuliahDiakui;
                 $sks = $mk ? $mk->total_sks : $konv->sks_asal;
                 $huruf = strtoupper(trim((string) $konv->nilai_huruf_asal));
-                $mutu = match ($huruf) {
+                $skalaTransfer = SkalaNilai::where('is_active', true)
+                    ->where('nilai_huruf', $huruf)
+                    ->orderByRaw('program_studi_id IS NULL')
+                    ->first();
+                $mutu = $skalaTransfer ? (float) $skalaTransfer->bobot_indeks : match ($huruf) {
                     'A' => 4.00,
                     'A-' => 3.75,
                     'B+' => 3.25,
@@ -944,7 +1134,8 @@ class PerkuliahanController extends Controller
                     continue;
                 }
                 $bobot = $mutu * $sks;
-                $totalSks += $sks;
+                $totalSksDiambil += $sks;
+                $totalSksLulus += $sks;
                 $totalBobotMutu += $bobot;
 
                 $items[] = [
@@ -960,8 +1151,17 @@ class PerkuliahanController extends Controller
             }
         }
 
-        // Masukkan mata kuliah reguler yang sudah dinilai
+        // Masukkan mata kuliah reguler — ambil nilai terbaik per MK (mengulang)
+        $bestByMk = [];
         foreach ($nilaiList as $n) {
+            $kelas = $n->krsDetail?->kelas;
+            $mk = $kelas?->mataKuliah;
+            $mkKey = $mk?->id ?? ('krs-' . $n->krs_detail_id);
+            if (!isset($bestByMk[$mkKey]) || (float) $n->bobot_mutu > (float) $bestByMk[$mkKey]->bobot_mutu) {
+                $bestByMk[$mkKey] = $n;
+            }
+        }
+        foreach ($bestByMk as $n) {
             $krs = $n->krsDetail?->krs;
             $kelas = $n->krsDetail?->kelas;
             $mk = $kelas?->mataKuliah;
@@ -969,7 +1169,10 @@ class PerkuliahanController extends Controller
             $mutu = (float) $n->bobot_mutu;
             $bobot = $mutu * $sks;
 
-            $totalSks += $sks;
+            $totalSksDiambil += $sks;
+            if (($n->nilai_huruf ?? 'E') !== 'E') {
+                $totalSksLulus += $sks;
+            }
             $totalBobotMutu += $bobot;
 
             $items[] = [
@@ -978,14 +1181,14 @@ class PerkuliahanController extends Controller
                 'kode_mk' => $mk?->kode_mk ?? 'MK',
                 'nama_mk' => $mk?->nama ?? 'Mata Kuliah',
                 'sks' => $sks,
-                'nilai_huruf' => $n->nilai_huruf ?? 'A',
+                'nilai_huruf' => $n->nilai_huruf ?? 'E',
                 'bobot_mutu' => $mutu,
                 'mutu_x_sks' => $bobot,
                 'is_transfer' => false,
             ];
         }
 
-        $ipk = $totalSks > 0 ? round($totalBobotMutu / $totalSks, 2) : 0.00;
+        $ipk = $totalSksDiambil > 0 ? round($totalBobotMutu / $totalSksDiambil, 2) : 0.00;
 
         $predikat = 'Memuaskan';
         if ($ipk >= 3.51) {
@@ -1000,8 +1203,9 @@ class PerkuliahanController extends Controller
                 'mahasiswa' => $mhs,
                 'items' => $items,
                 'ringkasan' => [
-                    'total_sks_lulus' => $totalSks,
-                    'total_mutu' => $totalBobotMutu,
+                    'total_sks' => $totalSksDiambil,
+                    'total_sks_lulus' => $totalSksLulus,
+                    'total_mutu' => round($totalBobotMutu, 2),
                     'ipk' => $ipk,
                     'predikat' => $predikat,
                     'tanggal_cetak' => now()->translatedFormat('d F Y'),
@@ -1125,20 +1329,15 @@ class PerkuliahanController extends Controller
         ]);
     }
 
-    public function storeAbsensi(Request $request, $pertemuanId)
+    public function storeAbsensi(StoreAbsensiRequest $request, $pertemuanId)
     {
         $pertemuan = \App\Models\Siakad\Pertemuan::findOrFail($pertemuanId);
         $kelas = Kelas::findOrFail($pertemuan->kelas_id);
         $this->checkRpsApproved($kelas);
 
-        $request->validate([
-            'absensi' => 'required|array',
-            'absensi.*.mahasiswa_id' => 'required|exists:siakad_mahasiswa,id',
-            'absensi.*.status' => 'required|in:hadir,sakit,izin,alfa',
-            'absensi.*.catatan' => 'nullable|string|max:255',
-        ]);
+        $validated = $request->validated();
 
-        foreach ($request->absensi as $item) {
+        foreach ($validated['absensi'] as $item) {
             \App\Models\Siakad\AbsensiMahasiswa::updateOrCreate(
                 ['pertemuan_id' => $pertemuanId, 'mahasiswa_id' => $item['mahasiswa_id']],
                 ['status' => $item['status'], 'catatan' => $item['catatan'] ?? null]

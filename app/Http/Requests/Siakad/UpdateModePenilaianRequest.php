@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Siakad;
 
+use App\Rules\MasterReferensiExists;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateModePenilaianRequest extends FormRequest
@@ -14,7 +15,14 @@ class UpdateModePenilaianRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'mode_penilaian' => 'required|in:full_obe,semi_obe,konvensional',
+            'mode_penilaian' => ['required', 'string', new MasterReferensiExists('mode_penilaian')],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'mode_penilaian.required' => 'Mode penilaian wajib dipilih.',
         ];
     }
 }

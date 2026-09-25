@@ -14,7 +14,7 @@ class UpdateStandarIku5ProdiRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'unit_kerja_id' => 'sometimes|required|integer|exists:unit_kerja,id',
+            'unit_kerja_id' => 'sometimes|required|integer|exists:simpeg_unit_kerja,id',
             'tahun_akademik' => 'sometimes|required|string|max:10',
             'target_publikasi_scopus' => 'sometimes|required|integer|min:0',
             'target_publikasi_sinta' => 'sometimes|required|integer|min:0',

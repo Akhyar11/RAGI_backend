@@ -82,7 +82,19 @@ class User extends Authenticatable
             });
     }
 
-    protected $appends = ['is_superadmin', 'is_admin'];
+    public function laboranRuangan()
+    {
+        return $this->belongsToMany(Ruangan::class, 'sinapra_laboran_ruangan', 'user_id', 'ruangan_id')
+            ->withPivot('is_primary')
+            ->withTimestamps();
+    }
+
+    public function isLaboran(): bool
+    {
+        return $this->hasRole('admin_laboratorium') || $this->laboranRuangan()->exists();
+    }
+
+    protected $appends = ['is_superadmin', 'is_admin', 'referral_code'];
 
     public function getNameAttribute($value): ?string
     {
@@ -184,6 +196,11 @@ class User extends Authenticatable
                   ->orWhere('slug', $shortSlug)
             )
             ->exists();
+    }
+
+    public function hasPermissionTo(string $permission): bool
+    {
+        return $this->hasPermission($permission);
     }
 
     public function hasRole(string $roleSlug): bool

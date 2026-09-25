@@ -219,40 +219,32 @@ class MenuSeeder extends Seeder
                 'permission_slug' => 'siakad.dashboard.read',
                 'order_index' => 1,
             ],
+            // Catatan: KRS & Jadwal tidak dibuat top-level agar tidak aktif ganda —
+            // sudah ada di grup PERKULIAHAN & OBE di bawah.
             [
-                'name' => 'KRS Semester Aktif',
-                'url' => '/siakad/krs',
-                'icon' => 'FaClipboardCheck',
-                'module' => 'siakad',
-                'permission_slug' => 'siakad.krs.read',
-                'order_index' => 2,
-            ],
-            [
-                'name' => 'Jadwal Kuliah & RPS',
-                'url' => '/siakad/perkuliahan/kelas',
-                'icon' => 'FaCalendarCheck',
-                'module' => 'siakad',
-                'permission_slug' => 'siakad.kelas.read',
-                'order_index' => 3,
-            ],
-            [
-                'name' => 'KHS & Transkrip Nilai',
-                'url' => '/siakad/nilai',
+                'name' => 'Hasil Studi (KHS & Transkrip)',
+                'url' => '/siakad/hasil-studi',
                 'icon' => 'FaAward',
                 'module' => 'siakad',
                 'permission_slug' => 'siakad.nilai.read',
                 'order_index' => 4,
             ],
             [
-                'name' => 'MASTER AKADEMIK (BAAK)',
-                'url' => '#master_siakad',
-                'icon' => 'FaDatabase',
+                'name' => 'PERKULIAHAN & OBE',
+                'url' => '#perkuliahan_siakad',
+                'icon' => 'FaCalendarCheck',
                 'module' => 'siakad',
                 'order_index' => 5,
                 'children' => [
-                    ['name' => 'Fakultas & Prodi', 'url' => '/siakad/master/fakultas', 'icon' => 'FaBuilding', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 1],
-                    ['name' => 'Kurikulum OBE', 'url' => '/siakad/master/kurikulum', 'icon' => 'FaBookOpen', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 2],
-                    ['name' => 'Mata Kuliah & Bobot', 'url' => '/siakad/master/matakuliah', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.matakuliah.manage', 'order_index' => 3],
+                    ['name' => 'Kelas & Jadwal', 'url' => '/siakad/perkuliahan/kelas', 'icon' => 'FaCalendarCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.kelas.read', 'order_index' => 1],
+                    ['name' => 'KRS Mahasiswa', 'url' => '/siakad/krs', 'icon' => 'FaClipboardCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.krs.read', 'order_index' => 2],
+                    ['name' => 'Penilaian Kelas (OBE)', 'url' => '/siakad/nilai', 'icon' => 'FaPen', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 3],
+                    ['name' => 'Pemantauan OBE', 'url' => '/siakad/obe', 'icon' => 'FaChartBar', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 4],
+                    ['name' => 'CPL & Kurikulum', 'url' => '/siakad/obe/cpl', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 5],
+                    ['name' => 'CPMK Mata Kuliah', 'url' => '/siakad/obe/cpmk', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 6],
+                    ['name' => 'RPS & Verifikasi', 'url' => '/siakad/obe/rps', 'icon' => 'FaFileAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 7],
+                    ['name' => 'Bank Soal', 'url' => '/siakad/obe/soal', 'icon' => 'FaBookOpen', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 8],
+                    ['name' => 'Ketertiban Dosen Nilai', 'url' => '/siakad/obe/kepatuhan', 'icon' => 'FaUserCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 8],
                 ]
             ],
             [
@@ -262,11 +254,28 @@ class MenuSeeder extends Seeder
                 'module' => 'siakad',
                 'order_index' => 6,
                 'children' => [
-                    ['name' => 'Direktori Mahasiswa', 'url' => '/siakad/civitas/mahasiswa', 'icon' => 'FaUserGraduate', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 1],
+                    ['name' => 'Mahasiswa & Plotting PA', 'url' => '/siakad/civitas/mahasiswa', 'icon' => 'FaUserGraduate', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 1],
                     ['name' => 'Konversi Mahasiswa Transfer', 'url' => '/siakad/civitas/konversi', 'icon' => 'FaExchangeAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.konversi.manage', 'order_index' => 2],
                     ['name' => 'Direktori Dosen Pengajar', 'url' => '/siakad/civitas/dosen', 'icon' => 'FaChalkboardTeacher', 'module' => 'siakad', 'permission_slug' => 'siakad.dosen.manage', 'order_index' => 3],
-                    ['name' => 'Biodata Mahasiswa (Kelas)', 'url' => '/siakad/civitas/biodata', 'icon' => 'FaUser', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 4],
+                    ['name' => 'Biodata Mahasiswa', 'url' => '/siakad/civitas/biodata', 'icon' => 'FaUser', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 4],
                     ['name' => 'Penerima Beasiswa', 'url' => '/siakad/civitas/beasiswa', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.beasiswa.manage', 'order_index' => 5],
+                ]
+            ],
+            [
+                'name' => 'MASTER AKADEMIK (BAAK)',
+                'url' => '#master_siakad',
+                'icon' => 'FaDatabase',
+                'module' => 'siakad',
+                'order_index' => 7,
+                'children' => [
+                    ['name' => 'Tahun Akademik', 'url' => '/siakad/master/tahun-akademik', 'icon' => 'FaCalendarCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 1],
+                    ['name' => 'Fakultas & Prodi', 'url' => '/siakad/master/fakultas', 'icon' => 'FaBuilding', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 2],
+                    ['name' => 'Kurikulum OBE', 'url' => '/siakad/master/kurikulum', 'icon' => 'FaBookOpen', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 3],
+                    ['name' => 'Mata Kuliah', 'url' => '/siakad/master/matakuliah', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.matakuliah.manage', 'order_index' => 4],
+                    ['name' => 'Skala Nilai', 'url' => '/siakad/master/skala-nilai', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 5],
+                    ['name' => 'Konfigurasi Penilaian & OBE', 'url' => '/siakad/master/konfigurasi-penilaian', 'icon' => 'FaSlidersH', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 6],
+                    ['name' => 'Master Referensi', 'url' => '/siakad/master/referensi', 'icon' => 'FaDatabase', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 7],
+                    ['name' => 'Master Tipe Referensi', 'url' => '/siakad/master/tipe-referensi', 'icon' => 'FaTags', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 8],
                 ]
             ],
             [
@@ -274,10 +283,18 @@ class MenuSeeder extends Seeder
                 'url' => '#feeder_siakad',
                 'icon' => 'FaSyncAlt',
                 'module' => 'siakad',
-                'order_index' => 7,
+                'order_index' => 8,
                 'children' => [
                     ['name' => 'Sinkronisasi Neo Feeder', 'url' => '/siakad/feeder-sync', 'icon' => 'FaCloudUploadAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.feeder.manage', 'order_index' => 1],
                 ]
+            ],
+            [
+                'name' => 'Panduan & Alur SIAKAD',
+                'url' => '/siakad/panduan',
+                'icon' => 'FaBookOpen',
+                'module' => 'siakad',
+                'permission_slug' => 'siakad.dashboard.read',
+                'order_index' => 9,
             ],
 
             // ── MODUL SPMB (PENERIMAAN MAHASISWA BARU) ─────────────
@@ -384,6 +401,45 @@ class MenuSeeder extends Seeder
                 'module' => 'sinapra',
                 'permission_slug' => 'sinapra.dashboard.read',
                 'order_index' => 5,
+            ],
+            [
+                'name' => 'Laboratorium & BHP',
+                'url' => '/sinapra/laboratorium',
+                'icon' => 'FaBoxes',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.dashboard.read',
+                'order_index' => 6,
+            ],
+            [
+                'name' => 'Audit & Mutasi',
+                'url' => '/sinapra/audit-mutasi',
+                'icon' => 'FaClipboardCheck',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.dashboard.read',
+                'order_index' => 7,
+            ],
+            [
+                'name' => 'Kalender Ruangan',
+                'url' => '/sinapra/kalender',
+                'icon' => 'FaCalendar',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.dashboard.read',
+                'order_index' => 8,
+            ],
+            [
+                'name' => 'MASTER DATA',
+                'url' => '#master_sinapra',
+                'icon' => 'FaDatabase',
+                'module' => 'sinapra',
+                'order_index' => 9,
+                'children' => [
+                    ['name' => 'Master Kategori Aset', 'url' => '/sinapra/master/kategori-aset', 'icon' => 'FaTags', 'module' => 'sinapra', 'order_index' => 1],
+                    ['name' => 'Master Tipe Ruangan', 'url' => '/sinapra/master/tipe-ruangan', 'icon' => 'FaDoorOpen', 'module' => 'sinapra', 'order_index' => 2],
+                    ['name' => 'Master Vendor & Rekanan', 'url' => '/sinapra/master/vendor', 'icon' => 'FaHandshake', 'module' => 'sinapra', 'order_index' => 3],
+                    ['name' => 'Master Kategori BHP Lab', 'url' => '/sinapra/master/kategori-bhp', 'icon' => 'FaBoxes', 'module' => 'sinapra', 'order_index' => 4],
+                    ['name' => 'Master Satuan Barang', 'url' => '/sinapra/master/satuan', 'icon' => 'FaRulerCombined', 'module' => 'sinapra', 'order_index' => 5],
+                    ['name' => 'Master Referensi Status & Kondisi', 'url' => '/sinapra/master/referensi', 'icon' => 'FaDatabase', 'module' => 'sinapra', 'order_index' => 6],
+                ]
             ],
 
             // ── MODUL SIKEU ───────────────────────────────────────
@@ -564,6 +620,17 @@ class MenuSeeder extends Seeder
             $operatorSdmRole->menus()->syncWithoutDetaching($simpegMenuIds);
         }
 
+        // Attach all SINAPRA menus to admin_sarpras and admin_laboratorium
+        $sinapraMenuIds = Menu::where('module', 'sinapra')->pluck('id')->toArray();
+        $adminSarprasRole = \App\Models\Role::where('slug', 'admin_sarpras')->first();
+        if ($adminSarprasRole) {
+            $adminSarprasRole->menus()->syncWithoutDetaching($sinapraMenuIds);
+        }
+        $adminLabRole = \App\Models\Role::where('slug', 'admin_laboratorium')->first();
+        if ($adminLabRole) {
+            $adminLabRole->menus()->syncWithoutDetaching($sinapraMenuIds);
+        }
+
         $dosenRole = \App\Models\Role::where('slug', 'dosen')->first();
         if ($dosenRole) {
             $dosenSimpegMenuIds = Menu::where('module', 'simpeg')
@@ -571,6 +638,26 @@ class MenuSeeder extends Seeder
                 ->pluck('id')
                 ->toArray();
             $dosenRole->menus()->syncWithoutDetaching($dosenSimpegMenuIds);
+        }
+
+        // Dosen: portal SIAKAD (jadwal, KRS bimbingan, nilai, CPMK/RPS, hasil studi, panduan)
+        if ($dosenRole) {
+            $dosenSiakadMenuIds = Menu::where('module', 'siakad')
+                ->whereIn('url', [
+                    '/siakad',
+                    '#perkuliahan_siakad',
+                    '/siakad/perkuliahan/kelas',
+                    '/siakad/krs',
+                    '/siakad/nilai',
+                    '/siakad/obe/cpmk',
+                    '/siakad/obe/rps',
+                    '/siakad/hasil-studi',
+                    '/siakad/civitas/mahasiswa',
+                    '/siakad/panduan',
+                ])
+                ->pluck('id')
+                ->toArray();
+            $dosenRole->menus()->syncWithoutDetaching($dosenSiakadMenuIds);
         }
 
         // Portal mandiri mahasiswa: dashboard + tagihan via baseAllowed,
@@ -582,6 +669,19 @@ class MenuSeeder extends Seeder
                 ->pluck('id')
                 ->toArray();
             $mahasiswaRole->menus()->syncWithoutDetaching($mhsSikeuMenuIds);
+            // Portal SIAKAD mahasiswa: dashboard, KRS, jadwal, hasil studi, panduan
+            $mhsSiakadMenuIds = Menu::where('module', 'siakad')
+                ->whereIn('url', [
+                    '/siakad',
+                    '#perkuliahan_siakad',
+                    '/siakad/perkuliahan/kelas',
+                    '/siakad/krs',
+                    '/siakad/hasil-studi',
+                    '/siakad/panduan',
+                ])
+                ->pluck('id')
+                ->toArray();
+            $mahasiswaRole->menus()->syncWithoutDetaching($mhsSiakadMenuIds);
         }
 
         // Pimpinan: dashboard + approval direktur + laporan & pantauan (read-only eksekutif).
