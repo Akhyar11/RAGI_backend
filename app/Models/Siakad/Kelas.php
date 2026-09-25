@@ -84,4 +84,9 @@ class Kelas extends Model
     {
         return $this->hasMany(Pertemuan::class, 'kelas_id');
     }
+
+    public function lmsSetting()
+    {
+        return $this->hasOne(\App\Models\Lms\KelasLmsSetting::class, 'kelas_id');
+    }
 }

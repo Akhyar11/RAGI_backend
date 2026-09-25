@@ -10,6 +10,7 @@ use App\Http\Controllers\API\Siakad\PaController;
 use App\Http\Controllers\API\Siakad\MahasiswaBeasiswaController;
 use App\Http\Controllers\API\Siakad\StatusAkademikController;
 use App\Http\Controllers\API\Siakad\KelulusanController;
+use App\Http\Controllers\API\Siakad\LmsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -239,4 +240,41 @@ Route::prefix('obe')->group(function () {
 
     Route::get('/mahasiswa/portofolio', [ObeController::class, 'getMahasiswaPortofolioObe']);
     Route::get('/mahasiswa/{mahasiswaId}/portofolio', [ObeController::class, 'getMahasiswaPortofolioObe']);
+});
+
+// --- LMS & Absensi Terintegrasi Perkuliahan ---
+Route::prefix('lms')->group(function () {
+    // Hak Akses Baca & Partisipasi Mahasiswa/Dosen
+    Route::middleware(['can:siakad.kelas.read'])->group(function () {
+        Route::get('/kelas/my', [LmsController::class, 'getMyKelas']);
+        Route::get('/tugas/my', [LmsController::class, 'getMyAllTugas']);
+        Route::get('/kelas/{kelasId}/overview', [LmsController::class, 'getOverview']);
+        Route::get('/kelas/{kelasId}/rekap-absensi', [LmsController::class, 'getRekapAbsensi']);
+        Route::get('/pertemuan/{id}', [LmsController::class, 'getPertemuan']);
+        Route::get('/download/{type}/{id}', [LmsController::class, 'downloadFile']);
+        Route::post('/tugas/{tugasId}/kumpul', [LmsController::class, 'kumpulkanTugas']);
+        Route::post('/pertemuan/{pertemuanId}/input-token', [LmsController::class, 'inputToken']);
+        Route::post('/pertemuan/{pertemuanId}/izin', [LmsController::class, 'ajukanIzin']);
+    });
+
+    // Hak Akses Kelola Kelas & Pembelajaran (Dosen Pengajar / Kaprodi / Admin)
+    Route::middleware(['can:siakad.kelas.manage'])->group(function () {
+        Route::put('/kelas/{kelasId}/setting', [LmsController::class, 'updateSetting']);
+        Route::post('/pertemuan/{pertemuanId}/materi', [LmsController::class, 'storeMateri']);
+        Route::put('/materi/{materiId}', [LmsController::class, 'updateMateri']);
+        Route::delete('/materi/{materiId}', [LmsController::class, 'destroyMateri']);
+        Route::post('/materi/{materiId}/file', [LmsController::class, 'uploadMateriFile']);
+        Route::delete('/materi-file/{fileId}', [LmsController::class, 'destroyMateriFile']);
+        Route::post('/pertemuan/{pertemuanId}/tugas', [LmsController::class, 'storeTugas']);
+        Route::put('/tugas/{tugasId}', [LmsController::class, 'updateTugas']);
+        Route::delete('/tugas/{tugasId}', [LmsController::class, 'destroyTugas']);
+        Route::post('/pertemuan/{pertemuanId}/token', [LmsController::class, 'generateToken']);
+        Route::post('/pertemuan/{pertemuanId}/bulk-absensi', [LmsController::class, 'bulkAbsensi']);
+        Route::patch('/izin/{izinId}/proses', [LmsController::class, 'prosesIzin']);
+    });
+
+    // Hak Akses Penilaian Akademik (OBE Sync)
+    Route::middleware(['can:siakad.nilai.manage'])->group(function () {
+        Route::put('/pengumpulan/{pengumpulanId}/nilai', [LmsController::class, 'beriNilaiTugas']);
+    });
 });
