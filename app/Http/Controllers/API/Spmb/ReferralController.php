@@ -59,7 +59,7 @@ class ReferralController extends Controller
     public function report(Request $request): JsonResponse
     {
         $perPage = min(100, $request->integer('per_page', 15));
-        $allowedSort = ['created_at', 'status', 'referral_code'];
+        $allowedSort = ['created_at', 'status', 'referral_code', 'referrer', 'pendaftar', 'gelombang'];
         $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
 
@@ -75,6 +75,38 @@ class ReferralController extends Controller
 
         if ($request->filled('referral_code')) {
             $query->where('referral_code', 'like', '%'.$request->input('referral_code').'%');
+        }
+
+        if ($request->filled('referrer')) {
+            $referrer = $request->input('referrer');
+            $query->whereHas('referrer', function ($rq) use ($referrer) {
+                $rq->where('name', 'like', "%{$referrer}%")
+                    ->orWhere('username', 'like', "%{$referrer}%")
+                    ->orWhere('email', 'like', "%{$referrer}%");
+            });
+        }
+
+        if ($request->filled('pendaftar')) {
+            $pendaftar = $request->input('pendaftar');
+            $query->whereHas('pendaftaran', function ($pq) use ($pendaftar) {
+                $pq->where('nama_lengkap', 'like', "%{$pendaftar}%")
+                    ->orWhere('no_pendaftaran', 'like', "%{$pendaftar}%");
+            });
+        }
+
+        if ($request->filled('gelombang_id')) {
+            $gelombangId = (int) $request->input('gelombang_id');
+            $query->whereHas('pendaftaran', function ($pq) use ($gelombangId) {
+                $pq->where('gelombang_id', $gelombangId);
+            });
+        }
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('spmb_referral_usages.created_at', '>=', $request->input('start_date'));
+        }
+
+        if ($request->filled('end_date')) {
+            $query->whereDate('spmb_referral_usages.created_at', '<=', $request->input('end_date'));
         }
 
         if ($request->filled('search')) {
@@ -93,7 +125,17 @@ class ReferralController extends Controller
             });
         }
 
-        $query->orderBy($sortBy, $sortOrder);
+        if (in_array($sortBy, ['referrer', 'pendaftar', 'gelombang'], true)) {
+            $query->leftJoin('core_users as referrer_user', 'referrer_user.id', '=', 'spmb_referral_usages.referrer_user_id')
+                ->leftJoin('spmb_pendaftaran_calon_mhs as pendaftaran', 'pendaftaran.id', '=', 'spmb_referral_usages.pendaftaran_id')
+                ->leftJoin('spmb_gelombang_penerimaan as gelombang', 'gelombang.id', '=', 'pendaftaran.gelombang_id')
+                ->select('spmb_referral_usages.*');
+
+            $sortColumn = $sortBy === 'referrer' ? 'referrer_user.name' : ($sortBy === 'pendaftar' ? 'pendaftaran.nama_lengkap' : 'gelombang.nama');
+            $query->orderBy($sortColumn, $sortOrder);
+        } else {
+            $query->orderBy($sortBy === 'created_at' ? 'spmb_referral_usages.created_at' : $sortBy, $sortOrder);
+        }
 
         $data = $query->paginate($perPage);
 
@@ -113,6 +155,11 @@ class ReferralController extends Controller
                 'search' => $request->input('search'),
                 'status' => $request->input('status'),
                 'referral_code' => $request->input('referral_code'),
+                'referrer' => $request->input('referrer'),
+                'pendaftar' => $request->input('pendaftar'),
+                'gelombang_id' => $request->input('gelombang_id'),
+                'start_date' => $request->input('start_date'),
+                'end_date' => $request->input('end_date'),
                 'sort_by' => $sortBy,
                 'sort_order' => $sortOrder,
             ],

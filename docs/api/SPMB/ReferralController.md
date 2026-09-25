@@ -128,7 +128,12 @@ Controller ini mengelola fitur **Kode Referral (Rujukan) Mahasiswa Baru**. Setia
 | `search` | string | ❌ | — | Cari kode / nama referrer / no pendaftaran |
 | `status` | string | ❌ | — | Filter status `claimed`, `qualified`, `rewarded`, `cancelled` |
 | `referral_code` | string | ❌ | — | Filter kode referral (like) |
-| `sort_by` | string | ❌ | `created_at` | `created_at`, `status`, atau `referral_code` |
+| `referrer` | string | ❌ | — | Filter nama/username/email referrer (like) |
+| `pendaftar` | string | ❌ | — | Filter nama/no pendaftaran (like) |
+| `gelombang_id` | integer | ❌ | — | Filter gelombang penerimaan (ID) |
+| `start_date` | date | ❌ | — | Filter dibuat sejak tanggal (Y-m-d) |
+| `end_date` | date | ❌ | — | Filter dibuat sampai tanggal (Y-m-d) |
+| `sort_by` | string | ❌ | `created_at` | `created_at`, `status`, `referral_code`, `referrer`, `pendaftar`, atau `gelombang` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
 | `page` | integer | ❌ | `1` | Halaman yang diminta |

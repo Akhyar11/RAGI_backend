@@ -169,4 +169,37 @@ class ReferralTest extends TestCase
         $this->assertSame(ReferralUsage::STATUS_QUALIFIED, $usage->status);
         $this->assertNotNull($usage->qualified_at);
     }
+
+    public function test_laporan_referral_mendukung_filter_dan_sort_relasi(): void
+    {
+        $referee = User::factory()->create(['username' => 'referee_satu', 'name' => 'Referee Satu', 'is_active' => true]);
+        $pendaftaran = $this->makePendaftaran($referee, ['nik' => '3333333333333333', 'nama_lengkap' => 'Referee Satu']);
+
+        app(SpmbReferralService::class)->attachToPendaftaran($pendaftaran, 'REF-ABC123');
+
+        $role = \App\Models\Role::create(['name' => 'Admin SPMB', 'slug' => 'admin_spmb_test', 'is_active' => true]);
+        $permission = \App\Models\Permission::create(['name' => 'Kelola SPMB', 'slug' => 'spmb.manage', 'module' => 'spmb', 'action' => 'update']);
+        \App\Models\RolePermission::create(['role_id' => $role->id, 'permission_id' => $permission->id]);
+
+        $admin = User::factory()->create(['is_active' => true]);
+        $admin->roles()->attach($role->id);
+
+        Passport::actingAs($admin);
+
+        $this->getJson('/api/spmb/laporan/referral?sort_by=referrer&sort_order=asc')
+            ->assertOk()
+            ->assertJsonPath('data.0.referral_code', 'REF-ABC123');
+
+        $this->getJson('/api/spmb/laporan/referral?referrer=Budi&gelombang_id='.$this->gelombang->id)
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+
+        $this->getJson('/api/spmb/laporan/referral?pendaftar=TidakAdaNamaIni')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 0);
+
+        $this->getJson('/api/spmb/laporan/referral-summary')
+            ->assertOk()
+            ->assertJsonPath('data.claimed', 1);
+    }
 }
