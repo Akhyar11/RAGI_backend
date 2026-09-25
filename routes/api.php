@@ -16,11 +16,13 @@ use App\Http\Controllers\API\ModuleController;
 |--------------------------------------------------------------------------
 */
 Route::prefix('auth')->group(function () {
-    Route::post('/register', [AuthController::class, 'register']);
+    // Rate limited (6/menit) + anti-bot Turnstile
+    Route::post('/register', [AuthController::class, 'register'])
+        ->middleware(['throttle:6,1', 'turnstile:register']);
 
-    // Rate limited: maks 5 percobaan login per menit per IP
+    // Rate limited: maks 5 percobaan login per menit per IP + anti-bot Turnstile
     Route::post('/login', [AuthController::class, 'login'])
-        ->middleware('throttle:login');
+        ->middleware(['throttle:login', 'turnstile:login']);
 
     Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
     Route::post('/mfa/login-verify', [AuthController::class, 'mfaLoginVerify']);

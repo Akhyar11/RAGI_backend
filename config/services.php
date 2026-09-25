@@ -66,4 +66,14 @@ return [
         'timeout' => env('HOLIDAY_API_TIMEOUT', 10),
     ],
 
+    'turnstile' => [
+        'secret' => env('TURNSTILE_SECRET'),
+        // Daftar hostname FE yang diizinkan (dipisah koma). Entri dasar seperti
+        // "ragispace.com" otomatis mencakup subdomain (sso., spmb., dst).
+        'hostnames' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('TURNSTILE_HOSTNAMES', ''))
+        ))),
+    ],
+
 ];
