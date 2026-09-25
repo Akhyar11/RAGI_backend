@@ -328,6 +328,7 @@ class PermissionSeeder extends Seeder
                 'siakad.nilai.read',
                 'siakad.nilai.manage',
                 'siakad.mahasiswa.read',
+                'siakad.konversi.manage',
                 // SIMPEG mandiri
                 'simpeg.dashboard.read',
                 'simpeg.pegawai.read',

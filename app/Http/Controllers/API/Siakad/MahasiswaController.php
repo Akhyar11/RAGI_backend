@@ -46,6 +46,21 @@ class MahasiswaController extends Controller
             });
         }
 
+        if ($request->filled('dosen_wali_id')) {
+            $query->where('dosen_wali_id', $request->dosen_wali_id);
+        }
+
+        // Dosen/PA hanya melihat mahasiswa bimbingannya (kecuali BAAK/kaprodi).
+        // Catatan: isAdmin() true juga untuk dosen (permission update SIMPEG),
+        // sehingga dipakai cek peran eksplisit.
+        $user = $request->user();
+        $isPriv = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+        $isDosenMurni = $user && $user->hasRole('dosen') && !$isPriv;
+        if ($isDosenMurni || ($user && !$isPriv && $request->boolean('advisees_only'))) {
+            $dosen = \App\Models\Siakad\Dosen::where('user_id', $user->id)->first();
+            $query->where('dosen_wali_id', $dosen?->id ?? -1);
+        }
+
         $allowedSortColumns = ['created_at', 'nim', 'nama_lengkap', 'angkatan'];
         $sortBy = in_array($request->sort_by, $allowedSortColumns) ? $request->sort_by : 'created_at';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
@@ -620,8 +635,36 @@ class MahasiswaController extends Controller
 
     public function listKonversi(Request $request)
     {
-        $konversi = KonversiTransfer::with(['mahasiswa.programStudi', 'diprosesOleh', 'details.mataKuliahDiakui'])
-            ->orderBy('created_at', 'desc')
+        $query = KonversiTransfer::with(['mahasiswa.programStudi', 'diprosesOleh', 'details.mataKuliahDiakui']);
+
+        $user = $request->user();
+        $isPriv = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+        $isDosenMurni = $user && $user->hasRole('dosen') && !$isPriv;
+
+        if ($isDosenMurni || ($user && !$isPriv && $request->boolean('advisees_only'))) {
+            $dosen = \App\Models\Siakad\Dosen::where('user_id', $user->id)->first();
+            if ($dosen) {
+                $query->whereHas('mahasiswa', function ($q) use ($dosen) {
+                    $q->where('dosen_wali_id', $dosen->id);
+                });
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->whereHas('mahasiswa', function ($q) use ($search) {
+                $q->where('nama_lengkap', 'like', "%{$search}%")
+                  ->orWhere('nim', 'like', "%{$search}%");
+            });
+        }
+
+        $konversi = $query->orderBy('created_at', 'desc')
             ->paginate($request->integer('per_page', 15));
 
         return response()->json([
@@ -658,8 +701,14 @@ class MahasiswaController extends Controller
             // Determine status
             $status = $request->status;
             $user = $request->user();
-            
-            if ($user && ($user->isAdmin() || $user->hasRole('dosen'))) {
+
+            $isPrivileged = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+            $isPa = false;
+            if ($user && !$isPrivileged) {
+                $dosenLogin = \App\Models\Siakad\Dosen::where('user_id', $user->id)->first();
+                $isPa = $dosenLogin && (int) $mhs->dosen_wali_id === (int) $dosenLogin->id;
+            }
+            if ($isPrivileged || $isPa) {
                 $status = $status ?? 'disetujui';
             } else {
                 // Students can only save as draft or diajukan
@@ -674,9 +723,9 @@ class MahasiswaController extends Controller
             }
 
             // Konversi yang sudah DISETUJUI terkunci bagi mahasiswa (hubungi BAAK).
-            // Admin/dosen/superadmin boleh merevisi (mis. koreksi) — status ditentukan ulang di bawah.
-            $isStaff = $user && ($user->isAdmin() || $user->hasRole('dosen'));
-            if ($konversi && $konversi->status === 'disetujui' && !$isStaff) {
+            // Admin/dosen PA/superadmin boleh merevisi (mis. koreksi) — status ditentukan ulang di bawah.
+            $isStaff = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+            if ($konversi && $konversi->status === 'disetujui' && !$isStaff && !$isPa) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Penyetaraan sudah disetujui dan terkunci. Hubungi BAAK bila ada koreksi.',
@@ -768,7 +817,18 @@ class MahasiswaController extends Controller
             'details.*.catatan_penolakan' => 'nullable|string|max:500',
         ]);
 
-        $konversi = KonversiTransfer::with('details')->findOrFail($id);
+        $konversi = KonversiTransfer::with(['details', 'mahasiswa'])->findOrFail($id);
+
+        // Verifikator: admin/kaprodi, atau PA dari mahasiswa yang bersangkutan
+        $user = $request->user();
+        $allowed = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+        if (!$allowed && $user) {
+            $dosen = \App\Models\Siakad\Dosen::where('user_id', $user->id)->first();
+            $allowed = $dosen && (int) $konversi->mahasiswa?->dosen_wali_id === (int) $dosen->id;
+        }
+        if (!$allowed) {
+            return response()->json(['status' => 'error', 'message' => 'Hanya BAAK, Kaprodi, atau Dosen PA mahasiswa ini yang dapat memverifikasi konversi.'], 403);
+        }
 
         return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $konversi) {
             // Keputusan per-MK (parsial): tandai diakui/ditolak per baris
@@ -856,6 +916,12 @@ class MahasiswaController extends Controller
             'dosen_wali_id' => 'required|exists:siakad_dosen,id',
         ]);
 
+        // Plotting PA hanya BAAK/kaprodi — dosen tidak boleh memetakan sendiri
+        $user = $request->user();
+        if (!$user || !($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'))) {
+            return response()->json(['status' => 'error', 'message' => 'Plotting PA hanya untuk BAAK/Kaprodi.'], 403);
+        }
+
         $dosen = \App\Models\Siakad\Dosen::findOrFail($request->dosen_wali_id);
         $count = Mahasiswa::whereIn('id', $request->mahasiswa_ids)
             ->update(['dosen_wali_id' => $dosen->id]);
@@ -881,6 +947,11 @@ class MahasiswaController extends Controller
             'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'angkatan' => 'nullable|integer',
         ]);
+
+        $user = $request->user();
+        if (!$user || !($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'))) {
+            return response()->json(['status' => 'error', 'message' => 'Plotting PA hanya untuk BAAK/Kaprodi.'], 403);
+        }
 
         $query = Mahasiswa::whereNull('dosen_wali_id')->where('status', 'aktif');
 

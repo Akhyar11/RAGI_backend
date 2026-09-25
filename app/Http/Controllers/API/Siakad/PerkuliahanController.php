@@ -28,6 +28,34 @@ class PerkuliahanController extends Controller
     protected SiakadAkademikService $akademikService;
     protected KrsService $krsService;
 
+    /**
+     * Dosen non-admin hanya boleh melihat mahasiswa bimbingannya
+     * atau peserta kelas yang diampunya.
+     */
+    private function assertDosenBolehLihatMahasiswa($user, int $mahasiswaId): ?\Illuminate\Http\JsonResponse
+    {
+        $priv = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+        if (!$user || $priv) {
+            return null;
+        }
+        $dosen = Dosen::where('user_id', $user->id)->first();
+        if (!$dosen) {
+            return null;
+        }
+        $mhs = Mahasiswa::find($mahasiswaId);
+        if (!$mhs) {
+            return response()->json(['status' => 'error', 'message' => 'Mahasiswa tidak ditemukan.'], 404);
+        }
+        $isAdvisee = (int) $mhs->dosen_wali_id === (int) $dosen->id;
+        $isPeserta = KrsDetail::whereHas('krs', fn($q) => $q->where('mahasiswa_id', $mahasiswaId))
+            ->whereHas('kelas.dosenPengampu', fn($q) => $q->where('dosen_id', $dosen->id))
+            ->exists();
+        if (!$isAdvisee && !$isPeserta) {
+            return response()->json(['status' => 'error', 'message' => 'Anda hanya dapat melihat mahasiswa bimbingan atau peserta kelas Anda.'], 403);
+        }
+        return null;
+    }
+
     public function __construct(SiakadAkademikService $akademikService, KrsService $krsService)
     {
         $this->akademikService = $akademikService;
@@ -277,7 +305,8 @@ class PerkuliahanController extends Controller
 
         // Cek jika login sebagai Dosen Wali
         $dosen = $user ? Dosen::where('user_id', $user->id)->first() : null;
-        if ($dosen && !$user->isAdmin() && $request->boolean('advisees_only')) {
+        $isDosenMurni = $dosen && !($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+        if ($isDosenMurni && $request->boolean('advisees_only')) {
             $query->whereHas('mahasiswa', fn($mq) => $mq->where('dosen_wali_id', $dosen->id));
         }
 
@@ -348,7 +377,7 @@ class PerkuliahanController extends Controller
 
         $user = $request->user();
         $dosen = Dosen::where('user_id', $user?->id)->first();
-        $isPrivileged = $user && ($user->isAdmin() || $user->isSuperAdmin() || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+        $isPrivileged = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
 
         $approvedCount = 0;
         $skippedCount = 0;
@@ -388,8 +417,8 @@ class PerkuliahanController extends Controller
      */
     public function monitoringKrsProdi(Request $request)
     {
-        $taId = $request->input('tahun_akademik_id') ?? MasterTahunAkademik::where('is_active', true)->value('id');
-        $tahunAkademik = MasterTahunAkademik::find($taId);
+        $taId = $request->input('tahun_akademik_id') ?? TahunAkademik::where('is_active', true)->value('id');
+        $tahunAkademik = TahunAkademik::find($taId);
 
         $prodiQuery = \App\Models\Spmb\MasterProgramStudi::with('fakultas')
             ->where('is_active', true);
@@ -890,7 +919,7 @@ class PerkuliahanController extends Controller
 
         $user = $request->user();
         $dosen = Dosen::where('user_id', $user?->id)->first();
-        $isPrivileged = $user && ($user->isAdmin() || $user->isSuperAdmin() || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+        $isPrivileged = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
 
         if (!$isPrivileged) {
             if (!$dosen) {
@@ -934,7 +963,8 @@ class PerkuliahanController extends Controller
 
         // Cek jika login sebagai Dosen
         $dosen = $user ? Dosen::where('user_id', $user->id)->first() : null;
-        if ($dosen && !$user->isAdmin() && $request->boolean('my_classes_only')) {
+        $isDosenMurniNilai = $dosen && !($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+        if ($isDosenMurniNilai && $request->boolean('my_classes_only')) {
             $query->whereHas('krsDetail.kelas.dosenPengampu', fn($dq) => $dq->where('dosen_id', $dosen->id));
         }
 
@@ -956,6 +986,9 @@ class PerkuliahanController extends Controller
         }
 
         if ($request->filled('mahasiswa_id')) {
+            if ($guard = $this->assertDosenBolehLihatMahasiswa($user, (int) $request->mahasiswa_id)) {
+                return $guard;
+            }
             $query->whereHas('krsDetail.krs', fn($q) => $q->where('mahasiswa_id', $request->mahasiswa_id));
         }
 
@@ -1083,6 +1116,13 @@ class PerkuliahanController extends Controller
             ->first();
 
         if (!$mhs && $request->filled('mahasiswa_id')) {
+            $checkId = (int) $request->mahasiswa_id;
+            $maybeMhs = Mahasiswa::find($checkId);
+            if ($maybeMhs) {
+                if ($guard = $this->assertDosenBolehLihatMahasiswa($user, $checkId)) {
+                    return $guard;
+                }
+            }
             $mhs = Mahasiswa::with(['programStudi.fakultas', 'dosenWali', 'konversiTransfer.details.mataKuliahDiakui'])->find($request->mahasiswa_id);
         }
 

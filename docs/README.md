@@ -63,6 +63,7 @@
 | MahasiswaController | Data mahasiswa, NIM, konversi transfer, dan penugasan PA | [docs/api/SIAKAD/MahasiswaController.md](api/SIAKAD/MahasiswaController.md) |
 | ObeController | Kurikulum OBE (CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, Nilai) | [docs/api/SIAKAD/ObeController.md](api/SIAKAD/ObeController.md) |
 | PerkuliahanController | Kelas, KRS, nilai, transkrip, pertemuan & absensi | [docs/api/SIAKAD/PerkuliahanController.md](api/SIAKAD/PerkuliahanController.md) |
+| PaController | Pembimbing Akademik: Rekap bimbingan, catatan jurnal mahasiswa, aktivitas per kelas (SIMPA), & cetak PDF | [docs/api/SIAKAD/PaController.md](api/SIAKAD/PaController.md) |
 
 ---
 

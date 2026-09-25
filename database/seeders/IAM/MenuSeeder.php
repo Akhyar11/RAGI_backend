@@ -245,6 +245,7 @@ class MenuSeeder extends Seeder
                     ['name' => 'RPS & Verifikasi', 'url' => '/siakad/obe/rps', 'icon' => 'FaFileAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 7],
                     ['name' => 'Bank Soal', 'url' => '/siakad/obe/soal', 'icon' => 'FaBookOpen', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 8],
                     ['name' => 'Ketertiban Dosen Nilai', 'url' => '/siakad/obe/kepatuhan', 'icon' => 'FaUserCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 9],
+                    ['name' => 'Bimbingan PA', 'url' => '/siakad/bimbingan', 'icon' => 'FaHandsHelping', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 10],
                 ]
             ],
             [

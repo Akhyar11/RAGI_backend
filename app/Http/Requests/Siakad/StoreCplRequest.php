@@ -9,7 +9,8 @@ class StoreCplRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $user = $this->user();
+        return (bool) ($user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi')));
     }
 
     public function rules(): array

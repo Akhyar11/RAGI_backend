@@ -6,6 +6,7 @@ use App\Http\Controllers\API\Siakad\MahasiswaController;
 use App\Http\Controllers\API\Siakad\AkademikController;
 use App\Http\Controllers\API\Siakad\PerkuliahanController;
 use App\Http\Controllers\API\Siakad\ObeController;
+use App\Http\Controllers\API\Siakad\PaController;
 use App\Http\Controllers\API\Siakad\MahasiswaBeasiswaController;
 use App\Http\Controllers\API\Siakad\StatusAkademikController;
 use App\Http\Controllers\API\Siakad\KelulusanController;
@@ -148,6 +149,24 @@ Route::prefix('perkuliahan')->group(function () {
     Route::patch('/khs/{id}/lock', [StatusAkademikController::class, 'lockKhs']);
 });
 
+// --- Bimbingan PA (catatan, rekap, laporan aktivitas SIMPA) ---
+Route::prefix('bimbingan')->group(function () {
+    Route::get('/rekap', [PaController::class, 'rekap']);
+    Route::get('/advisees', [PaController::class, 'advisees']);
+    Route::get('/catatan', [PaController::class, 'listCatatan']);
+    Route::post('/catatan', [PaController::class, 'storeCatatan']);
+    Route::put('/catatan/{id}', [PaController::class, 'updateCatatan']);
+    Route::delete('/catatan/{id}', [PaController::class, 'destroyCatatan']);
+    Route::get('/laporan', [PaController::class, 'getLaporan']);
+    Route::post('/laporan', [PaController::class, 'storeLaporan']);
+    // SIMPA Indonusa Aktivitas Bimbingan Per Kelas
+    Route::get('/aktivitas', [PaController::class, 'getLaporanAktivitas']);
+    Route::get('/aktivitas/komposisi', [PaController::class, 'hitungKomposisiKelas']);
+    Route::post('/aktivitas', [PaController::class, 'storeLaporanAktivitas']);
+    Route::delete('/aktivitas/{id}', [PaController::class, 'destroyLaporanAktivitas']);
+    Route::get('/aktivitas/cetak', [PaController::class, 'cetakLaporanPdf']);
+});
+
 // --- Status Akademik & Cuti ---
 Route::prefix('status')->group(function () {
     Route::get('/cuti', [StatusAkademikController::class, 'listCuti']);
@@ -194,7 +213,7 @@ Route::prefix('obe')->group(function () {
     Route::get('/soal', [ObeController::class, 'listSoal']);
     Route::post('/soal', [ObeController::class, 'storeSoal']);
     Route::delete('/soal/{id}', [ObeController::class, 'deleteSoal']);
-    Route::get('/kelas/{kelasId}/rekap-csv', [ObeController::class, 'rekapKelasCsv']);
+    Route::get('/kelas/{kelasId}/rekap-xlsx', [ObeController::class, 'rekapKelasXlsx']);
     Route::post('/rps/{id}/submit', [ObeController::class, 'submitRps']);
     Route::patch('/rps/{id}/approve', [ObeController::class, 'approveRps']);
 

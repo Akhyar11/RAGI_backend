@@ -85,6 +85,19 @@ class ObeController extends Controller
             'cpl_id' => 'nullable|exists:siakad_cpl,id',
         ]);
 
+        // Kaprodi/BAAK bebas; dosen hanya untuk MK yang diampunya
+        $user = $request->user();
+        $priv = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+        if (!$priv && $user) {
+            $dosen = \App\Models\Siakad\Dosen::where('user_id', $user->id)->first();
+            $mengampu = $dosen && \App\Models\Siakad\DosenPengampu::where('dosen_id', $dosen->id)
+                ->whereHas('kelas', fn($q) => $q->where('mata_kuliah_id', $request->mata_kuliah_id))
+                ->exists();
+            if (!$mengampu) {
+                return response()->json(['status' => 'error', 'message' => 'Anda hanya dapat memetakan CPMK untuk MK yang Anda ampu.'], 403);
+            }
+        }
+
         $cpmk = Cpmk::updateOrCreate(
             ['mata_kuliah_id' => $request->mata_kuliah_id, 'kode_cpmk' => $request->kode_cpmk],
             [
@@ -284,6 +297,17 @@ class ObeController extends Controller
     {
         $kelas = Kelas::with(['mataKuliah.cpmks.cpl', 'programStudi', 'programStudis', 'dosenPengampu.dosen', 'tahunAkademik'])->findOrFail($kelasId);
         $mode = $kelas->tahunAkademik?->mode_penilaian ?? 'semi_obe';
+
+        // Dosen murni hanya boleh membuka matriks kelas yang diampunya
+        $reqUser = $request->user();
+        $reqPriv = $reqUser && ($reqUser->isSuperAdmin() || $reqUser->hasRole('admin') || $reqUser->hasRole('kaprodi') || $reqUser->hasRole('wakil_prodi'));
+        if ($reqUser && !$reqPriv) {
+            $reqDosen = \App\Models\Siakad\Dosen::where('user_id', $reqUser->id)->first();
+            $mengampu = $reqDosen && $kelas->dosenPengampu->contains(fn($dp) => (int) $dp->dosen_id === (int) $reqDosen->id);
+            if (!$mengampu) {
+                return response()->json(['status' => 'error', 'message' => 'Anda hanya dapat membuka kelas yang Anda ampu.'], 403);
+            }
+        }
         
         // 1. Define the components list based on the active mode
         if ($mode === 'full_obe') {
@@ -924,6 +948,25 @@ class ObeController extends Controller
         // 1. Jika diberikan ID numerik
         if ($mahasiswaId && is_numeric($mahasiswaId) && (int)$mahasiswaId > 0) {
             $mahasiswa = Mahasiswa::with(['programStudi.fakultas'])->find($mahasiswaId);
+
+            // Dosen non-admin: hanya bimbingan / peserta kelasnya
+            $privPorto = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+            if ($mahasiswa && $user && !$privPorto) {
+                $dosen = \App\Models\Siakad\Dosen::where('user_id', $user->id)->first();
+                if ($dosen) {
+                    $isAdvisee = (int) $mahasiswa->dosen_wali_id === (int) $dosen->id;
+                    $isPeserta = \App\Models\Siakad\KrsDetail::whereHas('krs', fn($q) => $q->where('mahasiswa_id', $mahasiswa->id))
+                        ->whereHas('kelas.dosenPengampu', fn($q) => $q->where('dosen_id', $dosen->id))
+                        ->exists();
+                    if (!$isAdvisee && !$isPeserta) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Anda hanya dapat melihat mahasiswa bimbingan atau peserta kelas Anda.',
+                            'data' => null,
+                        ], 403);
+                    }
+                }
+            }
         }
 
         // 2. Jika dipanggil oleh mahasiswa yang sedang login
@@ -1260,7 +1303,7 @@ class ObeController extends Controller
             'rps_mingguan_id' => 'nullable|exists:siakad_rps_mingguan,id',
         ]);
 
-        $query = BankSoal::with(['mingguan', 'subCpmk.cpmk', 'rps.mataKuliah'])->orderBy('id');
+        $query = BankSoal::with(['mingguan', 'subCpmk.cpmk', 'rps.mataKuliah.kurikulum.programStudi'])->orderBy('id');
         if ($request->filled('rps_id')) {
             $query->where('rps_id', $request->rps_id);
         }
@@ -1284,6 +1327,10 @@ class ObeController extends Controller
         ]);
         $validated['dibuat_oleh'] = $request->user()?->id;
 
+        if (trim(strip_tags($validated['pertanyaan'] ?? '')) === '') {
+            return response()->json(['status' => 'error', 'message' => 'Pertanyaan tidak boleh kosong.'], 422);
+        }
+
         $soal = BankSoal::updateOrCreate(['id' => $request->id], $validated);
 
         return response()->json([
@@ -1301,22 +1348,51 @@ class ObeController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Soal berhasil dihapus']);
     }
 
-    // --- Rekap Nilai Kelas (CSV, dibuka di Excel) ---
-    public function rekapKelasCsv($kelasId)
+    // --- Rekap Nilai Kelas (XLSX, dibuka di Excel) ---
+    public function rekapKelasXlsx($kelasId)
     {
         $kelas = Kelas::with(['mataKuliah', 'tahunAkademik', 'programStudi'])->findOrFail($kelasId);
         $res = $this->getKelasNilaiObe(new Request(), $kelasId);
         $payload = $res->getData(true)['data'];
 
-        $rows = [];
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Rekap Nilai');
+
+        $sheet->setCellValue('A1', 'REKAP NILAI KELAS');
+        $sheet->setCellValue('A2', ($kelas->mataKuliah?->nama ?? '') . ' (' . ($kelas->mataKuliah?->kode_mk ?? '') . ')');
+        $sheet->setCellValue('A3', 'Kelas: ' . ($kelas->nama_kelas ?? '') . ' • Periode: ' . ($kelas->tahunAkademik?->nama ?? '') . ' • Prodi: ' . ($kelas->programStudi?->nama ?? ''));
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+
         $header = ['NO', 'NIM', 'NAMA'];
         foreach ($payload['komponen'] as $comp) {
             $header[] = ($comp['nama_komponen'] ?? 'Komponen') . ' (' . ($comp['bobot'] ?? 0) . '%)';
         }
         $header = array_merge($header, ['NILAI_AKHIR', 'HURUF', 'MUTU', 'STATUS']);
-        $rows[] = $header;
+
+        $rowNum = 5;
+        $colLetter = function ($i) {
+            $s = '';
+            $i++;
+            while ($i > 0) {
+                $m = ($i - 1) % 26;
+                $s = chr(65 + $m) . $s;
+                $i = intdiv($i - $m - 1, 26);
+            }
+            return $s;
+        };
+        $lastCol = $colLetter(count($header) - 1);
+
+        foreach (array_values($header) as $i => $h) {
+            $sheet->setCellValue($colLetter($i) . $rowNum, $h);
+        }
+        $sheet->getStyle("A{$rowNum}:{$lastCol}{$rowNum}")->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1F4E79']],
+        ]);
 
         foreach (array_values($payload['peserta']) as $i => $p) {
+            $r = $rowNum + 1 + $i;
             $row = [$i + 1, $p['mahasiswa']['nim'] ?? '', $p['mahasiswa']['nama_lengkap'] ?? ''];
             foreach ($payload['komponen'] as $comp) {
                 $row[] = $p['scores'][(string) $comp['id']]['nilai_angka'] ?? $p['scores'][$comp['id']]['nilai_angka'] ?? 0;
@@ -1325,20 +1401,24 @@ class ObeController extends Controller
             $row[] = $p['nilai_huruf'];
             $row[] = $p['bobot_mutu'];
             $row[] = !empty($p['is_final']) ? 'Final' : 'Draft';
-            $rows[] = $row;
+            foreach (array_values($row) as $c => $v) {
+                $sheet->setCellValue($colLetter($c) . $r, $v);
+            }
         }
 
-        $output = "\xEF\xBB\xBF";
-        foreach ($rows as $row) {
-            $output .= implode(',', array_map(fn($v) => '"' . str_replace('"', '""', (string) $v) . '"', $row)) . "\n";
-        }
-
-        $fname = 'rekap_nilai_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $kelas->kode_kelas ?? $kelasId) . '.csv';
-
-        return response($output, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . $fname . '"',
+        $lastRow = $rowNum + count($payload['peserta']);
+        $sheet->getStyle("A{$rowNum}:{$lastCol}{$lastRow}")->applyFromArray([
+            'borders' => ['allBorders' => ['borderStyle' => 'thin', 'color' => ['rgb' => 'B0B0B0']]],
         ]);
+        foreach (range(0, count($header) - 1) as $c) {
+            $sheet->getColumnDimension($colLetter($c))->setAutoSize(true);
+        }
+
+        $fname = 'rekap_nilai_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $kelas->kode_kelas ?? $kelasId) . '.xlsx';
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet))->save('php://output');
+        }, $fname, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     public function submitRps($id)
@@ -1629,6 +1709,12 @@ class ObeController extends Controller
             'cpl_id' => 'required|exists:siakad_cpl,id',
             'is_checked' => 'required|boolean',
         ]);
+
+        // Matriks CPL-MK hanya Kaprodi/BAAK
+        $user = $request->user();
+        if (!$user || !($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'))) {
+            return response()->json(['status' => 'error', 'message' => 'Pemetaan CPL-MK hanya untuk Kaprodi/BAAK.'], 403);
+        }
 
         $mk = MataKuliah::findOrFail($request->mata_kuliah_id);
 
