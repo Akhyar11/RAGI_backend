@@ -6,6 +6,7 @@
 echo "🤖 [Audit 2/9: Zero Hardcode & RBAC] Memeriksa perubahan dengan AI (AI Muse Spark 1.3)..."
 
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
+AI_ENGINE="${AI_ENGINE:-agy}"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
 MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
@@ -46,7 +47,9 @@ Aturan Baku (STRICT — setiap aturan bernomor, nilai hanya dari baris baru):
    - BENAR: `$this->authorize('viewAny', User::class);`, `Gate::authorize('approve-krs');`, `Route::middleware(['auth:sanctum','can:manage-users'])`, `if (!auth()->user()->hasRole('admin')) abort(403);`.
    - Gate WAJIB didefinisikan di `app/Providers/AppServiceProvider.php` (Gate::define / Gate::before).
    - Helper WAJIB: `hasPermission(string $permissionSlug)` dan `hasRole(string $roleSlug)` memakai relasi `belongsToMany(Role::class,'user_roles')->withPivot(['valid_from','valid_until'])`.
-   - Slug permission WAJIB format `{modul}.{aksi}` (contoh BENAR: `users.read`, `users.create`, `krs.approve`; SALAH: `readUsers`, `approve`).
+   - Slug permission WAJIB format `{modul}.{aksi}` ATAU `{modul}.{submodul}.{aksi}` (proyek ini memang memakai slug 3-segmen di database, contoh RESMI: `spmb.manage`, `spmb.laporan.read`, `spmb.laporan.export`, `iam.roles.read`). DILARANG hanya memakai slug yang TIDAK ADA di `database/seeders/IAM/PermissionSeeder.php`. JANGAN menolak slug yang terdaftar di PermissionSeeder.
+     - SALAH: `readUsers`, `approve`, `users` (tanpa aksi), atau slug karangan yang tidak terdaftar di PermissionSeeder.
+     - BENAR: `users.read`, `krs.approve`, `spmb.manage`, `spmb.laporan.read` (semua ada di PermissionSeeder).
    - Respons auth (login/SSO/AuthController) WAJIB eager-load relasi roles via `with('roles')` atau `$user->load('roles')` agar frontend dapat mengevaluasi otorisasi.
 5. WAJIB pahami klarifikasi: string literal di dalam argumen `hasRole()` / `hasPermission()` adalah BENAR, bukan pelanggaran.
    - BENAR (jangan tolak): `$user->hasRole('admin')`, `$user->hasPermission('users.read')`, `$q->where('slug',$permissionSlug)` di dalam definisi helper/Gate/Policy.
@@ -54,6 +57,8 @@ Aturan Baku (STRICT — setiap aturan bernomor, nilai hanya dari baris baru):
 
 Catatan:
 - HANYA periksa baris baru (+) — baris konteks tanpa `+` dan file yang tidak diubah WAJIB diabaikan. Jangan menolak kode lama.
+
+- JANGAN menuduh sebuah simbol/komponen/ikon "tidak di-import" atau "tidak terdefinisi": diff hanya memuat potongan file, sehingga baris import sering berada DI LUAR diff. Validitas import sudah diverifikasi terpisah (tsc --noEmit untuk FE, php -l untuk BE). Laporkan hanya pelanggaran yang benar-benar terlihat pada baris (+).
 
 Git Diff:
 EOF

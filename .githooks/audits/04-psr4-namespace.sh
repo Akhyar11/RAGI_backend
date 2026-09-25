@@ -6,6 +6,7 @@
 echo "📦 [Audit 5/9: PSR-4 Namespace] Memeriksa perubahan dengan AI (AI Muse Spark 1.3)..."
 
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
+AI_ENGINE="${AI_ENGINE:-agy}"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
 MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
@@ -41,6 +42,8 @@ Aturan Baku (STRICT — setiap aturan bernomor, nilai hanya dari baris baru):
 
 Catatan:
 - HANYA periksa baris baru (+) — baris konteks tanpa `+` WAJIB diabaikan.
+
+- JANGAN menuduh sebuah simbol/komponen/ikon "tidak di-import" atau "tidak terdefinisi": diff hanya memuat potongan file, sehingga baris import sering berada DI LUAR diff. Validitas import sudah diverifikasi terpisah (tsc --noEmit untuk FE, php -l untuk BE). Laporkan hanya pelanggaran yang benar-benar terlihat pada baris (+).
 
 Git Diff:
 EOF

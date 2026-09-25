@@ -13,6 +13,7 @@
 echo "📋 [Audit 8/9: Menu Seeder Organization Standard] Memeriksa struktur dan kerapian seeder menu..."
 
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
+AI_ENGINE="${AI_ENGINE:-agy}"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
 MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 
@@ -28,7 +29,11 @@ fi
 
 IS_MANUAL_RUN=false
 if [ -z "$TARGET_FILES" ] && [ -z "$STAGED_DIFF" ]; then
-    if [ -t 0 ] || [ "$1" == "--all" ] || [ -z "$GIT_INDEX_FILE" ]; then
+    # Hanya pindai SELURUH seeder saat benar-benar diminta (--all) atau dijalankan
+    # interaktif di TTY. JANGAN gunakan hilangnya GIT_INDEX_FILE sebagai sinyal,
+    # karena itu membuat pemanggilan dari hook/audit lain (mis. pre-commit FE)
+    # ikut memindai seeder yang tak berubah -> false failure.
+    if [ -t 0 ] || [ "$1" == "--all" ]; then
         IS_MANUAL_RUN=true
         TARGET_FILES=$(find database/seeders -type f -name "*Menu*Seeder*.php" 2>/dev/null)
     fi
@@ -46,17 +51,38 @@ STATIC_CHECK_RESULT=$(php -r '
 $files = array_slice($argv, 1);
 $violations = [];
 
-// Daftar ikon yang didukung di frontend (Sidebar.tsx)
-$supportedIcons = [
-    "FaHome", "FaUserPlus", "FaChartPie", "FaUsers", "FaUserCheck", "FaList", "FaShieldAlt", "FaShield",
-    "FaFileAlt", "FaClipboardCheck", "FaFileCheck", "FaCreditCard", "FaBookOpen", "FaAward", "FaLayers",
-    "FaBoxes", "FaCalendar", "FaTrophy", "FaBriefcase", "FaClock", "FaSitemap", "FaMoneyBillWave",
-    "FaCalendarCheck", "FaBuilding", "FaWrench", "FaShoppingCart", "FaUser", "FaSmartphone", "FaShieldCheck",
-    "FaLock", "FaKey", "FaGraduationCap", "FaUserGraduate", "FaChalkboardTeacher", "FaExchangeAlt", "FaPen",
-    "FaSyncAlt", "FaCloudUploadAlt", "FaDatabase", "FaTags", "FaSlidersH", "FaSliders", "FaBars", "FaMenu",
-    "FaDesktop", "FaLaptop", "FaMonitor", "FaHistory", "FaCogs", "FaCog", "FaChartBar", "FaSparkles",
-    "FaHourglassHalf", "FaFileSignature", "FaCheckSquare", "FaDollarSign", "FaExclamationTriangle", "FaCoins", "FaTag"
+// Sumber kebenaran ikon: iconMap di RAGIFrontend/components/layout/Sidebar.tsx.
+// Dibaca dinamis agar tidak drift saat ikon baru ditambahkan di frontend.
+$supportedIcons = [];
+$sidebarCandidates = [
+    getcwd() . "/../RAGIFrontend/components/layout/Sidebar.tsx",
+    getcwd() . "/../RAGI/RAGIFrontend/components/layout/Sidebar.tsx",
 ];
+foreach ($sidebarCandidates as $sp) {
+    if (is_file($sp)) {
+        $sidebarSrc = file_get_contents($sp);
+        if (preg_match("/iconMap\s*:\s*Record<[^>]*>\s*=\s*\{([\s\S]*?)\};/", $sidebarSrc, $sm)) {
+            if (preg_match_all("/[\x27\"]([^\x27\"]+)[\x27\"]\s*:/", $sm[1], $keys)) {
+                $supportedIcons = array_values(array_unique($keys[1]));
+            }
+        }
+        if (!empty($supportedIcons)) break;
+    }
+}
+// Fallback: daftar baku bila Sidebar.tsx tidak ditemukan (mis. repo FE tidak ada).
+if (empty($supportedIcons)) {
+    $supportedIcons = [
+        "FaHome", "FaUserPlus", "FaChartPie", "FaUsers", "FaUserCheck", "FaList", "FaShieldAlt", "FaShield",
+        "FaFileAlt", "FaClipboardCheck", "FaFileCheck", "FaCreditCard", "FaBookOpen", "FaAward", "FaLayers",
+        "FaBoxes", "FaCalendar", "FaTrophy", "FaBriefcase", "FaClock", "FaSitemap", "FaMoneyBillWave",
+        "FaCalendarCheck", "FaBuilding", "FaWrench", "FaShoppingCart", "FaUser", "FaSmartphone", "FaShieldCheck",
+        "FaLock", "FaKey", "FaGraduationCap", "FaUserGraduate", "FaChalkboardTeacher", "FaExchangeAlt", "FaPen",
+        "FaSyncAlt", "FaCloudUploadAlt", "FaDatabase", "FaTags", "FaSlidersH", "FaSliders", "FaBars", "FaMenu",
+        "FaDesktop", "FaLaptop", "FaMonitor", "FaHistory", "FaCogs", "FaCog", "FaChartBar", "FaSparkles",
+        "FaHourglassHalf", "FaFileSignature", "FaCheckSquare", "FaDollarSign", "FaExclamationTriangle", "FaCoins", "FaTag",
+        "FaDoorOpen", "FaHandshake", "FaRulerCombined", "FaShareAlt"
+    ];
+}
 
 foreach ($files as $file) {
     if (!file_exists($file)) continue;
@@ -284,6 +310,8 @@ ATURAN BAKU PENGORGANISASIAN MENU SEEDER:
 
 Catatan:
 - HANYA periksa baris baru (+) yaitu baris kode baru yang DITAMBAHKAN atau DIUBAH (diawali tanda `+`). JANGAN menolak baris konteks yang tidak diubah (tanpa `+`).
+
+- JANGAN menuduh sebuah simbol/komponen/ikon "tidak di-import" atau "tidak terdefinisi": diff hanya memuat potongan file, sehingga baris import sering berada DI LUAR diff. Validitas import sudah diverifikasi terpisah (tsc --noEmit untuk FE, php -l untuk BE). Laporkan hanya pelanggaran yang benar-benar terlihat pada baris (+).
 
 Git Diff:
 EOF
