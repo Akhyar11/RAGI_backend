@@ -19,7 +19,25 @@ class PengajuanOperasionalController extends Controller
      */
     public function index(Request $request)
     {
-        $query = PengajuanPencairanKas::with(['items', 'fakultas', 'ruangan', 'unitKas', 'lpj']);
+        $query = PengajuanPencairanKas::with([
+            'items',
+            'fakultas',
+            'ruangan',
+            'unitKas',
+            'lpj',
+            'suratTugas.pegawai.unitKerja',
+            'pemohon',
+        ]);
+
+        if ($request->filled('tab')) {
+            if ($request->tab === 'simpeg') {
+                $query->where('kanal', 'simpeg_surat_tugas');
+            } elseif ($request->tab === 'operasional') {
+                $query->where(function ($q) {
+                    $q->whereNull('kanal')->orWhere('kanal', '!=', 'simpeg_surat_tugas');
+                });
+            }
+        }
 
         if ($request->filled('search')) {
             $s = $request->search;
@@ -234,5 +252,55 @@ class PengajuanOperasionalController extends Controller
         $data = \App\Models\Ruangan::orderBy('nama')->get(['id', 'kode', 'nama']);
 
         return response()->json(['status' => 'success', 'data' => $data]);
+    }
+
+    /**
+     * POST /api/v1/sikeu/pengajuan-operasional/{id}/setujui-panjar-simpeg
+     */
+    public function setujuiPanjarSimpeg(Request $request, $id)
+    {
+        $request->validate([
+            'unit_kas_id' => 'required|integer|exists:sikeu_unit_kas,id',
+            'nominal_disetujui' => 'required|numeric|min:1',
+            'catatan' => 'nullable|string|max:1000',
+        ]);
+
+        try {
+            $pengajuan = PengajuanPencairanKas::findOrFail($id);
+            $result = $this->service->setujuiPanjarSimpeg($pengajuan, $request->only(['unit_kas_id', 'nominal_disetujui', 'catatan']), $request);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Panjar perjalanan dinas berhasil disetujui, menunggu konfirmasi pegawai',
+                'data' => $result,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'error', 'message' => 'Gagal menyetujui panjar: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * POST /api/v1/sikeu/pengajuan-operasional/{id}/tutup-lpj-simpeg
+     */
+    public function tutupLpjSimpeg(Request $request, $id)
+    {
+        $request->validate([
+            'catatan' => 'nullable|string|max:1000',
+        ]);
+
+        try {
+            $pengajuan = PengajuanPencairanKas::findOrFail($id);
+            $result = $this->service->tutupLpjSimpeg($pengajuan, $request->only(['catatan']), $request);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Transaksi perjalanan dinas berhasil diverifikasi dan diselesaikan',
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'error', 'message' => 'Gagal menutup LPJ: ' . $e->getMessage()], 500);
+        }
     }
 }

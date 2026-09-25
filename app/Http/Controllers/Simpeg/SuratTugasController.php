@@ -194,6 +194,23 @@ class SuratTugasController extends Controller
     }
 
     /**
+     * Konfirmasi penerimaan panjar oleh dosen pemohon (Tahap 4)
+     */
+    public function konfirmasiPanjar(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        $suratTugas = SuratTugas::findOrFail($id);
+
+        $result = $this->service->konfirmasiPanjar($suratTugas, $user);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Konfirmasi panjar berhasil disimpan. Pengajuan siap dicairkan oleh Keuangan.',
+            'data' => $result,
+        ]);
+    }
+
+    /**
      * Menghapus draf / pengajuan surat tugas
      */
     public function destroy(Request $request, int $id): JsonResponse

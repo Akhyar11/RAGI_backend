@@ -134,3 +134,28 @@ Mengunggah berkas laporan pertanggungjawaban (LPJ) kedinasan.
 - `file_lpj`: file (PDF max 10MB), required (1 file dokumen bundel LPJ lengkap memuat laporan kegiatan, foto dokumentasi, dan scan rekap bukti/slip pembayaran)
 - `laporan_kegiatan`: string, optional (Ringkasan laporan capaian hasil dinas)
 - `biaya_realisasi`: numeric, optional (Total realisasi pengeluaran dinas yang terpakai untuk rekonsiliasi kas SIKEU)
+
+---
+
+## 6. POST /api/simpeg/surat-tugas/{id}/konfirmasi-panjar
+Konfirmasi penerimaan panjar oleh dosen/pegawai pemohon (Tahap 4 alur 8-tahap integrasi).
+Setelah Bagian Keuangan (SIKEU) menyetujui besaran dana panjar dan menetapkan unit kas, dosen pemohon mengonfirmasi kesediaan tugas dinas dan nominal dana tersebut sehingga status pengajuan di SIKEU siap untuk dicairkan oleh bendahara.
+
+> 🔒 **Otorisasi**: Hanya **Penanggung Jawab Tugas** (`pegawai_id`) atau **Admin SIMPEG** yang berhak melakukan konfirmasi.  
+> ⚠️ **Syarat Status**: Surat tugas harus memiliki `status_pencairan = panjar_disetujui`.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Konfirmasi panjar berhasil disimpan. Pengajuan siap dicairkan oleh Keuangan.",
+    "data": {
+        "id": 1,
+        "nomor_surat": "ST/FT/001/2026",
+        "status": "disetujui",
+        "status_pencairan": "siap_cair",
+        "nominal_disetujui": "450000.00"
+    }
+}
+```
+

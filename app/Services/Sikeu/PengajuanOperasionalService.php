@@ -252,9 +252,15 @@ class PengajuanOperasionalService
                 'status' => 'dicairkan',
                 'tanggal_pencairan' => $data['tanggal_pencairan'] ?? now()->toDateString(),
                 'bukti_pencairan_path' => $buktiPath,
-                'kanal' => $unitKas?->kanal,
+                'kanal' => $pengajuan->kanal ?? $unitKas?->kanal,
                 'referensi_eksternal' => $data['referensi_eksternal'] ?? $pengajuan->referensi_eksternal,
             ]);
+
+            // Sinkronisasi status_pencairan ke SIMPEG jika ini adalah surat tugas
+            if ($pengajuan->kanal === 'simpeg_surat_tugas') {
+                \App\Models\Simpeg\SuratTugas::where('sikeu_pencairan_id', $pengajuan->id)
+                    ->update(['status_pencairan' => 'dicairkan']);
+            }
 
             return $pengajuan->fresh(['items', 'unitKas']);
         });
@@ -274,7 +280,122 @@ class PengajuanOperasionalService
             }
         }
 
-        return $pengajuan->fresh(['items', 'unitKas']);
+        return $pengajuan;
+    }
+
+    /**
+     * Keuangan menentukan unit kas dan nominal panjar untuk pengajuan surat tugas SIMPEG (Tahap 3).
+     */
+    public function setujuiPanjarSimpeg(PengajuanPencairanKas $pengajuan, array $data, ?Request $request = null): PengajuanPencairanKas
+    {
+        $pengajuan = DB::transaction(function () use ($pengajuan, $data) {
+            $unitKas = UnitKas::findOrFail($data['unit_kas_id']);
+            if (!$unitKas->status) {
+                throw new \InvalidArgumentException('Unit kas yang dipilih tidak aktif.');
+            }
+
+            $nominal = (float) $data['nominal_disetujui'];
+            if ($nominal <= 0) {
+                throw new \InvalidArgumentException('Nominal panjar disetujui harus lebih dari nol.');
+            }
+
+            $userId = auth()->id();
+
+            $pengajuan->update([
+                'unit_kas_id' => $unitKas->id,
+                'nominal_disetujui' => $nominal,
+                'status' => 'menunggu_konfirmasi_pegawai',
+                'approved_keuangan_by' => $userId,
+                'approved_keuangan_at' => now(),
+            ]);
+
+            // Catat history
+            ApprovalHistoryPencairan::create([
+                'pengajuan_id' => $pengajuan->id,
+                'user_id' => $userId,
+                'tahap' => 'keuangan',
+                'aksi' => 'approve',
+                'catatan' => $data['catatan'] ?? 'Panjar disetujui dari kas: ' . $unitKas->nama_kas . ' sebesar Rp ' . number_format($nominal, 0, ',', '.'),
+            ]);
+
+            // Update item nominal disetujui
+            PengajuanItem::where('pengajuan_id', $pengajuan->id)->update([
+                'harga_satuan' => $nominal,
+                'subtotal' => $nominal,
+            ]);
+
+            // Sinkronisasi ke modul SIMPEG: nominal_disetujui dan status_pencairan
+            \App\Models\Simpeg\SuratTugas::where('sikeu_pencairan_id', $pengajuan->id)->update([
+                'nominal_disetujui' => $nominal,
+                'status_pencairan' => 'panjar_disetujui',
+            ]);
+
+            return $pengajuan->fresh(['items', 'unitKas', 'suratTugas.pegawai']);
+        });
+
+        if ($request) {
+            try {
+                AuditLogService::record(
+                    module: 'SIKEU',
+                    action: 'approve_panjar_simpeg',
+                    tableName: 'sikeu_pengajuan_pencairan_kas',
+                    recordId: $pengajuan->id,
+                    newValues: ['nominal_disetujui' => $pengajuan->nominal_disetujui, 'unit_kas_id' => $pengajuan->unit_kas_id],
+                    request: $request,
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('AuditLog approve panjar dilewati: ' . $e->getMessage());
+            }
+        }
+
+        return $pengajuan;
+    }
+
+    /**
+     * Keuangan memverifikasi dan menutup transaksi pengajuan dinas SIMPEG setelah LPJ & selisih dana beres (Tahap 8).
+     */
+    public function tutupLpjSimpeg(PengajuanPencairanKas $pengajuan, array $data, ?Request $request = null): PengajuanPencairanKas
+    {
+        $pengajuan = DB::transaction(function () use ($pengajuan, $data) {
+            $userId = auth()->id();
+
+            $pengajuan->update([
+                'status' => 'selesai',
+            ]);
+
+            ApprovalHistoryPencairan::create([
+                'pengajuan_id' => $pengajuan->id,
+                'user_id' => $userId,
+                'tahap' => 'keuangan',
+                'aksi' => 'approve',
+                'catatan' => $data['catatan'] ?? 'LPJ perjalanan dinas telah diverifikasi dan kasbon ditutup (selesai).',
+            ]);
+
+            // Sinkronisasi ke SIMPEG
+            \App\Models\Simpeg\SuratTugas::where('sikeu_pencairan_id', $pengajuan->id)->update([
+                'status_pencairan' => 'selesai',
+                'status' => 'selesai',
+            ]);
+
+            return $pengajuan->fresh(['items', 'unitKas', 'suratTugas.pegawai']);
+        });
+
+        if ($request) {
+            try {
+                AuditLogService::record(
+                    module: 'SIKEU',
+                    action: 'tutup_lpj_simpeg',
+                    tableName: 'sikeu_pengajuan_pencairan_kas',
+                    recordId: $pengajuan->id,
+                    newValues: ['status' => 'selesai'],
+                    request: $request,
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('AuditLog tutup lpj dilewati: ' . $e->getMessage());
+            }
+        }
+
+        return $pengajuan;
     }
 
     /**

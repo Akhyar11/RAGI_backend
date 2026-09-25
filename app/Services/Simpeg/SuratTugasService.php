@@ -302,24 +302,22 @@ class SuratTugasService
 
             if ($data['status'] === 'disetujui') {
                 $updatePayload['nomor_surat'] = $data['nomor_surat'];
-                $updatePayload['nominal_disetujui'] = $nominalDisetujui;
 
-                // Integrasi SIKEU: Jika tugas berbiaya (> 0), teruskan antrean pencairan dana ke SIKEU
-                if ($nominalDisetujui > 0) {
-                    $unitKas = \App\Models\Sikeu\UnitKas::where('status', true)->first() ?? \App\Models\Sikeu\UnitKas::first();
-                    $unitKasId = $unitKas?->id;
+                $estimasiBiaya = (float) ($suratTugas->estimasi_biaya ?? 0);
+
+                // Integrasi SIKEU: Jika tugas berbiaya (> 0), teruskan antrean pencairan dana ke SIKEU (Tahap 2)
+                if ($estimasiBiaya > 0) {
                     $unitKerjaId = $suratTugas->pegawai?->unit_kerja_id;
-
                     $nomorPengajuan = 'CAIR-ST-' . date('Ymd') . '-' . sprintf('%04d', $suratTugas->id);
 
                     $attributes = [
                         'unit_kerja_id' => $unitKerjaId,
-                        'unit_kas_id' => $unitKasId,
+                        'unit_kas_id' => null, // Ditetapkan oleh Bagian Keuangan (SIKEU) di Tahap 3
                         'pemohon_id' => $suratTugas->pegawai?->user_id ?? $user->id,
                         'judul_pengajuan' => 'Panjar Perjalanan Dinas: ' . $suratTugas->nama_kegiatan,
                         'deskripsi' => 'Pencairan panjar dana tugas dinas No. ' . $data['nomor_surat'] . ' ke ' . $suratTugas->lokasi_tujuan . ' an. ' . ($suratTugas->pegawai?->nama_lengkap ?? 'Pegawai'),
-                        'nominal_diajukan' => $suratTugas->estimasi_biaya ?? $nominalDisetujui,
-                        'nominal_disetujui' => $nominalDisetujui,
+                        'nominal_diajukan' => $estimasiBiaya,
+                        'nominal_disetujui' => 0, // Menunggu persetujuan nominal oleh Admin SIKEU
                         'jenis_pengajuan' => 'kegiatan',
                         'kategori_pengajuan' => 'non_barang',
                         'status' => 'pending_keuangan',
@@ -348,17 +346,19 @@ class SuratTugasService
                         [
                             'qty' => 1,
                             'satuan' => 'paket',
-                            'harga_satuan' => $nominalDisetujui,
-                            'subtotal' => $nominalDisetujui,
+                            'harga_satuan' => $estimasiBiaya,
+                            'subtotal' => $estimasiBiaya,
                             'keterangan' => 'Dana panjar tugas dinas luar kampus No. ' . $data['nomor_surat'],
                         ]
                     );
 
                     $updatePayload['sikeu_pencairan_id'] = $pengajuanKas->id;
-                    $updatePayload['status_pencairan'] = 'belum_cair';
+                    $updatePayload['nominal_disetujui'] = 0;
+                    $updatePayload['status_pencairan'] = 'menunggu_keuangan';
                 } else {
                     // Non-biaya / Pelatihan daring Zoom / Rp 0 -> Bypass SIKEU
                     $updatePayload['sikeu_pencairan_id'] = null;
+                    $updatePayload['nominal_disetujui'] = 0;
                     $updatePayload['status_pencairan'] = 'tidak_perlu';
                 }
             }
@@ -373,6 +373,38 @@ class SuratTugasService
             // Jika disetujui, picu event untuk otomatisasi presensi dinas luar
             if ($data['status'] === 'disetujui') {
                 SuratTugasDisetujui::dispatch($suratTugas->fresh());
+            }
+
+            return $this->getById($suratTugas->id, $user);
+        });
+    }
+
+    /**
+     * Konfirmasi penerimaan panjar oleh dosen pemohon (Tahap 4)
+     */
+    public function konfirmasiPanjar(SuratTugas $suratTugas, $user): SuratTugas
+    {
+        $canManageAll = $user->isAdmin() || $user->hasPermission('simpeg.surat_tugas.approve');
+        $pegawaiId = $user->pegawai?->id;
+
+        if (!$canManageAll && $suratTugas->pegawai_id !== $pegawaiId) {
+            throw new AuthorizationException('Hanya pemohon penugasan yang dapat mengonfirmasi panjar.');
+        }
+
+        if ($suratTugas->status_pencairan !== 'panjar_disetujui') {
+            throw ValidationException::withMessages([
+                'status_pencairan' => ['Konfirmasi panjar hanya dapat dilakukan setelah nominal disetujui oleh Bagian Keuangan.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($suratTugas, $user) {
+            $suratTugas->update([
+                'status_pencairan' => 'siap_cair',
+            ]);
+
+            if ($suratTugas->sikeu_pencairan_id) {
+                \App\Models\Sikeu\PengajuanPencairanKas::where('id', $suratTugas->sikeu_pencairan_id)
+                    ->update(['status' => 'disetujui']);
             }
 
             return $this->getById($suratTugas->id, $user);
@@ -416,7 +448,7 @@ class SuratTugasService
                 'laporan_kegiatan' => $data['laporan_kegiatan'] ?? $suratTugas->laporan_kegiatan,
                 'biaya_realisasi' => $biayaRealisasi,
                 'tanggal_upload_lpj' => now(),
-                'status' => 'selesai',
+                'status_pencairan' => 'lpj_diunggah',
             ]);
 
             // Sinkronisasi berkas LPJ dan realisasi ke transaksi pengeluaran kas SIKEU bila terhubung
@@ -426,6 +458,7 @@ class SuratTugasService
                     $pengajuanKas->update([
                         'total_realisasi' => $biayaRealisasi,
                         'sisa_nominal' => $sisaNominal,
+                        'status' => 'lpj_pending',
                     ]);
                 }
 

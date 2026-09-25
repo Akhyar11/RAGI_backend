@@ -356,6 +356,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::put('surat-tugas/{id}', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'update']);
     Route::post('surat-tugas/{id}/approve', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'approve']);
     Route::post('surat-tugas/{id}/lpj', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'uploadLpj']);
+    Route::post('surat-tugas/{id}/konfirmasi-panjar', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'konfirmasiPanjar']);
     Route::delete('surat-tugas/{id}', [App\Http\Controllers\Simpeg\SuratTugasController::class, 'destroy']);
 
     // Izin Parsial Jam Kerja Pegawai
@@ -534,6 +535,8 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::get('pengajuan-operasional/{id}', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'show']);
     Route::post('pengajuan-operasional/{id}/approve', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'approve']);
     Route::post('pengajuan-operasional/{id}/pencairan', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'pencairan']);
+    Route::post('pengajuan-operasional/{id}/setujui-panjar-simpeg', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'setujuiPanjarSimpeg']);
+    Route::post('pengajuan-operasional/{id}/tutup-lpj-simpeg', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'tutupLpjSimpeg']);
     Route::post('pengajuan-operasional/{id}/lpj', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'simpanLpj']);
     Route::post('lpj/{id}/verifikasi', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'verifikasiLpj']);
     Route::get('referensi/fakultas', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'listFakultas']);
