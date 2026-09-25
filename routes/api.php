@@ -541,6 +541,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::post('lpj/{id}/verifikasi', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'verifikasiLpj']);
     Route::get('referensi/fakultas', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'listFakultas']);
     Route::get('referensi/ruangan', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'listRuangan']);
+    Route::get('referensi/kategori-pengajuan', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'listKategoriPengajuan']);
 
     // Kas Kecil (Petty Cash): transaksi keluar petugas + pengajuan kas langsung
     Route::get('kas-kecil/referensi/kategori', [App\Http\Controllers\Sikeu\KasKecilController::class, 'referensiKategori']);

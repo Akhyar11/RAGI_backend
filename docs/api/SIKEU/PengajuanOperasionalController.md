@@ -21,6 +21,7 @@
 | POST | `/api/v1/sikeu/lpj/{id}/verifikasi` | Verifikasi LPJ pengadaan sarpras | ✅ Sanctum |
 | GET | `/api/v1/sikeu/referensi/fakultas` | Referensi fakultas | ✅ Sanctum |
 | GET | `/api/v1/sikeu/referensi/ruangan` | Referensi ruangan | ✅ Sanctum |
+| GET | `/api/v1/sikeu/referensi/kategori-pengajuan` | Referensi kategori pengajuan operasional | ✅ Sanctum |
 
 ---
 

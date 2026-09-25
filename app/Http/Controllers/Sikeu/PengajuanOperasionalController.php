@@ -254,6 +254,16 @@ class PengajuanOperasionalController extends Controller
         return response()->json(['status' => 'success', 'data' => $data]);
     }
 
+    public function listKategoriPengajuan()
+    {
+        $data = [
+            ['id' => 'pengadaan_barang', 'nama' => 'Pengadaan Barang'],
+            ['id' => 'non_barang', 'nama' => 'Non-Barang'],
+        ];
+
+        return response()->json(['status' => 'success', 'data' => $data]);
+    }
+
     /**
      * POST /api/v1/sikeu/pengajuan-operasional/{id}/setujui-panjar-simpeg
      */
