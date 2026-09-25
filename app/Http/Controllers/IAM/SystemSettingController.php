@@ -91,6 +91,26 @@ class SystemSettingController extends Controller
             }
         }
 
+        $defaultLms = [
+            'lms_storage_disk'        => (string) SystemSetting::get('lms_storage_disk', 'r2'),
+            'lms_max_file_materi_mb'  => (string) SystemSetting::get('lms_max_file_materi_mb', '50'),
+            'lms_max_video_mb'        => (string) SystemSetting::get('lms_max_video_mb', '500'),
+            'lms_max_file_tugas_mb'   => (string) SystemSetting::get('lms_max_file_tugas_mb', '50'),
+            'lms_allow_token_absensi' => (string) SystemSetting::get('lms_allow_token_absensi', 'true'),
+            'lms_token_ttl_minutes'   => (string) SystemSetting::get('lms_token_ttl_minutes', '15'),
+        ];
+
+        foreach ($defaultLms as $key => $val) {
+            if (!isset($settings[$key])) {
+                $settings[$key] = [
+                    'id'          => null,
+                    'key'         => $key,
+                    'value'       => (string) $val,
+                    'description' => 'Konfigurasi LMS & Absensi Perkuliahan',
+                ];
+            }
+        }
+
         return response()->json([
             'status' => 'success',
             'data'   => $settings,

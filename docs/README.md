@@ -18,6 +18,7 @@
 | RoleAssignmentController | Pemetaan relasi User-Role dan Role-Permission | [docs/api/IAM/RoleAssignmentController.md](api/IAM/RoleAssignmentController.md) |
 | UserSessionController | Pemantauan & pencabutan sesi pengguna | [docs/api/IAM/UserSessionController.md](api/IAM/UserSessionController.md) |
 | AuditLogController | Rekaman log sistem (Akuntabilitas) | [docs/api/IAM/AuditLogController.md](api/IAM/AuditLogController.md) |
+| SystemSettingController | Pengaturan terpusat sistem (SMTP, R2, Feeder, LMS) | [docs/api/IAM/SystemSettingController.md](api/IAM/SystemSettingController.md) |
 
 ---
 
