@@ -113,12 +113,12 @@ Menyetujui atau menolak permohonan dinas luar, menetapkan nominal anggaran yang 
 
 > ℹ️ **Catatan Otomatisasi**:
 > 1. **Presensi Otomatis**: Saat disetujui, sistem secara otomatis menerbitkan data presensi kepegawaian berstatus **DINAS** untuk ketua rombongan dan seluruh anggota pada rentang tanggal dinas melalui Event `SuratTugasDisetujui`.
-> 2. **Integrasi SIKEU Otomatis**: Jika `nominal_disetujui > 0`, sistem otomatis membuat antrean permohonan pencairan kasbon/panjar perjalanan dinas di modul SIKEU (`sikeu_pengajuan_pencairan_kas`). Jika `nominal_disetujui = 0` (contoh: pelatihan daring via Zoom / non-biaya), pengajuan ke SIKEU di-bypass (tidak dibuat).
+> 2. **Integrasi SIKEU Otomatis**: Jika `nominal_disetujui > 0`, sistem otomatis membuat antrean permohonan pencairan kasbon/panjar perjalanan dinas di modul SIKEU (`sikeu_pengajuan_pencairan_kas` dengan kategori `non_barang`, kanal `simpeg_surat_tugas`, status `pending_keuangan`) serta rincian item (`sikeu_pengajuan_item`). Jika `nominal_disetujui = 0` (contoh: pelatihan daring via Zoom / non-biaya), pengajuan ke SIKEU di-bypass (tidak dibuat).
 
 ### Request Body
 - `status`: string, required (`disetujui` / `ditolak`)
 - `nomor_surat`: string, required if `status = disetujui` (Nomor resmi surat tugas)
-- `nominal_disetujui`: numeric, optional (Nominal dana dinas yang disetujui. Isi 0 jika tugas non-anggaran / daring Zoom)
+- `nominal_disetujui`: numeric, optional (Nominal dana dinas yang disetujui. Default diambil dari estimasi biaya diajukan jika tidak diisi. Isi 0 jika tugas non-anggaran / daring Zoom)
 - `catatan_approval`: string, optional
 - `file_surat_tugas`: file (PDF max 10MB), optional (Surat bertandatangan)
 
@@ -127,7 +127,8 @@ Menyetujui atau menolak permohonan dinas luar, menetapkan nominal anggaran yang 
 ## 5. POST /api/simpeg/surat-tugas/{id}/lpj
 Mengunggah berkas laporan pertanggungjawaban (LPJ) kedinasan.
 
-> 🔒 **Otorisasi Ketat**: Hanya **Penanggung Jawab Tugas** (`pegawai_id`) atau **Admin / Pejabat Approver** yang berhak mengunggah berkas LPJ. Anggota rombongan dinas hanya berstatus *read-only* (melihat data dan mengunduh berkas LPJ yang sudah diunggah).
+> 🔒 **Otorisasi Ketat**: Hanya **Penanggung Jawab Tugas** (`pegawai_id`) atau **Admin / Pejabat Approver** yang berhak mengunggah berkas LPJ. Anggota rombongan dinas hanya berstatus *read-only* (melihat data dan mengunduh berkas LPJ yang sudah diunggah).  
+> 💰 **Kalkulasi Selisih & Pengembalian Dana**: Sistem secara otomatis menghitung selisih panjar disetujui dikurangi biaya realisasi (`sisa_nominal`). Jika biaya terpakai lebih kecil daripada panjar disetujui (contoh: disetujui Rp 500.000, terpakai Rp 300.000), sistem secara tegas menampilkan **Dana yang Harus Dikembalikan ke Kas Kampus: Rp 200.000**. Jika terpakai lebih besar, menampilkan klaim kurang bayar (reimbursement). Nilai ini otomatis disinkronkan ke pembukuan transaksi SIKEU.
 
 ### Request Body
 - `file_lpj`: file (PDF max 10MB), required (1 file dokumen bundel LPJ lengkap memuat laporan kegiatan, foto dokumentasi, dan scan rekap bukti/slip pembayaran)

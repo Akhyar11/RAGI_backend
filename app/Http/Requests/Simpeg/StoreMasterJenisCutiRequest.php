@@ -17,7 +17,7 @@ class StoreMasterJenisCutiRequest extends FormRequest
             'nama' => 'required|string|max:100',
             'kode' => 'nullable|string|max:50|unique:simpeg_master_jenis_cuti,kode',
             'tipe_durasi' => 'required|in:ditetapkan,fleksibel',
-            'durasi_hari' => 'required_if:tipe_durasi,ditetapkan|nullable|integer|min:1',
+            'durasi_hari' => 'required_if:tipe_durasi,ditetapkan|nullable|integer|min:0',
             'satuan' => 'nullable|string|max:20',
             'lampiran_wajib' => 'nullable|boolean',
             'keterangan' => 'nullable|string',
@@ -33,7 +33,7 @@ class StoreMasterJenisCutiRequest extends FormRequest
             'tipe_durasi.required' => 'Tipe durasi cuti wajib dipilih.',
             'tipe_durasi.in' => 'Tipe durasi cuti harus berupa ditetapkan atau fleksibel.',
             'durasi_hari.required_if' => 'Durasi hari wajib diisi jika tipe durasi ditetapkan.',
-            'durasi_hari.min' => 'Durasi hari minimal 1 hari.',
+            'durasi_hari.min' => 'Durasi hari minimal 0 hari.',
         ];
     }
 }

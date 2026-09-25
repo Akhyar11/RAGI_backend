@@ -122,6 +122,39 @@ class SimpegMasterJenisCutiTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_create_master_jenis_cuti_fleksibel_with_zero_durasi_hari()
+    {
+        $payload = [
+            'nama' => 'Cuti Sakit Fleksibel',
+            'kode' => 'CUTI_SAKIT_FLEKSIBEL',
+            'tipe_durasi' => 'fleksibel',
+            'durasi_hari' => 0,
+            'satuan' => 'hari',
+            'lampiran_wajib' => true,
+            'keterangan' => 'Memerlukan surat keterangan dokter/klinik',
+            'is_active' => true,
+        ];
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/master-jenis-cuti', $payload);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'nama' => 'Cuti Sakit Fleksibel',
+                    'tipe_durasi' => 'fleksibel',
+                    'durasi_hari' => 0,
+                ]
+            ]);
+
+        $this->assertDatabaseHas('simpeg_master_jenis_cuti', [
+            'nama' => 'Cuti Sakit Fleksibel',
+            'tipe_durasi' => 'fleksibel',
+            'durasi_hari' => 0,
+        ]);
+    }
+
     public function test_fixed_duration_pengajuan_cuti_auto_calculates_dates()
     {
         $master = MasterJenisCuti::create([

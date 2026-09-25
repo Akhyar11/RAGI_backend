@@ -57,6 +57,17 @@ class SuratTugas extends Model
         'approved_at' => 'datetime',
     ];
 
+    protected $appends = [
+        'sisa_nominal',
+    ];
+
+    public function getSisaNominalAttribute(): float
+    {
+        $disetujui = (float) ($this->nominal_disetujui ?? 0);
+        $realisasi = (float) ($this->biaya_realisasi ?? 0);
+        return $disetujui - $realisasi;
+    }
+
     public function pegawai()
     {
         return $this->belongsTo(Pegawai::class, 'pegawai_id');

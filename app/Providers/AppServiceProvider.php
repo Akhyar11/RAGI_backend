@@ -65,6 +65,7 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Simpeg\SuratTugas::observe(\App\Observers\Simpeg\SuratTugasObserver::class);
         \App\Models\Simpeg\UsulanJafung::observe(\App\Observers\Simpeg\UsulanJafungObserver::class);
         \App\Models\Simpeg\PegawaiKomponenGaji::observe(\App\Observers\Simpeg\PegawaiKomponenGajiObserver::class);
+        \App\Models\Simpeg\JabatanFungsionalAkademik::observe(\App\Observers\JabatanFungsionalAkademikObserver::class);
 
         // SINAPRA Observers
         \App\Models\LabBhp::observe(\App\Observers\Sinapra\LabBhpObserver::class);

@@ -15,7 +15,7 @@ return new class extends Migration
         if (!Schema::hasTable('siakad_skala_nilai')) {
             Schema::create('siakad_skala_nilai', function (Blueprint $table) {
                 $table->id();
-                $table->foreignId('program_studi_id')->nullable()->constrained('spmb_master_program_studi')->cascadeOnDelete();
+                $table->foreignId('program_studi_id')->nullable()->constrained('siakad_program_studi')->cascadeOnDelete();
                 $table->string('nilai_huruf', 5); // A, A-, B+, B, B-, C+, C, D, E
                 $table->decimal('bobot_indeks', 4, 2); // 4.00, 3.75, 3.50, dst.
                 $table->decimal('batas_bawah', 5, 2); // misal 85.00

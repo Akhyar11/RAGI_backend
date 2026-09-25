@@ -4,7 +4,7 @@
 > **Base URL**: `/api/simpeg/jabatan-fungsional`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-24  
-> **Diperbarui**: 2026-09-24  
+> **Diperbarui**: 2026-09-25  
 
 ## Daftar Endpoint
 
@@ -32,17 +32,19 @@
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
 | `search` | string | ❌ | — | Cari nama jafung atau nama golongan |
-| `golongan` | string | ❌ | — | Filter golongan (`asisten_ahli`, `lektor`, `lektor_kepala`, `guru_besar`) |
+| `golongan` | string | ❌ | — | Filter golongan (`tenaga_pengajar`, `asisten_ahli`, `lektor`, `lektor_kepala`, `guru_besar`) |
 | `sort_by` | string | ❌ | `created_at` | Kolom pengurutan (`nama`, `golongan`, `angka_kredit_min`, `created_at`) |
 | `sort_order` | string | ❌ | `desc` | Arah urutan: `asc` / `desc` |
-| `per_page` | integer | ❌ | `15` | Limit per halaman (default 15, maks 100) |
-| `page` | integer | ❌ | `1` | Nomor halaman (default 1) |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+| `page` | integer | ❌ | `1` | Halaman yang diminta |
 
-### Response Sukses (200 OK)
+### Response Sukses
 
+**200 OK (dengan Pagination)**
 ```json
 {
     "status": "success",
+    "message": "Data retrieved successfully",
     "data": [
         {
             "id": 1,
@@ -71,7 +73,23 @@
 ```json
 {
     "status": "error",
-    "message": "Unauthenticated."
+    "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Data jabatan fungsional tidak ditemukan."
 }
 ```
 
@@ -96,12 +114,13 @@
     "nama": "Tenaga Pengajar",
     "angka_kredit_min": 0,
     "angka_kredit_max": 100,
-    "golongan": "asisten_ahli"
+    "golongan": "tenaga_pengajar"
 }
 ```
 
-### Response Sukses (201 Created)
+### Response Sukses
 
+**201 Created**
 ```json
 {
     "status": "success",
@@ -111,9 +130,9 @@
         "nama": "Tenaga Pengajar",
         "angka_kredit_min": 0,
         "angka_kredit_max": 100,
-        "golongan": "asisten_ahli",
-        "created_at": "2026-09-24T10:05:00.000000Z",
-        "updated_at": "2026-09-24T10:05:00.000000Z"
+        "golongan": "tenaga_pengajar",
+        "created_at": "2026-09-25T12:00:00.000000Z",
+        "updated_at": "2026-09-25T12:00:00.000000Z"
     }
 }
 ```
@@ -124,7 +143,7 @@
 ```json
 {
     "status": "error",
-    "message": "Unauthenticated."
+    "message": "Token tidak valid atau sesi telah berakhir."
 }
 ```
 
@@ -136,13 +155,25 @@
 }
 ```
 
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Data jabatan fungsional tidak ditemukan."
+}
+```
+
 **422 Unprocessable Entity**
 ```json
 {
-    "message": "The nama has already been taken.",
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
     "errors": {
         "nama": [
-            "The nama has already been taken."
+            "Nama jabatan fungsional sudah digunakan."
+        ],
+        "golongan": [
+            "Golongan wajib diisi."
         ]
     }
 }
@@ -161,29 +192,73 @@
 | `Authorization` | `Bearer {token}` | ✅ |
 | `Accept` | `application/json` | ✅ |
 
-### Response Sukses (200 OK)
+### Query Parameters
 
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `search` | string | ❌ | — | Cari nama atau kode golongan |
+| `sort_by` | string | ❌ | `urutan` | Kolom pengurutan (`kode`, `nama`, `urutan`, `created_at`) |
+| `sort_order` | string | ❌ | `asc` | Arah urutan: `asc` / `desc` |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+| `page` | integer | ❌ | `1` | Halaman yang diminta |
+
+### Response Sukses
+
+**200 OK (dengan Pagination)**
 ```json
 {
     "status": "success",
+    "message": "Daftar master golongan jabatan fungsional berhasil dimuat.",
     "data": [
         {
+            "id": 1,
+            "value": "tenaga_pengajar",
+            "label": "Tenaga Pengajar",
+            "pangkat": "Penata Muda",
+            "ruang": "III/a"
+        },
+        {
+            "id": 2,
             "value": "asisten_ahli",
-            "label": "Asisten Ahli"
+            "label": "Asisten Ahli",
+            "pangkat": "Penata Muda / Penata Muda Tingkat I",
+            "ruang": "III/a - III/b"
         },
         {
+            "id": 3,
             "value": "lektor",
-            "label": "Lektor"
+            "label": "Lektor",
+            "pangkat": "Penata / Penata Tingkat I",
+            "ruang": "III/c - III/d"
         },
         {
+            "id": 4,
             "value": "lektor_kepala",
-            "label": "Lektor Kepala"
+            "label": "Lektor Kepala",
+            "pangkat": "Pembina / Pembina Tingkat I / Pembina Utama Muda",
+            "ruang": "IV/a - IV/c"
         },
         {
+            "id": 5,
             "value": "guru_besar",
-            "label": "Guru Besar"
+            "label": "Guru Besar",
+            "pangkat": "Pembina Utama Madya / Pembina Utama",
+            "ruang": "IV/d - IV/e"
         }
-    ]
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 5,
+        "last_page": 1,
+        "from": 1,
+        "to": 5
+    },
+    "filters": {
+        "search": "",
+        "sort_by": "urutan",
+        "sort_order": "asc"
+    }
 }
 ```
 
@@ -193,8 +268,19 @@
 ```json
 {
     "status": "error",
-    "message": "Unauthenticated."
+    "message": "Token tidak valid atau sesi telah berakhir."
 }
 ```
 
-> **Catatan**: Master data jabatan fungsional mengacu ke tabel `simpeg_jabatan_fungsional_akademik`. Tidak ada fitur hard-delete sembarangan karena jenjang jafung terikat dengan riwayat kepangkatan dan usulan kenaikan jafung dosen. Password dan data sensitif tidak pernah disertakan.
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+}
+```
+
+### Catatan Tambahan
+
+> - Endpoint ini mendukung soft-delete untuk menjaga integritas relasi data riwayat kepangkatan dan usulan jafung dosen.
+> - Field `password` dan data kredensial tidak pernah dikembalikan dalam response endpoint ini.

@@ -16,14 +16,21 @@ class JabatanFungsionalAkademik extends Model
         'angka_kredit_min',
         'angka_kredit_max',
         'golongan',
+        'golongan_pangkat_id',
         'tunjangan_nominal',
     ];
 
     protected $casts = [
         'angka_kredit_min' => 'integer',
         'angka_kredit_max' => 'integer',
+        'golongan_pangkat_id' => 'integer',
         'tunjangan_nominal' => 'float',
     ];
+
+    public function golonganPangkat()
+    {
+        return $this->belongsTo(MasterGolonganPangkat::class, 'golongan_pangkat_id');
+    }
 
     public function riwayatJabatan()
     {

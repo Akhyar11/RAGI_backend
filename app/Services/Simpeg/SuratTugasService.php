@@ -287,7 +287,11 @@ class SuratTugasService
         }
 
         return DB::transaction(function () use ($suratTugas, $data, $fileSuratTugas, $user) {
-            $nominalDisetujui = isset($data['nominal_disetujui']) ? (float) $data['nominal_disetujui'] : 0;
+            if (array_key_exists('nominal_disetujui', $data) && $data['nominal_disetujui'] !== null && $data['nominal_disetujui'] !== '') {
+                $nominalDisetujui = (float) $data['nominal_disetujui'];
+            } else {
+                $nominalDisetujui = (float) ($suratTugas->estimasi_biaya ?? 0);
+            }
 
             $updatePayload = [
                 'status' => $data['status'],
@@ -317,7 +321,10 @@ class SuratTugasService
                         'nominal_diajukan' => $suratTugas->estimasi_biaya ?? $nominalDisetujui,
                         'nominal_disetujui' => $nominalDisetujui,
                         'jenis_pengajuan' => 'kegiatan',
+                        'kategori_pengajuan' => 'non_barang',
                         'status' => 'pending_keuangan',
+                        'kanal' => 'simpeg_surat_tugas',
+                        'referensi_eksternal' => $data['nomor_surat'],
                         'approved_pimpinan_by' => $user->id,
                         'approved_pimpinan_at' => now(),
                     ];
@@ -332,10 +339,26 @@ class SuratTugasService
                         ));
                     }
 
+                    // Buat/update rincian item pengajuan agar detail SIKEU lengkap
+                    \App\Models\Sikeu\PengajuanItem::updateOrCreate(
+                        [
+                            'pengajuan_id' => $pengajuanKas->id,
+                            'nama_barang' => 'Panjar Perjalanan Dinas: ' . $suratTugas->nama_kegiatan,
+                        ],
+                        [
+                            'qty' => 1,
+                            'satuan' => 'paket',
+                            'harga_satuan' => $nominalDisetujui,
+                            'subtotal' => $nominalDisetujui,
+                            'keterangan' => 'Dana panjar tugas dinas luar kampus No. ' . $data['nomor_surat'],
+                        ]
+                    );
+
                     $updatePayload['sikeu_pencairan_id'] = $pengajuanKas->id;
                     $updatePayload['status_pencairan'] = 'belum_cair';
                 } else {
-                    // Non-biaya / Pelatihan daring Zoom -> Bypass SIKEU
+                    // Non-biaya / Pelatihan daring Zoom / Rp 0 -> Bypass SIKEU
+                    $updatePayload['sikeu_pencairan_id'] = null;
                     $updatePayload['status_pencairan'] = 'tidak_perlu';
                 }
             }
@@ -386,6 +409,8 @@ class SuratTugasService
                 ? $data['biaya_realisasi']
                 : ($suratTugas->nominal_disetujui > 0 ? $suratTugas->biaya_realisasi : 0);
 
+            $sisaNominal = (float) $suratTugas->nominal_disetujui - (float) $biayaRealisasi;
+
             $suratTugas->update([
                 'file_lpj' => $filePath,
                 'laporan_kegiatan' => $data['laporan_kegiatan'] ?? $suratTugas->laporan_kegiatan,
@@ -396,6 +421,14 @@ class SuratTugasService
 
             // Sinkronisasi berkas LPJ dan realisasi ke transaksi pengeluaran kas SIKEU bila terhubung
             if ($suratTugas->sikeu_pencairan_id) {
+                $pengajuanKas = \App\Models\Sikeu\PengajuanPencairanKas::find($suratTugas->sikeu_pencairan_id);
+                if ($pengajuanKas) {
+                    $pengajuanKas->update([
+                        'total_realisasi' => $biayaRealisasi,
+                        'sisa_nominal' => $sisaNominal,
+                    ]);
+                }
+
                 $pengeluaran = \App\Models\Sikeu\PengeluaranKampus::where('nomor_transaksi', 'like', '%-' . sprintf('%04d', $suratTugas->sikeu_pencairan_id))->first();
                 if ($pengeluaran) {
                     $pengeluaranUpdate = [
@@ -406,7 +439,7 @@ class SuratTugasService
                         $pengeluaranUpdate['net_dibayarkan'] = $biayaRealisasi;
                     }
                     if (!str_contains($pengeluaran->keterangan, '[LPJ Terunggah]')) {
-                        $pengeluaranUpdate['keterangan'] = $pengeluaran->keterangan . ' [LPJ Terunggah: Realisasi Rp ' . number_format((float)$biayaRealisasi, 0, ',', '.') . ']';
+                        $pengeluaranUpdate['keterangan'] = $pengeluaran->keterangan . ' [LPJ Terunggah: Realisasi Rp ' . number_format((float)$biayaRealisasi, 0, ',', '.') . ', Sisa Rp ' . number_format((float)$sisaNominal, 0, ',', '.') . ']';
                     }
                     $pengeluaran->update($pengeluaranUpdate);
                 }

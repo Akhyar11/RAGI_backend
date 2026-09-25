@@ -28,6 +28,8 @@ class SimpegUnitKerjaDanJabatanTest extends TestCase
             'email' => 'admin@campus.ac.id',
         ]);
         $this->admin->roles()->attach($roleSuper->id);
+
+        $this->seed(\Database\Seeders\SIMPEG\MasterGolonganPangkatSeeder::class);
     }
 
     public function test_can_create_unit_kerja_successfully()
@@ -193,6 +195,28 @@ class SimpegUnitKerjaDanJabatanTest extends TestCase
         $this->assertDatabaseHas('simpeg_jabatan_fungsional_akademik', [
             'nama' => 'Tenaga Pengajar',
             'golongan' => 'asisten_ahli',
+        ]);
+    }
+
+    public function test_can_create_jabatan_fungsional_with_golongan_tenaga_pengajar()
+    {
+        $payload = [
+            'nama' => 'Tenaga Pengajar Non-Jafung',
+            'angka_kredit_min' => 0,
+            'angka_kredit_max' => 99,
+            'golongan' => 'tenaga_pengajar',
+        ];
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/jabatan-fungsional', $payload);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.golongan', 'tenaga_pengajar');
+
+        $this->assertDatabaseHas('simpeg_jabatan_fungsional_akademik', [
+            'nama' => 'Tenaga Pengajar Non-Jafung',
+            'golongan' => 'tenaga_pengajar',
         ]);
     }
 
