@@ -3,10 +3,10 @@
 namespace App\Listeners\Spmb;
 
 use App\Events\Sikeu\PembayaranSpmbLunas;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Queue\InteractsWithQueue;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Services\Spmb\SpmbPendaftaranService;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Queue\InteractsWithQueue;
 
 class UpdateStatusPembayaranSpmb implements ShouldQueue
 {
@@ -32,9 +32,14 @@ class UpdateStatusPembayaranSpmb implements ShouldQueue
         $pendaftaran = PendaftaranCalonMhs::find($calonMahasiswaId);
 
         if ($pendaftaran) {
+            // Jangan turunkan status yang sudah lebih lanjut (verified/lulus_administrasi).
+            $newStatus = $pendaftaran->status === PendaftaranCalonMhs::STATUS_DRAFT
+                ? PendaftaranCalonMhs::STATUS_SUBMITTED
+                : $pendaftaran->status;
+
             $pendaftaran->update([
                 'status_pembayaran' => 'lunas',
-                'status' => 'submitted' // Change status so they can proceed
+                'status' => $newStatus,
             ]);
 
             // Buat urutan alur pendaftaran (Progress Tracker) untuk mahasiswa ini

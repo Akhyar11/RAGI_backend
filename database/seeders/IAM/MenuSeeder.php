@@ -297,10 +297,9 @@ class MenuSeeder extends Seeder
                 'permission_slug' => 'spmb.manage',
                 'order_index' => 2,
                 'children' => [
-                    ['name' => 'Data Calon Mahasiswa', 'url' => '/spmb/pendaftar', 'icon' => 'FaUsers', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 1],
-                    ['name' => 'Pendaftaran Mahasiswa Baru', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUserPlus', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 2],
-                    ['name' => 'Verifikasi Daftar Ulang', 'url' => '/spmb/daftar-ulang', 'icon' => 'FaClipboardCheck', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 3],
-                    ['name' => 'Registrasi Online', 'url' => '/spmb/registrasi', 'icon' => 'FaPen', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 4],
+                    ['name' => 'Pendaftaran Mahasiswa Baru', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUserPlus', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 1],
+                    ['name' => 'Verifikasi Daftar Ulang', 'url' => '/spmb/daftar-ulang', 'icon' => 'FaClipboardCheck', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 2],
+                    ['name' => 'Registrasi Online', 'url' => '/spmb/registrasi', 'icon' => 'FaPen', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 3],
                 ]
             ],
             [
@@ -341,6 +340,7 @@ class MenuSeeder extends Seeder
                 'order_index' => 5,
                 'children' => [
                     ['name' => 'Statistik Pendaftaran', 'url' => '/spmb/laporan/statistik', 'icon' => 'FaChartBar', 'module' => 'spmb', 'permission_slug' => 'spmb.laporan.read', 'order_index' => 1],
+                    ['name' => 'Laporan Referral', 'url' => '/spmb/laporan/referral', 'icon' => 'FaUsers', 'module' => 'spmb', 'permission_slug' => 'spmb.laporan.read', 'order_index' => 2],
                 ]
             ],
 
@@ -667,9 +667,9 @@ class MenuSeeder extends Seeder
             $adminKeuPembayaranRole->menus()->syncWithoutDetaching($pembayaranMenuIds);
         }
 
-        // Attach SPMB menus to admin-spmb role
+        // Attach SPMB menus to SPMB admin role (slug resmi: admin_spmb)
         $spmbMenuIds = Menu::where('module', 'spmb')->pluck('id')->toArray();
-        $adminSpmbRole = \App\Models\Role::where('slug', 'admin-spmb')->first();
+        $adminSpmbRole = \App\Models\Role::where('slug', 'admin_spmb')->first();
         if ($adminSpmbRole) {
             $adminSpmbRole->menus()->syncWithoutDetaching($spmbMenuIds);
         }

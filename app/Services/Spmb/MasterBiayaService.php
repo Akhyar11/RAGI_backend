@@ -2,13 +2,16 @@
 
 namespace App\Services\Spmb;
 
+use App\Models\Sikeu\TarifSpmb;
+use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\Spmb\MasterBiaya;
 use App\Models\Spmb\MasterBiayaItem;
 use App\Models\Spmb\MasterKomponenBiaya;
-use App\Models\Spmb\MasterProgramStudi;
+use App\Services\Sikeu\SpmbSikeuService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class MasterBiayaService
 {
@@ -39,7 +42,7 @@ class MasterBiayaService
                 }
             }
 
-            if ($positionType === 'end' || !$newList->contains(null)) {
+            if ($positionType === 'end' || ! $newList->contains(null)) {
                 $newList->push(null);
             }
 
@@ -93,7 +96,7 @@ class MasterBiayaService
                     }
                 }
 
-                if ($positionType === 'end' || !$newList->contains('id', $komponen->id)) {
+                if ($positionType === 'end' || ! $newList->contains('id', $komponen->id)) {
                     $newList->push($komponen);
                 }
 
@@ -112,6 +115,7 @@ class MasterBiayaService
             unset($data['position_type'], $data['reference_id']);
 
             $komponen->update($data);
+
             return $komponen->fresh();
         });
     }
@@ -141,7 +145,7 @@ class MasterBiayaService
             );
 
             $total = 0;
-            if (!empty($data['items'])) {
+            if (! empty($data['items'])) {
                 foreach ($data['items'] as $item) {
                     $nominal = (float) $item['nominal'];
                     $total += $nominal;
@@ -161,6 +165,7 @@ class MasterBiayaService
             }
 
             $masterBiaya->update(['total_biaya' => $total]);
+
             return $masterBiaya->load(['items.komponenBiaya', 'programStudi', 'gelombang']);
         });
     }
@@ -221,7 +226,7 @@ class MasterBiayaService
      */
     public function getKomponenBeban(?int $gelombangId, ?int $programStudiId, bool $saatPendaftaran): Collection
     {
-        if (!$gelombangId || !$programStudiId) {
+        if (! $gelombangId || ! $programStudiId) {
             return collect();
         }
 
@@ -231,7 +236,7 @@ class MasterBiayaService
             ->where('is_active', true)
             ->first();
 
-        if (!$biaya) {
+        if (! $biaya) {
             return collect();
         }
 
@@ -265,23 +270,31 @@ class MasterBiayaService
     public function buildDetailBebanPendaftaran(?int $gelombangId, ?int $programStudiId): array
     {
         $details = $this->buildDetailTagihan($gelombangId, $programStudiId, true);
-        if (!empty($details)) {
+        if (! empty($details)) {
             return $details;
         }
 
-        $sikeuService = app(\App\Services\Sikeu\SpmbSikeuService::class);
-        $gelombang = \App\Models\Spmb\GelombangPenerimaan::with('masterBiaya')->find($gelombangId);
-        $nominal = $sikeuService->getTarifPendaftaranSpmb($gelombang->jalur_masuk_id ?? 1, $gelombang->id ?? 1);
+        $gelombang = GelombangPenerimaan::find($gelombangId);
+
+        $sikeuService = app(SpmbSikeuService::class);
+        $nominal = $sikeuService->getTarifPendaftaranSpmb($gelombang->jalur_masuk_id ?? null, $gelombangId);
+
         if ($nominal <= 0) {
-            $nominal = ($gelombang && $gelombang->biaya_pendaftaran > 0)
-                ? (float) $gelombang->biaya_pendaftaran
-                : 250000.00;
+            throw ValidationException::withMessages([
+                'biaya' => 'Biaya pendaftaran belum dikonfigurasi untuk gelombang ini. Hubungi panitia SPMB.',
+            ]);
         }
 
+        $masterBiaya = \App\Models\Sikeu\MasterBiaya::where('is_active', true)
+            ->where(function ($q) {
+                $q->where('kode', 'SPMB_ADM')->orWhere('tipe', 'spmb_adm');
+            })
+            ->first();
+
         return [[
-            'master_biaya_kode' => ($gelombang && $gelombang->masterBiaya) ? $gelombang->masterBiaya->kode : 'SPMB_ADM',
+            'master_biaya_kode' => $masterBiaya->kode ?? 'SPMB_ADM',
             'nominal' => $nominal,
-            'keterangan' => ($gelombang && $gelombang->masterBiaya) ? $gelombang->masterBiaya->nama : 'Biaya Formulir Pendaftaran SPMB',
+            'keterangan' => $masterBiaya->nama ?? 'Biaya Formulir Pendaftaran SPMB',
         ]];
     }
 
@@ -292,11 +305,11 @@ class MasterBiayaService
     public function buildDetailBebanDaftarUlang(?int $gelombangId, ?int $programStudiId): array
     {
         $details = $this->buildDetailTagihan($gelombangId, $programStudiId, false);
-        if (!empty($details)) {
+        if (! empty($details)) {
             return $details;
         }
 
-        $biayaDaftarUlang = \App\Models\Sikeu\TarifSpmb::with('masterBiaya')
+        $biayaDaftarUlang = TarifSpmb::with('masterBiaya')
             ->whereHas('masterBiaya', function ($q) {
                 $q->where('kode', 'like', '%UKT%')->orWhere('nama', 'like', '%UKT%');
             })->first();

@@ -29,6 +29,8 @@ class CheckMenuAccess
         'POST /spmb/pendaftaran/finalize',
         'POST /spmb/pendaftaran/reissue-va',
         'POST /spmb/pendaftaran/reset',
+        // Referral self-service calon mahasiswa
+        'GET /spmb/referral/saya',
         // Daftar ulang mandiri
         'POST /spmb/daftar-ulang/{pendaftaran_id}/generate-tagihan',
         'POST /spmb/daftar-ulang/{pendaftaran_id}/konfirmasi',

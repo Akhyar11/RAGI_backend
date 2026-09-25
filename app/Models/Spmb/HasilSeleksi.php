@@ -2,11 +2,9 @@
 
 namespace App\Models\Spmb;
 
+use App\Models\Siakad\ProgramStudi;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Spmb\PendaftaranCalonMhs;
-use App\Models\Siakad\ProgramStudi;
-use App\Models\Spmb\KonversiMahasiswa;
 
 class HasilSeleksi extends Model
 {
@@ -15,7 +13,9 @@ class HasilSeleksi extends Model
     protected $table = 'spmb_hasil_seleksi';
 
     public const STATUS_LULUS = 'lulus';
+
     public const STATUS_CADANGAN = 'cadangan';
+
     public const STATUS_TIDAK_LULUS = 'tidak_lulus';
 
     protected $fillable = [
@@ -24,6 +24,7 @@ class HasilSeleksi extends Model
         'nilai_total',
         'peringkat',
         'status',
+        'status_daftar_ulang',
         'catatan',
         'diumumkan_at',
     ];

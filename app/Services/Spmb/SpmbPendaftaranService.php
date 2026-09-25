@@ -13,6 +13,8 @@ use App\Models\Spmb\MasterTipeJalurAlur;
 
 class SpmbPendaftaranService
 {
+    public function __construct(private SpmbReferralService $referralService) {}
+
     /**
      * Submit pendaftaran dari draft ke submitted
      */
@@ -46,6 +48,13 @@ class SpmbPendaftaranService
             'diverifikasi_oleh' => $adminId,
             'diverifikasi_at' => now(),
         ]);
+
+        // Sinkronkan status referral: qualified bila lolos, dibatalkan bila gagal.
+        if ($isLulus) {
+            $this->referralService->qualify($pendaftaran);
+        } else {
+            $this->referralService->cancel($pendaftaran);
+        }
     }
 
     public function generateProgressAlur(PendaftaranCalonMhs $pendaftaran): void
@@ -95,6 +104,7 @@ class SpmbPendaftaranService
                     ->value('id') ?? 1;
                 $kuotaProdi = \App\Models\Spmb\SpmbKuotaProdi::where('tahun_akademik_id', $tahunAkademikId)
                     ->where('program_studi_id', $dataSeleksi['program_studi_diterima_id'])
+                    ->lockForUpdate()
                     ->first();
                 
                 if ($kuotaProdi && $kuotaProdi->kuota_terisi >= $kuotaProdi->kuota_total) {
@@ -122,6 +132,86 @@ class SpmbPendaftaranService
             );
 
             return $hasil;
+        });
+    }
+
+    /**
+     * Simpan biodata pendaftaran (draft) beserta kode referral.
+     */
+    public function saveBiodata(\App\Models\User $user, array $validated): PendaftaranCalonMhs
+    {
+        return DB::transaction(function () use ($user, $validated) {
+            // Kode referral ditangani service (validasi exists + anti self-referral),
+            // jangan ikut di-mass-assign agar tidak menyimpan kode tak valid.
+            $referralCode = $validated['used_referral_code'] ?? null;
+            unset($validated['used_referral_code']);
+
+            $existing = PendaftaranCalonMhs::where('user_id', $user->id)->first();
+            $noPendaftaran = ($existing && ! empty($existing->no_pendaftaran))
+                ? $existing->no_pendaftaran
+                : ('REG-'.date('Ymd').'-'.rand(1000, 9999));
+
+            // GELOMBANG IMMUTABILITY PROTECTION:
+            // If candidate already registered/paid in a gelombang, lock gelombang_id so future admin gelombang changes won't affect them.
+            if ($existing && ! empty($existing->gelombang_id)) {
+                $validated['gelombang_id'] = $existing->gelombang_id;
+            }
+
+            // Sanitasi input: jika nik kosong string, jadikan null agar tidak memicu duplikat unique key
+            if (array_key_exists('nik', $validated)) {
+                if (empty(trim((string) $validated['nik']))) {
+                    $validated['nik'] = $existing ? $existing->nik : null;
+                }
+            }
+
+            // Pastikan nama_lengkap memiliki nilai representatif meskipun pada Step 1 awal
+            $namaLengkap = ! empty($validated['nama_lengkap'])
+                ? $validated['nama_lengkap']
+                : ($existing->nama_lengkap ?? $user->name ?? $user->username ?? 'Calon Mahasiswa');
+
+            $pendaftaran = PendaftaranCalonMhs::updateOrCreate(
+                ['user_id' => $user->id],
+                array_merge($validated, [
+                    'nama_lengkap' => $namaLengkap,
+                    'no_pendaftaran' => $noPendaftaran,
+                    'kewarganegaraan' => $validated['kewarganegaraan'] ?? $existing->kewarganegaraan ?? 'WNI',
+                    'status' => $existing ? $existing->status : 'draft',
+                    'status_pembayaran' => $existing ? $existing->status_pembayaran : 'belum_bayar',
+                ])
+            );
+
+            // Terapkan / perbarui kode referral bila dikirim dari wizard.
+            if ($referralCode !== null && trim($referralCode) !== '') {
+                $this->referralService->attachToPendaftaran($pendaftaran, $referralCode);
+                $pendaftaran->refresh();
+            }
+
+            return $pendaftaran;
+        });
+    }
+
+    /**
+     * Perbarui status pendaftaran sekaligus sinkronkan status referral.
+     */
+    public function updateStatusWithReferral(PendaftaranCalonMhs $pendaftaran, array $validated, int $adminId): PendaftaranCalonMhs
+    {
+        return DB::transaction(function () use ($pendaftaran, $validated, $adminId) {
+            $pendaftaran->status = $validated['status'];
+            if (isset($validated['catatan_verifikasi'])) {
+                $pendaftaran->catatan_verifikasi = $validated['catatan_verifikasi'];
+            }
+            $pendaftaran->diverifikasi_oleh = $adminId;
+            $pendaftaran->diverifikasi_at = now();
+            $pendaftaran->save();
+
+            // Sinkronkan status referral mengikuti keputusan verifikasi.
+            if ($validated['status'] === PendaftaranCalonMhs::STATUS_LULUS_ADMINISTRASI) {
+                $this->referralService->qualify($pendaftaran);
+            } elseif ($validated['status'] === PendaftaranCalonMhs::STATUS_GAGAL_ADMINISTRASI) {
+                $this->referralService->cancel($pendaftaran);
+            }
+
+            return $pendaftaran->refresh();
         });
     }
 }

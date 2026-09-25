@@ -16,6 +16,12 @@ class AppServiceProvider extends ServiceProvider
             \App\Listeners\Spmb\UpdateStatusPembayaranSpmb::class
         );
 
+        // Konversi calon mahasiswa lulus daftar ulang -> Mahasiswa (SIAKAD).
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Events\Spmb\MahasiswaDiterima::class,
+            \App\Listeners\Spmb\ProsesKonversiMahasiswa::class
+        );
+
         \Illuminate\Support\Facades\Event::listen(
             \App\Events\Simpeg\SuratTugasDisetujui::class,
             \App\Listeners\Simpeg\SetPresensiDinasLuar::class
@@ -41,6 +47,7 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Spmb\MasterBiaya::observe(\App\Observers\Spmb\MasterBiayaObserver::class);
         \App\Models\Spmb\MasterBiayaItem::observe(\App\Observers\Spmb\MasterBiayaItemObserver::class);
         \App\Models\Spmb\MasterKomponenBiaya::observe(\App\Observers\Spmb\MasterKomponenBiayaObserver::class);
+        \App\Models\Spmb\ReferralUsage::observe(\App\Observers\Spmb\ReferralUsageObserver::class);
 
         // SIAKAD Observers
         \App\Models\Siakad\Mahasiswa::observe(\App\Observers\MahasiswaObserver::class);
@@ -78,6 +85,14 @@ class AppServiceProvider extends ServiceProvider
             if ($user->hasPermission($ability)) {
                 return true;
             }
+        });
+
+        // Simulasi pembayaran SPMB (local/testing): admin atau pemilik pendaftaran.
+        Gate::define('simulate-spmb-payment', function (User $user, \App\Models\Spmb\PendaftaranCalonMhs $pendaftaran) {
+            return $user->hasRole('superadmin')
+                || $user->hasRole('admin')
+                || $user->hasPermission('spmb.manage')
+                || (int) $pendaftaran->user_id === (int) $user->id;
         });
 
         Passport::$validateKeyPermissions = false;

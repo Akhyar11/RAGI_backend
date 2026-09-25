@@ -395,6 +395,9 @@ Route::prefix('spmb')->group(function () {
     Route::get('referensi/{tipe}', [App\Http\Controllers\System\MasterReferensiController::class, 'getByTipe']);
     Route::get('berkas-requirement', [\App\Http\Controllers\API\Spmb\BerkasRequirementController::class, 'index']);
     Route::get('master/berkas-requirement', [\App\Http\Controllers\API\Spmb\BerkasRequirementController::class, 'index']);
+
+    // Validasi kode referral (publik agar dapat dipakai pada form registrasi akun).
+    Route::get('referral/validate', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'validate']);
 });
 
 Route::middleware('auth:api')->prefix('spmb')->group(function () {
@@ -738,9 +741,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     // Generate Tagihan Semester Masal
     Route::post('tagihan/generate-mass', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'generateMassTagihan']);
 
-    // SPMB Payment Callback / Webhook Integration
-    Route::post('callback/spmb/{calonMahasiswaId}', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'handleSpmbPaymentCallback']);
-    Route::post('callback/va-paid', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'vaPaymentCallback']);
+    // SPMB Checkout lookup (butuh login)
     Route::get('checkout/lookup-va', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'lookupVa']);
 
     // Dashboard Executive Summary & Live Xendit Balance
@@ -755,6 +756,23 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     // Pajak Kampus (PPh 21, PPh 23, PPN 11%) & Setor NTPN
     Route::get('pajak', [App\Http\Controllers\Sikeu\PajakKampusController::class, 'index']);
     Route::post('pajak/{id}/setor', [App\Http\Controllers\Sikeu\PajakKampusController::class, 'setorPajak']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Payment Gateway Callbacks / Webhooks (publik + verifikasi token)
+|--------------------------------------------------------------------------
+| Tidak memakai auth:api agar dapat dipanggil oleh payment gateway. Keamanan
+| dijaga oleh middleware payment.callback (x-callback-token).
+*/
+Route::middleware('payment.callback')->prefix('v1/sikeu')->group(function () {
+    Route::post('callback/spmb/{calonMahasiswaId}', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'handleSpmbPaymentCallback']);
+    Route::post('callback/va-paid', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'vaPaymentCallback']);
+});
+
+// Simulasi pembayaran SPMB (khusus local/testing, butuh login & kepemilikan tagihan)
+Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
+    Route::post('callback/spmb/{calonMahasiswaId}/simulate', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'simulateSpmbPayment']);
 });
 
 // Alias for direct non-v1 calls (backward compatibility with axios client baseURL)

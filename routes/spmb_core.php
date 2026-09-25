@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\API\Spmb\AdminSeleksiController;
 use App\Http\Controllers\API\Spmb\CalonMahasiswaController;
 use App\Http\Controllers\API\Spmb\DaftarUlangController;
 use App\Http\Controllers\API\Spmb\LaporanSpmbController;
@@ -53,9 +52,7 @@ Route::post('pendaftaran/{id}/status', [PendaftaranController::class, 'updateSta
 Route::post('pendaftaran/berkas/{id}/verify', [PendaftaranController::class, 'verifyBerkas']);
 
 // Seleksi & Verifikasi (Admin SPMB)
-Route::get('pendaftar', [AdminSeleksiController::class, 'getPendaftar']);
-Route::post('pendaftar/{id}/verifikasi', [AdminSeleksiController::class, 'verifikasi']);
-Route::post('pendaftar/{id}/kelulusan', [AdminSeleksiController::class, 'tetapkanKelulusan']);
+// (Dikonsolidasikan ke PendaftaranController — endpoint /pendaftar lama dihapus)
 
 // Kuota Program Studi
 Route::apiResource('kuota-prodi', SpmbKuotaProdiController::class);
@@ -67,6 +64,15 @@ Route::post('daftar-ulang/{pendaftaran_id}/konfirmasi', [DaftarUlangController::
 // Laporan & Export Data
 Route::get('laporan/statistik', [LaporanSpmbController::class, 'statistik']);
 Route::get('laporan/export-csv', [LaporanSpmbController::class, 'exportCsv']);
+
+// Referral (Kode Rujukan Mahasiswa Baru) — data milik pengguna yang login.
+Route::get('referral/saya', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'me']);
+
+// Laporan Referral (Admin SPMB)
+Route::middleware('can:spmb.manage')->group(function () {
+    Route::get('laporan/referral', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'report']);
+    Route::get('laporan/referral-summary', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'summary']);
+});
 
 // Master Biaya SPMB (Dinamis)
 Route::middleware('can:spmb.manage')->group(function () {

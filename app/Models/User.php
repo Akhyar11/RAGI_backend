@@ -82,7 +82,7 @@ class User extends Authenticatable
             });
     }
 
-    protected $appends = ['is_superadmin', 'is_admin', 'referral_code'];
+    protected $appends = ['is_superadmin', 'is_admin'];
 
     public function getNameAttribute($value): ?string
     {
@@ -117,6 +117,10 @@ class User extends Authenticatable
 
     public function getReferralCodeAttribute($value): ?string
     {
+        // Saat serialisasi atribut appended, Laravel dapat memanggil accessor dengan
+        // nilai null. Ambil langsung dari atribut mentah agar kode tidak tergenerate ulang.
+        $value = $value ?? ($this->attributes['referral_code'] ?? null);
+
         if (empty($value) && $this->exists) {
             $code = static::generateUniqueReferralCode();
             $this->attributes['referral_code'] = $code;

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SsoToken;
+use App\Http\Requests\RegisterRequest;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
@@ -14,20 +15,23 @@ use Illuminate\Support\Str;
 use App\Mail\VerifyEmailMail;
 use App\Services\AuditLogService;
 use App\Services\IAM\SsoService;
+use App\Services\Spmb\SpmbReferralService;
 
 class AuthController extends Controller
 {
-    public function __construct(private SsoService $ssoService) {}
+    public function __construct(
+        private SsoService $ssoService,
+        private SpmbReferralService $referralService
+    ) {}
 
-    public function register(Request $request)
+    public function register(RegisterRequest $request)
     {
-        $request->validate([
-            'username' => 'required|string|unique:core_users',
-            'email' => 'required|string|email|unique:core_users',
-            'password' => 'required|string|min:8|confirmed',
-            'phone' => 'nullable|string',
-// user_type removed
-        ]);
+        $request->validated();
+
+        // Validasi awal kode referral sebelum akun dibuat (agar tidak membuat akun saat kode salah).
+        if ($request->filled('referral_code')) {
+            $this->referralService->validate($request->input('referral_code'));
+        }
 
         $user = User::create([
             'username' => $request->username,
@@ -76,6 +80,14 @@ class AuthController extends Controller
                         'status_pembayaran' => 'belum_bayar',
                     ]
                 );
+
+                // Lampirkan kode referral (jika ada) ke draft pendaftaran yang baru dibuat.
+                if ($request->filled('referral_code')) {
+                    $pendaftaran = \App\Models\Spmb\PendaftaranCalonMhs::where('user_id', $user->id)->first();
+                    if ($pendaftaran) {
+                        $this->referralService->attachToPendaftaran($pendaftaran, $request->input('referral_code'));
+                    }
+                }
             } catch (\Throwable $th) {
                 \Illuminate\Support\Facades\Log::warning('Gagal auto-create PendaftaranCalonMhs: ' . $th->getMessage());
             }

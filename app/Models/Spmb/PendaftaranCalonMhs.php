@@ -44,6 +44,9 @@ class PendaftaranCalonMhs extends Model
         'master_tipe_jalur_id',
         'info_daftar',
         'ket_info_daftar',
+        'used_referral_code',
+        'referrer_user_id',
+        'referral_validated_at',
         'no_pendaftaran',
         'nim',
         'nama_lengkap',
@@ -96,6 +99,7 @@ class PendaftaranCalonMhs extends Model
     protected $casts = [
         'tanggal_lahir' => 'date',
         'diverifikasi_at' => 'datetime',
+        'referral_validated_at' => 'datetime',
         'nilai_rata_rapor' => 'decimal:2',
         'kelompok_ukt' => 'integer',
     ];
@@ -113,6 +117,16 @@ class PendaftaranCalonMhs extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function referrer()
+    {
+        return $this->belongsTo(User::class, 'referrer_user_id');
+    }
+
+    public function referralUsage()
+    {
+        return $this->hasOne(ReferralUsage::class, 'pendaftaran_id');
     }
 
     public function konversi()

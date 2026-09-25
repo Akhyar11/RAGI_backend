@@ -5,11 +5,14 @@ namespace App\Http\Controllers\API\Spmb;
 use App\Http\Controllers\Controller;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\DokumenPendaftaran;
+use App\Services\Spmb\SpmbPendaftaranService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class PendaftaranController extends Controller
 {
+    public function __construct(private SpmbPendaftaranService $pendaftaranService) {}
+
     /**
      * Get all Pendaftaran with filters
      */
@@ -35,6 +38,11 @@ class PendaftaranController extends Controller
         // Filter by Gelombang
         if ($request->filled('gelombang_id')) {
             $query->where('gelombang_id', $request->gelombang_id);
+        }
+
+        // Filter by Kode Referral
+        if ($request->filled('referral_code')) {
+            $query->where('used_referral_code', 'like', '%' . $request->input('referral_code') . '%');
         }
 
         // Search by Nama Lengkap, No Pendaftaran, NIK, or User Account
@@ -75,7 +83,8 @@ class PendaftaranController extends Controller
             'programStudi',
             'programStudiPilihan2',
             'dokumenPendaftaran',
-            'user'
+            'user',
+            'referrer:id,username,name,referral_code',
         ])->findOrFail($id);
 
         return response()->json([
@@ -120,13 +129,8 @@ class PendaftaranController extends Controller
             'catatan_verifikasi' => 'nullable|string'
         ]);
 
-        $pendaftaran->status = $validated['status'];
-        if (isset($validated['catatan_verifikasi'])) {
-            $pendaftaran->catatan_verifikasi = $validated['catatan_verifikasi'];
-        }
-        $pendaftaran->diverifikasi_oleh = auth()->id();
-        $pendaftaran->diverifikasi_at = now();
-        $pendaftaran->save();
+        // Simpan status + sinkronkan referral dalam satu transaksi service.
+        $pendaftaran = $this->pendaftaranService->updateStatusWithReferral($pendaftaran, $validated, auth()->id());
 
         return response()->json([
             'status' => 'success',
