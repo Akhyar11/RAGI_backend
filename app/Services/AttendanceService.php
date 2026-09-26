@@ -35,8 +35,13 @@ class AttendanceService
             ->first();
 
         if ($existing && in_array($existing->status, ['hadir', 'terlambat', 'menunggu_approval']) && $existing->clock_in) {
+            // Karyawan sudah melakukan presensi masuk hari ini.
+            // Bila belum melakukan presensi pulang, alihkan otomatis scan ini sebagai presensi pulang (clock-out).
+            if ($existing->clock_out === null) {
+                return $this->processClockOut($employee, $data);
+            }
             throw ValidationException::withMessages([
-                'attendance' => ['Karyawan sudah melakukan presensi masuk yang sah hari ini.'],
+                'attendance' => ['Karyawan sudah melakukan presensi masuk dan presensi pulang yang sah hari ini.'],
             ]);
         }
 
@@ -61,6 +66,7 @@ class AttendanceService
 
         // 4. Evaluasi aturan validasi
         $rejectionReasons = [];
+        $faceMatched = false;
 
         // Aturan A: Deteksi Mock Location
         if ($isMock) {
@@ -99,6 +105,8 @@ class AttendanceService
                     $faceScore = (float) $verifyResult['similarity'];
                     if (!$verifyResult['is_match']) {
                         $rejectionReasons[] = "Wajah tidak cocok dengan profil biometrik terdaftar di server (Skor kemiripan: {$faceScore}, batas minimal {$minFaceScore}).";
+                    } else {
+                        $faceMatched = true;
                     }
                     if (!empty($verifyResult['live_embedding'])) {
                         $data['face_embedding'] = $verifyResult['live_embedding'];
@@ -107,6 +115,7 @@ class AttendanceService
                     // Fallback jika python microservice offline tetapi client mengirim face_score numerik valid
                     if (isset($data['face_score']) && (float) $data['face_score'] >= $minFaceScore) {
                         $faceScore = (float) $data['face_score'];
+                        $faceMatched = true;
                     } else {
                         $rejectionReasons[] = $verifyResult['message'] ?? 'Verifikasi biometrik wajah di server gagal.';
                     }
@@ -115,6 +124,8 @@ class AttendanceService
         } elseif (isset($data['face_score'])) {
             if ($faceScore < $minFaceScore) {
                 $rejectionReasons[] = "Skor pengenalan wajah rendah ({$faceScore}, batas minimal {$minFaceScore}).";
+            } else {
+                $faceMatched = true;
             }
         } else {
             $rejectionReasons[] = 'Foto wajah presensi wajib disertakan untuk verifikasi biometrik.';
@@ -147,7 +158,7 @@ class AttendanceService
                 : (int) SystemSetting::get('max_late_clock_in_minutes', 240));
 
         // Aturan E: Batas Pembukaan Presensi Masuk (Tidak boleh scan terlalu pagi sebelum shift dibuka)
-        // Aturan E2: Batas Penutupan Presensi Masuk (Tidak boleh scan setelah melewati batas telat maksimal)
+        // Aturan E2: Batas Penutupan Presensi Masuk (Jika melewati batas cutoff masuk, alihkan otomatis ke Presensi Pulang)
         // Aturan E3: Jika jam shift telah berakhir, alihkan otomatis sebagai Presensi Pulang
         if ($schedule && !$schedule->is_day_off && $schedule->start_time && !$isHolidayForEmployee) {
             $scheduledStart = Carbon::parse("{$today} {$schedule->start_time}");
@@ -162,20 +173,29 @@ class AttendanceService
                 }
             }
 
-            if ($now->lessThan($earliestClockIn)) {
-                $rejectionReasons[] = "Presensi masuk belum dibuka. Presensi untuk shift ini ({$schedule->start_time}) baru dapat dilakukan mulai pukul {$earliestClockIn->format('H:i')} (maksimal {$maxEarlyClockInMinutes} menit sebelum jam kerja).";
-            }
-
             if ($maxLateClockInMinutes > 0) {
                 $latestClockIn = $scheduledStart->copy()->addMinutes($maxLateClockInMinutes);
                 if ($now->greaterThan($latestClockIn)) {
-                    $rejectionReasons[] = "Presensi masuk ditutup. Batas maksimal keterlambatan untuk shift ini ({$schedule->start_time}) adalah {$maxLateClockInMinutes} menit setelah jam kerja (terakhir pukul {$latestClockIn->format('H:i')}). Hubungi HR untuk pencatatan manual.";
+                    // Batas akhir presensi masuk (cutoff) telah terlampaui (misal lewat jam 12:00 pada shift jam 08:00).
+                    // Alihkan secara otomatis ke proses presensi pulang (clock-out) tanpa mencatat presensi masuk.
+                    return $this->processClockOut($employee, $data);
                 }
+            }
+
+            if ($now->lessThan($earliestClockIn)) {
+                $rejectionReasons[] = "Presensi masuk belum dibuka. Presensi untuk shift ini ({$schedule->start_time}) baru dapat dilakukan mulai pukul {$earliestClockIn->format('H:i')} (maksimal {$maxEarlyClockInMinutes} menit sebelum jam kerja).";
             }
         } elseif (!$schedule && !$isHolidayForEmployee) {
             $fallbackEnd = Carbon::parse("{$today} 17:00:00");
-            if ($now->greaterThanOrEqualTo($fallbackEnd)) {
+            $fallbackStart = Carbon::parse("{$today} 08:00:00");
+            $latestClockIn = $fallbackStart->copy()->addMinutes($maxLateClockInMinutes);
+            if ($now->greaterThan($latestClockIn) || $now->greaterThanOrEqualTo($fallbackEnd)) {
                 return $this->processClockOut($employee, $data);
+            }
+
+            $earliestClockIn = $fallbackStart->copy()->subMinutes($maxEarlyClockInMinutes);
+            if ($now->lessThan($earliestClockIn)) {
+                $rejectionReasons[] = "Presensi masuk belum dibuka. Presensi masuk reguler baru dapat dilakukan mulai pukul {$earliestClockIn->format('H:i')}.";
             }
         }
 
@@ -217,6 +237,14 @@ class AttendanceService
 
         $photoPath = $this->saveAttendanceFile($faceImage, 'presensi');
 
+        $formattedRejection = null;
+        if (!empty($rejectionReasons)) {
+            $rawMsg = implode(' | ', $rejectionReasons);
+            $formattedRejection = $faceMatched
+                ? "Verifikasi wajah berhasil (Kemiripan: " . round($faceScore * 100, 1) . "%), namun presensi masuk ditolak: {$rawMsg}"
+                : "Presensi masuk ditolak: {$rawMsg}";
+        }
+
         $attendanceData = [
             'pegawai_id' => $employee->id,
             'office_location_id' => $office?->id,
@@ -229,7 +257,7 @@ class AttendanceService
             'clock_in_is_mock_location' => $isMock,
             'status' => $status,
             'late_minutes' => $lateMinutes,
-            'rejection_reason' => !empty($rejectionReasons) ? implode(' | ', $rejectionReasons) : null,
+            'rejection_reason' => $formattedRejection,
             'source' => $data['source'] ?? 'mobile_gps',
         ];
 
@@ -531,6 +559,8 @@ class AttendanceService
             $this->resolveOfficeForCoordinates($employee, $userLat, $userLon);
 
         $rejectionReasons = [];
+        $faceMatched = false;
+
         if ($isMock) {
             $rejectionReasons[] = 'Terdeteksi penggunaan Fake/Mock Location (GPS Palsu).';
         }
@@ -540,8 +570,48 @@ class AttendanceService
         if ($office && !$isWithinRadius) {
             $rejectionReasons[] = "Di luar area kantor (terdekat: {$nearestOffice->name}, jarak {$nearestDistance}m, radius {$nearestOffice->radius_meters}m; {$checkedCount} lokasi absen diperiksa).";
         }
-        if ($faceScore < $minFaceScore) {
-            $rejectionReasons[] = "Skor pengenalan wajah rendah ({$faceScore}, batas minimal {$minFaceScore}).";
+
+        // Verifikasi Biometrik Wajah ke Python Face Microservice
+        $faceImage = $data['face_image'] ?? $data['foto'] ?? $data['foto_presensi'] ?? null;
+        if (!empty($faceImage)) {
+            if (empty($employee->face_embedding)) {
+                $rejectionReasons[] = 'Data biometrik wajah karyawan belum terdaftar di sistem. Silakan lakukan pendaftaran wajah terlebih dahulu.';
+            } else {
+                $enrolledVec = json_decode($employee->face_embedding, true) ?? [];
+                $enrolledPoseVecs = [];
+                if (!empty($employee->face_embeddings)) {
+                    $decodedPoses = json_decode($employee->face_embeddings, true);
+                    if (is_array($decodedPoses)) {
+                        $enrolledPoseVecs = array_values(array_filter($decodedPoses, 'is_array'));
+                    }
+                }
+                $verifyResult = $this->faceService->verifyFace($faceImage, $enrolledVec, $minFaceScore, $enrolledPoseVecs);
+
+                if ($verifyResult['success']) {
+                    $faceScore = (float) $verifyResult['similarity'];
+                    if (!$verifyResult['is_match']) {
+                        $rejectionReasons[] = "Wajah tidak cocok dengan profil biometrik terdaftar di server (Skor kemiripan: {$faceScore}, batas minimal {$minFaceScore}).";
+                    } else {
+                        $faceMatched = true;
+                    }
+                    if (!empty($verifyResult['live_embedding'])) {
+                        $data['face_embedding'] = $verifyResult['live_embedding'];
+                    }
+                } else {
+                    if (isset($data['face_score']) && (float) $data['face_score'] >= $minFaceScore) {
+                        $faceScore = (float) $data['face_score'];
+                        $faceMatched = true;
+                    } else {
+                        $rejectionReasons[] = $verifyResult['message'] ?? 'Verifikasi biometrik wajah di server gagal.';
+                    }
+                }
+            }
+        } elseif (isset($data['face_score'])) {
+            if ($faceScore < $minFaceScore) {
+                $rejectionReasons[] = "Skor pengenalan wajah rendah ({$faceScore}, batas minimal {$minFaceScore}).";
+            } else {
+                $faceMatched = true;
+            }
         }
 
         // Jadwal dihitung dari tanggal dinas record (duty date), bukan tanggal sekarang,
@@ -574,10 +644,24 @@ class AttendanceService
         if ($schedule && !$schedule->is_day_off && $schedule->end_time && !$isHolidayForEmployee) {
             // getScheduledEndForDate otomatis +1 hari untuk shift lintas hari.
             $scheduledEnd = $schedule->getScheduledEndForDate($dutyDateStr);
-            $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyLeaveToleranceMinutes);
+            $scheduledStart = $schedule->getScheduledStartForDate($dutyDateStr);
+
+            $maxEarlyClockOutMinutes = $schedule->getMaxEarlyClockOutMinutes();
+            $maxLateClockOutMinutes = $schedule->getMaxLateClockOutMinutes();
+            $earlyTolerance = ($maxEarlyClockOutMinutes !== null && $maxEarlyClockOutMinutes > 0)
+                ? $maxEarlyClockOutMinutes
+                : $earlyLeaveToleranceMinutes;
+
+            $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyTolerance);
+
+            $latestClockOut = ($maxLateClockOutMinutes > 0)
+                ? $scheduledEnd->copy()->addMinutes($maxLateClockOutMinutes)
+                : null;
 
             if ($now->lessThan($earliestClockOut)) {
-                $rejectionReasons[] = "Presensi pulang belum dibuka. Presensi pulang untuk shift ini ({$schedule->start_time} - {$schedule->end_time}) baru dapat dilakukan mulai pukul {$earliestClockOut->format('H:i')} (toleransi pulang cepat: {$earlyLeaveToleranceMinutes} menit).";
+                $rejectionReasons[] = "Presensi pulang belum dibuka. Presensi pulang untuk shift ini ({$schedule->start_time} - {$schedule->end_time}) baru dapat dilakukan mulai pukul {$earliestClockOut->format('H:i')}.";
+            } elseif ($latestClockOut && $now->greaterThan($latestClockOut)) {
+                $rejectionReasons[] = "Presensi pulang telah ditutup. Batas maksimal presensi pulang untuk shift ini ({$schedule->start_time} - {$schedule->end_time}) adalah {$maxLateClockOutMinutes} menit setelah jam pulang (terakhir pukul {$latestClockOut->format('H:i')}). Hubungi HR untuk pencatatan manual.";
             } elseif ($now->lessThan($scheduledEnd)) {
                 $earlyLeaveMinutes = (int) $now->diffInMinutes($scheduledEnd, false);
                 if ($earlyLeaveMinutes < 0) {
@@ -586,9 +670,20 @@ class AttendanceService
             }
         } elseif (!$schedule && !$isHolidayForEmployee) {
             $fallbackEnd = Carbon::parse("{$today} 17:00:00");
-            $earliestClockOut = $fallbackEnd->copy()->subMinutes(15);
+            $maxEarlyClockOutMinutes = (int) SystemSetting::get('max_early_clock_out_minutes', 0);
+            $maxLateClockOutMinutes = (int) SystemSetting::get('max_late_clock_out_minutes', 240);
+
+            $earliestClockOut = ($maxEarlyClockOutMinutes > 0)
+                ? $fallbackEnd->copy()->subMinutes($maxEarlyClockOutMinutes)
+                : Carbon::parse("{$today} 12:00:00");
+            $latestClockOut = ($maxLateClockOutMinutes > 0)
+                ? $fallbackEnd->copy()->addMinutes($maxLateClockOutMinutes)
+                : null;
+
             if ($now->lessThan($earliestClockOut)) {
                 $rejectionReasons[] = "Presensi pulang belum dibuka. Jam kerja reguler berakhir pukul 17:00 (presensi pulang baru dapat dilakukan mulai pukul {$earliestClockOut->format('H:i')}).";
+            } elseif ($latestClockOut && $now->greaterThan($latestClockOut)) {
+                $rejectionReasons[] = "Presensi pulang telah ditutup. Batas maksimal presensi pulang reguler adalah pukul {$latestClockOut->format('H:i')}. Hubungi HR untuk pencatatan manual.";
             }
         }
 
@@ -603,8 +698,12 @@ class AttendanceService
         }
 
         if (!empty($rejectionReasons)) {
+            $rawMsg = implode(' | ', $rejectionReasons);
+            $msg = $faceMatched
+                ? "Verifikasi wajah berhasil (Kemiripan: " . round($faceScore * 100, 1) . "%), namun presensi pulang ditolak: {$rawMsg}"
+                : "Presensi pulang ditolak: {$rawMsg}";
             throw ValidationException::withMessages([
-                'attendance' => ['Presensi pulang ditolak: ' . implode(' | ', $rejectionReasons)],
+                'attendance' => [$msg],
             ]);
         }
 
@@ -658,10 +757,17 @@ class AttendanceService
             $clockOutData['status'] = 'hadir';
             $clockOutData['status_kehadiran'] = 'hadir';
             $clockOutData['late_minutes'] = 0;
+            $clockOutData['clock_in'] = null;
+            $clockOutData['jam_masuk'] = null;
         }
 
         $attendance->fill($clockOutData);
         $attendance->save();
+
+        // 7. Adaptive Biometric Template Update (EMA)
+        if ($faceScore >= 0.80 && !empty($data['face_embedding'])) {
+            $this->updateAdaptiveFaceEmbedding($employee, $data['face_embedding']);
+        }
 
         return $attendance;
     }

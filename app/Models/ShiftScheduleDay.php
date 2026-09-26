@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\SystemSetting;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -23,6 +24,8 @@ class ShiftScheduleDay extends Model
         'early_leave_tolerance_minutes',
         'max_early_clock_in_minutes',
         'max_late_clock_in_minutes',
+        'max_early_clock_out_minutes',
+        'max_late_clock_out_minutes',
         'applies_national_holidays',
     ];
 
@@ -33,6 +36,8 @@ class ShiftScheduleDay extends Model
         'early_leave_tolerance_minutes' => 'integer',
         'max_early_clock_in_minutes' => 'integer',
         'max_late_clock_in_minutes' => 'integer',
+        'max_early_clock_out_minutes' => 'integer',
+        'max_late_clock_out_minutes' => 'integer',
         'applies_national_holidays' => 'boolean',
     ];
 
@@ -113,6 +118,42 @@ class ShiftScheduleDay extends Model
         }
 
         return (int) SystemSetting::get('max_late_clock_in_minutes', 240);
+    }
+
+    /**
+     * Batas buka absen pulang lebih awal (menit sebelum jam pulang shift).
+     * Hierarki: hari -> template -> null (bila null, sistem otomatis membuka setelah batas masuk berakhir).
+     */
+    public function getMaxEarlyClockOutMinutes(): ?int
+    {
+        if ($this->max_early_clock_out_minutes !== null) {
+            return (int) $this->max_early_clock_out_minutes;
+        }
+
+        if ($this->shiftTemplate && $this->shiftTemplate->max_early_clock_out_minutes !== null) {
+            return (int) $this->shiftTemplate->max_early_clock_out_minutes;
+        }
+
+        $global = SystemSetting::get('max_early_clock_out_minutes');
+        return ($global !== null && $global !== '' && (int) $global > 0) ? (int) $global : null;
+    }
+
+    /**
+     * Batas maksimal keterlambatan clock-out (menit setelah jam pulang shift).
+     * Hierarki: hari -> template -> SystemSetting (default 240).
+     * Nilai 0 = tanpa batas.
+     */
+    public function getMaxLateClockOutMinutes(): int
+    {
+        if ($this->max_late_clock_out_minutes !== null) {
+            return (int) $this->max_late_clock_out_minutes;
+        }
+
+        if ($this->shiftTemplate && $this->shiftTemplate->max_late_clock_out_minutes !== null) {
+            return (int) $this->shiftTemplate->max_late_clock_out_minutes;
+        }
+
+        return (int) SystemSetting::get('max_late_clock_out_minutes', 240);
     }
 
     public function getDayNameAttribute(): string

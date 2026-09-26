@@ -201,6 +201,12 @@ Mengambil status presensi hari ini, authoritative server time (anti clock-tamper
       "early_leave_tolerance_minutes": 15,
       "max_early_clock_in_minutes": 60,
       "max_late_clock_in_minutes": 240,
+      "max_early_clock_out_minutes": null,
+      "max_late_clock_out_minutes": 240,
+      "earliest_clock_in": "07:00:00",
+      "latest_clock_in": "12:00:00",
+      "earliest_clock_out": "16:45:00",
+      "latest_clock_out": "21:00:00",
       "is_day_off": false,
       "is_overnight": false,
       "duty_date": "2026-09-17"
@@ -228,6 +234,10 @@ Mengambil status presensi hari ini, authoritative server time (anti clock-tamper
 ### POST `/api/v1/attendance/clock-in` & `POST /api/simpeg/presensi/clock-in`
 
 Mencatat presensi masuk karyawan dengan validasi geofencing, GPS accuracy, anti-mock GPS, dan biometrik wajah. Mendukung auto-sync ke kolom legacy `jam_masuk` dan `lat_long`, serta penyimpanan foto presensi.
+
+> **Auto-Cutoff Presensi Masuk & Pengalihan Presensi Pulang:**
+> - Jika scan dilakukan setelah batas akhir toleransi masuk (`max_late_clock_in_minutes`, misal pukul 12:00 pada shift jam 08:00) atau setelah jam pulang shift, request secara otomatis dialihkan dan dicatat sebagai **Presensi Pulang (Clock Out)** tanpa mencatat jam masuk (`clock_in = null`), dengan catatan *"Presensi pulang tercatat tanpa presensi masuk sebelumnya"*.
+> - Jika verifikasi biometrik wajah berhasil namun ada kriteria lain yang gagal (misal di luar radius kantor atau di luar jam presensi), response API mengembalikan pesan transparan: `"Verifikasi wajah berhasil (Kemiripan: X%), namun presensi ditolak: [alasan rincian]"`.
 
 **Request Body:**
 ```json
@@ -271,7 +281,7 @@ Mencatat presensi masuk karyawan dengan validasi geofencing, GPS accuracy, anti-
 
 ### POST `/api/v1/attendance/clock-out` & `POST /api/simpeg/presensi/clock-out`
 
-Mencatat presensi pulang karyawan. Nilai `face_score` dan `is_mock_location` bersifat opsional (default terisi aman).
+Mencatat presensi pulang karyawan. Nilai `face_score` dan `is_mock_location` bersifat opsional (default terisi aman). Memeriksa pembukaan jam pulang (`earliest_clock_out`) dan batas maksimal scan pulang (`latest_clock_out` via `max_late_clock_out_minutes`).
 
 **Request Body:**
 ```json
@@ -279,6 +289,7 @@ Mencatat presensi pulang karyawan. Nilai `face_score` dan `is_mock_location` ber
   "latitude": -7.5675,
   "longitude": 110.8036,
   "accuracy": 12.0,
+  "face_image": "data:image/jpeg;base64,...",
   "notes": "Pulang kerja"
 }
 ```

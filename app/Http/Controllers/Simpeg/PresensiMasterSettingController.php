@@ -8,6 +8,9 @@ use App\Models\ShiftTemplate;
 use App\Models\NationalHoliday;
 use App\Models\Simpeg\FingerprintDevice;
 use App\Models\SystemSetting;
+use App\Http\Requests\Simpeg\StoreShiftTemplateRequest;
+use App\Http\Requests\Simpeg\UpdatePresensiSettingRequest;
+use App\Http\Requests\Simpeg\UpdateShiftTemplateRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,6 +27,8 @@ class PresensiMasterSettingController extends Controller
             'late_tolerance_minutes',
             'max_early_clock_in_minutes',
             'max_late_clock_in_minutes',
+            'max_early_clock_out_minutes',
+            'max_late_clock_out_minutes',
             'early_leave_tolerance_minutes',
             'applies_national_holidays',
         ])->get()->keyBy('key');
@@ -36,6 +41,8 @@ class PresensiMasterSettingController extends Controller
                 'late_tolerance_minutes' => (int) ($settings->get('late_tolerance_minutes')?->value ?? 15),
                 'max_early_clock_in_minutes' => (int) ($settings->get('max_early_clock_in_minutes')?->value ?? 60),
                 'max_late_clock_in_minutes' => (int) ($settings->get('max_late_clock_in_minutes')?->value ?? 240),
+                'max_early_clock_out_minutes' => (int) ($settings->get('max_early_clock_out_minutes')?->value ?? 0),
+                'max_late_clock_out_minutes' => (int) ($settings->get('max_late_clock_out_minutes')?->value ?? 240),
                 'early_leave_tolerance_minutes' => (int) ($settings->get('early_leave_tolerance_minutes')?->value ?? 15),
                 'applies_national_holidays' => filter_var($settings->get('applies_national_holidays')?->value ?? true, FILTER_VALIDATE_BOOLEAN),
             ],
@@ -45,17 +52,9 @@ class PresensiMasterSettingController extends Controller
     /**
      * Perbarui parameter sistem presensi
      */
-    public function updateSettings(Request $request): JsonResponse
+    public function updateSettings(UpdatePresensiSettingRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'face_score_threshold' => 'required|numeric|min:0.1|max:1.0',
-            'gps_accuracy_threshold_meters' => 'required|numeric|min:5|max:500',
-            'late_tolerance_minutes' => 'required|integer|min:0|max:120',
-            'max_early_clock_in_minutes' => 'required|integer|min:0|max:240',
-            'max_late_clock_in_minutes' => 'required|integer|min:0|max:720',
-            'early_leave_tolerance_minutes' => 'required|integer|min:0|max:120',
-            'applies_national_holidays' => 'required|boolean',
-        ]);
+        $validated = $request->validated();
 
         foreach ($validated as $key => $val) {
             SystemSetting::set($key, (string) $val);
@@ -181,23 +180,9 @@ class PresensiMasterSettingController extends Controller
      * Days opsional: bila tidak dikirim, dibuatkan 7 hari default
      * (Senin-Jumat 08:00-17:00, Sabtu-Minggu libur) yang bisa diubah lewat update.
      */
-    public function storeShiftTemplate(Request $request): JsonResponse
+    public function storeShiftTemplate(StoreShiftTemplateRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:simpeg_shift_templates,name',
-            'description' => 'nullable|string',
-            'late_tolerance_minutes' => 'nullable|integer|min:0|max:120',
-            'early_leave_tolerance_minutes' => 'nullable|integer|min:0|max:120',
-            'max_early_clock_in_minutes' => 'nullable|integer|min:0|max:240',
-            'max_late_clock_in_minutes' => 'nullable|integer|min:0|max:720',
-            'applies_national_holidays' => 'nullable|boolean',
-            'is_active' => 'required|boolean',
-            'days' => 'nullable|array|size:7',
-            'days.*.day_of_week' => 'required|integer|min:0|max:6',
-            'days.*.start_time' => 'nullable|string',
-            'days.*.end_time' => 'nullable|string',
-            'days.*.is_day_off' => 'required|boolean',
-        ]);
+        $validated = $request->validated();
 
         $shift = ShiftTemplate::create([
             'name' => $validated['name'],
@@ -206,6 +191,8 @@ class PresensiMasterSettingController extends Controller
             'early_leave_tolerance_minutes' => $validated['early_leave_tolerance_minutes'] ?? 15,
             'max_early_clock_in_minutes' => $validated['max_early_clock_in_minutes'] ?? 60,
             'max_late_clock_in_minutes' => $validated['max_late_clock_in_minutes'] ?? 240,
+            'max_early_clock_out_minutes' => $validated['max_early_clock_out_minutes'] ?? null,
+            'max_late_clock_out_minutes' => $validated['max_late_clock_out_minutes'] ?? 240,
             'applies_national_holidays' => $validated['applies_national_holidays'] ?? true,
             'is_active' => $validated['is_active'],
         ]);
@@ -217,6 +204,10 @@ class PresensiMasterSettingController extends Controller
                     'start_time' => $day['start_time'] ?? null,
                     'end_time' => $day['end_time'] ?? null,
                     'is_day_off' => $day['is_day_off'],
+                    'max_late_clock_in_minutes' => $day['max_late_clock_in_minutes'] ?? null,
+                    'max_early_clock_in_minutes' => $day['max_early_clock_in_minutes'] ?? null,
+                    'max_early_clock_out_minutes' => $day['max_early_clock_out_minutes'] ?? null,
+                    'max_late_clock_out_minutes' => $day['max_late_clock_out_minutes'] ?? null,
                 ]);
             }
         } else {
@@ -233,27 +224,11 @@ class PresensiMasterSettingController extends Controller
     /**
      * Update Master Shift Kerja & Hari Kerja
      */
-    public function updateShiftTemplate(Request $request, int $id): JsonResponse
+    public function updateShiftTemplate(UpdateShiftTemplateRequest $request, int $id): JsonResponse
     {
         $shift = ShiftTemplate::findOrFail($id);
 
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:simpeg_shift_templates,name,' . $shift->id,
-            'description' => 'nullable|string',
-            'late_tolerance_minutes' => 'nullable|integer',
-            'early_leave_tolerance_minutes' => 'nullable|integer',
-            'max_early_clock_in_minutes' => 'nullable|integer',
-            'max_late_clock_in_minutes' => 'nullable|integer',
-            'applies_national_holidays' => 'nullable|boolean',
-            'is_active' => 'required|boolean',
-            'days' => 'nullable|array',
-            'days.*.id' => 'required|integer',
-            'days.*.start_time' => 'nullable|string',
-            'days.*.end_time' => 'nullable|string',
-            'days.*.is_day_off' => 'required|boolean',
-            'days.*.max_late_clock_in_minutes' => 'nullable|integer|min:0|max:720',
-            'days.*.max_early_clock_in_minutes' => 'nullable|integer|min:0|max:240',
-        ]);
+        $validated = $request->validated();
 
         $shift->update([
             'name' => $validated['name'],
@@ -262,6 +237,8 @@ class PresensiMasterSettingController extends Controller
             'early_leave_tolerance_minutes' => $validated['early_leave_tolerance_minutes'] ?? $shift->early_leave_tolerance_minutes,
             'max_early_clock_in_minutes' => $validated['max_early_clock_in_minutes'] ?? $shift->max_early_clock_in_minutes,
             'max_late_clock_in_minutes' => $validated['max_late_clock_in_minutes'] ?? $shift->max_late_clock_in_minutes,
+            'max_early_clock_out_minutes' => array_key_exists('max_early_clock_out_minutes', $validated) ? $validated['max_early_clock_out_minutes'] : $shift->max_early_clock_out_minutes,
+            'max_late_clock_out_minutes' => array_key_exists('max_late_clock_out_minutes', $validated) ? $validated['max_late_clock_out_minutes'] : $shift->max_late_clock_out_minutes,
             'applies_national_holidays' => $validated['applies_national_holidays'] ?? $shift->applies_national_holidays,
             'is_active' => $validated['is_active'],
         ]);
@@ -278,6 +255,12 @@ class PresensiMasterSettingController extends Controller
                 }
                 if (array_key_exists('max_early_clock_in_minutes', $dayData)) {
                     $dayUpdate['max_early_clock_in_minutes'] = $dayData['max_early_clock_in_minutes'];
+                }
+                if (array_key_exists('max_early_clock_out_minutes', $dayData)) {
+                    $dayUpdate['max_early_clock_out_minutes'] = $dayData['max_early_clock_out_minutes'];
+                }
+                if (array_key_exists('max_late_clock_out_minutes', $dayData)) {
+                    $dayUpdate['max_late_clock_out_minutes'] = $dayData['max_late_clock_out_minutes'];
                 }
                 $shift->days()->where('id', $dayData['id'])->update($dayUpdate);
             }

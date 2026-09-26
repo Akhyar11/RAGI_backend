@@ -226,7 +226,7 @@ class SimpegAttendanceTest extends TestCase
             ]);
 
         $clockOutRes->assertStatus(200)
-            ->assertJson(['success' => true]);
+            ->assertJson(['status' => 'success']);
     }
 
     public function test_integration_attendances_with_api_key(): void
@@ -590,7 +590,7 @@ class SimpegAttendanceTest extends TestCase
             ]);
 
         $outRes->assertStatus(200)
-            ->assertJson(['success' => true]);
+            ->assertJson(['status' => 'success']);
 
         $attendance = \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
             ->whereDate('tanggal', '2026-09-14')
@@ -748,7 +748,7 @@ class SimpegAttendanceTest extends TestCase
             ]);
 
         $outRes->assertStatus(200)
-            ->assertJson(['success' => true]);
+            ->assertJson(['status' => 'success']);
 
         $attendance = \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
             ->whereDate('tanggal', '2026-09-15')
@@ -788,7 +788,7 @@ class SimpegAttendanceTest extends TestCase
             ]);
 
         $inRes->assertStatus(200)
-            ->assertJson(['success' => true]);
+            ->assertJson(['status' => 'success']);
 
         $attendance = \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
             ->whereDate('tanggal', '2026-09-15')
@@ -907,6 +907,112 @@ class SimpegAttendanceTest extends TestCase
         $this->assertEquals('08:00:00', $attendance->jam_masuk);
         $this->assertNull($attendance->clock_out);
         $this->assertNull($attendance->jam_keluar);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_scan_after_clock_in_cutoff_automatically_records_as_clock_out_without_clock_in(): void
+    {
+        // Pastikan shift memiliki jadwal Selasa 08:00 - 17:00 dengan max_late_clock_in_minutes = 240 (cutoff 12:00)
+        $this->shift->days()->updateOrCreate(
+            ['day_of_week' => 2], // 2 = Selasa
+            [
+                'start_time' => '08:00:00',
+                'end_time' => '17:00:00',
+                'is_day_off' => false,
+                'max_early_clock_in_minutes' => 60,
+                'max_late_clock_in_minutes' => 240,
+                'max_early_clock_out_minutes' => 300,
+                'max_late_clock_out_minutes' => 240,
+            ]
+        );
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        // Karyawan tidak scan masuk pagi hari, lalu melakukan scan pada pukul 13:00 (setelah cutoff 12:00)
+        Carbon::setTestNow('2026-09-15 13:00:00');
+
+        // Cek status hari ini: can_clock_in harus false, can_clock_out harus true
+        $todayRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/attendance/today');
+
+        $todayRes->assertStatus(200)
+            ->assertJsonPath('data.can_clock_in', false)
+            ->assertJsonPath('data.can_clock_out', true);
+
+        // Karyawan scan (meskipun memanggil endpoint clock-in karena app/client lama)
+        $scanRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-in', [
+                'latitude' => -7.5675,
+                'longitude' => 110.8036,
+                'accuracy' => 10.0,
+                'face_score' => 0.88,
+            ]);
+
+        $scanRes->assertStatus(200)
+            ->assertJson(['status' => 'success']);
+
+        $record = \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
+            ->whereDate('tanggal', '2026-09-15')
+            ->first();
+
+        $this->assertNotNull($record);
+        $this->assertNull($record->clock_in);
+        $this->assertNull($record->jam_masuk);
+        $this->assertNotNull($record->clock_out);
+        $this->assertEquals('13:00:00', $record->jam_keluar);
+        $this->assertStringContainsString('Presensi pulang tercatat tanpa presensi masuk sebelumnya', $record->notes);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_biometric_match_with_out_of_radius_returns_transparent_message(): void
+    {
+        Carbon::setTestNow('2026-09-15 08:00:00');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        // Wajah cocok (face_score 0.95), namun lokasi berada di luar radius kantor
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-in', [
+                'latitude' => -6.200000,
+                'longitude' => 106.816666,
+                'accuracy' => 10.0,
+                'face_score' => 0.95,
+            ]);
+
+        $res->assertStatus(422);
+
+        $message = $res->json('message');
+        $this->assertStringContainsString('Verifikasi wajah berhasil', $message);
+        $this->assertStringContainsString('95%', $message);
+        $this->assertStringContainsString('Di luar area kantor', $message);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_validation_exception_returns_specific_message_in_message_field(): void
+    {
+        Carbon::setTestNow('2026-09-15 08:00:00');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        // Kirim request tanpa akurasi GPS (validasi form request gagal)
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/attendance/clock-in', [
+                'latitude' => -7.5675,
+                'longitude' => 110.8036,
+            ]);
+
+        $res->assertStatus(422);
+
+        $message = $res->json('message');
+        // Bukan string kaku generic 'Data yang diberikan tidak valid.'
+        $this->assertNotEmpty($message);
+        $this->assertNotEquals('Data yang diberikan tidak valid.', $message);
 
         Carbon::setTestNow();
     }

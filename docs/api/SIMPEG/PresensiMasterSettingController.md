@@ -58,6 +58,8 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
             "early_leave_tolerance_minutes": 15,
             "max_early_clock_in_minutes": 60,
             "max_late_clock_in_minutes": 240,
+            "max_early_clock_out_minutes": null,
+            "max_late_clock_out_minutes": 240,
             "applies_national_holidays": true,
             "employees_count": 36,
             "days": [
@@ -93,11 +95,13 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
     "description": "string, nullable",
     "late_tolerance_minutes": "integer, nullable, 0-120 (default 15)",
     "early_leave_tolerance_minutes": "integer, nullable, 0-120 (default 15)",
-    "max_early_clock_in_minutes": "integer, nullable, 0-240 (default 60)",
-    "max_late_clock_in_minutes": "integer, nullable, 0-720 (default 240, 0 = tanpa batas)",
+    "max_early_clock_in_minutes": "integer, nullable, 0-720 (default 60)",
+    "max_late_clock_in_minutes": "integer, nullable, 0-720 (default 240, cutoff scan masuk; setelah ini otomatis diarahkan ke presensi pulang)",
+    "max_early_clock_out_minutes": "integer, nullable, 0-720 (default null/otomatis mengikuti cutoff masuk atau toleransi pulang cepat)",
+    "max_late_clock_out_minutes": "integer, nullable, 0-720 (default 240, batas maksimal presensi pulang terecord setelah jam pulang)",
     "applies_national_holidays": "boolean, nullable (default true — matikan untuk shift satpam/operasional)",
     "is_active": "boolean, required",
-    "days": "array, nullable (PUT: array berisi {id, start_time, end_time, is_day_off}; POST: array 7 item berisi {day_of_week, start_time, end_time, is_day_off})"
+    "days": "array, nullable (PUT: array berisi {id, start_time, end_time, is_day_off, max_early_clock_out_minutes?, max_late_clock_out_minutes?}; POST: array 7 item berisi {day_of_week, start_time, end_time, is_day_off})"
 }
 ```
 

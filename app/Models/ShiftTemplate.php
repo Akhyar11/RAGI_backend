@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Simpeg\Pegawai;
+use App\Models\SystemSetting;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -20,6 +21,8 @@ class ShiftTemplate extends Model
         'early_leave_tolerance_minutes',
         'max_early_clock_in_minutes',
         'max_late_clock_in_minutes',
+        'max_early_clock_out_minutes',
+        'max_late_clock_out_minutes',
         'applies_national_holidays',
     ];
 
@@ -29,6 +32,8 @@ class ShiftTemplate extends Model
         'early_leave_tolerance_minutes' => 'integer',
         'max_early_clock_in_minutes' => 'integer',
         'max_late_clock_in_minutes' => 'integer',
+        'max_early_clock_out_minutes' => 'integer',
+        'max_late_clock_out_minutes' => 'integer',
         'applies_national_holidays' => 'boolean',
     ];
 
@@ -45,5 +50,24 @@ class ShiftTemplate extends Model
     public function getScheduleForDay(int $dayOfWeek): ?ShiftScheduleDay
     {
         return $this->days()->where('day_of_week', $dayOfWeek)->first();
+    }
+
+    public function getMaxEarlyClockOutMinutes(): ?int
+    {
+        if ($this->max_early_clock_out_minutes !== null) {
+            return (int) $this->max_early_clock_out_minutes;
+        }
+
+        $global = SystemSetting::get('max_early_clock_out_minutes');
+        return ($global !== null && $global !== '' && (int) $global > 0) ? (int) $global : null;
+    }
+
+    public function getMaxLateClockOutMinutes(): int
+    {
+        if ($this->max_late_clock_out_minutes !== null) {
+            return (int) $this->max_late_clock_out_minutes;
+        }
+
+        return (int) SystemSetting::get('max_late_clock_out_minutes', 240);
     }
 }

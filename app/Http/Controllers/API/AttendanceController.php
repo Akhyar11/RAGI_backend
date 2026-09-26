@@ -110,25 +110,63 @@ class AttendanceController extends Controller
         $isClockedOut = ($attendance && $attendance->clock_out !== null);
         $hasValidClockIn = ($attendance && in_array($attendance->status, ['hadir', 'terlambat', 'menunggu_approval']) && $attendance->clock_in !== null);
 
-        // Tentukan apakah waktu saat ini sudah jam pulang shift
+        // Tentukan window presensi masuk dan presensi pulang
         $isPastShiftEnd = false;
         $isInClockOutWindow = false;
+        $isPastClockInCutoff = false;
+        $isInClockInWindow = false;
+
+        $scheduledStart = null;
+        $scheduledEnd = null;
+        $earliestClockIn = null;
+        $latestClockIn = null;
+        $earliestClockOut = null;
+        $latestClockOut = null;
 
         if ($schedule && !$schedule->is_day_off && $schedule->end_time) {
             $dutyDateStr = $attendance ? Carbon::parse($attendance->getAttribute('tanggal'))->toDateString() : $dutyDate;
+            $scheduledStart = $schedule->getScheduledStartForDate($dutyDateStr);
             $scheduledEnd = $schedule->getScheduledEndForDate($dutyDateStr);
+
+            $maxEarlyClockIn = $schedule->getMaxEarlyClockInMinutes();
+            $maxLateClockIn = $schedule->getMaxLateClockInMinutes();
+            $earliestClockIn = $scheduledStart->copy()->subMinutes($maxEarlyClockIn);
+            $latestClockIn = ($maxLateClockIn > 0) ? $scheduledStart->copy()->addMinutes($maxLateClockIn) : null;
+
+            $maxEarlyClockOut = $schedule->getMaxEarlyClockOutMinutes();
+            $maxLateClockOut = $schedule->getMaxLateClockOutMinutes();
             $earlyLeaveTolerance = $schedule->getEarlyLeaveToleranceMinutes();
-            $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyLeaveTolerance);
 
+            $earlyTolerance = ($maxEarlyClockOut !== null && $maxEarlyClockOut > 0)
+                ? $maxEarlyClockOut
+                : $earlyLeaveTolerance;
+            $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyTolerance);
+
+            $latestClockOut = ($maxLateClockOut > 0) ? $scheduledEnd->copy()->addMinutes($maxLateClockOut) : null;
+
+            $isInClockInWindow = $now->greaterThanOrEqualTo($earliestClockIn) && ($latestClockIn === null || $now->lessThanOrEqualTo($latestClockIn));
+            $isPastClockInCutoff = ($latestClockIn !== null && $now->greaterThan($latestClockIn));
             $isPastShiftEnd = $now->greaterThanOrEqualTo($scheduledEnd);
-            $isInClockOutWindow = $now->greaterThanOrEqualTo($earliestClockOut);
+            $isInClockOutWindow = $now->greaterThanOrEqualTo($earliestClockOut) && ($latestClockOut === null || $now->lessThanOrEqualTo($latestClockOut));
         } elseif (!$schedule) {
+            $scheduledStart = Carbon::parse("{$dutyDate} 08:00:00");
             $scheduledEnd = Carbon::parse("{$dutyDate} 17:00:00");
-            $earlyLeaveTolerance = $shiftTemplate ? $shiftTemplate->early_leave_tolerance_minutes : 15;
-            $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyLeaveTolerance);
+            $maxEarlyClockIn = (int) \App\Models\SystemSetting::get('max_early_clock_in_minutes', 60);
+            $maxLateClockIn = (int) \App\Models\SystemSetting::get('max_late_clock_in_minutes', 240);
+            $maxEarlyClockOut = (int) \App\Models\SystemSetting::get('max_early_clock_out_minutes', 0);
+            $maxLateClockOut = (int) \App\Models\SystemSetting::get('max_late_clock_out_minutes', 240);
 
+            $earliestClockIn = $scheduledStart->copy()->subMinutes($maxEarlyClockIn);
+            $latestClockIn = ($maxLateClockIn > 0) ? $scheduledStart->copy()->addMinutes($maxLateClockIn) : null;
+
+            $earlyTolerance = ($maxEarlyClockOut > 0) ? $maxEarlyClockOut : 15;
+            $earliestClockOut = $scheduledEnd->copy()->subMinutes($earlyTolerance);
+            $latestClockOut = ($maxLateClockOut > 0) ? $scheduledEnd->copy()->addMinutes($maxLateClockOut) : null;
+
+            $isInClockInWindow = $now->greaterThanOrEqualTo($earliestClockIn) && ($latestClockIn === null || $now->lessThanOrEqualTo($latestClockIn));
+            $isPastClockInCutoff = ($latestClockIn !== null && $now->greaterThan($latestClockIn));
             $isPastShiftEnd = $now->greaterThanOrEqualTo($scheduledEnd);
-            $isInClockOutWindow = $now->greaterThanOrEqualTo($earliestClockOut);
+            $isInClockOutWindow = $now->greaterThanOrEqualTo($earliestClockOut) && ($latestClockOut === null || $now->lessThanOrEqualTo($latestClockOut));
         }
 
         if ($isClockedOut) {
@@ -140,11 +178,11 @@ class AttendanceController extends Controller
             $canClockOut = $isInClockOutWindow;
         } else {
             // Belum pernah scan masuk hari ini
-            if ($isPastShiftEnd || $isInClockOutWindow) {
-                // Jam kerja shift sudah berakhir / sudah waktu pulang (misal jam 17:00 pada shift 08:00 - 16:00).
-                // Jendela presensi masuk ditutup, buka presensi pulang!
+            if ($isPastClockInCutoff || $isPastShiftEnd || $isInClockOutWindow) {
+                // Batas waktu absen masuk telah berakhir atau sudah memasuki jam pulang.
+                // Tombol presensi otomatis beralih menjadi Presensi Pulang!
                 $canClockIn = false;
-                $canClockOut = true;
+                $canClockOut = $isInClockOutWindow || $isPastShiftEnd;
             } else {
                 $canClockIn = true;
                 $canClockOut = false;
@@ -167,6 +205,12 @@ class AttendanceController extends Controller
             'early_leave_tolerance_minutes' => $schedule->getEarlyLeaveToleranceMinutes(),
             'max_early_clock_in_minutes' => $schedule->getMaxEarlyClockInMinutes(),
             'max_late_clock_in_minutes' => $schedule->getMaxLateClockInMinutes(),
+            'max_early_clock_out_minutes' => $schedule->getMaxEarlyClockOutMinutes(),
+            'max_late_clock_out_minutes' => $schedule->getMaxLateClockOutMinutes(),
+            'earliest_clock_in' => $earliestClockIn?->format('H:i:s'),
+            'latest_clock_in' => $latestClockIn?->format('H:i:s'),
+            'earliest_clock_out' => $earliestClockOut?->format('H:i:s'),
+            'latest_clock_out' => $latestClockOut?->format('H:i:s'),
         ] : [
             'id' => null,
             'day_of_week' => $dayOfWeek,
@@ -184,6 +228,12 @@ class AttendanceController extends Controller
             'early_leave_tolerance_minutes' => $shiftTemplate ? $shiftTemplate->early_leave_tolerance_minutes : 15,
             'max_early_clock_in_minutes' => $shiftTemplate ? $shiftTemplate->max_early_clock_in_minutes : 60,
             'max_late_clock_in_minutes' => $shiftTemplate ? ($shiftTemplate->max_late_clock_in_minutes ?? 240) : 240,
+            'max_early_clock_out_minutes' => $shiftTemplate ? $shiftTemplate->max_early_clock_out_minutes : null,
+            'max_late_clock_out_minutes' => $shiftTemplate ? ($shiftTemplate->max_late_clock_out_minutes ?? 240) : 240,
+            'earliest_clock_in' => $earliestClockIn?->format('H:i:s'),
+            'latest_clock_in' => $latestClockIn?->format('H:i:s'),
+            'earliest_clock_out' => $earliestClockOut?->format('H:i:s'),
+            'latest_clock_out' => $latestClockOut?->format('H:i:s'),
         ];
 
         return response()->json([
@@ -285,11 +335,11 @@ class AttendanceController extends Controller
             'success' => $isSuccess,
             'message' => match ($attendance->status) {
                 'hadir' => ($attendance->clock_out && !$attendance->clock_in)
-                    ? 'Presensi pulang berhasil dicatat (jam shift telah berakhir).'
-                    : 'Presensi masuk berhasil (Tepat Waktu).',
+                    ? 'Presensi pulang berhasil dicatat (tanpa presensi masuk sebelumnya).'
+                    : ($attendance->clock_out ? 'Presensi pulang berhasil dicatat.' : 'Presensi masuk berhasil (Tepat Waktu).'),
                 'terlambat' => 'Presensi masuk berhasil dicatat (Terlambat).',
                 'menunggu_approval' => 'Presensi masuk pada hari libur tersimpan, menunggu persetujuan HR.',
-                'ditolak' => 'Presensi masuk ditolak: ' . $attendance->rejection_reason,
+                'ditolak' => $attendance->rejection_reason,
                 default => 'Status presensi: ' . $attendance->status,
             },
             'data' => $attendance,
@@ -332,10 +382,13 @@ class AttendanceController extends Controller
 
         $attendance = $this->attendanceService->processClockOut($employee, $validated);
 
+        $message = ($attendance->clock_out && !$attendance->clock_in)
+            ? 'Presensi pulang berhasil dicatat (tanpa presensi masuk sebelumnya).'
+            : 'Presensi pulang berhasil dicatat.';
+
         return response()->json([
             'status' => 'success',
-            'success' => true,
-            'message' => 'Presensi pulang berhasil dicatat.',
+            'message' => $message,
             'data' => $attendance,
         ]);
     }
