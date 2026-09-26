@@ -30,6 +30,10 @@ class MasterGolonganPangkatService
             $query->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
         }
 
+        if (!empty($filters['ruang'])) {
+            $query->where('ruang', $filters['ruang']);
+        }
+
         $allowedSorts = ['created_at', 'updated_at', 'nama', 'kode', 'urutan', 'pangkat', 'ruang', 'is_active'];
         $sortBy = in_array($filters['sort_by'] ?? '', $allowedSorts, true) ? $filters['sort_by'] : 'created_at';
         $sortOrder = ($filters['sort_order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';

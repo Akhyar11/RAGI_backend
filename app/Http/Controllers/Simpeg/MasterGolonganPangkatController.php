@@ -36,6 +36,7 @@ class MasterGolonganPangkatController extends Controller
         $filters = [
             'search' => $request->get('search'),
             'is_active' => $request->get('is_active'),
+            'ruang' => $request->get('ruang'),
             'sort_by' => $sortBy,
             'sort_order' => $sortOrder,
         ];

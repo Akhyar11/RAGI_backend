@@ -35,6 +35,7 @@
 |---|---|---|---|---|
 | `search` | string | ❌ | — | Kata kunci pencarian kode, nama, pangkat, atau ruang |
 | `is_active` | boolean | ❌ | — | Filter status keaktifan (`true` / `false`) |
+| `ruang` | string | ❌ | — | Filter spesifik ruang golongan (`a`, `b`, `c`, `d`, `e`) |
 | `sort_by` | string | ❌ | `created_at` | Kolom pengurutan (`created_at`, `updated_at`, `nama`, `kode`, `urutan`, `pangkat`, `ruang`, `is_active`) |
 | `sort_order` | string | ❌ | `desc` | Arah pengurutan: `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
