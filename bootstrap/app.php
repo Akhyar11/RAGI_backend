@@ -22,6 +22,8 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
+
         $middleware->redirectTo(
             guests: fn (Request $request) => $request->is('api/*') ? null : '/login'
         );

@@ -189,7 +189,7 @@ Route::middleware('signed')->prefix('simpeg')->group(function () {
 });
 
 // Endpoint stream generik untuk berkas privat (Signed URL, tanpa auth:api).
-Route::middleware('signed')->get('files/view', [App\Http\Controllers\FileStreamController::class, 'show'])
+Route::middleware('signed:relative')->get('files/view', [App\Http\Controllers\FileStreamController::class, 'show'])
     ->name('files.view');
 
 Route::middleware('auth:api')->prefix('simpeg')->group(function () {
