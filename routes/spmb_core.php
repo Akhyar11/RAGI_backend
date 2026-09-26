@@ -80,6 +80,7 @@ Route::middleware('can:spmb.laporan.read')->group(function () {
 // Master Biaya SPMB (Dinamis)
 Route::middleware('can:spmb.manage')->group(function () {
     Route::get('master/komponen-biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'getKomponen']);
+    Route::get('master/komponen-biaya-role-options', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'roleOptions']);
     Route::get('master/komponen-biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'showKomponen']);
     Route::post('master/komponen-biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'storeKomponen']);
     Route::put('master/komponen-biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'updateKomponen']);

@@ -110,10 +110,25 @@ class MasterBiayaSpmbController extends Controller
         ]);
     }
 
+    /**
+     * Opsi role untuk pemetaan reward referral pada komponen biaya.
+     */
+    public function roleOptions(Request $request): JsonResponse
+    {
+        $roles = \App\Models\Role::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'slug', 'name']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Opsi role berhasil dimuat.',
+            'data' => $roles,
+        ]);
+    }
+
     public function destroyKomponen(Request $request, $id): JsonResponse
     {
-
-
         $komponen = MasterKomponenBiaya::findOrFail($id);
         $this->service->deleteKomponen($komponen);
 
