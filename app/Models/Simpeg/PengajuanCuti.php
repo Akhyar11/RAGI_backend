@@ -43,7 +43,10 @@ class PengajuanCuti extends Model
 
         // Berkas disimpan private → URL publik akan 404. Gunakan Signed URL
         // terpusat (FileStorageService) ke endpoint stream generik.
-        return app(\App\Services\Storage\FileStorageService::class)->signedUrl($this->file_pendukung);
+        $files = app(\App\Services\Storage\FileStorageService::class);
+        return $files->signedUrl($this->file_pendukung)
+            ?? $files->temporaryUrl($this->file_pendukung, now()->addMinutes(60))
+            ?? $files->url($this->file_pendukung, private: true);
     }
 
     public function pegawai(): BelongsTo

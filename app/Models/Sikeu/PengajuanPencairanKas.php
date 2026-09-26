@@ -58,6 +58,43 @@ class PengajuanPencairanKas extends Model
         'tanggal_pencairan' => 'date',
     ];
 
+    protected $appends = [
+        'bukti_pencairan_url',
+        'file_lampiran_url',
+    ];
+
+    public function getBuktiPencairanUrlAttribute(): ?string
+    {
+        if (empty($this->bukti_pencairan_path)) {
+            return null;
+        }
+
+        if (str_starts_with($this->bukti_pencairan_path, 'http://') || str_starts_with($this->bukti_pencairan_path, 'https://')) {
+            return $this->bukti_pencairan_path;
+        }
+
+        $files = app(\App\Services\Storage\FileStorageService::class);
+        return $files->signedUrl($this->bukti_pencairan_path)
+            ?? $files->temporaryUrl($this->bukti_pencairan_path, now()->addMinutes(60))
+            ?? $files->url($this->bukti_pencairan_path, private: true);
+    }
+
+    public function getFileLampiranUrlAttribute(): ?string
+    {
+        if (empty($this->file_lampiran)) {
+            return null;
+        }
+
+        if (str_starts_with($this->file_lampiran, 'http://') || str_starts_with($this->file_lampiran, 'https://')) {
+            return $this->file_lampiran;
+        }
+
+        $files = app(\App\Services\Storage\FileStorageService::class);
+        return $files->signedUrl($this->file_lampiran)
+            ?? $files->temporaryUrl($this->file_lampiran, now()->addMinutes(60))
+            ?? $files->url($this->file_lampiran, private: true);
+    }
+
     public function unitKas()
     {
         return $this->belongsTo(UnitKas::class, 'unit_kas_id');

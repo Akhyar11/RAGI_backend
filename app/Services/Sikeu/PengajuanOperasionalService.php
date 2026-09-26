@@ -19,8 +19,7 @@ class PengajuanOperasionalService
 {
     protected function simpanFile($file, string $folder): string
     {
-        $name = Str::uuid() . '.' . $file->getClientOriginalExtension();
-        return $file->storeAs($folder . '/' . date('Y/m'), $name, 'public');
+        return app(\App\Services\Storage\FileStorageService::class)->store($file, $folder, private: true);
     }
 
     protected function statusAwal(string $kategori): string

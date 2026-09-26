@@ -36,6 +36,26 @@ class SkPegawai extends Model
         'verified_at' => 'datetime',
     ];
 
+    protected $appends = [
+        'file_sk_url',
+    ];
+
+    public function getFileSkUrlAttribute(): ?string
+    {
+        if (empty($this->file_sk)) {
+            return null;
+        }
+
+        if (str_starts_with($this->file_sk, 'http://') || str_starts_with($this->file_sk, 'https://')) {
+            return $this->file_sk;
+        }
+
+        $files = app(\App\Services\Storage\FileStorageService::class);
+        return $files->signedUrl($this->file_sk)
+            ?? $files->temporaryUrl($this->file_sk, now()->addMinutes(60))
+            ?? $files->url($this->file_sk, private: true);
+    }
+
     public function pegawai()
     {
         return $this->belongsTo(Pegawai::class, 'pegawai_id');

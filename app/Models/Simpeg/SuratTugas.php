@@ -62,6 +62,8 @@ class SuratTugas extends Model
 
     protected $appends = [
         'sisa_nominal',
+        'file_surat_tugas_url',
+        'file_lpj_url',
     ];
 
     public function getSisaNominalAttribute(): float
@@ -69,6 +71,38 @@ class SuratTugas extends Model
         $disetujui = (float) ($this->nominal_disetujui ?? 0);
         $realisasi = (float) ($this->biaya_realisasi ?? 0);
         return $disetujui - $realisasi;
+    }
+
+    public function getFileSuratTugasUrlAttribute(): ?string
+    {
+        if (empty($this->file_surat_tugas)) {
+            return null;
+        }
+
+        if (str_starts_with($this->file_surat_tugas, 'http://') || str_starts_with($this->file_surat_tugas, 'https://')) {
+            return $this->file_surat_tugas;
+        }
+
+        $files = app(\App\Services\Storage\FileStorageService::class);
+        return $files->signedUrl($this->file_surat_tugas)
+            ?? $files->temporaryUrl($this->file_surat_tugas, now()->addMinutes(60))
+            ?? $files->url($this->file_surat_tugas, private: true);
+    }
+
+    public function getFileLpjUrlAttribute(): ?string
+    {
+        if (empty($this->file_lpj)) {
+            return null;
+        }
+
+        if (str_starts_with($this->file_lpj, 'http://') || str_starts_with($this->file_lpj, 'https://')) {
+            return $this->file_lpj;
+        }
+
+        $files = app(\App\Services\Storage\FileStorageService::class);
+        return $files->signedUrl($this->file_lpj)
+            ?? $files->temporaryUrl($this->file_lpj, now()->addMinutes(60))
+            ?? $files->url($this->file_lpj, private: true);
     }
 
     public function pegawai()

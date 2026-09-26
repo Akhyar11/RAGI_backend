@@ -198,6 +198,19 @@ class FileStorageService
     {
         $diskName = $this->resolveDisk($disk, false);
 
+        if ($disk === null) {
+            foreach ($this->candidateDisks(null, false) as $candidate) {
+                try {
+                    if (Storage::disk($candidate)->exists($relative)) {
+                        $diskName = $candidate;
+                        break;
+                    }
+                } catch (\Throwable) {
+                    // Abaikan jika disk tidak terhubung
+                }
+            }
+        }
+
         if ($diskName === 'public' && ! $this->isCloudActive()) {
             try {
                 if (app()->has('request') && request()->hasHeader('host')) {
@@ -338,6 +351,19 @@ class FileStorageService
 
         $diskName = $this->resolveDisk($disk, true);
         $expiresAt ??= now()->addMinutes(15);
+
+        if ($disk === null) {
+            foreach ($this->candidateDisks(null, true) as $candidate) {
+                try {
+                    if (Storage::disk($candidate)->exists($relative)) {
+                        $diskName = $candidate;
+                        break;
+                    }
+                } catch (\Throwable) {
+                    // Abaikan kendala koneksi disk
+                }
+            }
+        }
 
         try {
             /** @var Filesystem $store */
