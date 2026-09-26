@@ -168,6 +168,11 @@ class SuratTugasService
             // Default status: diajukan jika bukan draft eksplisit
             $status = $data['status'] ?? 'diajukan';
 
+            $pegawai = \App\Models\Simpeg\Pegawai::find($data['pegawai_id']);
+            $namaBank = $data['nama_bank'] ?? $pegawai?->nama_bank;
+            $nomorRekening = $data['nomor_rekening'] ?? $pegawai?->nomor_rekening;
+            $namaRekening = $data['nama_rekening'] ?? ($pegawai?->nama_rekening ?? $pegawai?->nama_lengkap);
+
             $suratTugas = SuratTugas::create([
                 'nomor_surat' => $data['nomor_surat'] ?? null,
                 'pegawai_id' => $data['pegawai_id'],
@@ -183,6 +188,9 @@ class SuratTugasService
                 'maksud_tujuan' => $data['maksud_tujuan'],
                 'beban_anggaran' => $data['beban_anggaran'] ?? null,
                 'estimasi_biaya' => $data['estimasi_biaya'] ?? null,
+                'nama_bank' => $namaBank,
+                'nomor_rekening' => $nomorRekening,
+                'nama_rekening' => $namaRekening,
                 'status' => $status,
                 'keterangan' => $data['keterangan'] ?? null,
                 'kendaraan_dinas' => $data['kendaraan_dinas'] ?? null,
@@ -235,7 +243,8 @@ class SuratTugasService
                 'pegawai_id', 'kategori_kegiatan_id', 'jenis_transportasi_id',
                 'nama_kegiatan', 'tempat_berangkat', 'lokasi_tujuan',
                 'tanggal_berangkat', 'tanggal_kembali', 'tanggal_mulai', 'tanggal_selesai',
-                'maksud_tujuan', 'beban_anggaran', 'estimasi_biaya', 'keterangan',
+                'maksud_tujuan', 'beban_anggaran', 'estimasi_biaya',
+                'nama_bank', 'nomor_rekening', 'nama_rekening', 'keterangan',
                 'kendaraan_dinas', 'nama_driver', 'kontak_driver', 'status'
             ];
 
@@ -318,6 +327,9 @@ class SuratTugasService
                         'deskripsi' => 'Pencairan panjar dana tugas dinas No. ' . $data['nomor_surat'] . ' ke ' . $suratTugas->lokasi_tujuan . ' an. ' . ($suratTugas->pegawai?->nama_lengkap ?? 'Pegawai'),
                         'nominal_diajukan' => $estimasiBiaya,
                         'nominal_disetujui' => 0, // Menunggu persetujuan nominal oleh Admin SIKEU
+                        'nama_bank_penerima' => $suratTugas->nama_bank ?? $suratTugas->pegawai?->nama_bank,
+                        'nomor_rekening_penerima' => $suratTugas->nomor_rekening ?? $suratTugas->pegawai?->nomor_rekening,
+                        'nama_rekening_penerima' => $suratTugas->nama_rekening ?? ($suratTugas->pegawai?->nama_rekening ?? $suratTugas->pegawai?->nama_lengkap),
                         'jenis_pengajuan' => 'kegiatan',
                         'kategori_pengajuan' => 'non_barang',
                         'status' => 'pending_keuangan',

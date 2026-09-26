@@ -122,6 +122,7 @@
 | MasterTingkatKegiatanController | Master tingkat jangkauan kegiatan (Lokal, Wilayah, Nasional, Internasional) | [docs/api/SIMPEG/MasterTingkatKegiatanController.md](api/SIMPEG/MasterTingkatKegiatanController.md) |
 | MasterJenisIzinJamKerjaController | Master jenis dispensasi izin jam kerja, durasi toleransi & aturan potong | [docs/api/SIMPEG/MasterJenisIzinJamKerjaController.md](api/SIMPEG/MasterJenisIzinJamKerjaController.md) |
 | MasterKategoriSkController | Master kategori nomor dan jenis Surat Keputusan (SK) pegawai | [docs/api/SIMPEG/MasterKategoriSkController.md](api/SIMPEG/MasterKategoriSkController.md) |
+| MasterGolonganPangkatController | Master referensi jenjang golongan & pangkat kepegawaian (I/a s.d. IV/e) | [docs/api/SIMPEG/MasterGolonganPangkatController.md](api/SIMPEG/MasterGolonganPangkatController.md) |
 
 ---
 

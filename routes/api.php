@@ -186,6 +186,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('jabatan-fungsional', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'index']);
     Route::post('jabatan-fungsional', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'store']);
     Route::get('jabatan-fungsional/master/golongan', [App\Http\Controllers\Simpeg\JabatanFungsionalController::class, 'getGolongan']);
+    Route::apiResource('master-golongan-pangkat', App\Http\Controllers\Simpeg\MasterGolonganPangkatController::class);
 
     // Pegawai
     Route::get('pegawai/template', [App\Http\Controllers\Simpeg\PegawaiController::class, 'downloadTemplate']);
