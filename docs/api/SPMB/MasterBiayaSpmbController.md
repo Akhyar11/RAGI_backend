@@ -155,7 +155,9 @@ Permission: `spmb.manage`.
     "data": [
         { "id": 1, "slug": "mahasiswa", "name": "Mahasiswa" },
         { "id": 5, "slug": "admin_spmb", "name": "Admin SPMB" }
-    ]
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 2, "last_page": 1, "from": 1, "to": 2 },
+    "filters": { "search": null, "sort_by": "name", "sort_order": "asc" }
 }
 ```
 
