@@ -117,3 +117,37 @@ $model->update(['file_path' => $filePath]);
 - **JANGAN** menyimpan file yang dapat dieksekusi (`.php`, `.sh`, `.exe`).
 - Kolom di database yang menyimpan path file diberi nama akhiran `_path` (contoh: `file_path`, `foto_path`).
 - Kolom di database **TIDAK BOLEH** menyimpan URL absolut atau nama domain, hanya path relatif.
+
+---
+
+## 7. Konsistensi Public vs Private (WAJIB)
+
+> Catatan: contoh `Storage::disk('public')` pada bagian sebelumnya adalah **legacy**. Mulai sekarang gunakan satu pintu: `FileStorageService`.
+
+### Upload
+- **Privat/sensitif** (KTP, KK, ijazah, SK, e-file pegawai, lampiran cuti/izin, bukti kas, selfie presensi):
+  ```php
+  $path = $files->store($uploadedFile, 'modul/direktori', private: true); // -> disk privat (r2-private)
+  ```
+- **Publik** (foto profil, pengumuman, template):
+  ```php
+  $path = $files->store($uploadedFile, 'modul/direktori'); // -> disk publik (r2)
+  ```
+
+### Akses URL
+Gunakan **selalu** `FileStorageService`:
+```php
+$url  = $files->url($model->file_path);      // otomatis Signed URL bila file privat, publik bila tidak
+$signed = $files->signedUrl($model->file_path); // khusus file privat
+```
+
+**DILARANG KERAS**:
+- `Storage::disk('public')->url($path)` untuk berkas privat/sensitif.
+- Menyimpan berkas privat di bucket publik.
+- Mengekspos URL R2/storage langsung untuk berkas privat.
+
+Signed URL mengarah ke endpoint generik `GET /api/files/view?path=…` (middleware `signed`, berlaku 15 menit, mencari di semua disk: `r2-private → r2 → public → local`).
+
+### Konfigurasi
+- `FILESYSTEM_PRIVATE_DISK` = disk privat (bucket terpisah, mis. `r2-private`).
+- Jangan isi `R2_PRIVATE_URL` dengan domain publik (`pub-….r2.dev`); matikan Public Access pada bucket privat.

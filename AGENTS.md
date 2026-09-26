@@ -69,3 +69,37 @@ Jika sebuah commit ditolak oleh auditor/git hook (`.githooks/audits/*.sh`):
 3. Petakan SETIAP aturan di skrip auditor ke kondisi `git diff --cached` (auditor umumnya hanya menilai baris `+`), lalu perbaiki SEMUA potensi pelanggaran sekaligus.
 4. Jalankan ulang auditor tersebut sampai `PASS`, cek seluruh auditor lain, baru commit normal.
 </RULE[auditor_compliance]>
+
+<RULE[file_storage_consistency]>
+# Aturan Baku Penyimpanan & Akses Berkas (Public vs Private) — WAJIB KONSISTEN
+
+## Prinsip Tunggal
+| Jenis berkas | Disk | Cara akses |
+|---|---|---|
+| **Publik** (foto profil, pengumuman, template, gambar umum) | disk publik (`FILESYSTEM_PUBLIC_DISK`, mis. `r2`) | `FileStorageService::url($path)` → URL publik |
+| **Privat/sensitif** (KTP, KK, ijazah, SK, e-file pegawai, lampiran cuti/izin, bukti kas/transaksi, selfie presensi) | disk privat (`FILESYSTEM_PRIVATE_DISK`, mis. `r2-private`) | **Signed URL** saja (otomatis via `FileStorageService::url()`/`signedUrl()`) — **DILARANG** URL storage langsung |
+
+## Aturan Wajib
+1. **Upload WAJIB lewat `FileStorageService`**:
+   - Privat: `$this->files->store($file, '<baseDir>', private: true)`
+   - Publik: `$this->files->store($file, '<baseDir>')`
+   - DILARANG menyimpan berkas langsung dengan `Storage::disk(...)->put()` di controller/service.
+2. **Ambil URL WAJIB lewat `FileStorageService`**:
+   - `FileStorageService::url($path)` otomatis mengembalikan **Signed URL** bila berkas ada di disk privat, dan URL publik bila tidak.
+   - Khusus berkas privat, boleh langsung `FileStorageService::signedUrl($path)`.
+3. **DILARANG KERAS** memakai URL storage langsung untuk berkas privat:
+   - SALAH: `Storage::disk('public')->url($path)`, `Storage::url($path)`, atau `R2_PRIVATE_URL`/`r2.dev` untuk dokumen sensitif.
+   - BENAR: `FileStorageService::url($path)` / `signedUrl($path)` → mengarah ke endpoint stream generik `GET /api/files/view?path=…` (bertanda-tangan, berlaku 15 menit).
+4. **Endpoint stream generik**: `GET /api/files/view?path=<path relatif>` dilindungi middleware `signed`, mencari berkas di semua disk (`r2-private → r2 → public → local`) sehingga berkas lama (masa migrasi) tetap tampil. Jangan membuat URL storage langsung untuk berkas privat.
+5. **Konfigurasi server** (jangan keliru):
+   - `FILESYSTEM_PRIVATE_DISK` = disk privat (mis. `r2-private`, bucket terpisah).
+   - **JANGAN** mengisi `R2_PRIVATE_URL` dengan domain publik (`pub-….r2.dev`) dan **matikan Public Access** pada bucket privat. Berkas privat hanya boleh diakses via Signed URL.
+6. **Path DB selalu relatif** (tanpa domain, tanpa prefix `storage/`), nama file UUID + ekstensi asli. Ekstensi executable (`.php`, `.sh`, `.exe`, dll.) ditolak.
+7. Setiap penambahan endpoint pengelola berkas WAJIB disertai dokumentasi API (`docs/api/…`) sesuai Aturan auditor dokumentasi.
+
+## Larangan Ringkas
+- ❌ `Storage::disk('public')->url()` untuk dokumen sensitif.
+- ❌ Menyimpan berkas privat di bucket publik.
+- ❌ Mengekspos URL R2/storage langsung untuk berkas privat.
+- ✅ `FileStorageService` sebagai satu-satunya pintu upload & pembuatan URL berkas.
+</RULE[file_storage_consistency]>
