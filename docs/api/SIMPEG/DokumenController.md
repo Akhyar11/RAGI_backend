@@ -1,6 +1,6 @@
 # DokumenController
 
-> **Modul**: SIMPEG / **Base URL**: /api/simpeg/dokumen / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-19
+> **Modul**: SIMPEG / **Base URL**: /api/simpeg/dokumen / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-26
 
 Modul ini mengelola arsip e-file dokumen kepegawaian (KTP, KK, Ijazah, SK, Serdos, Sertifikat, dll.), penyimpanan terenkripsi/private, secure view dengan dynamic watermark anti-bocor, serta penghapusan berkas.
 
@@ -12,7 +12,9 @@ Modul ini mengelola arsip e-file dokumen kepegawaian (KTP, KK, Ijazah, SK, Serdo
 |---|---|---|---|
 | GET | `/api/simpeg/dokumen` | Daftar arsip e-file dokumen pegawai | ✅ Bearer |
 | POST | `/api/simpeg/dokumen` | Unggah dokumen e-file pegawai baru | ✅ Bearer |
-| GET | `/api/simpeg/dokumen/{id}/secure-view` | Dapatkan link aman & watermark dokumen | ✅ Bearer |
+| GET | `/api/simpeg/dokumen/{id}/secure-view` | Link pratinjau aman + watermark (Signed URL) | ✅ Bearer |
+| GET | `/api/simpeg/dokumen/{id}/download` | Unduh berkas fisik (stream) | ✅ Bearer |
+| GET | `/api/simpeg/dokumen/{id}/file` | Stream berkas pratinjau via Signed URL | ❌ Publik (Signed URL) |
 | DELETE | `/api/simpeg/dokumen/{id}` | Hapus arsip dokumen pegawai | ✅ Bearer |
 
 ---
@@ -209,7 +211,7 @@ Contoh representasi form:
 
 ## 3. GET /api/simpeg/dokumen/{id}/secure-view
 
-> Menghasilkan secure temporary URL dan teks watermark untuk pratinjau aman di browser.
+> Menghasilkan link pratinjau aman (Signed URL, berlaku 15 menit) dan teks watermark. Link `file_url` boleh dibuka di tab baru tanpa Bearer token karena dilindungi middleware `signed`. Streaming dibaca dari disk kandidat (local/public/R2) sehingga tetap bekerja untuk berkas lama.
 
 ### Headers
 
@@ -223,12 +225,14 @@ Contoh representasi form:
 ```json
 {
     "status": "success",
-    "message": "Akses dokumen aman berhasil diinisialisasi",
     "data": {
-        "id": 2,
+        "dokumen_id": 2,
         "nama_dokumen": "Sertifikat Pendidik Dosen",
-        "url": "http://localhost:8000/storage/private/simpeg/dokumen_pegawai/serdos.pdf?token=xyz",
-        "watermark": "RAHASIA - Dr. Siti Aminah - 198501012010122001 - 2026-09-19"
+        "jenis_dokumen": "serdos",
+        "watermark_overlay": "RAHASIA - Dr. Siti Aminah - 198501012010122001 - 2026-09-19",
+        "file_url": "https://ragibe.poltekindonusa.ac.id/api/simpeg/dokumen/2/file?expires=1760000000&signature=abc123",
+        "file_exists": true,
+        "security_status": "Confidential - Encrypted & Watermarked"
     }
 }
 ```
@@ -261,7 +265,81 @@ Contoh representasi form:
 
 ---
 
-## 4. DELETE /api/simpeg/dokumen/{id}
+## 4. GET /api/simpeg/dokumen/{id}/download
+
+> Mengunduh berkas fisik dokumen (stream) dengan nama unduhan asli. Stream dibaca dari disk kandidat (local/public/R2).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json, application/octet-stream` | ✅ |
+
+### Response Sukses (200 OK)
+Binary stream (`Content-Disposition: attachment`).
+
+### Response Error
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Akses Ditolak: Dokumen ini bersifat rahasia dan hanya dapat dibuka oleh Admin SIMPEG, Superadmin, atau pegawai pemilik dokumen tersebut."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "File fisik tidak ditemukan pada lokasi storage server."
+}
+```
+
+---
+
+## 5. GET /api/simpeg/dokumen/{id}/file
+
+> Stream berkas pratinjau (inline) untuk dibuka di browser. **Tanpa Bearer token**, dilindungi **Signed URL** (berlaku 15 menit). URL dihasilkan oleh endpoint `secure-view`.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Accept` | `application/json` | ❌ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `expires` | integer | ✅ | Timestamp kedaluwarsa (diisi otomatis oleh Signed URL) |
+| `signature` | string | ✅ | Tanda tangan HMAC (diisi otomatis oleh Signed URL) |
+
+### Response Sukses (200 OK)
+Binary stream (`Content-Disposition: inline`).
+
+### Response Error
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Invalid signature."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Berkas fisik dokumen tidak ditemukan."
+}
+```
+
+---
+
+## 6. DELETE /api/simpeg/dokumen/{id}
 
 > Menghapus berkas dokumen pegawai.
 
@@ -324,6 +402,8 @@ Contoh representasi form:
 
 ## Catatan Khusus & Integritas Data
 - **Penyimpanan Berkas**: Seluruh berkas diunggah ke private disk yang tidak dapat diakses langsung tanpa autentikasi token.
+- **Pratinjau Aman (Signed URL)**: `secure-view` mengembalikan `file_url` bertanda-tangan (berlaku 15 menit) yang men-stream berkas inline dari disk kandidat (local/public/R2), sehingga tetap bekerja walau berkas lama berada di disk berbeda.
+- **Download**: Endpoint `/download` men-stream berkas sebagai attachment dengan nama unduhan asli.
 - **Dynamic Watermark**: Tampilan view dokumen otomatis disisipi nama pengunduh, NIP, dan stempel waktu untuk mencegah kebocoran dokumen rahasia.
 - **Soft Delete**: Berkas dokumen kepegawaian yang dihapus dicatat riwayatnya dalam audit log.
 - **Password & Token**: Password, hashed password, dan token autentikasi tidak pernah dikembalikan dalam response API ini.

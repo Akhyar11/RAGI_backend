@@ -174,6 +174,18 @@ Route::middleware('auth:api')->group(function () {
 | SIMPEG (Sistem Informasi Kepegawaian) Routes
 |--------------------------------------------------------------------------
 */
+/*
+|--------------------------------------------------------------------------
+| SIMPEG Dokumen — Preview Bertanda-tangan (tanpa auth:api; dilindungi signature)
+|--------------------------------------------------------------------------
+| URL sementara dari secure-view dibuka di tab baru tanpa Bearer token,
+| sehingga dilindungi middleware `signed` (berlaku 15 menit).
+*/
+Route::middleware('signed')->prefix('simpeg')->group(function () {
+    Route::get('dokumen/{id}/file', [App\Http\Controllers\Simpeg\DokumenController::class, 'viewFile'])
+        ->name('simpeg.dokumen.file');
+});
+
 Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     // Dashboard Stats
     Route::get('dashboard-stats', [App\Http\Controllers\Simpeg\SimpegDashboardController::class, 'stats']);

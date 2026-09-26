@@ -114,7 +114,7 @@
 | PegawaiKomponenGajiController | Kustomisasi konfigurasi komponen gaji spesifik pegawai | [docs/api/SIMPEG/PegawaiKomponenGajiController.md](api/SIMPEG/PegawaiKomponenGajiController.md) |
 | UsulanJafungController | Usulan kenaikan jabatan fungsional dosen, angka kredit & verifikasi SK | [docs/api/SIMPEG/UsulanJafungController.md](api/SIMPEG/UsulanJafungController.md) |
 | CutiController | Pengajuan cuti pegawai terintegrasi, validasi durasi, approval & notifikasi | [docs/api/SIMPEG/CutiController.md](api/SIMPEG/CutiController.md) |
-| DokumenController | E-File arsip dokumen kepegawaian, secure view & dynamic watermark | [docs/api/SIMPEG/DokumenController.md](api/SIMPEG/DokumenController.md) |
+| DokumenController | E-File arsip dokumen kepegawaian, secure view (Signed URL) & dynamic watermark | [docs/api/SIMPEG/DokumenController.md](api/SIMPEG/DokumenController.md) |
 | MasterJenisSertifikasiController | Master referensi jenis sertifikasi profesi & keahlian dosen/tendik | [docs/api/SIMPEG/MasterJenisSertifikasiController.md](api/SIMPEG/MasterJenisSertifikasiController.md) |
 | MasterJenisTesController | Master referensi jenis tes kompetensi resmi (TOEFL, TPA, dsb.) | [docs/api/SIMPEG/MasterJenisTesController.md](api/SIMPEG/MasterJenisTesController.md) |
 | MasterJenisPelatihanController | Master klasifikasi pelatihan, diklat, dan bimbingan teknis pegawai | [docs/api/SIMPEG/MasterJenisPelatihanController.md](api/SIMPEG/MasterJenisPelatihanController.md) |

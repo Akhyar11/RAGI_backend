@@ -260,6 +260,30 @@ class FileStorageService
     }
 
     /**
+     * Response tampilan inline (preview di browser) untuk local maupun R2/S3.
+     * Mencari di disk kandidat (mendukung masa migrasi) sehingga tetap bekerja
+     * walau file lama berada di disk berbeda dari konfigurasi disk privat.
+     */
+    public function streamInline(?string $path, ?string $disk = null, bool $private = false): StreamedResponse
+    {
+        $relative = $this->normalizePath($path);
+
+        if ($relative === '') {
+            abort(404, 'Berkas tidak ditemukan.');
+        }
+
+        foreach ($this->candidateDisks($disk, $private) as $candidate) {
+            $store = Storage::disk($candidate);
+
+            if ($store->exists($relative)) {
+                return $store->response($relative);
+            }
+        }
+
+        abort(404, 'File fisik tidak ditemukan pada storage server.');
+    }
+
+    /**
      * Salin file storage (termasuk R2) ke file lokal sementara untuk parsing
      * (mis. import SQL presensi). Caller WAJIB @unlink() hasilnya.
      *

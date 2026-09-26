@@ -8,6 +8,7 @@ use App\Services\Storage\FileStorageService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 
 class DokumenController extends Controller
 {
@@ -143,9 +144,20 @@ class DokumenController extends Controller
 
         $watermarkText = \App\Services\Simpeg\FileSecurityService::getWatermarkText($dokumen);
         $fileExists = $this->files->exists($dokumen->file_path, private: true);
-        $fileUrl = $fileExists
-            ? ($this->files->temporaryUrl($dokumen->file_path) ?? $this->files->url($dokumen->file_path, private: true))
-            : null;
+
+        // URL preview bertanda-tangan (temporary) ke endpoint streaming backend.
+        // Bekerja untuk disk apa pun (local/public/R2) dan aman dibuka di tab baru
+        // tanpa perlu Bearer token. Berlaku 15 menit.
+        $fileUrl = null;
+        if ($fileExists) {
+            $signedPath = URL::temporarySignedRoute(
+                'simpeg.dokumen.file',
+                now()->addMinutes(15),
+                ['id' => $dokumen->id],
+                absolute: false
+            );
+            $fileUrl = $request->getSchemeAndHttpHost().$signedPath;
+        }
 
         return response()->json([
             'status' => 'success',
@@ -161,13 +173,28 @@ class DokumenController extends Controller
         ]);
     }
 
+    /**
+     * Stream berkas inline (preview) via URL bertanda-tangan.
+     * Dilindungi middleware `signed` (tanpa auth:api) — berlaku sementara.
+     */
+    public function viewFile(Request $request, $id)
+    {
+        $dokumen = DokumenPegawai::findOrFail($id);
+
+        if (empty($dokumen->file_path)) {
+            abort(404, 'Berkas fisik dokumen tidak ditemukan.');
+        }
+
+        return $this->files->streamInline($dokumen->file_path, private: true);
+    }
+
     public function downloadFile(Request $request, $id)
     {
         $user = $request->user();
         $dokumen = DokumenPegawai::with('pegawai')->findOrFail($id);
 
-        $isAdmin = $user->isAdmin() 
-            || $user->hasPermission('simpeg.dokumen.manage') 
+        $isAdmin = $user->isAdmin()
+            || $user->hasPermission('simpeg.dokumen.manage')
             || $user->hasPermission('simpeg.pegawai.manage');
 
         $isOwner = $user->pegawai && $user->pegawai->id === $dokumen->pegawai_id;
