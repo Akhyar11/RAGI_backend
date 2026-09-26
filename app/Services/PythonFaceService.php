@@ -96,10 +96,13 @@ class PythonFaceService
                 ];
             }
 
-            $errorMsg = $response->json('detail') ?? $response->json('message') ?? 'Gagal memproses pendaftaran wajah di microservice.';
+            $errorDetail = $response->json('detail');
+            $errorMsg = is_array($errorDetail)
+                ? ($errorDetail['message'] ?? json_encode($errorDetail, JSON_UNESCAPED_UNICODE))
+                : ($errorDetail ?? $response->json('message') ?? 'Gagal memproses pendaftaran wajah di microservice.');
             return [
                 'success' => false,
-                'message' => $errorMsg,
+                'message' => (string) $errorMsg,
             ];
         } catch (\Throwable $e) {
             Log::error('Koneksi ke Python Face Service gagal saat enrollFromImages: ' . $e->getMessage());
@@ -151,12 +154,15 @@ class PythonFaceService
                 ];
             }
 
-            $errorMsg = $response->json('detail') ?? $response->json('message') ?? 'Gagal memverifikasi biometrik wajah di server.';
+            $errorDetail = $response->json('detail');
+            $errorMsg = is_array($errorDetail)
+                ? ($errorDetail['message'] ?? json_encode($errorDetail, JSON_UNESCAPED_UNICODE))
+                : ($errorDetail ?? $response->json('message') ?? 'Gagal memverifikasi biometrik wajah di server.');
             return [
                 'success' => false,
                 'is_match' => false,
                 'similarity' => 0.0,
-                'message' => $errorMsg,
+                'message' => (string) $errorMsg,
             ];
         } catch (\Throwable $e) {
             Log::error('Koneksi ke Python Face Service gagal saat verifyFace: ' . $e->getMessage());
