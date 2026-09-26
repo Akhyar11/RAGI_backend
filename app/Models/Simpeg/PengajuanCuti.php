@@ -6,7 +6,6 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\URL;
 
 class PengajuanCuti extends Model
 {
@@ -43,24 +42,8 @@ class PengajuanCuti extends Model
         }
 
         // Berkas disimpan private → URL publik akan 404. Gunakan Signed URL
-        // (berlaku 15 menit) ke endpoint stream backend yang mencari di disk
-        // kandidat (r2-private/public/local).
-        try {
-            $relative = URL::temporarySignedRoute(
-                'simpeg.cuti.file',
-                now()->addMinutes(15),
-                ['id' => $this->id],
-                absolute: false
-            );
-
-            return request()->getSchemeAndHttpHost().$relative;
-        } catch (\Throwable) {
-            return URL::temporarySignedRoute(
-                'simpeg.cuti.file',
-                now()->addMinutes(15),
-                ['id' => $this->id]
-            );
-        }
+        // terpusat (FileStorageService) ke endpoint stream generik.
+        return app(\App\Services\Storage\FileStorageService::class)->signedUrl($this->file_pendukung);
     }
 
     public function pegawai(): BelongsTo

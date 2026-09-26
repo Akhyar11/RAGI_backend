@@ -188,6 +188,10 @@ Route::middleware('signed')->prefix('simpeg')->group(function () {
         ->name('simpeg.cuti.file');
 });
 
+// Endpoint stream generik untuk berkas privat (Signed URL, tanpa auth:api).
+Route::middleware('signed')->get('files/view', [App\Http\Controllers\FileStreamController::class, 'show'])
+    ->name('files.view');
+
 Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     // Dashboard Stats
     Route::get('dashboard-stats', [App\Http\Controllers\Simpeg\SimpegDashboardController::class, 'stats']);

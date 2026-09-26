@@ -8,7 +8,6 @@ use App\Services\Storage\FileStorageService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\URL;
 
 class DokumenController extends Controller
 {
@@ -145,19 +144,9 @@ class DokumenController extends Controller
         $watermarkText = \App\Services\Simpeg\FileSecurityService::getWatermarkText($dokumen);
         $fileExists = $this->files->exists($dokumen->file_path, private: true);
 
-        // URL preview bertanda-tangan (temporary) ke endpoint streaming backend.
-        // Bekerja untuk disk apa pun (local/public/R2) dan aman dibuka di tab baru
-        // tanpa perlu Bearer token. Berlaku 15 menit.
-        $fileUrl = null;
-        if ($fileExists) {
-            $signedPath = URL::temporarySignedRoute(
-                'simpeg.dokumen.file',
-                now()->addMinutes(15),
-                ['id' => $dokumen->id],
-                absolute: false
-            );
-            $fileUrl = $request->getSchemeAndHttpHost().$signedPath;
-        }
+        // URL preview: Signed URL terpusat (FileStorageService) ke endpoint stream
+        // generik. Bekerja untuk disk apa pun dan aman dibuka di tab baru.
+        $fileUrl = $fileExists ? $this->files->signedUrl($dokumen->file_path) : null;
 
         return response()->json([
             'status' => 'success',

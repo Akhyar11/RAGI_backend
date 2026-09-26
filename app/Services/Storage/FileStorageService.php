@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -174,6 +175,9 @@ class FileStorageService
     /**
      * URL publik untuk file non-rahasia.
      * Di R2 memakai R2_URL (custom domain). Di local memakai Storage::url + asset.
+     *
+     * OTOMATIS: bila berkas ternyata tersimpan di disk privat, yang dikembalikan
+     * adalah Signed URL (bukan URL publik) agar dokumen privat tidak bocor/404.
      */
     public function url(?string $path, ?string $disk = null, bool $private = false): ?string
     {
@@ -183,7 +187,16 @@ class FileStorageService
             return null;
         }
 
-        $diskName = $this->resolveDisk($disk, $private);
+        if (! $private && $this->isStoredPrivately($relative)) {
+            return $this->signedUrl($relative);
+        }
+
+        return $this->buildPublicUrl($relative, $disk);
+    }
+
+    protected function buildPublicUrl(string $relative, ?string $disk = null): ?string
+    {
+        $diskName = $this->resolveDisk($disk, false);
 
         if ($diskName === 'public' && ! $this->isCloudActive()) {
             try {
@@ -204,6 +217,111 @@ class FileStorageService
         }
 
         return $url;
+    }
+
+    /** Cache hasil deteksi privat per-path (hindari HEAD berulang dalam 1 request). */
+    protected array $privateLookupCache = [];
+
+    /** True bila berkas fisik ada di disk privat. */
+    public function isStoredPrivately(string $path): bool
+    {
+        $relative = $this->normalizePath($path);
+
+        if ($relative === '') {
+            return false;
+        }
+
+        if (array_key_exists($relative, $this->privateLookupCache)) {
+            return $this->privateLookupCache[$relative];
+        }
+
+        $result = false;
+
+        foreach ($this->candidateDisks(null, true) as $candidate) {
+            try {
+                if (Storage::disk($candidate)->exists($relative)) {
+                    $result = true;
+                    break;
+                }
+            } catch (\Throwable) {
+                // Disk tidak tersedia — lanjut.
+            }
+        }
+
+        return $this->privateLookupCache[$relative] = $result;
+    }
+
+    /**
+     * Signed URL (berlaku sementara) ke endpoint stream generik `/api/files/view`.
+     * Aman dibuka di tab baru tanpa Bearer token.
+     */
+    public function signedUrl(?string $path, int $minutes = 15): ?string
+    {
+        $relative = $this->normalizePath($path);
+
+        if ($relative === '') {
+            return null;
+        }
+
+        try {
+            $signed = URL::temporarySignedRoute(
+                'files.view',
+                now()->addMinutes($minutes),
+                ['path' => $relative],
+                absolute: false
+            );
+
+            return request()->getSchemeAndHttpHost().$signed;
+        } catch (\Throwable) {
+            try {
+                return URL::temporarySignedRoute(
+                    'files.view',
+                    now()->addMinutes($minutes),
+                    ['path' => $relative]
+                );
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+    }
+
+    /** Semua disk kandidat (privat + publik cloud + lokal) untuk pembacaan generik. */
+    protected function allDisks(): array
+    {
+        return array_values(array_unique(array_filter([
+            strtolower($this->privateDiskName()),
+            strtolower($this->publicDiskName()),
+            'public',
+            'local',
+        ])));
+    }
+
+    /**
+     * Stream inline dari SEMUA disk (public/private/local). Dipakai endpoint
+     * signed generik `/api/files/view`, sehingga berkas apa pun (lama maupun
+     * baru, di disk mana pun) tetap dapat ditampilkan.
+     */
+    public function streamInlineAny(?string $path): StreamedResponse
+    {
+        $relative = $this->normalizePath($path);
+
+        if ($relative === '') {
+            abort(404, 'Berkas tidak ditemukan.');
+        }
+
+        foreach ($this->allDisks() as $disk) {
+            try {
+                $store = Storage::disk($disk);
+
+                if ($store->exists($relative)) {
+                    return $store->response($relative);
+                }
+            } catch (\Throwable) {
+                // Disk tidak tersedia — lanjut.
+            }
+        }
+
+        abort(404, 'File fisik tidak ditemukan pada storage server.');
     }
 
     /**

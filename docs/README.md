@@ -26,6 +26,7 @@
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
 | MasterReferensiController | Manajemen data item referensi umum, kode, modul, dan status aktif | [docs/api/System/MasterReferensiController.md](api/System/MasterReferensiController.md) |
+| FileStreamController | Stream berkas privat generik via Signed URL (tanpa Bearer) | [docs/api/System/FileStreamController.md](api/System/FileStreamController.md) |
 | MasterTipeReferensiController | Manajemen kategori master tipe referensi sistem | [docs/api/System/MasterTipeReferensiController.md](api/System/MasterTipeReferensiController.md) |
 
 ---

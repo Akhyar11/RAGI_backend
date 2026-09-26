@@ -230,7 +230,7 @@ Contoh representasi form:
         "nama_dokumen": "Sertifikat Pendidik Dosen",
         "jenis_dokumen": "serdos",
         "watermark_overlay": "RAHASIA - Dr. Siti Aminah - 198501012010122001 - 2026-09-19",
-        "file_url": "https://ragibe.poltekindonusa.ac.id/api/simpeg/dokumen/2/file?expires=1760000000&signature=abc123",
+        "file_url": "https://ragibe.poltekindonusa.ac.id/api/files/view?path=simpeg%2Fdokumen_pegawai%2F2026%2F09%2Fuuid.pdf&expires=1760000000&signature=abc123",
         "file_exists": true,
         "security_status": "Confidential - Encrypted & Watermarked"
     }

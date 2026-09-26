@@ -352,5 +352,5 @@ Binary stream (`Content-Disposition: inline`), dibaca dari disk kandidat (r2-pri
 ## Catatan Khusus & Integritas Data
 - **Soft Delete**: Data cuti menggunakan soft delete (`deleted_at`), riwayat pengajuan tidak pernah dihapus permanen untuk keperluan audit.
 - **Kerahasiaan Data**: Dokumen surat keterangan sakit atau alasan personal hanya dapat diunduh oleh pegawai bersangkutan dan pejabat SDM berwenang.
-- **Lampiran Privat (Signed URL)**: `file_pendukung_url` mengembalikan URL bertanda-tangan (15 menit) ke endpoint `/api/simpeg/cuti/{id}/file`; berkas disimpan di private disk sehingga tidak dapat diakses lewat URL publik.
+- **Lampiran Privat (Signed URL)**: `file_pendukung_url` mengembalikan URL bertanda-tangan (15 menit) ke endpoint stream generik `/api/files/view?path=…`; berkas disimpan di private disk sehingga tidak dapat diakses lewat URL publik.
 - **Password & Token**: Password, hashed password, dan token autentikasi tidak pernah dikembalikan dalam response API ini.
