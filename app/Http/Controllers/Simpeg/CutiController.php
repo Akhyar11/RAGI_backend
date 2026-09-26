@@ -168,11 +168,26 @@ class CutiController extends Controller
         ], 201);
     }
 
+    /**
+     * Stream lampiran cuti (inline) via URL bertanda-tangan.
+     * Dilindungi middleware `signed` (tanpa auth:api).
+     */
+    public function viewFile(Request $request, $id)
+    {
+        $cuti = PengajuanCuti::findOrFail($id);
+
+        if (empty($cuti->file_pendukung)) {
+            abort(404, 'Berkas pendukung tidak ditemukan.');
+        }
+
+        return $this->files->streamInline($cuti->file_pendukung, private: true);
+    }
+
     public function updateStatus(Request $request, $id): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.cuti.update') && 
-            !$user->hasPermission('simpeg.cuti.approve') && 
+        if (!$user->hasPermission('simpeg.cuti.update') &&
+            !$user->hasPermission('simpeg.cuti.approve') &&
             !$user->isAdmin()) {
             return response()->json([
                 'status' => 'error',

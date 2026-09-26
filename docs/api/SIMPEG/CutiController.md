@@ -1,6 +1,6 @@
 # CutiController
 
-> **Modul**: SIMPEG / **Base URL**: /api/simpeg/cuti / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-19
+> **Modul**: SIMPEG / **Base URL**: /api/simpeg/cuti / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-26
 
 Modul ini mengelola permohonan cuti pegawai (tahunan, sakit, melahirkan, alasan penting, besar), validasi kuota dan dokumen pendukung, persetujuan/penolakan oleh pimpinan/SDM, serta notifikasi terintegrasi WhatsApp dan Email.
 
@@ -13,6 +13,7 @@ Modul ini mengelola permohonan cuti pegawai (tahunan, sakit, melahirkan, alasan 
 | GET | `/api/simpeg/cuti` | Daftar pengajuan cuti pegawai | ✅ Bearer |
 | POST | `/api/simpeg/cuti` | Buat permohonan cuti baru | ✅ Bearer |
 | PATCH | `/api/simpeg/cuti/{id}/status` | Persetujuan / penolakan status pengajuan cuti | ✅ Bearer |
+| GET | `/api/simpeg/cuti/{id}/file` | Stream lampiran cuti via Signed URL | ❌ Publik (Signed URL) |
 
 ---
 
@@ -308,7 +309,48 @@ Contoh payload:
 
 ---
 
+## 4. GET /api/simpeg/cuti/{id}/file
+
+> Stream lampiran cuti (inline) untuk dibuka di browser. **Tanpa Bearer token**, dilindungi **Signed URL** (berlaku 15 menit). Dipakai oleh atribut `file_pendukung_url` pada response cuti.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Accept` | `application/json` | ❌ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `expires` | integer | ✅ | Timestamp kedaluwarsa (diisi otomatis oleh Signed URL) |
+| `signature` | string | ✅ | Tanda tangan HMAC (diisi otomatis oleh Signed URL) |
+
+### Response Sukses (200 OK)
+Binary stream (`Content-Disposition: inline`), dibaca dari disk kandidat (r2-private/public/local).
+
+### Response Error
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Invalid signature."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Berkas pendukung tidak ditemukan."
+}
+```
+
+---
+
 ## Catatan Khusus & Integritas Data
 - **Soft Delete**: Data cuti menggunakan soft delete (`deleted_at`), riwayat pengajuan tidak pernah dihapus permanen untuk keperluan audit.
 - **Kerahasiaan Data**: Dokumen surat keterangan sakit atau alasan personal hanya dapat diunduh oleh pegawai bersangkutan dan pejabat SDM berwenang.
+- **Lampiran Privat (Signed URL)**: `file_pendukung_url` mengembalikan URL bertanda-tangan (15 menit) ke endpoint `/api/simpeg/cuti/{id}/file`; berkas disimpan di private disk sehingga tidak dapat diakses lewat URL publik.
 - **Password & Token**: Password, hashed password, dan token autentikasi tidak pernah dikembalikan dalam response API ini.

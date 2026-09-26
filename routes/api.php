@@ -184,6 +184,8 @@ Route::middleware('auth:api')->group(function () {
 Route::middleware('signed')->prefix('simpeg')->group(function () {
     Route::get('dokumen/{id}/file', [App\Http\Controllers\Simpeg\DokumenController::class, 'viewFile'])
         ->name('simpeg.dokumen.file');
+    Route::get('cuti/{id}/file', [App\Http\Controllers\Simpeg\CutiController::class, 'viewFile'])
+        ->name('simpeg.cuti.file');
 });
 
 Route::middleware('auth:api')->prefix('simpeg')->group(function () {
