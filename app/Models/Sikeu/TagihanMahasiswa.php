@@ -9,6 +9,9 @@ class TagihanMahasiswa extends Model
 {
     use HasFactory;
 
+    /** Tipe referensi tagihan biaya daftar ulang SPMB. */
+    public const TIPE_SPMB_DAFTAR_ULANG = 'spmb_daftar_ulang';
+
     protected $table = 'sikeu_tagihan_mahasiswa';
 
     protected $fillable = [

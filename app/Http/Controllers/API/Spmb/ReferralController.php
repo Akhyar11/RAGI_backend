@@ -3,12 +3,17 @@
 namespace App\Http\Controllers\API\Spmb;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Spmb\CreatePayoutReferralRequest;
+use App\Http\Requests\Spmb\GetReferralUsagesRequest;
 use App\Http\Requests\Spmb\ValidateReferralCodeRequest;
+use App\Models\Spmb\PayoutReferral;
 use App\Models\Spmb\ReferralUsage;
+use App\Services\AuditLogService;
 use App\Services\Spmb\SpmbReferralService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 class ReferralController extends Controller
 {
@@ -42,13 +47,115 @@ class ReferralController extends Controller
         }
 
         $stats = $this->referralService->statsForUser($user);
+        $withdrawable = $this->referralService->withdrawableSummary($user);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Data referral berhasil diambil.',
             'data' => [
                 'summary' => $stats,
+                'withdrawable' => $withdrawable,
             ],
+        ]);
+    }
+
+    /**
+     * Daftar referral milik pengguna yang login (untuk tab Referral di /profile).
+     * Mendukung filter status, pencarian, rentang tanggal, dan sorting.
+     */
+    public function usages(GetReferralUsagesRequest $request): JsonResponse
+    {
+        $filters = $request->validated();
+        $perPage = min(100, $request->integer('per_page', 15));
+
+        $result = $this->referralService->getUsagesForUser(
+            $request->user(),
+            $filters,
+            $perPage
+        );
+
+        $data = $result['paginator'];
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar riwayat referral berhasil diambil.',
+            'data' => $result['items'],
+            'meta' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem(),
+            ],
+            'filters' => [
+                'search' => $filters['search'] ?? null,
+                'status' => $filters['status'] ?? null,
+                'start_date' => $filters['start_date'] ?? null,
+                'end_date' => $filters['end_date'] ?? null,
+                'sort_by' => $result['sort_by'],
+                'sort_order' => $result['sort_order'],
+            ],
+        ]);
+    }
+
+    /**
+     * Buat bukti pencairan (payout). Status referral TIDAK diubah;
+     * hanya ditandai payout. Mengembalikan data payout (JSON).
+     */
+    public function payout(CreatePayoutReferralRequest $request): JsonResponse
+    {
+        $payout = $this->referralService->createPayout(
+            $request->user(),
+            $request->input('keterangan')
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Bukti pencairan referral berhasil dibuat.',
+            'data' => [
+                'id' => $payout->id,
+                'nomor_bukti' => $payout->nomor_bukti,
+                'referral_count' => $payout->referral_count,
+                'total_nominal' => (float) $payout->total_nominal,
+                'generated_at' => $payout->generated_at,
+            ],
+        ], 201);
+    }
+
+    /**
+     * Unduh bukti pencairan (PDF) milik pengguna yang login.
+     */
+    public function downloadPayout(Request $request, PayoutReferral $payout): \Illuminate\Http\Response
+    {
+        Gate::authorize('view', $payout);
+
+        $user = $request->user();
+
+        $pdf = $this->referralService->generatePayoutPdf($payout, $user);
+        $filename = 'bukti-pencairan-referral-'.$payout->nomor_bukti.'.pdf';
+
+        // Jejak audit unduhan bukti pencairan (non-blocking).
+        try {
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'export',
+                tableName: $payout->getTable(),
+                recordId: $payout->id,
+                oldValues: null,
+                newValues: [
+                    'nomor_bukti' => $payout->nomor_bukti,
+                    'total_nominal' => (float) $payout->total_nominal,
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log export payout: '.$e->getMessage());
+        }
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 

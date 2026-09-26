@@ -31,9 +31,19 @@ class ReferralUsageObserver
                 return;
             }
 
+            $action = 'update';
+
+            if ($referralUsage->wasChanged('status')) {
+                $action = match ($referralUsage->status) {
+                    ReferralUsage::STATUS_QUALIFIED => 'approve',
+                    ReferralUsage::STATUS_CANCELLED => 'reject',
+                    default => 'update',
+                };
+            }
+
             AuditLogService::record(
                 module: 'SPMB',
-                action: 'update',
+                action: $action,
                 tableName: $referralUsage->getTable(),
                 recordId: $referralUsage->id,
                 oldValues: $referralUsage->getOriginal(),

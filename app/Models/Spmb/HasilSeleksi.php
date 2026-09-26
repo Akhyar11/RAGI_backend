@@ -18,6 +18,8 @@ class HasilSeleksi extends Model
 
     public const STATUS_TIDAK_LULUS = 'tidak_lulus';
 
+    public const STATUS_DAFTAR_ULANG_LUNAS = 'lunas';
+
     protected $fillable = [
         'pendaftaran_id',
         'program_studi_diterima_id',

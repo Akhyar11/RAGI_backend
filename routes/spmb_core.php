@@ -67,9 +67,12 @@ Route::get('laporan/export-csv', [LaporanSpmbController::class, 'exportCsv']);
 
 // Referral (Kode Rujukan Mahasiswa Baru) — data milik pengguna yang login.
 Route::get('referral/saya', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'me']);
+Route::get('referral/saya/usages', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'usages']);
+Route::post('referral/payout', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'payout']);
+Route::get('referral/payout/{payout}/download', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'downloadPayout'])->whereNumber('payout');
 
-// Laporan Referral (Admin SPMB)
-Route::middleware('can:spmb.manage')->group(function () {
+// Laporan Referral (Admin/Panitia SPMB) — konsisten dengan modul laporan lain.
+Route::middleware('can:spmb.laporan.read')->group(function () {
     Route::get('laporan/referral', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'report']);
     Route::get('laporan/referral-summary', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'summary']);
 });

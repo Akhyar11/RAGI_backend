@@ -17,6 +17,7 @@ class MasterKomponenBiaya extends Model
         'nama',
         'kategori',
         'tipe_potongan',
+        'is_referral_reward',
         'urutan',
         'is_active',
         'keterangan',
@@ -24,6 +25,7 @@ class MasterKomponenBiaya extends Model
 
     protected $casts = [
         'tipe_potongan' => 'boolean',
+        'is_referral_reward' => 'boolean',
         'is_active' => 'boolean',
         'urutan' => 'integer',
     ];
@@ -31,5 +33,16 @@ class MasterKomponenBiaya extends Model
     public function items()
     {
         return $this->hasMany(MasterBiayaItem::class, 'komponen_biaya_id');
+    }
+
+    public function roleRewards()
+    {
+        return $this->hasMany(KomponenBiayaRoleReward::class, 'komponen_biaya_id');
+    }
+
+    /** Komponen yang menjadi sumber nominal reward referral. */
+    public function scopeReferralReward($query)
+    {
+        return $query->where('is_referral_reward', true);
     }
 }

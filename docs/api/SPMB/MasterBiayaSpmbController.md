@@ -141,6 +141,11 @@ Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `gel
     "nama": "Biaya Pendaftaran",
     "kategori": "pendaftaran",
     "tipe_potongan": false,
+    "is_referral_reward": false,
+    "role_rewards": [
+        { "role_id": 5, "nominal": 50000 },
+        { "role_id": 6, "nominal": 25000 }
+    ],
     "urutan": 1,
     "position_type": "end",
     "reference_id": null,
@@ -148,6 +153,8 @@ Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `gel
     "keterangan": "Biaya formulir pendaftaran"
 }
 ```
+
+> **Reward Referral**: Jika komponen ini menjadi sumber reward referral, set `is_referral_reward = true` dan isi `role_rewards[]` (mapping `role_id` → `nominal`). Nominal reward referrer dihitung dari mapping role referrer (mis. Mahasiswa berbeda dari Dosen). Mapping disimpan di `spmb_komponen_biaya_role_reward`.
 
 ### Response Sukses
 

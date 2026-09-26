@@ -32,6 +32,7 @@ class ReferralUsage extends Model
         'rewarded_at',
         'reward_ref_type',
         'reward_ref_id',
+        'payout_id',
         'keterangan',
     ];
 
@@ -39,11 +40,17 @@ class ReferralUsage extends Model
         'qualified_at' => 'datetime',
         'rewarded_at' => 'datetime',
         'reward_ref_id' => 'integer',
+        'payout_id' => 'integer',
     ];
 
     public function pendaftaran()
     {
         return $this->belongsTo(PendaftaranCalonMhs::class, 'pendaftaran_id');
+    }
+
+    public function payout()
+    {
+        return $this->belongsTo(PayoutReferral::class, 'payout_id');
     }
 
     public function referee()

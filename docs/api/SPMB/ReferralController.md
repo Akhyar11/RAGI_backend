@@ -4,7 +4,7 @@
 > **Base URL**: `/api/spmb`  
 > **Autentikasi**: Bearer Token (Sanctum) — kecuali dinyatakan lain  
 > **Dibuat**: 2026-09-24  
-> **Diperbarui**: 2026-09-24
+> **Diperbarui**: 2026-09-26
 
 Controller ini mengelola fitur **Kode Referral (Rujukan) Mahasiswa Baru**. Setiap pengguna (`core_users`) memiliki `referral_code` unik yang dapat dibagikan kepada calon mahasiswa. Saat calon mahasiswa mendaftar (register akun atau mengisi wizard SPMB), kode referensi dapat diterapkan pada `spmb_pendaftaran_calon_mhs` dan dicatat pada `spmb_referral_usages`.
 
@@ -12,9 +12,13 @@ Controller ini mengelola fitur **Kode Referral (Rujukan) Mahasiswa Baru**. Setia
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
-| GET | `/api/spmb/referral/validate` | Validasi kode referral & tampilkan nama pemilik (tersamar) | ❌ Publik |
-| GET | `/api/spmb/referral/saya` | Kode referral milik user aktif + statistik & riwayat | ✅ Bearer |
+| GET | `/api/spmb/referral/validate` | Validasi kode referral & tampilkan nama pemilik (tersamar) | ❌ Publik (throttle 20/menit) |
+| GET | `/api/spmb/referral/saya` | Kode referral milik user aktif + statistik + nominal bisa dicairkan | ✅ Bearer |
+| GET | `/api/spmb/referral/saya/usages` | Daftar referral milik user (paginasi + filter) | ✅ Bearer |
+| POST | `/api/spmb/referral/payout` | Membuat bukti pencairan (JSON) | ✅ Bearer |
+| GET | `/api/spmb/referral/payout/{payout}/download` | Unduh bukti pencairan (PDF) | ✅ Bearer |
 | GET | `/api/spmb/laporan/referral` | Rekap laporan penggunaan referral (paginasi) | ✅ `spmb.laporan.read` |
+| GET | `/api/spmb/laporan/referral-summary` | Ringkasan agregat referral per status | ✅ `spmb.laporan.read` |
 
 ---
 
@@ -201,3 +205,174 @@ Controller ini mengelola fitur **Kode Referral (Rujukan) Mahasiswa Baru**. Setia
 - Setiap penggunaan kode tercatat di tabel `spmb_referral_usages` (satu baris per pendaftaran, unik).
 - Penggunaan referral otomatis menjadi `qualified` saat pendaftaran berstatus `lulus_administrasi`, dan `cancelled` saat `gagal_administrasi`.
 - Kode hanya dapat diubah selama status pendaftaran `draft` atau `submitted`.
+
+---
+
+## GET /api/spmb/referral/saya/usages
+
+> Daftar referral milik pengguna yang login (untuk tab **Referral** di `/profile`).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `search` | string | ❌ | — | Cari kode / nama pendaftar / no pendaftaran |
+| `status` | string | ❌ | — | `claimed` / `qualified` / `rewarded` / `cancelled` |
+| `start_date` | date | ❌ | — | Filter dibuat sejak tanggal |
+| `end_date` | date | ❌ | — | Filter dibuat sampai tanggal |
+| `sort_by` | string | ❌ | `created_at` | `created_at` / `status` / `referral_code` |
+| `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
+| `per_page` | integer | ❌ | `15` | Maks. 100 |
+
+### Response Sukses (200 OK)
+Envelope standar (`data`, `meta`, `filters`). Statistik & nominal bisa dicairkan tersedia di `GET /api/spmb/referral/saya`.
+
+```json
+{
+    "status": "success",
+    "data": [
+        { "id": 1, "referral_code": "REF-A1B2C3", "status": "qualified", "reward_nominal": 50000, "nama_pendaftar": "Budi", "no_pendaftaran": "REG-20260926-0001", "gelombang": "Gelombang 1", "created_at": "2026-09-26T08:00:00.000000Z" }
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 },
+    "filters": { "search": null, "status": null, "start_date": null, "end_date": null, "sort_by": "created_at", "sort_order": "desc" }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+---
+
+## POST /api/spmb/referral/payout
+
+> Membuat **bukti pencairan (payout)** untuk referral yang layak dicairkan. Status referral **tidak diubah** (tetap `qualified`); hanya ditandai `payout_id`.
+
+**Kriteria layak cair:** status `qualified`, belum ditandai payout, pendaftar "selesai" (lulus/mahasiswa baru atau daftar ulang lunas), dan sudah membayar biaya daftar ulang minimal `config('spmb.referral.min_daftar_ulang_payment')`.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+| Field | Type | Required | Deskripsi |
+|---|---|---|---|
+| `keterangan` | string | ❌ | Catatan (maks 255) |
+
+```json
+{
+    "keterangan": "Pencairan reward referral periode September 2026"
+}
+```
+
+### Response Sukses (201 Created)
+
+```json
+{
+    "status": "success",
+    "message": "Bukti pencairan referral berhasil dibuat.",
+    "data": { "id": 3, "nomor_bukti": "PAYOUT-20260926-AB12CD", "referral_count": 1, "total_nominal": 50000, "generated_at": "2026-09-26T09:00:00.000000Z" }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+**422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "keterangan": ["Keterangan maksimal 255 karakter."]
+    }
+}
+```
+
+---
+
+## GET /api/spmb/laporan/referral-summary
+
+> Ringkasan agregat penggunaan referral per status (seluruh data, bukan per halaman). Otorisasi: `can:spmb.laporan.read`.
+
+### Query Parameters
+Tidak ada (tanpa paginasi/filter).
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Data retrieved successfully",
+    "data": { "claimed": 12, "qualified": 7, "rewarded": 0, "cancelled": 3 }
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+}
+```
+
+---
+
+## GET /api/spmb/referral/payout/{payout}/download
+
+> Mengunduh **bukti pencairan (PDF)** milik pengguna yang login.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+
+### Response Sukses (200 OK)
+Binary `application/pdf` (`Content-Disposition: attachment`).
+
+### Response Error
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Bukti pencairan tidak ditemukan."
+}
+```
+
+---
+
+## Reward Referral (Mapping per Role)
+
+- Nominal reward diambil dari **master komponen biaya SPMB** yang ditandai `is_referral_reward = true`, melalui mapping role → nominal: tabel `spmb_komponen_biaya_role_reward (komponen_biaya_id, role_id, nominal)`.
+- Reward per referral milik referrer = **jumlah nominal mapping** untuk role referrer (mis. role Mahasiswa bisa berbeda dari Dosen).
+- Konfigurasi mapping dilakukan via endpoint Master Komponen Biaya (`POST/PUT /api/spmb/master/komponen-biaya` dengan `is_referral_reward` + `role_rewards[]`).
+- Bukti pencairan tercatat di tabel `spmb_referral_payouts` (nomor bukti, jumlah referral, total nominal).

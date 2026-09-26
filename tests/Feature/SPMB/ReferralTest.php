@@ -179,7 +179,9 @@ class ReferralTest extends TestCase
 
         $role = \App\Models\Role::create(['name' => 'Admin SPMB', 'slug' => 'admin_spmb_test', 'is_active' => true]);
         $permission = \App\Models\Permission::create(['name' => 'Kelola SPMB', 'slug' => 'spmb.manage', 'module' => 'spmb', 'action' => 'update']);
+        $reportPermission = \App\Models\Permission::create(['name' => 'Lihat Laporan SPMB', 'slug' => 'spmb.laporan.read', 'module' => 'spmb', 'action' => 'read']);
         \App\Models\RolePermission::create(['role_id' => $role->id, 'permission_id' => $permission->id]);
+        \App\Models\RolePermission::create(['role_id' => $role->id, 'permission_id' => $reportPermission->id]);
 
         $admin = User::factory()->create(['is_active' => true]);
         $admin->roles()->attach($role->id);
@@ -201,5 +203,61 @@ class ReferralTest extends TestCase
         $this->getJson('/api/spmb/laporan/referral-summary')
             ->assertOk()
             ->assertJsonPath('data.claimed', 1);
+    }
+
+    public function test_reward_pencairan_referral_mengikuti_mapping_role(): void
+    {
+        // Komponen biaya sebagai sumber reward + mapping role.
+        $komponen = \App\Models\Spmb\MasterKomponenBiaya::create([
+            'kode' => 'REWARD-REF',
+            'nama' => 'Reward Referral',
+            'kategori' => 'lainnya',
+            'is_referral_reward' => true,
+            'is_active' => true,
+        ]);
+
+        $roleMhs = \App\Models\Role::create(['name' => 'Mahasiswa Test', 'slug' => 'mhs_test', 'is_active' => true]);
+        \App\Models\Spmb\KomponenBiayaRoleReward::create([
+            'komponen_biaya_id' => $komponen->id,
+            'role_id' => $roleMhs->id,
+            'nominal' => 50000,
+        ]);
+
+        $this->referrer->roles()->attach($roleMhs->id);
+
+        // Referee + pendaftaran "selesai" + tagihan daftar ulang >= 100000.
+        $referee = User::factory()->create(['is_active' => true]);
+        $pendaftaran = $this->makePendaftaran($referee, [
+            'nik' => '4444444444444444',
+        ]);
+
+        app(SpmbReferralService::class)->attachToPendaftaran($pendaftaran, 'REF-ABC123');
+        $usage = ReferralUsage::where('pendaftaran_id', $pendaftaran->id)->firstOrFail();
+        $usage->update(['status' => ReferralUsage::STATUS_QUALIFIED, 'qualified_at' => now()]);
+        $pendaftaran->update(['status' => PendaftaranCalonMhs::STATUS_LULUS_ADMINISTRASI]);
+
+        \App\Models\Sikeu\TagihanMahasiswa::create([
+            'calon_mahasiswa_id' => $pendaftaran->id,
+            'tipe_referensi' => 'spmb_daftar_ulang',
+            'nomor_tagihan' => 'INV-REF-'.uniqid(),
+            'total_tagihan' => 150000,
+            'total_potongan' => 0,
+            'total_denda' => 0,
+            'total_bayar' => 150000,
+            'status' => 'lunas',
+            'source_system' => 'SPMB',
+        ]);
+
+        $service = app(SpmbReferralService::class);
+
+        $this->assertSame(50000.0, $service->rewardPerReferral($this->referrer));
+
+        $summary = $service->withdrawableSummary($this->referrer);
+        $this->assertSame(1, $summary['count']);
+        $this->assertSame(50000.0, (float) $summary['total_nominal']);
+
+        $payout = $service->createPayout($this->referrer);
+        $this->assertSame(50000.0, (float) $payout->total_nominal);
+        $this->assertNotNull(ReferralUsage::where('pendaftaran_id', $pendaftaran->id)->first()->payout_id);
     }
 }

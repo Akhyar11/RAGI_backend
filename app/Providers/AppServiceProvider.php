@@ -48,6 +48,13 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Spmb\MasterBiayaItem::observe(\App\Observers\Spmb\MasterBiayaItemObserver::class);
         \App\Models\Spmb\MasterKomponenBiaya::observe(\App\Observers\Spmb\MasterKomponenBiayaObserver::class);
         \App\Models\Spmb\ReferralUsage::observe(\App\Observers\Spmb\ReferralUsageObserver::class);
+        \App\Models\Spmb\PayoutReferral::observe(\App\Observers\Spmb\PayoutReferralObserver::class);
+        \App\Models\Spmb\KomponenBiayaRoleReward::observe(\App\Observers\Spmb\KomponenBiayaRoleRewardObserver::class);
+
+        \Illuminate\Support\Facades\Gate::policy(
+            \App\Models\Spmb\PayoutReferral::class,
+            \App\Policies\Spmb\PayoutReferralPolicy::class
+        );
 
         // SIAKAD Observers
         \App\Models\Siakad\Mahasiswa::observe(\App\Observers\MahasiswaObserver::class);

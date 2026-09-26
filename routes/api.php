@@ -421,7 +421,8 @@ Route::prefix('spmb')->group(function () {
     Route::get('master/berkas-requirement', [\App\Http\Controllers\API\Spmb\BerkasRequirementController::class, 'index']);
 
     // Validasi kode referral (publik agar dapat dipakai pada form registrasi akun).
-    Route::get('referral/validate', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'validate']);
+    Route::get('referral/validate', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'validate'])
+        ->middleware('throttle:20,1');
 });
 
 Route::middleware('auth:api')->prefix('spmb')->group(function () {

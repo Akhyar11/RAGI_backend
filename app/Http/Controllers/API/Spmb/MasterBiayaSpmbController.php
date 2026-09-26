@@ -28,7 +28,7 @@ class MasterBiayaSpmbController extends Controller
 
     public function getKomponen(Request $request): JsonResponse
     {
-        $query = MasterKomponenBiaya::query();
+        $query = MasterKomponenBiaya::query()->with(['roleRewards.role:id,slug,name']);
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -81,7 +81,7 @@ class MasterBiayaSpmbController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Komponen biaya berhasil ditambahkan.',
-            'data' => $komponen,
+            'data' => $komponen->load('roleRewards.role:id,slug,name'),
         ], 201);
     }
 
@@ -93,7 +93,7 @@ class MasterBiayaSpmbController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Komponen biaya berhasil diperbarui.',
-            'data' => $updated,
+            'data' => $updated->load('roleRewards.role:id,slug,name'),
         ]);
     }
 
@@ -101,7 +101,7 @@ class MasterBiayaSpmbController extends Controller
     {
 
 
-        $komponen = MasterKomponenBiaya::findOrFail($id);
+        $komponen = MasterKomponenBiaya::with('roleRewards.role:id,slug,name')->findOrFail($id);
 
         return response()->json([
             'status' => 'success',

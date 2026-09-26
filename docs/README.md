@@ -40,7 +40,7 @@
 | MasterBiayaSpmbController | Master biaya SPMB per gelombang & program studi | [docs/api/SPMB/MasterBiayaSpmbController.md](api/SPMB/MasterBiayaSpmbController.md) |
 | TarifUktSpmbController (DIHAPUS) | Pengganti: MasterBiayaSpmbController (beban pendaftaran/daftar ulang) | [docs/api/SPMB/TarifUktSpmbController.md](api/SPMB/TarifUktSpmbController.md) |
 | CalonMahasiswaController | Alur pendaftaran calon mahasiswa (biodata, berkas, tagihan, VA) | [docs/api/SPMB/CalonMahasiswaController.md](api/SPMB/CalonMahasiswaController.md) |
-| ReferralController | Kode referral mahasiswa baru: validasi, statistik mandiri & laporan | [docs/api/SPMB/ReferralController.md](api/SPMB/ReferralController.md) |
+| ReferralController | Kode referral mahasiswa baru: validasi, statistik mandiri, reward per role, payout (bukti PDF) & laporan | [docs/api/SPMB/ReferralController.md](api/SPMB/ReferralController.md) |
 | DaftarUlangController | Tagihan & konfirmasi daftar ulang calon mahasiswa lulus | [docs/api/SPMB/DaftarUlangController.md](api/SPMB/DaftarUlangController.md) |
 | LaporanSpmbController | Statistik & export laporan pendaftaran SPMB | [docs/api/SPMB/LaporanSpmbController.md](api/SPMB/LaporanSpmbController.md) |
 

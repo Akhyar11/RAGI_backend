@@ -285,6 +285,7 @@ class PermissionSeeder extends Seeder
         $adminKeuAkuntansiRole = Role::where('slug', 'admin_keuangan_akuntansi')->first();
         $adminKeuPembayaranRole = Role::where('slug', 'admin_keuangan_pembayaran')->first();
         $petugasKasKecilRole = Role::where('slug', 'petugas_kas_kecil')->first();
+        $adminSpmbRole = Role::whereIn('slug', ['admin-spmb', 'admin_spmb'])->first();
 
         // 1. Super Admin & Admin -> Semua permissions
         if ($superAdminRole) {
@@ -540,6 +541,20 @@ class PermissionSeeder extends Seeder
             $perms = Permission::whereIn('slug', $petugasKasKecilSlugs)->get();
             foreach ($perms as $p) {
                 RolePermission::create(['role_id' => $petugasKasKecilRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 15. Admin SPMB -> kelola & laporan SPMB
+        if ($adminSpmbRole) {
+            $adminSpmbSlugs = [
+                'spmb.dashboard.read',
+                'spmb.manage',
+                'spmb.laporan.read',
+                'spmb.laporan.export',
+            ];
+            $perms = Permission::whereIn('slug', $adminSpmbSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::firstOrCreate(['role_id' => $adminSpmbRole->id, 'permission_id' => $p->id]);
             }
         }
     }

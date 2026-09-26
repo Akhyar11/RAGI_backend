@@ -66,9 +66,14 @@ class MasterBiayaService
             $data['tipe_potongan'] = $data['tipe_potongan'] ?? false;
             $data['is_active'] = $data['is_active'] ?? true;
 
-            unset($data['position_type'], $data['reference_id']);
+            $roleRewards = $data['role_rewards'] ?? null;
 
-            return MasterKomponenBiaya::create($data);
+            unset($data['position_type'], $data['reference_id'], $data['role_rewards']);
+
+            $komponen = MasterKomponenBiaya::create($data);
+            $this->syncRoleRewards($komponen, (bool) ($data['is_referral_reward'] ?? false), $roleRewards);
+
+            return $komponen;
         });
     }
 
@@ -112,12 +117,48 @@ class MasterBiayaService
                 }
             }
 
-            unset($data['position_type'], $data['reference_id']);
+            $roleRewards = $data['role_rewards'] ?? null;
+
+            unset($data['position_type'], $data['reference_id'], $data['role_rewards']);
 
             $komponen->update($data);
 
+            $this->syncRoleRewards($komponen, (bool) ($komponen->is_referral_reward), $roleRewards);
+
             return $komponen->fresh();
         });
+    }
+
+    /**
+     * Sinkronkan mapping nominal reward referral per role untuk komponen biaya.
+     * Dipanggil di dalam DB::transaction create/update komponen.
+     */
+    protected function syncRoleRewards(MasterKomponenBiaya $komponen, bool $isReward, ?array $rewards): void
+    {
+        if (! $isReward) {
+            // Hapus per-instance agar observer (audit log) terpicu.
+            $komponen->roleRewards()->get()->each->delete();
+
+            return;
+        }
+
+        if ($rewards === null) {
+            return;
+        }
+
+        // Hapus per-instance agar observer (audit log) terpicu.
+        $komponen->roleRewards()->get()->each->delete();
+
+        foreach ($rewards as $row) {
+            if (empty($row['role_id'])) {
+                continue;
+            }
+
+            $komponen->roleRewards()->create([
+                'role_id' => (int) $row['role_id'],
+                'nominal' => (float) ($row['nominal'] ?? 0),
+            ]);
+        }
     }
 
     public function deleteKomponen(MasterKomponenBiaya $komponen): bool
