@@ -30,10 +30,10 @@ class SkPegawai extends Model
     ];
 
     protected $casts = [
-        'tanggal_sk' => 'date',
-        'tmt_sk' => 'date',
-        'tmt_selesai' => 'date',
-        'verified_at' => 'datetime',
+        'tanggal_sk' => 'date:Y-m-d',
+        'tmt_sk' => 'date:Y-m-d',
+        'tmt_selesai' => 'date:Y-m-d',
+        'verified_at' => 'datetime:Y-m-d H:i:s',
     ];
 
     protected $appends = [

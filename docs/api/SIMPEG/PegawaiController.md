@@ -4,7 +4,7 @@
 > **Base URL**: `/api/simpeg/pegawai`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-14  
-> **Diperbarui**: 2026-09-22  
+> **Diperbarui**: 2026-09-28  
 
 Controller ini mengelola master data pegawai di lingkungan universitas/institusi, mencakup pendaftaran pegawai baru, penetapan multi-role jenis pegawai (`core_roles`), pembuatan akun login SSO otomatis (`core_users`), pengunduhan template import berkas, import pegawai massal via CSV/Excel, serta manajemen biometrik presensi.
 

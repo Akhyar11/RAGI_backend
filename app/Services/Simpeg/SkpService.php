@@ -110,6 +110,14 @@ class SkpService
      */
     public function createSkp(array $data, $user): PenilaianKinerja
     {
+        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.kinerja.manage');
+        if (!$isManager) {
+            $userPegawaiId = $user->pegawai?->id;
+            if ($userPegawaiId) {
+                $data['pegawai_id'] = $userPegawaiId;
+            }
+        }
+
         return DB::transaction(function () use ($data) {
             $skp = PenilaianKinerja::create([
                 'pegawai_id' => $data['pegawai_id'],

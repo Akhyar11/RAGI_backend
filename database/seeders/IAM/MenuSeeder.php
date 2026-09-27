@@ -635,10 +635,44 @@ class MenuSeeder extends Seeder
         $dosenRole = \App\Models\Role::where('slug', 'dosen')->first();
         if ($dosenRole) {
             $dosenSimpegMenuIds = Menu::where('module', 'simpeg')
-                ->whereIn('url', ['/simpeg', '/simpeg/presensi', '/simpeg/cuti', '/simpeg/payroll', '/simpeg/kompetensi', '/simpeg/surat-tugas', '/simpeg/izin-kerja', '/simpeg/sk-pegawai'])
+                ->whereIn('url', [
+                    '/simpeg',
+                    '#layanan_simpeg',
+                    '#kepegawaian_simpeg',
+                    '/simpeg/presensi',
+                    '/simpeg/cuti',
+                    '/simpeg/payroll',
+                    '/simpeg/kinerja',
+                    '/simpeg/usulan-jafung',
+                    '/simpeg/kompetensi',
+                    '/simpeg/surat-tugas',
+                    '/simpeg/sk-pegawai',
+                    '/simpeg/dokumen',
+                ])
                 ->pluck('id')
                 ->toArray();
             $dosenRole->menus()->syncWithoutDetaching($dosenSimpegMenuIds);
+        }
+
+        $tendikRole = \App\Models\Role::where('slug', 'tendik')->first();
+        if ($tendikRole) {
+            $tendikSimpegMenuIds = Menu::where('module', 'simpeg')
+                ->whereIn('url', [
+                    '/simpeg',
+                    '#layanan_simpeg',
+                    '#kepegawaian_simpeg',
+                    '/simpeg/presensi',
+                    '/simpeg/cuti',
+                    '/simpeg/payroll',
+                    '/simpeg/kinerja',
+                    '/simpeg/kompetensi',
+                    '/simpeg/surat-tugas',
+                    '/simpeg/sk-pegawai',
+                    '/simpeg/dokumen',
+                ])
+                ->pluck('id')
+                ->toArray();
+            $tendikRole->menus()->syncWithoutDetaching($tendikSimpegMenuIds);
         }
 
         // Dosen: portal SIAKAD (jadwal, KRS bimbingan, nilai, CPMK/RPS, hasil studi, panduan)

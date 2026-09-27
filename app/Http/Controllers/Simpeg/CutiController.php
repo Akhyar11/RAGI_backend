@@ -29,13 +29,16 @@ class CutiController extends Controller
 
         $query = PengajuanCuti::with(['pegawai.unitKerja', 'pegawai.dosen.programStudi', 'approver', 'masterJenisCuti']);
 
-        if ($request->has('pegawai_id')) {
-            $query->where('pegawai_id', $request->pegawai_id);
-        } elseif (!$user->isAdmin() && !$user->hasPermission('simpeg.cuti.manage') && !$user->hasPermission('simpeg.cuti.approve')) {
+        $isCutiManager = $user->isAdmin() || $user->hasPermission('simpeg.cuti.manage') || $user->hasPermission('simpeg.cuti.approve');
+        if (!$isCutiManager) {
             $pegId = $user->pegawai?->id;
             if ($pegId) {
                 $query->where('pegawai_id', $pegId);
+            } else {
+                $query->whereRaw('1 = 0');
             }
+        } elseif ($request->filled('pegawai_id')) {
+            $query->where('pegawai_id', $request->pegawai_id);
         }
 
         $masterJenisCutiId = $request->filled('master_jenis_cuti_id') ? (int) $request->master_jenis_cuti_id : null;
@@ -108,6 +111,19 @@ class CutiController extends Controller
         }
 
         $validated = $request->validated();
+
+        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.cuti.manage');
+        if (!$isManager) {
+            $userPegawai = Pegawai::where('user_id', $user->id)->first();
+            if (!$userPegawai) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Akun Anda belum terhubung dengan data Pegawai.',
+                ], 403);
+            }
+            $validated['pegawai_id'] = $userPegawai->id;
+        }
+
         $master = MasterJenisCuti::findOrFail($validated['master_jenis_cuti_id']);
 
         if ($master->lampiran_wajib && !$request->hasFile('file') && empty($validated['file_pendukung'])) {

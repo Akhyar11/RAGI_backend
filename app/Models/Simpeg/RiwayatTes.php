@@ -26,7 +26,7 @@ class RiwayatTes extends Model
     protected $casts = [
         'tahun' => 'integer',
         'skor' => 'float',
-        'masa_berlaku' => 'date',
+        'masa_berlaku' => 'date:Y-m-d',
     ];
 
     public function pegawai()

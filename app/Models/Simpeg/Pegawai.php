@@ -59,8 +59,8 @@ class Pegawai extends Model
         'tanggal_lahir' => 'date:Y-m-d',
         'tanggal_masuk' => 'date:Y-m-d',
         'tanggal_keluar' => 'date:Y-m-d',
-        'face_enrolled_at' => 'datetime',
-        'consent_pdp_at' => 'datetime',
+        'face_enrolled_at' => 'datetime:Y-m-d H:i:s',
+        'consent_pdp_at' => 'datetime:Y-m-d H:i:s',
         'is_active' => 'boolean',
     ];
 

@@ -93,7 +93,7 @@ class PresensiController extends Controller
         }
 
         // 2. Mode Realtime Biometric Attendance
-        $isManager = $user->hasPermission('simpeg.presensi.manage') || $user->hasPermission('simpeg.presensi.read') || $user->isAdmin() || $user->hasRole('admin_simpeg') || $user->hasRole('admin');
+        $isManager = $user->hasPermission('simpeg.presensi.manage') || $user->isAdmin() || $user->hasRole('admin_simpeg') || $user->hasRole('admin');
 
         $query = Attendance::with(['employee.unitKerja', 'officeLocation']);
 

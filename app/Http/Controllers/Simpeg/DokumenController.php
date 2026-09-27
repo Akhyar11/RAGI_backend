@@ -15,16 +15,14 @@ class DokumenController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $isPrivileged = $user->hasRole('superadmin') || $user->hasRole('admin');
-        if (!$user->hasPermission('simpeg.dokumen.read') && !$user->hasPermission('simpeg.dokumen.create') && !$user->hasPermission('simpeg.dokumen.manage') && !$isPrivileged) {
+        $isPrivileged = $user->hasRole('superadmin') || $user->hasRole('admin') || $user->hasPermission('simpeg.dokumen.manage');
+        if (!$user->hasPermission('simpeg.dokumen.read') && !$user->hasPermission('simpeg.dokumen.create') && !$isPrivileged) {
             throw new AuthorizationException('Anda tidak memiliki hak akses (permission) untuk melihat Dokumen E-File.');
         }
 
         $query = DokumenPegawai::with(['pegawai.unitKerja', 'pegawai.dosen.programStudi']);
 
-        if ($request->has('pegawai_id')) {
-            $query->where('pegawai_id', $request->pegawai_id);
-        } elseif (!$isPrivileged && !$user->hasPermission('simpeg.dokumen.manage')) {
+        if (!$isPrivileged) {
             // Non-admin hanya bisa melihat dokumen miliknya sendiri
             $pegId = $user->pegawai?->id;
             if ($pegId) {
@@ -32,6 +30,8 @@ class DokumenController extends Controller
             } else {
                 $query->whereRaw('1 = 0');
             }
+        } elseif ($request->filled('pegawai_id')) {
+            $query->where('pegawai_id', $request->pegawai_id);
         }
 
         if ($request->filled('jenis_dokumen')) {
@@ -98,6 +98,14 @@ class DokumenController extends Controller
             'file_path' => 'nullable|string',
             'file_size' => 'nullable|string',
         ]);
+
+        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.dokumen.manage');
+        if (!$isManager) {
+            $userPegawaiId = $user->pegawai?->id;
+            if ($userPegawaiId) {
+                $validated['pegawai_id'] = $userPegawaiId;
+            }
+        }
 
         if ($request->hasFile('file')) {
             $file = $request->file('file');
@@ -215,7 +223,8 @@ class DokumenController extends Controller
     public function destroy(Request $request, $id): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.dokumen.delete') && !$user->hasPermission('simpeg.dokumen.manage') && !$user->isAdmin()) {
+        $isPrivileged = $user->hasRole('superadmin') || $user->hasRole('admin') || $user->hasPermission('simpeg.dokumen.manage');
+        if (!$user->hasPermission('simpeg.dokumen.delete') && !$isPrivileged) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses (permission) untuk menghapus Dokumen E-File.'
@@ -223,6 +232,16 @@ class DokumenController extends Controller
         }
 
         $dokumen = DokumenPegawai::findOrFail($id);
+
+        if (!$isPrivileged) {
+            $userPegId = $user->pegawai?->id;
+            if (!$userPegId || $dokumen->pegawai_id !== $userPegId) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda hanya berhak menghapus dokumen milik Anda sendiri.'
+                ], 403);
+            }
+        }
 
         // Delete physical file if exists (dinamis: local / R2)
         if (!empty($dokumen->file_path)) {
