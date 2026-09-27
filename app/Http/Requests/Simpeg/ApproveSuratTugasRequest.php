@@ -29,6 +29,7 @@ class ApproveSuratTugasRequest extends FormRequest
             'nomor_surat.required_if' => 'Nomor surat tugas resmi wajib diisi jika disetujui.',
             'nominal_disetujui.numeric' => 'Nominal disetujui harus berupa angka valid.',
             'nominal_disetujui.min' => 'Nominal disetujui tidak boleh bernilai negatif.',
+            'file_surat_tugas.file' => 'Berkas surat tugas harus berupa berkas file dokumen yang valid.',
             'file_surat_tugas.mimes' => 'Berkas surat tugas bertandatangan harus berformat PDF.',
             'file_surat_tugas.max' => 'Ukuran berkas surat tugas maksimal 10MB.',
         ];

@@ -51,8 +51,10 @@ class UpdateSuratTugasRequest extends FormRequest
             'jenis_transportasi_id.exists' => 'Moda transportasi tidak valid.',
             'tanggal_kembali.after_or_equal' => 'Tanggal kembali harus sama atau setelah tanggal berangkat.',
             'tanggal_selesai.after_or_equal' => 'Tanggal selesai kegiatan harus sama atau setelah tanggal mulai.',
+            'file_surat_tugas.file' => 'Berkas surat tugas harus berupa berkas file dokumen yang valid.',
             'file_surat_tugas.mimes' => 'Berkas surat tugas resmi wajib berformat PDF.',
             'file_surat_tugas.max' => 'Ukuran berkas surat tugas maksimal 10MB.',
+            'file_lpj.file' => 'Berkas laporan LPJ harus berupa berkas file dokumen yang valid.',
             'file_lpj.mimes' => 'Berkas laporan LPJ wajib berformat PDF.',
             'file_lpj.max' => 'Ukuran berkas laporan LPJ maksimal 10MB.',
         ];
