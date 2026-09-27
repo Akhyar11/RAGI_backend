@@ -22,6 +22,7 @@ class StorePegawaiRequest extends FormRequest
         return [
             'user_id' => 'nullable|exists:core_users,id|unique:simpeg_pegawai,user_id',
             'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
+            'jabatan_fungsional_id' => 'nullable|exists:simpeg_jabatan_fungsional_akademik,id',
             'nip' => 'required|string|unique:simpeg_pegawai,nip',
             'nidn' => 'required|string|unique:simpeg_pegawai,nidn',
             'nuptk' => 'required|string|unique:simpeg_pegawai,nuptk',
@@ -62,6 +63,7 @@ class StorePegawaiRequest extends FormRequest
             'nuptk' => 'NUPTK',
             'nama_lengkap' => 'Nama Lengkap',
             'tanggal_masuk' => 'Tanggal Masuk',
+            'jabatan_fungsional_id' => 'Jabatan Fungsional Akademik',
             'shift_template_id' => 'Shift Kerja (Jadwal Presensi)',
         ];
     }

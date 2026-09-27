@@ -77,7 +77,7 @@ class PegawaiController extends Controller
     public function me(Request $request)
     {
         $user = $request->user();
-        $pegawai = Pegawai::with(['unitKerja', 'riwayatJabatan.jabatan', 'riwayatJabatan.jabatanFungsional', 'riwayatPendidikan', 'dosen.programStudi'])
+        $pegawai = Pegawai::with(['unitKerja', 'jabatanFungsional', 'riwayatJabatan.jabatan', 'riwayatJabatan.jabatanFungsional', 'riwayatPendidikan', 'dosen.programStudi'])
             ->where('user_id', $user->id)
             ->first();
 
@@ -96,7 +96,7 @@ class PegawaiController extends Controller
                 'telepon' => '081234567890',
                 'alamat' => 'Jl. Merdeka No. 45, Bandung',
             ]);
-            $pegawai->load(['unitKerja', 'riwayatJabatan', 'riwayatPendidikan']);
+            $pegawai->load(['unitKerja', 'jabatanFungsional', 'riwayatJabatan', 'riwayatPendidikan']);
         }
 
         return response()->json([
@@ -158,6 +158,7 @@ class PegawaiController extends Controller
         $pegawai = Pegawai::with([
             'user.roles',
             'unitKerja',
+            'jabatanFungsional',
             'shiftTemplate',
             'officeLocation',
             'additionalOffices',

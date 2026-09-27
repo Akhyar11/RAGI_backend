@@ -19,6 +19,7 @@ class Pegawai extends Model
     protected $fillable = [
         'user_id',
         'unit_kerja_id',
+        'jabatan_fungsional_id',
         'office_location_id',
         'shift_template_id',
         'nip',
@@ -54,6 +55,7 @@ class Pegawai extends Model
     ];
 
     protected $casts = [
+        'jabatan_fungsional_id' => 'integer',
         'tanggal_lahir' => 'date:Y-m-d',
         'tanggal_masuk' => 'date:Y-m-d',
         'tanggal_keluar' => 'date:Y-m-d',
@@ -206,6 +208,11 @@ class Pegawai extends Model
     public function unitKerja()
     {
         return $this->belongsTo(UnitKerja::class, 'unit_kerja_id');
+    }
+
+    public function jabatanFungsional()
+    {
+        return $this->belongsTo(JabatanFungsionalAkademik::class, 'jabatan_fungsional_id');
     }
 
     public function officeLocation()

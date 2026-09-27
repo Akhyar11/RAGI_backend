@@ -15,7 +15,7 @@ class PegawaiService
 {
     public function getFiltered(array $filters = [])
     {
-        $query = Pegawai::with(['user', 'user.roles', 'unitKerja', 'shiftTemplate', 'officeLocation', 'riwayatJabatan.jabatan', 'riwayatPendidikan', 'dosen', 'dosen.programStudi', 'roles']);
+        $query = Pegawai::with(['user', 'user.roles', 'unitKerja', 'jabatanFungsional', 'shiftTemplate', 'officeLocation', 'riwayatJabatan.jabatan', 'riwayatPendidikan', 'dosen', 'dosen.programStudi', 'roles']);
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];

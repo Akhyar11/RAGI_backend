@@ -33,6 +33,7 @@ class UpdatePegawaiRequest extends FormRequest
         return [
             'user_id' => 'nullable|exists:core_users,id|unique:simpeg_pegawai,user_id,' . $id,
             'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
+            'jabatan_fungsional_id' => 'nullable|exists:simpeg_jabatan_fungsional_akademik,id',
             'nip' => 'nullable|string|unique:simpeg_pegawai,nip,' . $id,
             'nidn' => 'nullable|string|unique:simpeg_pegawai,nidn,' . $id,
             'nuptk' => 'nullable|string|unique:simpeg_pegawai,nuptk,' . $id,
@@ -70,6 +71,7 @@ class UpdatePegawaiRequest extends FormRequest
             'nidn' => 'NIDN',
             'nuptk' => 'NUPTK',
             'nama_lengkap' => 'Nama Lengkap',
+            'jabatan_fungsional_id' => 'Jabatan Fungsional Akademik',
             'shift_template_id' => 'Shift Kerja (Jadwal Presensi)',
         ];
     }
