@@ -274,9 +274,9 @@ class SpmbReferralService
      * Buat bukti pencairan (payout) dan tandai referral terkait.
      * Status referral TIDAK diubah (tetap qualified), hanya ditandai payout.
      */
-    public function createPayout(User $referrer, ?string $keterangan = null): PayoutReferral
+    public function createPayout(User $referrer, array $data = []): PayoutReferral
     {
-        return DB::transaction(function () use ($referrer, $keterangan) {
+        return DB::transaction(function () use ($referrer, $data) {
             $usages = $this->eligiblePayoutQuery($referrer)->lockForUpdate()->get();
             $perReferral = $this->rewardPerReferral($referrer);
 
@@ -286,7 +286,11 @@ class SpmbReferralService
                 'total_nominal' => $perReferral * $usages->count(),
                 'nomor_bukti' => 'PAYOUT-'.now()->format('Ymd').'-'.strtoupper(Str::random(6)),
                 'generated_at' => now(),
-                'keterangan' => $keterangan,
+                'keterangan' => $data['keterangan'] ?? null,
+                'status' => PayoutReferral::STATUS_MENUNGGU_VERIFIKASI,
+                'nama_bank' => $data['nama_bank'] ?? null,
+                'nomor_rekening' => $data['nomor_rekening'] ?? null,
+                'nama_pemilik_rekening' => $data['nama_pemilik_rekening'] ?? null,
             ]);
 
             if ($usages->isNotEmpty()) {

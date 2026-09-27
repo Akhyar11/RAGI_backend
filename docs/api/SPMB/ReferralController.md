@@ -276,10 +276,16 @@ Envelope standar (`data`, `meta`, `filters`). Statistik & nominal bisa dicairkan
 | Field | Type | Required | Deskripsi |
 |---|---|---|---|
 | `keterangan` | string | ❌ | Catatan (maks 255) |
+| `nama_bank` | string | ✅ | Nama bank tujuan (maks 100) |
+| `nomor_rekening` | string | ✅ | Nomor rekening tujuan (maks 60) |
+| `nama_pemilik_rekening` | string | ✅ | Nama pemilik rekening (maks 150) |
 
 ```json
 {
-    "keterangan": "Pencairan reward referral periode September 2026"
+    "keterangan": "Pencairan reward referral periode September 2026",
+    "nama_bank": "BCA",
+    "nomor_rekening": "1234567890",
+    "nama_pemilik_rekening": "Budi Santoso"
 }
 ```
 
@@ -289,9 +295,11 @@ Envelope standar (`data`, `meta`, `filters`). Statistik & nominal bisa dicairkan
 {
     "status": "success",
     "message": "Bukti pencairan referral berhasil dibuat.",
-    "data": { "id": 3, "nomor_bukti": "PAYOUT-20260926-AB12CD", "referral_count": 1, "total_nominal": 50000, "generated_at": "2026-09-26T09:00:00.000000Z" }
+    "data": { "id": 3, "nomor_bukti": "PAYOUT-20260926-AB12CD", "status": "menunggu_verifikasi", "referral_count": 1, "total_nominal": 50000, "generated_at": "2026-09-26T09:00:00.000000Z" }
 }
 ```
+
+**Payout berstatus `menunggu_verifikasi` dan otomatis menjadi invoice di SIKEU** (`GET /api/v1/sikeu/referral-pencairan`) untuk diverifikasi lalu dibayar oleh admin keuangan.
 
 ### Response Error
 

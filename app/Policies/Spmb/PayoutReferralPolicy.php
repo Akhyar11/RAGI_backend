@@ -9,7 +9,8 @@ class PayoutReferralPolicy
 {
     /**
      * Pengguna hanya boleh melihat/mengunduh payout miliknya sendiri.
-     * Panitia SPMB (permission laporan) boleh melihat semua.
+     * Panitia SPMB (permission laporan) dan admin keuangan
+     * (verifikator invoice) boleh melihat semua.
      */
     public function view(User $user, PayoutReferral $payout): bool
     {
@@ -17,6 +18,10 @@ class PayoutReferralPolicy
             return true;
         }
 
-        return $user->can('spmb.laporan.read');
+        if ($user->can('spmb.laporan.read')) {
+            return true;
+        }
+
+        return $user->can('sikeu.pengeluaran.read');
     }
 }

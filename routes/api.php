@@ -803,6 +803,15 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::post('callback/spmb/{calonMahasiswaId}/simulate', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'simulateSpmbPayment']);
 });
 
+// Pencairan Reward Referral SPMB (invoice masuk untuk admin keuangan).
+Route::middleware(['auth:api', 'can:sikeu.pengeluaran.read'])->prefix('v1/sikeu')->group(function () {
+    Route::get('referral-pencairan', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'index']);
+    Route::get('referral-pencairan/{id}', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'show']);
+    Route::post('referral-pencairan/{id}/verify', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'verify']);
+    Route::post('referral-pencairan/{id}/pay', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'pay']);
+    Route::post('referral-pencairan/{id}/reject', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'reject']);
+});
+
 // Alias for direct non-v1 calls (backward compatibility with axios client baseURL)
 Route::middleware('auth:api')->prefix('sikeu')->group(function () {
     Route::get('master/gaji-pegawai', [App\Http\Controllers\Sikeu\MasterGajiPegawaiController::class, 'index']);
