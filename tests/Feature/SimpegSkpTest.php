@@ -29,7 +29,13 @@ class SimpegSkpTest extends TestCase
         parent::setUp();
         $this->setUpPassport();
 
-        $this->seed(SimpegSkpMasterSeeder::class);
+        $this->kategoriPendidikan = MasterKategoriSkp::create([
+            'nama' => 'Tridharma: Pendidikan dan Pengajaran',
+            'kode' => 'PENDIDIKAN',
+            'deskripsi' => 'Pengajaran, bimbingan, dan evaluasi pembelajaran',
+            'urutan' => 1,
+            'is_active' => true,
+        ]);
 
         $this->admin = User::factory()->create([
             'id' => 1,
@@ -60,7 +66,8 @@ class SimpegSkpTest extends TestCase
             'tempat_lahir' => 'Surabaya',
             'jenis_kelamin' => 'L',
             'status_pegawai' => 'tetap',
-            'status_aktif' => true,
+            'status' => 'aktif',
+            'is_active' => true,
             'tanggal_masuk' => '2015-04-01',
         ]);
 
@@ -80,7 +87,8 @@ class SimpegSkpTest extends TestCase
             'tempat_lahir' => 'Bandung',
             'jenis_kelamin' => 'L',
             'status_pegawai' => 'tetap',
-            'status_aktif' => true,
+            'status' => 'aktif',
+            'is_active' => true,
             'tanggal_masuk' => '2000-03-01',
         ]);
 
@@ -100,6 +108,9 @@ class SimpegSkpTest extends TestCase
                     'pejabat_penilai',
                 ],
             ]);
+
+        $this->assertNotEmpty($response->json('data.pejabat_penilai'));
+        $this->assertCount(2, $response->json('data.pejabat_penilai'));
     }
 
     public function test_store_creates_skp_with_items_in_draft(): void

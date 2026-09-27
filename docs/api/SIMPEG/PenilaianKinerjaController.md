@@ -49,7 +49,14 @@ Mengambil data master kategori SKP yang aktif dan daftar calon pejabat penilai a
         "id": 10,
         "nama_lengkap": "Dr. Ir. Budi Santoso, M.Kom.",
         "nip": "198001012005011001",
-        "jabatan_terakhir": "Dekan Fakultas Ilmu Komputer"
+        "unit_kerja": {
+          "id": 2,
+          "nama": "Fakultas Teknik & Ilmu Komputer"
+        },
+        "jabatan_fungsional": {
+          "id": 4,
+          "nama": "Lektor Kepala"
+        }
       }
     ]
   }
