@@ -168,22 +168,20 @@ class MasterJenisCutiController extends Controller
 
         $master = MasterJenisCuti::findOrFail($id);
 
-        // Check if there are active pengajuan cuti records
-        $inUse = $master->pengajuanCuti()->exists();
-        if ($inUse) {
-            // Soft delete
-            $master->delete();
+        // Periksa apakah master jenis cuti sudah pernah digunakan dalam pengajuan cuti
+        if ($master->pengajuanCuti()->exists()) {
             return response()->json([
-                'status' => 'success',
-                'message' => 'Master jenis cuti dinonaktifkan (soft deleted) karena telah memiliki riwayat permohonan.',
-            ]);
+                'status' => 'error',
+                'message' => "Master jenis cuti '{$master->nama}' tidak dapat dihapus karena masih digunakan dalam riwayat pengajuan cuti pegawai.",
+            ], 422);
         }
 
+        $nama = $master->nama;
         $master->delete();
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Master jenis cuti berhasil dihapus.',
+            'message' => "Master jenis cuti '{$nama}' berhasil dihapus.",
         ]);
     }
 }

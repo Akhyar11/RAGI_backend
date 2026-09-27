@@ -100,11 +100,20 @@ class JabatanController extends Controller
         }
 
         $jabatan = Jabatan::findOrFail($id);
+
+        if ($jabatan->riwayatJabatan()->exists()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Jabatan '{$jabatan->nama}' tidak dapat dihapus karena masih digunakan dalam riwayat jabatan pegawai."
+            ], 422);
+        }
+
+        $nama = $jabatan->nama;
         $jabatan->delete();
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Jabatan berhasil dihapus.'
+            'message' => "Jabatan '{$nama}' berhasil dihapus."
         ]);
     }
 }

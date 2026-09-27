@@ -242,4 +242,105 @@ class SimpegUnitKerjaDanJabatanTest extends TestCase
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['nama']);
     }
+
+    public function test_can_delete_unit_kerja_when_not_in_use()
+    {
+        $unit = UnitKerja::create([
+            'kode' => 'UNIT-DEL-01',
+            'nama' => 'Unit Sementara',
+            'tipe' => 'unit',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->deleteJson("/api/simpeg/unit-kerja/{$unit->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('status', 'success');
+
+        $this->assertDatabaseMissing('simpeg_unit_kerja', [
+            'id' => $unit->id,
+        ]);
+    }
+
+    public function test_cannot_delete_unit_kerja_when_has_children()
+    {
+        $parent = UnitKerja::create([
+            'kode' => 'PARENT-01',
+            'nama' => 'Fakultas Induk',
+            'tipe' => 'fakultas',
+            'is_active' => true,
+        ]);
+
+        UnitKerja::create([
+            'induk_id' => $parent->id,
+            'kode' => 'CHILD-01',
+            'nama' => 'Prodi Cabang',
+            'tipe' => 'prodi',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->deleteJson("/api/simpeg/unit-kerja/{$parent->id}");
+
+        $response->assertStatus(422);
+
+        $this->assertDatabaseHas('simpeg_unit_kerja', [
+            'id' => $parent->id,
+        ]);
+    }
+
+    public function test_can_delete_jabatan_when_not_in_use()
+    {
+        $jabatan = Jabatan::create([
+            'nama' => 'Koordinator Lab IT',
+            'tipe' => 'struktural',
+            'level_jabatan' => 3,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->deleteJson("/api/simpeg/jabatan/{$jabatan->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('status', 'success');
+
+        $this->assertDatabaseMissing('simpeg_jabatan', [
+            'id' => $jabatan->id,
+        ]);
+    }
+
+    public function test_cannot_delete_jabatan_when_used_in_riwayat_jabatan()
+    {
+        $jabatan = Jabatan::create([
+            'nama' => 'Kepala Biro Kepegawaian',
+            'tipe' => 'struktural',
+            'level_jabatan' => 2,
+            'is_active' => true,
+        ]);
+
+        $pegawai = \App\Models\Simpeg\Pegawai::create([
+            'user_id' => $this->admin->id,
+            'nip' => 'PEG-TEST-001',
+            'nama_lengkap' => 'Dr. Test Pegawai',
+            'is_active' => true,
+        ]);
+
+        \App\Models\Simpeg\RiwayatJabatan::create([
+            'pegawai_id' => $pegawai->id,
+            'jabatan_id' => $jabatan->id,
+            'mulai_jabatan' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->deleteJson("/api/simpeg/jabatan/{$jabatan->id}");
+
+        $response->assertStatus(422)
+            ->assertJsonPath('status', 'error');
+
+        $this->assertDatabaseHas('simpeg_jabatan', [
+            'id' => $jabatan->id,
+        ]);
+    }
 }

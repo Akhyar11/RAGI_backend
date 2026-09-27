@@ -104,11 +104,12 @@ class UnitKerjaController extends Controller
         }
 
         $unitKerja = UnitKerja::findOrFail($id);
+        $nama = $unitKerja->nama;
         $this->unitKerjaService->delete($unitKerja);
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Unit Kerja berhasil dihapus.'
+            'message' => "Unit Kerja '{$nama}' berhasil dihapus."
         ]);
     }
 }

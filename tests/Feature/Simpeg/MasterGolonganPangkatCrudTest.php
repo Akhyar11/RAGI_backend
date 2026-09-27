@@ -123,7 +123,33 @@ class MasterGolonganPangkatCrudTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('status', 'success');
 
-        $this->assertSoftDeleted('simpeg_master_golongan_pangkat', [
+        $this->assertDatabaseMissing('simpeg_master_golongan_pangkat', [
+            'id' => $golongan->id,
+        ]);
+    }
+
+    public function test_cannot_delete_master_golongan_pangkat_when_in_use()
+    {
+        $golongan = MasterGolonganPangkat::create([
+            'kode' => 'III/d',
+            'nama' => 'Penata Tingkat I',
+            'urutan' => 5,
+            'is_active' => true,
+        ]);
+
+        \App\Models\Simpeg\JabatanFungsionalAkademik::create([
+            'nama' => 'Lektor Kepala Khusus',
+            'kode' => 'LK-01',
+            'golongan_pangkat_id' => $golongan->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->deleteJson("/api/simpeg/master-golongan-pangkat/{$golongan->id}");
+
+        $response->assertStatus(422);
+
+        $this->assertDatabaseHas('simpeg_master_golongan_pangkat', [
             'id' => $golongan->id,
         ]);
     }

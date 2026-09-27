@@ -306,7 +306,7 @@
 ```json
 {
     "status": "success",
-    "message": "Unit Kerja berhasil dihapus."
+    "message": "Unit Kerja 'Unit Sementara' berhasil dihapus."
 }
 ```
 
@@ -336,4 +336,17 @@
 }
 ```
 
-> **Catatan**: Operasi DELETE melakukan hard-delete atau pembersihan data unit kerja. Jika unit kerja memiliki relasi anak (`children`) atau riwayat jabatan/pegawai yang terikat, sistem akan memvalidasi integritas relasi untuk mencegah *orphaned records*. Tidak ada data sensitif atau password yang dikembalikan dalam response ini.
+**422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "id": [
+            "Unit kerja 'Fakultas Teknik' tidak dapat dihapus karena masih memiliki sub-unit kerja di bawahnya."
+        ]
+    }
+}
+```
+
+> **Catatan**: Operasi DELETE menerapkan **hard-delete** dengan proteksi integritas relasi. Apabila unit kerja masih memiliki sub-unit kerja (`children`), data pegawai (`pegawai`), atau formasi jabatan (`jabatan`), penghapusan akan ditolak dengan kode status 422 untuk mencegah rusaknya integritas struktural organisasi. Jika tidak ada relasi, unit kerja akan dihapus permanen.

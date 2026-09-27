@@ -311,7 +311,7 @@
 ```json
 {
     "status": "success",
-    "message": "Jabatan berhasil dihapus."
+    "message": "Jabatan 'Kepala Biro Kepegawaian' berhasil dihapus."
 }
 ```
 
@@ -341,4 +341,12 @@
 }
 ```
 
-> **Catatan**: Operasi DELETE menghapus formasi jabatan (hard-delete / cascade). Apabila jabatan masih terikat dengan pegawai aktif atau riwayat penugasan SK pegawai, sistem memblokir penghapusan untuk menjaga konsistensi data riwayat karir pegawai. Tidak ada data rahasia/password dalam payload response ini.
+**422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "Jabatan 'Kepala Biro Kepegawaian' tidak dapat dihapus karena masih digunakan dalam riwayat jabatan pegawai."
+}
+```
+
+> **Catatan**: Operasi DELETE menghapus formasi jabatan secara fisik (*hard-delete*). Apabila jabatan masih terikat dengan riwayat jabatan pegawai (`simpeg_riwayat_jabatan`), sistem memblokir penghapusan dengan status 422 untuk menjaga konsistensi data riwayat karir kepegawaian.
