@@ -32,7 +32,7 @@ class GetReferralUsagesRequest extends FormRequest
             ],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'sort_by' => ['nullable', 'string', Rule::in(['created_at', 'status', 'referral_code'])],
+            'sort_by' => ['nullable', 'string', Rule::in(['created_at', 'status', 'referral_code', 'nama_pendaftar', 'gelombang'])],
             'sort_order' => ['nullable', 'string', Rule::in(['asc', 'desc'])],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];

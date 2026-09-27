@@ -227,7 +227,7 @@ Controller ini mengelola fitur **Kode Referral (Rujukan) Mahasiswa Baru**. Setia
 | `status` | string | ❌ | — | `claimed` / `qualified` / `rewarded` / `cancelled` |
 | `start_date` | date | ❌ | — | Filter dibuat sejak tanggal |
 | `end_date` | date | ❌ | — | Filter dibuat sampai tanggal |
-| `sort_by` | string | ❌ | `created_at` | `created_at` / `status` / `referral_code` |
+| `sort_by` | string | ❌ | `created_at` | `created_at` / `status` / `referral_code` / `nama_pendaftar` / `gelombang` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 
