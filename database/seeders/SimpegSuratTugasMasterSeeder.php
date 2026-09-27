@@ -45,6 +45,7 @@ class SimpegSuratTugasMasterSeeder extends Seeder
             [
                 'kode' => 'MOBIL_DINAS',
                 'nama' => 'Mobil Dinas Kampus',
+                'is_kendaraan_kampus' => true,
                 'deskripsi' => 'Armada mobil operasional kampus',
                 'urutan' => 1,
                 'is_active' => true,
@@ -52,6 +53,7 @@ class SimpegSuratTugasMasterSeeder extends Seeder
             [
                 'kode' => 'PESAWAT',
                 'nama' => 'Pesawat Terbang',
+                'is_kendaraan_kampus' => false,
                 'deskripsi' => 'Penerbangan komersil',
                 'urutan' => 2,
                 'is_active' => true,
@@ -59,6 +61,7 @@ class SimpegSuratTugasMasterSeeder extends Seeder
             [
                 'kode' => 'KERETA',
                 'nama' => 'Kereta Api',
+                'is_kendaraan_kampus' => false,
                 'deskripsi' => 'Transportasi kereta api antar kota',
                 'urutan' => 3,
                 'is_active' => true,
