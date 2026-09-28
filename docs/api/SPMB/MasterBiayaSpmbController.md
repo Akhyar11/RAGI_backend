@@ -403,6 +403,8 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 
 ## [PUT] /api/spmb/master/biaya/{id}
 
+> **Sinkronisasi item**: daftar `items` yang dikirim menjadi acuan final. Item yang **tidak ada** di payload akan **dihapus** dari rincian (hanya komponen yang dipilih yang tersimpan), lalu `total_biaya` dihitung ulang.
+
 ### Request Body
 
 ```json

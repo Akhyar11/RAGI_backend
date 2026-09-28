@@ -222,6 +222,15 @@ class MasterBiayaService
             ]);
 
             if (isset($data['items'])) {
+                $komponenIds = collect($data['items'])->pluck('komponen_biaya_id')->all();
+
+                // Hapus item yang tidak lagi dipilih pada rincian master biaya.
+                MasterBiayaItem::where('master_biaya_id', $biaya->id)
+                    ->whereNotIn('komponen_biaya_id', $komponenIds)
+                    ->get()
+                    ->each
+                    ->delete();
+
                 $total = 0;
                 foreach ($data['items'] as $item) {
                     $nominal = (float) $item['nominal'];
