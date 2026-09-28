@@ -25,6 +25,7 @@ class UpdateMasterJenisTransportasiRequest extends FormRequest
                 'max:50',
                 Rule::unique('simpeg_master_jenis_transportasi', 'kode')->ignore($id),
             ],
+            'is_kendaraan_kampus' => 'nullable|boolean',
             'deskripsi' => 'nullable|string',
             'urutan' => 'nullable|integer|min:0',
             'is_active' => 'nullable|boolean',

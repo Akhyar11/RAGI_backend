@@ -49,15 +49,15 @@ class SuratTugas extends Model
     ];
 
     protected $casts = [
-        'tanggal_berangkat' => 'date',
-        'tanggal_kembali' => 'date',
-        'tanggal_mulai' => 'date',
-        'tanggal_selesai' => 'date',
+        'tanggal_berangkat' => 'date:Y-m-d',
+        'tanggal_kembali' => 'date:Y-m-d',
+        'tanggal_mulai' => 'date:Y-m-d',
+        'tanggal_selesai' => 'date:Y-m-d',
         'estimasi_biaya' => 'decimal:2',
         'nominal_disetujui' => 'decimal:2',
         'biaya_realisasi' => 'decimal:2',
-        'tanggal_upload_lpj' => 'datetime',
-        'approved_at' => 'datetime',
+        'tanggal_upload_lpj' => 'datetime:Y-m-d H:i:s',
+        'approved_at' => 'datetime:Y-m-d H:i:s',
     ];
 
     protected $appends = [

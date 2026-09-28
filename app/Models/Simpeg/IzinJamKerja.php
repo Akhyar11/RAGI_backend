@@ -27,8 +27,8 @@ class IzinJamKerja extends Model
     ];
 
     protected $casts = [
-        'tanggal' => 'date',
-        'approved_at' => 'datetime',
+        'tanggal' => 'date:Y-m-d',
+        'approved_at' => 'datetime:Y-m-d H:i:s',
     ];
 
     protected $appends = [

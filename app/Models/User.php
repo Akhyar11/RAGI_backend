@@ -165,9 +165,12 @@ class User extends Authenticatable
             return true;
         }
         
-        // Admin adalah user yang memiliki setidaknya satu permission "update", "delete", atau "manage" (tindakan di atas read/create biasa)
-        return $this->roles()->whereHas('permissions', function($q) {
-            $q->whereIn('action', ['update', 'delete', 'approve', 'manage']);
+        // Admin adalah user yang memiliki role administratif (bukan dosen, tendik, atau mahasiswa)
+        return $this->roles()->where(function ($q) {
+            $q->where('slug', 'admin')
+              ->orWhere('slug', 'like', 'admin_%')
+              ->orWhere('slug', 'like', '%_admin')
+              ->orWhere('slug', 'operator_sdm');
         })->exists();
     }
 

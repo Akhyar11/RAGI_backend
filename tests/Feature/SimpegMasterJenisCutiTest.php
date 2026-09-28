@@ -228,4 +228,61 @@ class SimpegMasterJenisCutiTest extends TestCase
                 ]
             ]);
     }
+
+    public function test_can_delete_master_jenis_cuti_when_not_in_use()
+    {
+        $master = MasterJenisCuti::create([
+            'nama' => 'Cuti Menikah Anak',
+            'kode' => 'CUTI_NIKAH_ANAK',
+            'tipe_durasi' => 'ditetapkan',
+            'durasi_hari' => 3,
+            'satuan' => 'hari',
+            'lampiran_wajib' => false,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->deleteJson("/api/simpeg/master-jenis-cuti/{$master->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('status', 'success');
+
+        $this->assertDatabaseMissing('simpeg_master_jenis_cuti', [
+            'id' => $master->id,
+        ]);
+    }
+
+    public function test_cannot_delete_master_jenis_cuti_when_in_use()
+    {
+        $master = MasterJenisCuti::create([
+            'nama' => 'Cuti Melahirkan',
+            'kode' => 'CUTI_MELAHIRKAN',
+            'tipe_durasi' => 'ditetapkan',
+            'durasi_hari' => 90,
+            'satuan' => 'hari',
+            'lampiran_wajib' => true,
+            'is_active' => true,
+        ]);
+
+        \App\Models\Simpeg\PengajuanCuti::create([
+            'pegawai_id' => $this->pegawai->id,
+            'master_jenis_cuti_id' => $master->id,
+            'jenis_cuti' => 'Cuti Melahirkan',
+            'tanggal_mulai' => '2026-10-01',
+            'tanggal_selesai' => '2026-12-30',
+            'jumlah_hari' => 90,
+            'alasan' => 'Melahirkan anak pertama',
+            'status' => 'diajukan',
+        ]);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->deleteJson("/api/simpeg/master-jenis-cuti/{$master->id}");
+
+        $response->assertStatus(422)
+            ->assertJsonPath('status', 'error');
+
+        $this->assertDatabaseHas('simpeg_master_jenis_cuti', [
+            'id' => $master->id,
+        ]);
+    }
 }

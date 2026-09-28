@@ -23,4 +23,9 @@ class MasterJenisSertifikasi extends Model
     {
         return $this->hasMany(SertifikasiDosen::class, 'jenis_sertifikasi_id');
     }
+
+    public function riwayatSertifikasi()
+    {
+        return $this->hasMany(SertifikasiDosen::class, 'jenis_sertifikasi_id');
+    }
 }

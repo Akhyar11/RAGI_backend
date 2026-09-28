@@ -32,14 +32,21 @@ class UsulanJafungController extends Controller
             'jafungTujuan'
         ]);
 
+        $user = $request->user();
+        $isVerifier = $user->hasPermission('simpeg.usulan_jafung.verify') ||
+                      $user->hasRole('superadmin') ||
+                      $user->hasRole('admin');
+
         // Filter based on role / user scope
-        if ($request->has('pegawai_id') && !empty($request->pegawai_id)) {
-            $query->where('pegawai_id', $request->pegawai_id);
-        } elseif (!$request->user()->hasPermission('simpeg.usulan_jafung.verify')) {
-            $pegId = $request->user()->pegawai?->id;
+        if (!$isVerifier) {
+            $pegId = $user->pegawai?->id;
             if ($pegId) {
                 $query->where('pegawai_id', $pegId);
+            } else {
+                $query->whereRaw('1 = 0');
             }
+        } elseif ($request->filled('pegawai_id')) {
+            $query->where('pegawai_id', $request->pegawai_id);
         }
 
         // Search
@@ -100,10 +107,10 @@ class UsulanJafungController extends Controller
 
     public function show(Request $request, $id): JsonResponse
     {
-        $canRead = $request->user()->hasPermission('simpeg.usulan_jafung.read') ||
-                   $request->user()->hasPermission('simpeg.usulan_jafung.verify') ||
-                   $request->user()->hasRole('superadmin') ||
-                   $request->user()->hasRole('admin');
+        $user = $request->user();
+        $isVerifier = $user->hasPermission('simpeg.usulan_jafung.verify') ||
+                      $user->hasRole('superadmin') ||
+                      $user->hasRole('admin');
 
         $usulan = UsulanJafung::with([
             'pegawai.unitKerja',
@@ -112,10 +119,10 @@ class UsulanJafungController extends Controller
             'jafungTujuan'
         ])->findOrFail($id);
 
-        if (!$canRead) {
-            $pegId = $request->user()->pegawai?->id;
-            if ($usulan->pegawai_id !== $pegId) {
-                throw new AuthorizationException('Akses Ditolak: Anda tidak memiliki izin untuk melihat usulan jafung ini.');
+        if (!$isVerifier) {
+            $pegId = $user->pegawai?->id;
+            if (!$pegId || $usulan->pegawai_id !== $pegId) {
+                throw new AuthorizationException('Akses Ditolak: Anda hanya berhak melihat usulan jafung milik sendiri.');
             }
         }
 
@@ -128,7 +135,24 @@ class UsulanJafungController extends Controller
 
     public function store(StoreUsulanJafungRequest $request): JsonResponse
     {
-        $usulan = $this->usulanJafungService->create($request->validated());
+        $user = $request->user();
+        $isVerifier = $user->hasPermission('simpeg.usulan_jafung.verify') ||
+                      $user->hasRole('superadmin') ||
+                      $user->hasRole('admin');
+
+        $validated = $request->validated();
+        if (!$isVerifier) {
+            $pegId = $user->pegawai?->id;
+            if (!$pegId) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Akun Anda belum terhubung dengan data Pegawai.',
+                ], 403);
+            }
+            $validated['pegawai_id'] = $pegId;
+        }
+
+        $usulan = $this->usulanJafungService->create($validated);
 
         return response()->json([
             'status' => 'success',
@@ -139,15 +163,23 @@ class UsulanJafungController extends Controller
 
     public function update(UpdateUsulanJafungRequest $request, $id): JsonResponse
     {
-        $canManage = $request->user()->hasPermission('simpeg.usulan_jafung.update') ||
-                     $request->user()->hasPermission('simpeg.usulan_jafung.verify');
+        $user = $request->user();
+        $isVerifier = $user->hasPermission('simpeg.usulan_jafung.verify') ||
+                      $user->hasRole('superadmin') ||
+                      $user->hasRole('admin');
 
         $usulan = UsulanJafung::findOrFail($id);
 
-        if (!$canManage) {
-            $pegId = $request->user()->pegawai?->id;
-            if ($usulan->pegawai_id !== $pegId) {
+        if (!$isVerifier) {
+            $pegId = $user->pegawai?->id;
+            if (!$pegId || $usulan->pegawai_id !== $pegId) {
                 throw new AuthorizationException('Akses Ditolak: Anda tidak dapat mengubah usulan ini.');
+            }
+            if (!in_array($usulan->status_usulan, ['draft', 'perbaikan', 'submitted'], true)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Usulan jafung yang sudah diproses atau disetujui tidak dapat diubah.',
+                ], 422);
             }
         }
 
@@ -162,14 +194,27 @@ class UsulanJafungController extends Controller
 
     public function destroy(Request $request, $id): JsonResponse
     {
-        $canDelete = $request->user()->hasPermission('simpeg.usulan_jafung.delete');
+        $user = $request->user();
+        $isVerifier = $user->hasPermission('simpeg.usulan_jafung.verify') ||
+                      $user->hasRole('superadmin') ||
+                      $user->hasRole('admin');
+
+        if (!$user->hasPermission('simpeg.usulan_jafung.delete') && !$isVerifier) {
+            throw new AuthorizationException('Anda tidak memiliki izin menghapus usulan jafung.');
+        }
 
         $usulan = UsulanJafung::findOrFail($id);
 
-        if (!$canDelete) {
-            $pegId = $request->user()->pegawai?->id;
-            if ($usulan->pegawai_id !== $pegId) {
+        if (!$isVerifier) {
+            $pegId = $user->pegawai?->id;
+            if (!$pegId || $usulan->pegawai_id !== $pegId) {
                 throw new AuthorizationException('Akses Ditolak: Anda tidak dapat menghapus usulan ini.');
+            }
+            if (!in_array($usulan->status_usulan, ['draft', 'perbaikan'], true)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya usulan jafung berstatus draft atau perbaikan yang dapat dibatalkan/dihapus.',
+                ], 422);
             }
         }
 

@@ -16,6 +16,7 @@ class StoreMasterJenisTransportasiRequest extends FormRequest
         return [
             'nama' => 'required|string|max:100',
             'kode' => 'required|string|max:50|unique:simpeg_master_jenis_transportasi,kode',
+            'is_kendaraan_kampus' => 'nullable|boolean',
             'deskripsi' => 'nullable|string',
             'urutan' => 'nullable|integer|min:0',
             'is_active' => 'nullable|boolean',

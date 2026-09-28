@@ -22,6 +22,13 @@ class UsulanJafungService
                 $data['file_sk_hasil'] = $path;
             }
 
+            if (empty($data['jafung_asal_id']) && !empty($data['pegawai_id'])) {
+                $pegawai = \App\Models\Simpeg\Pegawai::find($data['pegawai_id']);
+                if ($pegawai && $pegawai->jabatan_fungsional_id) {
+                    $data['jafung_asal_id'] = $pegawai->jabatan_fungsional_id;
+                }
+            }
+
             if (empty($data['status_usulan'])) {
                 $data['status_usulan'] = 'submitted';
             }

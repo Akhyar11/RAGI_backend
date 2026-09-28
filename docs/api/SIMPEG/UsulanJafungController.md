@@ -1,6 +1,6 @@
 # UsulanJafungController
 
-> **Modul**: SIMPEG / **Base URL**: /api/simpeg/usulan-jafung / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-19
+> **Modul**: SIMPEG / **Base URL**: /api/simpeg/usulan-jafung / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-28
 
 Modul ini mengelola proses usulan kenaikan Jabatan Fungsional (Jafung) dosen, validasi angka kredit, verifikasi dokumen SK hasil, catatan reviewer/tim penilai, serta soft delete usulan.
 

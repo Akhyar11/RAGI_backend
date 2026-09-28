@@ -21,6 +21,11 @@ class PresensiPeriode extends Model
         'created_by',
     ];
 
+    protected $casts = [
+        'tanggal_awal' => 'date:Y-m-d',
+        'tanggal_akhir' => 'date:Y-m-d',
+    ];
+
     public function presensiPegawai()
     {
         return $this->hasMany(PresensiPegawai::class, 'presensi_periode_id');

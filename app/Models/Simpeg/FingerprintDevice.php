@@ -29,7 +29,7 @@ class FingerprintDevice extends Model
     protected $casts = [
         'port' => 'integer',
         'is_active' => 'boolean',
-        'last_sync_at' => 'datetime',
+        'last_sync_at' => 'datetime:Y-m-d H:i:s',
     ];
 
     public function officeLocation(): BelongsTo

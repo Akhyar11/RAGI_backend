@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1` dan `/api/simpeg`  
 > **Autentikasi**: Bearer Token (Passport/Sanctum) / X-API-KEY (Integrasi)  
 > **Dibuat**: 2026-09-14  
-> **Diperbarui**: 2026-09-18 (jendela `max_late_clock_in_minutes` + shift lintas hari 22:00-06:00)
+> **Diperbarui**: 2026-09-28
 
 Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Python port 8001), geofencing Haversine, dan jadwal shift dinamis yang digunakan oleh aplikasi **Mobile Android (Flutter)** dan dashboard **SIMPEG Web**.
 

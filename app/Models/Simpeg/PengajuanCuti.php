@@ -27,6 +27,11 @@ class PengajuanCuti extends Model
         'file_pendukung',
     ];
 
+    protected $casts = [
+        'tanggal_mulai' => 'date:Y-m-d',
+        'tanggal_selesai' => 'date:Y-m-d',
+    ];
+
     protected $appends = [
         'file_pendukung_url',
     ];

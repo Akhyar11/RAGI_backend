@@ -13,7 +13,7 @@
 | POST | `/api/simpeg/master-jenis-cuti` | Menambahkan jenis izin/cuti baru | ✅ Admin SDM |
 | GET | `/api/simpeg/master-jenis-cuti/{id}` | Mengambil rincian jenis izin/cuti | ✅ User / Admin SIMPEG |
 | PUT | `/api/simpeg/master-jenis-cuti/{id}` | Memperbarui data jenis izin/cuti | ✅ Admin SDM |
-| DELETE | `/api/simpeg/master-jenis-cuti/{id}` | Menghapus atau menonaktifkan jenis izin/cuti | ✅ Admin SDM |
+| DELETE | `/api/simpeg/master-jenis-cuti/{id}` | Menghapus jenis izin/cuti (hard delete dengan proteksi relasi) | ✅ Admin SDM |
 
 ---
 
@@ -108,3 +108,46 @@
     }
 }
 ```
+
+---
+
+## DELETE /api/simpeg/master-jenis-cuti/{id}
+
+> Menghapus data master jenis cuti / izin.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Master jenis cuti 'Cuti Menikah Anak' berhasil dihapus."
+}
+```
+
+### Response Error (422 Unprocessable Content)
+
+```json
+{
+    "status": "error",
+    "message": "Master jenis cuti 'Cuti Tahunan' tidak dapat dihapus karena masih digunakan dalam riwayat pengajuan cuti pegawai."
+}
+```
+
+### Response Error (404 Not Found)
+
+```json
+{
+    "status": "error",
+    "message": "Data tidak ditemukan."
+}
+```
+
+### Catatan Penting
+- Endpoint `DELETE` menerapkan **hard-delete** dengan proteksi integritas relasi. Data master jenis cuti yang masih memiliki riwayat permohonan di tabel `simpeg_pengajuan_cuti` akan ditolak dengan kode status 422. Jika belum pernah digunakan, data akan dihapus permanen dari basis data.
