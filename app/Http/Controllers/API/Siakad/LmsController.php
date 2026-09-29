@@ -380,10 +380,10 @@ class LmsController extends Controller
         Gate::authorize('siakad.kelas.read');
 
         $perPage      = min(100, $request->integer('per_page', 15));
-        $search       = $request->query('search');
+        $search       = $request->filled('search') ? (string) $request->input('search') : null;
         $allowedSorts = ['id', 'nama_kelas', 'kode_kelas', 'created_at', 'updated_at'];
-        $sortBy       = in_array($request->query('sort_by'), $allowedSorts, true) ? $request->query('sort_by') : 'created_at';
-        $sortOrder    = strtolower($request->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $sortBy       = in_array($request->sort_by, $allowedSorts, true) ? $request->sort_by : 'created_at';
+        $sortOrder    = $request->sort_order === 'asc' ? 'asc' : 'desc';
 
         $paginator = $this->lmsService->getMyKelas(
             (int) $request->user()->id,
@@ -421,10 +421,10 @@ class LmsController extends Controller
         Gate::authorize('siakad.kelas.read');
 
         $perPage      = min(100, $request->integer('per_page', 15));
-        $search       = $request->query('search');
+        $search       = $request->filled('search') ? (string) $request->input('search') : null;
         $allowedSorts = ['id', 'judul', 'deadline_at', 'created_at', 'updated_at'];
-        $sortBy       = in_array($request->query('sort_by'), $allowedSorts, true) ? $request->query('sort_by') : 'created_at';
-        $sortOrder    = strtolower($request->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $sortBy       = in_array($request->sort_by, $allowedSorts, true) ? $request->sort_by : 'created_at';
+        $sortOrder    = $request->sort_order === 'asc' ? 'asc' : 'desc';
 
         $paginator = $this->lmsService->getMyAllTugas(
             (int) $request->user()->id,
