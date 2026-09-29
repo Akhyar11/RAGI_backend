@@ -834,6 +834,9 @@ Route::get('v1/sikeu/dispensasi/validasi/{signature_hash}', [App\Http\Controller
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:api')->prefix('sinapra')->group(function () {
+    // Dashboard Summary
+    Route::get('dashboard-summary', [App\Http\Controllers\Sinapra\SinapraDashboardController::class, 'summary']);
+
     // Gedung & Ruangan
     Route::get('gedung', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'index']);
     Route::post('gedung', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'store']);
