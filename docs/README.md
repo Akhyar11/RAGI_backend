@@ -155,6 +155,7 @@
 | MasterSatuanController | Master data satuan barang dan aset (unit, pcs, rim, dll.) | [docs/api/SINAPRA/MasterSatuanController.md](api/SINAPRA/MasterSatuanController.md) |
 | MasterVendorController | Master data vendor dan rekanan pengadaan/kalibrasi alat kampus | [docs/api/SINAPRA/MasterVendorController.md](api/SINAPRA/MasterVendorController.md) |
 | MasterKategoriBhpController | Master data kategori bahan habis pakai (BHP) laboratorium | [docs/api/SINAPRA/MasterKategoriBhpController.md](api/SINAPRA/MasterKategoriBhpController.md) |
+| LaboranProdiController | Penugasan laboran per Program Studi untuk isolasi akses ruangan dan aset | [docs/api/SINAPRA/LaboranProdiController.md](api/SINAPRA/LaboranProdiController.md) |
 
 ---
 

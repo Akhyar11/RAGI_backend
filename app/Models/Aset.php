@@ -17,6 +17,7 @@ class Aset extends Model
     protected $fillable = [
         'kategori_id',
         'ruangan_id',
+        'program_studi_id',
         'penanggung_jawab_pegawai_id',
         'kode_aset',
         'nama',
@@ -33,6 +34,7 @@ class Aset extends Model
     ];
 
     protected $casts = [
+        'program_studi_id' => 'integer',
         'penanggung_jawab_pegawai_id' => 'integer',
         'tanggal_perolehan' => 'date',
         'harga_perolehan' => 'decimal:2',
@@ -50,12 +52,40 @@ class Aset extends Model
     }
 
     /**
-     * Scope untuk membatasi aset hanya pada lab binaan laboran
+     * Scope untuk membatasi aset hanya pada lab binaan atau program studi laboran
      */
     public function scopeForLaboran($query, User $user)
     {
         $ruanganIds = $user->laboranRuangan()->pluck('sinapra_ruangan.id');
-        return $query->whereIn('ruangan_id', $ruanganIds);
+        $prodiIds = $user->laboranProdi()->pluck('siakad_program_studi.id');
+
+        return $query->where(function ($q) use ($ruanganIds, $prodiIds) {
+            $hasCondition = false;
+            if ($prodiIds->isNotEmpty()) {
+                $q->whereIn('program_studi_id', $prodiIds)
+                  ->orWhereHas('ruangan', fn($rq) => $rq->whereIn('program_studi_id', $prodiIds));
+                $hasCondition = true;
+            }
+            if ($ruanganIds->isNotEmpty()) {
+                if ($hasCondition) {
+                    $q->orWhereIn('ruangan_id', $ruanganIds);
+                } else {
+                    $q->whereIn('ruangan_id', $ruanganIds);
+                }
+                $hasCondition = true;
+            }
+            if (!$hasCondition) {
+                $q->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    /**
+     * Relasi ke Program Studi (SIAKAD)
+     */
+    public function programStudi(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Siakad\ProgramStudi::class, 'program_studi_id');
     }
 
     /**

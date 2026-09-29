@@ -854,6 +854,11 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::post('ruangan/{ruangan}/laboran', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'assignLaboran']);
     Route::delete('ruangan/{ruangan}/laboran/{user}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'unassignLaboran']);
 
+    // Laboran per Program Studi
+    Route::get('laboran-prodi', [App\Http\Controllers\Sinapra\LaboranProdiController::class, 'index']);
+    Route::post('laboran-prodi', [App\Http\Controllers\Sinapra\LaboranProdiController::class, 'store']);
+    Route::delete('laboran-prodi/{laboranProdi}', [App\Http\Controllers\Sinapra\LaboranProdiController::class, 'destroy']);
+
     // Kategori Aset & Aset
     Route::get('kategori-aset', [App\Http\Controllers\Sinapra\AsetController::class, 'indexKategori']);
     Route::post('kategori-aset', [App\Http\Controllers\Sinapra\AsetController::class, 'storeKategori']);

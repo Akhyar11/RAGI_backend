@@ -17,6 +17,7 @@ class Ruangan extends Model
     protected $fillable = [
         'gedung_id',
         'tipe_ruangan_id',
+        'program_studi_id',
         'kode',
         'nama',
         'lantai',
@@ -30,12 +31,21 @@ class Ruangan extends Model
 
     protected $casts = [
         'tipe_ruangan_id' => 'integer',
+        'program_studi_id' => 'integer',
         'lantai' => 'integer',
         'kapasitas' => 'integer',
         'ada_ac' => 'boolean',
         'ada_proyektor' => 'boolean',
         'ada_wifi' => 'boolean',
     ];
+
+    /**
+     * Relasi ke Program Studi (SIAKAD)
+     */
+    public function programStudi(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Siakad\ProgramStudi::class, 'program_studi_id');
+    }
 
     /**
      * Relasi ke Master Tipe Ruangan

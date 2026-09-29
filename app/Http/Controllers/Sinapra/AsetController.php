@@ -116,7 +116,7 @@ class AsetController extends Controller
         $this->authorize('viewAny', Aset::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = Aset::with(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja']);
+        $query = Aset::with(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja', 'programStudi:id,kode_prodi,nama,jenjang']);
 
         if ($request->filled('kategori_id')) {
             $query->where('kategori_id', $request->kategori_id);
@@ -124,6 +124,14 @@ class AsetController extends Controller
 
         if ($request->filled('ruangan_id')) {
             $query->where('ruangan_id', $request->ruangan_id);
+        }
+
+        if ($request->filled('program_studi_id')) {
+            if ($request->program_studi_id === 'null' || $request->program_studi_id === 'umum') {
+                $query->whereNull('program_studi_id');
+            } else {
+                $query->where('program_studi_id', $request->program_studi_id);
+            }
         }
 
         if ($request->filled('penanggung_jawab_pegawai_id')) {
@@ -185,6 +193,7 @@ class AsetController extends Controller
                 'search' => $request->search,
                 'kategori_id' => $request->kategori_id,
                 'ruangan_id' => $request->ruangan_id,
+                'program_studi_id' => $request->program_studi_id,
                 'kondisi' => $request->kondisi,
                 'status' => $request->status,
                 'is_borrowable' => $request->is_borrowable,
@@ -204,7 +213,7 @@ class AsetController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data aset berhasil ditambahkan',
-            'data' => $aset->load(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja']),
+            'data' => $aset->load(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja', 'programStudi:id,kode_prodi,nama,jenjang']),
         ], 201);
     }
 
@@ -215,7 +224,7 @@ class AsetController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Detail aset berhasil diambil',
-            'data' => $aset->load(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja', 'maintenanceLogs', 'peminjaman', 'riwayatPenyusutan.jurnalUmum']),
+            'data' => $aset->load(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja', 'programStudi:id,kode_prodi,nama,jenjang', 'maintenanceLogs', 'peminjaman', 'riwayatPenyusutan.jurnalUmum']),
         ]);
     }
 
@@ -228,7 +237,7 @@ class AsetController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data aset berhasil diperbarui',
-            'data' => $updated->load(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja']),
+            'data' => $updated->load(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja', 'programStudi:id,kode_prodi,nama,jenjang']),
         ]);
     }
 

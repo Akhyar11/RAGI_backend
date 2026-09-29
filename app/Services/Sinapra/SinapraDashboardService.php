@@ -88,6 +88,28 @@ class SinapraDashboardService
             ->take(5)
             ->get(['id', 'kode_aset', 'nama', 'penanggung_jawab_pegawai_id', 'harga_perolehan', 'nilai_buku', 'kondisi', 'status']);
 
+        // 9. Distribusi Aset & Ruangan per Program Studi
+        $prodiStats = \App\Models\Siakad\ProgramStudi::select('id', 'kode_prodi', 'nama', 'jenjang')
+            ->withCount(['asets as total_aset', 'ruangans as total_ruangan'])
+            ->withSum('asets as total_nilai_aset', 'harga_perolehan')
+            ->orderBy('nama', 'asc')
+            ->get()
+            ->map(function ($prodi) {
+                return [
+                    'id' => $prodi->id,
+                    'kode_prodi' => $prodi->kode_prodi,
+                    'nama' => $prodi->nama,
+                    'jenjang' => $prodi->jenjang,
+                    'total_aset' => (int) $prodi->total_aset,
+                    'total_ruangan' => (int) $prodi->total_ruangan,
+                    'total_nilai_aset' => (float) ($prodi->total_nilai_aset ?? 0),
+                ];
+            });
+
+        $umumAsetCount = Aset::whereNull('program_studi_id')->count();
+        $umumAsetNilai = (float) Aset::whereNull('program_studi_id')->sum('harga_perolehan');
+        $umumRuanganCount = Ruangan::whereNull('program_studi_id')->count();
+
         return [
             'metrics' => [
                 'total_gedung' => $totalGedung,
@@ -118,6 +140,15 @@ class SinapraDashboardService
                     'baik' => $kondisiCounts['baik'] ?? 0,
                     'rusak_ringan' => $kondisiCounts['rusak_ringan'] ?? 0,
                     'rusak_berat' => $kondisiCounts['rusak_berat'] ?? 0,
+                ],
+            ],
+            'distribusi_prodi' => [
+                'prodi_list' => $prodiStats,
+                'fasilitas_umum' => [
+                    'nama' => 'Umum Kampus / Rektorat',
+                    'total_aset' => $umumAsetCount,
+                    'total_ruangan' => $umumRuanganCount,
+                    'total_nilai_aset' => $umumAsetNilai,
                 ],
             ],
             'early_warnings' => [

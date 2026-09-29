@@ -89,9 +89,16 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function laboranProdi()
+    {
+        return $this->belongsToMany(\App\Models\Siakad\ProgramStudi::class, 'sinapra_laboran_prodi', 'user_id', 'program_studi_id')
+            ->withPivot('is_primary')
+            ->withTimestamps();
+    }
+
     public function isLaboran(): bool
     {
-        return $this->hasRole('admin_laboratorium') || $this->laboranRuangan()->exists();
+        return $this->hasRole('admin_laboratorium') || $this->laboranRuangan()->exists() || $this->laboranProdi()->exists();
     }
 
     protected $appends = ['is_superadmin', 'is_admin', 'referral_code'];

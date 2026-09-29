@@ -18,6 +18,7 @@ class RuanganRequest extends FormRequest
         return [
             'gedung_id' => 'required|exists:sinapra_gedung,id',
             'tipe_ruangan_id' => 'nullable|exists:sinapra_master_tipe_ruangan,id',
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'kode' => 'required|string|max:50|unique:sinapra_ruangan,kode,' . $ruanganId,
             'nama' => 'required|string|max:150',
             'lantai' => 'required|integer|min:1',

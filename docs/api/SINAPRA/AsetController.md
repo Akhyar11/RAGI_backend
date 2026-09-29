@@ -48,6 +48,7 @@ Deskripsi: Mengambil daftar inventaris barang/aset dengan filter kategori, ruang
 - `is_borrowable` (boolean, optional) - Filter apakah aset dapat dipinjam.
 - `is_lab_asset` (boolean, optional) - Filter aset laboratorium.
 - `penanggung_jawab_pegawai_id` (integer, optional) - Filter aset berdasarkan PIC pegawai SIMPEG penanggung jawab.
+- `program_studi_id` (integer|string, optional) - Filter aset berdasarkan Program Studi SIAKAD (`null` atau `umum` untuk aset umum kampus).
 - `sort_by` (string, default: `created_at`) - Whitelist: `created_at`, `kode_aset`, `nama`, `harga_perolehan`, `nilai_buku`, `tanggal_perolehan`.
 - `sort_order` (enum: `asc`, `desc`, default: `desc`) - Urutan data.
 - `per_page` (integer, default: 15, max: 100) - Jumlah data per halaman.
@@ -63,6 +64,7 @@ Deskripsi: Mengambil daftar inventaris barang/aset dengan filter kategori, ruang
             "id": 1,
             "kategori_id": 2,
             "ruangan_id": 5,
+            "program_studi_id": 1,
             "kode_aset": "AST-LAB-001",
             "nama": "Mikroskop Binokuler Digital",
             "merk": "Olympus",
@@ -75,6 +77,12 @@ Deskripsi: Mengambil daftar inventaris barang/aset dengan filter kategori, ruang
             "status": "tersedia",
             "is_borrowable": true,
             "is_lab_asset": true,
+            "program_studi": {
+                "id": 1,
+                "kode_prodi": "TI-S1",
+                "nama": "S1 Teknik Informatika",
+                "jenjang": "S1"
+            },
             "created_at": "2026-01-15T08:00:00.000000Z"
         }
     ],
@@ -100,6 +108,7 @@ Deskripsi: Menambahkan unit inventaris barang/aset baru ke dalam sistem.
 {
     "kategori_id": 2,
     "ruangan_id": 5,
+    "program_studi_id": 1,
     "kode_aset": "AST-LAB-002",
     "nama": "Spektrofotometer UV-Vis",
     "merk": "Shimadzu",
@@ -123,6 +132,7 @@ Deskripsi: Menambahkan unit inventaris barang/aset baru ke dalam sistem.
         "id": 2,
         "kategori_id": 2,
         "ruangan_id": 5,
+        "program_studi_id": 1,
         "kode_aset": "AST-LAB-002",
         "nama": "Spektrofotometer UV-Vis",
         "merk": "Shimadzu",
@@ -135,6 +145,12 @@ Deskripsi: Menambahkan unit inventaris barang/aset baru ke dalam sistem.
         "status": "tersedia",
         "is_borrowable": true,
         "is_lab_asset": true,
+        "program_studi": {
+            "id": 1,
+            "kode_prodi": "TI-S1",
+            "nama": "S1 Teknik Informatika",
+            "jenjang": "S1"
+        },
         "created_at": "2026-02-10T10:00:00.000000Z"
     }
 }

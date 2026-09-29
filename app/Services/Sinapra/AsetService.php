@@ -87,6 +87,13 @@ class AsetService
                 $data['nilai_buku'] = $data['harga_perolehan'];
             }
 
+            if (empty($data['program_studi_id']) && !empty($data['ruangan_id'])) {
+                $ruangan = \App\Models\Ruangan::find($data['ruangan_id']);
+                if ($ruangan && $ruangan->program_studi_id) {
+                    $data['program_studi_id'] = $ruangan->program_studi_id;
+                }
+            }
+
             $aset = Aset::create($data);
 
             AuditLogService::record(

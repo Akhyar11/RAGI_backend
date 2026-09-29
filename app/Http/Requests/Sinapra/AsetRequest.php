@@ -18,6 +18,7 @@ class AsetRequest extends FormRequest
         return [
             'kategori_id' => 'required|exists:sinapra_kategori_aset,id',
             'ruangan_id' => 'nullable|exists:sinapra_ruangan,id',
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'penanggung_jawab_pegawai_id' => 'nullable|exists:simpeg_pegawai,id',
             'kode_aset' => 'required|string|max:100|unique:sinapra_aset,kode_aset,' . $asetId,
             'nama' => 'required|string|max:150',

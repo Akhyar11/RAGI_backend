@@ -108,6 +108,7 @@ Deskripsi: Mengambil daftar ruangan kampus dengan relasi tipe ruangan, gedung, d
 - `search` (string, optional) - Filter pencarian kode atau nama ruangan.
 - `gedung_id` (integer, optional) - Filter berdasarkan ID gedung.
 - `tipe_ruangan_id` (integer, optional) - Filter relasi master tipe ruangan.
+- `program_studi_id` (integer|string, optional) - Filter ruangan berdasarkan Program Studi SIAKAD (`null` atau `umum` untuk ruangan umum kampus).
 - `tipe` (string, optional) - Filter kode tipe ruangan (mencakup data legacy atau relasi kode master tipe ruangan).
 - `status` (enum: aktif, maintenance, nonaktif, optional) - Filter status operasional ruangan.
 - `sort_by` (string, default: `created_at`) - Whitelist: `created_at`, `updated_at`, `kode`, `nama`, `kapasitas`, `lantai`.
@@ -134,6 +135,7 @@ Deskripsi: Mengambil daftar ruangan kampus dengan relasi tipe ruangan, gedung, d
             "ada_ac": true,
             "ada_proyektor": true,
             "ada_wifi": true,
+            "program_studi_id": 1,
             "status": "aktif",
             "gedung": {
                 "id": 1,
@@ -144,6 +146,12 @@ Deskripsi: Mengambil daftar ruangan kampus dengan relasi tipe ruangan, gedung, d
                 "id": 1,
                 "kode": "KELAS",
                 "nama": "Ruang Kelas Teori"
+            },
+            "program_studi": {
+                "id": 1,
+                "kode_prodi": "TI-S1",
+                "nama": "S1 Teknik Informatika",
+                "jenjang": "S1"
             },
             "created_at": "2026-08-19T09:00:00.000000Z",
             "updated_at": "2026-09-24T18:00:00.000000Z"
@@ -200,6 +208,7 @@ Deskripsi: Menambahkan data ruangan kampus baru.
     "nama": "Ruang Kuliah Teori A2",
     "lantai": 1,
     "tipe": "kelas",
+    "program_studi_id": 1,
     "kapasitas": 40,
     "luas_m2": 64.0,
     "ada_ac": true,
@@ -219,6 +228,7 @@ Deskripsi: Menambahkan data ruangan kampus baru.
         "id": 2,
         "gedung_id": 1,
         "tipe_ruangan_id": 1,
+        "program_studi_id": 1,
         "kode": "R-102",
         "nama": "Ruang Kuliah Teori A2",
         "lantai": 1,
@@ -237,6 +247,11 @@ Deskripsi: Menambahkan data ruangan kampus baru.
             "id": 1,
             "kode": "KELAS",
             "nama": "Ruang Kelas Teori"
+        },
+        "program_studi": {
+            "id": 1,
+            "kode_prodi": "TI-S1",
+            "nama": "S1 Teknik Informatika"
         },
         "created_at": "2026-09-24T18:00:00.000000Z",
         "updated_at": "2026-09-24T18:00:00.000000Z"
