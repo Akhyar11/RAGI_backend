@@ -134,4 +134,9 @@ class PengajuanPencairanKas extends Model
     {
         return $this->hasOne(\App\Models\Simpeg\SuratTugas::class, 'sikeu_pencairan_id');
     }
+
+    public function pengadaanSinapra()
+    {
+        return $this->hasOne(\App\Models\PengajuanPengadaan::class, 'sikeu_pencairan_id');
+    }
 }

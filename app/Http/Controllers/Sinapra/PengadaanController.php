@@ -18,7 +18,7 @@ class PengadaanController extends Controller
         $this->authorize('viewAny', PengajuanPengadaan::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = PengajuanPengadaan::with(['unitKerja', 'pengaju', 'approver'])->withCount('details');
+        $query = PengajuanPengadaan::with(['unitKerja', 'pengaju', 'approver', 'pencairanKas'])->withCount('details');
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -88,7 +88,7 @@ class PengadaanController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Detail pengajuan pengadaan berhasil diambil',
-            'data' => $pengadaan->load(['unitKerja', 'pengaju', 'approver', 'details.kategoriAset']),
+            'data' => $pengadaan->load(['unitKerja', 'pengaju', 'approver', 'details.kategoriAset', 'pencairanKas']),
         ]);
     }
 

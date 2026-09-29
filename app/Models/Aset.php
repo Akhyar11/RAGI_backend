@@ -17,6 +17,7 @@ class Aset extends Model
     protected $fillable = [
         'kategori_id',
         'ruangan_id',
+        'penanggung_jawab_pegawai_id',
         'kode_aset',
         'nama',
         'merk',
@@ -32,6 +33,7 @@ class Aset extends Model
     ];
 
     protected $casts = [
+        'penanggung_jawab_pegawai_id' => 'integer',
         'tanggal_perolehan' => 'date',
         'harga_perolehan' => 'decimal:2',
         'nilai_buku' => 'decimal:2',
@@ -102,6 +104,22 @@ class Aset extends Model
     public function disposal(): HasMany
     {
         return $this->hasMany(DisposalAset::class, 'aset_id');
+    }
+
+    /**
+     * Relasi ke Penanggung Jawab Pegawai (SIMPEG)
+     */
+    public function penanggungJawab(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Simpeg\Pegawai::class, 'penanggung_jawab_pegawai_id');
+    }
+
+    /**
+     * Relasi ke Riwayat Jurnal Penyusutan Aset (SIKEU)
+     */
+    public function riwayatPenyusutan(): HasMany
+    {
+        return $this->hasMany(\App\Models\Sinapra\RiwayatPenyusutanAset::class, 'aset_id');
     }
 }
 

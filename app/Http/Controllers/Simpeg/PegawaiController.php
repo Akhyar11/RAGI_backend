@@ -163,6 +163,7 @@ class PegawaiController extends Controller
             'riwayatPendidikan',
             'dosen.programStudi',
             'roles',
+            'asetDipegang.ruangan',
         ])->findOrFail($id);
 
         $user = $request->user();
@@ -244,4 +245,29 @@ class PegawaiController extends Controller
             'data' => $pegawai->fresh(['unitKerja', 'officeLocation', 'shiftTemplate'])
         ]);
     }
+
+    /**
+     * Cek status clearance inventaris aset dinas dan peminjaman fasilitas pegawai.
+     */
+    public function clearance(Request $request, $id)
+    {
+        $pegawai = Pegawai::findOrFail($id);
+        $user = $request->user();
+        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.pegawai.manage') || $user->hasPermission('simpeg.pegawai.read');
+
+        if (!$isManager && $pegawai->user_id !== $user->id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akses Ditolak: Anda tidak memiliki hak akses untuk melihat status clearance pegawai ini.'
+            ], 403);
+        }
+
+        $clearance = $this->pegawaiService->getClearanceStatus($pegawai);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $clearance
+        ]);
+    }
 }
+

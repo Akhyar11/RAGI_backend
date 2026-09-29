@@ -68,10 +68,47 @@ class PengadaanService
 
             $oldValues = $pengajuan->toArray();
 
-            $pengajuan->update([
+            $updateData = [
                 'status' => $status,
                 'disetujui_oleh' => $approverId,
-            ]);
+            ];
+
+            // Integrasi SIKEU: Saat disetujui, otomatis buat tiket permohonan dana operasional di SIKEU
+            if ($status === 'disetujui' && empty($pengajuan->sikeu_pencairan_id)) {
+                $pencairan = \App\Models\Sikeu\PengajuanPencairanKas::create([
+                    'nomor_pengajuan' => 'OPR-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(5)),
+                    'unit_kerja_id' => $pengajuan->unit_kerja_id,
+                    'unit_kas_id' => null, // Ditentukan oleh Bagian Keuangan saat pencairan
+                    'pemohon_id' => $pengajuan->diajukan_oleh,
+                    'judul_pengajuan' => 'Pengadaan Barang: ' . $pengajuan->judul,
+                    'deskripsi' => $pengajuan->alasan_kebutuhan,
+                    'nominal_diajukan' => (float) $pengajuan->estimasi_anggaran,
+                    'nominal_disetujui' => (float) $pengajuan->estimasi_anggaran,
+                    'jenis_pengajuan' => 'sarpras',
+                    'kategori_pengajuan' => 'pengadaan_barang',
+                    'status' => 'pending_keuangan',
+                    'kanal' => 'sinapra_pengadaan',
+                    'referensi_eksternal' => 'sinapra_pengadaan:' . $pengajuan->id,
+                ]);
+
+                $updateData['sikeu_pencairan_id'] = $pencairan->id;
+
+                // Salin rincian detail barang ke items pencairan kas SIKEU
+                $pengajuan->loadMissing('details');
+                foreach ($pengajuan->details as $d) {
+                    \App\Models\Sikeu\PengajuanItem::create([
+                        'pengajuan_id' => $pencairan->id,
+                        'nama_barang' => $d->nama_barang,
+                        'qty' => (float) $d->jumlah,
+                        'satuan' => $d->satuan ?? 'unit',
+                        'harga_satuan' => (float) $d->harga_satuan_estimasi,
+                        'subtotal' => (float) $d->total_estimasi,
+                        'keterangan' => $d->spesifikasi,
+                    ]);
+                }
+            }
+
+            $pengajuan->update($updateData);
 
             AuditLogService::record(
                 module: 'SINAPRA',
@@ -82,7 +119,7 @@ class PengadaanService
                 newValues: $pengajuan->fresh()->toArray()
             );
 
-            return $pengajuan->fresh()->load('details');
+            return $pengajuan->fresh()->load(['details', 'pencairanKas']);
         });
     }
 

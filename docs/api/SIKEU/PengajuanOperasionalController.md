@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/sikeu/pengajuan-operasional`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-25  
-> **Diperbarui**: 2026-09-25  
+> **Diperbarui**: 2026-09-30  
 
 ## Daftar Endpoint
 
@@ -68,7 +68,7 @@
 
 ## POST /api/v1/sikeu/pengajuan-operasional/{id}/pencairan
 
-> Mencairkan dana panjar dinas / pengajuan operasional dan menerbitkan bukti pengeluaran kas (Tahap 5).
+> Mencairkan dana panjar dinas / pengajuan operasional dan menerbitkan bukti pengeluaran kas (Tahap 5). Jika permohonan berasal dari kanal SINAPRA (`kanal = 'sinapra_pengadaan'`), pencairan ini secara otomatis menyelaraskan status usulan pengadaan barang pada SINAPRA menjadi `proses_pengadaan`.
 
 ### Headers
 

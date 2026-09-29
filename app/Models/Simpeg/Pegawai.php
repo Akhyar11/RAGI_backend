@@ -359,4 +359,9 @@ class Pegawai extends Model
     {
         return $this->hasMany(PenilaianKinerja::class, 'pegawai_id');
     }
+
+    public function asetDipegang()
+    {
+        return $this->hasMany(\App\Models\Aset::class, 'penanggung_jawab_pegawai_id');
+    }
 }

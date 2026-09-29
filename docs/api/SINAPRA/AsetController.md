@@ -4,7 +4,7 @@
 > **Base URL**: `/api/sinapra`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-08-19  
-> **Diperbarui**: 2026-09-23  
+> **Diperbarui**: 2026-09-30  
 
 ## Daftar Endpoint
 
@@ -23,6 +23,8 @@
 | GET | `/api/sinapra/aset/{id}/hitung-penyusutan` | Kalkulasi nilai buku & penyusutan aset | ✅ |
 | PUT | `/api/sinapra/aset/{id}` | Update data aset | ✅ |
 | DELETE | `/api/sinapra/aset/{id}` | Soft delete aset | ✅ |
+| POST | `/api/sinapra/aset/{id}/post-jurnal-penyusutan` | Posting beban penyusutan aset ke jurnal umum SIKEU | ✅ |
+| GET | `/api/sinapra/aset/{id}/riwayat-penyusutan` | Listing riwayat posting jurnal penyusutan aset | ✅ |
 
 ---
 
@@ -45,6 +47,7 @@ Deskripsi: Mengambil daftar inventaris barang/aset dengan filter kategori, ruang
 - `status` (enum: `tersedia`, `dipinjam`, `maintenance`, `dihapuskan`, optional) - Status aset.
 - `is_borrowable` (boolean, optional) - Filter apakah aset dapat dipinjam.
 - `is_lab_asset` (boolean, optional) - Filter aset laboratorium.
+- `penanggung_jawab_pegawai_id` (integer, optional) - Filter aset berdasarkan PIC pegawai SIMPEG penanggung jawab.
 - `sort_by` (string, default: `created_at`) - Whitelist: `created_at`, `kode_aset`, `nama`, `harga_perolehan`, `nilai_buku`, `tanggal_perolehan`.
 - `sort_order` (enum: `asc`, `desc`, default: `desc`) - Urutan data.
 - `per_page` (integer, default: 15, max: 100) - Jumlah data per halaman.
@@ -293,6 +296,100 @@ Deskripsi: Mengambil sekumpulan metadata label stiker barcode & QR Code sekaligu
 
 ---
 
+## POST /api/sinapra/aset/{id}/post-jurnal-penyusutan
+
+Deskripsi: Memposting beban penyusutan tahunan aset fisik ke Jurnal Umum SIKEU (double-entry: Dr. 505.01 Beban Penyusutan Aset Tetap / Cr. 105.01 Akumulasi Penyusutan Aset Tetap), sekaligus memperbarui nilai buku aset pada SINAPRA dan mencatat riwayat penyusutan agar tidak terjadi duplikasi periode tahun yang sama.
+
+### Request Body
+```json
+{
+    "tahun": 2026,
+    "catatan": "Penyusutan akhir tahun buku peralatan lab"
+}
+```
+
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `tahun` | integer | ❌ | Tahun periode penyusutan (default: tahun berjalan saat ini). Min: 2000, Max: tahun berjalan + 1. |
+| `catatan` | string | ❌ | Catatan keterangan tambahan penyusutan (maks. 500 karakter). |
+
+### Response Sukses (201 Created)
+```json
+{
+    "status": "success",
+    "message": "Jurnal penyusutan aset periode tahun 2026 berhasil diposting ke SIKEU",
+    "data": {
+        "id": 1,
+        "aset_id": 5,
+        "tahun": 2026,
+        "nominal_penyusutan": 25000000,
+        "nilai_buku_sesudah": 75000000,
+        "sikeu_jurnal_id": 12,
+        "posted_by": 1,
+        "catatan": "Penyusutan akhir tahun buku peralatan lab",
+        "created_at": "2026-09-30T10:00:00.000000Z",
+        "jurnal": {
+            "id": 12,
+            "nomor_jurnal": "JRN-DEP-20260930-A1B2",
+            "tanggal_jurnal": "2026-09-30",
+            "total_debet": 25000000,
+            "total_kredit": 25000000,
+            "status_posting": "posted"
+        }
+    }
+}
+```
+
+### Response Gagal (422 Unprocessable Content)
+```json
+{
+    "status": "error",
+    "message": "Penyusutan aset untuk periode tahun 2026 sudah pernah diposting ke SIKEU."
+}
+```
+
+---
+
+## GET /api/sinapra/aset/{id}/riwayat-penyusutan
+
+Deskripsi: Mengambil riwayat posting jurnal penyusutan aset fisik beserta relasi entitas pencatat dan jurnal umum SIKEU.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Riwayat penyusutan aset berhasil diambil",
+    "data": [
+        {
+            "id": 1,
+            "aset_id": 5,
+            "tahun": 2026,
+            "nominal_penyusutan": 25000000,
+            "nilai_buku_sesudah": 75000000,
+            "sikeu_jurnal_id": 12,
+            "posted_by": 1,
+            "catatan": "Penyusutan akhir tahun buku peralatan lab",
+            "created_at": "2026-09-30T10:00:00.000000Z",
+            "poster": {
+                "id": 1,
+                "name": "Super Administrator"
+            },
+            "jurnal": {
+                "id": 12,
+                "nomor_jurnal": "JRN-DEP-20260930-A1B2",
+                "tanggal_jurnal": "2026-09-30",
+                "total_debet": 25000000,
+                "total_kredit": 25000000,
+                "status_posting": "posted"
+            }
+        }
+    ]
+}
+```
+
+---
+
 ## Catatan
 - Penghapusan data aset dan kategori menggunakan mekanisme soft-delete.
 - Data kredensial dan password tidak dikembalikan dalam response API.
+

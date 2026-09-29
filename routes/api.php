@@ -213,6 +213,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('pegawai/roles', [App\Http\Controllers\Simpeg\PegawaiController::class, 'getRoles']);
     Route::apiResource('pegawai', App\Http\Controllers\Simpeg\PegawaiController::class);
     Route::post('pegawai/{id}/reset-face', [App\Http\Controllers\Simpeg\PegawaiController::class, 'resetFace']);
+    Route::get('pegawai/{id}/clearance', [App\Http\Controllers\Simpeg\PegawaiController::class, 'clearance']);
 
     // Riwayat Jabatan, Pendidikan & Portofolio Tridharma Terpadu
     Route::get('pegawai/{id}/tridharma-dossier', [App\Http\Controllers\Simpeg\TridharmaDossierController::class, 'getDossier']);
@@ -863,6 +864,8 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'show']);
     Route::get('aset/{aset}/label', [App\Http\Controllers\Sinapra\AsetController::class, 'getLabel']);
     Route::get('aset/{aset}/hitung-penyusutan', [App\Http\Controllers\Sinapra\AsetController::class, 'hitungPenyusutan']);
+    Route::post('aset/{aset}/post-jurnal-penyusutan', [App\Http\Controllers\Sinapra\AsetController::class, 'postJurnalPenyusutan']);
+    Route::get('aset/{aset}/riwayat-penyusutan', [App\Http\Controllers\Sinapra\AsetController::class, 'getRiwayatPenyusutan']);
     Route::put('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'update']);
     Route::delete('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'destroy']);
 

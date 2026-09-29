@@ -261,6 +261,21 @@ class PengajuanOperasionalService
                     ->update(['status_pencairan' => 'dicairkan']);
             }
 
+            // Sinkronisasi status ke SINAPRA jika ini adalah pengadaan barang
+            if ($pengajuan->kanal === 'sinapra_pengadaan' || str_starts_with($pengajuan->referensi_eksternal ?? '', 'sinapra_pengadaan:')) {
+                $query = \App\Models\PengajuanPengadaan::where('sikeu_pencairan_id', $pengajuan->id);
+                if (str_starts_with($pengajuan->referensi_eksternal ?? '', 'sinapra_pengadaan:')) {
+                    $parts = explode(':', $pengajuan->referensi_eksternal);
+                    if (isset($parts[1]) && is_numeric($parts[1])) {
+                        $query->orWhere('id', (int) $parts[1]);
+                    }
+                }
+                $query->update([
+                    'status' => 'proses_pengadaan',
+                    'sikeu_pencairan_id' => $pengajuan->id,
+                ]);
+            }
+
             return $pengajuan->fresh(['items', 'unitKas']);
         });
 
