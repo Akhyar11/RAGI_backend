@@ -47,6 +47,15 @@ Termasuk juga merespons API dengan **enum string statis** (seperti `'REGULER'`, 
 1. **Minimal Hardcode**: Sistem yang baik harus meminimalkan hardcode hingga 0%.
 2. **Dilarang Keras Array/Enum Literal Statis**: DILARANG KERAS meng-hardcode opsi pilihan atau melakukan validasi backend menggunakan `in:VALUE1,VALUE2` jika nilai tersebut semestinya berasal dari tabel master database (contoh: `master_tipe_jalur`, `master_jalur_kelas`). Validasi WAJIB menggunakan rule `exists:nama_tabel,id`.
 3. **Referensi ID Wajib**: Seluruh relasi, filter, dan query wajib menggunakan **referensi ID entitas** (seperti `module.id`, `tipe_jalur_id`, `jalur_kelas_id`, dsb.) yang diambil dari database, bukan berupa label string atau hardcode nama.
+
+## Pengecualian Sah — Nilai Tetap Domain (bukan entitas master)
+Statis **DIPERBOLEHKAN** bila nilai bersifat tetap/closed-set oleh domain atau regulasi dan **TIDAK memiliki tabel master/ID entitas**, dengan syarat:
+1. Nilai tidak dikelola lewat tabel master apa pun (contoh sah: jenis kelamin `L`/`P`, agama, status sipil, jenjang pendidikan, rentang penghasilan, asal lulusan `sekolah`/`pt`, sumber informasi pendaftaran, status workflow internal).
+2. Dideklarasikan sebagai **konstanta terpusat** (mis. `const`/`config` di satu lokasi), bukan inline berulang di banyak tempat.
+3. Nilai (`value`) stabil dan **selaras dengan kolom/enum database**; tidak boleh bertentangan dengan skema.
+4. Untuk validasi nilai tetap ini, `in:...` DIPERBOLEHKAN sepanjang daftar nilainya benar-benar tetap dan bukan berasal dari tabel master.
+
+Tetap **DILARANG**: opsi/validasi untuk entitas yang punya tabel/ID (prodi, jalur, gelombang, modul, role, jenis biaya, unit kerja, dsb.) — itu WAJIB dinamis via API/relasi ID.
 </RULE[no_hardcode_definition]>
 
 <RULE[no_ujian_spmb]>

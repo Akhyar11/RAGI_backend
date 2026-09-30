@@ -4,6 +4,7 @@ namespace App\Services\Spmb;
 
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\HasilSeleksi;
+use App\Models\Sikeu\TagihanMahasiswa;
 use Illuminate\Support\Facades\DB;
 use App\Events\Spmb\MahasiswaDiterima;
 use Illuminate\Validation\ValidationException;
@@ -213,5 +214,80 @@ class SpmbPendaftaranService
 
             return $pendaftaran->refresh();
         });
+    }
+
+    /**
+     * Ringkasan pembayaran daftar ulang calon mahasiswa.
+     *
+     * Tagihan daftar ulang diterbitkan & dibayar di modul SIKEU
+     * (sikeu_tagihan_mahasiswa, tipe_referensi spmb_daftar_ulang).
+     * Method ini hanya membaca status terkini untuk kebutuhan detail admin SPMB.
+     */
+    public function daftarUlangSummary(PendaftaranCalonMhs $pendaftaran): array
+    {
+        $tagihan = TagihanMahasiswa::with(['virtualAccount', 'pembayarans'])
+            ->where('calon_mahasiswa_id', $pendaftaran->id)
+            ->where('source_system', 'SPMB')
+            ->where('tipe_referensi', TagihanMahasiswa::TIPE_SPMB_DAFTAR_ULANG)
+            ->latest('id')
+            ->first();
+
+        $statusDaftarUlang = $pendaftaran->hasilSeleksi?->status_daftar_ulang;
+
+        if (! $tagihan) {
+            return [
+                'has_tagihan' => false,
+                'status_daftar_ulang' => $statusDaftarUlang,
+                'tagihan' => null,
+            ];
+        }
+
+        $totalBersih = (float) $tagihan->total_tagihan
+            + (float) $tagihan->total_denda
+            - (float) $tagihan->total_potongan;
+        $sudahDibayar = (float) $tagihan->total_bayar;
+        $sisaKurang = max(0, $totalBersih - $sudahDibayar);
+        $persenTerbayar = $totalBersih > 0
+            ? min(100, round(($sudahDibayar / $totalBersih) * 100, 2))
+            : 0;
+
+        $virtualAccount = $tagihan->virtualAccount;
+
+        return [
+            'has_tagihan' => true,
+            'status_daftar_ulang' => $statusDaftarUlang,
+            'tagihan' => [
+                'id' => $tagihan->id,
+                'nomor_tagihan' => $tagihan->nomor_tagihan,
+                'status' => $tagihan->status,
+                'due_date' => $tagihan->jatuh_tempo?->toDateString(),
+                'total_tagihan' => (float) $tagihan->total_tagihan,
+                'total_potongan' => (float) $tagihan->total_potongan,
+                'total_denda' => (float) $tagihan->total_denda,
+                'total_bersih' => $totalBersih,
+                'sudah_dibayar' => $sudahDibayar,
+                'sisa_kurang' => $sisaKurang,
+                'persen_terbayar' => $persenTerbayar,
+                'virtual_account' => $virtualAccount ? [
+                    'va_number' => $virtualAccount->va_number,
+                    'bank_kode' => $virtualAccount->bank_kode,
+                    'bank_nama' => $virtualAccount->bank_nama,
+                    'nominal' => (float) $virtualAccount->nominal,
+                    'status' => $virtualAccount->status,
+                    'expired_at' => $virtualAccount->expired_at,
+                ] : null,
+                'riwayat_pembayaran' => $tagihan->pembayarans
+                    ->sortByDesc('waktu_bayar')
+                    ->values()
+                    ->map(fn ($bayar) => [
+                        'id' => $bayar->id,
+                        'kode_transaksi' => $bayar->kode_transaksi,
+                        'jumlah_bayar' => (float) $bayar->jumlah_bayar,
+                        'channel_bayar' => $bayar->channel_bayar,
+                        'status' => $bayar->status,
+                        'paid_at' => $bayar->waktu_bayar,
+                    ])->all(),
+            ],
+        ];
     }
 }

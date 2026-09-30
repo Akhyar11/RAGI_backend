@@ -32,7 +32,8 @@ Aturan Baku (STRICT — setiap aturan bernomor, nilai hanya dari baris baru):
 1. DILARANG `in:STATIS` untuk data master/dropdown dinamis, WAJIB `exists:nama_tabel,id`.
    - SALAH: `'jalur_masuk' => 'required|in:REGULER,KARYAWAN'` atau `'agama' => 'in:Islam,Kristen'` (data master referensi/dropdown dinamis).
    - BENAR: `'jalur_masuk_id' => 'required|exists:spmb_master_referensi,id'` atau `'tipe_id' => 'required|exists:core_tipe_referensi,id'`.
-   - Nilai `in:` yang sah adalah sort direction (`'sort_order' => 'in:asc,desc'`) dan enum aksi workflow status internal (`in:disetujui,ditolak`).
+   - Nilai `in:` yang sah adalah sort direction (`'sort_order' => 'in:asc,desc'`), enum aksi workflow status internal (`in:disetujui,ditolak`), DAN nilai tetap domain (closed-set) yang TIDAK memiliki tabel master/ID (mis. jenis kelamin `in:L,P`, agama, status sipil, jenjang pendidikan, rentang penghasilan, asal lulusan `in:sekolah,pt`, status workflow internal) sepanjang daftar benar-benar tetap dan selaras dengan skema.
+   - Tetap DILARANG: `in:` untuk entitas yang punya tabel/ID (prodi, jalur, gelombang, modul, role, jenis biaya, unit kerja, dsb.) — itu WAJIB `exists:nama_tabel,id`.
    - SALAH bila memakai `exists:nama_tabel,kode` atau varian kolom lain — WAJIB `exists:nama_tabel,id`.
 2. DILARANG kata `user_type` di MANA PUN pada baris baru (+).
    - Berlaku untuk: $fillable model User, validasi Form Request, where/select/query builder, if/else/switch/match, payload response JSON, factory/seeder.

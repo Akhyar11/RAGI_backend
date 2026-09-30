@@ -84,12 +84,19 @@ class PendaftaranController extends Controller
             'programStudiPilihan2',
             'dokumenPendaftaran',
             'user',
+            'hasilSeleksi',
             'referrer:id,username,name,referral_code',
         ])->findOrFail($id);
 
+        // Ringkasan daftar ulang (tagihan & pembayaran dikelola modul SIKEU).
+        $daftarUlang = $this->pendaftaranService->daftarUlangSummary($pendaftaran);
+
         return response()->json([
             'status' => 'success',
-            'data' => $pendaftaran
+            'message' => 'Detail pendaftaran berhasil diambil',
+            'data' => array_merge($pendaftaran->toArray(), [
+                'daftar_ulang' => $daftarUlang,
+            ])
         ]);
     }
 
