@@ -89,9 +89,16 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function laboranProdi()
+    {
+        return $this->belongsToMany(\App\Models\Siakad\ProgramStudi::class, 'sinapra_laboran_prodi', 'user_id', 'program_studi_id')
+            ->withPivot('is_primary')
+            ->withTimestamps();
+    }
+
     public function isLaboran(): bool
     {
-        return $this->hasRole('admin_laboratorium') || $this->laboranRuangan()->exists();
+        return $this->hasRole('admin_laboratorium') || $this->laboranRuangan()->exists() || $this->laboranProdi()->exists();
     }
 
     protected $appends = ['is_superadmin', 'is_admin', 'referral_code'];
@@ -165,9 +172,12 @@ class User extends Authenticatable
             return true;
         }
         
-        // Admin adalah user yang memiliki setidaknya satu permission "update", "delete", atau "manage" (tindakan di atas read/create biasa)
-        return $this->roles()->whereHas('permissions', function($q) {
-            $q->whereIn('action', ['update', 'delete', 'approve', 'manage']);
+        // Admin adalah user yang memiliki role administratif (bukan dosen, tendik, atau mahasiswa)
+        return $this->roles()->where(function ($q) {
+            $q->where('slug', 'admin')
+              ->orWhere('slug', 'like', 'admin_%')
+              ->orWhere('slug', 'like', '%_admin')
+              ->orWhere('slug', 'operator_sdm');
         })->exists();
     }
 

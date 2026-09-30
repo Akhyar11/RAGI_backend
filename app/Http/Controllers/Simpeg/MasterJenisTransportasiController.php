@@ -36,7 +36,11 @@ class MasterJenisTransportasiController extends Controller
             $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
         }
 
-        $sortBy = in_array($request->sort_by, ['id', 'nama', 'kode', 'urutan', 'created_at']) ? $request->sort_by : 'urutan';
+        if ($request->has('is_kendaraan_kampus') && $request->is_kendaraan_kampus !== '') {
+            $query->where('is_kendaraan_kampus', filter_var($request->is_kendaraan_kampus, FILTER_VALIDATE_BOOLEAN));
+        }
+
+        $sortBy = in_array($request->sort_by, ['id', 'nama', 'kode', 'urutan', 'is_kendaraan_kampus', 'created_at']) ? $request->sort_by : 'urutan';
         $sortDir = strtolower($request->sort_dir ?? 'asc') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($sortBy, $sortDir)->orderBy('id', 'asc');
 
@@ -77,6 +81,9 @@ class MasterJenisTransportasiController extends Controller
         }
 
         $data = $request->validated();
+        if (!isset($data['is_kendaraan_kampus'])) {
+            $data['is_kendaraan_kampus'] = false;
+        }
         if (!isset($data['urutan'])) {
             $data['urutan'] = (MasterJenisTransportasi::max('urutan') ?? 0) + 1;
         }

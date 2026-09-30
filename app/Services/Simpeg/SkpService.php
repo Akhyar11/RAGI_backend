@@ -20,8 +20,11 @@ class SkpService
     {
         return [
             'kategori_skp' => MasterKategoriSkp::where('is_active', true)->orderBy('urutan')->get(),
-            'pejabat_penilai' => Pegawai::select('id', 'nama_lengkap', 'nip', 'jabatan_terakhir')
-                ->where('status_aktif', true)
+            'pejabat_penilai' => Pegawai::with(['unitKerja', 'jabatanFungsional'])
+                ->where(function ($q) {
+                    $q->where('status', 'aktif')
+                      ->orWhere('is_active', true);
+                })
                 ->orderBy('nama_lengkap')
                 ->get(),
         ];
@@ -107,6 +110,14 @@ class SkpService
      */
     public function createSkp(array $data, $user): PenilaianKinerja
     {
+        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.kinerja.manage');
+        if (!$isManager) {
+            $userPegawaiId = $user->pegawai?->id;
+            if ($userPegawaiId) {
+                $data['pegawai_id'] = $userPegawaiId;
+            }
+        }
+
         return DB::transaction(function () use ($data) {
             $skp = PenilaianKinerja::create([
                 'pegawai_id' => $data['pegawai_id'],

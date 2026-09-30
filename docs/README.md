@@ -85,6 +85,7 @@
 | PengajuanKasController | Pengajuan pencairan kas operasional unit, panjar dinas, persetujuan & penolakan | [docs/api/SIKEU/PengajuanKasController.md](api/SIKEU/PengajuanKasController.md) |
 | PemasukanKampusController | Pencatatan Pemasukan Hibah, Donatur, & Kerjasama | [docs/api/SIKEU/PemasukanKampusController.md](api/SIKEU/PemasukanKampusController.md) |
 | AkuntansiController | Chart of Accounts (COA), Jurnal Umum, & Buku Besar | [docs/api/SIKEU/AkuntansiController.md](api/SIKEU/AkuntansiController.md) |
+| ReferralPencairanController | Invoice payout reward referral SPMB: verifikasi, bayar (pengeluaran + jurnal otomatis), tolak | [docs/api/SIKEU/ReferralPencairanController.md](api/SIKEU/ReferralPencairanController.md) |
 | PaymentGatewayConfigController | Pengaturan Provider Payment Gateway (Midtrans/Xendit) | [docs/api/SIKEU/PaymentGatewayConfigController.md](api/SIKEU/PaymentGatewayConfigController.md) |
 | SettingTarifController | Konfigurasi Tarif Biaya per Angkatan, Prodi, & Semester | [docs/api/SIKEU/SettingTarifController.md](api/SIKEU/SettingTarifController.md) |
 | PembayaranKasirController | Pembayaran Kasir/Loket Tunai & Non-Tunai, Koreksi Transaksi, & Tagihan Masal | [docs/api/SIKEU/PembayaranKasirController.md](api/SIKEU/PembayaranKasirController.md) |
@@ -126,6 +127,7 @@
 | MasterJenisIzinJamKerjaController | Master jenis dispensasi izin jam kerja, durasi toleransi & aturan potong | [docs/api/SIMPEG/MasterJenisIzinJamKerjaController.md](api/SIMPEG/MasterJenisIzinJamKerjaController.md) |
 | MasterKategoriSkController | Master kategori nomor dan jenis Surat Keputusan (SK) pegawai | [docs/api/SIMPEG/MasterKategoriSkController.md](api/SIMPEG/MasterKategoriSkController.md) |
 | MasterGolonganPangkatController | Master referensi jenjang golongan & pangkat kepegawaian (I/a s.d. IV/e) | [docs/api/SIMPEG/MasterGolonganPangkatController.md](api/SIMPEG/MasterGolonganPangkatController.md) |
+| MasterJenisTransportasiController | Master moda dan jenis transportasi penugasan dinas luar (armada kampus vs umum/pribadi) | [docs/api/SIMPEG/MasterJenisTransportasiController.md](api/SIMPEG/MasterJenisTransportasiController.md) |
 
 ---
 
@@ -153,6 +155,7 @@
 | MasterSatuanController | Master data satuan barang dan aset (unit, pcs, rim, dll.) | [docs/api/SINAPRA/MasterSatuanController.md](api/SINAPRA/MasterSatuanController.md) |
 | MasterVendorController | Master data vendor dan rekanan pengadaan/kalibrasi alat kampus | [docs/api/SINAPRA/MasterVendorController.md](api/SINAPRA/MasterVendorController.md) |
 | MasterKategoriBhpController | Master data kategori bahan habis pakai (BHP) laboratorium | [docs/api/SINAPRA/MasterKategoriBhpController.md](api/SINAPRA/MasterKategoriBhpController.md) |
+| LaboranProdiController | Penugasan laboran per Program Studi untuk isolasi akses ruangan dan aset | [docs/api/SINAPRA/LaboranProdiController.md](api/SINAPRA/LaboranProdiController.md) |
 
 ---
 

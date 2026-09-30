@@ -83,10 +83,16 @@ class MasterGolonganPangkatService
     }
 
     /**
-     * Hapus data master golongan (soft delete).
+     * Hapus data master golongan (hard delete dengan proteksi relasi).
      */
     public function delete(MasterGolonganPangkat $golongan): bool
     {
+        if ($golongan->jabatanFungsional()->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'id' => ["Golongan / pangkat '{$golongan->nama}' tidak dapat dihapus karena masih digunakan oleh data jabatan fungsional pegawai."],
+            ]);
+        }
+
         return DB::transaction(function () use ($golongan) {
             return (bool) $golongan->delete();
         });

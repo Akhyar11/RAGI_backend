@@ -1,0 +1,60 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        if (!Schema::hasColumn('simpeg_pegawai', 'jabatan_fungsional_id')) {
+            // SQLite: drop dependent VIEW before table rebuild.
+            try {
+                DB::statement('DROP VIEW IF EXISTS employees');
+            } catch (\Throwable $e) {
+            }
+
+            Schema::table('simpeg_pegawai', function (Blueprint $table) {
+                $table->foreignId('jabatan_fungsional_id')
+                    ->nullable()
+                    ->after('unit_kerja_id')
+                    ->constrained('simpeg_jabatan_fungsional_akademik')
+                    ->nullOnDelete();
+            });
+
+            // Recreate compatibility VIEW.
+            try {
+                DB::statement('CREATE VIEW employees AS SELECT id, user_id, office_location_id, shift_template_id, nip AS employee_code, jenis_pegawai AS position, (SELECT nama FROM simpeg_unit_kerja WHERE simpeg_unit_kerja.id = simpeg_pegawai.unit_kerja_id) AS department, telepon AS phone, face_embedding, face_enrolled_at, consent_pdp_at, is_active, created_at, updated_at FROM simpeg_pegawai');
+            } catch (\Throwable $e) {
+            }
+        }
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        try {
+            DB::statement('DROP VIEW IF EXISTS employees');
+        } catch (\Throwable $e) {
+        }
+
+        Schema::table('simpeg_pegawai', function (Blueprint $table) {
+            if (Schema::hasColumn('simpeg_pegawai', 'jabatan_fungsional_id')) {
+                $table->dropForeign(['jabatan_fungsional_id']);
+                $table->dropColumn('jabatan_fungsional_id');
+            }
+        });
+
+        try {
+            DB::statement('CREATE VIEW employees AS SELECT id, user_id, office_location_id, shift_template_id, nip AS employee_code, jenis_pegawai AS position, (SELECT nama FROM simpeg_unit_kerja WHERE simpeg_unit_kerja.id = simpeg_pegawai.unit_kerja_id) AS department, telepon AS phone, face_embedding, face_enrolled_at, consent_pdp_at, is_active, created_at, updated_at FROM simpeg_pegawai');
+        } catch (\Throwable $e) {
+        }
+    }
+};

@@ -14,8 +14,16 @@ class UpdatePegawaiRequest extends FormRequest
         $pegawaiId = $this->route('id') ?? $this->route('pegawai');
         $pegawai = \App\Models\Simpeg\Pegawai::find($pegawaiId);
 
-        if (!$this->user()->hasPermission('simpeg.pegawai.update') && !$this->user()->hasPermission('simpeg.pegawai.manage')) {
-            if (!$pegawai || $pegawai->user_id !== $this->user()->id) {
+        $user = $this->user();
+        if (!$user) {
+            return false;
+        }
+
+        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.pegawai.update') || $user->hasPermission('simpeg.pegawai.manage');
+
+        // Jika bukan pengelola kepegawaian, hanya izinkan jika mengedit datanya sendiri
+        if (!$isManager) {
+            if (!$pegawai || $pegawai->user_id !== $user->id) {
                 return false;
             }
         }
@@ -29,10 +37,29 @@ class UpdatePegawaiRequest extends FormRequest
     public function rules(): array
     {
         $id = $this->route('id') ?? $this->route('pegawai');
+        $user = $this->user();
+        $isManager = $user && ($user->isAdmin() || $user->hasPermission('simpeg.pegawai.update') || $user->hasPermission('simpeg.pegawai.manage'));
+
+        // Jika bukan manajer / admin SDM, batasi hanya untuk data kontak, bank, dan profil mandiri
+        if (!$isManager) {
+            return [
+                'telepon' => 'nullable|string|max:30',
+                'alamat' => 'nullable|string',
+                'nama_bank' => 'nullable|string|max:50',
+                'bank_nama' => 'nullable|string|max:50',
+                'nomor_rekening' => 'nullable|string|max:50',
+                'nama_rekening' => 'nullable|string|max:100',
+                'tempat_lahir' => 'nullable|string|max:100',
+                'tanggal_lahir' => 'nullable|date',
+                'jenis_kelamin' => 'sometimes|string|max:10',
+                'agama' => 'nullable|string|max:50',
+            ];
+        }
 
         return [
             'user_id' => 'nullable|exists:core_users,id|unique:simpeg_pegawai,user_id,' . $id,
             'unit_kerja_id' => 'nullable|exists:simpeg_unit_kerja,id',
+            'jabatan_fungsional_id' => 'nullable|exists:simpeg_jabatan_fungsional_akademik,id',
             'nip' => 'nullable|string|unique:simpeg_pegawai,nip,' . $id,
             'nidn' => 'nullable|string|unique:simpeg_pegawai,nidn,' . $id,
             'nuptk' => 'nullable|string|unique:simpeg_pegawai,nuptk,' . $id,
@@ -52,6 +79,7 @@ class UpdatePegawaiRequest extends FormRequest
             'status' => 'sometimes|string|max:50',
             'telepon' => 'nullable|string|max:30',
             'nama_bank' => 'nullable|string|max:50',
+            'bank_nama' => 'nullable|string|max:50',
             'nomor_rekening' => 'nullable|string|max:50',
             'nama_rekening' => 'nullable|string|max:100',
             'alamat' => 'nullable|string',
@@ -70,6 +98,7 @@ class UpdatePegawaiRequest extends FormRequest
             'nidn' => 'NIDN',
             'nuptk' => 'NUPTK',
             'nama_lengkap' => 'Nama Lengkap',
+            'jabatan_fungsional_id' => 'Jabatan Fungsional Akademik',
             'shift_template_id' => 'Shift Kerja (Jadwal Presensi)',
         ];
     }

@@ -9,6 +9,9 @@ use App\Http\Requests\Simpeg\StoreSertifikasiDosenRequest;
 use App\Http\Requests\Simpeg\UpdateRiwayatPelatihanRequest;
 use App\Http\Requests\Simpeg\UpdateRiwayatTesRequest;
 use App\Http\Requests\Simpeg\UpdateSertifikasiDosenRequest;
+use App\Models\Simpeg\RiwayatPelatihan;
+use App\Models\Simpeg\RiwayatTes;
+use App\Models\Simpeg\SertifikasiDosen;
 use App\Services\Simpeg\KompetensiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -67,7 +70,8 @@ class KompetensiController extends Controller
     public function storeSertifikasi(StoreSertifikasiDosenRequest $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.kompetensi.create') && !$user->hasPermission('simpeg.kompetensi.manage') && !$user->isAdmin()) {
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        if (!$user->hasPermission('simpeg.kompetensi.create') && !$isManager) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk menambahkan sertifikasi dosen.',
@@ -75,6 +79,14 @@ class KompetensiController extends Controller
         }
 
         $validated = $request->validated();
+        if (!$isManager) {
+            $userPegId = $user->pegawai?->id;
+            if (!$userPegId) {
+                return response()->json(['status' => 'error', 'message' => 'Akun Anda belum terhubung dengan data Pegawai.'], 403);
+            }
+            $validated['pegawai_id'] = $userPegId;
+        }
+
         $file = $request->file('file');
         unset($validated['file']);
 
@@ -90,14 +102,26 @@ class KompetensiController extends Controller
     public function updateSertifikasi(UpdateSertifikasiDosenRequest $request, int $id): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.kompetensi.update') && !$user->hasPermission('simpeg.kompetensi.manage') && !$user->isAdmin()) {
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        if (!$user->hasPermission('simpeg.kompetensi.update') && !$isManager) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk mengubah data sertifikasi dosen.',
             ], 403);
         }
 
+        $sertifikasi = SertifikasiDosen::findOrFail($id);
+        if (!$isManager && $sertifikasi->pegawai_id !== $user->pegawai?->id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda hanya berhak mengubah sertifikasi milik Anda sendiri.'
+            ], 403);
+        }
+
         $validated = $request->validated();
+        if (!$isManager) {
+            unset($validated['pegawai_id']);
+        }
         $file = $request->file('file');
         unset($validated['file']);
 
@@ -113,10 +137,19 @@ class KompetensiController extends Controller
     public function destroySertifikasi(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.kompetensi.delete') && !$user->hasPermission('simpeg.kompetensi.manage') && !$user->isAdmin()) {
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        if (!$user->hasPermission('simpeg.kompetensi.delete') && !$isManager) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk menghapus sertifikasi dosen.',
+            ], 403);
+        }
+
+        $sertifikasi = SertifikasiDosen::findOrFail($id);
+        if (!$isManager && $sertifikasi->pegawai_id !== $user->pegawai?->id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda hanya berhak menghapus sertifikasi milik Anda sendiri.'
             ], 403);
         }
 
@@ -162,7 +195,8 @@ class KompetensiController extends Controller
     public function storeTes(StoreRiwayatTesRequest $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.kompetensi.create') && !$user->hasPermission('simpeg.kompetensi.manage') && !$user->isAdmin()) {
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        if (!$user->hasPermission('simpeg.kompetensi.create') && !$isManager) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk menambahkan data riwayat tes.',
@@ -170,6 +204,14 @@ class KompetensiController extends Controller
         }
 
         $validated = $request->validated();
+        if (!$isManager) {
+            $userPegId = $user->pegawai?->id;
+            if (!$userPegId) {
+                return response()->json(['status' => 'error', 'message' => 'Akun Anda belum terhubung dengan data Pegawai.'], 403);
+            }
+            $validated['pegawai_id'] = $userPegId;
+        }
+
         $file = $request->file('file');
         unset($validated['file']);
 
@@ -185,14 +227,26 @@ class KompetensiController extends Controller
     public function updateTes(UpdateRiwayatTesRequest $request, int $id): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.kompetensi.update') && !$user->hasPermission('simpeg.kompetensi.manage') && !$user->isAdmin()) {
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        if (!$user->hasPermission('simpeg.kompetensi.update') && !$isManager) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk mengubah data riwayat tes.',
             ], 403);
         }
 
+        $tes = RiwayatTes::findOrFail($id);
+        if (!$isManager && $tes->pegawai_id !== $user->pegawai?->id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda hanya berhak mengubah riwayat tes milik Anda sendiri.'
+            ], 403);
+        }
+
         $validated = $request->validated();
+        if (!$isManager) {
+            unset($validated['pegawai_id']);
+        }
         $file = $request->file('file');
         unset($validated['file']);
 
@@ -208,10 +262,19 @@ class KompetensiController extends Controller
     public function destroyTes(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.kompetensi.delete') && !$user->hasPermission('simpeg.kompetensi.manage') && !$user->isAdmin()) {
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        if (!$user->hasPermission('simpeg.kompetensi.delete') && !$isManager) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk menghapus data riwayat tes.',
+            ], 403);
+        }
+
+        $tes = RiwayatTes::findOrFail($id);
+        if (!$isManager && $tes->pegawai_id !== $user->pegawai?->id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda hanya berhak menghapus riwayat tes milik Anda sendiri.'
             ], 403);
         }
 
@@ -257,7 +320,8 @@ class KompetensiController extends Controller
     public function storePelatihan(StoreRiwayatPelatihanRequest $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.kompetensi.create') && !$user->hasPermission('simpeg.kompetensi.manage') && !$user->isAdmin()) {
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        if (!$user->hasPermission('simpeg.kompetensi.create') && !$isManager) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk menambahkan data riwayat pelatihan.',
@@ -265,6 +329,14 @@ class KompetensiController extends Controller
         }
 
         $validated = $request->validated();
+        if (!$isManager) {
+            $userPegId = $user->pegawai?->id;
+            if (!$userPegId) {
+                return response()->json(['status' => 'error', 'message' => 'Akun Anda belum terhubung dengan data Pegawai.'], 403);
+            }
+            $validated['pegawai_id'] = $userPegId;
+        }
+
         $file = $request->file('file');
         unset($validated['file']);
 
@@ -280,14 +352,26 @@ class KompetensiController extends Controller
     public function updatePelatihan(UpdateRiwayatPelatihanRequest $request, int $id): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.kompetensi.update') && !$user->hasPermission('simpeg.kompetensi.manage') && !$user->isAdmin()) {
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        if (!$user->hasPermission('simpeg.kompetensi.update') && !$isManager) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk mengubah data riwayat pelatihan.',
             ], 403);
         }
 
+        $pelatihan = RiwayatPelatihan::findOrFail($id);
+        if (!$isManager && $pelatihan->pegawai_id !== $user->pegawai?->id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda hanya berhak mengubah riwayat pelatihan milik Anda sendiri.'
+            ], 403);
+        }
+
         $validated = $request->validated();
+        if (!$isManager) {
+            unset($validated['pegawai_id']);
+        }
         $file = $request->file('file');
         unset($validated['file']);
 
@@ -303,10 +387,19 @@ class KompetensiController extends Controller
     public function destroyPelatihan(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('simpeg.kompetensi.delete') && !$user->hasPermission('simpeg.kompetensi.manage') && !$user->isAdmin()) {
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        if (!$user->hasPermission('simpeg.kompetensi.delete') && !$isManager) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk menghapus data riwayat pelatihan.',
+            ], 403);
+        }
+
+        $pelatihan = RiwayatPelatihan::findOrFail($id);
+        if (!$isManager && $pelatihan->pegawai_id !== $user->pegawai?->id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda hanya berhak menghapus riwayat pelatihan milik Anda sendiri.'
             ], 403);
         }
 

@@ -7,6 +7,9 @@ use App\Models\Siakad\Dosen;
 use App\Models\Spmb\MasterProgramStudi;
 use App\Models\User;
 use App\Models\Role;
+use App\Models\Aset;
+use App\Models\PeminjamanAset;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -15,7 +18,7 @@ class PegawaiService
 {
     public function getFiltered(array $filters = [])
     {
-        $query = Pegawai::with(['user', 'user.roles', 'unitKerja', 'shiftTemplate', 'officeLocation', 'riwayatJabatan.jabatan', 'riwayatPendidikan', 'dosen', 'dosen.programStudi', 'roles']);
+        $query = Pegawai::with(['user', 'user.roles', 'unitKerja', 'jabatanFungsional', 'shiftTemplate', 'officeLocation', 'riwayatJabatan.jabatan', 'riwayatPendidikan', 'dosen', 'dosen.programStudi', 'roles']);
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];
@@ -108,6 +111,29 @@ class PegawaiService
 
     public function update(Pegawai $pegawai, array $data)
     {
+        // Enforce clearance jika status diubah menjadi keluar / pensiun / berhenti
+        $newStatus = isset($data['status']) ? strtolower(trim((string)$data['status'])) : null;
+        $newStatusKepegawaian = isset($data['status_kepegawaian']) ? strtolower(trim((string)$data['status_kepegawaian'])) : null;
+
+        $isDeactivating = in_array($newStatus, ['keluar', 'pensiun', 'berhenti']) ||
+                          in_array($newStatusKepegawaian, ['keluar', 'pensiun', 'berhenti']);
+
+        if ($isDeactivating) {
+            $clearance = $this->getClearanceStatus($pegawai);
+            if (!$clearance['is_cleared']) {
+                $reasons = [];
+                if ($clearance['aset_dipegang_count'] > 0) {
+                    $reasons[] = "masih memegang {$clearance['aset_dipegang_count']} aset dinas";
+                }
+                if ($clearance['peminjaman_aktif_count'] > 0) {
+                    $reasons[] = "masih memiliki {$clearance['peminjaman_aktif_count']} peminjaman fasilitas aktif";
+                }
+                throw ValidationException::withMessages([
+                    'status' => ['Tidak dapat mengubah status menjadi keluar/pensiun karena pegawai ' . implode(' dan ', $reasons) . '. Selesaikan clearance inventaris di SINAPRA terlebih dahulu.']
+                ]);
+            }
+        }
+
         return \Illuminate\Support\Facades\DB::transaction(function () use ($pegawai, $data) {
             unset($data['email'], $data['username']);
 
@@ -143,6 +169,20 @@ class PegawaiService
 
     public function delete(Pegawai $pegawai)
     {
+        $clearance = $this->getClearanceStatus($pegawai);
+        if (!$clearance['is_cleared']) {
+            $reasons = [];
+            if ($clearance['aset_dipegang_count'] > 0) {
+                $reasons[] = "masih memegang {$clearance['aset_dipegang_count']} aset dinas";
+            }
+            if ($clearance['peminjaman_aktif_count'] > 0) {
+                $reasons[] = "masih memiliki {$clearance['peminjaman_aktif_count']} peminjaman fasilitas aktif";
+            }
+            throw ValidationException::withMessages([
+                'pegawai' => ['Tidak dapat menghapus pegawai karena pegawai ' . implode(' dan ', $reasons) . '. Selesaikan clearance inventaris di SINAPRA terlebih dahulu.']
+            ]);
+        }
+
         if ($pegawai->dosen) {
             $pegawai->dosen->update([
                 'status_aktif' => 'Tidak Aktif',
@@ -150,6 +190,34 @@ class PegawaiService
             ]);
         }
         return $pegawai->delete();
+    }
+
+    /**
+     * Cek status clearance aset dinas dan peminjaman fasilitas pegawai.
+     */
+    public function getClearanceStatus(Pegawai $pegawai): array
+    {
+        $asetDipegang = Aset::where('penanggung_jawab_pegawai_id', $pegawai->id)
+            ->where('status', '!=', 'dihapuskan')
+            ->get(['id', 'kode_aset', 'nama_aset', 'nomor_seri', 'status', 'kondisi']);
+
+        $peminjamanAktif = collect();
+        if ($pegawai->user_id) {
+            $peminjamanAktif = PeminjamanAset::where('user_id', $pegawai->user_id)
+                ->whereIn('status', ['pending_laboran', 'pending_admin_sinapra', 'disetujui'])
+                ->with(['aset:id,kode_aset,nama_aset'])
+                ->get();
+        }
+
+        $isCleared = $asetDipegang->isEmpty() && $peminjamanAktif->isEmpty();
+
+        return [
+            'is_cleared' => $isCleared,
+            'aset_dipegang_count' => $asetDipegang->count(),
+            'peminjaman_aktif_count' => $peminjamanAktif->count(),
+            'aset_dipegang' => $asetDipegang,
+            'peminjaman_aktif' => $peminjamanAktif,
+        ];
     }
 
     /**

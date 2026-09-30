@@ -107,7 +107,7 @@ class ReferralController extends Controller
     {
         $payout = $this->referralService->createPayout(
             $request->user(),
-            $request->input('keterangan')
+            $request->validated()
         );
 
         return response()->json([
@@ -116,6 +116,7 @@ class ReferralController extends Controller
             'data' => [
                 'id' => $payout->id,
                 'nomor_bukti' => $payout->nomor_bukti,
+                'status' => $payout->status,
                 'referral_count' => $payout->referral_count,
                 'total_nominal' => (float) $payout->total_nominal,
                 'generated_at' => $payout->generated_at,

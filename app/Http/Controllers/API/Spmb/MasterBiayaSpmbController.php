@@ -110,10 +110,52 @@ class MasterBiayaSpmbController extends Controller
         ]);
     }
 
+    /**
+     * Opsi role untuk pemetaan reward referral pada komponen biaya.
+     */
+    public function roleOptions(Request $request): JsonResponse
+    {
+        $perPage = min(100, $request->integer('per_page', 15));
+
+        $query = \App\Models\Role::query()->where('is_active', true);
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('slug', 'like', "%{$search}%");
+            });
+        }
+
+        $allowedSort = ['name', 'slug', 'id'];
+        $sortBy = in_array($request->input('sort_by'), $allowedSort, true) ? $request->input('sort_by') : 'name';
+        $sortOrder = $request->input('sort_order') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        $data = $query->paginate($perPage);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Opsi role berhasil dimuat.',
+            'data' => $data->items(),
+            'meta' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem(),
+            ],
+            'filters' => [
+                'search' => $request->input('search'),
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+            ],
+        ]);
+    }
+
     public function destroyKomponen(Request $request, $id): JsonResponse
     {
-
-
         $komponen = MasterKomponenBiaya::findOrFail($id);
         $this->service->deleteKomponen($komponen);
 

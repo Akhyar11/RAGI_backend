@@ -53,8 +53,8 @@ class GajiPegawai extends Model
         'total_bpjs' => 'float',
         'gaji_bersih' => 'float',
         'jumlah_hari_hadir_tepat_waktu' => 'integer',
-        'submitted_at' => 'datetime',
-        'tanggal_transfer' => 'datetime',
+        'submitted_at' => 'datetime:Y-m-d H:i:s',
+        'tanggal_transfer' => 'datetime:Y-m-d H:i:s',
     ];
 
     public function pegawai(): BelongsTo

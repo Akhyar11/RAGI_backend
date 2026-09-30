@@ -162,6 +162,14 @@ class SuratTugasService
     public function create(array $data, ?UploadedFile $fileSuratTugas, ?UploadedFile $fileLpj, $user): SuratTugas
     {
         return DB::transaction(function () use ($data, $fileSuratTugas, $fileLpj, $user) {
+            $isManager = $user->isAdmin() || $user->hasPermission('simpeg.surat_tugas.manage');
+            if (!$isManager) {
+                $userPegawaiId = $user->pegawai?->id;
+                if ($userPegawaiId) {
+                    $data['pegawai_id'] = $userPegawaiId;
+                }
+            }
+
             $fileSuratTugasPath = $this->handleFileUpload($fileSuratTugas, 'surat_tugas');
             $fileLpjPath = $this->handleFileUpload($fileLpj, 'lpj');
 

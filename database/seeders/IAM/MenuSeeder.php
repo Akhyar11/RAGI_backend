@@ -364,12 +364,20 @@ class MenuSeeder extends Seeder
 
             // ── MODUL SINAPRA ─────────────────────────────────────
             [
+                'name' => 'Dashboard Sarpras',
+                'url' => '/sinapra',
+                'icon' => 'FaChartPie',
+                'module' => 'sinapra',
+                'permission_slug' => 'sinapra.dashboard.read',
+                'order_index' => 1,
+            ],
+            [
                 'name' => 'Gedung & Ruangan',
                 'url' => '/sinapra/gedung-ruangan',
                 'icon' => 'FaBuilding',
                 'module' => 'sinapra',
                 'permission_slug' => 'sinapra.ruangan.read',
-                'order_index' => 1,
+                'order_index' => 2,
             ],
             [
                 'name' => 'Inventaris Aset',
@@ -377,7 +385,7 @@ class MenuSeeder extends Seeder
                 'icon' => 'FaBoxes',
                 'module' => 'sinapra',
                 'permission_slug' => 'sinapra.aset.read',
-                'order_index' => 2,
+                'order_index' => 3,
             ],
             [
                 'name' => 'Peminjaman',
@@ -385,7 +393,7 @@ class MenuSeeder extends Seeder
                 'icon' => 'FaCalendarCheck',
                 'module' => 'sinapra',
                 'permission_slug' => 'sinapra.dashboard.read',
-                'order_index' => 3,
+                'order_index' => 4,
             ],
             [
                 'name' => 'Maintenance',
@@ -393,7 +401,7 @@ class MenuSeeder extends Seeder
                 'icon' => 'FaWrench',
                 'module' => 'sinapra',
                 'permission_slug' => 'sinapra.dashboard.read',
-                'order_index' => 4,
+                'order_index' => 5,
             ],
             [
                 'name' => 'Pengadaan Barang',
@@ -401,7 +409,7 @@ class MenuSeeder extends Seeder
                 'icon' => 'FaShoppingCart',
                 'module' => 'sinapra',
                 'permission_slug' => 'sinapra.dashboard.read',
-                'order_index' => 5,
+                'order_index' => 6,
             ],
             [
                 'name' => 'Laboratorium & BHP',
@@ -409,7 +417,7 @@ class MenuSeeder extends Seeder
                 'icon' => 'FaBoxes',
                 'module' => 'sinapra',
                 'permission_slug' => 'sinapra.dashboard.read',
-                'order_index' => 6,
+                'order_index' => 7,
             ],
             [
                 'name' => 'Audit & Mutasi',
@@ -417,7 +425,7 @@ class MenuSeeder extends Seeder
                 'icon' => 'FaClipboardCheck',
                 'module' => 'sinapra',
                 'permission_slug' => 'sinapra.dashboard.read',
-                'order_index' => 7,
+                'order_index' => 8,
             ],
             [
                 'name' => 'Kalender Ruangan',
@@ -425,14 +433,14 @@ class MenuSeeder extends Seeder
                 'icon' => 'FaCalendar',
                 'module' => 'sinapra',
                 'permission_slug' => 'sinapra.dashboard.read',
-                'order_index' => 8,
+                'order_index' => 9,
             ],
             [
                 'name' => 'MASTER DATA',
                 'url' => '#master_sinapra',
                 'icon' => 'FaDatabase',
                 'module' => 'sinapra',
-                'order_index' => 9,
+                'order_index' => 10,
                 'children' => [
                     ['name' => 'Master Kategori Aset', 'url' => '/sinapra/master/kategori-aset', 'icon' => 'FaTags', 'module' => 'sinapra', 'order_index' => 1],
                     ['name' => 'Master Tipe Ruangan', 'url' => '/sinapra/master/tipe-ruangan', 'icon' => 'FaDoorOpen', 'module' => 'sinapra', 'order_index' => 2],
@@ -635,10 +643,44 @@ class MenuSeeder extends Seeder
         $dosenRole = \App\Models\Role::where('slug', 'dosen')->first();
         if ($dosenRole) {
             $dosenSimpegMenuIds = Menu::where('module', 'simpeg')
-                ->whereIn('url', ['/simpeg', '/simpeg/presensi', '/simpeg/cuti', '/simpeg/payroll', '/simpeg/kompetensi', '/simpeg/surat-tugas', '/simpeg/izin-kerja', '/simpeg/sk-pegawai'])
+                ->whereIn('url', [
+                    '/simpeg',
+                    '#layanan_simpeg',
+                    '#kepegawaian_simpeg',
+                    '/simpeg/presensi',
+                    '/simpeg/cuti',
+                    '/simpeg/payroll',
+                    '/simpeg/kinerja',
+                    '/simpeg/usulan-jafung',
+                    '/simpeg/kompetensi',
+                    '/simpeg/surat-tugas',
+                    '/simpeg/sk-pegawai',
+                    '/simpeg/dokumen',
+                ])
                 ->pluck('id')
                 ->toArray();
             $dosenRole->menus()->syncWithoutDetaching($dosenSimpegMenuIds);
+        }
+
+        $tendikRole = \App\Models\Role::where('slug', 'tendik')->first();
+        if ($tendikRole) {
+            $tendikSimpegMenuIds = Menu::where('module', 'simpeg')
+                ->whereIn('url', [
+                    '/simpeg',
+                    '#layanan_simpeg',
+                    '#kepegawaian_simpeg',
+                    '/simpeg/presensi',
+                    '/simpeg/cuti',
+                    '/simpeg/payroll',
+                    '/simpeg/kinerja',
+                    '/simpeg/kompetensi',
+                    '/simpeg/surat-tugas',
+                    '/simpeg/sk-pegawai',
+                    '/simpeg/dokumen',
+                ])
+                ->pluck('id')
+                ->toArray();
+            $tendikRole->menus()->syncWithoutDetaching($tendikSimpegMenuIds);
         }
 
         // Dosen: portal SIAKAD (jadwal, KRS bimbingan, nilai, CPMK/RPS, hasil studi, panduan)

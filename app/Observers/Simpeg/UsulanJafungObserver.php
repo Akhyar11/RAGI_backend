@@ -64,6 +64,12 @@ class UsulanJafungObserver
                         'ditolak' => 'reject',
                         default => 'update',
                     };
+
+                    if ($model->status_usulan === 'disetujui' && $model->jafung_tujuan_id) {
+                        \App\Models\Simpeg\Pegawai::where('id', $model->pegawai_id)->update([
+                            'jabatan_fungsional_id' => $model->jafung_tujuan_id,
+                        ]);
+                    }
                 }
 
                 $oldValues = self::$oldValues[spl_object_id($model)] ?? [];

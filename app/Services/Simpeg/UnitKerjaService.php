@@ -29,6 +29,24 @@ class UnitKerjaService
 
     public function delete(UnitKerja $unitKerja)
     {
+        if ($unitKerja->children()->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'id' => ["Unit kerja '{$unitKerja->nama}' tidak dapat dihapus karena masih memiliki sub-unit kerja di bawahnya."],
+            ]);
+        }
+
+        if ($unitKerja->pegawai()->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'id' => ["Unit kerja '{$unitKerja->nama}' tidak dapat dihapus karena masih digunakan oleh data pegawai."],
+            ]);
+        }
+
+        if ($unitKerja->jabatan()->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'id' => ["Unit kerja '{$unitKerja->nama}' tidak dapat dihapus karena masih digunakan oleh data jabatan."],
+            ]);
+        }
+
         return $unitKerja->delete();
     }
 }

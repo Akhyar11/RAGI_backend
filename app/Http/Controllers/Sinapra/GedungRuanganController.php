@@ -124,11 +124,31 @@ class GedungRuanganController extends Controller
         $this->authorize('viewAny', Ruangan::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = Ruangan::with(['gedung', 'laboran', 'tipeRuangan']);
+        $query = Ruangan::with(['gedung', 'laboran', 'tipeRuangan', 'programStudi:id,kode_prodi,nama,jenjang']);
 
         $user = $request->user();
         if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
-            $query->whereHas('laboran', fn($q) => $q->where('core_users.id', $user->id));
+            $prodiIds = $user->laboranProdi()->pluck('siakad_program_studi.id');
+            $hasLaboranRuangan = $user->laboranRuangan()->exists();
+
+            $query->where(function ($q) use ($user, $prodiIds, $hasLaboranRuangan) {
+                $hasCondition = false;
+                if ($prodiIds->isNotEmpty()) {
+                    $q->whereIn('program_studi_id', $prodiIds);
+                    $hasCondition = true;
+                }
+                if ($hasLaboranRuangan) {
+                    if ($hasCondition) {
+                        $q->orWhereHas('laboran', fn($lq) => $lq->where('core_users.id', $user->id));
+                    } else {
+                        $q->whereHas('laboran', fn($lq) => $lq->where('core_users.id', $user->id));
+                    }
+                    $hasCondition = true;
+                }
+                if (!$hasCondition) {
+                    $q->whereRaw('1 = 0');
+                }
+            });
         }
 
         if ($request->filled('gedung_id')) {
@@ -137,6 +157,14 @@ class GedungRuanganController extends Controller
 
         if ($request->filled('tipe_ruangan_id')) {
             $query->where('tipe_ruangan_id', $request->tipe_ruangan_id);
+        }
+
+        if ($request->filled('program_studi_id')) {
+            if ($request->program_studi_id === 'null' || $request->program_studi_id === 'umum') {
+                $query->whereNull('program_studi_id');
+            } else {
+                $query->where('program_studi_id', $request->program_studi_id);
+            }
         }
 
         if ($request->filled('tipe')) {
@@ -181,6 +209,7 @@ class GedungRuanganController extends Controller
                 'search' => $request->search,
                 'gedung_id' => $request->gedung_id,
                 'tipe_ruangan_id' => $request->tipe_ruangan_id,
+                'program_studi_id' => $request->program_studi_id,
                 'tipe' => $request->tipe,
                 'status' => $request->status,
                 'sort_by' => $sortBy,
@@ -198,7 +227,7 @@ class GedungRuanganController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data ruangan berhasil ditambahkan',
-            'data' => $ruangan->load(['gedung', 'tipeRuangan']),
+            'data' => $ruangan->load(['gedung', 'tipeRuangan', 'programStudi:id,kode_prodi,nama,jenjang']),
         ], 201);
     }
 
@@ -209,7 +238,7 @@ class GedungRuanganController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Detail ruangan berhasil diambil',
-            'data' => $ruangan->load(['gedung', 'aset', 'laboran', 'tipeRuangan']),
+            'data' => $ruangan->load(['gedung', 'aset', 'laboran', 'tipeRuangan', 'programStudi:id,kode_prodi,nama,jenjang']),
         ]);
     }
 
@@ -222,7 +251,7 @@ class GedungRuanganController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data ruangan berhasil diperbarui',
-            'data' => $updated->load(['gedung', 'tipeRuangan']),
+            'data' => $updated->load(['gedung', 'tipeRuangan', 'programStudi:id,kode_prodi,nama,jenjang']),
         ]);
     }
 

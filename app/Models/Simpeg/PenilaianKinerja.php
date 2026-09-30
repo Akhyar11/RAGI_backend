@@ -34,9 +34,9 @@ class PenilaianKinerja extends Model
         'tahun' => 'integer',
         'nilai_skp' => 'decimal:2',
         'nilai_bkd' => 'decimal:2',
-        'tanggal_pengajuan' => 'datetime',
-        'tanggal_persetujuan' => 'datetime',
-        'evaluated_at' => 'datetime',
+        'tanggal_pengajuan' => 'datetime:Y-m-d H:i:s',
+        'tanggal_persetujuan' => 'datetime:Y-m-d H:i:s',
+        'evaluated_at' => 'datetime:Y-m-d H:i:s',
     ];
 
     public function pegawai(): BelongsTo

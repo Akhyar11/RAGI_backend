@@ -33,6 +33,11 @@ class PresensiPegawai extends Model
         'early_leave_minutes',
     ];
 
+    protected $casts = [
+        'tanggal' => 'date:Y-m-d',
+        'approved_at' => 'datetime:Y-m-d H:i:s',
+    ];
+
     public function pegawai(): BelongsTo
     {
         return $this->belongsTo(Pegawai::class, 'pegawai_id');

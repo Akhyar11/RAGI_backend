@@ -4,9 +4,9 @@
 > **Base URL**: `/api/simpeg/pegawai`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-14  
-> **Diperbarui**: 2026-09-22  
+> **Diperbarui**: 2026-09-29  
 
-Controller ini mengelola master data pegawai di lingkungan universitas/institusi, mencakup pendaftaran pegawai baru, penetapan multi-role jenis pegawai (`core_roles`), pembuatan akun login SSO otomatis (`core_users`), pengunduhan template import berkas, import pegawai massal via CSV/Excel, serta manajemen biometrik presensi.
+Controller ini mengelola master data pegawai di lingkungan universitas/institusi, mencakup pendaftaran pegawai baru, penetapan multi-role jenis pegawai (`core_roles`), pembuatan akun login SSO otomatis (`core_users`), pengunduhan template import berkas, import pegawai massal via CSV/Excel, manajemen biometrik presensi, serta clearance inventaris aset dinas (SINAPRA).
 
 ---
 
@@ -20,10 +20,11 @@ Controller ini mengelola master data pegawai di lingkungan universitas/institusi
 | GET | `/api/simpeg/pegawai/me` | Profil data pegawai dari user yang sedang login | ✅ |
 | GET | `/api/simpeg/pegawai` | Daftar data pegawai (dengan pagination & filter) | ✅ |
 | POST | `/api/simpeg/pegawai` | Tambah data pegawai baru (multi-role SSO & shift) | ✅ |
-| GET | `/api/simpeg/pegawai/{id}` | Detail profil lengkap pegawai (roles, unit, shift) | ✅ |
-| PUT | `/api/simpeg/pegawai/{id}` | Memperbarui data pegawai & sinkronisasi akun SSO | ✅ |
-| DELETE | `/api/simpeg/pegawai/{id}` | Menghapus data pegawai (Soft-delete) | ✅ |
+| GET | `/api/simpeg/pegawai/{id}` | Detail profil lengkap pegawai (roles, unit, shift, aset) | ✅ |
+| PUT | `/api/simpeg/pegawai/{id}` | Memperbarui data pegawai & validasi clearance aset | ✅ |
+| DELETE | `/api/simpeg/pegawai/{id}` | Menghapus data pegawai (validasi clearance aset) | ✅ |
 | POST | `/api/simpeg/pegawai/{id}/reset-face` | Mereset data biometrik wajah pegawai | ✅ |
+| GET | `/api/simpeg/pegawai/{id}/clearance` | Status clearance aset dinas dan peminjaman fasilitas | ✅ |
 
 ---
 
@@ -279,6 +280,7 @@ Content-Type: application/json
   "tanggal_masuk": "2024-01-15",
   "shift_template_id": 1,
   "unit_kerja_id": 2,
+  "jabatan_fungsional_id": 2,
   "role_ids": [5],
   "status_kepegawaian": "tetap_yayasan",
   "status": "aktif",
@@ -432,6 +434,7 @@ Content-Type: application/json
   "tanggal_masuk": "2024-01-15",
   "shift_template_id": 1,
   "unit_kerja_id": 2,
+  "jabatan_fungsional_id": 2,
   "role_ids": [5],
   "status_kepegawaian": "tetap_yayasan",
   "status": "aktif",
@@ -543,6 +546,55 @@ Accept: application/json
 
 ---
 
+## GET /api/simpeg/pegawai/{id}/clearance
+
+> Mengambil status verifikasi clearance inventaris aset dinas dan peminjaman fasilitas pegawai dari modul SINAPRA. Digunakan untuk memeriksa apakah pegawai bebas dari tanggungan aset sebelum proses pengunduran diri (resign), pemutusan hubungan kerja, atau masa pensiun.
+
+### Headers
+```http
+Authorization: Bearer <token>
+Accept: application/json
+```
+
+### URL Parameters
+| Parameter | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `id` | integer | ✅ | ID entitas pegawai (`simpeg_pegawai.id`) |
+
+### Response Success (200 OK)
+```json
+{
+  "status": "success",
+  "data": {
+    "is_cleared": true,
+    "aset_dipegang_count": 0,
+    "peminjaman_aktif_count": 0,
+    "aset_dipegang": [],
+    "peminjaman_aktif": []
+  }
+}
+```
+
+### Response Error (403 Forbidden)
+```json
+{
+  "status": "error",
+  "message": "Akses Ditolak: Anda tidak memiliki hak akses untuk melihat status clearance pegawai ini."
+}
+```
+
+### Response Error (404 Not Found)
+```json
+{
+  "status": "error",
+  "message": "Pegawai tidak ditemukan."
+}
+```
+
+---
+
 ## Catatan Keamanan & Sistem
 1. **Penerapan Soft-Delete**: Model `Pegawai` menggunakan trait `Illuminate\Database\Eloquent\SoftDeletes`. Menghapus data pegawai melalui endpoint `DELETE` hanya akan mengisi kolom `deleted_at` untuk menjamin integritas riwayat presensi, gaji, dan riwayat jabatan.
 2. **Proteksi Password Akun SSO**: Password default (`indonusa`) yang di-generate untuk akun login SSO (`core_users`) disimpan dalam bentuk hash terenkripsi Bcrypt dan **TIDAK PERNAH dikembalikan** pada respons JSON endpoint API manapun demi privasi dan keamanan sistem.
+3. **Validasi Clearance Aset SINAPRA**: Setiap percobaan mengubah status kepegawaian menjadi `keluar`, `pensiun`, atau `berhenti`, serta tindakan penghapusan data pegawai (`DELETE`), secara otomatis divalidasi oleh sistem. Jika pegawai masih memegang aset dinas aktif atau memiliki pinjaman fasilitas yang belum dikembalikan, sistem akan memblokir aksi tersebut dengan HTTP 422 Unprocessable Entity.
+

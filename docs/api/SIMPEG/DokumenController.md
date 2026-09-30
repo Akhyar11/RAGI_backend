@@ -1,6 +1,6 @@
 # DokumenController
 
-> **Modul**: SIMPEG / **Base URL**: /api/simpeg/dokumen / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-26
+> **Modul**: SIMPEG / **Base URL**: /api/simpeg/dokumen / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-28
 
 Modul ini mengelola arsip e-file dokumen kepegawaian (KTP, KK, Ijazah, SK, Serdos, Sertifikat, dll.), penyimpanan terenkripsi/private, secure view dengan dynamic watermark anti-bocor, serta penghapusan berkas.
 

@@ -116,7 +116,7 @@ class AsetController extends Controller
         $this->authorize('viewAny', Aset::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = Aset::with(['kategori', 'ruangan.gedung']);
+        $query = Aset::with(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja', 'programStudi:id,kode_prodi,nama,jenjang']);
 
         if ($request->filled('kategori_id')) {
             $query->where('kategori_id', $request->kategori_id);
@@ -124,6 +124,18 @@ class AsetController extends Controller
 
         if ($request->filled('ruangan_id')) {
             $query->where('ruangan_id', $request->ruangan_id);
+        }
+
+        if ($request->filled('program_studi_id')) {
+            if ($request->program_studi_id === 'null' || $request->program_studi_id === 'umum') {
+                $query->whereNull('program_studi_id');
+            } else {
+                $query->where('program_studi_id', $request->program_studi_id);
+            }
+        }
+
+        if ($request->filled('penanggung_jawab_pegawai_id')) {
+            $query->where('penanggung_jawab_pegawai_id', $request->penanggung_jawab_pegawai_id);
         }
 
         if ($request->filled('kondisi')) {
@@ -181,6 +193,7 @@ class AsetController extends Controller
                 'search' => $request->search,
                 'kategori_id' => $request->kategori_id,
                 'ruangan_id' => $request->ruangan_id,
+                'program_studi_id' => $request->program_studi_id,
                 'kondisi' => $request->kondisi,
                 'status' => $request->status,
                 'is_borrowable' => $request->is_borrowable,
@@ -200,7 +213,7 @@ class AsetController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data aset berhasil ditambahkan',
-            'data' => $aset->load(['kategori', 'ruangan']),
+            'data' => $aset->load(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja', 'programStudi:id,kode_prodi,nama,jenjang']),
         ], 201);
     }
 
@@ -211,7 +224,7 @@ class AsetController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Detail aset berhasil diambil',
-            'data' => $aset->load(['kategori', 'ruangan.gedung', 'maintenanceLogs', 'peminjaman']),
+            'data' => $aset->load(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja', 'programStudi:id,kode_prodi,nama,jenjang', 'maintenanceLogs', 'peminjaman', 'riwayatPenyusutan.jurnalUmum']),
         ]);
     }
 
@@ -224,7 +237,7 @@ class AsetController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data aset berhasil diperbarui',
-            'data' => $updated->load(['kategori', 'ruangan']),
+            'data' => $updated->load(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja', 'programStudi:id,kode_prodi,nama,jenjang']),
         ]);
     }
 
@@ -288,6 +301,57 @@ class AsetController extends Controller
             'status' => 'success',
             'message' => 'Data label barcode & QR code batch aset berhasil diambil',
             'data' => $labels,
+        ]);
+    }
+
+    /**
+     * Memposting beban penyusutan aset ke Jurnal Umum SIKEU.
+     */
+    public function postJurnalPenyusutan(Request $request, Aset $aset): JsonResponse
+    {
+        $this->authorize('update', $aset);
+
+        $validated = $request->validate([
+            'tahun' => ['nullable', 'integer', 'min:2000', 'max:' . (date('Y') + 1)],
+            'catatan' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $tahun = $validated['tahun'] ?? (int) date('Y');
+
+        try {
+            $riwayat = $this->service->postJurnalPenyusutan(
+                $aset,
+                $tahun,
+                $request->user()->id,
+                $validated['catatan'] ?? null
+            );
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Jurnal penyusutan aset periode tahun {$tahun} berhasil diposting ke SIKEU",
+                'data' => $riwayat,
+            ], 201);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Mendapatkan daftar riwayat jurnal penyusutan aset.
+     */
+    public function getRiwayatPenyusutan(Aset $aset): JsonResponse
+    {
+        $this->authorize('view', $aset);
+
+        $riwayat = $this->service->getRiwayatPenyusutan($aset);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Riwayat penyusutan aset berhasil diambil',
+            'data' => $riwayat,
         ]);
     }
 }

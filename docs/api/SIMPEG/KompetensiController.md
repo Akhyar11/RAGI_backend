@@ -1,4 +1,6 @@
-# Dokumentasi API: Kompetensi & Pelatihan Dosen (KompetensiController)
+# KompetensiController
+
+> **Modul**: SIMPEG / **Base URL**: /api/simpeg/kompetensi / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-28
 
 Modul ini mengelola data kompetensi dosen dan tenaga kependidikan: **Sertifikasi Dosen**, **Riwayat Tes Kemampuan (Bahasa & Potensi Akademik)**, dan **Riwayat Pelatihan / Diklat / Workshop**.
 

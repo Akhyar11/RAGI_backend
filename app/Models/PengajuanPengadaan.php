@@ -23,11 +23,13 @@ class PengajuanPengadaan extends Model
         'estimasi_anggaran',
         'status',
         'disetujui_oleh',
+        'sikeu_pencairan_id',
     ];
 
     protected $casts = [
         'tanggal_pengajuan' => 'date',
         'estimasi_anggaran' => 'decimal:2',
+        'sikeu_pencairan_id' => 'integer',
     ];
 
     /**
@@ -52,6 +54,14 @@ class PengajuanPengadaan extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'disetujui_oleh');
+    }
+
+    /**
+     * Relasi ke Tiket Pencairan Kas SIKEU
+     */
+    public function pencairanKas(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Sikeu\PengajuanPencairanKas::class, 'sikeu_pencairan_id');
     }
 
     /**

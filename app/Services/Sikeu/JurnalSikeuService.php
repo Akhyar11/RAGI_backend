@@ -39,6 +39,7 @@ class JurnalSikeuService
         'penutupan' => 'JRN-TUTUP',
         'pemasukan' => 'JRN-INC',
         'pengeluaran' => 'JRN-EXP',
+        'penyusutan' => 'JRN-DEP',
         'manual' => 'JRN-',
     ];
 
@@ -458,6 +459,53 @@ class JurnalSikeuService
 
         self::baris($jurnal, $akunKasUnit->id, $nominal, 0, "Pengisian kas kecil: {$keterangan}");
         self::baris($jurnal, $akunKasUtama->id, 0, $nominal, "Kas utama: {$keterangan}");
+
+        return $jurnal;
+    }
+
+    /**
+     * Jurnal otomatis beban & akumulasi penyusutan aset tetap (SINAPRA):
+     * Dr. Beban Penyusutan Aset Tetap (505.01)
+     * Cr. Akumulasi Penyusutan Aset Tetap (105.01)
+     */
+    public static function jurnalPenyusutanAset(
+        int $referensiId,
+        float $nominal,
+        string $keterangan,
+        ?string $tanggal = null
+    ): JurnalUmum {
+        if ($nominal <= 0) {
+            throw new \InvalidArgumentException('Nominal beban penyusutan aset harus lebih dari nol.');
+        }
+
+        $akunBeban = AkunKeuangan::where('kode_akun', '505.01')->first()
+            ?? AkunKeuangan::where('kelompok', 'beban')->where('nama_akun', 'like', '%penyusutan%')->first()
+            ?? AkunKeuangan::firstOrCreate(
+                ['kode_akun' => '505.01'],
+                ['nama_akun' => 'Beban Penyusutan Aset Tetap', 'kelompok' => 'beban', 'saldo_normal' => 'debet']
+            );
+
+        $akunAkumulasi = AkunKeuangan::where('kode_akun', '105.01')->first()
+            ?? AkunKeuangan::where('kelompok', 'aset')->where('nama_akun', 'like', '%akumulasi%')->first()
+            ?? AkunKeuangan::firstOrCreate(
+                ['kode_akun' => '105.01'],
+                ['nama_akun' => 'Akumulasi Penyusutan Aset Tetap', 'kelompok' => 'aset', 'saldo_normal' => 'kredit']
+            );
+
+        $jurnal = self::header(
+            self::prefix('penyusutan'),
+            'penyesuaian',
+            $referensiId,
+            $keterangan,
+            $nominal
+        );
+
+        if ($tanggal) {
+            $jurnal->update(['tanggal_jurnal' => $tanggal]);
+        }
+
+        self::baris($jurnal, $akunBeban->id, $nominal, 0, "Beban penyusutan: {$keterangan}");
+        self::baris($jurnal, $akunAkumulasi->id, 0, $nominal, "Akumulasi penyusutan: {$keterangan}");
 
         return $jurnal;
     }

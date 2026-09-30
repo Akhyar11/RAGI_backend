@@ -63,4 +63,30 @@ class ProgramStudi extends Model
     {
         return $this->hasMany(\App\Models\Siakad\Cpl::class, 'program_studi_id');
     }
+
+    /**
+     * Relasi ke Ruangan SINAPRA
+     */
+    public function ruangans()
+    {
+        return $this->hasMany(\App\Models\Ruangan::class, 'program_studi_id');
+    }
+
+    /**
+     * Relasi ke Inventaris Aset SINAPRA
+     */
+    public function asets()
+    {
+        return $this->hasMany(\App\Models\Aset::class, 'program_studi_id');
+    }
+
+    /**
+     * Relasi ke Laboran yang ditugaskan di Prodi ini
+     */
+    public function laborans()
+    {
+        return $this->belongsToMany(\App\Models\User::class, 'sinapra_laboran_prodi', 'program_studi_id', 'user_id')
+            ->withPivot('is_primary')
+            ->withTimestamps();
+    }
 }

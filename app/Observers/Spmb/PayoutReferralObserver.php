@@ -8,6 +8,13 @@ use Illuminate\Support\Facades\Log;
 
 class PayoutReferralObserver
 {
+    /**
+     * Snapshot nilai sebelum persist agar jejak audit memakai data lama
+     * yang presisi (diambil di hook updating, sebelum save).
+     *
+     * @var array<int|string, array{original: array, changes: array}>
+     */
+    protected static array $snapshots = [];
     public function created(PayoutReferral $payout): void
     {
         try {
@@ -25,20 +32,45 @@ class PayoutReferralObserver
         }
     }
 
+    public function updating(PayoutReferral $payout): void
+    {
+        self::$snapshots[$payout->getKey() ?? spl_object_id($payout)] = [
+            'original' => $payout->getOriginal(),
+            'changes' => $payout->getDirty(),
+        ];
+    }
+
     public function updated(PayoutReferral $payout): void
     {
         try {
-            if (! $payout->wasChanged()) {
+            $key = $payout->getKey() ?? spl_object_id($payout);
+            $snapshot = self::$snapshots[$key] ?? null;
+            unset(self::$snapshots[$key]);
+
+            $original = $snapshot['original'] ?? $payout->getOriginal();
+            $changes = $snapshot['changes'] ?? $payout->getChanges();
+
+            if (empty($changes) && ! $payout->wasChanged()) {
                 return;
+            }
+
+            $action = 'update';
+
+            if ($payout->wasChanged('status')) {
+                $action = match ($payout->status) {
+                    PayoutReferral::STATUS_TERVERIFIKASI => 'approve',
+                    PayoutReferral::STATUS_DITOLAK => 'reject',
+                    default => 'update',
+                };
             }
 
             AuditLogService::record(
                 module: 'SPMB',
-                action: 'update',
+                action: $action,
                 tableName: $payout->getTable(),
                 recordId: $payout->id,
-                oldValues: $payout->getOriginal(),
-                newValues: $payout->getChanges(),
+                oldValues: $original,
+                newValues: $changes,
                 request: request()
             );
         } catch (\Throwable $e) {

@@ -213,6 +213,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('pegawai/roles', [App\Http\Controllers\Simpeg\PegawaiController::class, 'getRoles']);
     Route::apiResource('pegawai', App\Http\Controllers\Simpeg\PegawaiController::class);
     Route::post('pegawai/{id}/reset-face', [App\Http\Controllers\Simpeg\PegawaiController::class, 'resetFace']);
+    Route::get('pegawai/{id}/clearance', [App\Http\Controllers\Simpeg\PegawaiController::class, 'clearance']);
 
     // Riwayat Jabatan, Pendidikan & Portofolio Tridharma Terpadu
     Route::get('pegawai/{id}/tridharma-dossier', [App\Http\Controllers\Simpeg\TridharmaDossierController::class, 'getDossier']);
@@ -803,6 +804,15 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
     Route::post('callback/spmb/{calonMahasiswaId}/simulate', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'simulateSpmbPayment']);
 });
 
+// Pencairan Reward Referral SPMB (invoice masuk untuk admin keuangan).
+Route::middleware(['auth:api', 'can:sikeu.pengeluaran.read'])->prefix('v1/sikeu')->group(function () {
+    Route::get('referral-pencairan', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'index']);
+    Route::get('referral-pencairan/{id}', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'show']);
+    Route::post('referral-pencairan/{id}/verify', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'verify']);
+    Route::post('referral-pencairan/{id}/pay', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'pay']);
+    Route::post('referral-pencairan/{id}/reject', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'reject']);
+});
+
 // Alias for direct non-v1 calls (backward compatibility with axios client baseURL)
 Route::middleware('auth:api')->prefix('sikeu')->group(function () {
     Route::get('master/gaji-pegawai', [App\Http\Controllers\Sikeu\MasterGajiPegawaiController::class, 'index']);
@@ -824,6 +834,9 @@ Route::get('v1/sikeu/dispensasi/validasi/{signature_hash}', [App\Http\Controller
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:api')->prefix('sinapra')->group(function () {
+    // Dashboard Summary
+    Route::get('dashboard-summary', [App\Http\Controllers\Sinapra\SinapraDashboardController::class, 'summary']);
+
     // Gedung & Ruangan
     Route::get('gedung', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'index']);
     Route::post('gedung', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'store']);
@@ -841,6 +854,11 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::post('ruangan/{ruangan}/laboran', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'assignLaboran']);
     Route::delete('ruangan/{ruangan}/laboran/{user}', [App\Http\Controllers\Sinapra\GedungRuanganController::class, 'unassignLaboran']);
 
+    // Laboran per Program Studi
+    Route::get('laboran-prodi', [App\Http\Controllers\Sinapra\LaboranProdiController::class, 'index']);
+    Route::post('laboran-prodi', [App\Http\Controllers\Sinapra\LaboranProdiController::class, 'store']);
+    Route::delete('laboran-prodi/{laboranProdi}', [App\Http\Controllers\Sinapra\LaboranProdiController::class, 'destroy']);
+
     // Kategori Aset & Aset
     Route::get('kategori-aset', [App\Http\Controllers\Sinapra\AsetController::class, 'indexKategori']);
     Route::post('kategori-aset', [App\Http\Controllers\Sinapra\AsetController::class, 'storeKategori']);
@@ -854,6 +872,8 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'show']);
     Route::get('aset/{aset}/label', [App\Http\Controllers\Sinapra\AsetController::class, 'getLabel']);
     Route::get('aset/{aset}/hitung-penyusutan', [App\Http\Controllers\Sinapra\AsetController::class, 'hitungPenyusutan']);
+    Route::post('aset/{aset}/post-jurnal-penyusutan', [App\Http\Controllers\Sinapra\AsetController::class, 'postJurnalPenyusutan']);
+    Route::get('aset/{aset}/riwayat-penyusutan', [App\Http\Controllers\Sinapra\AsetController::class, 'getRiwayatPenyusutan']);
     Route::put('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'update']);
     Route::delete('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'destroy']);
 

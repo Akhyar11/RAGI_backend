@@ -1,6 +1,6 @@
 # CutiController
 
-> **Modul**: SIMPEG / **Base URL**: /api/simpeg/cuti / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-26
+> **Modul**: SIMPEG / **Base URL**: /api/simpeg/cuti / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-28
 
 Modul ini mengelola permohonan cuti pegawai (tahunan, sakit, melahirkan, alasan penting, besar), validasi kuota dan dokumen pendukung, persetujuan/penolakan oleh pimpinan/SDM, serta notifikasi terintegrasi WhatsApp dan Email.
 

@@ -77,26 +77,29 @@ class PegawaiController extends Controller
     public function me(Request $request)
     {
         $user = $request->user();
-        $pegawai = Pegawai::with(['unitKerja', 'riwayatJabatan.jabatan', 'riwayatJabatan.jabatanFungsional', 'riwayatPendidikan', 'dosen.programStudi'])
+        $pegawai = Pegawai::with(['unitKerja', 'jabatanFungsional', 'riwayatJabatan.jabatan', 'riwayatJabatan.jabatanFungsional', 'riwayatPendidikan', 'dosen.programStudi'])
             ->where('user_id', $user->id)
             ->first();
 
         if (!$pegawai) {
             $unitKerja = \App\Models\Simpeg\UnitKerja::first();
-            $nama = $user->username === 'admin' ? 'Dr. Wasis Utama, M.T.' : ($user->username === 'dosen' ? 'Anisa Rahmawati, M.Kom.' : ucfirst($user->username));
+            $nama = $user->name ?: ucfirst($user->username);
+            $isTendik = $user->hasRole('tendik');
+            $isDosen = $user->hasRole('dosen');
+            $jenis = $isTendik ? 'tendik' : ($isDosen ? 'dosen' : 'pegawai');
             $pegawai = Pegawai::create([
                 'user_id' => $user->id,
                 'unit_kerja_id' => $unitKerja?->id,
                 'nip' => '19920815' . rand(100000, 999999),
                 'nama_lengkap' => $nama,
                 'jenis_kelamin' => 'P',
-                'jenis_pegawai' => $user->user_type === 'dosen' ? 'dosen' : ($user->user_type === 'tendik' ? 'tendik' : 'dosen'),
+                'jenis_pegawai' => $jenis,
                 'status_kepegawaian' => 'tetap_yayasan',
                 'status' => 'aktif',
-                'telepon' => '081234567890',
-                'alamat' => 'Jl. Merdeka No. 45, Bandung',
+                'telepon' => null,
+                'alamat' => null,
             ]);
-            $pegawai->load(['unitKerja', 'riwayatJabatan', 'riwayatPendidikan']);
+            $pegawai->load(['unitKerja', 'jabatanFungsional', 'riwayatJabatan', 'riwayatPendidikan']);
         }
 
         return response()->json([
@@ -148,16 +151,10 @@ class PegawaiController extends Controller
 
     public function show(Request $request, $id)
     {
-        if (!$request->user()->hasPermission('simpeg.pegawai.read') && !$request->user()->hasPermission('simpeg.pegawai.manage')) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Anda tidak memiliki hak akses (permission) untuk melihat rincian Data Pegawai.'
-            ], 403);
-        }
-
         $pegawai = Pegawai::with([
             'user.roles',
             'unitKerja',
+            'jabatanFungsional',
             'shiftTemplate',
             'officeLocation',
             'additionalOffices',
@@ -166,7 +163,20 @@ class PegawaiController extends Controller
             'riwayatPendidikan',
             'dosen.programStudi',
             'roles',
+            'asetDipegang.ruangan',
         ])->findOrFail($id);
+
+        $user = $request->user();
+        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.pegawai.manage');
+
+        if (!$isManager) {
+            if ($pegawai->user_id !== $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Akses Ditolak: Anda tidak memiliki hak akses untuk melihat rincian Data Pegawai lain.'
+                ], 403);
+            }
+        }
 
         return response()->json([
             'status' => 'success',
@@ -235,4 +245,29 @@ class PegawaiController extends Controller
             'data' => $pegawai->fresh(['unitKerja', 'officeLocation', 'shiftTemplate'])
         ]);
     }
+
+    /**
+     * Cek status clearance inventaris aset dinas dan peminjaman fasilitas pegawai.
+     */
+    public function clearance(Request $request, $id)
+    {
+        $pegawai = Pegawai::findOrFail($id);
+        $user = $request->user();
+        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.pegawai.manage') || $user->hasPermission('simpeg.pegawai.read');
+
+        if (!$isManager && $pegawai->user_id !== $user->id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akses Ditolak: Anda tidak memiliki hak akses untuk melihat status clearance pegawai ini.'
+            ], 403);
+        }
+
+        $clearance = $this->pegawaiService->getClearanceStatus($pegawai);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $clearance
+        ]);
+    }
 }
+

@@ -19,6 +19,7 @@ Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `gel
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
 | GET | `/api/spmb/master/komponen-biaya` | Daftar komponen biaya berpaginasi | ✅ |
+| GET | `/api/spmb/master/komponen-biaya-role-options` | Opsi role aktif untuk pemetaan reward referral | ✅ |
 | GET | `/api/spmb/master/komponen-biaya/{id}` | Detail komponen biaya | ✅ |
 | POST | `/api/spmb/master/komponen-biaya` | Tambah komponen biaya | ✅ |
 | PUT | `/api/spmb/master/komponen-biaya/{id}` | Perbarui komponen biaya | ✅ |
@@ -127,6 +128,49 @@ Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `gel
 **404 Not Found**
 ```json
 { "status": "error", "message": "No query results for model [App\\Models\\Spmb\\MasterKomponenBiaya] 99." }
+```
+
+---
+
+## [GET] /api/spmb/master/komponen-biaya-role-options
+
+> Daftar role aktif (`id`, `slug`, `name`) untuk mengisi pemetaan `role_rewards` pada komponen biaya bertipe reward referral.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+Permission: `spmb.manage`.
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Opsi role berhasil dimuat.",
+    "data": [
+        { "id": 1, "slug": "mahasiswa", "name": "Mahasiswa" },
+        { "id": 5, "slug": "admin_spmb", "name": "Admin SPMB" }
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 2, "last_page": 1, "from": 1, "to": 2 },
+    "filters": { "search": null, "sort_by": "name", "sort_order": "asc" }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "This action is unauthorized." }
 ```
 
 ---
@@ -358,6 +402,8 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 ---
 
 ## [PUT] /api/spmb/master/biaya/{id}
+
+> **Sinkronisasi item**: daftar `items` yang dikirim menjadi acuan final. Item yang **tidak ada** di payload akan **dihapus** dari rincian (hanya komponen yang dipilih yang tersimpan), lalu `total_biaya` dihitung ulang.
 
 ### Request Body
 

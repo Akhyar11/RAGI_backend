@@ -274,9 +274,9 @@ class SpmbReferralService
      * Buat bukti pencairan (payout) dan tandai referral terkait.
      * Status referral TIDAK diubah (tetap qualified), hanya ditandai payout.
      */
-    public function createPayout(User $referrer, ?string $keterangan = null): PayoutReferral
+    public function createPayout(User $referrer, array $data = []): PayoutReferral
     {
-        return DB::transaction(function () use ($referrer, $keterangan) {
+        return DB::transaction(function () use ($referrer, $data) {
             $usages = $this->eligiblePayoutQuery($referrer)->lockForUpdate()->get();
             $perReferral = $this->rewardPerReferral($referrer);
 
@@ -286,7 +286,11 @@ class SpmbReferralService
                 'total_nominal' => $perReferral * $usages->count(),
                 'nomor_bukti' => 'PAYOUT-'.now()->format('Ymd').'-'.strtoupper(Str::random(6)),
                 'generated_at' => now(),
-                'keterangan' => $keterangan,
+                'keterangan' => $data['keterangan'] ?? null,
+                'status' => PayoutReferral::STATUS_MENUNGGU_VERIFIKASI,
+                'nama_bank' => $data['nama_bank'] ?? null,
+                'nomor_rekening' => $data['nomor_rekening'] ?? null,
+                'nama_pemilik_rekening' => $data['nama_pemilik_rekening'] ?? null,
             ]);
 
             if ($usages->isNotEmpty()) {
@@ -309,7 +313,7 @@ class SpmbReferralService
      */
     public function getUsagesForUser(User $user, array $filters = [], int $perPage = 15): array
     {
-        $allowedSort = ['created_at', 'status', 'referral_code'];
+        $allowedSort = ['created_at', 'status', 'referral_code', 'nama_pendaftar', 'gelombang'];
         $sortBy = in_array($filters['sort_by'] ?? null, $allowedSort, true) ? $filters['sort_by'] : 'created_at';
         $sortOrder = ($filters['sort_order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
 
@@ -350,7 +354,26 @@ class SpmbReferralService
             $query->whereDate((new ReferralUsage)->qualifyColumn('created_at'), '<=', $filters['end_date']);
         }
 
-        $query->orderBy($sortBy, $sortOrder);
+        $pendaftaranTable = (new PendaftaranCalonMhs)->getTable();
+        $usageColumn = (new ReferralUsage)->qualifyColumn('pendaftaran_id');
+
+        if ($sortBy === 'nama_pendaftar') {
+            $query->orderBy(
+                PendaftaranCalonMhs::query()
+                    ->select('nama_lengkap')
+                    ->whereColumn("{$pendaftaranTable}.id", $usageColumn),
+                $sortOrder
+            );
+        } elseif ($sortBy === 'gelombang') {
+            $query->orderBy(
+                PendaftaranCalonMhs::query()
+                    ->select('gelombang_id')
+                    ->whereColumn("{$pendaftaranTable}.id", $usageColumn),
+                $sortOrder
+            );
+        } else {
+            $query->orderBy($sortBy, $sortOrder);
+        }
 
         $paginator = $query->paginate($perPage);
         $perReferral = $this->rewardPerReferral($user);

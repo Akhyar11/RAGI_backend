@@ -11,12 +11,14 @@ class MasterJenisTransportasi extends Model
     protected $fillable = [
         'nama',
         'kode',
+        'is_kendaraan_kampus',
         'deskripsi',
         'urutan',
         'is_active',
     ];
 
     protected $casts = [
+        'is_kendaraan_kampus' => 'boolean',
         'urutan' => 'integer',
         'is_active' => 'boolean',
     ];

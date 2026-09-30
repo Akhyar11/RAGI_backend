@@ -4,7 +4,7 @@
 > **Base URL**: `/api/sinapra`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-08-19  
-> **Diperbarui**: 2026-09-23  
+> **Diperbarui**: 2026-09-30  
 
 ## Daftar Endpoint
 
@@ -53,7 +53,8 @@ Deskripsi: Mengambil daftar pengajuan pengadaan barang dari seluruh unit kerja/l
             "tanggal_pengajuan": "2026-09-23",
             "estimasi_anggaran": 150000000.0,
             "status": "diajukan",
-            "disetujui_oleh": null,
+            "disetujui_oleh": 1,
+            "sikeu_pencairan_id": 10,
             "details_count": 1,
             "created_at": "2026-09-23T08:00:00.000000Z",
             "unit_kerja": {
@@ -65,7 +66,16 @@ Deskripsi: Mengambil daftar pengajuan pengadaan barang dari seluruh unit kerja/l
                 "username": "laboran_trpl",
                 "name": "Laboran TRPL"
             },
-            "approver": null
+            "approver": {
+                "id": 1,
+                "name": "Super Administrator"
+            },
+            "pencairan_kas": {
+                "id": 10,
+                "nomor_pengajuan": "CAIR-20260930-X1Y2",
+                "status": "pending_keuangan",
+                "nominal_diajukan": 150000000.0
+            }
         }
     ],
     "meta": {
@@ -177,7 +187,7 @@ Deskripsi: Melihat detail pengajuan pengadaan beserta rincian item barang dan ap
 
 ## PATCH /api/sinapra/pengadaan/{id}/status
 
-Deskripsi: Mengubah status persetujuan usulan pengadaan (`diajukan`, `disetujui`, `ditolak`, `proses_pengadaan`, `selesai`) oleh Admin SINAPRA / Pimpinan.
+Deskripsi: Mengubah status persetujuan usulan pengadaan (`diajukan`, `disetujui`, `ditolak`, `proses_pengadaan`, `selesai`) oleh Admin SINAPRA / Pimpinan. Ketika status diubah menjadi `disetujui`, sistem secara otomatis membuat tiket permohonan pencairan kas di SIKEU (`kanal = 'sinapra_pengadaan'`) beserta rincian item pengadaannya.
 
 ### Request Body
 ```json
@@ -194,7 +204,8 @@ Deskripsi: Mengubah status persetujuan usulan pengadaan (`diajukan`, `disetujui`
     "data": {
         "id": 1,
         "status": "disetujui",
-        "disetujui_oleh": 1
+        "disetujui_oleh": 1,
+        "sikeu_pencairan_id": 10
     }
 }
 ```

@@ -14,7 +14,7 @@
 | POST | `/api/simpeg/master-golongan-pangkat` | Menambahkan data jenjang golongan baru | ✅ Admin SIMPEG |
 | GET | `/api/simpeg/master-golongan-pangkat/{id}` | Detail data master jenjang golongan | ✅ Staff / Admin SIMPEG |
 | PUT | `/api/simpeg/master-golongan-pangkat/{id}` | Memperbarui data jenjang golongan | ✅ Admin SIMPEG |
-| DELETE | `/api/simpeg/master-golongan-pangkat/{id}` | Menghapus data jenjang golongan (soft delete) | ✅ Admin SIMPEG |
+| DELETE | `/api/simpeg/master-golongan-pangkat/{id}` | Menghapus data jenjang golongan (hard delete dengan proteksi relasi) | ✅ Admin SIMPEG |
 
 ---
 
@@ -301,6 +301,20 @@
 }
 ```
 
+### Response Error (422 Unprocessable Content)
+
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "id": [
+            "Golongan / pangkat 'Tenaga Pengajar' tidak dapat dihapus karena masih digunakan oleh data jabatan fungsional pegawai."
+        ]
+    }
+}
+```
+
 ### Response Error (404 Not Found)
 
 ```json
@@ -311,4 +325,4 @@
 ```
 
 ### Catatan Penting
-- Endpoint `DELETE` menerapkan **soft-delete** (data tidak dihapus permanen dari basis data, melainkan mengisi stempel waktu pada kolom `deleted_at`).
+- Endpoint `DELETE` menerapkan **hard-delete** dengan proteksi integritas relasi. Data yang masih digunakan oleh data jabatan fungsional pegawai (`simpeg_jabatan_fungsional_akademik`) akan ditolak dengan kode status 422. Jika tidak ada relasi yang terkait, data akan dihapus permanen dari basis data.
