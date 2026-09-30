@@ -15,6 +15,7 @@ use App\Http\Requests\Siakad\Lms\BulkAbsensiRequest;
 use App\Http\Requests\Siakad\Lms\AjukanIzinRequest;
 use App\Http\Requests\Siakad\Lms\ProsesIzinRequest;
 use App\Http\Requests\Siakad\Lms\UpdateKelasLmsSettingRequest;
+use App\Models\Siakad\Mahasiswa;
 use App\Services\Siakad\LmsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -274,13 +275,20 @@ class LmsController extends Controller
     }
 
     /**
-     * Dapatkan rekapitulasi kehadiran seluruh kelas.
+     * Dapatkan rekapitulasi kehadiran kelas.
+     * Pemanggil mahasiswa hanya menerima baris miliknya sendiri (privasi data).
      */
-    public function getRekapAbsensi(int $kelasId): JsonResponse
+    public function getRekapAbsensi(Request $request, int $kelasId): JsonResponse
     {
         Gate::authorize('siakad.kelas.read');
 
-        $rekap = $this->lmsService->getRekapAbsensiKelas($kelasId);
+        $user = $request->user();
+        $onlyMahasiswaId = null;
+        if ($user && $user->hasRole('mahasiswa') && !$user->can('siakad.kelas.manage')) {
+            $onlyMahasiswaId = Mahasiswa::where('user_id', $user->id)->value('id');
+        }
+
+        $rekap = $this->lmsService->getRekapAbsensiKelas($kelasId, $onlyMahasiswaId);
 
         return response()->json([
             'status'  => 'success',
@@ -384,13 +392,15 @@ class LmsController extends Controller
         $allowedSorts = ['id', 'nama_kelas', 'kode_kelas', 'created_at', 'updated_at'];
         $sortBy       = in_array($request->sort_by, $allowedSorts, true) ? $request->sort_by : 'created_at';
         $sortOrder    = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $tahunAkademikId = $request->filled('tahun_akademik_id') ? (int) $request->input('tahun_akademik_id') : null;
 
         $paginator = $this->lmsService->getMyKelas(
             (int) $request->user()->id,
             $perPage,
             $search,
             $sortBy,
-            $sortOrder
+            $sortOrder,
+            $tahunAkademikId
         );
 
         return response()->json([
@@ -406,9 +416,10 @@ class LmsController extends Controller
                 'to'           => $paginator->lastItem(),
             ],
             'filters' => [
-                'search'     => $search,
-                'sort_by'    => $sortBy,
-                'sort_order' => $sortOrder,
+                'search'            => $search,
+                'sort_by'           => $sortBy,
+                'sort_order'        => $sortOrder,
+                'tahun_akademik_id' => $tahunAkademikId,
             ],
         ]);
     }

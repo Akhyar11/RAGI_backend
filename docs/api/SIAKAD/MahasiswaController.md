@@ -25,7 +25,9 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 | POST | `/api/v1/siakad/mahasiswa/generate-missing-nims` | Generate NIM massal | ✅ |
 | POST | `/api/v1/siakad/mahasiswa/sync-from-spmb` | Sinkronisasi dari pendaftar SPMB | ✅ |
 | GET | `/api/v1/siakad/mahasiswa/konversi` | Daftar konversi transfer | ✅ |
+| GET | `/api/v1/siakad/mahasiswa/konversi/{id}` | Detail konversi transfer + rincian MK | ✅ |
 | POST | `/api/v1/siakad/mahasiswa/konversi` | Tambah konversi transfer | ✅ |
+| PUT | `/api/v1/siakad/mahasiswa/konversi/{id}` | Perbarui usulan konversi (rincian diganti penuh) | ✅ |
 | PATCH | `/api/v1/siakad/mahasiswa/konversi/{id}/status` | Ubah status konversi | ✅ |
 | DELETE | `/api/v1/siakad/mahasiswa/konversi/{id}` | Hapus konversi | ✅ |
 | POST | `/api/v1/siakad/mahasiswa/bulk-assign-pa` | Penugasan PA massal | ✅ |
@@ -124,6 +126,163 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 **404 Not Found**
 ```json
 { "status": "error", "message": "No query results for model [App\\Models\\Siakad\\Mahasiswa] 99." }
+```
+
+---
+
+## [GET] /api/v1/siakad/mahasiswa/konversi/{id}
+
+> Detail satu usulan konversi transfer beserta rincian penyetaraan MK (`details.mata_kuliah_diakui`).
+> Dosen murni hanya dapat melihat usulan mahasiswa bimbingannya (`dosen_wali_id`); selain itu 403.
+
+#### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Detail konversi transfer berhasil dimuat",
+    "data": {
+        "id": 1,
+        "no_transaksi": "KNV-2026-001",
+        "mahasiswa_id": 5,
+        "kampus_asal": "Universitas Nusantara",
+        "prodi_asal": "Teknik Komputer",
+        "status": "diajukan",
+        "catatan": null,
+        "mahasiswa": { "id": 5, "nim": "20260001", "nama_lengkap": "Budi Santoso" },
+        "details": [
+            {
+                "id": 11,
+                "kode_mk_asal": "CS101",
+                "nama_mk_asal": "Dasar Pemrograman",
+                "sks_asal": 3,
+                "nilai_huruf_asal": "A",
+                "status": "diakui",
+                "mata_kuliah_diakui": { "id": 45, "kode_mk": "IF101", "nama": "Pengantar Informatika" }
+            }
+        ]
+    }
+}
+```
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki akses ke usulan konversi mahasiswa ini."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Konversi transfer tidak ditemukan."
+}
+```
+
+---
+
+## [PUT] /api/v1/siakad/mahasiswa/konversi/{id}
+
+> Perbarui usulan konversi (dipakai halaman edit). Rincian `details` diganti penuh:
+> baris lama dihapus lalu dibuat ulang dari payload. Aturan kunci status `disetujui`
+> dan penentuan status otomatis sama seperti endpoint POST.
+
+#### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "kampus_asal": "Universitas Nusantara",
+    "prodi_asal": "Teknik Komputer",
+    "catatan": "Revisi mapping MK",
+    "status": "diajukan",
+    "details": [
+        {
+            "mata_kuliah_diakui_id": 45,
+            "kode_mk_asal": "CS101",
+            "nama_mk_asal": "Dasar Pemrograman",
+            "sks_asal": 3,
+            "nilai_huruf_asal": "A"
+        }
+    ]
+}
+```
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Konversi transfer nilai mahasiswa berhasil disimpan",
+    "data": {
+        "id": 1
+    }
+}
+```
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Konversi sudah disetujui dan tidak dapat diubah."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Konversi transfer tidak ditemukan."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "The given data was invalid.",
+    "errors": {
+        "kampus_asal": [
+            "Perguruan tinggi asal wajib diisi."
+        ],
+        "details": [
+            "Daftar mata kuliah penyetaraan minimal 1 baris."
+        ],
+        "details.0.mata_kuliah_diakui_id": [
+            "Mata kuliah kurikulum lokal wajib dipilih."
+        ]
+    }
+}
 ```
 
 ---

@@ -31,6 +31,92 @@ Manajemen Pembimbing Akademik (PA): rekap bimbingan dosen, penugasan mahasiswa b
 
 ---
 
+## [GET] /api/v1/siakad/bimbingan/rekap
+
+Rekapitulasi per dosen PA: komposisi status mahasiswa bimbingan (point-in-time) +
+aktivitas sesi bimbingan. Aktivitas (`total_bimbingan`, `butuh_khusus_aktif`,
+`terakhir_bimbingan_at`) dapat dibatasi rentang tanggal.
+
+#### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `dosen_id` | integer | ❌ | — | Hanya dosen tertentu (kaprodi/admin) |
+| `program_studi_id` | integer | ❌ | — | Filter homebase prodi dosen |
+| `dari_tanggal` | date | ❌ | — | Batas awal aktivitas (`YYYY-MM-DD`) |
+| `sampai_tanggal` | date | ❌ | — | Batas akhir aktivitas (`YYYY-MM-DD`) |
+| `search` | string | ❌ | — | Pencarian nama dosen atau NIDN |
+| `sort_by` | string | ❌ | `nama_lengkap` | Kolom pengurutan (`nama_lengkap`, `nidn`) |
+| `sort_order` | string | ❌ | `asc` | Arah pengurutan: `asc` / `desc` |
+| `per_page` | integer | ❌ | `15` | Jumlah rekaman data per halaman (maks. 100) |
+| `page` | integer | ❌ | `1` | Nomor halaman yang diminta |
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Rekap bimbingan PA berhasil dimuat",
+    "data": [
+        {
+            "dosen_id": 3,
+            "nama_lengkap": "Dr. Budi Santoso",
+            "nidn": "0011223344",
+            "program_studi": "Informatika",
+            "komposisi": { "aktif": 12, "cuti": 1, "mangkir": 0, "keluar": 0, "lulus": 0, "total": 13 },
+            "butuh_khusus_aktif": 1,
+            "total_bimbingan": 8,
+            "terakhir_bimbingan_at": "2026-09-20",
+            "belum_bimbingan": false
+        }
+    ]
+}
+```
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melihat data rekap ini."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "The given data was invalid.",
+    "errors": {
+        "dari_tanggal": [
+            "Format tanggal dari_tanggal tidak valid."
+        ],
+        "dosen_id": [
+            "Dosen tidak ditemukan."
+        ]
+    }
+}
+```
+
+> Catatan: filter tanggal hanya membatasi agregat aktivitas sesi
+> (`tanggal_bimbingan`, fallback `created_at` bila kosong); komposisi status
+> mahasiswa selalu kondisi terkini.
+
+---
+
 ## [GET] /api/v1/siakad/bimbingan/aktivitas
 
 Mengambil riwayat sesi aktivitas bimbingan PA yang dicatat per kelas dan per tanggal.

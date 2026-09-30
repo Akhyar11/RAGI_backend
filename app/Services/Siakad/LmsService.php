@@ -16,7 +16,9 @@ use App\Models\Siakad\Dosen;
 use App\Models\Siakad\DosenPengampu;
 use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\NilaiKomponenMahasiswa;
+use App\Models\Siakad\TahunAkademik;
 use App\Models\SystemSetting;
+use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -28,22 +30,70 @@ class LmsService
 {
     /**
      * Dapatkan disk storage yang aktif (prioritas: kelas -> system setting -> default disk).
+     *
+     * Optimal R2: bila kandidat disk cloud (r2/r2-private/s3) belum dikonfigurasi
+     * (bucket/endpoint kosong, mis. env local), otomatis fallback ke kandidat
+     * berikutnya agar upload tetap jalan di storage lokal.
      */
     public function resolveDisk(?Kelas $kelas = null): string
     {
+        $candidates = [];
+
         if ($kelas && $kelas->lmsSetting && !empty($kelas->lmsSetting->storage_disk)) {
-            $disk = $kelas->lmsSetting->storage_disk;
-            if (array_key_exists($disk, config('filesystems.disks', []))) {
-                return $disk;
-            }
+            $candidates[] = $kelas->lmsSetting->storage_disk;
         }
 
         $configuredDisk = SystemSetting::get('lms_storage_disk');
-        if ($configuredDisk && array_key_exists($configuredDisk, config('filesystems.disks', []))) {
-            return $configuredDisk;
+        if ($configuredDisk) {
+            $candidates[] = $configuredDisk;
         }
 
-        return config('filesystems.default', 'local');
+        $candidates[] = config('filesystems.default', 'local');
+
+        $availableDisks = config('filesystems.disks', []);
+
+        foreach ($candidates as $disk) {
+            if (!is_string($disk) || !array_key_exists($disk, $availableDisks)) {
+                continue;
+            }
+
+            if ($this->isCloudDisk($disk) && !$this->isCloudDiskConfigured($disk)) {
+                continue;
+            }
+
+            return $disk;
+        }
+
+        return 'local';
+    }
+
+    /**
+     * True bila disk memakai driver cloud S3-compatible (R2/S3).
+     */
+    protected function isCloudDisk(string $disk): bool
+    {
+        return in_array(strtolower($disk), ['r2', 'r2-private', 's3'], true);
+    }
+
+    /**
+     * True bila disk cloud sudah punya bucket + endpoint minimal.
+     * Cerminan FileStorageService::isCloudDiskConfigured agar konsisten.
+     */
+    protected function isCloudDiskConfigured(string $disk): bool
+    {
+        $disk = strtolower($disk);
+
+        if ($disk === 's3') {
+            return (bool) config('filesystems.disks.s3.bucket');
+        }
+
+        if (in_array($disk, ['r2', 'r2-private'], true)) {
+            $cfg = config("filesystems.disks.{$disk}", []);
+
+            return !empty($cfg['bucket']) && !empty($cfg['endpoint']);
+        }
+
+        return true;
     }
 
     /**
@@ -157,6 +207,25 @@ class LmsService
         $tokenAktif = !empty($pertemuan->token_absensi) &&
             $pertemuan->token_expired_at &&
             now()->lt($pertemuan->token_expired_at);
+
+        // Privasi data: mahasiswa hanya boleh melihat catatan miliknya sendiri,
+        // bukan absensi/izin/pengumpulan seluruh kelas.
+        if ($isMahasiswa && $mahasiswaModel) {
+            $pertemuan->setRelation(
+                'absensi',
+                $pertemuan->absensi->where('mahasiswa_id', $mahasiswaModel->id)->values()
+            );
+            $pertemuan->setRelation(
+                'izinAbsensiList',
+                $pertemuan->izinAbsensiList->where('mahasiswa_id', $mahasiswaModel->id)->values()
+            );
+            foreach ($tugasList as $tugas) {
+                $tugas->setRelation(
+                    'pengumpulan',
+                    $tugas->pengumpulan->where('mahasiswa_id', $mahasiswaModel->id)->values()
+                );
+            }
+        }
 
         return [
             'pertemuan' => $pertemuan,
@@ -616,8 +685,11 @@ class LmsService
 
     /**
      * Rekapitulasi kehadiran satu kelas lengkap untuk seluruh pertemuan.
+     *
+     * @param int|null $onlyMahasiswaId Bila diisi, hanya baris mahasiswa tersebut
+     *                                  yang dikembalikan (privasi data mahasiswa).
      */
-    public function getRekapAbsensiKelas(int $kelasId): array
+    public function getRekapAbsensiKelas(int $kelasId, ?int $onlyMahasiswaId = null): array
     {
         $kelas = Kelas::with(['lmsSetting', 'pertemuans'])->findOrFail($kelasId);
         $totalPertemuan = $kelas->pertemuans->count();
@@ -633,6 +705,7 @@ class LmsService
         foreach ($krsDetails as $kd) {
             $mhs = $kd->krs?->mahasiswa;
             if (!$mhs) continue;
+            if ($onlyMahasiswaId && (int) $mhs->id !== (int) $onlyMahasiswaId) continue;
 
             $absensiList = AbsensiMahasiswa::whereIn('pertemuan_id', $kelas->pertemuans->pluck('id'))
                 ->where('mahasiswa_id', $mhs->id)
@@ -676,9 +749,16 @@ class LmsService
         int $perPage = 15,
         ?string $search = null,
         string $sortBy = 'created_at',
-        string $sortOrder = 'desc'
+        string $sortOrder = 'desc',
+        ?int $tahunAkademikId = null
     ): \Illuminate\Contracts\Pagination\LengthAwarePaginator {
         $query = Kelas::with(['mataKuliah', 'tahunAkademik', 'programStudi', 'dosenPengampu.dosen', 'ruangan']);
+
+        // Tanpa filter eksplisit, batasi ke periode aktif agar tidak tercampur semua tahun akademik.
+        $tahunAkademikId ??= TahunAkademik::where('is_active', true)->value('id');
+        if ($tahunAkademikId) {
+            $query->where('tahun_akademik_id', $tahunAkademikId);
+        }
 
         $dosen = Dosen::where('user_id', $userId)->first();
         if ($dosen) {
@@ -691,6 +771,14 @@ class LmsService
                     $q->where('mahasiswa_id', $mahasiswa->id);
                 })->pluck('kelas_id');
                 $query->whereIn('id', $kelasIds);
+            } else {
+                // Tanpa relasi dosen/mahasiswa (mis. akun dosen belum tertaut):
+                // hanya istimewa (admin) boleh melihat semua; selain itu kosong.
+                $user = User::find($userId);
+                $isPriv = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+                if (!$isPriv) {
+                    $query->whereRaw('1 = 0');
+                }
             }
         }
 

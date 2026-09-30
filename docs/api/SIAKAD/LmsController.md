@@ -22,7 +22,7 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | GET | `/api/v1/siakad/lms/kelas/my` | Daftar kelas yang diampu (Dosen) atau diikuti (Mahasiswa) | ✅ |
 | GET | `/api/v1/siakad/lms/tugas/my` | Seluruh daftar tugas mahasiswa di semester aktif | ✅ |
 | GET | `/api/v1/siakad/lms/kelas/{kelasId}/overview` | Ringkasan 16 pertemuan kelas, silabus, & progres perkuliahan | ✅ |
-| GET | `/api/v1/siakad/lms/kelas/{kelasId}/rekap-absensi` | Matriks rekapitulasi kehadiran seluruh mahasiswa per pertemuan | ✅ |
+| GET | `/api/v1/siakad/lms/kelas/{kelasId}/rekap-absensi` | Rekap kehadiran (dosen: sekelas; mahasiswa: miliknya saja) | ✅ |
 | PUT | `/api/v1/siakad/lms/kelas/{kelasId}/setting` | Perbarui konfigurasi LMS kelas (storage, bobot, izin token) | ✅ |
 | GET | `/api/v1/siakad/lms/pertemuan/{id}` | Detail pertemuan, materi, tugas, kehadiran, dan pengajuan izin | ✅ |
 | POST | `/api/v1/siakad/lms/pertemuan/{pertemuanId}/materi` | Tambah materi pembelajaran baru (teks/link/file) | ✅ |
@@ -46,6 +46,7 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
+| `tahun_akademik_id` | integer | ❌ | aktif | Filter ID tahun akademik / semester perkuliahan |
 | `search` | string | ❌ | — | Pencarian judul materi, nama kelas, atau nama mahasiswa |
 | `sort_by` | string | ❌ | `created_at` | Kolom pengurutan data (`created_at`, `nama_kelas`, `id`) |
 | `sort_order` | string | ❌ | `desc` | Arah pengurutan: `asc` / `desc` |
@@ -55,6 +56,65 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 ---
 
 ## 1. Overview Kelas & Pertemuan
+
+### [GET] `/api/v1/siakad/lms/kelas/my`
+
+Mengambil daftar kelas yang diampu (untuk Dosen) atau kelas yang diikuti sesuai KRS yang disetujui (untuk Mahasiswa) pada tahun akademik aktif atau tahun akademik tertentu.
+
+#### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `tahun_akademik_id` | integer | ❌ | aktif | ID periode tahun akademik (default: periode `is_active = true`) |
+| `search` | string | ❌ | — | Pencarian nama kelas atau nama mata kuliah |
+
+#### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Daftar kelas LMS berhasil dimuat.",
+    "data": [
+        {
+            "id": 14,
+            "nama_kelas": "TI-3A",
+            "kode_kelas": "TI3A-20261",
+            "mata_kuliah": {
+                "id": 45,
+                "kode_mk": "IF301",
+                "nama_mk": "Pemrograman Web Lanjut",
+                "total_sks": 3
+            },
+            "dosen": {
+                "id": 2,
+                "nama_lengkap": "Dr. Budi Santoso, M.Kom."
+            },
+            "setting": {
+                "allow_student_attendance_token": true,
+                "default_storage_limit_mb": 25
+            },
+            "total_pertemuan": 16,
+            "pertemuan_terlaksana": 4
+        }
+    ]
+}
+```
+
+#### Response Error Standar
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki akses ke data kelas LMS."
+}
+```
 
 ### [GET] `/api/v1/siakad/lms/kelas/{kelasId}/overview`
 
@@ -398,8 +458,10 @@ Dosen pengampu memproses status persetujuan surat izin. Jika disetujui, kehadira
 
 ## Catatan Tambahan
 
-- **Penyimpanan Berkas (Cloudflare R2 & Lokal)**: Pemilihan disk penyimpanan disesuaikan secara dinamis melalui pengaturan sistem dan kelas (`lms_storage_disk`), tanpa melakukan *hardcoding* jalur berkas.
+- **Penyimpanan Berkas (Cloudflare R2 & Lokal)**: Pemilihan disk penyimpanan disesuaikan secara dinamis melalui pengaturan sistem dan kelas (`lms_storage_disk`), tanpa melakukan *hardcoding* jalur berkas. Bila disk cloud (r2/r2-private/s3) terpilih namun belum dikonfigurasi (bucket/endpoint kosong, mis. env lokal), sistem otomatis fallback ke disk lokal agar upload tetap berjalan.
 - **Integritas Penilaian OBE**: Sinkronisasi nilai tugas ke `siakad_nilai_komponen_mhs` dilakukan secara transaksional dengan menjaga relasi antara mahasiswa, kelas, dan komponen penilaian terkait.
 - **Keamanan Berkas**: Tautan pengunduhan materi dan pengumpulan tugas menggunakan signed URL berbatas waktu atau *streamed response* terproteksi sehingga berkas tidak dapat diakses secara publik tanpa autentikasi yang sah.
+- **Privasi Data Mahasiswa**: Pemanggil ber-role mahasiswa hanya menerima data kehadiran miliknya sendiri pada endpoint rekap (`rekapitulasi` 1 baris) dan detail pertemuan (`absensi_list`, `izin_list`, dan `pengumpulan` tiap tugas difilter ke miliknya). Agregat hitungan (`absensi_summary`) tetap ditampilkan.
+- **Cakupan Daftar Kelas (`kelas/my`)**: dosen hanya melihat kelas yang diampunya (`dosen_pengampu`), mahasiswa hanya kelas di KRS-nya. Akun tanpa relasi dosen/mahasiswa tidak menerima data apa pun kecuali istimewa (admin/kaprodi). Tanpa parameter `tahun_akademik_id`, daftar dibatasi ke periode aktif (`is_active`); kirim ID periode lain untuk melihat riwayat semester lalu.
 - **Kerahasiaan Data**: Field sensitif seperti token akses storage, credential S3, dan password pengguna tidak akan dikembalikan dalam response API apapun.
 - **Penghapusan Berkas**: Saat materi atau tugas dihapus, berkas fisik yang tersimpan di disk storage akan dibersihkan secara otomatis.

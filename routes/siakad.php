@@ -47,6 +47,7 @@ Route::prefix('mahasiswa')->group(function () {
     Route::post('/import-nim', [MahasiswaController::class, 'importNimData']);
     Route::post('/sync-from-spmb', [MahasiswaController::class, 'syncFromSpmb']);
     Route::get('/konversi', [MahasiswaController::class, 'listKonversi']);
+    Route::get('/konversi/{id}', [MahasiswaController::class, 'showKonversi']);
     Route::post('/konversi', [MahasiswaController::class, 'storeKonversi']);
     Route::put('/konversi/{id}', [MahasiswaController::class, 'updateKonversi']);
     Route::patch('/konversi/{id}/status', [MahasiswaController::class, 'updateKonversiStatus']);

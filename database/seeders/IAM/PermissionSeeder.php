@@ -324,6 +324,7 @@ class PermissionSeeder extends Seeder
             $dosenSlugs = [
                 'siakad.dashboard.read',
                 'siakad.kelas.read',
+                'siakad.kelas.manage',
                 'siakad.krs.read',
                 'siakad.krs.approve',
                 'siakad.nilai.read',

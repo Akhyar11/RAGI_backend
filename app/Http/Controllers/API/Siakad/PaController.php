@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\API\Siakad;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Siakad\RekapPaRequest;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\PaCatatan;
 use App\Models\Siakad\PaLaporan;
+use App\Services\Siakad\PaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -34,64 +36,15 @@ class PaController extends Controller
      * (aktif, cuti, mangkir, dropout/keluar, lulus) + butuh penanganan khusus.
      * Kaprodi/admin: seluruh dosen (filter prodi); dosen: dirinya sendiri.
      */
-    public function rekap(Request $request)
+    public function rekap(RekapPaRequest $request, PaService $paService)
     {
-        $request->validate([
-            'dosen_id' => 'nullable|exists:siakad_dosen,id',
-            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+        $data = $paService->getRekap($request->validated(), $request->user());
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Rekap bimbingan PA berhasil dimuat',
+            'data' => $data,
         ]);
-
-        $user = $request->user();
-        $ownDosen = Dosen::where('user_id', $user?->id)->first();
-
-        $dosenQuery = Dosen::with('programStudi');
-        if (!$this->isPrivileged($user)) {
-            $dosenQuery->where('id', $ownDosen?->id ?? -1);
-        } elseif ($request->filled('dosen_id')) {
-            $dosenQuery->where('id', $request->dosen_id);
-        }
-        if ($request->filled('program_studi_id')) {
-            $dosenQuery->where('program_studi_id', $request->program_studi_id);
-        }
-        $dosens = $dosenQuery->orderBy('nama_lengkap')->get();
-
-        $data = $dosens->map(function ($d) {
-            $base = Mahasiswa::where('dosen_wali_id', $d->id);
-            $counts = [
-                'aktif' => (clone $base)->where('status', 'aktif')->count(),
-                'cuti' => (clone $base)->where('status', 'cuti')->count(),
-                'mangkir' => (clone $base)->where('status', 'mangkir')->count(),
-                'keluar' => (clone $base)->whereIn('status', ['dropout'])->count(),
-                'lulus' => (clone $base)->where('status', 'lulus')->count(),
-            ];
-            $counts['total'] = array_sum($counts);
-            $khusus = PaCatatan::where('dosen_id', $d->id)
-                ->where('butuh_penanganan_khusus', true)
-                ->where('status_tindak_lanjut', '!=', 'selesai')
-                ->count();
-            $totalCatatan = PaCatatan::where('dosen_id', $d->id)->count();
-            $terakhir = PaCatatan::where('dosen_id', $d->id)->latest('id')->first();
-            $laporan = PaLaporan::where('dosen_id', $d->id)->latest('id')->first();
-
-            return [
-                'dosen_id' => $d->id,
-                'nama_lengkap' => $d->nama_lengkap,
-                'nidn' => $d->nidn,
-                'program_studi' => $d->programStudi?->nama,
-                'komposisi' => $counts,
-                'butuh_khusus_aktif' => $khusus,
-                'total_bimbingan' => $totalCatatan,
-                'terakhir_bimbingan_at' => $terakhir?->tanggal_bimbingan ?? $terakhir?->created_at,
-                'belum_bimbingan' => $totalCatatan === 0 && $counts['total'] > 0,
-                'laporan_terakhir' => $laporan ? [
-                    'tahun_akademik_id' => $laporan->tahun_akademik_id,
-                    'status' => $laporan->status,
-                    'updated_at' => $laporan->updated_at,
-                ] : null,
-            ];
-        });
-
-        return response()->json(['status' => 'success', 'data' => $data]);
     }
 
     /** Daftar mahasiswa bimbingan + flag masalah (tunggakan, KRS belum disetujui, IPK rendah). */

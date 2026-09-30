@@ -7,8 +7,10 @@ use Illuminate\Http\Request;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\KonversiTransfer;
 use App\Models\Siakad\KonversiTransferDetail;
+use App\Http\Requests\Siakad\UpdateKonversiTransferRequest;
 use App\Models\User;
 use App\Models\Role;
+use App\Services\Siakad\KonversiTransferService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
@@ -679,6 +681,22 @@ class MahasiswaController extends Controller
         ]);
     }
 
+    /**
+     * Detail satu usulan konversi transfer beserta rincian MK.
+     * Scope RBAC sama dengan listKonversi: dosen murni hanya bisa melihat
+     * usulan mahasiswa bimbingannya (dosen_wali_id).
+     */
+    public function showKonversi(Request $request, $id, KonversiTransferService $konversiService)
+    {
+        $konversi = $konversiService->getDetail($id, $request->user());
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Detail konversi transfer berhasil dimuat',
+            'data' => $konversi,
+        ]);
+    }
+
     public function storeKonversi(Request $request)
     {
         $request->validate([
@@ -778,14 +796,17 @@ class MahasiswaController extends Controller
 
     /**
      * Update konversi via PUT /konversi/{id} (alias eksplisit agar tidak 405).
-     * Didelegasikan ke storeKonversi (upsert + kunci disetujui tetap berlaku).
+     * Didelegasikan ke KonversiTransferService.
      */
-    public function updateKonversi(Request $request, $id)
+    public function updateKonversi(UpdateKonversiTransferRequest $request, $id, KonversiTransferService $konversiService)
     {
-        $konversi = KonversiTransfer::findOrFail($id);
-        $request->merge(['mahasiswa_id' => $konversi->mahasiswa_id]);
+        $konversi = $konversiService->update($id, $request->validated(), $request->user());
 
-        return $this->storeKonversi($request);
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Konversi transfer nilai mahasiswa berhasil disimpan',
+            'data' => $konversi,
+        ]);
     }
 
     public function destroyKonversi($id)
