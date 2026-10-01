@@ -1,10 +1,10 @@
 # MasterBiayaSpmbController
 
-> **Modul**: SPMB / **Base URL**: `/api/spmb/master` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-25
+> **Modul**: SPMB / **Base URL**: `/api/spmb/master` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-10-01
 
-Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `gelombang_id` + `program_studi_id`). Kolom `tahun_akademik_id` tidak lagi dipakai karena gelombang sudah membawa tahun akademik + jalur masuk. Setiap item biaya memiliki penanda `dibebankan_saat_pendaftaran`:
-- `true` → menjadi **beban awal** pada form pendaftaran online.
-- `false` → dibebankan saat **daftar ulang**.
+Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `master_tipe_jalur_id` + `program_studi_id`). Scoping memakai **Tipe Jalur Masuk** (`core_master_tipe_jalur`), bukan gelombang, sehingga satu konfigurasi biaya berlaku untuk semua gelombang pada tipe jalur tersebut. Setiap item biaya memiliki dua penanda:
+- `dibebankan_saat_pendaftaran`: `true` → menjadi **beban awal** pada form pendaftaran online; `false` → dibebankan saat **daftar ulang**.
+- `berlaku_diskon`: `true` → komponen ini **berhak atas diskon/potongan**; `false` → tidak.
 
 ## Headers
 
@@ -31,8 +31,6 @@ Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `gel
 | PUT | `/api/spmb/master/biaya/{id}` | Perbarui master biaya | ✅ |
 | DELETE | `/api/spmb/master/biaya/{id}` | Hapus master biaya (soft delete) | ✅ |
 | POST | `/api/spmb/master/biaya/{id}/restore` | Pulihkan master biaya terhapus | ✅ |
-| POST | `/api/spmb/master/biaya/batch` | Simpan massal per gelombang | ✅ |
-| POST | `/api/spmb/master/biaya/copy-from-gelombang` | Salin konfigurasi antar gelombang | ✅ |
 
 > Semua endpoint memerlukan permission `spmb.manage` (lihat `Gate::before` di `AppServiceProvider`). Tanpa token → `401`, tanpa izin → `403`.
 
@@ -55,7 +53,7 @@ Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `gel
 {
     "status": "error",
     "message": "Data yang diberikan tidak valid.",
-    "errors": { "gelombang_id": ["The gelombang id field is required."] }
+    "errors": { "master_tipe_jalur_id": ["The master tipe jalur id field is required."] }
 }
 ```
 
@@ -280,7 +278,7 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
 | `search` | string | ❌ | — | Cari nama / kode prodi |
-| `gelombang_id` | integer | ❌ | — | Filter gelombang |
+| `master_tipe_jalur_id` | integer | ❌ | — | Filter tipe jalur masuk (`core_master_tipe_jalur`) |
 | `program_studi_id` | integer | ❌ | — | Filter program studi |
 | `is_active` | boolean | ❌ | — | Filter status aktif |
 | `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `total_biaya`, `id` |
@@ -298,17 +296,17 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
     "data": [
         {
             "id": 1,
-            "gelombang_id": 3,
+            "master_tipe_jalur_id": 2,
             "program_studi_id": 7,
             "total_biaya": "12000000.00",
             "is_active": true,
             "keterangan": null,
-            "gelombang": { "id": 3, "nama": "Gelombang 1" },
+            "master_tipe_jalur": { "id": 2, "kode": "REGULER", "nama": "Reguler" },
             "program_studi": { "id": 7, "nama": "Teknik Informatika", "kode_prodi": "TI01", "jenjang": "S1" },
             "items": [
-                { "id": 10, "komponen_biaya_id": 6, "nominal": "250000.00", "dibebankan_saat_pendaftaran": true, "komponen_biaya": { "kode": "REG-AWAL", "nama": "Biaya Pendaftaran" } },
-                { "id": 11, "komponen_biaya_id": 8, "nominal": "2750000.00", "dibebankan_saat_pendaftaran": false, "komponen_biaya": { "kode": "SERAGAM", "nama": "Paket Seragam" } },
-                { "id": 12, "komponen_biaya_id": 7, "nominal": "9000000.00", "dibebankan_saat_pendaftaran": false, "komponen_biaya": { "kode": "DPI", "nama": "Dana Pengembangan Institusi" } }
+                { "id": 10, "komponen_biaya_id": 6, "nominal": "250000.00", "dibebankan_saat_pendaftaran": true, "berlaku_diskon": false, "komponen_biaya": { "kode": "REG-AWAL", "nama": "Biaya Pendaftaran" } },
+                { "id": 11, "komponen_biaya_id": 8, "nominal": "2750000.00", "dibebankan_saat_pendaftaran": false, "berlaku_diskon": true, "komponen_biaya": { "kode": "SERAGAM", "nama": "Paket Seragam" } },
+                { "id": 12, "komponen_biaya_id": 7, "nominal": "9000000.00", "dibebankan_saat_pendaftaran": false, "berlaku_diskon": true, "komponen_biaya": { "kode": "DPI", "nama": "Dana Pengembangan Institusi" } }
             ]
         }
     ],
@@ -330,12 +328,12 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
     "message": "Detail master biaya berhasil dimuat.",
     "data": {
         "id": 1,
-        "gelombang_id": 3,
+        "master_tipe_jalur_id": 2,
         "program_studi_id": 7,
         "total_biaya": "12000000.00",
         "is_active": true,
         "items": [
-            { "komponen_biaya_id": 6, "nominal": "250000.00", "dibebankan_saat_pendaftaran": true }
+            { "komponen_biaya_id": 6, "nominal": "250000.00", "dibebankan_saat_pendaftaran": true, "berlaku_diskon": false }
         ]
     }
 }
@@ -350,20 +348,20 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 
 ## [POST] /api/spmb/master/biaya
 
-> Idempoten untuk pasangan `(gelombang_id, program_studi_id)`.
+> Idempoten untuk pasangan `(master_tipe_jalur_id, program_studi_id)`.
 
 ### Request Body
 
 ```json
 {
-    "gelombang_id": 3,
+    "master_tipe_jalur_id": 2,
     "program_studi_id": 7,
     "is_active": true,
     "keterangan": "Paket biaya awal masuk",
     "items": [
-        { "komponen_biaya_id": 6, "nominal": 250000, "dibebankan_saat_pendaftaran": true, "keterangan": "Formulir" },
-        { "komponen_biaya_id": 8, "nominal": 2750000, "dibebankan_saat_pendaftaran": false },
-        { "komponen_biaya_id": 7, "nominal": 9000000, "dibebankan_saat_pendaftaran": false }
+        { "komponen_biaya_id": 6, "nominal": 250000, "dibebankan_saat_pendaftaran": true, "berlaku_diskon": false, "keterangan": "Formulir" },
+        { "komponen_biaya_id": 8, "nominal": 2750000, "dibebankan_saat_pendaftaran": false, "berlaku_diskon": true },
+        { "komponen_biaya_id": 7, "nominal": 9000000, "dibebankan_saat_pendaftaran": false, "berlaku_diskon": true }
     ]
 }
 ```
@@ -377,12 +375,12 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
     "message": "Master biaya program studi berhasil disimpan.",
     "data": {
         "id": 1,
-        "gelombang_id": 3,
+        "master_tipe_jalur_id": 2,
         "program_studi_id": 7,
         "total_biaya": 12000000,
         "is_active": true,
         "items": [],
-        "gelombang": { "id": 3, "nama": "Gelombang 1" },
+        "master_tipe_jalur": { "id": 2, "kode": "REGULER", "nama": "Reguler" },
         "program_studi": { "id": 7, "nama": "Teknik Informatika" }
     }
 }
@@ -409,12 +407,12 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 
 ```json
 {
-    "gelombang_id": 3,
+    "master_tipe_jalur_id": 2,
     "program_studi_id": 7,
     "is_active": true,
     "keterangan": "Diperbarui",
     "items": [
-        { "komponen_biaya_id": 6, "nominal": 300000, "dibebankan_saat_pendaftaran": true }
+        { "komponen_biaya_id": 6, "nominal": 300000, "dibebankan_saat_pendaftaran": true, "berlaku_diskon": false }
     ]
 }
 ```
@@ -460,70 +458,11 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 
 ---
 
-## [POST] /api/spmb/master/biaya/batch
-
-### Request Body
-
-```json
-{
-    "gelombang_id": 3,
-    "rows": [
-        {
-            "program_studi_id": 7,
-            "is_active": true,
-            "items": [
-                { "komponen_biaya_id": 6, "nominal": 250000, "dibebankan_saat_pendaftaran": true },
-                { "komponen_biaya_id": 8, "nominal": 2750000, "dibebankan_saat_pendaftaran": false }
-            ]
-        }
-    ]
-}
-```
-
-### Response Sukses
-
-**200 OK**
-```json
-{
-    "status": "success",
-    "message": "Semua konfigurasi biaya program studi berhasil disimpan secara massal.",
-    "data": { "updated": true }
-}
-```
-
----
-
-## [POST] /api/spmb/master/biaya/copy-from-gelombang
-
-### Request Body
-
-```json
-{ "from_gelombang_id": 2, "to_gelombang_id": 3 }
-```
-
-### Response Sukses
-
-**200 OK**
-```json
-{
-    "status": "success",
-    "message": "Berhasil menyalin 5 data biaya program studi ke gelombang target.",
-    "data": { "total_copied": 5 }
-}
-```
-
-### Response Error
-
-**404 Not Found**
-```json
-{ "status": "error", "message": "Tidak ditemukan data biaya pada gelombang sumber." }
-```
-
----
-
 ### Catatan Tambahan
 
-> - Menghapus gelombang akan menghapus (cascade) konfigurasi biayanya.
+> - Scoping biaya memakai **Tipe Jalur Masuk** (`core_master_tipe_jalur`), bukan gelombang. Satu konfigurasi berlaku lintas gelombang pada tipe jalur yang sama.
+> - Menghapus tipe jalur akan membuat `master_tipe_jalur_id` pada konfigurasi biaya menjadi `NULL` (null on delete); data biaya tidak ikut terhapus.
 > - Komponen bernilai `0` **tidak dihitung** sebagai komponen beban pada tagihan pendaftaran/daftar ulang.
+> - `berlaku_diskon` menyimpan penanda apakah komponen berhak atas diskon/potongan; default `false`.
 > - Password/token tidak pernah dikembalikan pada response.
 > - Seluruh aksi tulis (create/update/delete/restore) dicatat oleh observer audit (`MasterBiaya`, `MasterBiayaItem`, `MasterKomponenBiaya`).

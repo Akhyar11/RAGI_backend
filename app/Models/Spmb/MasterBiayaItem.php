@@ -16,12 +16,14 @@ class MasterBiayaItem extends Model
         'komponen_biaya_id',
         'nominal',
         'dibebankan_saat_pendaftaran',
+        'berlaku_diskon',
         'keterangan',
     ];
 
     protected $casts = [
         'nominal' => 'decimal:2',
         'dibebankan_saat_pendaftaran' => 'boolean',
+        'berlaku_diskon' => 'boolean',
     ];
 
     public function masterBiaya()

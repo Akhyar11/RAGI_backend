@@ -43,7 +43,7 @@ class DaftarUlangController extends Controller
         // Biaya daftar ulang disusun oleh service (fallback otomatis ke SIKEU).
         $prodiId = $hasil->program_studi_diterima_id ?? $pendaftaran->program_studi_id;
         $masterBiayaService = app(MasterBiayaService::class);
-        $details = $masterBiayaService->buildDetailBebanDaftarUlang($pendaftaran->gelombang_id, $prodiId);
+        $details = $masterBiayaService->buildDetailBebanDaftarUlang($pendaftaran->master_tipe_jalur_id, $prodiId);
 
         $payload = [
             'calon_mahasiswa_id' => $pendaftaran_id,

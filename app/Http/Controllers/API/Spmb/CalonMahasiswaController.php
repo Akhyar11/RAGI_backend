@@ -110,8 +110,9 @@ class CalonMahasiswaController extends Controller
         } else {
             // Beban awal pendaftaran disusun oleh service (termasuk fallback).
             $masterBiayaService = app(MasterBiayaService::class);
-            $gelombangId = $pendaftaran->gelombang_id ?? 1;
-            $details = $masterBiayaService->buildDetailBebanPendaftaran($gelombangId, $pendaftaran->program_studi_id);
+            $masterTipeJalurId = $pendaftaran->master_tipe_jalur_id;
+            $gelombangId = $pendaftaran->gelombang_id;
+            $details = $masterBiayaService->buildDetailBebanPendaftaran($masterTipeJalurId, $pendaftaran->program_studi_id, $gelombangId);
 
             // Generate External Bill via internal Request
             $payload = [

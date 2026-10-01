@@ -176,7 +176,7 @@ class MasterBiayaService
         return DB::transaction(function () use ($data) {
             $masterBiaya = MasterBiaya::updateOrCreate(
                 [
-                    'gelombang_id' => $data['gelombang_id'],
+                    'master_tipe_jalur_id' => $data['master_tipe_jalur_id'],
                     'program_studi_id' => $data['program_studi_id'],
                 ],
                 [
@@ -199,6 +199,7 @@ class MasterBiayaService
                         [
                             'nominal' => $nominal,
                             'dibebankan_saat_pendaftaran' => (bool) ($item['dibebankan_saat_pendaftaran'] ?? false),
+                            'berlaku_diskon' => (bool) ($item['berlaku_diskon'] ?? false),
                             'keterangan' => $item['keterangan'] ?? null,
                         ]
                     );
@@ -207,7 +208,7 @@ class MasterBiayaService
 
             $masterBiaya->update(['total_biaya' => $total]);
 
-            return $masterBiaya->load(['items.komponenBiaya', 'programStudi', 'gelombang']);
+            return $masterBiaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur']);
         });
     }
 
@@ -215,7 +216,7 @@ class MasterBiayaService
     {
         return DB::transaction(function () use ($biaya, $data) {
             $biaya->update([
-                'gelombang_id' => $data['gelombang_id'] ?? $biaya->gelombang_id,
+                'master_tipe_jalur_id' => $data['master_tipe_jalur_id'] ?? $biaya->master_tipe_jalur_id,
                 'program_studi_id' => $data['program_studi_id'] ?? $biaya->program_studi_id,
                 'is_active' => $data['is_active'] ?? $biaya->is_active,
                 'keterangan' => $data['keterangan'] ?? $biaya->keterangan,
@@ -244,6 +245,7 @@ class MasterBiayaService
                         [
                             'nominal' => $nominal,
                             'dibebankan_saat_pendaftaran' => (bool) ($item['dibebankan_saat_pendaftaran'] ?? false),
+                            'berlaku_diskon' => (bool) ($item['berlaku_diskon'] ?? false),
                             'keterangan' => $item['keterangan'] ?? null,
                         ]
                     );
@@ -254,7 +256,7 @@ class MasterBiayaService
                 $biaya->recalculateTotal();
             }
 
-            return $biaya->load(['items.komponenBiaya', 'programStudi', 'gelombang']);
+            return $biaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur']);
         });
     }
 
@@ -270,18 +272,18 @@ class MasterBiayaService
 
     /**
      * Ambil komponen biaya berdasarkan tahap beban (pendaftaran / daftar ulang)
-     * untuk gelombang + program studi tertentu.
+     * untuk tipe jalur masuk + program studi tertentu.
      *
      * @return Collection<int, MasterBiayaItem>
      */
-    public function getKomponenBeban(?int $gelombangId, ?int $programStudiId, bool $saatPendaftaran): Collection
+    public function getKomponenBeban(?int $masterTipeJalurId, ?int $programStudiId, bool $saatPendaftaran): Collection
     {
-        if (! $gelombangId || ! $programStudiId) {
+        if (! $masterTipeJalurId || ! $programStudiId) {
             return collect();
         }
 
         $biaya = MasterBiaya::with('items.komponenBiaya')
-            ->where('gelombang_id', $gelombangId)
+            ->where('master_tipe_jalur_id', $masterTipeJalurId)
             ->where('program_studi_id', $programStudiId)
             ->where('is_active', true)
             ->first();
@@ -302,9 +304,9 @@ class MasterBiayaService
      *
      * @return array<int, array{master_biaya_kode: string, nominal: float, keterangan: string}>
      */
-    public function buildDetailTagihan(?int $gelombangId, ?int $programStudiId, bool $saatPendaftaran): array
+    public function buildDetailTagihan(?int $masterTipeJalurId, ?int $programStudiId, bool $saatPendaftaran): array
     {
-        return $this->getKomponenBeban($gelombangId, $programStudiId, $saatPendaftaran)
+        return $this->getKomponenBeban($masterTipeJalurId, $programStudiId, $saatPendaftaran)
             ->map(fn ($item) => [
                 'master_biaya_kode' => $item->komponenBiaya->kode,
                 'nominal' => (float) $item->nominal,
@@ -315,16 +317,18 @@ class MasterBiayaService
 
     /**
      * Detail beban awal pendaftaran, dengan fallback ke tarif SIKEU bila
-     * komponen pendaftaran belum dikonfigurasi.
+     * komponen pendaftaran belum dikonfigurasi. Parameter `$gelombangId`
+     * hanya dipakai untuk fallback tarif (bila konfigurasi master biaya
+     * berbasis tipe jalur belum ada).
      */
-    public function buildDetailBebanPendaftaran(?int $gelombangId, ?int $programStudiId): array
+    public function buildDetailBebanPendaftaran(?int $masterTipeJalurId, ?int $programStudiId, ?int $gelombangId = null): array
     {
-        $details = $this->buildDetailTagihan($gelombangId, $programStudiId, true);
+        $details = $this->buildDetailTagihan($masterTipeJalurId, $programStudiId, true);
         if (! empty($details)) {
             return $details;
         }
 
-        $gelombang = GelombangPenerimaan::find($gelombangId);
+        $gelombang = $gelombangId ? GelombangPenerimaan::find($gelombangId) : null;
 
         $sikeuService = app(SpmbSikeuService::class);
         $nominal = $sikeuService->getTarifPendaftaranSpmb($gelombang->jalur_masuk_id ?? null, $gelombangId);
@@ -352,9 +356,9 @@ class MasterBiayaService
      * Detail beban daftar ulang, dengan fallback ke tarif UKT SIKEU bila
      * komponen daftar ulang belum dikonfigurasi.
      */
-    public function buildDetailBebanDaftarUlang(?int $gelombangId, ?int $programStudiId): array
+    public function buildDetailBebanDaftarUlang(?int $masterTipeJalurId, ?int $programStudiId): array
     {
-        $details = $this->buildDetailTagihan($gelombangId, $programStudiId, false);
+        $details = $this->buildDetailTagihan($masterTipeJalurId, $programStudiId, false);
         if (! empty($details)) {
             return $details;
         }
@@ -371,92 +375,5 @@ class MasterBiayaService
             'nominal' => $biayaDaftarUlang->nominal ?? 5000000,
             'keterangan' => 'Biaya UKT Semester 1',
         ]];
-    }
-
-    public function batchUpdate(array $data): void
-    {
-        DB::transaction(function () use ($data) {
-            $gelombangId = $data['gelombang_id'];
-
-            foreach ($data['rows'] as $row) {
-                $prodiId = $row['program_studi_id'];
-                $isActive = $row['is_active'] ?? true;
-
-                $masterBiaya = MasterBiaya::updateOrCreate(
-                    [
-                        'gelombang_id' => $gelombangId,
-                        'program_studi_id' => $prodiId,
-                    ],
-                    [
-                        'is_active' => $isActive,
-                    ]
-                );
-
-                $total = 0;
-                foreach ($row['items'] as $item) {
-                    $nom = (float) $item['nominal'];
-                    $total += $nom;
-
-                    MasterBiayaItem::updateOrCreate(
-                        [
-                            'master_biaya_id' => $masterBiaya->id,
-                            'komponen_biaya_id' => $item['komponen_biaya_id'],
-                        ],
-                        [
-                            'nominal' => $nom,
-                            'dibebankan_saat_pendaftaran' => (bool) ($item['dibebankan_saat_pendaftaran'] ?? false),
-                        ]
-                    );
-                }
-
-                $masterBiaya->update(['total_biaya' => $total]);
-            }
-        });
-    }
-
-    public function copyFromGelombang(array $data): int
-    {
-        $fromGelombang = $data['from_gelombang_id'];
-        $toGelombang = $data['to_gelombang_id'];
-
-        $sourceRecords = MasterBiaya::with('items')
-            ->where('gelombang_id', $fromGelombang)
-            ->get();
-
-        if ($sourceRecords->isEmpty()) {
-            return 0;
-        }
-
-        DB::transaction(function () use ($sourceRecords, $toGelombang) {
-            foreach ($sourceRecords as $src) {
-                $target = MasterBiaya::updateOrCreate(
-                    [
-                        'gelombang_id' => $toGelombang,
-                        'program_studi_id' => $src->program_studi_id,
-                    ],
-                    [
-                        'total_biaya' => $src->total_biaya,
-                        'is_active' => $src->is_active,
-                        'keterangan' => $src->keterangan,
-                    ]
-                );
-
-                foreach ($src->items as $srcItem) {
-                    MasterBiayaItem::updateOrCreate(
-                        [
-                            'master_biaya_id' => $target->id,
-                            'komponen_biaya_id' => $srcItem->komponen_biaya_id,
-                        ],
-                        [
-                            'nominal' => $srcItem->nominal,
-                            'dibebankan_saat_pendaftaran' => (bool) $srcItem->dibebankan_saat_pendaftaran,
-                            'keterangan' => $srcItem->keterangan,
-                        ]
-                    );
-                }
-            }
-        });
-
-        return $sourceRecords->count();
     }
 }

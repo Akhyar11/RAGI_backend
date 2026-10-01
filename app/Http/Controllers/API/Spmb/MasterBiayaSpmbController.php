@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\API\Spmb;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Spmb\BatchUpdateMasterBiayaRequest;
-use App\Http\Requests\Spmb\CopyMasterBiayaRequest;
 use App\Http\Requests\Spmb\StoreKomponenBiayaRequest;
 use App\Http\Requests\Spmb\StoreMasterBiayaRequest;
 use App\Http\Requests\Spmb\UpdateKomponenBiayaRequest;
@@ -187,7 +185,7 @@ class MasterBiayaSpmbController extends Controller
     {
 
 
-        $query = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'gelombang']);
+        $query = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'masterTipeJalur']);
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -197,8 +195,8 @@ class MasterBiayaSpmbController extends Controller
             });
         }
 
-        if ($request->filled('gelombang_id')) {
-            $query->where('gelombang_id', $request->input('gelombang_id'));
+        if ($request->filled('master_tipe_jalur_id')) {
+            $query->where('master_tipe_jalur_id', $request->input('master_tipe_jalur_id'));
         }
 
         if ($request->filled('program_studi_id')) {
@@ -239,7 +237,7 @@ class MasterBiayaSpmbController extends Controller
 
     public function show(Request $request, $id): JsonResponse
     {
-        $biaya = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'gelombang'])
+        $biaya = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'masterTipeJalur'])
             ->findOrFail($id);
 
         return response()->json([
@@ -296,35 +294,6 @@ class MasterBiayaSpmbController extends Controller
             'status' => 'success',
             'message' => 'Master biaya program studi berhasil dipulihkan.',
             'data' => $masterBiaya,
-        ]);
-    }
-
-    public function batchUpdate(BatchUpdateMasterBiayaRequest $request): JsonResponse
-    {
-        $this->service->batchUpdate($request->validated());
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Semua konfigurasi biaya program studi berhasil disimpan secara massal.',
-            'data' => ['updated' => true],
-        ]);
-    }
-
-    public function copyFromGelombang(CopyMasterBiayaRequest $request): JsonResponse
-    {
-        $count = $this->service->copyFromGelombang($request->validated());
-
-        if ($count === 0) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Tidak ditemukan data biaya pada gelombang sumber.',
-            ], 404);
-        }
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Berhasil menyalin ' . $count . ' data biaya program studi ke gelombang target.',
-            'data' => ['total_copied' => $count],
         ]);
     }
 }

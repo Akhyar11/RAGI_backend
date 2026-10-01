@@ -525,7 +525,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `gelombang_id` | integer | ✅ | — | ID gelombang (`spmb_gelombang_penerimaan`) |
+| `master_tipe_jalur_id` | integer | ✅ | — | ID tipe jalur masuk (`core_master_tipe_jalur`) |
 | `program_studi_id` | integer | ✅ | — | ID program studi (`siakad_program_studi`) |
 | `search` | string | ❌ | — | Tidak digunakan (endpoint non-paginasi) |
 | `sort_by` | string | ❌ | `created_at` | Tidak digunakan (endpoint non-paginasi) |
@@ -533,7 +533,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 | `per_page` | integer | ❌ | `15` | Tidak digunakan (endpoint non-paginasi) |
 | `page` | integer | ❌ | `1` | Tidak digunakan (endpoint non-paginasi) |
 
-> Catatan: endpoint ini **non-paginasi** (mengembalikan seluruh komponen beban untuk gelombang+prodi). Response menyertakan `"meta": null` dan `filters`.
+> Catatan: endpoint ini **non-paginasi** (mengembalikan seluruh komponen beban untuk tipe jalur + prodi). Response menyertakan `"meta": null` dan `filters`.
 
 ### Request Body
 
@@ -562,7 +562,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
         "total_daftar_ulang": 11750000
     },
     "meta": null,
-    "filters": { "gelombang_id": 3, "program_studi_id": 7, "search": null, "sort_by": "created_at", "sort_order": "desc" }
+    "filters": { "master_tipe_jalur_id": 2, "program_studi_id": 7, "search": null, "sort_by": "created_at", "sort_order": "desc" }
 }
 ```
 
@@ -579,7 +579,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 
 **404 Not Found**
 ```json
-{ "status": "error", "message": "No query results for model [App\\Models\\Spmb\\GelombangPenerimaan] 99." }
+{ "status": "error", "message": "No query results for model [App\\Models\\MasterTipeJalur] 99." }
 ```
 
 **422 Unprocessable Entity**
@@ -588,7 +588,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
     "status": "error",
     "message": "Data yang diberikan tidak valid.",
     "errors": {
-        "gelombang_id": ["The selected gelombang id is invalid."],
+        "master_tipe_jalur_id": ["The selected master tipe jalur id is invalid."],
         "program_studi_id": ["The selected program studi id is invalid."]
     }
 }

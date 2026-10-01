@@ -486,14 +486,14 @@ class MasterSpmbController extends Controller
 
     /**
      * Rincian komponen biaya (beban awal pendaftaran & daftar ulang)
-     * untuk gelombang + program studi tertentu.
+     * untuk tipe jalur masuk + program studi tertentu.
      */
     public function getBiayaPendaftaran(GetBiayaPendaftaranRequest $request): JsonResponse
     {
         $validated = $request->validated();
 
         $service = app(\App\Services\Spmb\MasterBiayaService::class);
-        $gelombangId = (int) $validated['gelombang_id'];
+        $masterTipeJalurId = (int) $validated['master_tipe_jalur_id'];
         $prodiId = (int) $validated['program_studi_id'];
 
         $map = function ($items) {
@@ -508,8 +508,8 @@ class MasterSpmbController extends Controller
             })->values();
         };
 
-        $pendaftaran = $map($service->getKomponenBeban($gelombangId, $prodiId, true));
-        $daftarUlang = $map($service->getKomponenBeban($gelombangId, $prodiId, false));
+        $pendaftaran = $map($service->getKomponenBeban($masterTipeJalurId, $prodiId, true));
+        $daftarUlang = $map($service->getKomponenBeban($masterTipeJalurId, $prodiId, false));
 
         return response()->json([
             'status' => 'success',

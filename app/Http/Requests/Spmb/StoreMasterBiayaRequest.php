@@ -14,7 +14,7 @@ class StoreMasterBiayaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'gelombang_id' => 'required|exists:spmb_gelombang_penerimaan,id',
+            'master_tipe_jalur_id' => 'required|exists:core_master_tipe_jalur,id',
             'program_studi_id' => 'required|exists:siakad_program_studi,id',
             'is_active' => 'nullable|boolean',
             'keterangan' => 'nullable|string',
@@ -22,6 +22,7 @@ class StoreMasterBiayaRequest extends FormRequest
             'items.*.komponen_biaya_id' => 'required|exists:spmb_master_komponen_biaya,id',
             'items.*.nominal' => 'required|numeric|min:0',
             'items.*.dibebankan_saat_pendaftaran' => 'nullable|boolean',
+            'items.*.berlaku_diskon' => 'nullable|boolean',
             'items.*.keterangan' => 'nullable|string|max:255',
         ];
     }

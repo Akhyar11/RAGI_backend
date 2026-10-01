@@ -445,8 +445,6 @@ Route::middleware(['auth:api', 'can:spmb.manage'])->prefix('spmb')->group(functi
     Route::put('master/biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'update']);
     Route::delete('master/biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'destroy']);
     Route::post('master/biaya/{id}/restore', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'restore']);
-    Route::post('master/biaya/batch', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'batchUpdate']);
-    Route::post('master/biaya/copy-from-gelombang', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'copyFromGelombang']);
 });
 
 Route::middleware('auth:api')->prefix('spmb')->group(function () {

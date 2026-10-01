@@ -95,8 +95,6 @@ Route::middleware('can:spmb.manage')->group(function () {
     Route::put('master/biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'update']);
     Route::delete('master/biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'destroy']);
     Route::post('master/biaya/{id}/restore', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'restore']);
-    Route::post('master/biaya/batch', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'batchUpdate']);
-    Route::post('master/biaya/copy-from-gelombang', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'copyFromGelombang']);
 
     // Template Surat SPMB
     Route::get('template-surat/{template_surat}/preview', [\App\Http\Controllers\API\Spmb\TemplateSuratSpmbController::class, 'preview']);
