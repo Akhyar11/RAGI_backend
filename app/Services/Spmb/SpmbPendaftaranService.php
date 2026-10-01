@@ -11,6 +11,12 @@ use Illuminate\Validation\ValidationException;
 
 use App\Models\Spmb\PendaftaranAlur;
 use App\Models\Spmb\MasterTipeJalurAlur;
+use App\Models\Siakad\TahunAkademik;
+use App\Models\Spmb\TemplateSuratSpmb;
+use App\Services\AuditLogService;
+use Illuminate\Support\Facades\Log;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 class SpmbPendaftaranService
 {
@@ -289,5 +295,312 @@ class SpmbPendaftaranService
                     ])->all(),
             ],
         ];
+    }
+
+    /**
+     * Cari template surat aktif yang paling spesifik untuk pendaftaran
+     */
+    public function resolveTemplateSurat(?int $jalurMasukId = null, ?int $gelombangId = null, string $jenisSurat = 'sk_lulus'): ?TemplateSuratSpmb
+    {
+        // 1. Template spesifik Jalur + Gelombang
+        if ($jalurMasukId && $gelombangId) {
+            $t = TemplateSuratSpmb::query()
+                ->where('jenis_surat', $jenisSurat)
+                ->where('is_active', true)
+                ->where('jalur_masuk_id', $jalurMasukId)
+                ->where('gelombang_id', $gelombangId)
+                ->first();
+            if ($t) {
+                return $t;
+            }
+        }
+
+        // 2. Template spesifik Jalur
+        if ($jalurMasukId) {
+            $t = TemplateSuratSpmb::query()
+                ->where('jenis_surat', $jenisSurat)
+                ->where('is_active', true)
+                ->where('jalur_masuk_id', $jalurMasukId)
+                ->whereNull('gelombang_id')
+                ->first();
+            if ($t) {
+                return $t;
+            }
+        }
+
+        // 3. Template spesifik Gelombang
+        if ($gelombangId) {
+            $t = TemplateSuratSpmb::query()
+                ->where('jenis_surat', $jenisSurat)
+                ->where('is_active', true)
+                ->whereNull('jalur_masuk_id')
+                ->where('gelombang_id', $gelombangId)
+                ->first();
+            if ($t) {
+                return $t;
+            }
+        }
+
+        // 4. Template default (tanpa batasan jalur & gelombang)
+        $t = TemplateSuratSpmb::query()
+            ->where('jenis_surat', $jenisSurat)
+            ->where('is_active', true)
+            ->whereNull('jalur_masuk_id')
+            ->whereNull('gelombang_id')
+            ->first();
+        if ($t) {
+            return $t;
+        }
+
+        // 5. Fallback ke sembarang template aktif jenis ini
+        return TemplateSuratSpmb::query()
+            ->where('jenis_surat', $jenisSurat)
+            ->where('is_active', true)
+            ->first();
+    }
+
+    /**
+     * Konversi angka bulan ke format romawi
+     */
+    private function getRomawiBulan(int $month): string
+    {
+        $map = [
+            1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV', 5 => 'V', 6 => 'VI',
+            7 => 'VII', 8 => 'VIII', 9 => 'IX', 10 => 'X', 11 => 'XI', 12 => 'XII'
+        ];
+        return $map[$month] ?? 'I';
+    }
+
+    /**
+     * Ganti token/placeholder pada teks
+     */
+    public function replacePlaceholders(?string $text, array $variables): string
+    {
+        if (empty($text)) {
+            return '';
+        }
+
+        $search = [];
+        $replace = [];
+        foreach ($variables as $key => $val) {
+            $search[] = '{' . $key . '}';
+            $replace[] = (string) $val;
+        }
+
+        return str_replace($search, $replace, $text);
+    }
+
+    /**
+     * Generate PDF Surat Keterangan Tanda Lulus (SK Tanda Lulus)
+     */
+    public function generateSkLulusPdf(PendaftaranCalonMhs $pendaftaran, ?TemplateSuratSpmb $template = null): string
+    {
+        $pendaftaran->loadMissing([
+            'gelombangPenerimaan.jalurMasuk',
+            'programStudi',
+            'programStudiPilihan2',
+            'hasilSeleksi.programStudiDiterima',
+            'verifikator',
+            'user',
+        ]);
+
+        $jalurId = $pendaftaran->gelombangPenerimaan?->jalur_masuk_id;
+        $gelombangId = $pendaftaran->gelombang_id;
+
+        if (!$template) {
+            $template = $this->resolveTemplateSurat($jalurId, $gelombangId, 'sk_lulus');
+        }
+
+        $tahunAkademik = TahunAkademik::query()
+            ->where('is_active', true)
+            ->orderByDesc('kode')
+            ->first();
+
+        $tahunAkademikNama = $tahunAkademik->nama ?? (date('Y') . '/' . (date('Y') + 1));
+        $prodiDiterimaNama = $pendaftaran->hasilSeleksi?->programStudiDiterima?->nama 
+            ?? $pendaftaran->programStudi?->nama 
+            ?? 'Program Studi Terpilih';
+        $jenjangDiterima = $pendaftaran->hasilSeleksi?->programStudiDiterima?->jenjang 
+            ?? $pendaftaran->programStudi?->jenjang 
+            ?? '';
+
+        $tanggalPenetapan = $pendaftaran->diverifikasi_at 
+            ? $pendaftaran->diverifikasi_at->translatedFormat('d F Y') 
+            : now()->translatedFormat('d F Y');
+
+        $romawiBulan = $this->getRomawiBulan((int) date('n'));
+        $tahun = date('Y');
+
+        $placeholders = [
+            'nama' => strtoupper($pendaftaran->nama_lengkap ?? '-'),
+            'no_pendaftaran' => $pendaftaran->no_pendaftaran ?? '-',
+            'nik' => $pendaftaran->nik ?? '-',
+            'tempat_lahir' => $pendaftaran->tempat_lahir ?? '-',
+            'tanggal_lahir' => $pendaftaran->tanggal_lahir ? $pendaftaran->tanggal_lahir->translatedFormat('d F Y') : '-',
+            'asal_sekolah' => $pendaftaran->asal_sekolah ?? $pendaftaran->asal_pt ?? '-',
+            'prodi_diterima' => $prodiDiterimaNama,
+            'jenjang' => $jenjangDiterima,
+            'jalur' => $pendaftaran->gelombangPenerimaan?->jalurMasuk?->nama ?? 'Reguler',
+            'gelombang' => $pendaftaran->gelombangPenerimaan?->nama ?? 'Gelombang Utama',
+            'tahun_akademik' => $tahunAkademikNama,
+            'tanggal_penetapan' => $tanggalPenetapan,
+            'tahun' => $tahun,
+            'romawi_bulan' => $romawiBulan,
+            'kota' => $template?->kota_penetapan ?? 'Surakarta',
+        ];
+
+        // Format nomor surat
+        $nomorSuratFormat = $template?->format_nomor_surat ?: 'SKL/SPMB/{tahun}/{romawi_bulan}/{no_pendaftaran}';
+        $nomorSurat = $this->replacePlaceholders($nomorSuratFormat, $placeholders);
+
+        // Kop
+        $kopInstitusi = $template?->kop_nama_institusi ?: config('app.institution_name', config('app.name', 'UNIVERSITAS INDONUSA'));
+        $kopSub = $template?->kop_nama_sub ?: 'PANITIA PENERIMAAN MAHASISWA BARU (SPMB)';
+        $kopKontak = $this->replacePlaceholders($template?->kop_alamat_kontak ?: "Sekretariat SPMB Kampus Terpadu • Email: spmb@kampus.ac.id • Website: spmb.kampus.ac.id\nTahun Akademik {tahun_akademik}", $placeholders);
+
+        // Judul, Teks, Petunjuk
+        $judulSurat = $template?->judul_surat ?: 'SURAT KETERANGAN TANDA LULUS SELEKSI';
+        $teksPembuka = $this->replacePlaceholders($template?->teks_pembuka ?: 'Berdasarkan hasil evaluasi verifikasi kelengkapan berkas administrasi dan pemenuhan syarat seleksi penerimaan mahasiswa baru Tahun Akademik {tahun_akademik}, Panitia Penerimaan Mahasiswa Baru menyatakan bahwa:', $placeholders);
+        $teksKeputusan = $this->replacePlaceholders($template?->teks_keputusan ?: 'DINYATAKAN LULUS / DITERIMA', $placeholders);
+        $petunjukDaftarUlang = $this->replacePlaceholders($template?->petunjuk_daftar_ulang ?: "1. Calon mahasiswa yang dinyatakan lulus wajib melakukan Daftar Ulang melalui portal resmi SPMB pada menu Daftar Ulang.\n2. Selesaikan pembayaran biaya registrasi/UKT menggunakan nomor Virtual Account resmi yang tertera pada invoice tagihan Anda sebelum batas waktu yang ditentukan.\n3. Setelah pembayaran daftar ulang terkonfirmasi lunas, sistem akan menerbitkan Nomor Induk Mahasiswa (NIM) resmi dan akun akademik mahasiswa baru.\n4. Surat keterangan ini sah dan dihasilkan secara otomatis oleh Sistem Informasi Penerimaan Mahasiswa Baru terintegrasi.", $placeholders);
+
+        // Pejabat & Tanda Tangan
+        $kotaPenetapan = $template?->kota_penetapan ?: 'Surakarta';
+        $namaPenandatangan = $template?->nama_penandatangan ?: ($pendaftaran->verifikator?->name ?? 'Panitia Seleksi SPMB');
+        $jabatanPenandatangan = $template?->jabatan_penandatangan ?: 'Ketua Panitia SPMB / Direktur Admisi';
+        $nipPenandatangan = $template?->nip_penandatangan ?: null;
+        $catatanKaki = $this->replacePlaceholders($template?->catatan_kaki ?: 'Dokumen ini merupakan bukti kelulusan seleksi SPMB yang sah. Keabsahan dokumen dapat diverifikasi langsung melalui database induk kampus terintegrasi.', $placeholders);
+
+        $html = view('spmb.sk-tanda-lulus', [
+            'pendaftaran' => $pendaftaran,
+            'tahunAkademik' => $tahunAkademik,
+            'generatedAt' => now(),
+            'template' => $template,
+            'nomorSurat' => $nomorSurat,
+            'kopInstitusi' => $kopInstitusi,
+            'kopSub' => $kopSub,
+            'kopKontak' => $kopKontak,
+            'judulSurat' => $judulSurat,
+            'teksPembuka' => $teksPembuka,
+            'teksKeputusan' => $teksKeputusan,
+            'petunjukDaftarUlang' => $petunjukDaftarUlang,
+            'kotaPenetapan' => $kotaPenetapan,
+            'namaPenandatangan' => $namaPenandatangan,
+            'jabatanPenandatangan' => $jabatanPenandatangan,
+            'nipPenandatangan' => $nipPenandatangan,
+            'catatanKaki' => $catatanKaki,
+            'prodiDiterimaNama' => $prodiDiterimaNama,
+            'jenjangDiterima' => $jenjangDiterima,
+            'tanggalPenetapan' => $tanggalPenetapan,
+        ])->render();
+
+        $options = new Options();
+        $options->set('isRemoteEnabled', false);
+
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        return (string) $dompdf->output();
+    }
+
+    /**
+     * Preview template surat dengan data dummy
+     */
+    public function previewTemplateSuratPdf(TemplateSuratSpmb $template): string
+    {
+        $mock = new PendaftaranCalonMhs();
+        $mock->id = 9999;
+        $mock->no_pendaftaran = 'SPMB-' . date('Y') . '-0001';
+        $mock->nama_lengkap = 'AHMAD FAUZI PRATAMA';
+        $mock->nik = '3371012345670001';
+        $mock->tempat_lahir = 'Surakarta';
+        $mock->tanggal_lahir = now()->subYears(18);
+        $mock->asal_sekolah = 'SMA Negeri 1 Surakarta';
+        $mock->diverifikasi_at = now();
+
+        return $this->generateSkLulusPdf($mock, $template);
+    }
+
+    /**
+     * Simpan template surat baru
+     */
+    public function storeTemplateSurat(array $data): TemplateSuratSpmb
+    {
+        if (!isset($data['is_active'])) {
+            $data['is_active'] = true;
+        }
+
+        $template = TemplateSuratSpmb::create($data);
+        $template->load(['jalurMasuk', 'gelombang']);
+
+        try {
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'create',
+                tableName: $template->getTable(),
+                recordId: (int) $template->id,
+                oldValues: null,
+                newValues: $template->toArray(),
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log create template surat: ' . $e->getMessage());
+        }
+
+        return $template;
+    }
+
+    /**
+     * Perbarui template surat
+     */
+    public function updateTemplateSurat(TemplateSuratSpmb $template, array $data): TemplateSuratSpmb
+    {
+        $oldValues = $template->getOriginal();
+        $template->update($data);
+        $template->load(['jalurMasuk', 'gelombang']);
+        $newValues = $template->getChanges();
+
+        try {
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'update',
+                tableName: $template->getTable(),
+                recordId: (int) $template->id,
+                oldValues: $oldValues,
+                newValues: $newValues,
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log update template surat: ' . $e->getMessage());
+        }
+
+        return $template;
+    }
+
+    /**
+     * Hapus template surat
+     */
+    public function deleteTemplateSurat(TemplateSuratSpmb $template): void
+    {
+        $oldValues = $template->getOriginal();
+        $tableName = $template->getTable();
+        $id = (int) $template->id;
+        $template->delete();
+
+        try {
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'delete',
+                tableName: $tableName,
+                recordId: $id,
+                oldValues: $oldValues,
+                newValues: null,
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log delete template surat: ' . $e->getMessage());
+        }
     }
 }

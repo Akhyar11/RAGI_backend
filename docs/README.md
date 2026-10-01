@@ -45,6 +45,7 @@
 | ReferralController | Kode referral mahasiswa baru: validasi, statistik mandiri, reward per role, payout (bukti PDF) & laporan | [docs/api/SPMB/ReferralController.md](api/SPMB/ReferralController.md) |
 | DaftarUlangController | Tagihan & konfirmasi daftar ulang calon mahasiswa lulus | [docs/api/SPMB/DaftarUlangController.md](api/SPMB/DaftarUlangController.md) |
 | LaporanSpmbController | Statistik & export laporan pendaftaran SPMB | [docs/api/SPMB/LaporanSpmbController.md](api/SPMB/LaporanSpmbController.md) |
+| TemplateSuratSpmbController | Manajemen template surat kelulusan (SK Tanda Lulus) dinamis & pratinjau PDF | [docs/api/SPMB/TemplateSuratSpmbController.md](api/SPMB/TemplateSuratSpmbController.md) |
 
 ---
 
@@ -86,7 +87,7 @@
 | PengajuanKasController | Pengajuan pencairan kas operasional unit, panjar dinas, persetujuan & penolakan | [docs/api/SIKEU/PengajuanKasController.md](api/SIKEU/PengajuanKasController.md) |
 | PemasukanKampusController | Pencatatan Pemasukan Hibah, Donatur, & Kerjasama | [docs/api/SIKEU/PemasukanKampusController.md](api/SIKEU/PemasukanKampusController.md) |
 | AkuntansiController | Chart of Accounts (COA), Jurnal Umum, & Buku Besar | [docs/api/SIKEU/AkuntansiController.md](api/SIKEU/AkuntansiController.md) |
-| ReferralPencairanController | Invoice payout reward referral SPMB: verifikasi, bayar (pengeluaran + jurnal otomatis), tolak | [docs/api/SIKEU/ReferralPencairanController.md](api/SIKEU/ReferralPencairanController.md) |
+| ReferralPencairanController | Invoice payout reward referral SPMB (tab SPMB Pengajuan Operasional): approval keuangan → direktur, cairkan (pengeluaran + jurnal otomatis), tolak | [docs/api/SIKEU/ReferralPencairanController.md](api/SIKEU/ReferralPencairanController.md) |
 | PaymentGatewayConfigController | Pengaturan Provider Payment Gateway (Midtrans/Xendit) | [docs/api/SIKEU/PaymentGatewayConfigController.md](api/SIKEU/PaymentGatewayConfigController.md) |
 | SettingTarifController | Konfigurasi Tarif Biaya per Angkatan, Prodi, & Semester | [docs/api/SIKEU/SettingTarifController.md](api/SIKEU/SettingTarifController.md) |
 | PembayaranKasirController | Pembayaran Kasir/Loket Tunai & Non-Tunai, Koreksi Transaksi, & Tagihan Masal | [docs/api/SIKEU/PembayaranKasirController.md](api/SIKEU/PembayaranKasirController.md) |

@@ -347,6 +347,7 @@ class MenuSeeder extends Seeder
                     ['name' => 'Komponen Biaya', 'url' => '/spmb/master/komponen-biaya', 'icon' => 'FaTag', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 3],
                     ['name' => 'Master Data Referensi', 'url' => '/spmb/master/referensi', 'icon' => 'FaDatabase', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 4],
                     ['name' => 'Master Tipe Referensi', 'url' => '/spmb/master/tipe-referensi', 'icon' => 'FaLayers', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 5],
+                    ['name' => 'Template SK & Surat', 'url' => '/spmb/master/template-surat', 'icon' => 'FaFileSignature', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 6],
                 ]
             ],
             [

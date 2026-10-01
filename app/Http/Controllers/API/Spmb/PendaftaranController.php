@@ -5,9 +5,13 @@ namespace App\Http\Controllers\API\Spmb;
 use App\Http\Controllers\Controller;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\DokumenPendaftaran;
+use App\Models\Spmb\HasilSeleksi;
+use App\Services\AuditLogService;
 use App\Services\Spmb\SpmbPendaftaranService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 
 class PendaftaranController extends Controller
 {
@@ -143,6 +147,66 @@ class PendaftaranController extends Controller
             'status' => 'success',
             'message' => 'Status pendaftaran berhasil diperbarui',
             'data' => $pendaftaran
+        ]);
+    }
+
+    /**
+     * Unduh Surat Keterangan Tanda Lulus (SK Tanda Lulus) PDF
+     */
+    public function downloadSkLulus(Request $request, $id)
+    {
+        $user = $request->user();
+        if (! $user) {
+            abort(401, 'Unauthenticated.');
+        }
+
+        if ($id === 'me') {
+            $pendaftaran = PendaftaranCalonMhs::where('user_id', $user->id)->firstOrFail();
+        } else {
+            $pendaftaran = PendaftaranCalonMhs::findOrFail($id);
+        }
+
+        $isAdmin = $user->hasPermission('spmb.manage')
+            || $user->hasPermission('spmb.pendaftaran.read');
+
+        if ($pendaftaran->user_id !== $user->id && ! $isAdmin) {
+            abort(403, 'Anda tidak memiliki hak akses untuk mengunduh SK pendaftaran ini.');
+        }
+
+        $isLulus = $pendaftaran->status === PendaftaranCalonMhs::STATUS_LULUS_ADMINISTRASI
+            || $pendaftaran->status === PendaftaranCalonMhs::STATUS_MAHASISWA_BARU
+            || ($pendaftaran->hasilSeleksi && $pendaftaran->hasilSeleksi->status === HasilSeleksi::STATUS_LULUS);
+
+        if (! $isLulus) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'SK Tanda Lulus belum dapat diunduh karena pendaftaran belum dinyatakan lulus seleksi administrasi.',
+            ], 400);
+        }
+
+        $pdf = $this->pendaftaranService->generateSkLulusPdf($pendaftaran);
+        $filename = 'SK-Tanda-Lulus-'.$pendaftaran->no_pendaftaran.'.pdf';
+
+        try {
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'export',
+                tableName: $pendaftaran->getTable(),
+                recordId: $pendaftaran->id,
+                oldValues: null,
+                newValues: [
+                    'no_pendaftaran' => $pendaftaran->no_pendaftaran,
+                    'jenis_dokumen' => 'SK_TANDA_LULUS',
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log: ' . $e->getMessage());
+        }
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 }

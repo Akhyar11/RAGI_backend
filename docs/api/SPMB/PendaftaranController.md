@@ -1,8 +1,8 @@
 # PendaftaranController
 
-> **Modul**: SPMB / **Base URL**: `/api/spmb/pendaftaran` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat**: 2026-09-30 / **Diperbarui**: 2026-09-30
+> **Modul**: SPMB / **Base URL**: `/api/spmb/pendaftaran` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat**: 2026-09-30 / **Diperbarui**: 2026-10-01
 
-Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB: daftar pendaftar, detail pendaftar (termasuk ringkasan pembayaran **daftar ulang**), verifikasi berkas, dan penetapan status kelulusan administrasi.
+Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan calon mahasiswa: daftar pendaftar, detail pendaftar (termasuk ringkasan pembayaran **daftar ulang**), unduh dokumen PDF **SK Tanda Lulus**, verifikasi berkas, dan penetapan status kelulusan administrasi.
 
 ## Daftar Endpoint
 
@@ -10,6 +10,7 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB: daftar
 |---|---|---|---|
 | GET | `/api/spmb/pendaftaran` | Daftar pendaftar (filter, sorting, paginasi) | ✅ |
 | GET | `/api/spmb/pendaftaran/{id}` | Detail pendaftar + ringkasan daftar ulang | ✅ |
+| GET | `/api/spmb/pendaftaran/{id}/sk-lulus` | Unduh dokumen PDF SK Tanda Lulus resmi | ✅ |
 | POST | `/api/spmb/pendaftaran/berkas/{id}/verify` | Verifikasi satu berkas pendaftaran | ✅ |
 | POST | `/api/spmb/pendaftaran/{id}/status` | Tetapkan status pendaftaran (verifikasi) | ✅ |
 
@@ -295,6 +296,54 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB: daftar
     "status": "error",
     "message": "Data yang diberikan tidak valid.",
     "errors": { "status": ["The selected status is invalid."] }
+}
+```
+
+---
+
+## GET /api/spmb/pendaftaran/{id}/sk-lulus
+
+> Mengunduh berkas Surat Keterangan (SK) Tanda Lulus resmi berformat PDF. Dapat diakses oleh calon mahasiswa pemilik pendaftaran atau panitia/admin SPMB jika pendaftaran telah berstatus `lulus_administrasi` atau `mahasiswa_baru`. Parameter `{id}` juga mendukung nilai `'me'` untuk merujuk pada pendaftaran milik user yang sedang terautentikasi.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/pdf, application/json` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer \| string | ✅ | ID Pendaftaran (`spmb_pendaftaran_calon_mhs.id`) atau `'me'` |
+
+### Response Sukses
+
+**200 OK**
+Mengembalikan stream biner berkas PDF (`application/pdf`) dengan header:
+- `Content-Type: application/pdf`
+- `Content-Disposition: attachment; filename="SK-Tanda-Lulus-REG-20260930-1234.pdf"`
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki hak akses untuk mengunduh SK pendaftaran ini." }
+```
+**404 Not Found**
+```json
+{ "status": "error", "message": "No query results for model [App\\Models\\Spmb\\PendaftaranCalonMhs] 99." }
+```
+**400 Bad Request**
+```json
+{
+    "status": "error",
+    "message": "SK Tanda Lulus belum dapat diunduh karena pendaftaran belum dinyatakan lulus seleksi administrasi."
 }
 ```
 

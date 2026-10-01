@@ -144,6 +144,7 @@ class PermissionSeeder extends Seeder
 
             // ── MODUL SPMB ────────────────────────────────────────
             ['name' => 'Lihat Dashboard SPMB', 'slug' => 'spmb.dashboard.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Melihat dashboard & pengumuman SPMB'],
+            ['name' => 'Lihat Data Pendaftaran SPMB', 'slug' => 'spmb.pendaftaran.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Melihat data formulir pendaftaran calon mahasiswa'],
             ['name' => 'Pendaftaran SPMB', 'slug' => 'spmb.pendaftaran.create', 'module' => 'spmb', 'action' => 'create', 'description' => 'Mengisi formulir pendaftaran mahasiswa baru'],
 
             // ── MODUL SIKEU ───────────────────────────────────────
@@ -550,6 +551,8 @@ class PermissionSeeder extends Seeder
             $adminSpmbSlugs = [
                 'spmb.dashboard.read',
                 'spmb.manage',
+                'spmb.pendaftaran.read',
+                'spmb.pendaftaran.create',
                 'spmb.laporan.read',
                 'spmb.laporan.export',
             ];
