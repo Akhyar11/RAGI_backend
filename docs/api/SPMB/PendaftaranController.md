@@ -13,6 +13,7 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan cal
 | GET | `/api/spmb/pendaftaran/{id}/sk-lulus` | Unduh dokumen PDF SK Tanda Lulus resmi | ✅ |
 | POST | `/api/spmb/pendaftaran/berkas/{id}/verify` | Verifikasi satu berkas pendaftaran | ✅ |
 | POST | `/api/spmb/pendaftaran/{id}/status` | Tetapkan status pendaftaran (verifikasi) | ✅ |
+| POST | `/api/spmb/pendaftaran/{id}/konversi-mahasiswa` | Konversi manual calon mahasiswa → mahasiswa resmi (generate NIM, role, email) | ✅ `spmb.manage` |
 
 ---
 
@@ -349,9 +350,74 @@ Mengembalikan stream biner berkas PDF (`application/pdf`) dengan header:
 
 ---
 
+## POST /api/spmb/pendaftaran/{id}/konversi-mahasiswa
+
+> Mengonversi calon mahasiswa yang berstatus `lulus_administrasi` menjadi mahasiswa resmi secara langsung (sinkron). Proses ini akan: (1) menerbitkan NIM baru, (2) membuat/memperbarui record `siakad_mahasiswa`, (3) sync ke SIKEU, (4) assign role `mahasiswa` pada akun IAM, dan (5) membuat email kampus via Google Workspace. Hanya dapat dipanggil oleh pengguna dengan permission `spmb.manage`.
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID `spmb_pendaftaran_calon_mhs` |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Calon mahasiswa berhasil dikonversi menjadi mahasiswa. NIM: 260100001",
+    "data": {
+        "pendaftaran": {
+            "id": 7,
+            "no_pendaftaran": "REG-20260930-1234",
+            "nama_lengkap": "Budi Santoso",
+            "status": "mahasiswa_baru",
+            "nim": "260100001"
+        },
+        "nim": "260100001",
+        "mahasiswa_id": 42
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+**403 Forbidden**
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+**404 Not Found**
+```json
+{ "status": "error", "message": "No query results for model [App\\Models\\Spmb\\PendaftaranCalonMhs] 99." }
+```
+**422 Unprocessable Entity** — sudah dikonversi
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": { "status": ["Pendaftar ini sudah dikonversi menjadi mahasiswa (NIM: 260100001)."] }
+}
+```
+**422 Unprocessable Entity** — status tidak memenuhi syarat
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": { "status": ["Konversi ke mahasiswa hanya dapat dilakukan pada pendaftaran berstatus Lulus Administrasi. Status saat ini: draft"] }
+}
+```
+
+---
+
 ### Catatan Tambahan
 
 > - Tagihan & pembayaran daftar ulang dikelola modul **SIKEU** (`sikeu_tagihan_mahasiswa`, `tipe_referensi = spmb_daftar_ulang`); SPMB hanya membaca status terkini.
 > - `sisa_kurang` dihitung dari `total_tagihan + total_denda - total_potongan - total_bayar` (minimal 0).
 > - Endpoint ini tidak melakukan operasi soft-delete.
 > - Password/token tidak pernah dikembalikan pada response.
+> - Endpoint `konversi-mahasiswa` memproses pembuatan email kampus Google Workspace di luar DB Transaction (non-blocking). Kegagalan API Google Workspace tidak akan membatalkan konversi NIM dan role.

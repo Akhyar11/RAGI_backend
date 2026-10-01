@@ -7,15 +7,20 @@ use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\DokumenPendaftaran;
 use App\Models\Spmb\HasilSeleksi;
 use App\Services\AuditLogService;
+use App\Services\Spmb\SpmbKonversiService;
 use App\Services\Spmb\SpmbPendaftaranService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
+use Illuminate\Validation\ValidationException;
 
 class PendaftaranController extends Controller
 {
-    public function __construct(private SpmbPendaftaranService $pendaftaranService) {}
+    public function __construct(
+        private SpmbPendaftaranService $pendaftaranService,
+        private SpmbKonversiService $konversiService,
+    ) {}
 
     /**
      * Get all Pendaftaran with filters
@@ -147,6 +152,69 @@ class PendaftaranController extends Controller
             'status' => 'success',
             'message' => 'Status pendaftaran berhasil diperbarui',
             'data' => $pendaftaran
+        ]);
+    }
+
+    /**
+     * Konversi manual calon mahasiswa menjadi mahasiswa resmi oleh Admin SPMB.
+     * Langsung memanggil SpmbKonversiService::prosesKonversi() secara sinkron
+     * sehingga NIM, role mahasiswa, dan email kampus langsung diterbitkan.
+     */
+    public function konversiMahasiswa(Request $request, $id): JsonResponse
+    {
+        $pendaftaran = PendaftaranCalonMhs::with([
+            'hasilSeleksi',
+            'user',
+            'programStudi',
+        ])->findOrFail($id);
+
+        // Guard: hanya bisa dikonversi dari status lulus_administrasi
+        if ($pendaftaran->status === PendaftaranCalonMhs::STATUS_MAHASISWA_BARU) {
+            throw ValidationException::withMessages([
+                'status' => 'Pendaftar ini sudah dikonversi menjadi mahasiswa (NIM: ' . $pendaftaran->nim . ').',
+            ]);
+        }
+
+        if ($pendaftaran->status !== PendaftaranCalonMhs::STATUS_LULUS_ADMINISTRASI) {
+            throw ValidationException::withMessages([
+                'status' => 'Konversi ke mahasiswa hanya dapat dilakukan pada pendaftaran berstatus Lulus Administrasi. Status saat ini: ' . $pendaftaran->status,
+            ]);
+        }
+
+        // Tangkap data asli sebelum konversi dilakukan (standar audit log)
+        $oldValues = $pendaftaran->getOriginal();
+
+        $konversi = $this->konversiService->prosesKonversi($pendaftaran, auth()->id());
+
+        // Refresh data setelah konversi
+        $pendaftaran->refresh();
+
+        try {
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'konversi_manual',
+                tableName: $pendaftaran->getTable(),
+                recordId: $pendaftaran->id,
+                oldValues: $oldValues,
+                newValues: [
+                    'status' => $pendaftaran->status,
+                    'nim' => $konversi->nim_diterbitkan,
+                    'dikonversi_oleh' => auth()->id(),
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log konversi mahasiswa: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Calon mahasiswa berhasil dikonversi menjadi mahasiswa. NIM: ' . $konversi->nim_diterbitkan,
+            'data' => [
+                'pendaftaran' => $pendaftaran,
+                'nim' => $konversi->nim_diterbitkan,
+                'mahasiswa_id' => $konversi->mahasiswa_id,
+            ],
         ]);
     }
 

@@ -3,21 +3,19 @@
 namespace App\Http\Controllers\Sikeu;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Sikeu\PayReferralPayoutRequest;
-use App\Http\Requests\Sikeu\RejectReferralPayoutRequest;
-use App\Http\Requests\Sikeu\VerifyReferralPayoutRequest;
+use App\Http\Requests\Sikeu\ApproveReferralPayoutRequest;
+use App\Http\Requests\Sikeu\CairkanReferralPayoutRequest;
 use App\Models\Spmb\PayoutReferral;
 use App\Services\Sikeu\SikeuReferralPencairanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
 class ReferralPencairanController extends Controller
 {
     public function __construct(private SikeuReferralPencairanService $service) {}
 
     /**
-     * Daftar invoice payout referral masuk (untuk admin keuangan).
+     * Daftar invoice payout referral masuk (tab SPMB pada Pengajuan Operasional).
      */
     public function index(Request $request): JsonResponse
     {
@@ -28,9 +26,10 @@ class ReferralPencairanController extends Controller
             ->withCount('usages');
 
         $allowedStatuses = [
-            PayoutReferral::STATUS_MENUNGGU_VERIFIKASI,
-            PayoutReferral::STATUS_TERVERIFIKASI,
-            PayoutReferral::STATUS_DIBAYAR,
+            PayoutReferral::STATUS_PENDING_KEUANGAN,
+            PayoutReferral::STATUS_PENDING_DIREKTUR,
+            PayoutReferral::STATUS_DISETUJUI,
+            PayoutReferral::STATUS_DICAIRKAN,
             PayoutReferral::STATUS_DITOLAK,
         ];
 
@@ -45,7 +44,8 @@ class ReferralPencairanController extends Controller
                     ->orWhere('sikeu_reference', 'like', "%{$search}%")
                     ->orWhereHas('referrer', function ($rq) use ($search) {
                         $rq->where('name', 'like', "%{$search}%")
-                            ->orWhere('username', 'like', "%{$search}%");
+                            ->orWhere('username', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
                     });
             });
         }
@@ -79,14 +79,17 @@ class ReferralPencairanController extends Controller
     }
 
     /**
-     * Detail invoice payout referral beserta bukti dan usages.
+     * Detail invoice payout referral: data referrer + riwayat usage referral.
      */
     public function show($id): JsonResponse
     {
         $payout = PayoutReferral::query()
             ->with([
                 'referrer:id,name,username,email',
-                'usages.pendaftaran:id,no_pendaftaran,nama_lengkap,status',
+                'approverKeuangan:id,name,username',
+                'approverDirektur:id,name,username',
+                'usages.pendaftaran:id,no_pendaftaran,nama_lengkap,status,gelombang_id',
+                'usages.pendaftaran.gelombangPenerimaan:id,nama',
             ])
             ->findOrFail($id);
 
@@ -98,76 +101,40 @@ class ReferralPencairanController extends Controller
     }
 
     /**
-     * Verifikasi bukti payout referral oleh admin keuangan.
+     * Approval bertahap (keuangan -> direktur) atau penolakan.
+     * Body: { aksi: approve|reject, catatan?: string }
      */
-    public function verify(VerifyReferralPayoutRequest $request, $id): JsonResponse
+    public function approve(ApproveReferralPayoutRequest $request, $id): JsonResponse
     {
         $payout = PayoutReferral::findOrFail($id);
-
-        if (! in_array($payout->status, [
-            PayoutReferral::STATUS_MENUNGGU_VERIFIKASI,
-            PayoutReferral::STATUS_DITOLAK,
-        ], true)) {
-            throw ValidationException::withMessages([
-                'status' => ['Payout referral pada status ini tidak dapat diverifikasi.'],
-            ]);
-        }
-
-        $payout->update([
-            'status' => PayoutReferral::STATUS_TERVERIFIKASI,
-            'verified_by' => $request->user()->id,
-            'verified_at' => now(),
-            'catatan_penolakan' => null,
-        ]);
+        $result = $this->service->approve(
+            $payout,
+            $request->validated('aksi'),
+            $request->validated('catatan'),
+            $request->user()
+        );
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Invoice referral berhasil diverifikasi.',
-            'data' => $payout->fresh(['referrer:id,name,username,email']),
+            'message' => $request->validated('aksi') === 'approve'
+                ? 'Invoice referral disetujui ke tahap berikutnya.'
+                : 'Invoice referral ditolak.',
+            'data' => $result,
         ]);
     }
 
     /**
-     * Bayar invoice payout referral: catat pengeluaran + jurnal, tandai dibayar.
+     * Pencairan: pilih unit kas + nominal manual (maks = total bukti).
      */
-    public function pay(PayReferralPayoutRequest $request, $id): JsonResponse
+    public function cairkan(CairkanReferralPayoutRequest $request, $id): JsonResponse
     {
         $payout = PayoutReferral::findOrFail($id);
-
-        $paid = $this->service->pay($payout, $request->user(), $request->validated());
+        $result = $this->service->cairkan($payout, $request->user(), $request->validated());
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Payout referral berhasil dibayar dan dicatat sebagai pengeluaran.',
-            'data' => $paid,
-        ]);
-    }
-
-    /**
-     * Tolak invoice payout referral (usages tetap ditandai agar tidak diklaim ulang).
-     */
-    public function reject(RejectReferralPayoutRequest $request, $id): JsonResponse
-    {
-        $payout = PayoutReferral::findOrFail($id);
-
-        if (! in_array($payout->status, [
-            PayoutReferral::STATUS_MENUNGGU_VERIFIKASI,
-            PayoutReferral::STATUS_TERVERIFIKASI,
-        ], true)) {
-            throw ValidationException::withMessages([
-                'status' => ['Payout referral pada status ini tidak dapat ditolak.'],
-            ]);
-        }
-
-        $payout->update([
-            'status' => PayoutReferral::STATUS_DITOLAK,
-            'catatan_penolakan' => $request->input('catatan'),
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Invoice referral ditolak.',
-            'data' => $payout->fresh(['referrer:id,name,username,email']),
+            'message' => 'Payout referral berhasil dicairkan dan dicatat sebagai pengeluaran.',
+            'data' => $result,
         ]);
     }
 }

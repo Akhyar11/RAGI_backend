@@ -51,6 +51,7 @@ Route::get('pendaftaran/{id}', [PendaftaranController::class, 'show']);
 Route::get('pendaftaran/{id}/sk-lulus', [PendaftaranController::class, 'downloadSkLulus']);
 Route::post('pendaftaran/{id}/status', [PendaftaranController::class, 'updateStatus']);
 Route::post('pendaftaran/berkas/{id}/verify', [PendaftaranController::class, 'verifyBerkas']);
+Route::middleware('can:spmb.manage')->post('pendaftaran/{id}/konversi-mahasiswa', [PendaftaranController::class, 'konversiMahasiswa']);
 
 // Seleksi & Verifikasi (Admin SPMB)
 // (Dikonsolidasikan ke PendaftaranController — endpoint /pendaftar lama dihapus)

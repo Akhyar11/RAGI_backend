@@ -17,22 +17,89 @@ use Illuminate\Validation\ValidationException;
 class SikeuReferralPencairanService
 {
     /**
-     * Bayar invoice payout referral: catat sebagai pengeluaran honorarium
-     * (jurnal otomatis + decrement kas), lalu tandai payout dibayar.
+     * Approval bertahap reward referral SPMB — selaras alur Pengajuan
+     * Operasional: pending_keuangan -> pending_direktur -> disetujui,
+     * atau ditolak pada tahap mana pun.
      */
-    public function pay(PayoutReferral $payout, User $admin, array $data = []): PayoutReferral
+    public function approve(PayoutReferral $payout, string $aksi, ?string $catatan, User $admin): PayoutReferral
     {
-        if (! in_array($payout->status, [
-            PayoutReferral::STATUS_MENUNGGU_VERIFIKASI,
-            PayoutReferral::STATUS_TERVERIFIKASI,
-        ], true)) {
+        $status = $payout->status;
+
+        $allowed = [
+            PayoutReferral::STATUS_PENDING_KEUANGAN,
+            PayoutReferral::STATUS_PENDING_DIREKTUR,
+            PayoutReferral::STATUS_DISETUJUI,
+        ];
+
+        if (! in_array($status, $allowed, true)) {
             throw ValidationException::withMessages([
-                'status' => ['Payout referral pada status ini tidak dapat dibayar.'],
+                'status' => ['Payout referral pada status ini tidak dapat diproses.'],
             ]);
         }
 
-        return DB::transaction(function () use ($payout, $admin, $data) {
-            $nominal = (float) $payout->total_nominal;
+        return DB::transaction(function () use ($payout, $aksi, $catatan, $admin, $status) {
+            if ($aksi === 'reject') {
+                $payout->update([
+                    'status' => PayoutReferral::STATUS_DITOLAK,
+                    'catatan_penolakan' => $catatan,
+                ]);
+
+                return $payout->fresh(['referrer:id,name,username,email', 'usages']);
+            }
+
+            if ($status === PayoutReferral::STATUS_PENDING_KEUANGAN) {
+                $payout->update([
+                    'status' => PayoutReferral::STATUS_PENDING_DIREKTUR,
+                    'verified_by' => $admin->id,
+                    'verified_at' => now(),
+                    'approved_keuangan_by' => $admin->id,
+                    'approved_keuangan_at' => now(),
+                    'catatan_penolakan' => null,
+                ]);
+            } elseif ($status === PayoutReferral::STATUS_PENDING_DIREKTUR) {
+                $payout->update([
+                    'status' => PayoutReferral::STATUS_DISETUJUI,
+                    'approved_direktur_by' => $admin->id,
+                    'approved_direktur_at' => now(),
+                ]);
+            } else {
+                throw ValidationException::withMessages([
+                    'status' => ['Payout referral sudah disetujui; lanjutkan ke tahap pencairan.'],
+                ]);
+            }
+
+            return $payout->fresh(['referrer:id,name,username,email', 'usages']);
+        });
+    }
+
+    /**
+     * Pencairan reward referral: catat sebagai pengeluaran honorarium
+     * (jurnal otomatis + decrement kas), lalu tandai payout dicairkan.
+     * Nominal diinput manual oleh keuangan, maksimal sebesar total bukti.
+     */
+    public function cairkan(PayoutReferral $payout, User $admin, array $data = []): PayoutReferral
+    {
+        if ($payout->status !== PayoutReferral::STATUS_DISETUJUI) {
+            throw ValidationException::withMessages([
+                'status' => ['Pencairan hanya untuk payout yang sudah disetujui direktur.'],
+            ]);
+        }
+
+        $nominal = (float) ($data['nominal_cair'] ?? $payout->total_nominal);
+        $totalBukti = (float) $payout->total_nominal;
+
+        if ($nominal <= 0) {
+            throw ValidationException::withMessages([
+                'nominal_cair' => ['Nominal pencairan harus lebih dari 0.'],
+            ]);
+        }
+        if ($nominal > $totalBukti) {
+            throw ValidationException::withMessages([
+                'nominal_cair' => ['Nominal pencairan tidak boleh melebihi total bukti (Rp '.number_format($totalBukti, 0, ',', '.').').'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($payout, $admin, $data, $nominal) {
             $tanggal = $data['tanggal_bayar'] ?? now()->toDateString();
 
             $unitKas = UnitKas::findOrFail($data['unit_kas_id']);
@@ -115,7 +182,7 @@ class SikeuReferralPencairanService
             }
 
             $payout->update([
-                'status' => PayoutReferral::STATUS_DIBAYAR,
+                'status' => PayoutReferral::STATUS_DICAIRKAN,
                 'paid_by' => $admin->id,
                 'paid_at' => now(),
                 'sikeu_reference' => $nomorTransaksi,

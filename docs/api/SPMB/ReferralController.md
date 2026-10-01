@@ -295,11 +295,11 @@ Envelope standar (`data`, `meta`, `filters`). Statistik & nominal bisa dicairkan
 {
     "status": "success",
     "message": "Bukti pencairan referral berhasil dibuat.",
-    "data": { "id": 3, "nomor_bukti": "PAYOUT-20260926-AB12CD", "status": "menunggu_verifikasi", "referral_count": 1, "total_nominal": 50000, "generated_at": "2026-09-26T09:00:00.000000Z" }
+    "data": { "id": 3, "nomor_bukti": "PAYOUT-20260926-AB12CD", "status": "pending_keuangan", "referral_count": 1, "total_nominal": 50000, "generated_at": "2026-09-26T09:00:00.000000Z" }
 }
 ```
 
-**Payout berstatus `menunggu_verifikasi` dan otomatis menjadi invoice di SIKEU** (`GET /api/v1/sikeu/referral-pencairan`) untuk diverifikasi lalu dibayar oleh admin keuangan.
+**Payout berstatus `pending_keuangan` dan otomatis menjadi invoice di SIKEU** (`GET /api/v1/sikeu/referral-pencairan`, tab SPMB pada Pengajuan Operasional) untuk di-approve keuangan → direktur lalu dicairkan oleh admin keuangan.
 
 ### Response Error
 

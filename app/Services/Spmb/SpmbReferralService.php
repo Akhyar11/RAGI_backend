@@ -287,7 +287,7 @@ class SpmbReferralService
                 'nomor_bukti' => 'PAYOUT-'.now()->format('Ymd').'-'.strtoupper(Str::random(6)),
                 'generated_at' => now(),
                 'keterangan' => $data['keterangan'] ?? null,
-                'status' => PayoutReferral::STATUS_MENUNGGU_VERIFIKASI,
+                'status' => PayoutReferral::STATUS_PENDING_KEUANGAN,
                 'nama_bank' => $data['nama_bank'] ?? null,
                 'nomor_rekening' => $data['nomor_rekening'] ?? null,
                 'nama_pemilik_rekening' => $data['nama_pemilik_rekening'] ?? null,

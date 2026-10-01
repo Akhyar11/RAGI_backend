@@ -4,7 +4,7 @@ namespace App\Http\Requests\Sikeu;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class RejectReferralPayoutRequest extends FormRequest
+class ApproveReferralPayoutRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -17,7 +17,8 @@ class RejectReferralPayoutRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'catatan' => ['required', 'string', 'max:500'],
+            'aksi' => ['required', 'in:approve,reject'],
+            'catatan' => ['nullable', 'string', 'max:1000', 'required_if:aksi,reject'],
         ];
     }
 }

@@ -808,9 +808,8 @@ Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
 Route::middleware(['auth:api', 'can:sikeu.pengeluaran.read'])->prefix('v1/sikeu')->group(function () {
     Route::get('referral-pencairan', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'index']);
     Route::get('referral-pencairan/{id}', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'show']);
-    Route::post('referral-pencairan/{id}/verify', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'verify']);
-    Route::post('referral-pencairan/{id}/pay', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'pay']);
-    Route::post('referral-pencairan/{id}/reject', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'reject']);
+    Route::post('referral-pencairan/{id}/approve', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'approve']);
+    Route::post('referral-pencairan/{id}/cairkan', [App\Http\Controllers\Sikeu\ReferralPencairanController::class, 'cairkan']);
 });
 
 // Alias for direct non-v1 calls (backward compatibility with axios client baseURL)

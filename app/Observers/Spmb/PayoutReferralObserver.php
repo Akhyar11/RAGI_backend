@@ -58,7 +58,8 @@ class PayoutReferralObserver
 
             if ($payout->wasChanged('status')) {
                 $action = match ($payout->status) {
-                    PayoutReferral::STATUS_TERVERIFIKASI => 'approve',
+                    PayoutReferral::STATUS_PENDING_DIREKTUR,
+                    PayoutReferral::STATUS_DISETUJUI => 'approve',
                     PayoutReferral::STATUS_DITOLAK => 'reject',
                     default => 'update',
                 };

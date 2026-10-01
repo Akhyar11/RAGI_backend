@@ -16,9 +16,11 @@ class PayoutReferral extends Model
 
     protected $table = 'spmb_referral_payouts';
 
-    public const STATUS_MENUNGGU_VERIFIKASI = 'menunggu_verifikasi';
-    public const STATUS_TERVERIFIKASI = 'terverifikasi';
-    public const STATUS_DIBAYAR = 'dibayar';
+    // ── Alur pencairan (selaras Pengajuan Operasional SIKEU) ─────────
+    public const STATUS_PENDING_KEUANGAN = 'pending_keuangan';
+    public const STATUS_PENDING_DIREKTUR = 'pending_direktur';
+    public const STATUS_DISETUJUI = 'disetujui';
+    public const STATUS_DICAIRKAN = 'dicairkan';
     public const STATUS_DITOLAK = 'ditolak';
 
     protected $fillable = [
@@ -31,6 +33,10 @@ class PayoutReferral extends Model
         'status',
         'verified_by',
         'verified_at',
+        'approved_keuangan_by',
+        'approved_keuangan_at',
+        'approved_direktur_by',
+        'approved_direktur_at',
         'paid_by',
         'paid_at',
         'sikeu_reference',
@@ -47,12 +53,24 @@ class PayoutReferral extends Model
         'total_nominal' => 'decimal:2',
         'generated_at' => 'datetime',
         'verified_at' => 'datetime',
+        'approved_keuangan_at' => 'datetime',
+        'approved_direktur_at' => 'datetime',
         'paid_at' => 'datetime',
     ];
 
     public function referrer()
     {
         return $this->belongsTo(User::class, 'referrer_user_id');
+    }
+
+    public function approverKeuangan()
+    {
+        return $this->belongsTo(User::class, 'approved_keuangan_by');
+    }
+
+    public function approverDirektur()
+    {
+        return $this->belongsTo(User::class, 'approved_direktur_by');
     }
 
     public function usages()
