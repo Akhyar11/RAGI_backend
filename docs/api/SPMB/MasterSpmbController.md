@@ -1,6 +1,6 @@
 # MasterSpmbController
 
-> **Modul**: SPMB / **Base URL**: `/api/spmb/master` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-25  
+> **Modul**: SPMB / **Base URL**: `/api/spmb/master` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-10-01  
 
 Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur pendaftaran, gelombang pendaftaran, dan opsi master SPMB.
 
@@ -14,6 +14,9 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 | GET | `/api/spmb/master/jalur` | Mendapatkan daftar jalur seleksi penerimaan | ✅ Admin / Staff |
 | GET | `/api/spmb/master/gelombang` | Mendapatkan daftar gelombang penerimaan berpaginasi | ✅ Admin / Staff |
 | GET | `/api/spmb/master/gelombang/{id}` | Mendapatkan detail informasi gelombang penerimaan | ✅ Admin / Staff |
+| POST | `/api/spmb/master/gelombang` | Membuat gelombang penerimaan baru | ✅ Admin / Staff |
+| PUT | `/api/spmb/master/gelombang/{id}` | Memperbarui gelombang penerimaan | ✅ Admin / Staff |
+| DELETE | `/api/spmb/master/gelombang/{id}` | Menghapus gelombang penerimaan | ✅ Admin / Staff |
 | GET | `/api/spmb/biaya-pendaftaran` | Rincian beban awal pendaftaran & daftar ulang per gelombang + prodi | ❌ Publik |
 | GET | `/api/spmb/master/options` | Mendapatkan seluruh opsi master SPMB secara ringkas | ✅ Admin / Staff |
 
@@ -197,6 +200,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
             "kuota_total": 150,
             "kuota_terisi": 45,
             "biaya_pendaftaran": 250000,
+            "potongan_biaya_daftar_ulang": 10.00,
             "status": "aktif",
             "created_at": "2026-09-21T10:00:00.000000Z",
             "updated_at": "2026-09-21T10:00:00.000000Z",
@@ -279,6 +283,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
         "kuota_total": 150,
         "kuota_terisi": 45,
         "biaya_pendaftaran": 250000,
+        "potongan_biaya_daftar_ulang": 10.00,
         "status": "aktif",
         "created_at": "2026-09-21T10:00:00.000000Z",
         "updated_at": "2026-09-21T10:00:00.000000Z",
@@ -315,6 +320,199 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
     "status": "error",
     "message": "Gelombang penerimaan tidak ditemukan."
 }
+```
+
+---
+
+## [POST] /api/spmb/master/gelombang
+
+> Membuat data gelombang penerimaan baru. Bila `status` diisi `aktif`, gelombang aktif lain pada `jalur_masuk_id` yang sama otomatis diubah menjadi `ditutup`.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "jalur_masuk_id": "integer, required, exists:spmb_jalur_masuk,id",
+    "nama": "string, required",
+    "tanggal_buka": "date, required (YYYY-MM-DD)",
+    "tanggal_tutup": "date, required, after_or_equal:tanggal_buka",
+    "tanggal_pengumuman": "date, nullable",
+    "kuota_total": "integer, required, min:1",
+    "biaya_pendaftaran": "numeric, nullable, min:0",
+    "potongan_biaya_daftar_ulang": "numeric, nullable, min:0, max:100 (persen)",
+    "status": "enum: draft|aktif|ditutup|selesai"
+}
+```
+
+### Response Sukses
+
+**201 Created**
+```json
+{
+    "status": "success",
+    "message": "Gelombang penerimaan berhasil dibuat.",
+    "data": {
+        "id": 2,
+        "jalur_masuk_id": 1,
+        "nama": "Gelombang 2 Reguler 2026/2027",
+        "tanggal_buka": "2026-05-01",
+        "tanggal_tutup": "2026-07-31",
+        "tanggal_pengumuman": "2026-08-05",
+        "kuota_total": 150,
+        "kuota_terisi": 0,
+        "biaya_pendaftaran": "250000.00",
+        "potongan_biaya_daftar_ulang": "10.00",
+        "status": "draft",
+        "created_at": "2026-10-01T10:00:00.000000Z",
+        "updated_at": "2026-10-01T10:00:00.000000Z",
+        "jalur_masuk": {
+            "id": 1,
+            "nama": "Reguler",
+            "kode": "REG"
+        }
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki akses ke resource SPMB ini." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "jalur_masuk_id": ["The selected jalur masuk id is invalid."],
+        "tanggal_tutup": ["The tanggal tutup must be a date after or equal to tanggal buka."],
+        "potongan_biaya_daftar_ulang": ["The potongan biaya daftar ulang must not be greater than 100."]
+    }
+}
+```
+
+---
+
+## [PUT] /api/spmb/master/gelombang/{id}
+
+> Memperbarui data gelombang penerimaan. Body mengikuti aturan validasi yang sama dengan POST.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "jalur_masuk_id": "integer, required, exists:spmb_jalur_masuk,id",
+    "nama": "string, required",
+    "tanggal_buka": "date, required (YYYY-MM-DD)",
+    "tanggal_tutup": "date, required, after_or_equal:tanggal_buka",
+    "tanggal_pengumuman": "date, nullable",
+    "kuota_total": "integer, required, min:1",
+    "biaya_pendaftaran": "numeric, nullable, min:0",
+    "potongan_biaya_daftar_ulang": "numeric, nullable, min:0, max:100 (persen)",
+    "status": "enum: draft|aktif|ditutup|selesai"
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Gelombang penerimaan berhasil diperbarui.",
+    "data": {
+        "id": 2,
+        "jalur_masuk_id": 1,
+        "nama": "Gelombang 2 Reguler 2026/2027",
+        "tanggal_buka": "2026-05-01",
+        "tanggal_tutup": "2026-07-31",
+        "tanggal_pengumuman": "2026-08-05",
+        "kuota_total": 200,
+        "kuota_terisi": 0,
+        "biaya_pendaftaran": "250000.00",
+        "potongan_biaya_daftar_ulang": "15.50",
+        "status": "aktif",
+        "created_at": "2026-10-01T10:00:00.000000Z",
+        "updated_at": "2026-10-01T10:05:00.000000Z",
+        "jalur_masuk": {
+            "id": 1,
+            "nama": "Reguler",
+            "kode": "REG"
+        }
+    }
+}
+```
+
+### Response Error
+
+**404 Not Found**
+```json
+{ "status": "error", "message": "No query results for model [App\\Models\\Spmb\\GelombangPenerimaan] 99." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "potongan_biaya_daftar_ulang": ["The potongan biaya daftar ulang must not be greater than 100."]
+    }
+}
+```
+
+---
+
+## [DELETE] /api/spmb/master/gelombang/{id}
+
+> Menghapus data gelombang penerimaan.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Gelombang penerimaan berhasil dihapus."
+}
+```
+
+### Response Error
+
+**404 Not Found**
+```json
+{ "status": "error", "message": "No query results for model [App\\Models\\Spmb\\GelombangPenerimaan] 99." }
 ```
 
 ---

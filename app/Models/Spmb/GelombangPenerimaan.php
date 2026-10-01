@@ -24,6 +24,7 @@ class GelombangPenerimaan extends Model
         'kuota_total',
         'kuota_terisi',
         'biaya_pendaftaran',
+        'potongan_biaya_daftar_ulang',
         'status',
     ];
 
@@ -32,6 +33,7 @@ class GelombangPenerimaan extends Model
         'tanggal_tutup' => 'date',
         'tanggal_pengumuman' => 'date',
         'biaya_pendaftaran' => 'decimal:2',
+        'potongan_biaya_daftar_ulang' => 'decimal:2',
     ];
 
     public function jalurMasuk()

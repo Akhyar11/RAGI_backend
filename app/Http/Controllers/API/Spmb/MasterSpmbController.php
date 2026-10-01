@@ -401,6 +401,7 @@ class MasterSpmbController extends Controller
             'tanggal_pengumuman' => 'nullable|date',
             'kuota_total' => 'required|integer|min:1',
             'biaya_pendaftaran' => 'nullable|numeric|min:0',
+            'potongan_biaya_daftar_ulang' => 'nullable|numeric|min:0|max:100',
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
 
@@ -433,6 +434,7 @@ class MasterSpmbController extends Controller
             'tanggal_pengumuman' => 'nullable|date',
             'kuota_total' => 'required|integer|min:1',
             'biaya_pendaftaran' => 'nullable|numeric|min:0',
+            'potongan_biaya_daftar_ulang' => 'nullable|numeric|min:0|max:100',
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
 
