@@ -6,6 +6,8 @@ Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `mas
 - `dibebankan_saat_pendaftaran`: `true` → menjadi **beban awal** pada form pendaftaran online; `false` → dibebankan saat **daftar ulang**.
 - `berlaku_diskon`: `true` → komponen ini **berhak atas diskon/potongan**; `false` → tidak.
 
+Pada master komponen biaya terdapat penanda `is_default_master_biaya`: bila `true`, komponen tersebut **otomatis dimuat** saat menambah Master Biaya SPMB.
+
 ## Headers
 
 | Header | Nilai | Wajib |
@@ -87,6 +89,7 @@ Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `mas
             "nama": "Biaya Pendaftaran",
             "kategori": "pendaftaran",
             "tipe_potongan": false,
+            "is_default_master_biaya": true,
             "urutan": 1,
             "is_active": true,
             "keterangan": null
@@ -184,6 +187,7 @@ Permission: `spmb.manage`.
     "kategori": "pendaftaran",
     "tipe_potongan": false,
     "is_referral_reward": false,
+    "is_default_master_biaya": true,
     "role_rewards": [
         { "role_id": 5, "nominal": 50000 },
         { "role_id": 6, "nominal": 25000 }

@@ -6,17 +6,16 @@ use Illuminate\Database\Seeder;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\RolePermission;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class PermissionSeeder extends Seeder
 {
     public function run(): void
     {
-        Schema::disableForeignKeyConstraints();
-        DB::table('core_role_permissions')->truncate();
-        DB::table('core_permissions')->truncate();
-        Schema::enableForeignKeyConstraints();
+        // PENTING: TIDAK melakukan truncate pada core_permissions / core_role_permissions.
+        // Truncate akan meng-reset auto-increment ID permission, sedangkan
+        // core_menus.permission_id menyimpan FK numerik — akibatnya relasi menu
+        // menjadi stale dan menunjuk permission yang salah (mis. spmb.manage
+        // bergeser ke sinapra.aset.create). Gunakan upsert idempoten agar ID stabil.
 
         $permissions = [
             // ── MODUL SSO (IAM) ───────────────────────────────────
@@ -273,7 +272,7 @@ class PermissionSeeder extends Seeder
         ];
 
         foreach ($permissions as $perm) {
-            Permission::firstOrCreate(
+            Permission::updateOrCreate(
                 ['slug' => $perm['slug']],
                 [
                     'name' => $perm['name'],
@@ -307,12 +306,12 @@ class PermissionSeeder extends Seeder
         // 1. Super Admin & Admin -> Semua permissions
         if ($superAdminRole) {
             foreach ($allPermissions as $p) {
-                RolePermission::create(['role_id' => $superAdminRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $superAdminRole->id, 'permission_id' => $p->id]);
             }
         }
         if ($adminRole) {
             foreach ($allPermissions as $p) {
-                RolePermission::create(['role_id' => $adminRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $adminRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -367,7 +366,7 @@ class PermissionSeeder extends Seeder
             ];
             $perms = Permission::whereIn('slug', $dosenSlugs)->get();
             foreach ($perms as $p) {
-                RolePermission::create(['role_id' => $dosenRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $dosenRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -388,7 +387,7 @@ class PermissionSeeder extends Seeder
             ];
             $perms = Permission::whereIn('slug', $tendikSlugs)->get();
             foreach ($perms as $p) {
-                RolePermission::create(['role_id' => $tendikRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $tendikRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -396,13 +395,13 @@ class PermissionSeeder extends Seeder
         if ($operatorSdmRole) {
             $simpegPerms = Permission::where('module', 'simpeg')->get();
             foreach ($simpegPerms as $p) {
-                RolePermission::create(['role_id' => $operatorSdmRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $operatorSdmRole->id, 'permission_id' => $p->id]);
             }
         }
         if ($adminSimpegRole) {
             $simpegPerms = Permission::where('module', 'simpeg')->get();
             foreach ($simpegPerms as $p) {
-                RolePermission::create(['role_id' => $adminSimpegRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $adminSimpegRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -410,7 +409,7 @@ class PermissionSeeder extends Seeder
         if ($operatorSikeuRole) {
             $sikeuPerms = Permission::where('module', 'sikeu')->get();
             foreach ($sikeuPerms as $p) {
-                RolePermission::create(['role_id' => $operatorSikeuRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $operatorSikeuRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -418,7 +417,7 @@ class PermissionSeeder extends Seeder
         if ($adminLppmRole) {
             $sippmPerms = Permission::where('module', 'sippm')->get();
             foreach ($sippmPerms as $p) {
-                RolePermission::create(['role_id' => $adminLppmRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $adminLppmRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -426,7 +425,7 @@ class PermissionSeeder extends Seeder
         if ($adminSarprasRole) {
             $sinapraPerms = Permission::where('module', 'sinapra')->get();
             foreach ($sinapraPerms as $p) {
-                RolePermission::create(['role_id' => $adminSarprasRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $adminSarprasRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -469,7 +468,7 @@ class PermissionSeeder extends Seeder
             $studentSlugs = ['spmb.student.read', 'spmb.dashboard.read', 'spmb.pendaftaran.read'];
             $perms = Permission::whereIn('slug', $studentSlugs)->get();
             foreach ($perms as $p) {
-                RolePermission::create(['role_id' => $calonMhsRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $calonMhsRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -506,7 +505,7 @@ class PermissionSeeder extends Seeder
             ];
             $perms = Permission::whereIn('slug', $pimpinanSlugs)->get();
             foreach ($perms as $p) {
-                RolePermission::create(['role_id' => $pimpinanRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $pimpinanRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -527,7 +526,7 @@ class PermissionSeeder extends Seeder
             ];
             $perms = Permission::whereIn('slug', $akuntansiSlugs)->get();
             foreach ($perms as $p) {
-                RolePermission::create(['role_id' => $adminKeuAkuntansiRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $adminKeuAkuntansiRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -545,7 +544,7 @@ class PermissionSeeder extends Seeder
             ];
             $perms = Permission::whereIn('slug', $pembayaranSlugs)->get();
             foreach ($perms as $p) {
-                RolePermission::create(['role_id' => $adminKeuPembayaranRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $adminKeuPembayaranRole->id, 'permission_id' => $p->id]);
             }
         }
 
@@ -558,7 +557,7 @@ class PermissionSeeder extends Seeder
             ];
             $perms = Permission::whereIn('slug', $petugasKasKecilSlugs)->get();
             foreach ($perms as $p) {
-                RolePermission::create(['role_id' => $petugasKasKecilRole->id, 'permission_id' => $p->id]);
+                RolePermission::firstOrCreate(['role_id' => $petugasKasKecilRole->id, 'permission_id' => $p->id]);
             }
         }
 

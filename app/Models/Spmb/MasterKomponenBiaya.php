@@ -18,6 +18,7 @@ class MasterKomponenBiaya extends Model
         'kategori',
         'tipe_potongan',
         'is_referral_reward',
+        'is_default_master_biaya',
         'urutan',
         'is_active',
         'keterangan',
@@ -26,6 +27,7 @@ class MasterKomponenBiaya extends Model
     protected $casts = [
         'tipe_potongan' => 'boolean',
         'is_referral_reward' => 'boolean',
+        'is_default_master_biaya' => 'boolean',
         'is_active' => 'boolean',
         'urutan' => 'integer',
     ];

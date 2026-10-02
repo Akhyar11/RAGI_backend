@@ -18,6 +18,8 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\IAM\MenuSeeder::class,
             \Database\Seeders\IAM\MenuValidasiManualSeeder::class,
             \Database\Seeders\IAM\MenuApprovalTahapSeeder::class,
+            \Database\Seeders\SpmbMenuCalonMahasiswaSeeder::class,
+            \Database\Seeders\SpmbMenuAdminSeeder::class,
             \Database\Seeders\IAM\AdminUserSeeder::class,
             \Database\Seeders\SpmbTemplateSuratSeeder::class,
         ]);

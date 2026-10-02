@@ -18,20 +18,8 @@ return new class extends Migration
             return;
         }
 
-        // Baca definisi hierarki menu dari MenuSeeder secara aman tanpa truncate
-        $seederPath = database_path('seeders/IAM/MenuSeeder.php');
-        if (!file_exists($seederPath)) {
-            return;
-        }
-
-        $code = file_get_contents($seederPath);
-        preg_match('/\$menus\s*=\s*(\[.*?\]);\s*foreach/s', $code, $matches);
-
-        if (!isset($matches[1])) {
-            return;
-        }
-
-        eval('$menus = ' . $matches[1] . ';');
+        // Baca definisi hierarki menu dari katalog terpusat (tanpa regex/eval).
+        $menus = \App\Support\MenuCatalog::definitions();
 
         foreach ($menus as $menuData) {
             $permissionId = null;

@@ -21,6 +21,7 @@ class UpdateKomponenBiayaRequest extends FormRequest
             'kategori' => 'nullable|string|max:50',
             'tipe_potongan' => 'nullable|boolean',
             'is_referral_reward' => 'nullable|boolean',
+            'is_default_master_biaya' => 'nullable|boolean',
             'role_rewards' => 'nullable|array',
             'role_rewards.*.role_id' => 'required|integer|exists:core_roles,id',
             'role_rewards.*.nominal' => 'required|numeric|min:0',
