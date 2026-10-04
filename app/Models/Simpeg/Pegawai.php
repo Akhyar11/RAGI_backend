@@ -205,6 +205,16 @@ class Pegawai extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    public function tandaTangan()
+    {
+        return $this->hasMany(TandaTanganPegawai::class, 'pegawai_id');
+    }
+
+    public function activeTandaTangan()
+    {
+        return $this->hasOne(TandaTanganPegawai::class, 'pegawai_id')->where('is_active', true)->latest();
+    }
+
     public function unitKerja()
     {
         return $this->belongsTo(UnitKerja::class, 'unit_kerja_id');

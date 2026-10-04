@@ -105,7 +105,7 @@ class MenuService
             $cq->orderBy('order_index');
         }])
         ->whereNull('parent_id')
-        ->when($module !== 'all', function ($q) use ($module) {
+        ->when(!empty($module) && $module !== 'all', function ($q) use ($module) {
             $q->where('module', $module);
         })
         ->where('is_active', true);

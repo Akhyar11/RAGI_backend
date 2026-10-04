@@ -18,78 +18,113 @@ class SinapraDashboardService
     /**
      * Menghasilkan agregasi metrik, sebaran status aset, early warnings, dan aktivitas terkini.
      */
-    public function getSummary(): array
+    public function getSummary(?\App\Models\User $user = null): array
     {
+        $isRestricted = $user && $user->isSinapraLaboranRestricted();
+        $ruanganBase = Ruangan::query();
+        $asetBase = Aset::query();
+        $accessibleRuanganIds = $isRestricted ? $user->getSinapraAccessibleRuanganIds() : collect();
+        $prodiIds = $isRestricted ? $user->getSinapraProdiIds() : collect();
+
+        if ($isRestricted) {
+            $ruanganBase->forLaboran($user);
+            $asetBase->forLaboran($user);
+        }
+
         // 1. Metrik Fasilitas
-        $totalGedung = Gedung::count();
-        $totalRuangan = Ruangan::count();
-        $totalKapasitasRuangan = (int) Ruangan::sum('kapasitas');
-        $ruanganTersedia = Ruangan::where('status', 'tersedia')->count();
+        $totalGedung = $isRestricted 
+            ? Gedung::whereHas('ruangan', fn($q) => $q->forLaboran($user))->count()
+            : Gedung::count();
+        $totalRuangan = (clone $ruanganBase)->count();
+        $totalKapasitasRuangan = (int) (clone $ruanganBase)->sum('kapasitas');
+        $ruanganTersedia = (clone $ruanganBase)->where('status', 'tersedia')->count();
 
         // 2. Metrik Inventaris Aset & Nilai Finansial (SIKEU)
-        $totalAset = Aset::count();
-        $totalHargaPerolehan = (float) Aset::sum('harga_perolehan');
-        $totalNilaiBuku = (float) Aset::sum('nilai_buku');
+        $totalAset = (clone $asetBase)->count();
+        $totalHargaPerolehan = (float) (clone $asetBase)->sum('harga_perolehan');
+        $totalNilaiBuku = (float) (clone $asetBase)->sum('nilai_buku');
         $totalAkumulasiPenyusutan = max(0, $totalHargaPerolehan - $totalNilaiBuku);
-        $totalAsetAdaPic = Aset::whereNotNull('penanggung_jawab_pegawai_id')->count();
+        $totalAsetAdaPic = (clone $asetBase)->whereNotNull('penanggung_jawab_pegawai_id')->count();
 
         // 3. Metrik Operasional & Peminjaman
-        $peminjamanRuanganAktif = PeminjamanRuangan::whereIn('status', ['disetujui', 'aktif'])->count();
-        $peminjamanAsetAktif = PeminjamanAset::whereIn('status', ['disetujui', 'dipinjam'])->count();
-        $peminjamanPending = PeminjamanRuangan::where('status', 'diajukan')->count()
-            + PeminjamanAset::where('status', 'diajukan')->count();
+        $pemRuanganQuery = PeminjamanRuangan::query();
+        $pemAsetQuery = PeminjamanAset::query();
+        if ($isRestricted) {
+            $pemRuanganQuery->whereIn('ruangan_id', $accessibleRuanganIds);
+            $pemAsetQuery->whereHas('aset', fn($q) => $q->forLaboran($user));
+        }
+
+        $peminjamanRuanganAktif = (clone $pemRuanganQuery)->whereIn('status', ['disetujui', 'aktif'])->count();
+        $peminjamanAsetAktif = (clone $pemAsetQuery)->whereIn('status', ['disetujui', 'dipinjam'])->count();
+        $peminjamanPending = (clone $pemRuanganQuery)->where('status', 'diajukan')->count()
+            + (clone $pemAsetQuery)->where('status', 'diajukan')->count();
 
         // 4. Maintenance & Pengadaan
-        $maintenanceAktif = MaintenanceLog::whereIn('status', ['dijadwalkan', 'proses'])->count();
+        $maintQuery = MaintenanceLog::query();
+        if ($isRestricted) {
+            $maintQuery->whereHas('aset', fn($q) => $q->forLaboran($user));
+        }
+        $maintenanceAktif = $maintQuery->whereIn('status', ['dijadwalkan', 'proses'])->count();
         $pengadaanPending = PengajuanPengadaan::where('status', 'diajukan')->count();
         $pengadaanDisetujui = PengajuanPengadaan::where('status', 'disetujui')->count();
 
         // 5. Breakdown Status Aset
-        $statusCounts = Aset::select('status', DB::raw('count(*) as total'))
+        $statusCounts = (clone $asetBase)->select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status')
             ->toArray();
 
         // Breakdown Kondisi Aset
-        $kondisiCounts = Aset::select('kondisi', DB::raw('count(*) as total'))
+        $kondisiCounts = (clone $asetBase)->select('kondisi', DB::raw('count(*) as total'))
             ->groupBy('kondisi')
             ->pluck('total', 'kondisi')
             ->toArray();
 
         // 6. Early Warnings (BHP Kritis & Kalibrasi)
-        $bhpKritis = LabBhp::with(['ruangan:id,nama,kode'])
-            ->whereColumn('stok_saat_ini', '<=', 'stok_minimum')
-            ->take(5)
+        $bhpKritisQuery = LabBhp::with(['ruangan:id,nama,kode'])
+            ->whereColumn('stok_saat_ini', '<=', 'stok_minimum');
+        if ($isRestricted) {
+            $bhpKritisQuery->whereIn('ruangan_id', $accessibleRuanganIds);
+        }
+        $bhpKritis = $bhpKritisQuery->take(5)
             ->get(['id', 'ruangan_id', 'kode_bhp', 'nama_bhp', 'stok_saat_ini', 'stok_minimum', 'satuan']);
 
-        $kalibrasiJatuhTempo = AlatKalibrasi::with(['aset:id,nama,kode_aset'])
+        $kalibrasiJatuhTempoQuery = AlatKalibrasi::with(['aset:id,nama,kode_aset'])
             ->where(function ($q) {
                 $q->whereNull('tanggal_kadaluarsa')
                   ->orWhere('tanggal_kadaluarsa', '<=', now()->addDays(30));
-            })
+            });
+        if ($isRestricted) {
+            $kalibrasiJatuhTempoQuery->whereHas('aset', fn($q) => $q->forLaboran($user));
+        }
+        $kalibrasiJatuhTempo = $kalibrasiJatuhTempoQuery
             ->orderBy('tanggal_kadaluarsa', 'asc')
             ->take(5)
             ->get(['id', 'aset_id', 'nomor_sertifikat', 'tanggal_kadaluarsa', 'status_kelayakan']);
 
         // 7. Recent Peminjaman Ruangan & Aset
-        $recentPeminjamanRuangan = PeminjamanRuangan::with(['ruangan:id,nama,kode', 'user:id,name'])
+        $recentPeminjamanRuangan = (clone $pemRuanganQuery)->with(['ruangan:id,nama,kode', 'user:id,name'])
             ->latest('id')
             ->take(5)
             ->get(['id', 'ruangan_id', 'user_id', 'keperluan', 'tanggal', 'jam_mulai', 'jam_selesai', 'status']);
 
-        $recentPeminjamanAset = PeminjamanAset::with(['aset:id,nama,kode_aset', 'user:id,name'])
+        $recentPeminjamanAset = (clone $pemAsetQuery)->with(['aset:id,nama,kode_aset', 'user:id,name'])
             ->latest('id')
             ->take(5)
             ->get(['id', 'aset_id', 'user_id', 'keperluan', 'tanggal_pinjam', 'tanggal_kembali_rencana', 'status']);
 
         // 8. Recent Aset Terdaftar
-        $recentAset = Aset::with(['penanggungJawab:id,nama_lengkap,nip'])
+        $recentAset = (clone $asetBase)->with(['penanggungJawab:id,nama_lengkap,nip'])
             ->latest('id')
             ->take(5)
             ->get(['id', 'kode_aset', 'nama', 'penanggung_jawab_pegawai_id', 'harga_perolehan', 'nilai_buku', 'kondisi', 'status']);
 
         // 9. Distribusi Aset & Ruangan per Program Studi
-        $prodiStats = \App\Models\Siakad\ProgramStudi::select('id', 'kode_prodi', 'nama', 'jenjang')
+        $prodiQuery = \App\Models\Siakad\ProgramStudi::select('id', 'kode_prodi', 'nama', 'jenjang');
+        if ($isRestricted && $prodiIds->isNotEmpty()) {
+            $prodiQuery->whereIn('id', $prodiIds);
+        }
+        $prodiStats = $prodiQuery
             ->withCount(['asets as total_aset', 'ruangans as total_ruangan'])
             ->withSum('asets as total_nilai_aset', 'harga_perolehan')
             ->orderBy('nama', 'asc')
@@ -106,9 +141,9 @@ class SinapraDashboardService
                 ];
             });
 
-        $umumAsetCount = Aset::whereNull('program_studi_id')->count();
-        $umumAsetNilai = (float) Aset::whereNull('program_studi_id')->sum('harga_perolehan');
-        $umumRuanganCount = Ruangan::whereNull('program_studi_id')->count();
+        $umumAsetCount = $isRestricted ? 0 : Aset::whereNull('program_studi_id')->count();
+        $umumAsetNilai = $isRestricted ? 0.0 : (float) Aset::whereNull('program_studi_id')->sum('harga_perolehan');
+        $umumRuanganCount = $isRestricted ? 0 : Ruangan::whereNull('program_studi_id')->count();
 
         return [
             'metrics' => [

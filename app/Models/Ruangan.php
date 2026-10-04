@@ -24,8 +24,11 @@ class Ruangan extends Model
         'tipe',
         'kapasitas',
         'ada_ac',
+        'jumlah_ac',
         'ada_proyektor',
+        'jumlah_proyektor',
         'ada_wifi',
+        'jumlah_wifi',
         'status',
     ];
 
@@ -35,8 +38,11 @@ class Ruangan extends Model
         'lantai' => 'integer',
         'kapasitas' => 'integer',
         'ada_ac' => 'boolean',
+        'jumlah_ac' => 'integer',
         'ada_proyektor' => 'boolean',
+        'jumlah_proyektor' => 'integer',
         'ada_wifi' => 'boolean',
+        'jumlah_wifi' => 'integer',
     ];
 
     /**
@@ -111,5 +117,33 @@ class Ruangan extends Model
     public function scopeIsLab($query)
     {
         return $query->where('tipe', 'lab');
+    }
+
+    /**
+     * Scope untuk membatasi ruangan yang dapat diakses oleh laboran sesuai prodi binaan atau penugasan langsung
+     */
+    public function scopeForLaboran($query, User $user)
+    {
+        $prodiIds = $user->getSinapraProdiIds();
+        $accessibleRuanganIds = $user->getSinapraAccessibleRuanganIds();
+
+        return $query->where(function ($q) use ($prodiIds, $accessibleRuanganIds, $user) {
+            $hasCondition = false;
+            if ($prodiIds->isNotEmpty()) {
+                $q->whereIn('program_studi_id', $prodiIds);
+                $hasCondition = true;
+            }
+            if ($accessibleRuanganIds->isNotEmpty()) {
+                if ($hasCondition) {
+                    $q->orWhereIn('id', $accessibleRuanganIds);
+                } else {
+                    $q->whereIn('id', $accessibleRuanganIds);
+                }
+                $hasCondition = true;
+            }
+            if (!$hasCondition) {
+                $q->whereRaw('1 = 0');
+            }
+        });
     }
 }

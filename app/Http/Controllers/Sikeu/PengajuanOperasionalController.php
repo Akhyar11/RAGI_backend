@@ -298,11 +298,13 @@ class PengajuanOperasionalController extends Controller
     {
         $request->validate([
             'catatan' => 'nullable|string|max:1000',
+            'nominal_pelunasan' => 'nullable|numeric|min:0',
+            'file_bukti_pelunasan' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:10240',
         ]);
 
         try {
             $pengajuan = PengajuanPencairanKas::findOrFail($id);
-            $result = $this->service->tutupLpjSimpeg($pengajuan, $request->only(['catatan']), $request);
+            $result = $this->service->tutupLpjSimpeg($pengajuan, $request->only(['catatan', 'nominal_pelunasan']), $request);
 
             return response()->json([
                 'status' => 'success',

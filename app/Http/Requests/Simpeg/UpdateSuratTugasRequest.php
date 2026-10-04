@@ -18,6 +18,8 @@ class UpdateSuratTugasRequest extends FormRequest
             'kategori_kegiatan_id' => 'sometimes|required|exists:simpeg_master_kategori_kegiatan_tugas,id',
             'jenis_transportasi_id' => 'sometimes|required|exists:simpeg_master_jenis_transportasi,id',
             'nama_kegiatan' => 'sometimes|required|string|max:255',
+            'jam_pelaksanaan' => 'nullable|string|max:100',
+            'penyelenggara' => 'nullable|string|max:255',
             'tempat_berangkat' => 'sometimes|required|string|max:255',
             'lokasi_tujuan' => 'sometimes|required|string|max:255',
             'tanggal_berangkat' => 'sometimes|required|date',

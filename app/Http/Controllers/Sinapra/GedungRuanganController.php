@@ -127,28 +127,8 @@ class GedungRuanganController extends Controller
         $query = Ruangan::with(['gedung', 'laboran', 'tipeRuangan', 'programStudi:id,kode_prodi,nama,jenjang']);
 
         $user = $request->user();
-        if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
-            $prodiIds = $user->laboranProdi()->pluck('siakad_program_studi.id');
-            $hasLaboranRuangan = $user->laboranRuangan()->exists();
-
-            $query->where(function ($q) use ($user, $prodiIds, $hasLaboranRuangan) {
-                $hasCondition = false;
-                if ($prodiIds->isNotEmpty()) {
-                    $q->whereIn('program_studi_id', $prodiIds);
-                    $hasCondition = true;
-                }
-                if ($hasLaboranRuangan) {
-                    if ($hasCondition) {
-                        $q->orWhereHas('laboran', fn($lq) => $lq->where('core_users.id', $user->id));
-                    } else {
-                        $q->whereHas('laboran', fn($lq) => $lq->where('core_users.id', $user->id));
-                    }
-                    $hasCondition = true;
-                }
-                if (!$hasCondition) {
-                    $q->whereRaw('1 = 0');
-                }
-            });
+        if ($user && $user->isSinapraLaboranRestricted()) {
+            $query->forLaboran($user);
         }
 
         if ($request->filled('gedung_id')) {

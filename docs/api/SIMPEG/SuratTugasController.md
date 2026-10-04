@@ -87,6 +87,8 @@ Mengajukan permohonan surat tugas dinas luar.
 - `kategori_kegiatan_id`: integer, required (ID Kategori kegiatan dinas)
 - `jenis_transportasi_id`: integer, required (ID Moda transportasi)
 - `nama_kegiatan`: string, required (Nama kegiatan tugas)
+- `jam_pelaksanaan`: string, nullable (Waktu/jam kegiatan dinas, contoh: '08.00 WIB - Selesai')
+- `penyelenggara`: string, nullable (Penyelenggara / mitra kegiatan)
 - `tempat_berangkat`: string, required (Tempat asal keberangkatan)
 - `lokasi_tujuan`: string, required (Kota / institusi tujuan)
 - `tanggal_berangkat`: date, required (YYYY-MM-DD)

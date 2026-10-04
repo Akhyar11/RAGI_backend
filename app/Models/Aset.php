@@ -56,8 +56,8 @@ class Aset extends Model
      */
     public function scopeForLaboran($query, User $user)
     {
-        $ruanganIds = $user->laboranRuangan()->pluck('sinapra_ruangan.id');
-        $prodiIds = $user->laboranProdi()->pluck('siakad_program_studi.id');
+        $ruanganIds = $user->getSinapraAccessibleRuanganIds();
+        $prodiIds = $user->getSinapraProdiIds();
 
         return $query->where(function ($q) use ($ruanganIds, $prodiIds) {
             $hasCondition = false;

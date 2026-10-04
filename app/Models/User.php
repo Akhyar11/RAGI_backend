@@ -52,9 +52,24 @@ class User extends Authenticatable
         return $this->hasOne(\App\Models\Simpeg\Pegawai::class, 'user_id');
     }
 
+    public function tandaTangan()
+    {
+        return $this->hasMany(\App\Models\Simpeg\TandaTanganPegawai::class, 'user_id');
+    }
+
+    public function activeTandaTangan()
+    {
+        return $this->hasOne(\App\Models\Simpeg\TandaTanganPegawai::class, 'user_id')->where('is_active', true)->latest();
+    }
+
     public function employee()
     {
         return $this->hasOne(\App\Models\Simpeg\Pegawai::class, 'user_id');
+    }
+
+    public function mahasiswa()
+    {
+        return $this->hasOne(\App\Models\Siakad\Mahasiswa::class, 'user_id');
     }
 
     public function ssoTokens()
@@ -96,9 +111,69 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    /**
+     * Dapatkan daftar ID Program Studi yang terikat wewenangnya dengan user di SINAPRA.
+     * Bersumber dari:
+     * 1. Mapping Role ke Prodi pada tabel `sinapra_prodi_roles`.
+     * 2. Direct assignment ke Prodi pada tabel `sinapra_laboran_prodi` (bila ada).
+     *
+     * @return \Illuminate\Support\Collection<int>
+     */
+    public function getSinapraProdiIds(): \Illuminate\Support\Collection
+    {
+        $roleIds = $this->roles()->pluck('core_roles.id');
+
+        $prodiIdsFromRoles = \Illuminate\Support\Facades\DB::table('sinapra_prodi_roles')
+            ->whereIn('role_id', $roleIds)
+            ->pluck('program_studi_id');
+
+        $prodiIdsDirect = $this->laboranProdi()->pluck('siakad_program_studi.id');
+
+        return $prodiIdsFromRoles->concat($prodiIdsDirect)->unique()->values();
+    }
+
+    /**
+     * Dapatkan seluruh ID Ruangan yang berada dalam lingkup wewenang laboran di SINAPRA.
+     * Meliputi:
+     * 1. Ruangan yang bernaung di bawah program studi binaan user (dari role maupun direct prodi).
+     * 2. Ruangan yang ditugaskan secara langsung ke user pada sinapra_laboran_ruangan.
+     *
+     * @return \Illuminate\Support\Collection<int>
+     */
+    public function getSinapraAccessibleRuanganIds(): \Illuminate\Support\Collection
+    {
+        $prodiIds = $this->getSinapraProdiIds();
+
+        $ruanganIdsFromProdi = $prodiIds->isNotEmpty()
+            ? \App\Models\Ruangan::whereIn('program_studi_id', $prodiIds)->pluck('id')
+            : collect();
+
+        $ruanganIdsDirect = $this->laboranRuangan()->pluck('sinapra_ruangan.id');
+
+        return $ruanganIdsFromProdi->concat($ruanganIdsDirect)->unique()->values();
+    }
+
+    /**
+     * Cek apakah user adalah laboran / staf dengan batasan wewenang prodi/lab tertentu di SINAPRA.
+     * Mengembalikan false untuk SuperAdmin, Admin Sarpras, atau Admin Global.
+     */
+    public function isSinapraLaboranRestricted(): bool
+    {
+        if ($this->isSuperAdmin() || $this->hasRole('admin') || $this->hasRole('admin_sarpras')) {
+            return false;
+        }
+
+        return $this->getSinapraProdiIds()->isNotEmpty()
+            || $this->laboranRuangan()->exists()
+            || $this->hasRole('admin_laboratorium');
+    }
+
     public function isLaboran(): bool
     {
-        return $this->hasRole('admin_laboratorium') || $this->laboranRuangan()->exists() || $this->laboranProdi()->exists();
+        return $this->hasRole('admin_laboratorium') 
+            || $this->getSinapraProdiIds()->isNotEmpty()
+            || $this->laboranRuangan()->exists() 
+            || $this->laboranProdi()->exists();
     }
 
     protected $appends = ['is_superadmin', 'is_admin', 'referral_code'];

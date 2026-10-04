@@ -114,11 +114,18 @@ bukti_pencairan: [File resi_transfer.pdf / image]
 | `Accept` | `application/json` | ✅ |
 | `Content-Type` | `application/json` | ✅ |
 
-### Request Body
+### Request Body (Multipart / JSON)
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `catatan` | string | ❌ | Catatan verifikasi penutupan kasbon dinas |
+| `nominal_pelunasan` | numeric | ❌ | Nominal dana reimburse / pengembalian lebih bayar |
+| `file_bukti_pelunasan` | file (image/pdf) | ❌ | Foto/bukti transfer pelunasan kasbon dinas (maks 10MB) |
 
 ```json
 {
-  "catatan": "LPJ dinas telah diverifikasi, sisa panjar disetor ke kas operasional"
+  "catatan": "LPJ dinas telah diverifikasi, reimbursement selisih telah ditransfer ke rekening pegawai",
+  "nominal_pelunasan": 150000
 }
 ```
 
@@ -130,7 +137,10 @@ bukti_pencairan: [File resi_transfer.pdf / image]
   "message": "Transaksi perjalanan dinas berhasil diverifikasi dan diselesaikan",
   "data": {
     "id": 10,
-    "status": "selesai"
+    "status": "selesai",
+    "tipe_pelunasan": "reimbursement",
+    "nominal_pelunasan": 150000.00,
+    "bukti_pelunasan_url": "http://localhost:8000/api/files/view?path=..."
   }
 }
 ```

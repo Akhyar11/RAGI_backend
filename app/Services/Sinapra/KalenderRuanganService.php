@@ -30,7 +30,7 @@ class KalenderRuanganService
      * @param array $filters
      * @return array
      */
-    public function getSchedule(array $filters = []): array
+    public function getSchedule(array $filters = [], ?\App\Models\User $user = null): array
     {
         $startDate = !empty($filters['start_date'])
             ? Carbon::parse($filters['start_date'])->startOfDay()
@@ -48,13 +48,13 @@ class KalenderRuanganService
 
         // 1. Ambil Event dari Peminjaman SINAPRA
         if ($source === 'semua' || $source === 'sinapra') {
-            $peminjamanEvents = $this->getSinapraPeminjamanEvents($startDate, $endDate, $ruanganId, $gedungId);
+            $peminjamanEvents = $this->getSinapraPeminjamanEvents($startDate, $endDate, $ruanganId, $gedungId, $user);
             $events = array_merge($events, $peminjamanEvents);
         }
 
         // 2. Ambil Event dari Perkuliahan SIAKAD
         if ($source === 'semua' || $source === 'siakad') {
-            $siakadEvents = $this->getSiakadPerkuliahanEvents($startDate, $endDate, $ruanganId, $gedungId);
+            $siakadEvents = $this->getSiakadPerkuliahanEvents($startDate, $endDate, $ruanganId, $gedungId, $user);
             $events = array_merge($events, $siakadEvents);
         }
 
@@ -78,12 +78,17 @@ class KalenderRuanganService
     /**
      * Mengambil agenda peminjaman ruangan dari modul SINAPRA.
      */
-    private function getSinapraPeminjamanEvents(Carbon $startDate, Carbon $endDate, ?int $ruanganId, ?int $gedungId): array
+    private function getSinapraPeminjamanEvents(Carbon $startDate, Carbon $endDate, ?int $ruanganId, ?int $gedungId, ?\App\Models\User $user = null): array
     {
         $query = PeminjamanRuangan::with(['ruangan.gedung', 'user'])
             ->whereDate('tanggal', '>=', $startDate->format('Y-m-d'))
             ->whereDate('tanggal', '<=', $endDate->format('Y-m-d'))
             ->whereIn('status', ['disetujui', 'berlangsung', 'pending']);
+
+        if ($user && $user->isSinapraLaboranRestricted()) {
+            $accessibleRuanganIds = $user->getSinapraAccessibleRuanganIds();
+            $query->whereIn('ruangan_id', $accessibleRuanganIds);
+        }
 
         if ($ruanganId) {
             $query->where('ruangan_id', $ruanganId);
@@ -124,7 +129,7 @@ class KalenderRuanganService
     /**
      * Mengambil jadwal perkuliahan aktif dari modul SIAKAD jika tabel tersedia.
      */
-    private function getSiakadPerkuliahanEvents(Carbon $startDate, Carbon $endDate, ?int $ruanganId, ?int $gedungId): array
+    private function getSiakadPerkuliahanEvents(Carbon $startDate, Carbon $endDate, ?int $ruanganId, ?int $gedungId, ?\App\Models\User $user = null): array
     {
         if (!Schema::hasTable('siakad_kelas')) {
             return [];
@@ -167,6 +172,11 @@ class KalenderRuanganService
             ->whereNull('siakad_kelas.deleted_at')
             ->whereNotNull('siakad_kelas.ruangan_id')
             ->whereNotNull('siakad_kelas.hari');
+
+        if ($user && $user->isSinapraLaboranRestricted()) {
+            $accessibleRuanganIds = $user->getSinapraAccessibleRuanganIds();
+            $kelasQuery->whereIn('siakad_kelas.ruangan_id', $accessibleRuanganIds);
+        }
 
         if ($ruanganId) {
             $kelasQuery->where('siakad_kelas.ruangan_id', $ruanganId);

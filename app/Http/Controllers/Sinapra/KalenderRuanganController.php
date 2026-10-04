@@ -25,7 +25,7 @@ class KalenderRuanganController extends Controller
     public function index(GetKalenderRuanganRequest $request): JsonResponse
     {
         $filters = $request->validated();
-        $result = $this->kalenderService->getSchedule($filters);
+        $result = $this->kalenderService->getSchedule($filters, $request->user());
 
         return response()->json([
             'success' => true,

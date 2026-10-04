@@ -19,8 +19,6 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\IAM\MenuValidasiManualSeeder::class,
             \Database\Seeders\IAM\MenuApprovalTahapSeeder::class,
             \Database\Seeders\IAM\AdminUserSeeder::class,
-            \Database\Seeders\SIMPEG\MasterGolonganPangkatSeeder::class,
-            \Database\Seeders\SimpegSuratTugasMasterSeeder::class,
             \Database\Seeders\SpmbTemplateSuratSeeder::class,
         ]);
     }

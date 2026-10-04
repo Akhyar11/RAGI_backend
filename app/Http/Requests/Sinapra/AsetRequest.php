@@ -11,6 +11,13 @@ class AsetRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (!$this->has('harga_perolehan') || $this->input('harga_perolehan') === null || $this->input('harga_perolehan') === '') {
+            $this->merge(['harga_perolehan' => 0]);
+        }
+    }
+
     public function rules(): array
     {
         $asetId = $this->route('aset') ? $this->route('aset')->id : null;
@@ -25,8 +32,9 @@ class AsetRequest extends FormRequest
             'merk' => 'nullable|string|max:100',
             'model' => 'nullable|string|max:100',
             'serial_number' => 'nullable|string|max:100',
+            'nomor_seri' => 'nullable|string|max:100',
             'tanggal_perolehan' => 'nullable|date',
-            'harga_perolehan' => 'required|numeric|min:0',
+            'harga_perolehan' => 'nullable|numeric|min:0',
             'nilai_buku' => 'nullable|numeric|min:0',
             'kondisi' => 'required|in:baik,rusak_ringan,rusak_berat',
             'status' => 'required|in:tersedia,dipinjam,maintenance,dihapuskan',

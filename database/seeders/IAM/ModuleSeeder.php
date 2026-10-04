@@ -81,5 +81,15 @@ class ModuleSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        Module::updateOrCreate(
+            ['code' => 'arsip'],
+            [
+                'name' => 'ARSIP (Tata Persuratan)',
+                'description' => 'Sistem Informasi Pengelolaan Nomor Surat, Arsip, & Kop Surat Resmi Kampus.',
+                'primary_color' => '#0891b2',
+                'is_active' => true,
+            ]
+        );
     }
 }

@@ -6,6 +6,7 @@ use App\Models\PeminjamanRuangan;
 use App\Models\PeminjamanAset;
 use App\Models\Aset;
 use App\Models\Ruangan;
+use App\Models\Simpeg\TandaTanganPegawai;
 use App\Services\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Exception;
@@ -143,37 +144,83 @@ class PeminjamanService
     }
 
     /**
-     * Pengajuan Peminjaman Aset oleh User.
+     * Pengajuan Peminjaman Aset oleh User (Mendukung 1 atau Banyak Aset Sekaligus).
      */
     public function applyPeminjamanAset(array $data, int $userId): PeminjamanAset
     {
         return DB::transaction(function () use ($data, $userId) {
-            $aset = Aset::with('ruangan')->findOrFail($data['aset_id']);
-
-            if (!$aset->is_borrowable) {
-                throw new Exception("Aset '{$aset->nama}' merupakan aset tetap yang tidak dapat dipinjam.");
+            $asetIds = [];
+            if (!empty($data['aset_ids']) && is_array($data['aset_ids'])) {
+                $asetIds = array_values(array_unique(array_filter($data['aset_ids'])));
+            } elseif (!empty($data['aset_id'])) {
+                $asetIds = [(int) $data['aset_id']];
             }
 
-            if ($aset->status !== 'tersedia') {
-                throw new Exception("Aset '{$aset->nama}' sedang tidak tersedia untuk dipinjam (status: {$aset->status}).");
+            if (empty($asetIds)) {
+                throw new Exception("Minimal satu barang aset wajib dipilih untuk dipinjam.");
             }
 
-            $isLab = $aset->is_lab_asset || ($aset->ruangan && $aset->ruangan->tipe === 'lab');
+            $nomorIdentitas = $data['nomor_identitas'] ?? null;
+            if (empty($nomorIdentitas)) {
+                $user = \App\Models\User::with(['mahasiswa', 'pegawai'])->find($userId);
+                if ($user) {
+                    $nomorIdentitas = $user->mahasiswa?->nim 
+                        ?? $user->pegawai?->nidn 
+                        ?? $user->pegawai?->nuptk 
+                        ?? $user->pegawai?->nip 
+                        ?? $user->username;
+                }
+            }
 
-            $data['user_id'] = $userId;
-            $data['status'] = $isLab ? 'pending_laboran' : 'pending_admin_sinapra';
+            $kodePeminjaman = 'PMA-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(5));
+            $createdRecords = [];
 
-            $peminjaman = PeminjamanAset::create($data);
+            foreach ($asetIds as $asetId) {
+                $aset = Aset::with('ruangan')->findOrFail($asetId);
 
-            AuditLogService::record(
-                module: 'SINAPRA',
-                action: 'create',
-                tableName: 'peminjaman_aset',
-                recordId: $peminjaman->id,
-                newValues: $peminjaman->toArray()
-            );
+                if (!$aset->is_borrowable) {
+                    throw new Exception("Aset '{$aset->nama}' merupakan aset tetap yang tidak dapat dipinjam.");
+                }
 
-            return $peminjaman;
+                if ($aset->status !== 'tersedia') {
+                    throw new Exception("Aset '{$aset->nama}' sedang tidak tersedia untuk dipinjam (status: {$aset->status}).");
+                }
+
+                $isLab = $aset->is_lab_asset || ($aset->ruangan && $aset->ruangan->tipe === 'lab');
+
+                $recordData = [
+                    'kode_peminjaman' => $kodePeminjaman,
+                    'aset_id' => $asetId,
+                    'user_id' => $userId,
+                    'nomor_identitas' => $nomorIdentitas,
+                    'kontak_peminjam' => $data['kontak_peminjam'] ?? null,
+                    'keperluan' => $data['keperluan'],
+                    'tanggal_pinjam' => $data['tanggal_pinjam'],
+                    'tanggal_kembali_rencana' => $data['tanggal_kembali_rencana'],
+                    'status' => $isLab ? 'pending_laboran' : 'pending_admin_sinapra',
+                ];
+
+                $peminjaman = PeminjamanAset::create($recordData);
+
+                AuditLogService::record(
+                    module: 'SINAPRA',
+                    action: 'create',
+                    tableName: 'peminjaman_aset',
+                    recordId: $peminjaman->id,
+                    newValues: $peminjaman->toArray()
+                );
+
+                $createdRecords[] = $peminjaman;
+            }
+
+            $primary = $createdRecords[0];
+            $itemsData = collect($createdRecords)->map(function ($item) {
+                return $item->load('aset')->toArray();
+            })->values()->all();
+            $primary->setAttribute('items', $itemsData);
+            $primary->setAttribute('items_count', count($createdRecords));
+
+            return $primary;
         });
     }
 
@@ -238,6 +285,25 @@ class PeminjamanService
 
                 $peminjaman->status = 'disetujui';
                 $aset->update(['status' => 'dipinjam']);
+
+                // Generate nomor surat peminjaman resmi jika belum ada
+                if (empty($peminjaman->nomor_surat)) {
+                    $bulan = date('m');
+                    $tahun = date('Y');
+                    $nomorSurat = sprintf('%03d/SINAPRA-ASET/%s/%s', $peminjaman->id, $bulan, $tahun);
+                    $peminjaman->nomor_surat = $nomorSurat;
+                    $peminjaman->surat_generated_at = now();
+
+                    // Jika merupakan bagian dari pengajuan batch (kode_peminjaman), seragamkan nomor surat
+                    if (!empty($peminjaman->kode_peminjaman)) {
+                        PeminjamanAset::where('kode_peminjaman', $peminjaman->kode_peminjaman)
+                            ->whereNull('nomor_surat')
+                            ->update([
+                                'nomor_surat' => $nomorSurat,
+                                'surat_generated_at' => now(),
+                            ]);
+                    }
+                }
             } else {
                 $peminjaman->status = 'ditolak_admin_sinapra';
                 $peminjaman->catatan_penolakan = $catatanPenolakan;
@@ -261,37 +327,186 @@ class PeminjamanService
     }
 
     /**
-     * Proses pengembalian barang/aset yang dipinjam.
+     * Mengambil data lengkap Surat Peminjaman Aset beserta tanda tangan digital SIMPEG.
      */
-    public function prosesPengembalianAset(PeminjamanAset $peminjaman, string $kondisiKembali): PeminjamanAset
+    public function getSuratPeminjamanAset(PeminjamanAset $peminjaman): array
     {
-        return DB::transaction(function () use ($peminjaman, $kondisiKembali) {
-            $oldValues = $peminjaman->toArray();
-
+        // Pastikan nomor surat sudah ter-generate
+        if (empty($peminjaman->nomor_surat)) {
+            $bulan = date('m');
+            $tahun = date('Y');
+            $nomorSurat = sprintf('%03d/SINAPRA-ASET/%s/%s', $peminjaman->id, $bulan, $tahun);
             $peminjaman->update([
-                'tanggal_kembali_aktual' => now()->toDateString(),
-                'kondisi_kembali' => $kondisiKembali,
-                'status' => 'kembali',
+                'nomor_surat' => $nomorSurat,
+                'surat_generated_at' => now(),
             ]);
+        }
 
-            // Update status & kondisi aset
-            $aset = Aset::findOrFail($peminjaman->aset_id);
-            $asetStatus = ($kondisiKembali === 'rusak_berat') ? 'maintenance' : 'tersedia';
-            $aset->update([
-                'status' => $asetStatus,
-                'kondisi' => $kondisiKembali,
-            ]);
+        // Ambil seluruh aset dalam pengajuan yang sama jika ada kode_peminjaman
+        $daftarPeminjaman = collect([$peminjaman]);
+        if (!empty($peminjaman->kode_peminjaman)) {
+            $daftarPeminjaman = PeminjamanAset::with(['aset.ruangan.gedung', 'aset.kategori'])
+                ->where('kode_peminjaman', $peminjaman->kode_peminjaman)
+                ->get();
+        } else {
+            $peminjaman->load(['aset.ruangan.gedung', 'aset.kategori']);
+            $daftarPeminjaman = collect([$peminjaman]);
+        }
 
-            AuditLogService::record(
-                module: 'SINAPRA',
-                action: 'update',
-                tableName: 'peminjaman_aset',
-                recordId: $peminjaman->id,
-                oldValues: $oldValues,
-                newValues: $peminjaman->fresh()->toArray()
-            );
+        $user = $peminjaman->user()->with(['pegawai.unitKerja', 'mahasiswa'])->first();
 
-            return $peminjaman->fresh();
+        // 1. Tanda Tangan Approver (Admin Sarpras) dari Master SIMPEG
+        $approverUser = null;
+        $approverTtd = null;
+        if ($peminjaman->disetujui_oleh) {
+            $approverUser = \App\Models\User::with('pegawai')->find($peminjaman->disetujui_oleh);
+            $approverTtd = TandaTanganPegawai::where('user_id', $peminjaman->disetujui_oleh)
+                ->where('is_active', true)
+                ->latest()
+                ->first();
+        }
+
+        // 2. Tanda Tangan Laboran dari Master SIMPEG (jika ada)
+        $laboranUser = null;
+        $laboranTtd = null;
+        if ($peminjaman->laboran_approved_by) {
+            $laboranUser = \App\Models\User::with('pegawai')->find($peminjaman->laboran_approved_by);
+            $laboranTtd = TandaTanganPegawai::where('user_id', $peminjaman->laboran_approved_by)
+                ->where('is_active', true)
+                ->latest()
+                ->first();
+        }
+
+        // 3. Tanda Tangan Peminjam dari Master SIMPEG (jika ada)
+        $peminjamTtd = TandaTanganPegawai::where('user_id', $peminjaman->user_id)
+            ->where('is_active', true)
+            ->latest()
+            ->first();
+
+        $daftarBarang = $daftarPeminjaman->map(function ($item, $idx) {
+            return [
+                'nomor' => $idx + 1,
+                'peminjaman_id' => $item->id,
+                'aset_id' => $item->aset_id,
+                'kode_aset' => $item->aset?->kode_aset ?? '-',
+                'nama_barang' => $item->aset?->nama ?? '-',
+                'merk' => $item->aset?->merk ?? '-',
+                'nomor_seri' => $item->aset?->nomor_seri ?? '-',
+                'lokasi_ruangan' => $item->aset?->ruangan?->nama ?? '-',
+                'gedung' => $item->aset?->ruangan?->gedung?->nama ?? '-',
+                'kondisi_pinjam' => $item->kondisi_pinjam ?? 'baik',
+                'status' => $item->status,
+            ];
+        });
+
+        // Identitas peminjam
+        $namaPeminjam = $user?->pegawai?->nama_lengkap ?? $user?->mahasiswa?->nama_lengkap ?? $user?->name ?? '-';
+        $nomorIdentitas = $peminjaman->nomor_identitas 
+            ?? $user?->mahasiswa?->nim 
+            ?? $user?->pegawai?->nidn 
+            ?? $user?->pegawai?->nuptk 
+            ?? $user?->pegawai?->nip 
+            ?? '-';
+
+        $unitKerja = $user?->pegawai?->unitKerja?->nama ?? 'Civitas Akademika Kampus';
+
+        return [
+            'peminjaman_id' => $peminjaman->id,
+            'kode_peminjaman' => $peminjaman->kode_peminjaman,
+            'nomor_surat' => $peminjaman->nomor_surat,
+            'surat_generated_at' => $peminjaman->surat_generated_at?->format('Y-m-d H:i:s'),
+            'tanggal_pinjam' => $peminjaman->tanggal_pinjam?->format('Y-m-d'),
+            'tanggal_kembali_rencana' => $peminjaman->tanggal_kembali_rencana?->format('Y-m-d'),
+            'keperluan' => $peminjaman->keperluan,
+            'status' => $peminjaman->status,
+            'peminjam' => [
+                'user_id' => $peminjaman->user_id,
+                'nama' => $namaPeminjam,
+                'nomor_identitas' => $nomorIdentitas,
+                'unit_kerja' => $unitKerja,
+                'kontak' => $peminjaman->kontak_peminjam ?? $user?->email,
+                'email' => $user?->email,
+                'tanda_tangan_url' => $peminjamTtd?->file_url,
+                'qr_token' => $peminjamTtd?->qr_token,
+            ],
+            'laboran' => $laboranUser ? [
+                'user_id' => $laboranUser->id,
+                'nama' => $laboranUser->pegawai?->nama_lengkap ?? $laboranUser->name,
+                'nip' => $laboranUser->pegawai?->nip ?? '-',
+                'nidn' => $laboranUser->pegawai?->nidn ?? null,
+                'verified_at' => $peminjaman->laboran_approved_at?->format('Y-m-d H:i:s'),
+                'tanda_tangan_url' => $laboranTtd?->file_url,
+                'qr_token' => $laboranTtd?->qr_token,
+            ] : null,
+            'approver' => $approverUser ? [
+                'user_id' => $approverUser->id,
+                'nama' => $approverUser->pegawai?->nama_lengkap ?? $approverUser->name,
+                'nip' => $approverUser->pegawai?->nip ?? '-',
+                'nidn' => $approverUser->pegawai?->nidn ?? null,
+                'approved_at' => $peminjaman->admin_approved_at?->format('Y-m-d H:i:s'),
+                'tanda_tangan_url' => $approverTtd?->file_url,
+                'qr_token' => $approverTtd?->qr_token,
+            ] : null,
+            'daftar_barang' => $daftarBarang,
+            'verifikasi_token' => hash('sha256', ($peminjaman->nomor_surat ?? '') . ($peminjaman->created_at ?? '')),
+        ];
+    }
+
+    /**
+     * Proses pengembalian barang/aset yang dipinjam (Mendukung pengembalian satuan atau batch).
+     */
+    public function prosesPengembalianAset(
+        PeminjamanAset $peminjaman,
+        string $kondisiKembali,
+        ?string $tanggalKembaliAktual = null,
+        ?string $catatanPengembalian = null,
+        bool $kembalikanSemuaDalamBatch = false
+    ): PeminjamanAset {
+        return DB::transaction(function () use ($peminjaman, $kondisiKembali, $tanggalKembaliAktual, $catatanPengembalian, $kembalikanSemuaDalamBatch) {
+            $tanggalKembali = $tanggalKembaliAktual ?: now()->toDateString();
+
+            // Kumpulan peminjaman yang akan diproses
+            $itemsToReturn = collect([$peminjaman]);
+            if ($kembalikanSemuaDalamBatch && !empty($peminjaman->kode_peminjaman)) {
+                $itemsToReturn = PeminjamanAset::where('kode_peminjaman', $peminjaman->kode_peminjaman)
+                    ->whereIn('status', ['dipinjam', 'disetujui'])
+                    ->get();
+            }
+
+            foreach ($itemsToReturn as $item) {
+                $oldValues = $item->toArray();
+
+                $item->update([
+                    'tanggal_kembali_aktual' => $tanggalKembali,
+                    'kondisi_kembali' => $kondisiKembali,
+                    'catatan_pengembalian' => $catatanPengembalian,
+                    'status' => 'kembali',
+                ]);
+
+                // Update status & kondisi aset
+                $aset = Aset::findOrFail($item->aset_id);
+                $asetStatus = match ($kondisiKembali) {
+                    'rusak_berat' => 'maintenance',
+                    'hilang' => 'disetujui_diapkir',
+                    default => 'tersedia',
+                };
+
+                $aset->update([
+                    'status' => $asetStatus,
+                    'kondisi' => ($kondisiKembali === 'hilang') ? 'rusak_berat' : $kondisiKembali,
+                ]);
+
+                AuditLogService::record(
+                    module: 'SINAPRA',
+                    action: 'update',
+                    tableName: 'peminjaman_aset',
+                    recordId: $item->id,
+                    oldValues: $oldValues,
+                    newValues: $item->fresh()->toArray()
+                );
+            }
+
+            return $peminjaman->fresh(['aset.ruangan', 'user']);
         });
     }
 }

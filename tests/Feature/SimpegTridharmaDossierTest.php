@@ -18,9 +18,6 @@ use App\Models\Sippm\SkemaKegiatan;
 use App\Models\Spmb\MasterProgramStudi;
 use App\Models\Spmb\MasterTahunAkademik;
 use App\Models\User;
-use Database\Seeders\SimpegIzinDanSkMasterSeeder;
-use Database\Seeders\SimpegSkpMasterSeeder;
-use Database\Seeders\SimpegSuratTugasMasterSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -37,10 +34,6 @@ class SimpegTridharmaDossierTest extends TestCase
     {
         parent::setUp();
         $this->setUpPassport();
-
-        $this->seed(SimpegSuratTugasMasterSeeder::class);
-        $this->seed(SimpegIzinDanSkMasterSeeder::class);
-        $this->seed(SimpegSkpMasterSeeder::class);
 
         $this->admin = User::factory()->create([
             'id' => 1,

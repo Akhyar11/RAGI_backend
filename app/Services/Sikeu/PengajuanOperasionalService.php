@@ -370,12 +370,43 @@ class PengajuanOperasionalService
      */
     public function tutupLpjSimpeg(PengajuanPencairanKas $pengajuan, array $data, ?Request $request = null): PengajuanPencairanKas
     {
-        $pengajuan = DB::transaction(function () use ($pengajuan, $data) {
+        $pengajuan = DB::transaction(function () use ($pengajuan, $data, $request) {
             $userId = auth()->id();
 
-            $pengajuan->update([
+            // Hitung selisih realisasi belanja vs dana panjar
+            $panjar = (float) ($pengajuan->nominal_disetujui ?? 0);
+            $realisasi = (float) ($pengajuan->total_realisasi ?? 0);
+            $selisih = $panjar - $realisasi; // > 0: lebih bayar (kembali ke kas), < 0: kurang bayar (reimburse dari SIKEU)
+
+            if ($selisih < 0) {
+                $tipePelunasan = 'reimbursement';
+                $nominalPelunasan = isset($data['nominal_pelunasan']) && (float) $data['nominal_pelunasan'] > 0
+                    ? (float) $data['nominal_pelunasan']
+                    : abs($selisih);
+            } elseif ($selisih > 0) {
+                $tipePelunasan = 'pengembalian_lebih_bayar';
+                $nominalPelunasan = isset($data['nominal_pelunasan']) && (float) $data['nominal_pelunasan'] > 0
+                    ? (float) $data['nominal_pelunasan']
+                    : $selisih;
+            } else {
+                $tipePelunasan = 'nihil';
+                $nominalPelunasan = 0;
+            }
+
+            $buktiPelunasanPath = null;
+            if ($request && $request->hasFile('file_bukti_pelunasan')) {
+                $buktiPelunasanPath = $this->simpanFile($request->file('file_bukti_pelunasan'), 'sikeu/bukti_pelunasan');
+            }
+
+            $updatePengajuan = [
                 'status' => 'selesai',
-            ]);
+                'tipe_pelunasan' => $tipePelunasan,
+                'nominal_pelunasan' => $nominalPelunasan,
+            ];
+            if ($buktiPelunasanPath) {
+                $updatePengajuan['bukti_pelunasan_path'] = $buktiPelunasanPath;
+            }
+            $pengajuan->update($updatePengajuan);
 
             ApprovalHistoryPencairan::create([
                 'pengajuan_id' => $pengajuan->id,
@@ -386,10 +417,16 @@ class PengajuanOperasionalService
             ]);
 
             // Sinkronisasi ke SIMPEG
-            \App\Models\Simpeg\SuratTugas::where('sikeu_pencairan_id', $pengajuan->id)->update([
+            $updateSurat = [
                 'status_pencairan' => 'selesai',
                 'status' => 'selesai',
-            ]);
+                'tipe_pelunasan' => $tipePelunasan,
+                'nominal_pelunasan' => $nominalPelunasan,
+            ];
+            if ($buktiPelunasanPath) {
+                $updateSurat['bukti_pelunasan_path'] = $buktiPelunasanPath;
+            }
+            \App\Models\Simpeg\SuratTugas::where('sikeu_pencairan_id', $pengajuan->id)->update($updateSurat);
 
             return $pengajuan->fresh(['items', 'unitKas', 'suratTugas.pegawai']);
         });
@@ -401,7 +438,11 @@ class PengajuanOperasionalService
                     action: 'tutup_lpj_simpeg',
                     tableName: 'sikeu_pengajuan_pencairan_kas',
                     recordId: $pengajuan->id,
-                    newValues: ['status' => 'selesai'],
+                    newValues: [
+                        'status' => 'selesai',
+                        'tipe_pelunasan' => $pengajuan->tipe_pelunasan,
+                        'nominal_pelunasan' => $pengajuan->nominal_pelunasan,
+                    ],
                     request: $request,
                 );
             } catch (\Throwable $e) {

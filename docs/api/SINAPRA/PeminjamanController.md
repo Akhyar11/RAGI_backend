@@ -20,6 +20,7 @@
 | GET | `/api/sinapra/peminjaman-aset/{id}` | Detail peminjaman barang/aset | ✅ |
 | POST | `/api/sinapra/peminjaman-aset/{id}/approve-laboran` | Verifikasi/Persetujuan tahap Laboran aset | ✅ |
 | POST | `/api/sinapra/peminjaman-aset/{id}/approve` | Persetujuan/Penolakan akhir peminjaman barang (Admin) | ✅ |
+| GET | `/api/sinapra/peminjaman-aset/{id}/surat` | Generate data surat peminjaman resmi & TTD digital SIMPEG | ✅ |
 | POST | `/api/sinapra/peminjaman-aset/{id}/kembalikan` | Pengembalian barang/aset | ✅ |
 
 ---
@@ -267,17 +268,20 @@ Deskripsi: Mengambil daftar permohonan peminjaman aset/barang dengan pagination 
 
 ## POST /api/sinapra/peminjaman-aset
 
-Deskripsi: Mengajukan peminjaman aset/barang. Aset harus memiliki `is_borrowable = true` dan `status = 'tersedia'`. Jika aset merupakan aset laboratorium (`is_lab_asset: true` atau berada di ruangan bertipe lab), status awal menjadi `pending_laboran`. Jika aset kampus umum, status menjadi `pending_admin_sinapra`.
+Deskripsi: Mengajukan peminjaman aset/barang tunggal (`aset_id`) atau multi-barang (`aset_ids`). Aset harus memiliki `is_borrowable = true` dan `status = 'tersedia'`. Transaksi peminjaman multi-barang akan dikelompokkan dengan sebuah `kode_peminjaman` (format `PMA-YYYYMMDD-XXXXX`). Jika salah satu aset merupakan aset laboratorium (`is_lab_asset: true` atau berada di ruangan bertipe lab), status awal menjadi `pending_laboran`. Jika aset kampus umum, status menjadi `pending_admin_sinapra`.
 
 ### Request Body
 ```json
 {
-    "aset_id": 5,
-    "keperluan": "Peminjaman Mikroskop untuk Uji Praktikum",
+    "aset_ids": [5, 6],
+    "keperluan": "Peminjaman Mikroskop dan Kamera Sensor untuk Uji Praktikum",
     "tanggal_pinjam": "2026-09-25",
-    "tanggal_kembali_rencana": "2026-09-26"
+    "tanggal_kembali_rencana": "2026-09-26",
+    "nomor_identitas": "2023001001",
+    "kontak_peminjam": "08123456789"
 }
 ```
+*Catatan: Parameter `aset_id` (single integer) tetap didukung untuk backward-compatibility.*
 
 ### Response Sukses (201 Created)
 ```json
@@ -286,12 +290,28 @@ Deskripsi: Mengajukan peminjaman aset/barang. Aset harus memiliki `is_borrowable
     "message": "Pengajuan peminjaman aset berhasil dikirim",
     "data": {
         "id": 1,
+        "kode_peminjaman": "PMA-20260925-ABCD1",
         "aset_id": 5,
         "user_id": 10,
-        "keperluan": "Peminjaman Mikroskop untuk Uji Praktikum",
+        "keperluan": "Peminjaman Mikroskop dan Kamera Sensor untuk Uji Praktikum",
         "tanggal_pinjam": "2026-09-25",
         "tanggal_kembali_rencana": "2026-09-26",
-        "status": "pending_laboran"
+        "status": "pending_laboran",
+        "items_count": 2,
+        "items": [
+            {
+                "id": 1,
+                "kode_peminjaman": "PMA-20260925-ABCD1",
+                "aset_id": 5,
+                "status": "pending_laboran"
+            },
+            {
+                "id": 2,
+                "kode_peminjaman": "PMA-20260925-ABCD1",
+                "aset_id": 6,
+                "status": "pending_laboran"
+            }
+        ]
     }
 }
 ```
@@ -356,14 +376,87 @@ Deskripsi: Persetujuan/penolakan tahap akhir oleh Admin SINAPRA atas peminjaman 
 
 ---
 
+---
+
+## GET /api/sinapra/peminjaman-aset/{id}/surat
+
+Deskripsi: Mengambil rincian Surat Izin Peminjaman Aset resmi kampus lengkap dengan nomor surat otomatis, pakta integritas, data peminjam, daftar inventaris barang yang dipinjam, serta penarikan otomatis tanda tangan digital milik pejabat approver dan laboran dari Master Tanda Tangan SIMPEG.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Data surat peminjaman aset berhasil diambil",
+    "data": {
+        "peminjaman_id": 1,
+        "kode_peminjaman": "PMA-20261001-A1B2C",
+        "nomor_surat": "001/SINAPRA-ASET/10/2026",
+        "surat_generated_at": "2026-10-01 10:15:00",
+        "tanggal_pinjam": "2026-10-01",
+        "tanggal_kembali_rencana": "2026-10-05",
+        "keperluan": "Praktikum Pemrograman Web Lanjut",
+        "status": "disetujui",
+        "peminjam": {
+            "user_id": 10,
+            "nama": "Wasis Waluyo",
+            "nomor_identitas": "202401001",
+            "unit_kerja": "Program Studi Teknik Informatika",
+            "kontak": "081234567890",
+            "email": "wasis@student.poltekindonusa.ac.id",
+            "tanda_tangan_url": null,
+            "qr_token": null
+        },
+        "laboran": {
+            "user_id": 5,
+            "nama": "Ahmad Laboran, S.Kom.",
+            "nip": "199001012020121002",
+            "nidn": null,
+            "verified_at": "2026-10-01 09:30:00",
+            "tanda_tangan_url": "https://ragibe.poltekindonusa.ac.id/api/files/view?path=simpeg%2Ftanda-tangan%2Fuuid-laboran.png&expires=1760000000&signature=sig123",
+            "qr_token": "a1b2c3d4-uuid-laboran"
+        },
+        "approver": {
+            "user_id": 2,
+            "nama": "Budi Santoso, M.T. (Ka. Bagian Sarpras)",
+            "nip": "198001012005011001",
+            "nidn": "0601018001",
+            "approved_at": "2026-10-01 10:15:00",
+            "tanda_tangan_url": "https://ragibe.poltekindonusa.ac.id/api/files/view?path=simpeg%2Ftanda-tangan%2Fuuid-approver.png&expires=1760000000&signature=sig456",
+            "qr_token": "e5f6g7h8-uuid-approver"
+        },
+        "daftar_barang": [
+            {
+                "nomor": 1,
+                "peminjaman_id": 1,
+                "aset_id": 5,
+                "kode_aset": "AST-LAB-005",
+                "nama_barang": "Laptop ASUS ROG Zephyrus",
+                "merk": "ASUS",
+                "nomor_seri": "SN-ROG-9921",
+                "lokasi_ruangan": "Laboratorium Komputer Terpadu",
+                "gedung": "Gedung Rektorat Lt. 2",
+                "kondisi_pinjam": "baik",
+                "status": "disetujui"
+            }
+        ],
+        "verifikasi_token": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    }
+}
+```
+
+---
+
 ## POST /api/sinapra/peminjaman-aset/{id}/kembalikan
 
-Deskripsi: Memproses pengembalian barang/aset pinjaman serta memperbarui kondisi fisik dan status ketersediaan barang kembali ke `tersedia`.
+Deskripsi: Memproses pengembalian barang/aset pinjaman serta memperbarui kondisi fisik dan status ketersediaan barang kembali ke `tersedia` (atau `maintenance` bila rusak). Mendukung pengembalian satuan ataupun sekaligus seluruh aset dalam satu kode permohonan.
 
 ### Request Body
 ```json
 {
-    "kondisi_kembali": "baik"
+    "kondisi_kembali": "baik",
+    "tanggal_kembali_aktual": "2026-10-05",
+    "catatan_pengembalian": "Aset dikembalikan dalam keadaan bersih, lengkap bersama adaptor dan tas bawaan.",
+    "kembalikan_semua_dalam_batch": true
 }
 ```
 
@@ -376,10 +469,12 @@ Deskripsi: Memproses pengembalian barang/aset pinjaman serta memperbarui kondisi
         "id": 1,
         "aset_id": 5,
         "user_id": 10,
-        "tanggal_pinjam": "2026-09-25",
-        "tanggal_kembali_aktual": "2026-09-26",
+        "tanggal_pinjam": "2026-10-01",
+        "tanggal_kembali_rencana": "2026-10-05",
+        "tanggal_kembali_aktual": "2026-10-05",
         "kondisi_kembali": "baik",
-        "status": "selesai"
+        "catatan_pengembalian": "Aset dikembalikan dalam keadaan bersih, lengkap bersama adaptor dan tas bawaan.",
+        "status": "kembali"
     }
 }
 ```

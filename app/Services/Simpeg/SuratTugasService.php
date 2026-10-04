@@ -7,6 +7,7 @@ use App\Models\Simpeg\MasterJenisTransportasi;
 use App\Models\Simpeg\MasterKategoriKegiatanTugas;
 use App\Models\Simpeg\SuratTugas;
 use App\Models\Simpeg\SuratTugasAnggota;
+use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -138,7 +139,8 @@ class SuratTugasService
             'kategoriKegiatan',
             'jenisTransportasi',
             'anggota.pegawai.unitKerja',
-            'approver',
+            'approver.pegawai',
+            'approver.activeTandaTangan',
             'pencairanKas',
         ])->findOrFail($id);
 
@@ -187,6 +189,8 @@ class SuratTugasService
                 'kategori_kegiatan_id' => $data['kategori_kegiatan_id'],
                 'jenis_transportasi_id' => $data['jenis_transportasi_id'],
                 'nama_kegiatan' => $data['nama_kegiatan'],
+                'jam_pelaksanaan' => $data['jam_pelaksanaan'] ?? null,
+                'penyelenggara' => $data['penyelenggara'] ?? null,
                 'tempat_berangkat' => $data['tempat_berangkat'],
                 'lokasi_tujuan' => $data['lokasi_tujuan'],
                 'tanggal_berangkat' => $data['tanggal_berangkat'],
@@ -249,7 +253,7 @@ class SuratTugasService
 
             $fillableKeys = [
                 'pegawai_id', 'kategori_kegiatan_id', 'jenis_transportasi_id',
-                'nama_kegiatan', 'tempat_berangkat', 'lokasi_tujuan',
+                'nama_kegiatan', 'jam_pelaksanaan', 'penyelenggara', 'tempat_berangkat', 'lokasi_tujuan',
                 'tanggal_berangkat', 'tanggal_kembali', 'tanggal_mulai', 'tanggal_selesai',
                 'maksud_tujuan', 'beban_anggaran', 'estimasi_biaya',
                 'nama_bank', 'nomor_rekening', 'nama_rekening', 'keterangan',
@@ -318,7 +322,35 @@ class SuratTugasService
             ];
 
             if ($data['status'] === 'disetujui') {
-                $updatePayload['nomor_surat'] = $data['nomor_surat'];
+                $nomorSurat = $data['nomor_surat'] ?? null;
+
+                // Jika nomor surat tidak diisi manual oleh approver, otomatis ajukan request ke modul ARSIP!
+                if (empty($nomorSurat)) {
+                    $unitKerjaKode = $suratTugas->pegawai?->unitKerja?->kode ?? 'REK';
+                    $tanggalSurat = $suratTugas->tanggal_mulai ? Carbon::parse($suratTugas->tanggal_mulai)->toDateString() : Carbon::now()->toDateString();
+                    
+                    try {
+                        $arsipService = app(\App\Services\Arsip\RequestNomorSuratService::class);
+                        $arsipReq = $arsipService->createRequest([
+                            'module_origin' => 'simpeg',
+                            'reference_type' => \App\Models\Simpeg\SuratTugas::class,
+                            'reference_id' => $suratTugas->id,
+                            'perihal' => 'Surat Tugas: ' . $suratTugas->nama_kegiatan,
+                            'tujuan' => $suratTugas->lokasi_tujuan,
+                            'tanggal_surat' => $tanggalSurat,
+                            'kode_unit' => $unitKerjaKode,
+                            'kode_klasifikasi' => 'DII', // Usulan klasifikasi DII (ST/SPPD)
+                            'jumlah_nomor' => 1,
+                            'catatan_pemohon' => 'Permohonan penomoran Surat Tugas dinas an. ' . ($suratTugas->pegawai?->nama_lengkap ?? 'Pegawai'),
+                        ], $user->id);
+                        
+                        $nomorSurat = "MENUNGGU ARSIP ({$arsipReq->kode_request})";
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning("Gagal auto-request nomor arsip untuk SuratTugas #{$suratTugas->id}: " . $e->getMessage());
+                    }
+                }
+
+                $updatePayload['nomor_surat'] = $nomorSurat;
 
                 $estimasiBiaya = (float) ($suratTugas->estimasi_biaya ?? 0);
 
@@ -332,7 +364,7 @@ class SuratTugasService
                         'unit_kas_id' => null, // Ditetapkan oleh Bagian Keuangan (SIKEU) di Tahap 3
                         'pemohon_id' => $suratTugas->pegawai?->user_id ?? $user->id,
                         'judul_pengajuan' => 'Panjar Perjalanan Dinas: ' . $suratTugas->nama_kegiatan,
-                        'deskripsi' => 'Pencairan panjar dana tugas dinas No. ' . $data['nomor_surat'] . ' ke ' . $suratTugas->lokasi_tujuan . ' an. ' . ($suratTugas->pegawai?->nama_lengkap ?? 'Pegawai'),
+                        'deskripsi' => 'Pencairan panjar dana tugas dinas No. ' . ($nomorSurat ?: '-') . ' ke ' . $suratTugas->lokasi_tujuan . ' an. ' . ($suratTugas->pegawai?->nama_lengkap ?? 'Pegawai'),
                         'nominal_diajukan' => $estimasiBiaya,
                         'nominal_disetujui' => 0, // Menunggu persetujuan nominal oleh Admin SIKEU
                         'nama_bank_penerima' => $suratTugas->nama_bank ?? $suratTugas->pegawai?->nama_bank,
@@ -342,7 +374,7 @@ class SuratTugasService
                         'kategori_pengajuan' => 'non_barang',
                         'status' => 'pending_keuangan',
                         'kanal' => 'simpeg_surat_tugas',
-                        'referensi_eksternal' => $data['nomor_surat'],
+                        'referensi_eksternal' => $nomorSurat,
                         'approved_pimpinan_by' => $user->id,
                         'approved_pimpinan_at' => now(),
                     ];
@@ -368,7 +400,7 @@ class SuratTugasService
                             'satuan' => 'paket',
                             'harga_satuan' => $estimasiBiaya,
                             'subtotal' => $estimasiBiaya,
-                            'keterangan' => 'Dana panjar tugas dinas luar kampus No. ' . $data['nomor_surat'],
+                            'keterangan' => 'Dana panjar tugas dinas luar kampus No. ' . ($nomorSurat ?: '-'),
                         ]
                     );
 

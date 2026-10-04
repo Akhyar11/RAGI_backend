@@ -83,7 +83,10 @@ class AsetService
     public function createAset(array $data): Aset
     {
         return DB::transaction(function () use ($data) {
-            if (!isset($data['nilai_buku']) && isset($data['harga_perolehan'])) {
+            if (!isset($data['harga_perolehan'])) {
+                $data['harga_perolehan'] = 0;
+            }
+            if (!isset($data['nilai_buku'])) {
                 $data['nilai_buku'] = $data['harga_perolehan'];
             }
 

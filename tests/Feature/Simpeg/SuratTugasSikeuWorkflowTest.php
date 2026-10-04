@@ -255,9 +255,13 @@ class SuratTugasSikeuWorkflowTest extends TestCase
         $closingRes->assertStatus(200);
         $pengajuanKas->refresh();
         $this->assertEquals('selesai', $pengajuanKas->status);
+        $this->assertEquals('pengembalian_lebih_bayar', $pengajuanKas->tipe_pelunasan);
+        $this->assertEquals(100000, (float)$pengajuanKas->nominal_pelunasan);
 
         $stFresh->refresh();
         $this->assertEquals('selesai', $stFresh->status_pencairan);
         $this->assertEquals('selesai', $stFresh->status);
+        $this->assertEquals('pengembalian_lebih_bayar', $stFresh->tipe_pelunasan);
+        $this->assertEquals(100000, (float)$stFresh->nominal_pelunasan);
     }
 }

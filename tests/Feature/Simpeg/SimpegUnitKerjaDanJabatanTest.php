@@ -4,6 +4,7 @@ namespace Tests\Feature\Simpeg;
 
 use App\Models\Role;
 use App\Models\Simpeg\Jabatan;
+use App\Models\Simpeg\MasterGolonganPangkat;
 use App\Models\Simpeg\UnitKerja;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,7 +30,15 @@ class SimpegUnitKerjaDanJabatanTest extends TestCase
         ]);
         $this->admin->roles()->attach($roleSuper->id);
 
-        $this->seed(\Database\Seeders\SIMPEG\MasterGolonganPangkatSeeder::class);
+        foreach ([
+            ['kode' => 'tenaga_pengajar', 'nama' => 'Tenaga Pengajar', 'urutan' => 1, 'is_active' => true],
+            ['kode' => 'asisten_ahli', 'nama' => 'Asisten Ahli', 'urutan' => 2, 'is_active' => true],
+            ['kode' => 'lektor', 'nama' => 'Lektor', 'urutan' => 3, 'is_active' => true],
+            ['kode' => 'lektor_kepala', 'nama' => 'Lektor Kepala', 'urutan' => 4, 'is_active' => true],
+            ['kode' => 'guru_besar', 'nama' => 'Guru Besar', 'urutan' => 5, 'is_active' => true],
+        ] as $gp) {
+            MasterGolonganPangkat::firstOrCreate(['kode' => $gp['kode']], $gp);
+        }
     }
 
     public function test_can_create_unit_kerja_successfully()

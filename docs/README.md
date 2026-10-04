@@ -114,6 +114,7 @@
 | SuratTugasController | Surat tugas dinas luar, armada/driver, tim rombongan, persetujuan, auto-presensi, & LPJ | [docs/api/SIMPEG/SuratTugasController.md](api/SIMPEG/SuratTugasController.md) |
 | IzinJamKerjaController | Izin parsial jam kerja (keluar kantor, datang terlambat, pulang awal) & integrasi presensi | [docs/api/SIMPEG/IzinJamKerjaController.md](api/SIMPEG/IzinJamKerjaController.md) |
 | SkPegawaiController | Arsip & pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/SIMPEG/SkPegawaiController.md](api/SIMPEG/SkPegawaiController.md) |
+| TandaTanganController | Master tanda tangan digital pegawai & pejabat approver (Private Storage & Signed URL) | [docs/api/SIMPEG/TandaTanganController.md](api/SIMPEG/TandaTanganController.md) |
 | PenilaianKinerjaController | Sasaran Kinerja Pegawai (SKP) butir-per-butir & evaluasi capaian BKD | [docs/api/SIMPEG/PenilaianKinerjaController.md](api/SIMPEG/PenilaianKinerjaController.md) |
 | TridharmaDossierController | Agregasi portofolio Tridharma terpadu (SIAKAD, SIPPM, SIMPEG) | [docs/api/SIMPEG/TridharmaDossierController.md](api/SIMPEG/TridharmaDossierController.md) |
 | PayrollController | Penggajian fleksibel, master komponen insentif, honor SKS, PPh 21, & posting kas SIKEU | [docs/api/SIMPEG/PayrollController.md](api/SIMPEG/PayrollController.md) |
@@ -158,6 +159,19 @@
 | MasterVendorController | Master data vendor dan rekanan pengadaan/kalibrasi alat kampus | [docs/api/SINAPRA/MasterVendorController.md](api/SINAPRA/MasterVendorController.md) |
 | MasterKategoriBhpController | Master data kategori bahan habis pakai (BHP) laboratorium | [docs/api/SINAPRA/MasterKategoriBhpController.md](api/SINAPRA/MasterKategoriBhpController.md) |
 | LaboranProdiController | Penugasan laboran per Program Studi untuk isolasi akses ruangan dan aset | [docs/api/SINAPRA/LaboranProdiController.md](api/SINAPRA/LaboranProdiController.md) |
+| ProdiRoleController | Pengaturan role pejabat & PIC operasional prodi (Kaprodi, Sekprodi, Laboran, dll.) | [docs/api/SINAPRA/ProdiRoleController.md](api/SINAPRA/ProdiRoleController.md) |
+
+---
+
+## 📁 Modul ARSIP (Tata Persuratan & Penomoran Surat)
+
+| Controller | Deskripsi | Dokumen |
+|---|---|---|
+| ArsipDashboardController | Statistik agregat persuratan, antrean permohonan, dan status kop surat | [docs/api/ARSIP/ArsipDashboardController.md](api/ARSIP/ArsipDashboardController.md) |
+| KlasifikasiSuratController | Master referensi kode klasifikasi dan unit persuratan | [docs/api/ARSIP/KlasifikasiSuratController.md](api/ARSIP/KlasifikasiSuratController.md) |
+| NomorSuratController | Penerbitan nomor surat resmi (satuan & bulk berurutan) format Romawi | [docs/api/ARSIP/NomorSuratController.md](api/ARSIP/NomorSuratController.md) |
+| KopSuratController | Pengelolaan master berkas kop surat 2 versi (Lama < 2021 vs Baru >= 2021) | [docs/api/ARSIP/KopSuratController.md](api/ARSIP/KopSuratController.md) |
+| RequestNomorSuratController | Alur permohonan nomor surat lintas modul & verifikasi admin arsip | [docs/api/ARSIP/RequestNomorSuratController.md](api/ARSIP/RequestNomorSuratController.md) |
 
 ---
 

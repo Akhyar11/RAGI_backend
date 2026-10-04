@@ -250,6 +250,11 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::apiResource('master/peran-pelatihan', App\Http\Controllers\Simpeg\MasterPeranPelatihanController::class);
     Route::apiResource('master/tingkat-kegiatan', App\Http\Controllers\Simpeg\MasterTingkatKegiatanController::class);
 
+    // Master Tanda Tangan Digital Pegawai
+    Route::get('tanda-tangan/user/{userId}', [App\Http\Controllers\Simpeg\TandaTanganController::class, 'getActiveByUser']);
+    Route::patch('tanda-tangan/{tandaTangan}/toggle-active', [App\Http\Controllers\Simpeg\TandaTanganController::class, 'toggleActive']);
+    Route::apiResource('tanda-tangan', App\Http\Controllers\Simpeg\TandaTanganController::class);
+
     Route::get('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'index']);
     Route::post('cuti', [App\Http\Controllers\Simpeg\CutiController::class, 'store']);
     Route::patch('cuti/{id}/status', [App\Http\Controllers\Simpeg\CutiController::class, 'updateStatus']);
@@ -886,6 +891,7 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('peminjaman-aset/{peminjaman}', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'showAset']);
     Route::post('peminjaman-aset/{peminjaman}/approve-laboran', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'approveLaboranAset']);
     Route::post('peminjaman-aset/{peminjaman}/approve', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'approveAset']);
+    Route::get('peminjaman-aset/{peminjaman}/surat', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'suratAset']);
     Route::post('peminjaman-aset/{peminjaman}/kembalikan', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'kembalikanAset']);
 
     // Maintenance / Perawatan
@@ -984,6 +990,36 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('master/kategori-bhp/{kategori_bhp}', [App\Http\Controllers\Sinapra\MasterKategoriBhpController::class, 'show']);
     Route::put('master/kategori-bhp/{kategori_bhp}', [App\Http\Controllers\Sinapra\MasterKategoriBhpController::class, 'update']);
     Route::delete('master/kategori-bhp/{kategori_bhp}', [App\Http\Controllers\Sinapra\MasterKategoriBhpController::class, 'destroy']);
+
+    // Plotting Role Laboran per Program Studi (SIAKAD)
+    Route::get('master/prodi-roles', [App\Http\Controllers\Sinapra\ProdiRoleController::class, 'index']);
+    Route::get('master/prodi-roles/roles-options', [App\Http\Controllers\Sinapra\ProdiRoleController::class, 'getAvailableRoles']);
+    Route::post('master/prodi-roles/{prodiId}', [App\Http\Controllers\Sinapra\ProdiRoleController::class, 'update']);
+    Route::put('master/prodi-roles/{prodiId}', [App\Http\Controllers\Sinapra\ProdiRoleController::class, 'update']);
+});
+
+// ==============================================================================
+// MODUL ARSIP (TATA PERSURATAN & PENOMORAN SURAT)
+// ==============================================================================
+Route::middleware('auth:api')->prefix('arsip')->group(function () {
+    // Dashboard Stats
+    Route::get('dashboard', [App\Http\Controllers\Arsip\ArsipDashboardController::class, 'index']);
+
+    // Master Kop Surat
+    Route::get('kop-surat/by-year', [App\Http\Controllers\Arsip\KopSuratController::class, 'getByYear']);
+    Route::post('kop-surat/{id}/toggle-active', [App\Http\Controllers\Arsip\KopSuratController::class, 'toggleActive']);
+    Route::apiResource('kop-surat', App\Http\Controllers\Arsip\KopSuratController::class);
+
+    // Master Klasifikasi & Kode Unit
+    Route::apiResource('klasifikasi', App\Http\Controllers\Arsip\KlasifikasiSuratController::class);
+
+    // Request Nomor Surat Lintas Modul
+    Route::post('request-nomor/{id}/verify', [App\Http\Controllers\Arsip\RequestNomorSuratController::class, 'verify']);
+    Route::apiResource('request-nomor', App\Http\Controllers\Arsip\RequestNomorSuratController::class)->only(['index', 'store', 'show']);
+
+    // Nomor Surat Definitif (Satuan / Bulk)
+    Route::post('nomor-surat/{id}/batalkan', [App\Http\Controllers\Arsip\NomorSuratController::class, 'batalkan']);
+    Route::apiResource('nomor-surat', App\Http\Controllers\Arsip\NomorSuratController::class);
 });
 
 

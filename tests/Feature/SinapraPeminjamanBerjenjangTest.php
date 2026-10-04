@@ -276,4 +276,64 @@ class SinapraPeminjamanBerjenjangTest extends TestCase
 
         $this->assertEquals('dipinjam', $this->asetLab->fresh()->status);
     }
+
+    public function test_apply_peminjaman_aset_records_identitas_and_kontak(): void
+    {
+        Passport::actingAs($this->mahasiswaUser);
+
+        $res = $this->postJson('/api/sinapra/peminjaman-aset', [
+            'aset_id' => $this->asetLab->id,
+            'tanggal_pinjam' => '2026-10-25',
+            'tanggal_kembali_rencana' => '2026-10-27',
+            'keperluan' => 'Peminjaman Osiloskop',
+            'nomor_identitas' => 'NIM-20269988',
+            'kontak_peminjam' => '081299887766',
+        ]);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.nomor_identitas', 'NIM-20269988')
+            ->assertJsonPath('data.kontak_peminjam', '081299887766');
+
+        $this->assertDatabaseHas('sinapra_peminjaman_aset', [
+            'id' => $res->json('data.id'),
+            'nomor_identitas' => 'NIM-20269988',
+            'kontak_peminjam' => '081299887766',
+        ]);
+    }
+
+    public function test_apply_peminjaman_aset_multiple_items_with_kode_peminjaman(): void
+    {
+        Passport::actingAs($this->mahasiswaUser);
+
+        $res = $this->postJson('/api/sinapra/peminjaman-aset', [
+            'aset_ids' => [$this->asetLab->id, $this->asetNonLab->id],
+            'tanggal_pinjam' => '2026-10-25',
+            'tanggal_kembali_rencana' => '2026-10-27',
+            'keperluan' => 'Praktikum Gabungan Elektronika & Presentasi',
+            'nomor_identitas' => 'NIM-20269988',
+            'kontak_peminjam' => '081299887766',
+        ]);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.items_count', 2);
+
+        $kodePeminjaman = $res->json('data.kode_peminjaman');
+        $this->assertNotNull($kodePeminjaman);
+        $this->assertStringStartsWith('PMA-', $kodePeminjaman);
+
+        // Verify both assets have sinapra_peminjaman_aset records with same kode_peminjaman
+        $this->assertDatabaseHas('sinapra_peminjaman_aset', [
+            'kode_peminjaman' => $kodePeminjaman,
+            'aset_id' => $this->asetLab->id,
+            'nomor_identitas' => 'NIM-20269988',
+        ]);
+
+        $this->assertDatabaseHas('sinapra_peminjaman_aset', [
+            'kode_peminjaman' => $kodePeminjaman,
+            'aset_id' => $this->asetNonLab->id,
+            'nomor_identitas' => 'NIM-20269988',
+        ]);
+    }
 }

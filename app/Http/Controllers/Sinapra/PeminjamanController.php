@@ -25,7 +25,7 @@ class PeminjamanController extends Controller
         $this->authorize('viewAny', PeminjamanRuangan::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = PeminjamanRuangan::with(['ruangan.gedung', 'user', 'approver', 'laboranApprover']);
+        $query = PeminjamanRuangan::with(['ruangan.gedung', 'user.pegawai', 'user.mahasiswa', 'approver', 'laboranApprover']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -40,9 +40,9 @@ class PeminjamanController extends Controller
         }
 
         $user = $request->user();
-        if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
-            $ruanganIds = $user->laboranRuangan()->pluck('sinapra_ruangan.id');
-            $query->whereIn('ruangan_id', $ruanganIds);
+        if ($user && $user->isSinapraLaboranRestricted()) {
+            $accessibleRuanganIds = $user->getSinapraAccessibleRuanganIds();
+            $query->whereIn('ruangan_id', $accessibleRuanganIds);
         }
 
         if ($request->filled('search')) {
@@ -153,7 +153,7 @@ class PeminjamanController extends Controller
         $this->authorize('viewAny', PeminjamanAset::class);
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $query = PeminjamanAset::with(['aset.kategori', 'aset.ruangan', 'user', 'approver', 'laboranApprover']);
+        $query = PeminjamanAset::with(['aset.kategori', 'aset.ruangan', 'user.pegawai', 'user.mahasiswa', 'approver', 'laboranApprover']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -164,9 +164,8 @@ class PeminjamanController extends Controller
         }
 
         $user = $request->user();
-        if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
-            $ruanganIds = $user->laboranRuangan()->pluck('sinapra_ruangan.id');
-            $query->whereHas('aset', fn($a) => $a->whereIn('ruangan_id', $ruanganIds));
+        if ($user && $user->isSinapraLaboranRestricted()) {
+            $query->whereHas('aset', fn($a) => $a->forLaboran($user));
         }
 
         if ($request->filled('search')) {
@@ -269,17 +268,36 @@ class PeminjamanController extends Controller
         ]);
     }
 
+    public function suratAset(PeminjamanAset $peminjaman): JsonResponse
+    {
+        $this->authorize('view', $peminjaman);
+
+        $surat = $this->service->getSuratPeminjamanAset($peminjaman);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data surat peminjaman aset berhasil diambil',
+            'data' => $surat,
+        ]);
+    }
+
     public function kembalikanAset(Request $request, PeminjamanAset $peminjaman): JsonResponse
     {
         $this->authorize('approve', $peminjaman);
 
         $request->validate([
-            'kondisi_kembali' => 'required|in:baik,rusak_ringan,rusak_berat',
+            'kondisi_kembali' => 'required|in:baik,rusak_ringan,rusak_berat,hilang',
+            'tanggal_kembali_aktual' => 'nullable|date',
+            'catatan_pengembalian' => 'nullable|string|max:500',
+            'kembalikan_semua_dalam_batch' => 'nullable|boolean',
         ]);
 
         $updated = $this->service->prosesPengembalianAset(
             peminjaman: $peminjaman,
-            kondisiKembali: $request->kondisi_kembali
+            kondisiKembali: $request->kondisi_kembali,
+            tanggalKembaliAktual: $request->input('tanggal_kembali_aktual'),
+            catatanPengembalian: $request->input('catatan_pengembalian'),
+            kembalikanSemuaDalamBatch: $request->boolean('kembalikan_semua_dalam_batch')
         );
 
         return response()->json([

@@ -13,13 +13,19 @@ class PeminjamanAset extends Model
     protected $table = 'sinapra_peminjaman_aset';
 
     protected $fillable = [
+        'kode_peminjaman',
+        'nomor_surat',
+        'surat_generated_at',
         'aset_id',
         'user_id',
+        'nomor_identitas',
+        'kontak_peminjam',
         'keperluan',
         'tanggal_pinjam',
         'tanggal_kembali_rencana',
         'tanggal_kembali_aktual',
         'kondisi_kembali',
+        'catatan_pengembalian',
         'status',
         'laboran_approved_by',
         'laboran_approved_at',
@@ -35,6 +41,7 @@ class PeminjamanAset extends Model
         'tanggal_kembali_aktual' => 'date',
         'laboran_approved_at' => 'datetime',
         'admin_approved_at' => 'datetime',
+        'surat_generated_at' => 'datetime',
     ];
 
     /**

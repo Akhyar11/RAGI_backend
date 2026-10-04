@@ -21,7 +21,7 @@ class SinapraDashboardController extends Controller
     public function summary(Request $request): JsonResponse
     {
         try {
-            $summary = $this->dashboardService->getSummary();
+            $summary = $this->dashboardService->getSummary($request->user());
 
             return response()->json([
                 'status' => 'success',

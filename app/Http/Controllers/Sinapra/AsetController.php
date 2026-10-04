@@ -147,7 +147,7 @@ class AsetController extends Controller
         }
 
         $user = $request->user();
-        if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
+        if ($user && $user->isSinapraLaboranRestricted()) {
             $query->forLaboran($user);
         }
 

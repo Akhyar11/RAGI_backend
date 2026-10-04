@@ -89,4 +89,14 @@ class ProgramStudi extends Model
             ->withPivot('is_primary')
             ->withTimestamps();
     }
+
+    /**
+     * Relasi ke Role Laboran Pengampu SINAPRA
+     */
+    public function sinapraRoles()
+    {
+        return $this->belongsToMany(\App\Models\Role::class, 'sinapra_prodi_roles', 'program_studi_id', 'role_id')
+            ->withPivot('keterangan')
+            ->withTimestamps();
+    }
 }

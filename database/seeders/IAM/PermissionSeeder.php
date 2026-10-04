@@ -96,8 +96,11 @@ class PermissionSeeder extends Seeder
             ['name' => 'Lihat Arsip SK Pegawai', 'slug' => 'simpeg.sk_pegawai.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat repositori SK kepegawaian & penugasan'],
             ['name' => 'Tambah / Laporkan SK Pegawai', 'slug' => 'simpeg.sk_pegawai.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Mengunggah dan melaporkan SK baru secara mandiri'],
             ['name' => 'Ubah SK Pegawai', 'slug' => 'simpeg.sk_pegawai.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah data arsip SK pegawai'],
-            ['name' => 'Hapus SK Pegawai', 'slug' => 'simpeg.sk_pegawai.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus arsip SK pegawai'],
             ['name' => 'Verifikasi SK Pegawai', 'slug' => 'simpeg.sk_pegawai.verify', 'module' => 'simpeg', 'action' => 'approve', 'description' => 'Memverifikasi atau menolak keabsahan SK pegawai'],
+            ['name' => 'Lihat Master Tanda Tangan', 'slug' => 'simpeg.tanda_tangan.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat daftar master tanda tangan digital pegawai'],
+            ['name' => 'Tambah Master Tanda Tangan', 'slug' => 'simpeg.tanda_tangan.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Menambahkan berkas tanda tangan digital pegawai baru'],
+            ['name' => 'Ubah Master Tanda Tangan', 'slug' => 'simpeg.tanda_tangan.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah data atau status aktif tanda tangan digital pegawai'],
+            ['name' => 'Hapus Master Tanda Tangan', 'slug' => 'simpeg.tanda_tangan.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus tanda tangan digital pegawai'],
 
             // ── MODUL SIPPM ───────────────────────────────────────
             ['name' => 'Lihat Dashboard SIPPM', 'slug' => 'sippm.dashboard.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat dashboard utama & metrik IKU SIPPM'],
@@ -254,6 +257,19 @@ class PermissionSeeder extends Seeder
             ['name' => 'Kelola Buka Kelas & Ruang', 'slug' => 'siakad.kelas.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Membuka kelas perkuliahan & alokasi ruang SINAPRA'],
             ['name' => 'Kelola Integrasi Neo Feeder', 'slug' => 'siakad.feeder.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Sinkronisasi data ke Neo Feeder PDDIKTI'],
             ['name' => 'Kelola Penerima Beasiswa Mahasiswa', 'slug' => 'siakad.beasiswa.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Menetapkan mahasiswa penerima beasiswa'],
+
+            // ── MODUL ARSIP (TATA PERSURATAN) ─────────────────────
+            ['name' => 'Lihat Dashboard Arsip', 'slug' => 'arsip.dashboard.read', 'module' => 'arsip', 'action' => 'read', 'description' => 'Melihat statistik & metrik tata persuratan'],
+            ['name' => 'Lihat Nomor Surat', 'slug' => 'arsip.nomor_surat.read', 'module' => 'arsip', 'action' => 'read', 'description' => 'Melihat daftar nomor surat resmi kampus'],
+            ['name' => 'Terbitkan Nomor Surat', 'slug' => 'arsip.nomor_surat.create', 'module' => 'arsip', 'action' => 'create', 'description' => 'Menerbitkan nomor surat resmi satuan atau bulk'],
+            ['name' => 'Ubah Nomor Surat', 'slug' => 'arsip.nomor_surat.update', 'module' => 'arsip', 'action' => 'update', 'description' => 'Mengubah perihal atau membatalkan nomor surat'],
+            ['name' => 'Hapus Nomor Surat', 'slug' => 'arsip.nomor_surat.delete', 'module' => 'arsip', 'action' => 'delete', 'description' => 'Menghapus nomor surat'],
+            ['name' => 'Lihat Permohonan Nomor Surat', 'slug' => 'arsip.request.read', 'module' => 'arsip', 'action' => 'read', 'description' => 'Melihat daftar permohonan nomor surat dari modul lain'],
+            ['name' => 'Ajukan Permohonan Nomor Surat', 'slug' => 'arsip.request.create', 'module' => 'arsip', 'action' => 'create', 'description' => 'Mengajukan permohonan nomor surat dari modul lain'],
+            ['name' => 'Verifikasi Permohonan Nomor Surat', 'slug' => 'arsip.request.approve', 'module' => 'arsip', 'action' => 'approve', 'description' => 'Menyetujui atau menolak permohonan nomor surat'],
+            ['name' => 'Lihat Master Kop Surat', 'slug' => 'arsip.kop_surat.read', 'module' => 'arsip', 'action' => 'read', 'description' => 'Melihat master berkas kop surat 2 versi'],
+            ['name' => 'Kelola Master Kop Surat', 'slug' => 'arsip.kop_surat.manage', 'module' => 'arsip', 'action' => 'update', 'description' => 'Mengunggah dan mengelola master kop surat'],
+            ['name' => 'Kelola Master Klasifikasi Surat', 'slug' => 'arsip.master.manage', 'module' => 'arsip', 'action' => 'update', 'description' => 'Mengelola kode unit dan kode klasifikasi surat'],
         ];
 
         foreach ($permissions as $perm) {
@@ -559,6 +575,21 @@ class PermissionSeeder extends Seeder
             $perms = Permission::whereIn('slug', $adminSpmbSlugs)->get();
             foreach ($perms as $p) {
                 RolePermission::firstOrCreate(['role_id' => $adminSpmbRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 16. Admin Arsip -> Kelola nomor surat, verifikasi permohonan, kop surat, klasifikasi
+        $adminArsipRole = Role::firstOrCreate(
+            ['slug' => 'admin_arsip'],
+            [
+                'name' => 'Admin Arsip & Persuratan',
+                'description' => 'Pengelola nomor surat resmi, verifikasi request persuratan, dan master kop surat',
+            ]
+        );
+        if ($adminArsipRole) {
+            $arsipPerms = Permission::where('module', 'arsip')->get();
+            foreach ($arsipPerms as $p) {
+                RolePermission::firstOrCreate(['role_id' => $adminArsipRole->id, 'permission_id' => $p->id]);
             }
         }
     }

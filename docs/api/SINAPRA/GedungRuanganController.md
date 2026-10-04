@@ -212,8 +212,11 @@ Deskripsi: Menambahkan data ruangan kampus baru.
     "kapasitas": 40,
     "luas_m2": 64.0,
     "ada_ac": true,
+    "jumlah_ac": 2,
     "ada_proyektor": true,
+    "jumlah_proyektor": 1,
     "ada_wifi": true,
+    "jumlah_wifi": 1,
     "keterangan": "Dilengkapi smart TV dan sound",
     "status": "aktif"
 }
@@ -236,8 +239,11 @@ Deskripsi: Menambahkan data ruangan kampus baru.
         "kapasitas": 40,
         "luas_m2": 64.0,
         "ada_ac": true,
+        "jumlah_ac": 2,
         "ada_proyektor": true,
+        "jumlah_proyektor": 1,
         "ada_wifi": true,
+        "jumlah_wifi": 1,
         "status": "aktif",
         "gedung": {
             "id": 1,

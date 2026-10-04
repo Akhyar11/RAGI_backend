@@ -9,7 +9,6 @@ use App\Models\Simpeg\PresensiPegawai;
 use App\Models\Simpeg\SuratTugas;
 use App\Models\Simpeg\UnitKerja;
 use App\Models\User;
-use Database\Seeders\SimpegSuratTugasMasterSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -28,7 +27,14 @@ class SimpegSuratTugasTest extends TestCase
         parent::setUp();
         $this->setUpPassport();
 
-        $this->seed(SimpegSuratTugasMasterSeeder::class);
+        MasterKategoriKegiatanTugas::firstOrCreate(
+            ['nama' => 'Konsorsium / Pertemuan Ilmiah'],
+            ['deskripsi' => 'Seminar, lokakarya, atau konferensi ilmiah', 'urutan' => 1, 'is_active' => true]
+        );
+        MasterJenisTransportasi::firstOrCreate(
+            ['kode' => 'MOBIL_DINAS'],
+            ['nama' => 'Mobil Dinas Kampus', 'is_kendaraan_kampus' => true, 'deskripsi' => 'Armada mobil operasional kampus', 'urutan' => 1, 'is_active' => true]
+        );
 
         $this->admin = User::factory()->create([
             'id' => 1,
@@ -250,12 +256,12 @@ class SimpegSuratTugasTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('status', 'success')
-            ->assertJsonPath('data.status', 'selesai')
+            ->assertJsonPath('data.status_pencairan', 'lpj_diunggah')
             ->assertJsonPath('data.biaya_realisasi', '4500000.00');
 
         $this->assertDatabaseHas('simpeg_surat_tugas', [
             'id' => $suratTugas->id,
-            'status' => 'selesai',
+            'status_pencairan' => 'lpj_diunggah',
             'biaya_realisasi' => 4500000,
         ]);
     }
@@ -335,8 +341,7 @@ class SimpegSuratTugasTest extends TestCase
 
         $approveResponse->assertStatus(200)
             ->assertJsonPath('status', 'success')
-            ->assertJsonPath('data.status_pencairan', 'belum_cair')
-            ->assertJsonPath('data.nominal_disetujui', '3000000.00');
+            ->assertJsonPath('data.status_pencairan', 'menunggu_keuangan');
 
         $suratTugasFresh = $suratTugas->fresh();
         $this->assertNotNull($suratTugasFresh->sikeu_pencairan_id);
@@ -344,30 +349,48 @@ class SimpegSuratTugasTest extends TestCase
         $this->assertDatabaseHas('sikeu_pengajuan_pencairan_kas', [
             'id' => $suratTugasFresh->sikeu_pencairan_id,
             'status' => 'pending_keuangan',
-            'nominal_disetujui' => 3000000,
+            'nominal_disetujui' => 0,
         ]);
 
-        // 3. Admin SIKEU mencairkan dana di endpoint /api/v1/sikeu/pengajuan-kas/{id}/approve
-        $cairkanResponse = $this->actingAs($this->admin, 'api')
-            ->postJson("/api/v1/sikeu/pengajuan-kas/{$suratTugasFresh->sikeu_pencairan_id}/approve", [
+        $unitKas = \App\Models\Sikeu\UnitKas::first();
+
+        // 3. Admin SIKEU menyetujui nominal panjar (Tahap 3)
+        $approvePanjarRes = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/v1/sikeu/pengajuan-operasional/{$suratTugasFresh->sikeu_pencairan_id}/setujui-panjar-simpeg", [
+                'unit_kas_id' => $unitKas->id,
                 'nominal_disetujui' => 3000000,
+                'catatan' => 'Panjar disetujui Rp 3.000.000',
+            ]);
+        $approvePanjarRes->assertStatus(200);
+
+        // 4. Pegawai mengonfirmasi panjar (Tahap 4)
+        $this->actingAs($this->admin, 'api')
+            ->postJson("/api/simpeg/surat-tugas/{$suratTugasFresh->id}/konfirmasi-panjar")
+            ->assertStatus(200);
+
+        // 5. Admin SIKEU mencairkan dana (Tahap 5)
+        $fileBukti = UploadedFile::fake()->create('resi_transfer.pdf', 300, 'application/pdf');
+        $cairkanResponse = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/v1/sikeu/pengajuan-operasional/{$suratTugasFresh->sikeu_pencairan_id}/pencairan", [
+                'nominal_cair' => 3000000,
+                'tanggal_pencairan' => '2026-10-10',
+                'bukti_pencairan' => $fileBukti,
             ]);
 
         $cairkanResponse->assertStatus(200)
             ->assertJsonPath('status', 'success')
             ->assertJsonPath('data.status', 'dicairkan');
 
-        // Status pencairan di surat tugas otomatis sudah_cair
-        $this->assertEquals('sudah_cair', $suratTugas->fresh()->status_pencairan);
+        // Status pencairan di surat tugas otomatis dicairkan
+        $this->assertEquals('dicairkan', $suratTugas->fresh()->status_pencairan);
 
-        // Terbit riwayat pengeluaran kas kampus
-        $this->assertDatabaseHas('sikeu_pengeluaran_kampus', [
-            'kategori' => 'kegiatan',
+        // Terbit riwayat transaksi unit kas
+        $this->assertDatabaseHas('sikeu_transaksi_kas_unit', [
+            'pengajuan_pencairan_id' => $suratTugasFresh->sikeu_pencairan_id,
             'nominal' => 3000000,
-            'status_pembayaran' => 'lunas',
         ]);
 
-        // 4. Pegawai mengunggah berkas LPJ
+        // 6. Pegawai mengunggah berkas LPJ
         $fileLpj = UploadedFile::fake()->create('berkas_lpj_resmi.pdf', 500, 'application/pdf');
         $lpjResponse = $this->actingAs($this->admin, 'api')
             ->postJson("/api/simpeg/surat-tugas/{$suratTugas->id}/lpj", [
@@ -378,13 +401,13 @@ class SimpegSuratTugasTest extends TestCase
 
         $lpjResponse->assertStatus(200)
             ->assertJsonPath('status', 'success')
-            ->assertJsonPath('data.status', 'selesai')
+            ->assertJsonPath('data.status_pencairan', 'lpj_diunggah')
             ->assertJsonPath('data.biaya_realisasi', '2950000.00');
 
-        // Pengeluaran kas kampus tersinkronisasi
-        $this->assertDatabaseHas('sikeu_pengeluaran_kampus', [
-            'kategori' => 'kegiatan',
-            'nominal' => 2950000,
+        $this->assertDatabaseHas('simpeg_surat_tugas', [
+            'id' => $suratTugas->id,
+            'status_pencairan' => 'lpj_diunggah',
+            'biaya_realisasi' => 2950000,
         ]);
     }
 }

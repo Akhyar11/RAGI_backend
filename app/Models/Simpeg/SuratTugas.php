@@ -18,6 +18,8 @@ class SuratTugas extends Model
         'kategori_kegiatan_id',
         'jenis_transportasi_id',
         'nama_kegiatan',
+        'jam_pelaksanaan',
+        'penyelenggara',
         'tempat_berangkat',
         'lokasi_tujuan',
         'tanggal_berangkat',
@@ -38,6 +40,9 @@ class SuratTugas extends Model
         'keterangan',
         'file_surat_tugas',
         'file_lpj',
+        'bukti_pelunasan_path',
+        'tipe_pelunasan',
+        'nominal_pelunasan',
         'tanggal_upload_lpj',
         'status',
         'catatan_approval',
@@ -56,6 +61,7 @@ class SuratTugas extends Model
         'estimasi_biaya' => 'decimal:2',
         'nominal_disetujui' => 'decimal:2',
         'biaya_realisasi' => 'decimal:2',
+        'nominal_pelunasan' => 'decimal:2',
         'tanggal_upload_lpj' => 'datetime:Y-m-d H:i:s',
         'approved_at' => 'datetime:Y-m-d H:i:s',
     ];
@@ -64,7 +70,35 @@ class SuratTugas extends Model
         'sisa_nominal',
         'file_surat_tugas_url',
         'file_lpj_url',
+        'bukti_pelunasan_url',
+        'direktur',
     ];
+
+    public function getDirekturAttribute(): ?User
+    {
+        return User::whereHas('roles.permissions', function ($q) {
+                $q->where('slug', 'simpeg.surat_tugas.approve');
+            })
+            ->with(['pegawai', 'activeTandaTangan'])
+            ->first()
+            ?? User::where('is_active', true)->with(['pegawai', 'activeTandaTangan'])->first();
+    }
+
+    public function getBuktiPelunasanUrlAttribute(): ?string
+    {
+        if (empty($this->bukti_pelunasan_path)) {
+            return null;
+        }
+
+        if (str_starts_with($this->bukti_pelunasan_path, 'http://') || str_starts_with($this->bukti_pelunasan_path, 'https://')) {
+            return $this->bukti_pelunasan_path;
+        }
+
+        $files = app(\App\Services\Storage\FileStorageService::class);
+        return $files->signedUrl($this->bukti_pelunasan_path)
+            ?? $files->temporaryUrl($this->bukti_pelunasan_path, now()->addMinutes(60))
+            ?? $files->url($this->bukti_pelunasan_path, private: true);
+    }
 
     public function getSisaNominalAttribute(): float
     {

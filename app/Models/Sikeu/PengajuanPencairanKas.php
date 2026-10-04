@@ -41,6 +41,9 @@ class PengajuanPencairanKas extends Model
         'approved_direktur_at',
         'tanggal_pencairan',
         'bukti_pencairan_path',
+        'bukti_pelunasan_path',
+        'tipe_pelunasan',
+        'nominal_pelunasan',
         'kanal',
         'referensi_eksternal',
         'catatan_penolakan',
@@ -51,6 +54,7 @@ class PengajuanPencairanKas extends Model
         'nominal_disetujui' => 'decimal:2',
         'total_realisasi' => 'decimal:2',
         'sisa_nominal' => 'decimal:2',
+        'nominal_pelunasan' => 'decimal:2',
         'approved_sarpras_at' => 'datetime',
         'approved_pimpinan_at' => 'datetime',
         'approved_keuangan_at' => 'datetime',
@@ -60,8 +64,25 @@ class PengajuanPencairanKas extends Model
 
     protected $appends = [
         'bukti_pencairan_url',
+        'bukti_pelunasan_url',
         'file_lampiran_url',
     ];
+
+    public function getBuktiPelunasanUrlAttribute(): ?string
+    {
+        if (empty($this->bukti_pelunasan_path)) {
+            return null;
+        }
+
+        if (str_starts_with($this->bukti_pelunasan_path, 'http://') || str_starts_with($this->bukti_pelunasan_path, 'https://')) {
+            return $this->bukti_pelunasan_path;
+        }
+
+        $files = app(\App\Services\Storage\FileStorageService::class);
+        return $files->signedUrl($this->bukti_pelunasan_path)
+            ?? $files->temporaryUrl($this->bukti_pelunasan_path, now()->addMinutes(60))
+            ?? $files->url($this->bukti_pelunasan_path, private: true);
+    }
 
     public function getBuktiPencairanUrlAttribute(): ?string
     {

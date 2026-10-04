@@ -149,6 +149,7 @@ class MenuSeeder extends Seeder
                     ['name' => 'Master Kategori SKP', 'url' => '/simpeg/master/kategori-skp', 'icon' => 'FaChartBar', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kinerja.read', 'order_index' => 7],
                     ['name' => 'Master Kompetensi', 'url' => '/simpeg/master/kompetensi', 'icon' => 'FaGraduationCap', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kompetensi.read', 'order_index' => 8],
                     ['name' => 'Master Kategori SK', 'url' => '/simpeg/master/kategori-sk', 'icon' => 'FaFileSignature', 'module' => 'simpeg', 'permission_slug' => 'simpeg.sk_pegawai.read', 'order_index' => 9],
+                    ['name' => 'Master Tanda Tangan', 'url' => '/simpeg/master/tanda-tangan', 'icon' => 'FaFileSignature', 'module' => 'simpeg', 'permission_slug' => 'simpeg.tanda_tangan.read', 'order_index' => 10],
                 ]
             ],
 
@@ -449,6 +450,7 @@ class MenuSeeder extends Seeder
                     ['name' => 'Master Kategori BHP Lab', 'url' => '/sinapra/master/kategori-bhp', 'icon' => 'FaBoxes', 'module' => 'sinapra', 'order_index' => 4],
                     ['name' => 'Master Satuan Barang', 'url' => '/sinapra/master/satuan', 'icon' => 'FaRulerCombined', 'module' => 'sinapra', 'order_index' => 5],
                     ['name' => 'Master Referensi Status & Kondisi', 'url' => '/sinapra/master/referensi', 'icon' => 'FaDatabase', 'module' => 'sinapra', 'order_index' => 6],
+                    ['name' => 'Plotting Role Program Studi', 'url' => '/sinapra/master/prodi-role', 'icon' => 'FaGraduationCap', 'module' => 'sinapra', 'order_index' => 7],
                 ]
             ],
 
@@ -529,6 +531,38 @@ class MenuSeeder extends Seeder
                 'module' => 'sikeu',
                 'permission_slug' => 'sikeu.dashboard.read',
                 'order_index' => 6,
+            ],
+
+            // ── MODUL ARSIP (TATA PERSURATAN) ─────────────────────
+            [
+                'name' => 'Dashboard Arsip',
+                'url' => '/arsip',
+                'icon' => 'FaChartPie',
+                'module' => 'arsip',
+                'permission_slug' => 'arsip.dashboard.read',
+                'order_index' => 1,
+            ],
+            [
+                'name' => 'PERSURATAN & ARSIP',
+                'url' => '#persuratan_arsip',
+                'icon' => 'FaFileAlt',
+                'module' => 'arsip',
+                'order_index' => 2,
+                'children' => [
+                    ['name' => 'Daftar Nomor Surat', 'url' => '/arsip/nomor-surat', 'icon' => 'FaFileSignature', 'module' => 'arsip', 'permission_slug' => 'arsip.nomor_surat.read', 'order_index' => 1],
+                    ['name' => 'Permohonan Masuk', 'url' => '/arsip/request-nomor', 'icon' => 'FaClipboardCheck', 'module' => 'arsip', 'permission_slug' => 'arsip.request.read', 'order_index' => 2],
+                ]
+            ],
+            [
+                'name' => 'MASTER DATA ARSIP',
+                'url' => '#master_arsip',
+                'icon' => 'FaDatabase',
+                'module' => 'arsip',
+                'order_index' => 3,
+                'children' => [
+                    ['name' => 'Master Kop Surat', 'url' => '/arsip/kop-surat', 'icon' => 'FaStamp', 'module' => 'arsip', 'permission_slug' => 'arsip.kop_surat.read', 'order_index' => 1],
+                    ['name' => 'Klasifikasi & Kode Unit', 'url' => '/arsip/master/klasifikasi', 'icon' => 'FaTags', 'module' => 'arsip', 'permission_slug' => 'arsip.master.manage', 'order_index' => 2],
+                ]
             ],
         ];
 
@@ -639,6 +673,13 @@ class MenuSeeder extends Seeder
         $adminLabRole = \App\Models\Role::where('slug', 'admin_laboratorium')->first();
         if ($adminLabRole) {
             $adminLabRole->menus()->syncWithoutDetaching($sinapraMenuIds);
+        }
+
+        // Attach all ARSIP menus to admin_arsip
+        $arsipMenuIds = Menu::where('module', 'arsip')->pluck('id')->toArray();
+        $adminArsipRole = \App\Models\Role::where('slug', 'admin_arsip')->first();
+        if ($adminArsipRole) {
+            $adminArsipRole->menus()->syncWithoutDetaching($arsipMenuIds);
         }
 
         $dosenRole = \App\Models\Role::where('slug', 'dosen')->first();

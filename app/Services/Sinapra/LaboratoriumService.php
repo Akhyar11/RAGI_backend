@@ -25,7 +25,7 @@ class LaboratoriumService
         $query = LabBhp::query()->with('ruangan.gedung');
 
         if ($this->isLaboranRestricted($user)) {
-            $labRuanganIds = LaboranRuangan::where('user_id', $user->id)->pluck('ruangan_id');
+            $labRuanganIds = $user->getSinapraAccessibleRuanganIds();
             $query->whereIn('ruangan_id', $labRuanganIds);
         }
 
@@ -166,9 +166,8 @@ class LaboratoriumService
         $query = AlatKalibrasi::query()->with(['aset.ruangan.gedung']);
 
         if ($this->isLaboranRestricted($user)) {
-            $labRuanganIds = LaboranRuangan::where('user_id', $user->id)->pluck('ruangan_id');
-            $query->whereHas('aset', function (Builder $q) use ($labRuanganIds) {
-                $q->whereIn('ruangan_id', $labRuanganIds);
+            $query->whereHas('aset', function (Builder $q) use ($user) {
+                $q->forLaboran($user);
             });
         }
 
@@ -231,7 +230,7 @@ class LaboratoriumService
             ->orderBy('jam_mulai', 'asc');
 
         if ($this->isLaboranRestricted($user)) {
-            $labRuanganIds = LaboranRuangan::where('user_id', $user->id)->pluck('ruangan_id');
+            $labRuanganIds = $user->getSinapraAccessibleRuanganIds();
             $peminjamanQuery->whereIn('ruangan_id', $labRuanganIds);
         }
 
@@ -268,8 +267,6 @@ class LaboratoriumService
      */
     private function isLaboranRestricted(User $user): bool
     {
-        $hasFullAccess = $user->hasRole('superadmin') || $user->hasRole('admin') || $user->hasRole('admin_sarpras');
-
-        return ! $hasFullAccess && $user->hasRole('admin_laboratorium');
+        return $user->isSinapraLaboranRestricted();
     }
 }
