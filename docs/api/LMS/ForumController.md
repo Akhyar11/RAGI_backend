@@ -92,6 +92,7 @@ user tanpa parameter `kelasId`, untuk halaman `/lms/forum` di sidebar.
 | `sort_by` | string | ❌ | `id` | `id`, `judul`, `is_pinned`, `created_at` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `tahun_akademik_id` | integer | ❌ | `null` | Filter periode (FK ke master tahun akademik) |
+| `kelas_id` | integer | ❌ | `null` | Filter satu kelas tertentu |
 
 ### Scope Data per Role
 
@@ -156,7 +157,8 @@ user tanpa parameter `kelasId`, untuk halaman `/lms/forum` di sidebar.
             "search": null,
             "sort_by": "id",
             "sort_order": "desc",
-            "tahun_akademik_id": null
+            "tahun_akademik_id": null,
+            "kelas_id": null
         }
     }
 }
@@ -167,6 +169,11 @@ sehingga topic terkunci tidak tenggelam di halaman akhir.
 
 `meta.filters` mengembalikan nilai filter yang benar-benar dipakai server (setelah
 normalisasi), sehingga frontend dapat menampilkan ulang state filter.
+
+`kelas_id` TIDAK membuka akses ke kelas di luar hak user: nilainya tetap
+di-intersect dengan daftar kelas yang boleh diakses (lihat *Scope Data per Role*),
+sehingga mengarang `kelas_id` milik kelas lain hanya menghasilkan daftar kosong,
+bukan data kelas tersebut.
 
 ### Response Error
 

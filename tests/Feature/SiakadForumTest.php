@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Lms\ForumTopik;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Siakad\Dosen;
@@ -284,5 +285,48 @@ class SiakadForumTest extends TestCase
 
         $postDesc = $this->getJson("/api/v1/lms/forum/{$topikId}/post?sort_order=desc");
         $this->assertSame(['Tiga', 'Dua', 'Satu'], collect($postDesc->json('data'))->pluck('isi')->all());
+    }
+
+    public function test_filter_kelas_tidak_membocorkan_kelas_lain(): void
+    {
+        Passport::actingAs($this->userDosen);
+
+        // Topik pada kelas yang diampu dosen ini.
+        $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/forum")->assertStatus(200);
+
+        // Kelas kedua yang TIDAK diampu dosen ini (dibuat tanpa DosenPengampu).
+        $kelasLain = Kelas::create([
+            'program_studi_id' => $this->kelas->program_studi_id,
+            'mata_kuliah_id' => $this->kelas->mata_kuliah_id,
+            'tahun_akademik_id' => $this->kelas->tahun_akademik_id,
+            'kode_kelas' => 'IF-FOR-B',
+            'nama_kelas' => 'Kelas Forum B',
+            'kapasitas' => 30,
+        ]);
+        // Topik di kelas lain dibuat langsung lewat model: fokus test ini adalah
+        // irisan filter kelas_id dengan hak akses, bukan alur otorisasi admin.
+        ForumTopik::create([
+            'kelas_id' => $kelasLain->id,
+            'judul' => 'Topik Kelas B',
+            'dibuat_oleh' => $this->userDosen->id,
+        ]);
+
+        // Dosen hanya melihat topiknya sendiri pada kelas yang diampu.
+        Passport::actingAs($this->userDosen);
+        $semua = $this->getJson('/api/v1/lms/forum');
+        $semua->assertStatus(200)->assertJsonPath('meta.total', 1);
+        $this->assertSame([$this->kelas->id], collect($semua->json('data'))->pluck('kelas_id')->unique()->all());
+
+        // Filter kelas sendiri tetap mengembalikan topiknya.
+        $pilihSendiri = $this->getJson("/api/v1/lms/forum?kelas_id={$this->kelas->id}");
+        $pilihSendiri->assertStatus(200)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('meta.filters.kelas_id', $this->kelas->id);
+
+        // Filter kelas yang tidak diakses → kosong, bukan error 403 dan bukan data.
+        $pilihAsing = $this->getJson("/api/v1/lms/forum?kelas_id={$kelasLain->id}");
+        $pilihAsing->assertStatus(200)
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.total', 0);
     }
 }

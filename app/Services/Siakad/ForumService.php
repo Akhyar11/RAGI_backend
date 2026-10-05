@@ -198,13 +198,20 @@ class ForumService
         ?string $search = null,
         string $sortBy = 'id',
         string $sortOrder = 'desc',
-        ?int $tahunAkademikId = null
+        ?int $tahunAkademikId = null,
+        ?int $kelasId = null
     ): LengthAwarePaginator {
         $query = ForumTopik::with(['kelas.mataKuliah', 'kelas.tahunAkademik'])
             ->withCount('posts');
 
         if ($kelasIds !== null) {
             $query->whereIn('kelas_id', $kelasIds ?: [0]);
+        }
+
+        // Filter kelas tunggal tetap harus intersecting dengan $kelasIds, sehingga
+        // user tidak bisa menebak kelas di luar haknya hanya lewat kelas_id.
+        if ($kelasId) {
+            $query->whereIn('kelas_id', $kelasIds === null ? [$kelasId] : array_values(array_intersect($kelasIds, [$kelasId])));
         }
 
         if ($tahunAkademikId) {

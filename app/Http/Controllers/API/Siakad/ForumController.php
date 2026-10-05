@@ -40,6 +40,7 @@ class ForumController extends Controller
             ForumService::SORT_TOPIK
         );
         $tahunAkademikId = $request->filled('tahun_akademik_id') ? (int) $request->input('tahun_akademik_id') : null;
+        $kelasId = $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null;
 
         $paginator = $this->forumService->listTopikAggregate(
             $this->lmsService->resolveAccessibleKelasIds((int) $request->user()->id),
@@ -47,7 +48,8 @@ class ForumController extends Controller
             $search,
             $sortBy,
             $sortOrder,
-            $tahunAkademikId
+            $tahunAkademikId,
+            $kelasId
         );
         $paginator->appends($request->query());
 
@@ -67,6 +69,7 @@ class ForumController extends Controller
                     'sort_by'           => $sortBy,
                     'sort_order'        => $sortOrder,
                     'tahun_akademik_id' => $tahunAkademikId,
+                    'kelas_id'          => $kelasId,
                 ],
             ],
         ]);
