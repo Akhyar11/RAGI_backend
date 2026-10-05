@@ -213,4 +213,24 @@ class SiakadLmsAgregatTest extends TestCase
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('filters.metode_absensi', null);
     }
+
+    public function test_filter_status_konfigurasi_memisahkan_kelas_belum_dikonfigurasi(): void
+    {
+        Passport::actingAs($this->userDosen);
+
+        $belum = $this->getJson('/api/v1/lms/pengaturan?status_konfigurasi=belum_terkonfigurasi');
+        $belum->assertStatus(200)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('filters.status_konfigurasi', 'belum_terkonfigurasi');
+
+        $sudah = $this->getJson('/api/v1/lms/pengaturan?status_konfigurasi=terkonfigurasi');
+        $sudah->assertStatus(200)
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.total', 0);
+
+        $ngawur = $this->getJson('/api/v1/lms/pengaturan?status_konfigurasi=ngawur');
+        $ngawur->assertStatus(200)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('filters.status_konfigurasi', null);
+    }
 }

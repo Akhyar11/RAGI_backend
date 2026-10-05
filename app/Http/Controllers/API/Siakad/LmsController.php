@@ -126,6 +126,9 @@ class LmsController extends Controller
         $metodeAbsensi = in_array($request->input('metode_absensi'), KelasLmsSetting::METODE_ABSENSI, true)
             ? (string) $request->input('metode_absensi')
             : null;
+        $statusKonfigurasi = in_array($request->input('status_konfigurasi'), LmsService::STATUS_PENGATURAN, true)
+            ? (string) $request->input('status_konfigurasi')
+            : null;
 
         $paginator = $this->lmsService->indexPengaturan(
             (int) $request->user()->id,
@@ -134,7 +137,8 @@ class LmsController extends Controller
             $sortBy,
             $sortOrder,
             $tahunAkademikId,
-            $metodeAbsensi
+            $metodeAbsensi,
+            $statusKonfigurasi
         );
 
         return response()->json([
@@ -155,6 +159,7 @@ class LmsController extends Controller
                 'sort_order'        => $sortOrder,
                 'tahun_akademik_id' => $tahunAkademikId,
                 'metode_absensi'    => $metodeAbsensi,
+                'status_konfigurasi' => $statusKonfigurasi,
             ],
         ]);
     }

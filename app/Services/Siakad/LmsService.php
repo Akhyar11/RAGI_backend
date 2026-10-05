@@ -28,6 +28,16 @@ use Illuminate\Validation\ValidationException;
 
 class LmsService
 {
+    /** Status konfigurasi LMS pada rekap pengaturan (filter `status_konfigurasi`). */
+    public const STATUS_PENGATURAN_SUDAH = 'terkonfigurasi';
+    public const STATUS_PENGATURAN_BELUM = 'belum_terkonfigurasi';
+
+    /** Closed-set status konfigurasi yang sah untuk filter rekap pengaturan. */
+    public const STATUS_PENGATURAN = [
+        self::STATUS_PENGATURAN_SUDAH,
+        self::STATUS_PENGATURAN_BELUM,
+    ];
+
     /**
      * Dapatkan disk storage yang aktif (prioritas: kelas -> system setting -> default disk).
      *
@@ -1036,7 +1046,8 @@ class LmsService
         string $sortBy = 'nama_kelas',
         string $sortOrder = 'asc',
         ?int $tahunAkademikId = null,
-        ?string $metodeAbsensi = null
+        ?string $metodeAbsensi = null,
+        ?string $statusKonfigurasi = null
     ): \Illuminate\Contracts\Pagination\LengthAwarePaginator {
         $query = Kelas::with(['mataKuliah', 'tahunAkademik', 'programStudi', 'lmsSetting'])
             ->withCount([
@@ -1064,6 +1075,12 @@ class LmsService
                     $q->orWhereDoesntHave('lmsSetting');
                 }
             });
+        }
+
+        if ($statusKonfigurasi === self::STATUS_PENGATURAN_BELUM) {
+            $query->whereDoesntHave('lmsSetting');
+        } elseif ($statusKonfigurasi === self::STATUS_PENGATURAN_SUDAH) {
+            $query->whereHas('lmsSetting');
         }
 
         if (!empty($search)) {

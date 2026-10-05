@@ -310,6 +310,7 @@ dari halaman daftar tanpa perlu membuka tiap kelas satu per satu.
 | `sort_order` | string | ❌ | `asc` | `asc` / `desc` |
 | `tahun_akademik_id` | integer | ❌ | — | Filter periode |
 | `metode_absensi` | string | ❌ | — | Filter metode absensi efektif: `manual_dosen` / `token_mahasiswa` / `keduanya`. Nilai di luar daftar ini diabaikan (fallback diam, bukan `422`) |
+| `status_konfigurasi` | string | ❌ | — | `terkonfigurasi` / `belum_terkonfigurasi`. Nilai di luar daftar ini diabaikan (fallback diam, bukan `422`) |
 
 #### Response Sukses (200 OK)
 
@@ -358,7 +359,8 @@ dari halaman daftar tanpa perlu membuka tiap kelas satu per satu.
         "sort_by": "kode_kelas",
         "sort_order": "asc",
         "tahun_akademik_id": null,
-        "metode_absensi": null
+        "metode_absensi": null,
+        "status_konfigurasi": null
     }
 }
 ```
@@ -372,6 +374,12 @@ dari halaman daftar tanpa perlu membuka tiap kelas satu per satu.
 > kelas tanpa `lms_setting` memakai nilai bawaan `KelasLmsSetting::METODE_KEDUANYA`
 > (`keduanya`), sehingga `?metode_absensi=keduanya` tetap memunculkan kelas yang belum
 > pernah dikonfigurasi. Kelas yang sudah dikonfigurasi dengan nilai lain tidak ikut.
+
+> **Filter `status_konfigurasi`** memakai closed-set `LmsService::STATUS_PENGATURAN`
+> (`terkonfigurasi`, `belum_terkonfigurasi`) dan memeriksa keberadaan baris
+> `lms_kelas_setting`, bukan nilai isinya: `belum_terkonfigurasi` memakai
+> `whereDoesntHave('lmsSetting')` sehingga kelas yang belum pernah disimpan
+> pengaturannya tetap bisa disaring terpisah dari kelas yang sudah dikonfigurasi.
 
 #### Response Error
 
