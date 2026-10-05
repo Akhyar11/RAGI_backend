@@ -62,6 +62,8 @@ class PengajuanOperasionalService
                 'deskripsi' => $data['deskripsi'],
                 'nominal_diajukan' => $nominal,
                 'nominal_disetujui' => 0,
+                'parent_pengajuan_id' => $data['parent_pengajuan_id'] ?? null,
+                'referensi_eksternal' => $data['referensi_eksternal'] ?? null,
                 'jenis_pengajuan' => $data['jenis_pengajuan'] ?? 'operasional',
                 'kategori_pengajuan' => $kategori,
                 'file_lampiran' => $lampiranPath,
@@ -236,16 +238,31 @@ class PengajuanOperasionalService
                 ]);
             }
 
-            // Jurnal akrual pencairan: Dr Beban Operasional / Cr Kas kanal unit kas
+            // Jurnal akrual pencairan: Dr Beban Operasional / Cr Kas kanal unit kas.
+            // Reimbursement (RMB-*) memakai jenis_sumber 'reimbursement' (JRN-RMB)
+            // agar terpisah dari pencairan biasa dan bisa difilter di akuntansi.
             $akunKasCair = \App\Services\Sikeu\JurnalSikeuService::akunKasUnit($unitKas, '101.01');
-            AutoJournalService::recordDisbursementJournal(
-                'OPERASIONAL',
-                $pengajuan->id,
-                $nominal,
-                'Pencairan operasional ' . $pengajuan->nomor_pengajuan . ' - ' . $pengajuan->judul_pengajuan,
-                '502.01',
-                $akunKasCair->kode_akun
-            );
+            $isReimbursement = ($pengajuan->jenis_pengajuan === 'reimbursement') || !empty($pengajuan->parent_pengajuan_id);
+            if ($isReimbursement) {
+                $parentNomor = $pengajuan->parent?->nomor_pengajuan
+                    ?? $pengajuan->referensi_eksternal
+                    ?? '-';
+                \App\Services\Sikeu\JurnalSikeuService::jurnalReimbursement(
+                    $pengajuan->id,
+                    $nominal,
+                    'Reimbursement ' . $pengajuan->nomor_pengajuan . ' atas ' . $parentNomor . ' - ' . $pengajuan->judul_pengajuan,
+                    $unitKas
+                );
+            } else {
+                AutoJournalService::recordDisbursementJournal(
+                    'OPERASIONAL',
+                    $pengajuan->id,
+                    $nominal,
+                    'Pencairan operasional ' . $pengajuan->nomor_pengajuan . ' - ' . $pengajuan->judul_pengajuan,
+                    '502.01',
+                    $akunKasCair->kode_akun
+                );
+            }
 
             $pengajuan->update([
                 'status' => 'dicairkan',
@@ -291,6 +308,94 @@ class PengajuanOperasionalService
                 );
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('AuditLog pencairan operasional dilewati: ' . $e->getMessage());
+            }
+        }
+
+        return $pengajuan;
+    }
+
+    /**
+     * Buat pengajuan reimbursement atas selisih kurang bayar LPJ pengajuan asal.
+     * Anak memakai nomor RMB-*, jenis 'reimbursement', kategori 'non_barang',
+     * status awal 'pending_keuangan', ter-link via parent_pengajuan_id sehingga
+     * keuangan bisa melacak LPJ mana yang belum diajukan reimburse-nya.
+     */
+    public function ajukanReimbursement(PengajuanPencairanKas $asal, array $data, ?Request $request = null): PengajuanPencairanKas
+    {
+        $pengajuan = DB::transaction(function () use ($asal, $data, $request) {
+            $asal = $asal->fresh(['lpj']);
+            $lpj = LaporanBuktiPelaksanaan::where('pengajuan_id', $asal->id)->latest('id')->first();
+
+            $cair = (float) ($asal->nominal_disetujui ?: ($lpj?->nominal_dicairkan ?? 0));
+            $realisasi = (float) ($lpj?->total_realisasi ?? $asal->total_realisasi);
+            $kurang = $realisasi - $cair;
+            if ($kurang <= 0) {
+                throw new \RuntimeException('Pengajuan asal tidak memiliki selisih kurang bayar (realisasi tidak melebihi pencairan).');
+            }
+
+            $nominal = isset($data['nominal_diajukan']) && (float) $data['nominal_diajukan'] > 0
+                ? (float) $data['nominal_diajukan']
+                : $kurang;
+            if ($nominal <= 0 || $nominal > $kurang + 0.009) {
+                throw new \InvalidArgumentException('Nominal reimbursement tidak valid (maks Rp ' . number_format($kurang, 0, ',', '.') . ').');
+            }
+
+            $aktif = PengajuanPencairanKas::where('parent_pengajuan_id', $asal->id)
+                ->whereNotIn('status', ['ditolak'])
+                ->exists();
+            if ($aktif) {
+                throw new \RuntimeException('Sudah ada pengajuan reimbursement aktif untuk LPJ ini.');
+            }
+
+            $unitKasId = $data['unit_kas_id'] ?? $asal->unit_kas_id;
+            $unitKas = $unitKasId ? UnitKas::find($unitKasId) : null;
+            if (!$unitKas || !$unitKas->status) {
+                throw new \InvalidArgumentException('Unit kas pembayar reimbursement tidak valid / tidak aktif.');
+            }
+
+            $lampiranPath = null;
+            if ($request && $request->hasFile('file_lampiran')) {
+                $lampiranPath = app(\App\Services\Storage\FileStorageService::class)->store(
+                    $request->file('file_lampiran'),
+                    'sikeu/pengajuan_operasional',
+                    private: true
+                );
+            }
+
+            $anak = PengajuanPencairanKas::create([
+                'nomor_pengajuan' => 'RMB-' . date('Ymd') . '-' . strtoupper(Str::random(5)),
+                'unit_kas_id' => $unitKas->id,
+                'fakultas_id' => $asal->fakultas_id,
+                'ruangan_id' => $asal->ruangan_id,
+                'pemohon_id' => auth()->id() ?? $asal->pemohon_id,
+                'judul_pengajuan' => 'Reimbursement: ' . $asal->judul_pengajuan,
+                'deskripsi' => $data['deskripsi'] ?? ('Klaim kurang bayar LPJ ' . $asal->nomor_pengajuan . ' sebesar Rp ' . number_format($kurang, 0, ',', '.') . '.'),
+                'nominal_diajukan' => $nominal,
+                'nominal_disetujui' => 0,
+                'parent_pengajuan_id' => $asal->id,
+                'referensi_eksternal' => 'reimburse:' . $asal->nomor_pengajuan,
+                'jenis_pengajuan' => 'reimbursement',
+                'kategori_pengajuan' => 'non_barang',
+                'kanal' => $asal->kanal,
+                'file_lampiran' => $lampiranPath,
+                'status' => 'pending_keuangan',
+            ]);
+
+            return $anak->fresh(['items', 'fakultas', 'ruangan', 'unitKas', 'parent']);
+        });
+
+        if ($request) {
+            try {
+                AuditLogService::record(
+                    module: 'SIKEU',
+                    action: 'create',
+                    tableName: 'sikeu_pengajuan_pencairan_kas',
+                    recordId: $pengajuan->id,
+                    newValues: $pengajuan->toArray(),
+                    request: $request,
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('AuditLog reimbursement dilewati: ' . $e->getMessage());
             }
         }
 
@@ -471,16 +576,16 @@ class PengajuanOperasionalService
                 $tambahanTotal += (float) $t['qty'] * (float) $t['harga_satuan'];
             }
             $totalPakai = $realisasi + $tambahanTotal;
-            if ($totalPakai > $nominalCair) {
-                throw new \InvalidArgumentException('Total realisasi + tambahan melebihi nominal yang dicairkan.');
-            }
+            // Defisit (total realisasi melebihi nominal cair) diizinkan dan
+            // dicatat sebagai sisa negatif = kurang bayar dasar reimbursement.
             $sisa = $nominalCair - $totalPakai;
 
             $metode = $data['metode_sisa'] ?? 'belum_ditentukan';
             if ($sisa > 0 && $metode === 'belum_ditentukan') {
                 throw new \InvalidArgumentException('Sisa dana wajib memilih metode: kembali_transfer / pakai_lagi.');
             }
-            if ($sisa == 0) {
+            if ($sisa <= 0) {
+                // Defisit (kurang bayar) atau impas: tidak ada pengembalian sisa.
                 $metode = 'belum_ditentukan';
             }
 

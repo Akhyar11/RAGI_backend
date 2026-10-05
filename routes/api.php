@@ -566,6 +566,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::post('pengajuan-operasional/{id}/setujui-panjar-simpeg', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'setujuiPanjarSimpeg']);
     Route::post('pengajuan-operasional/{id}/tutup-lpj-simpeg', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'tutupLpjSimpeg']);
     Route::post('pengajuan-operasional/{id}/lpj', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'simpanLpj']);
+    Route::post('pengajuan-operasional/{id}/reimburse', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'ajukanReimburse']);
     Route::post('lpj/{id}/verifikasi', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'verifikasiLpj']);
     Route::get('referensi/fakultas', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'listFakultas']);
     Route::get('referensi/ruangan', [App\Http\Controllers\Sikeu\PengajuanOperasionalController::class, 'listRuangan']);
