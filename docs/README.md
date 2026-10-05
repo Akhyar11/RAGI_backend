@@ -163,6 +163,7 @@
 | MasterKategoriBhpController | Master data kategori bahan habis pakai (BHP) laboratorium | [docs/api/SINAPRA/MasterKategoriBhpController.md](api/SINAPRA/MasterKategoriBhpController.md) |
 | LaboranProdiController | Penugasan laboran per Program Studi untuk isolasi akses ruangan dan aset | [docs/api/SINAPRA/LaboranProdiController.md](api/SINAPRA/LaboranProdiController.md) |
 | ProdiRoleController | Pengaturan role pejabat & PIC operasional prodi (Kaprodi, Sekprodi, Laboran, dll.) | [docs/api/SINAPRA/ProdiRoleController.md](api/SINAPRA/ProdiRoleController.md) |
+| SinapraImportController | Import data Excel/CSV dan unduh template per entitas master data, gedung, ruangan, & aset | [docs/api/SINAPRA/SinapraImportController.md](api/SINAPRA/SinapraImportController.md) |
 
 ---
 

@@ -998,6 +998,10 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('master/prodi-roles/roles-options', [App\Http\Controllers\Sinapra\ProdiRoleController::class, 'getAvailableRoles']);
     Route::post('master/prodi-roles/{prodiId}', [App\Http\Controllers\Sinapra\ProdiRoleController::class, 'update']);
     Route::put('master/prodi-roles/{prodiId}', [App\Http\Controllers\Sinapra\ProdiRoleController::class, 'update']);
+
+    // Import Excel & Unduh Template Data SINAPRA
+    Route::post('import/{entity}', [App\Http\Controllers\Sinapra\SinapraImportController::class, 'import']);
+    Route::get('import/template/{entity}', [App\Http\Controllers\Sinapra\SinapraImportController::class, 'downloadTemplate']);
 });
 
 // ==============================================================================
