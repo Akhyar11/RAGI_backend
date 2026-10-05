@@ -93,6 +93,7 @@ user tanpa parameter `kelasId`, untuk halaman `/lms/forum` di sidebar.
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `tahun_akademik_id` | integer | ❌ | `null` | Filter periode (FK ke master tahun akademik) |
 | `kelas_id` | integer | ❌ | `null` | Filter satu kelas tertentu |
+| `is_pinned` | boolean | ❌ | `null` | Saring status sematan topik. Diterima: `1`/`true`/`on`/`yes` → `true`, `0`/`false`/`off`/`no` → `false`. Nilai lain diabaikan (fallback diam, bukan `422`) |
 
 ### Scope Data per Role
 
@@ -158,7 +159,8 @@ user tanpa parameter `kelasId`, untuk halaman `/lms/forum` di sidebar.
             "sort_by": "id",
             "sort_order": "desc",
             "tahun_akademik_id": null,
-            "kelas_id": null
+            "kelas_id": null,
+            "is_pinned": null
         }
     }
 }
@@ -174,6 +176,12 @@ normalisasi), sehingga frontend dapat menampilkan ulang state filter.
 di-intersect dengan daftar kelas yang boleh diakses (lihat *Scope Data per Role*),
 sehingga mengarang `kelas_id` milik kelas lain hanya menghasilkan daftar kosong,
 bukan data kelas tersebut.
+
+`is_pinned` dinormalisasi di controller lewat
+`filter_var(..., FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)`: parameter yang
+tidak dikirim berarti `null` (= semua topik), sedangkan nilai yang tidak dikenali
+(`?is_pinned=ngawur`) menjadi `null` juga — bukan `false` — sehingga tidak pernah
+memotong hasil tanpa disadari pengguna.
 
 ### Response Error
 

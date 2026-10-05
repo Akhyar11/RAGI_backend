@@ -329,4 +329,46 @@ class SiakadForumTest extends TestCase
             ->assertJsonCount(0, 'data')
             ->assertJsonPath('meta.total', 0);
     }
+
+    public function test_filter_status_sematkan_topik(): void
+    {
+        Passport::actingAs($this->userDosen);
+
+        $res = $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum", [
+            'judul' => 'Topik Disematkan',
+            'is_pinned' => true,
+        ])->assertStatus(201);
+        $topikId = $res->json('data.id');
+
+        $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum", [
+            'judul' => 'Topik Biasa',
+        ])->assertStatus(201);
+
+        // Tanpa filter: semua topik, sematan tetap didahulukan.
+        $semua = $this->getJson('/api/v1/lms/forum');
+        $semua->assertStatus(200)
+            ->assertJsonPath('meta.filters.is_pinned', null)
+            ->assertJsonPath('meta.total', 2);
+        $this->assertSame($topikId, $semua->json('data.0.id'));
+
+        // true → hanya topik bersemat.
+        $ya = $this->getJson('/api/v1/lms/forum?is_pinned=true');
+        $ya->assertStatus(200)
+            ->assertJsonPath('meta.filters.is_pinned', true)
+            ->assertJsonCount(1, 'data');
+        $this->assertSame([$topikId], collect($ya->json('data'))->pluck('id')->all());
+
+        // false → hanya topik yang tidak disematkan.
+        $tidak = $this->getJson('/api/v1/lms/forum?is_pinned=0');
+        $tidak->assertStatus(200)
+            ->assertJsonPath('meta.filters.is_pinned', false)
+            ->assertJsonCount(1, 'data');
+        $this->assertFalse($tidak->json('data.0.is_pinned'));
+
+        // Nilai tak dikenal diabaikan diam-diam (= semua), bukan 422 dan bukan false.
+        $ngawur = $this->getJson('/api/v1/lms/forum?is_pinned=ngawur');
+        $ngawur->assertStatus(200)
+            ->assertJsonPath('meta.filters.is_pinned', null)
+            ->assertJsonPath('meta.total', 2);
+    }
 }

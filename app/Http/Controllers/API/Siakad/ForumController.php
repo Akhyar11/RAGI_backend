@@ -41,6 +41,13 @@ class ForumController extends Controller
         );
         $tahunAkademikId = $request->filled('tahun_akademik_id') ? (int) $request->input('tahun_akademik_id') : null;
         $kelasId = $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null;
+        // Filter boolean dinormalisasi lewat filter_var dengan NULL_ON_FAILURE:
+        // input absen berarti "semua", input tak dikenal diabaikan diam-diam.
+        $isPinned = null;
+        if ($request->has('is_pinned')) {
+            $parsed = filter_var($request->input('is_pinned'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            $isPinned = $parsed === null ? null : $parsed;
+        }
 
         $paginator = $this->forumService->listTopikAggregate(
             $this->lmsService->resolveAccessibleKelasIds((int) $request->user()->id),
@@ -49,7 +56,8 @@ class ForumController extends Controller
             $sortBy,
             $sortOrder,
             $tahunAkademikId,
-            $kelasId
+            $kelasId,
+            $isPinned
         );
         $paginator->appends($request->query());
 
@@ -70,6 +78,7 @@ class ForumController extends Controller
                     'sort_order'        => $sortOrder,
                     'tahun_akademik_id' => $tahunAkademikId,
                     'kelas_id'          => $kelasId,
+                    'is_pinned'         => $isPinned,
                 ],
             ],
         ]);

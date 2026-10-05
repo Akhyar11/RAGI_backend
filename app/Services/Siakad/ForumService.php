@@ -199,7 +199,8 @@ class ForumService
         string $sortBy = 'id',
         string $sortOrder = 'desc',
         ?int $tahunAkademikId = null,
-        ?int $kelasId = null
+        ?int $kelasId = null,
+        ?bool $isPinned = null
     ): LengthAwarePaginator {
         $query = ForumTopik::with(['kelas.mataKuliah', 'kelas.tahunAkademik'])
             ->withCount('posts');
@@ -232,6 +233,11 @@ class ForumService
                             });
                   });
             });
+        }
+
+        // Filter sematan: null berarti "semua", bukan "tidak bersemat".
+        if ($isPinned !== null) {
+            $query->where('is_pinned', $isPinned);
         }
 
         [$sortField, $direction] = $this->normalisasiSort($sortBy, $sortOrder, self::SORT_TOPIK);
