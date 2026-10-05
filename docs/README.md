@@ -77,6 +77,7 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
+| QuizController | Quiz per pertemuan + tryout level kelas & **agregat level modul** (batch-loading tanpa kunci, autosave, auto-grade, OBE sync) | [docs/api/LMS/QuizController.md](api/LMS/QuizController.md) |
 | LmsController | LMS standalone (`/api/v1/lms`, UI `/lms`): kelas/my per periode, materi, tugas + OBE sync, absensi token & izin. Otorisasi tetap Gate `siakad.kelas.*` | [docs/api/LMS/LmsController.md](api/LMS/LmsController.md) |
 ---
 
