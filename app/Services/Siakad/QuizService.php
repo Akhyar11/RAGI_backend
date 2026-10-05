@@ -177,7 +177,8 @@ class QuizService
         ?string $search = null,
         string $sortBy = 'id',
         string $sortOrder = 'desc',
-        ?int $tahunAkademikId = null
+        ?int $tahunAkademikId = null,
+        ?int $kelasId = null
     ): \Illuminate\Contracts\Pagination\LengthAwarePaginator {
         $query = Quiz::where('tipe', 'tryout')
             ->with(['komponenPenilaian', 'kelas.mataKuliah', 'kelas.tahunAkademik'])
@@ -185,6 +186,12 @@ class QuizService
 
         if ($kelasIds !== null) {
             $query->whereIn('kelas_id', $kelasIds ?: [0]);
+        }
+
+        // Filter kelas digabung (AND) dengan whereIn di atas sehingga kelas di luar
+        // hak user tidak bisa dimunculkan hanya lewat kelas_id.
+        if ($kelasId) {
+            $query->where('kelas_id', $kelasId);
         }
 
         if ($tahunAkademikId) {

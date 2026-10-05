@@ -352,6 +352,7 @@ class QuizController extends Controller
             : 'id';
         $sortOrder = $request->input('sort_order') === 'asc' ? 'asc' : 'desc';
         $tahunAkademikId = $request->filled('tahun_akademik_id') ? (int) $request->input('tahun_akademik_id') : null;
+        $kelasId = $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null;
 
         $userId = (int) $request->user()->id;
         $paginator = $this->quizService->listTryoutAggregate(
@@ -362,7 +363,8 @@ class QuizController extends Controller
             $search,
             $sortBy,
             $sortOrder,
-            $tahunAkademikId
+            $tahunAkademikId,
+            $kelasId
         );
 
         return response()->json([
@@ -382,6 +384,7 @@ class QuizController extends Controller
                 'sort_by'           => $sortBy,
                 'sort_order'        => $sortOrder,
                 'tahun_akademik_id' => $tahunAkademikId,
+                'kelas_id'          => $kelasId,
             ],
         ]);
     }

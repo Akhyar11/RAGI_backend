@@ -69,6 +69,7 @@ class LmsController extends Controller
         $statusPertemuan = $request->filled('status_pertemuan')
             ? (string) $request->input('status_pertemuan')
             : null;
+        $kelasId = $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null;
 
         $paginator = $this->lmsService->listPertemuanSaya(
             (int) $request->user()->id,
@@ -77,7 +78,8 @@ class LmsController extends Controller
             $sortBy,
             $sortOrder,
             $tahunAkademikId,
-            $statusPertemuan
+            $statusPertemuan,
+            $kelasId
         );
 
         return response()->json([
@@ -98,6 +100,7 @@ class LmsController extends Controller
                 'sort_order'        => $sortOrder,
                 'tahun_akademik_id' => $tahunAkademikId,
                 'status_pertemuan'  => $statusPertemuan,
+                'kelas_id'          => $kelasId,
             ],
         ]);
     }

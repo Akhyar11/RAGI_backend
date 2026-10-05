@@ -81,6 +81,7 @@ module-level dari daftar pertemuan pada halaman detail kelas.
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `tahun_akademik_id` | integer | ❌ | — | Filter periode |
 | `status_pertemuan` | string | ❌ | — | `belum` / `berlangsung` / `selesai` |
+| `kelas_id` | integer | ❌ | — | Filter satu kelas tertentu |
 
 #### Scope Data per Role
 
@@ -142,10 +143,15 @@ hasil kosong — bukan error — agar halaman tidak rusak.
         "sort_by": "tanggal",
         "sort_order": "desc",
         "tahun_akademik_id": null,
-        "status_pertemuan": null
+        "status_pertemuan": null,
+        "kelas_id": null
     }
 }
 ```
+
+`kelas_id` digabung (AND) dengan *Scope Data per Role*, bukan menggantikannya:
+mengirim `kelas_id` milik kelas yang tidak diakses user menghasilkan `total: 0`,
+bukan `403` (yang membocorkan keberadaan kelas) dan bukan data kelas tersebut.
 
 ### [PUT] `/api/v1/lms/pertemuan/{pertemuanId}`
 

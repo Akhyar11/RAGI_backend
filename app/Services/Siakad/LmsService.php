@@ -978,11 +978,18 @@ class LmsService
         string $sortBy = 'tanggal',
         string $sortOrder = 'desc',
         ?int $tahunAkademikId = null,
-        ?string $statusPertemuan = null
+        ?string $statusPertemuan = null,
+        ?int $kelasId = null
     ): \Illuminate\Contracts\Pagination\LengthAwarePaginator {
         $query = Pertemuan::with(['kelas.mataKuliah', 'kelas.tahunAkademik', 'kelas.programStudi', 'kelas.dosenPengampu.dosen']);
 
         $this->applyKelasScope($query, $userId);
+
+        // Filter kelas selalu digabung (AND) dengan applyKelasScope di atas, jadi
+        // kelas di luar hak user tidak bisa dimunculkan hanya lewat kelas_id.
+        if ($kelasId) {
+            $query->where('kelas_id', $kelasId);
+        }
 
         if ($tahunAkademikId) {
             $query->whereHas('kelas', function ($q) use ($tahunAkademikId) {

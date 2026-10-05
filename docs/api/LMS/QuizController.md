@@ -79,6 +79,7 @@ per-kelas tetap dipakai saat konteksnya sudah berada di dalam satu kelas.
 | `sort_by` | string | ❌ | `id` | `id`, `judul`, `durasi_menit`, `dibuka_at`, `ditutup_at`, `created_at` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `tahun_akademik_id` | integer | ❌ | `null` | Filter periode (FK ke master tahun akademik) |
+| `kelas_id` | integer | ❌ | `null` | Filter satu kelas tertentu |
 
 ### Scope Data per Role
 
@@ -140,13 +141,18 @@ Mahasiswa hanya melihat tryout `is_published = true` dan `is_archived = false`.
         "search": null,
         "sort_by": "id",
         "sort_order": "desc",
-        "tahun_akademik_id": null
+        "tahun_akademik_id": null,
+        "kelas_id": null
     }
 }
 ```
 
 `filters` selalu mengembalikan nilai filter yang benar-benar dipakai server (setelah
 normalisasi), sehingga frontend dapat menampilkan ulang state filter.
+
+`kelas_id` digabung (AND) dengan *Scope Data per Role*, bukan menggantikannya:
+mengirim `kelas_id` milik kelas yang tidak diakses user menghasilkan daftar kosong,
+bukan `403` dan bukan data kelas tersebut.
 
 ### Response Error
 
