@@ -106,6 +106,29 @@ class AppServiceProvider extends ServiceProvider
             }
         });
 
+        // LMS Forum — permission dan kepemilikan baris dipisah: permission
+        // di ForumPostPolicy/ForumTopikPolicy, cek `user_id` (resource-level)
+        // hanya di dalam policy.
+        Gate::policy(
+            \App\Models\Lms\ForumPost::class,
+            \App\Policies\Lms\ForumPostPolicy::class
+        );
+        Gate::policy(
+            \App\Models\Lms\ForumTopik::class,
+            \App\Policies\Lms\ForumTopikPolicy::class
+        );
+
+        // Bimbingan PA — menambah catatan bimbingan.
+        // Dosen PA/kaprodi/admin lewat `siakad.krs.approve` & `siakad.mahasiswa.manage`,
+        // mahasiswa menambah catatan atas dirinya sendiri lewat `siakad.krs.create`.
+        // Definisi dipusatkan di sini agar controller tidak melakukan
+        // gabungan pengecekan permission secara ad-hoc.
+        Gate::define('siakad.pa.catatan.create', function (User $user) {
+            return $user->hasPermission('siakad.krs.approve')
+                || $user->hasPermission('siakad.mahasiswa.manage')
+                || $user->hasPermission('siakad.krs.create');
+        });
+
         // Simulasi pembayaran SPMB (local/testing): admin atau pemilik pendaftaran.
         Gate::define('simulate-spmb-payment', function (User $user, \App\Models\Spmb\PendaftaranCalonMhs $pendaftaran) {
             return $user->hasRole('superadmin')

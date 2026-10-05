@@ -275,6 +275,11 @@ class PermissionSeeder extends Seeder
             ['name' => 'Lihat Master Kop Surat', 'slug' => 'arsip.kop_surat.read', 'module' => 'arsip', 'action' => 'read', 'description' => 'Melihat master berkas kop surat 2 versi'],
             ['name' => 'Kelola Master Kop Surat', 'slug' => 'arsip.kop_surat.manage', 'module' => 'arsip', 'action' => 'update', 'description' => 'Mengunggah dan mengelola master kop surat'],
             ['name' => 'Kelola Master Klasifikasi Surat', 'slug' => 'arsip.master.manage', 'module' => 'arsip', 'action' => 'update', 'description' => 'Mengelola kode unit dan kode klasifikasi surat'],
+
+            // ── MODUL LMS (FORUM DISKUSI) ─────────────────────────
+            ['name' => 'Lihat Forum Diskusi', 'slug' => 'lms.forum.read', 'module' => 'lms', 'action' => 'read', 'description' => 'Membaca topik & pesan forum kelas'],
+            ['name' => 'Kirim Pesan Forum', 'slug' => 'lms.forum.create', 'module' => 'lms', 'action' => 'create', 'description' => 'Mengirim pesan & balasan pada forum kelas'],
+            ['name' => 'Kelola Forum Diskusi', 'slug' => 'lms.forum.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Membuat/hapus topik & moderasi pesan forum kelas'],
         ];
 
         foreach ($permissions as $perm) {
@@ -329,6 +334,8 @@ class PermissionSeeder extends Seeder
                 'siakad.krs.read',
                 'siakad.krs.create',
                 'siakad.nilai.read',
+                'lms.forum.read',
+                'lms.forum.create',
                 'sikeu.tagihan.read',
                 'sikeu.dispensasi.read',
                 'sikeu.dispensasi.create',
@@ -353,6 +360,9 @@ class PermissionSeeder extends Seeder
                 'siakad.nilai.manage',
                 'siakad.mahasiswa.read',
                 'siakad.konversi.manage',
+                'lms.forum.read',
+                'lms.forum.create',
+                'lms.forum.manage',
                 // SIMPEG mandiri
                 'simpeg.dashboard.read',
                 'simpeg.pegawai.read',

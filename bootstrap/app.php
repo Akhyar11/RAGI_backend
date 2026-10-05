@@ -19,6 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->prefix('api/spmb')->group(base_path('routes/spmb_core.php'));
             // Protected SIAKAD module routes
             Route::middleware('auth:api')->prefix('api/v1/siakad')->group(base_path('routes/siakad.php'));
+            // Standalone LMS module routes (pisah dari SIAKAD agar menu tidak menumpuk)
+            Route::middleware('auth:api')->prefix('api/v1/lms')->group(base_path('routes/lms.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
