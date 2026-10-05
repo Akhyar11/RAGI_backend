@@ -16,7 +16,7 @@ class MenuSeeder extends Seeder
         Menu::truncate();
         Schema::enableForeignKeyConstraints();
 
-        $menus = \App\Support\MenuCatalog::definitions();
+$menus = \App\Support\MenuCatalog::definitions();
 
         foreach ($menus as $menuData) {
             $permissionId = null;
@@ -212,6 +212,17 @@ class MenuSeeder extends Seeder
                 ->pluck('id')
                 ->toArray();
             $mahasiswaRole->menus()->syncWithoutDetaching($mhsSiakadMenuIds);
+        }
+
+        // LMS standalone: dosen + mahasiswa wajib punya menu /lms
+        $lmsMenuIds = Menu::where('module', 'lms')->pluck('id')->toArray();
+        if (!empty($lmsMenuIds)) {
+            if (isset($dosenRole) && $dosenRole) {
+                $dosenRole->menus()->syncWithoutDetaching($lmsMenuIds);
+            }
+            if (isset($mahasiswaRole) && $mahasiswaRole) {
+                $mahasiswaRole->menus()->syncWithoutDetaching($lmsMenuIds);
+            }
         }
 
         // Pimpinan: dashboard + approval direktur + laporan & pantauan (read-only eksekutif).

@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class PengajuanOperasionalService
 {
@@ -221,7 +222,14 @@ class PengajuanOperasionalService
             $unitKas = UnitKas::find($pengajuan->unit_kas_id);
             $saldoSebelum = $unitKas ? (float) $unitKas->saldo_saat_ini : 0;
             if ($unitKas) {
-                $unitKas->increment('saldo_saat_ini', $nominal);
+                if ($nominal > $saldoSebelum) {
+                    // Pengecekan saldo memakai ValidationException agar client
+                    // menerima 422 dengan pesan pada field, bukan 500.
+                    throw ValidationException::withMessages([
+                        'nominal' => ['Saldo unit kas tidak mencukupi untuk pencairan operasional ini.'],
+                    ]);
+                }
+                $unitKas->decrement('saldo_saat_ini', $nominal);
             }
 
             if ($unitKas) {
@@ -229,10 +237,10 @@ class PengajuanOperasionalService
                     'unit_kas_id' => $unitKas->id,
                     'pengajuan_pencairan_id' => $pengajuan->id,
                     'kode_transaksi' => 'CAIR-' . date('Ymd') . '-' . strtoupper(Str::random(4)),
-                    'jenis_transaksi' => 'debet_pemasukan',
+                    'jenis_transaksi' => 'kredit_pengeluaran',
                     'nominal' => $nominal,
                     'saldo_sebelum' => $saldoSebelum,
-                    'saldo_sesudah' => $saldoSebelum + $nominal,
+                    'saldo_sesudah' => $saldoSebelum - $nominal,
                     'keterangan' => 'Pencairan operasional: ' . $pengajuan->nomor_pengajuan,
                     'tanggal_transaksi' => $data['tanggal_pencairan'] ?? now()->toDateString(),
                 ]);

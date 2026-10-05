@@ -17,9 +17,11 @@ Manajemen Pembimbing Akademik (PA): rekap bimbingan dosen, penugasan mahasiswa b
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
 | GET | `/api/v1/siakad/bimbingan/rekap` | Rekapitulasi bimbingan seluruh PA / dosen bersangkutan | ✅ |
-| GET | `/api/v1/siakad/bimbingan/advisees` | Daftar mahasiswa bimbingan PA + riwayat sesi log | ✅ |
+| GET | `/api/v1/siakad/bimbingan/advisees` | Daftar mahasiswa bimbingan PA + riwayat sesi log (paginated) | ✅ |
+| GET | `/api/v1/siakad/bimbingan/my-pa` | Data dosen PA mahasiswa login beserta riwayat catatan & KRS aktif | ✅ |
 | GET | `/api/v1/siakad/bimbingan/catatan` | Daftar catatan bimbingan per mahasiswa | ✅ |
 | POST | `/api/v1/siakad/bimbingan/catatan` | Simpan catatan bimbingan baru | ✅ |
+| PUT | `/api/v1/siakad/bimbingan/catatan/{id}` | Perbarui catatan bimbingan | ✅ |
 | DELETE | `/api/v1/siakad/bimbingan/catatan/{id}` | Hapus catatan bimbingan | ✅ |
 | GET | `/api/v1/siakad/bimbingan/laporan` | Ambil laporan akhir PA per tahun akademik | ✅ |
 | POST | `/api/v1/siakad/bimbingan/laporan` | Simpan/finalisasi laporan PA | ✅ |
@@ -116,6 +118,252 @@ aktivitas sesi bimbingan. Aktivitas (`total_bimbingan`, `butuh_khusus_aktif`,
 > mahasiswa selalu kondisi terkini.
 
 ---
+
+## [GET] /api/v1/siakad/bimbingan/advisees
+
+Mengambil daftar mahasiswa bimbingan PA beserta rekap catatan dan status KRS (paginated).
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `dosen_id` | integer | ❌ | — | ID Dosen PA (otomatis diambil dari user login jika role dosen) |
+| `status_mahasiswa` | string | ❌ | — | Filter status (aktif, cuti, mangkir, lulus, keluar) |
+| `search` | string | ❌ | — | Pencarian nama atau NIM mahasiswa |
+| `per_page` | integer | ❌ | 15 | Jumlah data per halaman |
+| `page` | integer | ❌ | 1 | Nomor halaman |
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Daftar mahasiswa bimbingan PA berhasil dimuat",
+    "data": [
+        {
+            "id": 14,
+            "nim": "202401001",
+            "nama_lengkap": "Ahmad Dani",
+            "angkatan": "2024",
+            "status": "aktif",
+            "program_studi": "Teknik Informatika",
+            "total_catatan": 2,
+            "butuh_khusus": false
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    }
+}
+```
+
+---
+
+## [GET] /api/v1/siakad/bimbingan/my-pa
+
+Mengambil data dosen PA bagi mahasiswa yang sedang login beserta riwayat catatan bimbingan dan KRS semester aktif.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Data dosen PA berhasil dimuat",
+    "data": {
+        "mahasiswa": {
+            "id": 14,
+            "nim": "202401001",
+            "nama_lengkap": "Ahmad Dani",
+            "angkatan": "2024",
+            "program_studi": "Teknik Informatika"
+        },
+        "dosen_pa": {
+            "id": 5,
+            "nama_lengkap": "Dr. Ir. Hendra Gunawan",
+            "nidn": "0011223344",
+            "nip": "198001012005011001",
+            "email": "hendra@kampus.ac.id",
+            "telepon": "081234567890",
+            "program_studi": "Teknik Informatika",
+            "jabatan_akademik": "Lektor Kepala"
+        },
+        "krs_aktif": {
+            "id": 22,
+            "status": "disetujui",
+            "total_sks": 20
+        },
+        "catatan": [],
+        "total_bimbingan": 0
+    }
+}
+```
+
+### Response Error
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Data mahasiswa tidak ditemukan untuk akun ini."
+}
+```
+
+---
+
+## [GET] /api/v1/siakad/bimbingan/catatan
+
+Mengambil daftar riwayat catatan bimbingan untuk mahasiswa tertentu.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Data catatan bimbingan berhasil diambil.",
+    "data": [
+        {
+            "id": 1,
+            "mahasiswa_id": 14,
+            "dosen_id": 5,
+            "tanggal_bimbingan": "2026-10-01",
+            "kategori": "akademik",
+            "isi": "Konsultasi pengambilan sks semester ganjil.",
+            "kesimpulan": "Disetujui 20 SKS.",
+            "butuh_penanganan_khusus": false
+        }
+    ]
+}
+```
+
+### Response Error (401 / 403)
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+---
+
+## [POST] /api/v1/siakad/bimbingan/catatan
+
+Menyimpan catatan bimbingan baru untuk mahasiswa bimbingan.
+
+### Request Body
+```json
+{
+    "mahasiswa_id": 14,
+    "tanggal_bimbingan": "2026-10-01",
+    "kategori": "akademik",
+    "isi": "Konsultasi rencana studi.",
+    "kesimpulan": "Fokus pada mata kuliah prasyarat.",
+    "butuh_penanganan_khusus": false
+}
+```
+
+### Response Sukses (201 Created)
+```json
+{
+    "status": "success",
+    "message": "Catatan bimbingan berhasil disimpan.",
+    "data": {
+        "id": 1,
+        "mahasiswa_id": 14,
+        "dosen_id": 5,
+        "tanggal_bimbingan": "2026-10-01",
+        "kategori": "akademik",
+        "isi": "Konsultasi rencana studi.",
+        "kesimpulan": "Fokus pada mata kuliah prasyarat.",
+        "butuh_penanganan_khusus": false
+    }
+}
+```
+
+### Response Error (422 Unprocessable Entity)
+```json
+{
+    "status": "error",
+    "message": "Validation failed",
+    "errors": {
+        "isi": ["The isi field is required."]
+    }
+}
+```
+
+---
+
+## [PUT] /api/v1/siakad/bimbingan/catatan/{id}
+
+Memperbarui isi catatan bimbingan yang telah dicatat sebelumnya.
+
+### Request Body
+```json
+{
+    "tanggal_bimbingan": "2026-10-01",
+    "kategori": "akademik",
+    "isi": "Revisi konsultasi rencana studi.",
+    "kesimpulan": "Disetujui 22 SKS.",
+    "butuh_penanganan_khusus": false
+}
+```
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Catatan bimbingan berhasil diperbarui.",
+    "data": {
+        "id": 1,
+        "mahasiswa_id": 14,
+        "dosen_id": 5,
+        "tanggal_bimbingan": "2026-10-01",
+        "kategori": "akademik",
+        "isi": "Revisi konsultasi rencana studi.",
+        "kesimpulan": "Disetujui 22 SKS.",
+        "butuh_penanganan_khusus": false
+    }
+}
+```
+
+### Response Error (403 Forbidden / 404 Not Found)
+```json
+{
+    "status": "error",
+    "message": "Catatan ini milik PA lain."
+}
+```
+
+---
+
+## [DELETE] /api/v1/siakad/bimbingan/catatan/{id}
+
+Menghapus catatan bimbingan PA.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Catatan bimbingan berhasil dihapus.",
+    "data": null
+}
+```
+
+### Response Error (403 Forbidden / 404 Not Found)
+```json
+{
+    "status": "error",
+    "message": "Catatan ini milik PA lain."
+}
+```
 
 ## [GET] /api/v1/siakad/bimbingan/aktivitas
 

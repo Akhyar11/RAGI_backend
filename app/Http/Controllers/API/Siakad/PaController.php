@@ -8,9 +8,12 @@ use App\Models\Siakad\Dosen;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\PaCatatan;
 use App\Models\Siakad\PaLaporan;
+use App\Services\AuditLogService;
 use App\Services\Siakad\PaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 
 class PaController extends Controller
 {
@@ -50,6 +53,8 @@ class PaController extends Controller
     /** Daftar mahasiswa bimbingan + flag masalah (tunggakan, KRS belum disetujui, IPK rendah). */
     public function advisees(Request $request)
     {
+        Gate::authorize('siakad.mahasiswa.read');
+
         $request->validate([
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
             'search' => 'nullable|string|max:100',
@@ -70,9 +75,14 @@ class PaController extends Controller
             $s = $request->search;
             $query->where(fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nim', 'like', "%{$s}%"));
         }
-        $list = $query->orderBy('nama_lengkap')->get();
 
-        $data = $list->map(function ($m) use ($dosen) {
+        $perPage = min(100, $request->integer('per_page', 15));
+        $allowedSorts = ['nama_lengkap', 'nim', 'angkatan', 'ipk'];
+        $sortBy = in_array($request->input('sort_by'), $allowedSorts, true) ? $request->input('sort_by') : 'nama_lengkap';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $paginator = $query->orderBy($sortBy, $sortOrder)->paginate($perPage);
+
+        $data = collect($paginator->items())->map(function ($m) use ($dosen) {
             $krsAktif = $m->krs->first();
             $catatanKhusus = PaCatatan::where('dosen_id', $dosen->id)
                 ->where('mahasiswa_id', $m->id)
@@ -127,7 +137,77 @@ class PaController extends Controller
             ];
         });
 
-        return response()->json(['status' => 'success', 'data' => $data]);
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data mahasiswa bimbingan PA berhasil diambil.',
+            'data' => $data,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+        ]);
+    }
+
+    /**
+     * Endpoint untuk mahasiswa melihat profil Dosen PA mereka,
+     * status akademik, serta seluruh riwayat catatan/sesi bimbingan.
+     */
+    public function myPa(Request $request)
+    {
+        Gate::authorize('siakad.krs.read');
+
+        $user = $request->user();
+        $mhs = Mahasiswa::with(['programStudi', 'dosenWali.programStudi', 'krs' => fn($q) => $q->latest('id')->limit(5)])
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$mhs) {
+            return response()->json(['status' => 'error', 'message' => 'Data mahasiswa tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $catatanList = PaCatatan::with('dosen')
+            ->where('mahasiswa_id', $mhs->id)
+            ->orderBy('tanggal_bimbingan', 'desc')
+            ->get();
+
+        $krsAktif = $mhs->krs->first();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data bimbingan PA berhasil diambil.',
+            'data' => [
+                'mahasiswa' => [
+                    'id' => $mhs->id,
+                    'nim' => $mhs->nim,
+                    'nama_lengkap' => $mhs->nama_lengkap,
+                    'angkatan' => $mhs->angkatan,
+                    'status' => $mhs->status,
+                    'ipk' => $mhs->ipk,
+                    'program_studi' => $mhs->programStudi?->nama,
+                ],
+                'dosen_wali' => $mhs->dosenWali ? [
+                    'id' => $mhs->dosenWali->id,
+                    'nama_lengkap' => $mhs->dosenWali->nama_lengkap,
+                    'nidn' => $mhs->dosenWali->nidn,
+                    'nip' => $mhs->dosenWali->nip,
+                    'email' => $mhs->dosenWali->email,
+                    'telepon' => $mhs->dosenWali->telepon ?? $mhs->dosenWali->handphone,
+                    'program_studi' => $mhs->dosenWali->programStudi?->nama,
+                    'jabatan_akademik' => $mhs->dosenWali->jabatan_akademik,
+                ] : null,
+                'krs_aktif' => $krsAktif ? [
+                    'id' => $krsAktif->id,
+                    'status' => $krsAktif->status,
+                    'total_sks' => $krsAktif->total_sks_diambil ?? $krsAktif->total_sks,
+                ] : null,
+                'catatan' => $catatanList,
+                'total_bimbingan' => $catatanList->count(),
+            ]
+        ]);
     }
 
     public function listCatatan(Request $request)
@@ -145,7 +225,16 @@ class PaController extends Controller
         $user = $request->user();
         if (!$this->isPrivileged($user)) {
             $own = Dosen::where('user_id', $user->id)->first();
-            $query->where('dosen_id', $own?->id ?? -1);
+            if ($own) {
+                $query->where('dosen_id', $own->id);
+            } else {
+                $mhs = Mahasiswa::where('user_id', $user->id)->first();
+                if ($mhs) {
+                    $query->where('mahasiswa_id', $mhs->id);
+                } else {
+                    $query->where('dosen_id', -1);
+                }
+            }
         } elseif ($request->filled('dosen_id')) {
             $query->where('dosen_id', $request->dosen_id);
         }
@@ -164,8 +253,10 @@ class PaController extends Controller
 
     public function storeCatatan(Request $request)
     {
+        Gate::authorize('siakad.pa.catatan.create');
+
         $validated = $request->validate([
-            'mahasiswa_id' => 'required|exists:siakad_mahasiswa,id',
+            'mahasiswa_id' => 'nullable|exists:siakad_mahasiswa,id',
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
             'kategori' => 'required|in:akademik,krs,khs,keuangan,pribadi,lainnya',
             'isi' => 'required|string',
@@ -179,10 +270,59 @@ class PaController extends Controller
         $user = $request->user();
         $dosen = Dosen::where('user_id', $user?->id)->first();
         if (!$dosen && !$this->isPrivileged($user)) {
-            return response()->json(['status' => 'error', 'message' => 'Akun Anda tidak terhubung ke data dosen.'], 403);
+            $mhs = Mahasiswa::where('user_id', $user?->id)->first();
+            if ($mhs) {
+                if (!$mhs->dosen_wali_id) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Anda belum memiliki Dosen Wali (PA) yang ditetapkan.',
+                        'errors' => [
+                            'dosen_wali_id' => ['Anda belum memiliki Dosen Wali (PA) yang ditetapkan.'],
+                        ],
+                    ], 422);
+                }
+                $catatan = PaCatatan::create([
+                    'mahasiswa_id' => $mhs->id,
+                    'dosen_id' => $mhs->dosen_wali_id,
+                    'kategori' => $validated['kategori'],
+                    'isi' => $validated['isi'],
+                    'kesimpulan' => $validated['kesimpulan'] ?? null,
+                    'tanggal_bimbingan' => $validated['tanggal_bimbingan'] ?? now()->toDateString(),
+                    'butuh_penanganan_khusus' => $request->boolean('butuh_penanganan_khusus', false),
+                    'status_tindak_lanjut' => 'dipantau',
+                    'dibuat_oleh' => $user->id,
+                    'tahun_akademik_id' => $validated['tahun_akademik_id'] ?? null,
+                ]);
+
+                try {
+                    AuditLogService::record(
+                        module: 'SIAKAD',
+                        action: 'create',
+                        tableName: 'siakad_pa_catatan',
+                        recordId: $catatan->id,
+                        oldValues: null,
+                        newValues: $catatan->toArray()
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('Gagal mencatat audit log catatan PA: ' . $e->getMessage());
+                }
+
+                return response()->json(['status' => 'success', 'message' => 'Catatan bimbingan berhasil diajukan ke Dosen PA.', 'data' => $catatan->load(['mahasiswa', 'dosen'])], 201);
+            }
+            return response()->json(['status' => 'error', 'message' => 'Akun Anda tidak terhubung ke data dosen atau mahasiswa.'], 403);
         }
 
-        $mhs = Mahasiswa::findOrFail($validated['mahasiswa_id']);
+        $mahasiswaId = $validated['mahasiswa_id'] ?? null;
+        if (!$mahasiswaId) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Mahasiswa wajib dipilih.',
+                'errors' => [
+                    'mahasiswa_id' => ['Mahasiswa wajib dipilih.'],
+                ],
+            ], 422);
+        }
+        $mhs = Mahasiswa::findOrFail($mahasiswaId);
         // Dosen murni hanya untuk bimbingannya; istimewa boleh atas nama PA ybs.
         $dosenId = $validated['dosen_id'] ?? null;
         if (!$this->isPrivileged($user)) {
@@ -195,21 +335,43 @@ class PaController extends Controller
             $dosenId = $mhs->dosen_wali_id;
         }
         if (!$dosenId) {
-            return response()->json(['status' => 'error', 'message' => 'Tentukan dosen PA untuk catatan ini.'], 422);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tentukan dosen PA untuk catatan ini.',
+                'errors' => [
+                    'dosen_id' => ['Tentukan dosen PA untuk catatan ini.'],
+                ],
+            ], 422);
         }
 
         $catatan = PaCatatan::create(array_merge($validated, [
+            'mahasiswa_id' => $mhs->id,
             'dosen_id' => $dosenId,
             'butuh_penanganan_khusus' => $request->boolean('butuh_penanganan_khusus', false),
             'status_tindak_lanjut' => $validated['status_tindak_lanjut'] ?? 'dipantau',
             'dibuat_oleh' => $user?->id,
         ]));
 
-        return response()->json(['status' => 'success', 'message' => 'Catatan bimbingan tersimpan', 'data' => $catatan->load(['mahasiswa', 'dosen'])], 201);
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_pa_catatan',
+                recordId: $catatan->id,
+                oldValues: null,
+                newValues: $catatan->toArray()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log catatan PA: ' . $e->getMessage());
+        }
+
+        return response()->json(['status' => 'success', 'message' => 'Catatan bimbingan berhasil disimpan.', 'data' => $catatan->load(['mahasiswa', 'dosen'])], 201);
     }
 
     public function updateCatatan(Request $request, $id)
     {
+        Gate::authorize('siakad.krs.approve');
+
         $catatan = PaCatatan::findOrFail($id);
         $user = $request->user();
         $own = Dosen::where('user_id', $user?->id)->first();
@@ -225,22 +387,59 @@ class PaController extends Controller
             'butuh_penanganan_khusus' => 'nullable|boolean',
             'status_tindak_lanjut' => 'nullable|in:dipantau,diproses,selesai',
         ]);
+        $oldValues = $catatan->getOriginal();
         $catatan->update($validated);
 
-        return response()->json(['status' => 'success', 'message' => 'Catatan diperbarui', 'data' => $catatan->fresh()->load(['mahasiswa'])]);
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_pa_catatan',
+                recordId: $catatan->id,
+                oldValues: $oldValues,
+                newValues: $catatan->getChanges()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log catatan PA: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Catatan bimbingan berhasil diperbarui.',
+            'data' => $catatan->fresh()->load(['mahasiswa']),
+        ]);
     }
 
     public function destroyCatatan($id, Request $request)
     {
+        Gate::authorize('siakad.krs.approve');
+
         $catatan = PaCatatan::findOrFail($id);
         $user = $request->user();
         $own = Dosen::where('user_id', $user?->id)->first();
         if (!$this->isPrivileged($user) && (int) $catatan->dosen_id !== (int) ($own?->id ?? -1)) {
             return response()->json(['status' => 'error', 'message' => 'Catatan ini milik PA lain.'], 403);
         }
+
+        $oldValues = $catatan->getOriginal();
+        $recordId = $catatan->id;
+
         $catatan->delete();
 
-        return response()->json(['status' => 'success', 'message' => 'Catatan dihapus']);
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_pa_catatan',
+                recordId: $recordId,
+                oldValues: $oldValues,
+                newValues: null
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log catatan PA: ' . $e->getMessage());
+        }
+
+        return response()->json(['status' => 'success', 'message' => 'Catatan bimbingan berhasil dihapus.', 'data' => null]);
     }
 
     public function getLaporan(Request $request)

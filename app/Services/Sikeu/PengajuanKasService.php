@@ -79,9 +79,36 @@ class PengajuanKasService
             $pengajuan->approved_keuangan_at = now();
             $pengajuan->save();
 
-            // Mutasi saldo Unit Kas
+            // Mutasi saldo Unit Kas (transfer antar kas: kas utama berkurang, unit penerima bertambah)
             $unitKas = UnitKas::find($pengajuan->unit_kas_id);
             if ($unitKas) {
+                $kasUtama = UnitKas::where('is_kabag_kas', true)
+                    ->where('status', true)
+                    ->first();
+
+                if ($kasUtama && (int) $kasUtama->id !== (int) $unitKas->id) {
+                    if ((float) $kasUtama->saldo_saat_ini < (float) $pengajuan->nominal_disetujui) {
+                        throw ValidationException::withMessages([
+                            'nominal_disetujui' => ['Saldo kas utama tidak mencukupi untuk pencairan ini.'],
+                        ]);
+                    }
+
+                    $saldoUtamaSebelum = (float) $kasUtama->saldo_saat_ini;
+                    $kasUtama->decrement('saldo_saat_ini', (float) $pengajuan->nominal_disetujui);
+
+                    TransaksiKasUnit::create([
+                        'unit_kas_id' => $kasUtama->id,
+                        'pengajuan_pencairan_id' => $pengajuan->id,
+                        'kode_transaksi' => 'TRX-' . time(),
+                        'jenis_transaksi' => 'kredit_pengeluaran',
+                        'nominal' => $pengajuan->nominal_disetujui,
+                        'saldo_sebelum' => $saldoUtamaSebelum,
+                        'saldo_sesudah' => $saldoUtamaSebelum - (float) $pengajuan->nominal_disetujui,
+                        'keterangan' => 'Penyaluran ke unit: ' . $pengajuan->judul_pengajuan,
+                        'tanggal_transaksi' => now()->toDateString(),
+                    ]);
+                }
+
                 $saldoSebelum = $unitKas->saldo_saat_ini;
                 $unitKas->saldo_saat_ini += $pengajuan->nominal_disetujui;
                 $unitKas->save();

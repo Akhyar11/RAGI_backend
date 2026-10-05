@@ -286,6 +286,16 @@ return [
                 'order_index' => 9,
             ],
 
+            // ── MODUL LMS (STANDALONE, PISAH DARI SIAKAD) ─────
+            [
+                'name' => 'Dashboard LMS',
+                'url' => '/lms',
+                'icon' => 'FaBookOpen',
+                'module' => 'lms',
+                'permission_slug' => 'siakad.kelas.read',
+                'order_index' => 1,
+            ],
+
             // ── MODUL SPMB (PENERIMAAN MAHASISWA BARU) ─────────────
             [
                 'name' => 'Dashboard SPMB',

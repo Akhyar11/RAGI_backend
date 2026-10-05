@@ -91,5 +91,15 @@ class ModuleSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        Module::updateOrCreate(
+            ['code' => 'lms'],
+            [
+                'name' => 'LMS (Learning Management)',
+                'description' => 'Sistem Manajemen Pembelajaran — Materi, Tugas & Absensi Terintegrasi.',
+                'primary_color' => '#6366f1',
+                'is_active' => true,
+            ]
+        );
     }
 }

@@ -186,21 +186,41 @@ class SpmbKonversiService
     }
 
     /**
-     * Algoritma pembuatan NIM: {2-digit tahun}{2-digit kode prodi}{4-digit sequential}.
+     * Algoritma pembuatan NIM:
+     * - Jika prodi punya prefix_nim (mis. Otomotif = "A"): {PREFIX}{2-digit tahun}{3-digit sequential}, cth A25001.
+     * - Jika kosong: fallback standar {2-digit tahun}{2-digit kode prodi}{4-digit sequential}.
      */
     public function generateNIM(int $angkatan, int $prodiId): string
     {
-        $prefix = substr((string)$angkatan, -2) . str_pad((string)$prodiId, 2, '0', STR_PAD_LEFT);
-        
+        $yy = substr((string)$angkatan, -2);
+        $prefixNim = null;
+        try {
+            $prodi = \App\Models\Siakad\ProgramStudi::find($prodiId);
+            $raw = trim((string)($prodi?->prefix_nim ?? ''));
+            if ($raw !== '') {
+                $prefixNim = strtoupper($raw);
+            }
+        } catch (\Throwable $e) {
+            $prefixNim = null;
+        }
+
+        if ($prefixNim !== null) {
+            $prefix = $prefixNim . $yy;
+            $seqLen = 3;
+        } else {
+            $prefix = $yy . str_pad((string)$prodiId, 2, '0', STR_PAD_LEFT);
+            $seqLen = 4;
+        }
+
         $lastMhs = Mahasiswa::where('nim', 'like', "{$prefix}%")
             ->orderBy('nim', 'desc')
             ->first();
 
         $nextSeq = 1;
-        if ($lastMhs && preg_match('/^' . preg_quote($prefix, '/') . '(\d{4})$/', $lastMhs->nim, $matches)) {
+        if ($lastMhs && preg_match('/^' . preg_quote($prefix, '/') . '(\d{' . $seqLen . ',})$/', (string)$lastMhs->nim, $matches)) {
             $nextSeq = ((int)$matches[1]) + 1;
         }
 
-        return $prefix . str_pad((string)$nextSeq, 4, '0', STR_PAD_LEFT);
+        return $prefix . str_pad((string)$nextSeq, $seqLen, '0', STR_PAD_LEFT);
     }
 }

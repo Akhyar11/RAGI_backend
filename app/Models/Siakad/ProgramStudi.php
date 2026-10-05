@@ -20,6 +20,7 @@ class ProgramStudi extends Model
         'fakultas_id',
         'kaprodi_id',
         'kode_prodi',
+        'prefix_nim',
         'kode_prodi_dikti',
         'id_feeder',
         'nama',

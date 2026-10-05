@@ -16,13 +16,21 @@ use App\Models\Siakad\KetercapaianCpmkMahasiswa;
 use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\NilaiMahasiswa;
 use App\Models\Siakad\BankSoal;
+use App\Models\Siakad\BankSoalKategori;
+use App\Models\Siakad\BankSoalOpsi;
+use App\Http\Requests\Siakad\Obe\StoreBankSoalRequest;
+use App\Http\Requests\Siakad\Obe\StoreBankSoalKategoriRequest;
+use App\Http\Requests\Siakad\Obe\StoreBankSoalOpsiRequest;
 use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\MataKuliah;
 use App\Services\Siakad\SiakadAkademikService;
 use App\Http\Requests\Siakad\StoreCplRequest;
 use App\Http\Requests\Siakad\StoreKelasKomponenRequest;
+use App\Services\AuditLogService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 
 class ObeController extends Controller
 {
@@ -1283,6 +1291,8 @@ class ObeController extends Controller
 
     public function deleteSubCpmk($id)
     {
+        Gate::authorize('siakad.nilai.manage');
+
         $sub = SubCpmk::findOrFail($id);
         if ($sub->komponenPenilaians()->exists()) {
             return response()->json([
@@ -1290,62 +1300,334 @@ class ObeController extends Controller
                 'message' => 'SubCPMK dipakai komponen penilaian — lepas dulu sebelum dihapus.',
             ], 422);
         }
+
+        $oldValues = $sub->getOriginal();
+        $subId = $sub->id;
         $sub->delete();
 
-        return response()->json(['status' => 'success', 'message' => 'SubCPMK berhasil dihapus']);
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_sub_cpmk',
+                recordId: $subId,
+                oldValues: $oldValues,
+                newValues: null
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log hapus SubCPMK: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'SubCPMK berhasil dihapus.',
+            'data' => null,
+        ]);
     }
 
-    // --- Bank Soal per Sesi/SubCPMK ---
+    // --- Bank Soal per Sesi/SubCPMK (master tunggal untuk OBE & Quiz LMS) ---
     public function listSoal(Request $request)
     {
-        $request->validate([
-            'rps_id' => 'nullable|exists:siakad_rps,id',
-            'rps_mingguan_id' => 'nullable|exists:siakad_rps_mingguan,id',
-        ]);
+        Gate::authorize('siakad.nilai.manage');
 
-        $query = BankSoal::with(['mingguan', 'subCpmk.cpmk', 'rps.mataKuliah.kurikulum.programStudi'])->orderBy('id');
+        $perPage = min(100, $request->integer('per_page', 15));
+
+        $query = BankSoal::with(['mingguan', 'subCpmk.cpmk', 'rps.mataKuliah.kurikulum.programStudi', 'kategori', 'opsi']);
+
         if ($request->filled('rps_id')) {
-            $query->where('rps_id', $request->rps_id);
+            $query->where('rps_id', $request->input('rps_id'));
         }
         if ($request->filled('rps_mingguan_id')) {
-            $query->where('rps_mingguan_id', $request->rps_mingguan_id);
+            $query->where('rps_mingguan_id', $request->input('rps_mingguan_id'));
+        }
+        if ($request->filled('sub_cpmk_id')) {
+            $query->where('sub_cpmk_id', $request->input('sub_cpmk_id'));
+        }
+        if ($request->filled('kategori_id')) {
+            $query->where('kategori_id', $request->input('kategori_id'));
+        }
+        if ($request->filled('tipe_soal')) {
+            $query->where('tipe_soal', $request->input('tipe_soal'));
+        }
+        if ($request->filled('tingkat_kesulitan')) {
+            $query->where('tingkat_kesulitan', $request->input('tingkat_kesulitan'));
+        }
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('pertanyaan', 'like', "%{$search}%")
+                  ->orWhere('kunci_jawaban', 'like', "%{$search}%")
+                  ->orWhereHas('opsi', function ($o) use ($search) {
+                      $o->where('teks', 'like', "%{$search}%");
+                  });
+            });
         }
 
-        return response()->json(['status' => 'success', 'data' => $query->get()]);
+        $allowedSorts = ['id', 'bobot', 'tipe_soal', 'tingkat_kesulitan', 'created_at', 'updated_at'];
+        $sortBy = in_array($request->input('sort_by'), $allowedSorts, true) ? $request->input('sort_by') : 'id';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        $data = $query->paginate($perPage);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data bank soal berhasil diambil.',
+            'data' => $data->items(),
+            'meta' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem(),
+            ],
+        ]);
     }
 
-    public function storeSoal(Request $request)
+    public function storeSoal(StoreBankSoalRequest $request)
     {
-        $validated = $request->validate([
-            'id' => 'nullable|exists:siakad_bank_soal,id',
-            'rps_id' => 'required|exists:siakad_rps,id',
-            'rps_mingguan_id' => 'nullable|exists:siakad_rps_mingguan,id',
-            'sub_cpmk_id' => 'nullable|exists:siakad_sub_cpmk,id',
-            'pertanyaan' => 'required|string',
-            'bobot' => 'nullable|numeric|min:0|max:100',
-            'kunci_jawaban' => 'nullable|string',
-        ]);
+        Gate::authorize('siakad.nilai.manage');
+
+        $validated = $request->validated();
         $validated['dibuat_oleh'] = $request->user()?->id;
 
         if (trim(strip_tags($validated['pertanyaan'] ?? '')) === '') {
             return response()->json(['status' => 'error', 'message' => 'Pertanyaan tidak boleh kosong.'], 422);
         }
 
-        $soal = BankSoal::updateOrCreate(['id' => $request->id], $validated);
+        if ($request->filled('id')) {
+            $soal = BankSoal::findOrFail($request->input('id'));
+            $oldValues = $soal->getOriginal();
+            $soal->update($validated);
+            $newValues = $soal->getChanges();
+            $action = 'update';
+        } else {
+            $soal = BankSoal::create($validated);
+            $oldValues = null;
+            $newValues = $soal->toArray();
+            $action = 'create';
+        }
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: $action,
+                tableName: 'siakad_bank_soal',
+                recordId: $soal->id,
+                oldValues: $oldValues,
+                newValues: $newValues
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log bank soal: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Soal berhasil disimpan',
-            'data' => $soal->load(['mingguan', 'subCpmk.cpmk']),
-        ], $request->filled('id') ? 200 : 201);
+            'message' => 'Soal berhasil disimpan.',
+            'data' => $soal->load(['mingguan', 'subCpmk.cpmk', 'kategori', 'opsi']),
+        ], $action === 'create' ? 201 : 200);
     }
 
     public function deleteSoal($id)
     {
+        Gate::authorize('siakad.nilai.manage');
+
         $soal = BankSoal::findOrFail($id);
+
+        // Bank soal yang sudah dipakai quiz LMS tidak boleh dihapus diam-diam
+        // (FK restrict juga menjaganya di level database).
+        if (\App\Models\Lms\QuizSoal::where('bank_soal_id', $soal->id)->exists()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Soal dipakai quiz LMS — lepas dari quiz terlebih dahulu sebelum dihapus.',
+            ], 422);
+        }
+
+        $oldValues = $soal->getOriginal();
+        $soalId = $soal->id;
         $soal->delete();
 
-        return response()->json(['status' => 'success', 'message' => 'Soal berhasil dihapus']);
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_bank_soal',
+                recordId: $soalId,
+                oldValues: $oldValues,
+                newValues: null
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log hapus soal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Soal berhasil dihapus.',
+            'data' => null,
+        ]);
+    }
+
+    // --- Kategori Bank Soal ---
+    public function listKategoriSoal(Request $request)
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $perPage = min(100, $request->integer('per_page', 15));
+        $query = BankSoalKategori::with('mataKuliah')->withCount('soal');
+
+        if ($request->filled('mata_kuliah_id')) {
+            $query->where('mata_kuliah_id', $request->input('mata_kuliah_id'));
+        }
+        if ($request->filled('search')) {
+            $query->where('nama', 'like', '%' . $request->input('search') . '%');
+        }
+
+        $allowedSorts = ['id', 'nama', 'created_at', 'updated_at'];
+        $sortBy = in_array($request->input('sort_by'), $allowedSorts, true) ? $request->input('sort_by') : 'nama';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $data = $query->orderBy($sortBy, $sortOrder)->paginate($perPage);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data kategori bank soal berhasil diambil.',
+            'data' => $data->items(),
+            'meta' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem(),
+            ],
+        ]);
+    }
+
+    public function storeKategoriSoal(StoreBankSoalKategoriRequest $request)
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $validated = $request->validated();
+        $validated['dibuat_oleh'] = $request->user()?->id;
+
+        $kategori = BankSoalKategori::create($validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_bank_soal_kategori',
+                recordId: $kategori->id,
+                oldValues: null,
+                newValues: $kategori->toArray()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log kategori bank soal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Kategori bank soal berhasil dibuat.',
+            'data' => $kategori->load('mataKuliah'),
+        ], 201);
+    }
+
+    public function deleteKategoriSoal($id)
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $kategori = BankSoalKategori::findOrFail($id);
+        $oldValues = $kategori->getOriginal();
+        $recordId = $kategori->id;
+
+        // Soal di dalamnya tidak ikut terhapus — relasi dilepas (kategori_id → null).
+        BankSoal::where('kategori_id', $kategori->id)->update(['kategori_id' => null]);
+        $kategori->delete();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_bank_soal_kategori',
+                recordId: $recordId,
+                oldValues: $oldValues,
+                newValues: null
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log hapus kategori: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Kategori bank soal berhasil dihapus.',
+            'data' => null,
+        ]);
+    }
+
+    // --- Opsi Jawaban Soal Pilihan Ganda ---
+    public function storeOpsiSoal(StoreBankSoalOpsiRequest $request, $soalId)
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $soal = BankSoal::findOrFail($soalId);
+
+        $opsi = $soal->opsi()->create($request->validated());
+
+        // Satu soal hanya boleh punya satu opsi benar.
+        if ($opsi->is_benar) {
+            BankSoalOpsi::where('bank_soal_id', $soal->id)
+                ->where('id', '!=', $opsi->id)
+                ->update(['is_benar' => false]);
+        }
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_bank_soal_opsi',
+                recordId: $opsi->id,
+                oldValues: null,
+                newValues: $opsi->toArray()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log opsi bank soal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Opsi jawaban berhasil ditambahkan.',
+            'data' => $opsi->fresh(),
+        ], 201);
+    }
+
+    public function deleteOpsiSoal($soalId, $opsiId)
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $opsi = BankSoalOpsi::where('bank_soal_id', $soalId)->findOrFail($opsiId);
+        $oldValues = $opsi->getOriginal();
+        $recordId = $opsi->id;
+
+        $opsi->delete();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_bank_soal_opsi',
+                recordId: $recordId,
+                oldValues: $oldValues,
+                newValues: null
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log hapus opsi: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Opsi jawaban berhasil dihapus.',
+            'data' => null,
+        ]);
     }
 
     // --- Rekap Nilai Kelas (XLSX, dibuka di Excel) ---

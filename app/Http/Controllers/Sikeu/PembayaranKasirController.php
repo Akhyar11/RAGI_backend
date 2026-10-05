@@ -213,6 +213,25 @@ class PembayaranKasirController extends Controller
 
             DB::commit();
 
+            try {
+                \App\Services\AuditLogService::record(
+    module: 'SIKEU',
+    action: 'create',
+    tableName: 'sikeu_pembayaran',
+    recordId: $processedPembayarans[0]->id ?? 0,
+    oldValues: null,
+    newValues: [
+                        'batch_kode' => $batchKodeTransaksi,
+                        'jumlah_bayar' => (float) $request->jumlah_bayar,
+                        'channel' => $request->channel_bayar,
+                        'unit_kas_id' => $unitKasKasir?->id,
+                        'tagihan' => $paidBillNumbers,
+                    ]
+);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log pembayaran kasir: ' . $e->getMessage());
+            }
+
             $primaryTagihan = $tagihans->first();
 
             return response()->json([
@@ -396,7 +415,7 @@ class PembayaranKasirController extends Controller
         try {
             DB::beginTransaction();
 
-            $pembayaran = Pembayaran::with('tagihan')->findOrFail($id);
+            $pembayaran = Pembayaran::with(['tagihan', 'unitKas'])->findOrFail($id);
 
             if ($pembayaran->status === 'reversed') {
                 return response()->json([
@@ -418,6 +437,8 @@ class PembayaranKasirController extends Controller
                     'message' => "Periode akuntansi sudah ditutup. Tidak dapat melakukan koreksi.",
                 ], 403);
             }
+
+            $oldValues = $pembayaran->getOriginal();
 
             // Reverse pembayaran
             $pembayaran->update(['status' => 'reversed']);
@@ -460,10 +481,31 @@ class PembayaranKasirController extends Controller
             // Kembalikan alokasi per komponen secara LIFO
             \App\Models\Sikeu\DetailTagihan::kurangi($tagihan, (float)$pembayaran->jumlah_bayar);
 
+            // Kembalikan saldo unit kas yang dulu bertambah saat pembayaran dicatat
+            // (pembayaran direct-cashier tanpa unit kas dilewati).
+            $unitKasKoreksi = $pembayaran->unitKas
+                ?? ($pembayaran->unit_kas_id ? \App\Models\Sikeu\UnitKas::find($pembayaran->unit_kas_id) : null);
+            if ($unitKasKoreksi) {
+                $unitKasKoreksi->decrement('saldo_saat_ini', (float)$pembayaran->jumlah_bayar);
+            }
+
             // Create reversal jurnal (akrual: Dr Piutang / Cr Kas)
             \App\Services\Sikeu\JurnalSikeuService::jurnalKoreksiPembayaran($pembayaran, $request->alasan_koreksi);
 
             DB::commit();
+
+            try {
+                \App\Services\AuditLogService::record(
+    module: 'SIKEU',
+    action: 'update',
+    tableName: 'sikeu_pembayaran',
+    recordId: $pembayaran->id,
+    oldValues: $oldValues,
+    newValues: $pembayaran->getChanges() ?: ['status' => 'reversed', 'alasan_koreksi' => $request->alasan_koreksi]
+);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log koreksi pembayaran: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'status' => 'success',
@@ -1195,8 +1237,13 @@ class PembayaranKasirController extends Controller
 
             // 4. Catat Transaksi Pembayaran Kasir
             $kodeTransaksi = 'TRX-LOKET-' . date('Ymd') . '-' . strtoupper(Str::random(5));
+            $unitKasLoket = \App\Services\Sikeu\JurnalSikeuService::resolveUnitKasUntukChannel(
+                $request->channel_bayar === 'LOKET_TUNAI' ? 'TUNAI' : 'LOKET_TRANSFER',
+                null
+            );
             $pembayaran = Pembayaran::create([
                 'tagihan_id' => $tagihan->id,
+                'unit_kas_id' => $unitKasLoket?->id,
                 'kode_transaksi' => $kodeTransaksi,
                 'jumlah_bayar' => $jumlahBayar,
                 'waktu_bayar' => now(),
@@ -1207,10 +1254,27 @@ class PembayaranKasirController extends Controller
                 'diverifikasi_oleh' => auth()->id(),
             ]);
 
+            if ($unitKasLoket) {
+                $unitKasLoket->increment('saldo_saat_ini', $jumlahBayar);
+            }
+
             // 5. Buat Jurnal Akuntansi Otomatis (akrual: Dr Kas/Bank / Cr Piutang)
-            \App\Services\Sikeu\JurnalSikeuService::jurnalPembayaranKasir($pembayaran, $request->channel_bayar, $tagihan);
+            \App\Services\Sikeu\JurnalSikeuService::jurnalPembayaranKasir($pembayaran, $request->channel_bayar, $tagihan, $unitKasLoket);
 
             DB::commit();
+
+            try {
+                \App\Services\AuditLogService::record(
+    module: 'SIKEU',
+    action: 'create',
+    tableName: 'sikeu_pembayaran',
+    recordId: $pembayaran->id,
+    oldValues: null,
+    newValues: $pembayaran->toArray()
+);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log direct cashier: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'status' => 'success',
@@ -1389,14 +1453,12 @@ class PembayaranKasirController extends Controller
 
             DB::commit();
 
+            // Envelope delete: `data` null, sesuai standar API CRUD proyek.
+            // Client cukup memuat ulang daftar tagihan/potongan.
             return response()->json([
                 'status' => 'success',
                 'message' => 'Potongan tagihan berhasil dicabut / dibatalkan.',
-                'data' => [
-                    'sisa_tagihan' => $newSisa,
-                    'total_potongan' => $newTotalPotongan,
-                    'status' => $tagihan->status,
-                ],
+                'data' => null,
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();

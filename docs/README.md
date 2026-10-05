@@ -66,9 +66,9 @@
 | AkademikController | Master akademik + opsi referensi dropdown (jenjang, akreditasi, tipe MK, mode penilaian) | [docs/api/SIAKAD/AkademikController.md](api/SIAKAD/AkademikController.md) |
 | FeederSyncController | Sinkronisasi Neo Feeder PDDikti (Dosen, Penugasan, Ajar, Mahasiswa, Kelas) | [docs/api/SIAKAD/FeederSyncController.md](api/SIAKAD/FeederSyncController.md) |
 | MahasiswaController | Data mahasiswa, NIM, usulan konversi transfer nilai (detail, edit, status), dan penugasan PA | [docs/api/SIAKAD/MahasiswaController.md](api/SIAKAD/MahasiswaController.md) |
-| ObeController | Kurikulum OBE (CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, Nilai) | [docs/api/SIAKAD/ObeController.md](api/SIAKAD/ObeController.md) |
+| ObeController | Kurikulum OBE (CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, Nilai, Bank Soal & Kategori Opsi) | [docs/api/SIAKAD/ObeController.md](api/SIAKAD/ObeController.md) |
 | PerkuliahanController | Kelas, KRS, nilai, transkrip, pertemuan & absensi | [docs/api/SIAKAD/PerkuliahanController.md](api/SIAKAD/PerkuliahanController.md) |
-| PaController | Pembimbing Akademik: Rekap bimbingan, filter aktivitas tanggal, catatan jurnal, sesi per kelas (SIMPA), & cetak PDF | [docs/api/SIAKAD/PaController.md](api/SIAKAD/PaController.md) |
+| PaController | Pembimbing Akademik: Rekap bimbingan, filter aktivitas tanggal, catatan jurnal (CRUD), sesi per kelas (SIMPA), my-pa, & cetak PDF | [docs/api/SIAKAD/PaController.md](api/SIAKAD/PaController.md) |
 
 
 ---

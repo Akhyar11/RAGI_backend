@@ -20,6 +20,7 @@ class StoreProgramStudiRequest extends FormRequest
             'fakultas_id' => 'required|exists:siakad_fakultas,id',
             'kaprodi_id' => 'nullable|exists:siakad_dosen,id',
             'kode_prodi' => ['required', 'string', 'max:20', Rule::unique(ProgramStudi::class, 'kode_prodi')],
+            'prefix_nim' => ['nullable', 'string', 'max:10', 'regex:/^[A-Za-z0-9\-]+$/', Rule::unique(ProgramStudi::class, 'prefix_nim')],
             'kode_prodi_dikti' => 'nullable|string|max:50',
             'nama' => 'required|string|max:255',
             'jenjang' => ['required', 'string', 'max:20', new MasterReferensiExists('jenjang_prodi')],

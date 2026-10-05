@@ -1,6 +1,7 @@
 # MahasiswaController
 
 > **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/mahasiswa` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-25
+> **Diperbarui**: 2026-10-01 — NIM prefix per prodi (`prefix_nim`)
 
 Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan penugasan Pembimbing Akademik. Validasi `program_studi_id` mengacu ke `siakad_program_studi`.
 
@@ -289,6 +290,12 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 ### Catatan Tambahan
 
+> - Format NIM otomatis mengikuti `siakad_program_studi.prefix_nim`:
+>   - Jika prodi punya `prefix_nim` (mis. Otomotif = `A`): `{PREFIX}{2-digit tahun}{3-digit urut}`, cth `A25001`, `A25002`.
+>   - Jika kosong: fallback standar `{2-digit tahun}{2-digit prodiId}{4-digit urut}`, cth `25010001`.
+>   - Atur via `PUT /api/v1/siakad/akademik/prodi/{id}` dengan body `{"prefix_nim": "A"}` (huruf/angka, maks. 10, unik).
+>   - Berlaku untuk `POST /generate-nim`, `POST /generate-missing-nims`, dan konversi otomatis SPMB (`sync-from-spmb` / event daftar-ulang lunas).
+>   - Untuk format bebas sekali pakai tetap bisa via `custom_nim` (satuan) atau kolom `NIM_BARU` pada Export/Import CSV massal.
 > - Perubahan data mahasiswa dicatat oleh observer audit (`MahasiswaObserver`, modul `SIAKAD`).
 > - Soft delete + restore berlaku pada data mahasiswa.
 > - Password/token tidak pernah dikembalikan pada response.

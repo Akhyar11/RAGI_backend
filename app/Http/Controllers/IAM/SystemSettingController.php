@@ -92,12 +92,15 @@ class SystemSettingController extends Controller
         }
 
         $defaultLms = [
-            'lms_storage_disk'        => (string) SystemSetting::get('lms_storage_disk', 'r2'),
-            'lms_max_file_materi_mb'  => (string) SystemSetting::get('lms_max_file_materi_mb', '50'),
-            'lms_max_video_mb'        => (string) SystemSetting::get('lms_max_video_mb', '500'),
-            'lms_max_file_tugas_mb'   => (string) SystemSetting::get('lms_max_file_tugas_mb', '50'),
-            'lms_allow_token_absensi' => (string) SystemSetting::get('lms_allow_token_absensi', 'true'),
-            'lms_token_ttl_minutes'   => (string) SystemSetting::get('lms_token_ttl_minutes', '15'),
+            'lms_storage_disk'          => (string) SystemSetting::get('lms_storage_disk', 'r2'),
+            'lms_max_file_materi_mb'    => (string) SystemSetting::get('lms_max_file_materi_mb', '50'),
+            'lms_max_video_mb'          => (string) SystemSetting::get('lms_max_video_mb', '500'),
+            'lms_max_file_tugas_mb'     => (string) SystemSetting::get('lms_max_file_tugas_mb', '50'),
+            'lms_allow_token_absensi'   => (string) SystemSetting::get('lms_allow_token_absensi', 'true'),
+            'lms_token_ttl_minutes'     => (string) SystemSetting::get('lms_token_ttl_minutes', '15'),
+            'lms_token_rotate_seconds'  => (string) SystemSetting::get('lms_token_rotate_seconds', '120'),
+            'lms_presensi_window_menit' => (string) SystemSetting::get('lms_presensi_window_menit', '30'),
+            'lms_quiz_batch_size'       => (string) SystemSetting::get('lms_quiz_batch_size', '10'),
         ];
 
         foreach ($defaultLms as $key => $val) {
