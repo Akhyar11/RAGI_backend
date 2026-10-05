@@ -50,6 +50,9 @@ class UpdatePaymentGatewayConfigRequest extends FormRequest
             'auto_disbursement_enabled' => 'required|boolean',
             'account_validation_enabled' => 'required|boolean',
             'max_disbursement_limit' => 'required|numeric|min:0',
+            'va_fee' => 'nullable|numeric|min:0',
+            'vat_percent' => 'nullable|numeric|min:0|max:100',
+            'charge_fee_to_payer' => 'nullable|boolean',
         ];
     }
 

@@ -511,10 +511,15 @@ class MasterSpmbController extends Controller
         $pendaftaran = $map($service->getKomponenBeban($masterTipeJalurId, $prodiId, true));
         $daftarUlang = $map($service->getKomponenBeban($masterTipeJalurId, $prodiId, false));
 
+        // Sumber biaya: 'master' bila ada konfigurasi Master Biaya SPMB untuk
+        // (tipe jalur + prodi) ini, atau 'none' (UI akan memakai tarif SIKEU/gelombang).
+        $hasMasterConfig = $pendaftaran->isNotEmpty() || $daftarUlang->isNotEmpty();
+
         return response()->json([
             'status' => 'success',
             'message' => 'Rincian biaya pendaftaran berhasil dimuat.',
             'data' => [
+                'source' => $hasMasterConfig ? 'master' : 'none',
                 'beban_pendaftaran' => $pendaftaran,
                 'total_pendaftaran' => (float) $pendaftaran->sum('nominal'),
                 'beban_daftar_ulang' => $daftarUlang,

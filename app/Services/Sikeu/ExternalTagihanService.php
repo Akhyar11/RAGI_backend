@@ -28,7 +28,7 @@ class ExternalTagihanService
                 'kode' => $item['master_biaya_kode'],
                 'nama' => $item['keterangan'] ?? $item['master_biaya_kode'],
                 'tipe' => $tipe,
-                'nominal_standar' => (float) $item['nominal'],
+                'nominal_standar' => (float) ($item['nominal'] ?? 0),
                 'is_active' => true,
             ]);
 
@@ -88,6 +88,26 @@ class ExternalTagihanService
                 }
             }
 
+            // Opsi: biaya payment gateway dibebankan ke pendaftar (ditambah ke tagihan).
+            $pgConfig = PaymentGatewayConfig::where('is_active', true)->first();
+            if ($pgConfig && $pgConfig->charge_fee_to_payer && $pgConfig->computeVaFee() > 0) {
+                $fee = $pgConfig->computeVaFee();
+                $masterBiayaFee = $this->resolveMasterBiaya([
+                    'master_biaya_kode' => 'BIAYA_VA',
+                    'nominal' => $fee,
+                    'keterangan' => 'Biaya Layanan Virtual Account',
+                ], $masterBiayaTipe);
+
+                $detailsData[] = [
+                    'master_biaya_id' => $masterBiayaFee->id,
+                    'nominal' => $fee,
+                    'potongan' => 0,
+                    'nominal_bersih' => $fee,
+                    'keterangan' => 'Biaya Layanan Virtual Account (fee + PPN)',
+                ];
+                $totalNominal += $fee;
+            }
+
             $totalBayar = max(0, $totalNominal - $totalPotongan);
             $initialStatus = $requiresApproval ? 'pending_approval' : 'belum_bayar';
             $statusApproval = $requiresApproval ? 'pending' : 'approved';
@@ -128,6 +148,7 @@ class ExternalTagihanService
             if (! $requiresApproval) {
                 $bankCode = 'BNI';
                 $vaNumber = '888'.date('ymd').str_pad($tagihan->id, 5, '0', STR_PAD_LEFT);
+                $xenditVaId = null;
 
                 // Check active Payment Gateway Config
                 $pgConfig = PaymentGatewayConfig::where('is_active', true)->first();
@@ -151,7 +172,8 @@ class ExternalTagihanService
                             $xData = $xenditRes->json();
                             $vaNumber = $xData['account_number'] ?? $vaNumber;
                             $bankCode = $xData['bank_code'] ?? $bankCode;
-                            Log::info("Xendit VA Created Successfully: VA {$vaNumber} for Tagihan {$tagihan->nomor_tagihan}");
+                            $xenditVaId = $xData['id'] ?? null;
+                            Log::info("Xendit VA Created Successfully: VA {$vaNumber} (xendit_id {$xenditVaId}) for Tagihan {$tagihan->nomor_tagihan}");
                         } else {
                             Log::error("Xendit VA Creation Error ({$xenditRes->status()}): ".$xenditRes->body());
                         }
@@ -163,6 +185,7 @@ class ExternalTagihanService
                 $vaData = VirtualAccount::create([
                     'tagihan_id' => $tagihan->id,
                     'va_number' => $vaNumber,
+                    'xendit_va_id' => $xenditVaId,
                     'bank_kode' => $bankCode,
                     'bank_nama' => 'Bank '.$bankCode,
                     'nominal' => $totalBayar,
@@ -177,5 +200,44 @@ class ExternalTagihanService
                 'requires_approval' => $requiresApproval,
             ];
         });
+    }
+
+    /**
+     * Simulasi pembayaran Fixed VA di Xendit (mode tes) agar transaksi tercatat
+     * di dashboard Xendit & saldo bertambah. Menggunakan `external_id`
+     * (nomor tagihan). Mengembalikan true bila sukses.
+     */
+    public function simulateXenditVaPayment(string $externalId, float $amount): bool
+    {
+        $config = PaymentGatewayConfig::where('is_active', true)->first();
+        $apiKey = $config?->api_key_encrypted;
+
+        if (! $config || $config->gateway_name !== 'xendit' || empty($apiKey)) {
+            Log::info('Xendit simulate dilewati: gateway tidak dikonfigurasi.');
+
+            return false;
+        }
+
+        try {
+            $url = 'https://api.xendit.co/callback_virtual_accounts/external_id=' . $externalId . '/simulate_payment';
+
+            $res = Http::withoutVerifying()
+                ->withBasicAuth($apiKey, '')
+                ->post($url, [
+                    'amount' => (int) round($amount),
+                ]);
+
+            if ($res->successful()) {
+                Log::info("Xendit VA simulate OK untuk external_id {$externalId} (amount {$amount}).");
+
+                return true;
+            }
+
+            Log::error("Xendit VA simulate Error ({$res->status()}): ".$res->body());
+        } catch (\Throwable $e) {
+            Log::warning('Xendit VA simulate Exception: '.$e->getMessage());
+        }
+
+        return false;
     }
 }

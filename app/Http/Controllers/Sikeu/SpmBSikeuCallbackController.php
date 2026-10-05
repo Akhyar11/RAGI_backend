@@ -7,12 +7,14 @@ use App\Events\Spmb\MahasiswaDiterima;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Sikeu\SpmbPaymentCallbackRequest;
 use App\Models\Sikeu\Pembayaran;
+use App\Models\Sikeu\PaymentGatewayConfig;
 use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\VirtualAccount;
 use App\Models\Spmb\HasilSeleksi;
 use App\Models\Spmb\PembayaranSpmb;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Services\Sikeu\AutoJournalService;
+use App\Services\Sikeu\ExternalTagihanService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -43,7 +45,82 @@ class SpmBSikeuCallbackController extends Controller
 
         Gate::authorize('simulate-spmb-payment', $pendaftaran);
 
+        // Picu Xendit (mode tes) agar transaksi tercatat di dashboard & saldo bertambah,
+        // memakai external_id = nomor tagihan. Kegagalan Xendit tidak menggagalkan simulasi lokal.
+        $tagihan = $this->findUnpaidSpmbTagihan((int) $calonMahasiswaId);
+        if ($tagihan) {
+            $amount = (float) ($request->input('nominal') ?: ($tagihan->virtualAccount?->nominal ?? $tagihan->total_tagihan));
+            app(ExternalTagihanService::class)->simulateXenditVaPayment($tagihan->nomor_tagihan, $amount);
+        }
+
         return $this->processPayment($request->validated(), (int) $calonMahasiswaId);
+    }
+
+    /**
+     * POST /api/v1/sikeu/callback/xendit
+     * Adapter webhook standar Xendit (Fixed VA) -> proses pembayaran SPMB.
+     * Field Xendit: external_id, paid_amount/amount, payment_id, bank_code, account_number.
+     */
+    public function handleXenditCallback(Request $request)
+    {
+        $externalId = (string) ($request->input('external_id') ?? '');
+        $accountNumber = preg_replace('/[^0-9]/', '', (string) ($request->input('account_number') ?? ''));
+        $nominal = (float) ($request->input('paid_amount') ?? $request->input('amount') ?? 0);
+
+        $tagihan = null;
+        if ($externalId !== '') {
+            $tagihan = TagihanMahasiswa::where('nomor_tagihan', $externalId)->first();
+        }
+        if (! $tagihan && $accountNumber !== '') {
+            $tagihan = VirtualAccount::where('va_number', $accountNumber)->first()?->tagihan;
+        }
+
+        if (! $tagihan || ! $tagihan->calon_mahasiswa_id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tagihan SPMB untuk callback Xendit tidak ditemukan.',
+            ], 404);
+        }
+
+        if ($nominal < 1000) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Nominal callback Xendit tidak valid.',
+                'errors' => [
+                    'nominal' => ['Nominal pembayaran minimal Rp 1.000.'],
+                ],
+            ], 422);
+        }
+
+        $orderId = (string) ($request->input('payment_id') ?? $request->input('id') ?? ('XND-'.$externalId));
+        $bankCode = $request->input('bank_code');
+
+        $validated = [
+            'order_id' => $orderId,
+            'nominal' => $nominal,
+            'status' => 'settlement',
+            'bank_kode' => $bankCode,
+            'channel' => $bankCode ? 'VA_'.$bankCode : null,
+        ];
+
+        return $this->processPayment($validated, (int) $tagihan->calon_mahasiswa_id);
+    }
+
+    /**
+     * Cari tagihan SPMB yang belum lunas milik calon mahasiswa
+     * (prioritas tagihan pendaftaran).
+     */
+    protected function findUnpaidSpmbTagihan(int $calonMahasiswaId): ?TagihanMahasiswa
+    {
+        return TagihanMahasiswa::where(function ($q) use ($calonMahasiswaId) {
+            $q->where('calon_mahasiswa_id', $calonMahasiswaId)
+                ->orWhere('mahasiswa_id', $calonMahasiswaId);
+        })
+            ->where('source_system', 'SPMB')
+            ->where('status', '!=', 'lunas')
+            ->orderByRaw('CASE WHEN tipe_referensi = ? THEN 0 ELSE 1 END', [TagihanMahasiswa::TIPE_SPMB_PENDAFTARAN])
+            ->orderBy('created_at')
+            ->first();
     }
 
     /**
@@ -75,15 +152,7 @@ class SpmBSikeuCallbackController extends Controller
 
             // Cari tagihan SPMB yang belum lunas milik calon mahasiswa ini.
             // Prioritas: tagihan pendaftaran (tipe_referensi spmb_pendaftaran).
-            $tagihan = TagihanMahasiswa::where(function ($q) use ($calonMahasiswaId) {
-                $q->where('calon_mahasiswa_id', $calonMahasiswaId)
-                    ->orWhere('mahasiswa_id', $calonMahasiswaId);
-            })
-                ->where('source_system', 'SPMB')
-                ->where('status', '!=', 'lunas')
-                ->orderByRaw("CASE WHEN tipe_referensi = 'spmb_pendaftaran' THEN 0 ELSE 1 END")
-                ->orderBy('created_at')
-                ->first();
+            $tagihan = $this->findUnpaidSpmbTagihan($calonMahasiswaId);
 
             if (! $tagihan) {
                 return [
@@ -105,8 +174,11 @@ class SpmBSikeuCallbackController extends Controller
                 'total_bayar' => min($newTotalBayar, max($totalBersih, 0)),
             ]);
 
-            // Trigger Auto Journal (Debet Kas Bank, Kredit Pendapatan SPMB)
-            AutoJournalService::recordStudentPaymentJournal($tagihan, (float) $validated['nominal']);
+            // Biaya payment gateway (fee + PPN) yang dipotong Xendit.
+            $gatewayFee = PaymentGatewayConfig::active()?->computeVaFee() ?? 0;
+
+            // Trigger Auto Journal (Debet Kas Bank net, Debet Beban PG, Kredit Piutang)
+            AutoJournalService::recordStudentPaymentJournal($tagihan, (float) $validated['nominal'], null, (float) $gatewayFee);
 
             // Sinkronkan status pendaftaran / daftar ulang berdasarkan tipe tagihan.
             $this->syncSpmbStatus($tagihan, $newStatus, (float) $validated['nominal']);
@@ -116,6 +188,7 @@ class SpmBSikeuCallbackController extends Controller
                 'tagihan_id' => $tagihan->id,
                 'kode_transaksi' => $validated['order_id'],
                 'jumlah_bayar' => $validated['nominal'],
+                'fee_amount' => $gatewayFee,
                 'waktu_bayar' => now(),
                 'channel_bayar' => $validated['channel'] ?? $validated['bank_kode'] ?? 'BANK_VA',
                 'status' => 'success',
@@ -238,17 +311,24 @@ class SpmBSikeuCallbackController extends Controller
         $tagihan = TagihanMahasiswa::find($va->tagihan_id);
         $pendaftaran = $tagihan ? PendaftaranCalonMhs::with('programStudi')->find($tagihan->calon_mahasiswa_id) : null;
 
+        $totalTagihan = $tagihan
+            ? (float) $tagihan->total_tagihan + (float) $tagihan->total_denda - (float) $tagihan->total_potongan
+            : 0;
+        $sisaBayar = $tagihan
+            ? max(0, $totalTagihan - (float) $tagihan->total_bayar)
+            : (float) ($va->nominal ?? 0);
+
         return response()->json([
             'status' => 'success',
             'data' => [
                 'va_number' => $va->va_number,
                 'bank_kode' => $va->bank_kode ?? 'BNI',
                 'bank_nama' => $va->bank_nama ?? 'Bank BNI',
-                'nominal' => (float) ($va->nominal ?? $tagihan->total_bayar ?? 250000),
-                'total_bayar' => (float) ($tagihan->total_bayar ?? $va->nominal ?? 250000),
+                'nominal' => (float) ($va->nominal ?? $totalTagihan),
+                'total_bayar' => $sisaBayar,
                 'expired_at' => $va->expired_at,
                 'status_va' => $va->status ?? 'aktif',
-                'status_pembayaran' => $pendaftaran->status_pembayaran ?? $tagihan->status ?? 'belum_bayar',
+                'status_pembayaran' => $tagihan->status ?? $pendaftaran->status_pembayaran ?? 'belum_bayar',
                 'tagihan_id' => $tagihan->id ?? null,
                 'nomor_tagihan' => $tagihan->nomor_tagihan ?? 'INV-SPMB',
                 'calon_mahasiswa_id' => $tagihan->calon_mahasiswa_id ?? $pendaftaran->id ?? 1,

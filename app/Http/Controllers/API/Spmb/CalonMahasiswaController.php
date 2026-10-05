@@ -73,11 +73,30 @@ class CalonMahasiswaController extends Controller
             $pendaftaran->tagihan_info = $tagihanData;
         }
 
+        // Tagihan daftar ulang (agar halaman checkout bisa membayar VA yang benar).
+        $daftarUlangTagihanData = null;
+        if ($pendaftaran) {
+            $duTagihan = TagihanMahasiswa::with('virtualAccount')
+                ->where('calon_mahasiswa_id', $pendaftaran->id)
+                ->where('source_system', 'SPMB')
+                ->where('tipe_referensi', TagihanMahasiswa::TIPE_SPMB_DAFTAR_ULANG)
+                ->latest('id')
+                ->first();
+
+            if ($duTagihan) {
+                $daftarUlangTagihanData = [
+                    'tagihan' => $duTagihan,
+                    'virtual_account' => $duTagihan->virtualAccount,
+                ];
+            }
+        }
+
         return response()->json([
             'status' => 'success',
             'data' => $pendaftaran ? [
                 'pendaftaran' => $pendaftaran,
                 'tagihan' => $tagihanData,
+                'daftar_ulang_tagihan' => $daftarUlangTagihanData,
             ] : null,
         ]);
     }
@@ -114,6 +133,10 @@ class CalonMahasiswaController extends Controller
             $gelombangId = $pendaftaran->gelombang_id;
             $details = $masterBiayaService->buildDetailBebanPendaftaran($masterTipeJalurId, $pendaftaran->program_studi_id, $gelombangId);
 
+            // Potongan biaya kustom per calon (bila ada) untuk tahap pendaftaran.
+            $potongan = app(\App\Services\Spmb\SpmbPotonganCalonService::class)
+                ->buildPotonganPayload($pendaftaran, 'pendaftaran', $details);
+
             // Generate External Bill via internal Request
             $payload = [
                 'calon_mahasiswa_id' => $pendaftaran->id,
@@ -123,6 +146,7 @@ class CalonMahasiswaController extends Controller
                 'requires_approval' => false,
                 'keterangan' => 'Pendaftaran SPMB - '.$namaLengkap,
                 'details' => $details,
+                'potongan' => $potongan,
             ];
 
             // Generate External Bill via SIKEU service

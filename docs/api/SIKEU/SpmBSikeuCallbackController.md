@@ -12,6 +12,7 @@
 |---|---|---|---|
 | POST | `/api/v1/sikeu/callback/spmb/{calonMahasiswaId}` | Webhook pelunasan biaya pendaftaran SPMB | ❌ Publik + token |
 | POST | `/api/v1/sikeu/callback/spmb/{calonMahasiswaId}/simulate` | Simulasi pembayaran (local/testing) | ✅ Bearer (pemilik/admin) |
+| POST | `/api/v1/sikeu/callback/xendit` | Adapter webhook native Xendit (Fixed VA) → proses pembayaran SPMB | ❌ Publik + token |
 | GET | `/api/v1/sikeu/checkout/lookup-va` | Cari detail tagihan dari nomor VA | ✅ Bearer |
 
 > **Keamanan webhook**: endpoint callback berada di luar `auth:api` agar dapat dipanggil payment gateway. Middleware `payment.callback` memverifikasi header `x-callback-token` terhadap `PaymentGatewayConfig.webhook_token_encrypted` (gateway aktif) atau env `SIKEU_CALLBACK_TOKEN`. Bila token belum dikonfigurasi, callback hanya diizinkan di environment `local`/`testing`.
@@ -63,5 +64,56 @@
         "tagihan_status": "lunas",
         "pembayaran_id": 45
     }
+}
+```
+
+---
+
+## POST /api/v1/sikeu/callback/xendit
+
+> Adapter **webhook native Xendit** (Fixed Virtual Account). Memetakan payload standar Xendit ke proses pembayaran SPMB. Dilindungi middleware `payment.callback` (header `x-callback-token`).
+
+### Request Body (format Xendit)
+
+```json
+{
+    "external_id": "INV-SPMB-20261005-QOBWK",
+    "paid_amount": 11750000,
+    "payment_id": "xnd_payment_123",
+    "bank_code": "BNI",
+    "account_number": "8808999986253194"
+}
+```
+
+> Pencarian tagihan: prioritas `external_id` (nomor tagihan), fallback `account_number` (VA).
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Pembayaran SPMB lunas dan dicatat ke jurnal keuangan.",
+    "is_spmb_unlocked": true,
+    "data": {
+        "tagihan": { "id": 6, "status": "lunas" },
+        "pembayaran": { "id": 45, "fee_amount": "9990.00" }
+    }
+}
+```
+
+### Response Error
+
+**404 Not Found** (tagihan SPMB tidak ditemukan)
+```json
+{ "status": "error", "message": "Tagihan SPMB untuk callback Xendit tidak ditemukan." }
+```
+
+**422 Unprocessable Entity** (nominal tidak valid)
+```json
+{
+    "status": "error",
+    "message": "Nominal callback Xendit tidak valid.",
+    "errors": { "nominal": ["Nominal pembayaran minimal Rp 1.000."] }
 }
 ```

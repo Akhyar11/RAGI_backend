@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Spmb;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreBiodataRequest extends FormRequest
 {
@@ -16,13 +17,18 @@ class StoreBiodataRequest extends FormRequest
 
     public function rules(): array
     {
+        $pendaftaranId = \App\Models\Spmb\PendaftaranCalonMhs::where('user_id', $this->user()?->id)->value('id');
+
         return [
             'gelombang_id' => 'sometimes|nullable|exists:spmb_gelombang_penerimaan,id',
             'program_studi_id' => 'sometimes|nullable|exists:siakad_program_studi,id',
             'program_studi_pilihan2_id' => 'sometimes|nullable|exists:siakad_program_studi,id',
             'master_tipe_jalur_id' => 'sometimes|nullable|exists:core_master_tipe_jalur,id',
             'nama_lengkap' => 'sometimes|nullable|string|max:255',
-            'nik' => 'sometimes|nullable|string|max:20',
+            'nik' => [
+                'sometimes', 'nullable', 'string', 'max:20',
+                Rule::unique('spmb_pendaftaran_calon_mhs', 'nik')->ignore($pendaftaranId),
+            ],
             'tanggal_lahir' => 'sometimes|nullable|date',
             'tempat_lahir' => 'sometimes|nullable|string',
             'jenis_kelamin' => 'sometimes|nullable|string|max:10',

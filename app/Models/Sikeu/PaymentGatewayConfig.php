@@ -13,6 +13,9 @@ class PaymentGatewayConfig extends Model
 
     protected $fillable = [
         'gateway_name',
+        'va_fee',
+        'vat_percent',
+        'charge_fee_to_payer',
         'environment',
         'base_url',
         'server_location',
@@ -36,6 +39,9 @@ class PaymentGatewayConfig extends Model
      * Using Laravel's native 'encrypted' cast ensures AES-256-CBC encryption in Database.
      */
     protected $casts = [
+        'va_fee' => 'decimal:2',
+        'vat_percent' => 'decimal:2',
+        'charge_fee_to_payer' => 'boolean',
         'api_key_encrypted' => 'encrypted',
         'public_key_encrypted' => 'encrypted',
         'webhook_token_encrypted' => 'encrypted',
@@ -46,4 +52,23 @@ class PaymentGatewayConfig extends Model
         'account_validation_enabled' => 'boolean',
         'max_disbursement_limit' => 'decimal:2',
     ];
+
+    /**
+     * Biaya gateway (fee + PPN) untuk satu transaksi VA.
+     */
+    public function computeVaFee(): float
+    {
+        $fee = (float) $this->va_fee;
+        $vat = $fee * ((float) $this->vat_percent / 100);
+
+        return round($fee + $vat, 2);
+    }
+
+    /**
+     * Konfigurasi gateway aktif.
+     */
+    public static function active(): ?self
+    {
+        return static::where('is_active', true)->first();
+    }
 }

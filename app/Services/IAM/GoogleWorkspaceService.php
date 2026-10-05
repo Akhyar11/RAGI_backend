@@ -14,8 +14,8 @@ class GoogleWorkspaceService
 {
     protected ?Client $client;
     protected ?Directory $directory;
-    protected string $domain;
-    protected string $adminEmail;
+    protected ?string $domain = null;
+    protected ?string $adminEmail = null;
 
     public function __construct()
     {
@@ -28,11 +28,11 @@ class GoogleWorkspaceService
 
         $credJsonStr = $dbSettings->get('google_workspace_credentials')?->value;
         
-        $this->adminEmail = $dbSettings->get('google_workspace_admin_email')?->value 
-            ?: config('services.google_workspace.admin_email', '');
-            
-        $this->domain = $dbSettings->get('google_workspace_domain')?->value 
-            ?: config('services.google_workspace.domain', 'student.campus.ac.id');
+        $this->adminEmail = $dbSettings->get('google_workspace_admin_email')?->value
+            ?: (config('services.google_workspace.admin_email') ?? '');
+
+        $this->domain = $dbSettings->get('google_workspace_domain')?->value
+            ?: (config('services.google_workspace.domain') ?? 'student.campus.ac.id');
 
         // Parse Credentials JSON
         $credentialsArray = null;

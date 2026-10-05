@@ -15,7 +15,7 @@ class AutoJournalService
      * Basis akrual: Dr Bank / Cr Piutang (pendapatan sudah diakui saat
      * penerbitan tagihan; potongan dicatat terpisah oleh alur potongan).
      */
-    public static function recordStudentPaymentJournal(TagihanMahasiswa $tagihan, float $nominalBayar, ?\App\Models\Sikeu\UnitKas $unitKas = null)
+    public static function recordStudentPaymentJournal(TagihanMahasiswa $tagihan, float $nominalBayar, ?\App\Models\Sikeu\UnitKas $unitKas = null, float $feeAmount = 0)
     {
         if ($nominalBayar <= 0) {
             return null;
@@ -24,10 +24,14 @@ class AutoJournalService
         try {
             DB::beginTransaction();
 
-            $nomorJurnal = JurnalSikeuService::prefix('pembayaran') . '-' . date('Ymd') . '-' . str_pad($tagihan->id, 5, '0', STR_PAD_LEFT);
+            $feeAmount = max(0, min($feeAmount, $nominalBayar));
+            $netKas = $nominalBayar - $feeAmount;
+
+            $nomorJurnal = JurnalSikeuService::prefix('pembayaran') . '-' . date('Ymd') . '-' . str_pad($tagihan->id, 5, '0', STR_PAD_LEFT) . '-' . strtoupper(\Illuminate\Support\Str::random(4));
 
             $akunBank = JurnalSikeuService::akunKasUnit($unitKas, '102.01');
-            $akunPiutang = AkunKeuangan::where('kode_akun', '103.01')->first();
+            $akunPiutang = self::akunPiutang();
+            $akunBebanPg = $feeAmount > 0 ? self::akunBebanPaymentGateway() : null;
 
             $jurnal = JurnalUmum::create([
                 'nomor_jurnal' => $nomorJurnal,
@@ -43,14 +47,25 @@ class AutoJournalService
                 'posted_at' => now(),
             ]);
 
-            // Debet: Kas Bank (nominal yang dibayar)
-            if ($akunBank) {
+            // Debet: Kas Bank (nominal bersih setelah biaya gateway)
+            if ($akunBank && $netKas > 0) {
                 DetailJurnalUmum::create([
                     'jurnal_id' => $jurnal->id,
                     'akun_id' => $akunBank->id,
-                    'debet' => $nominalBayar,
+                    'debet' => $netKas,
                     'kredit' => 0,
                     'keterangan' => 'Penerimaan Kas Bank Pembayaran Tagihan' . ($unitKas ? " ({$unitKas->nama_kas})" : ''),
+                ]);
+            }
+
+            // Debet: Beban Biaya Payment Gateway (fee + PPN yang dipotong gateway)
+            if ($akunBebanPg && $feeAmount > 0) {
+                DetailJurnalUmum::create([
+                    'jurnal_id' => $jurnal->id,
+                    'akun_id' => $akunBebanPg->id,
+                    'debet' => $feeAmount,
+                    'kredit' => 0,
+                    'keterangan' => 'Biaya payment gateway (fee + PPN)',
                 ]);
             }
 
@@ -72,6 +87,38 @@ class AutoJournalService
             \Log::error('Gagal membuat Auto-Jurnal Pembayaran Tagihan: ' . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Akun beban biaya payment gateway (dibuat otomatis bila belum ada).
+     */
+    protected static function akunBebanPaymentGateway(): ?AkunKeuangan
+    {
+        return AkunKeuangan::firstOrCreate(
+            ['kode_akun' => '503.01'],
+            [
+                'nama_akun' => 'Beban Biaya Payment Gateway',
+                'kelompok' => 'beban',
+                'saldo_normal' => 'debet',
+                'is_active' => true,
+            ]
+        );
+    }
+
+    /**
+     * Akun piutang mahasiswa (dibuat otomatis bila belum ada).
+     */
+    protected static function akunPiutang(): ?AkunKeuangan
+    {
+        return AkunKeuangan::firstOrCreate(
+            ['kode_akun' => '103.01'],
+            [
+                'nama_akun' => 'Piutang Tagihan Mahasiswa',
+                'kelompok' => 'aset',
+                'saldo_normal' => 'debet',
+                'is_active' => true,
+            ]
+        );
     }
 
     /**

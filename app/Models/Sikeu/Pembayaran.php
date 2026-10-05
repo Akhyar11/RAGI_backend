@@ -17,6 +17,7 @@ class Pembayaran extends Model
         'unit_kas_id',
         'kode_transaksi',
         'jumlah_bayar',
+        'fee_amount',
         'kode_unik',
         'waktu_bayar',
         'channel_bayar',
@@ -29,6 +30,7 @@ class Pembayaran extends Model
 
     protected $casts = [
         'jumlah_bayar' => 'decimal:2',
+        'fee_amount' => 'decimal:2',
         'waktu_bayar' => 'datetime',
     ];
 

@@ -16,7 +16,7 @@ class SpmbKonversiService
     /**
      * Konversi pendaftar yang lulus menjadi Mahasiswa (Generate NIM jika belum ada dan update Role).
      */
-    public function prosesKonversi(PendaftaranCalonMhs $pendaftaran, int $diprosesOlehId = null): KonversiMahasiswa
+    public function prosesKonversi(PendaftaranCalonMhs $pendaftaran, ?int $diprosesOlehId = null): KonversiMahasiswa
     {
         // Karena ada call eksternal (Google API), kita pisahkan dari DB Transaction jika tidak ingin transaction menggantung
         // Namun demi konsistensi data internal, DB Transaction dijalankan terlebih dahulu
@@ -123,9 +123,14 @@ class SpmbKonversiService
             return $konversiData;
         });
 
-        // 5. Eksekusi API External Google Workspace di luar DB Transaction
+        // 5. Eksekusi API External Google Workspace di luar DB Transaction (best-effort).
+        //    Kegagalan provisioning email kampus TIDAK boleh menggagalkan konversi.
         if (isset($userToUpdateEmail) && isset($nimGenerate)) {
-            $this->assignGoogleWorkspaceEmail($userToUpdateEmail, $pendaftaran->nama_lengkap, $nimGenerate);
+            try {
+                $this->assignGoogleWorkspaceEmail($userToUpdateEmail, $pendaftaran->nama_lengkap, $nimGenerate);
+            } catch (\Throwable $e) {
+                Log::warning('Gagal provisioning email kampus (Google Workspace): ' . $e->getMessage());
+            }
         }
 
         return $konversi;

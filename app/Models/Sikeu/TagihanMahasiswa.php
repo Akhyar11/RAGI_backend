@@ -12,6 +12,9 @@ class TagihanMahasiswa extends Model
     /** Tipe referensi tagihan biaya daftar ulang SPMB. */
     public const TIPE_SPMB_DAFTAR_ULANG = 'spmb_daftar_ulang';
 
+    /** Tipe referensi tagihan biaya pendaftaran SPMB. */
+    public const TIPE_SPMB_PENDAFTARAN = 'spmb_pendaftaran';
+
     protected $table = 'sikeu_tagihan_mahasiswa';
 
     protected $fillable = [

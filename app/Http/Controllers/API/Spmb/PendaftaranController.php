@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\DokumenPendaftaran;
 use App\Models\Spmb\HasilSeleksi;
+use App\Models\Sikeu\TagihanMahasiswa;
 use App\Services\AuditLogService;
 use App\Services\Spmb\SpmbKonversiService;
 use App\Services\Spmb\SpmbPendaftaranService;
@@ -178,6 +179,20 @@ class PendaftaranController extends Controller
         if ($pendaftaran->status !== PendaftaranCalonMhs::STATUS_LULUS_ADMINISTRASI) {
             throw ValidationException::withMessages([
                 'status' => 'Konversi ke mahasiswa hanya dapat dilakukan pada pendaftaran berstatus Lulus Administrasi. Status saat ini: ' . $pendaftaran->status,
+            ]);
+        }
+
+        // Guard: daftar ulang harus lunas, kecuali admin melakukan override eksplisit.
+        $force = $request->boolean('force');
+        $tagihanDaftarUlang = TagihanMahasiswa::where('calon_mahasiswa_id', $pendaftaran->id)
+            ->where('source_system', 'SPMB')
+            ->where('tipe_referensi', TagihanMahasiswa::TIPE_SPMB_DAFTAR_ULANG)
+            ->latest('id')
+            ->first();
+
+        if ($tagihanDaftarUlang && $tagihanDaftarUlang->status !== 'lunas' && ! $force) {
+            throw ValidationException::withMessages([
+                'daftar_ulang' => 'Daftar ulang belum lunas. Konversi memerlukan konfirmasi override.',
             ]);
         }
 

@@ -799,6 +799,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
 */
 Route::middleware('payment.callback')->prefix('v1/sikeu')->group(function () {
     Route::post('callback/spmb/{calonMahasiswaId}', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'handleSpmbPaymentCallback']);
+    Route::post('callback/xendit', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'handleXenditCallback']);
     Route::post('callback/va-paid', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'vaPaymentCallback']);
 });
 

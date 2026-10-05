@@ -4,6 +4,8 @@ namespace App\Services\Spmb;
 
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\HasilSeleksi;
+use App\Models\Spmb\BerkasRequirement;
+use App\Models\Spmb\DokumenPendaftaran;
 use App\Models\Sikeu\TagihanMahasiswa;
 use Illuminate\Support\Facades\DB;
 use App\Events\Spmb\MahasiswaDiterima;
@@ -33,9 +35,49 @@ class SpmbPendaftaranService
             ]);
         }
 
-        // TODO: Validasi kelengkapan biodata dan dokumen wajib
-        
+        $this->validateBerkasWajib($pendaftaran);
+
         $pendaftaran->update(['status' => 'submitted']);
+    }
+
+    /**
+     * Pastikan seluruh berkas wajib (sesuai spmb_berkas_requirement untuk jalur
+     * masuk calon) sudah diunggah sebelum pendaftaran disubmit.
+     */
+    private function validateBerkasWajib(PendaftaranCalonMhs $pendaftaran): void
+    {
+        $jalurMasukId = $pendaftaran->gelombangPenerimaan?->jalur_masuk_id;
+
+        if (! $jalurMasukId) {
+            return;
+        }
+
+        $wajib = BerkasRequirement::where('jalur_masuk_id', $jalurMasukId)
+            ->where('is_active', true)
+            ->where('wajib', true)
+            ->get();
+
+        if ($wajib->isEmpty()) {
+            return;
+        }
+
+        $uploadedJenis = DokumenPendaftaran::where('pendaftaran_id', $pendaftaran->id)
+            ->whereNotNull('file_path')
+            ->pluck('jenis_dokumen')
+            ->filter()
+            ->unique()
+            ->all();
+
+        $missing = $wajib
+            ->filter(fn ($req) => ! in_array($req->jenis_dokumen, $uploadedJenis, true))
+            ->pluck('label')
+            ->all();
+
+        if (! empty($missing)) {
+            throw ValidationException::withMessages([
+                'berkas' => 'Berkas wajib belum lengkap: ' . implode(', ', $missing) . '. Silakan unggah terlebih dahulu.',
+            ]);
+        }
     }
 
     /**
@@ -129,7 +171,7 @@ class SpmbPendaftaranService
                 ['pendaftaran_id' => $pendaftaran->id],
                 [
                     'program_studi_diterima_id' => $dataSeleksi['program_studi_diterima_id'] ?? null,
-                    'nilai_total' => $dataSeleksi['nilai_total'],
+                    'nilai_total' => $dataSeleksi['nilai_total'] ?? 0,
                     'peringkat' => $dataSeleksi['peringkat'] ?? null,
                     'status' => $dataSeleksi['status'], // 'lulus', 'tidak_lulus', 'cadangan'
                     'status_daftar_ulang' => $dataSeleksi['status'] === 'lulus' ? 'belum' : 'belum',

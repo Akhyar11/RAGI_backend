@@ -45,6 +45,10 @@ class DaftarUlangController extends Controller
         $masterBiayaService = app(MasterBiayaService::class);
         $details = $masterBiayaService->buildDetailBebanDaftarUlang($pendaftaran->master_tipe_jalur_id, $prodiId);
 
+        // Potongan daftar ulang = diskon default gelombang + potongan kustom calon (stacking).
+        $potongan = app(\App\Services\Spmb\SpmbPotonganCalonService::class)
+            ->buildDaftarUlangPotonganPayload($pendaftaran, $details);
+
         $payload = [
             'calon_mahasiswa_id' => $pendaftaran_id,
             'tipe_referensi' => 'spmb_daftar_ulang',
@@ -52,6 +56,7 @@ class DaftarUlangController extends Controller
             'requires_approval' => false,
             'keterangan' => 'Tagihan Daftar Ulang - Pendaftaran ID '.$pendaftaran_id,
             'details' => $details,
+            'potongan' => $potongan,
         ];
 
         $issued = app(ExternalTagihanService::class)->issueExternalBill($payload);

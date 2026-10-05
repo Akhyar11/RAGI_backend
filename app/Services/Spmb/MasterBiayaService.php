@@ -10,6 +10,7 @@ use App\Models\Spmb\MasterKomponenBiaya;
 use App\Services\Sikeu\SpmbSikeuService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -308,8 +309,10 @@ class MasterBiayaService
     {
         return $this->getKomponenBeban($masterTipeJalurId, $programStudiId, $saatPendaftaran)
             ->map(fn ($item) => [
+                'komponen_biaya_id' => $item->komponen_biaya_id,
                 'master_biaya_kode' => $item->komponenBiaya->kode,
                 'nominal' => (float) $item->nominal,
+                'berlaku_diskon' => (bool) $item->berlaku_diskon,
                 'keterangan' => $item->komponenBiaya->nama,
             ])
             ->all();
@@ -330,6 +333,12 @@ class MasterBiayaService
 
         $gelombang = $gelombangId ? GelombangPenerimaan::find($gelombangId) : null;
 
+        Log::warning('SPMB: Master Biaya pendaftaran tidak ditemukan untuk tipe jalur + prodi; memakai fallback tarif SIKEU.', [
+            'master_tipe_jalur_id' => $masterTipeJalurId,
+            'program_studi_id' => $programStudiId,
+            'gelombang_id' => $gelombangId,
+        ]);
+
         $sikeuService = app(SpmbSikeuService::class);
         $nominal = $sikeuService->getTarifPendaftaranSpmb($gelombang->jalur_masuk_id ?? null, $gelombangId);
 
@@ -346,6 +355,7 @@ class MasterBiayaService
             ->first();
 
         return [[
+            'komponen_biaya_id' => null,
             'master_biaya_kode' => $masterBiaya->kode ?? 'SPMB_ADM',
             'nominal' => $nominal,
             'keterangan' => $masterBiaya->nama ?? 'Biaya Formulir Pendaftaran SPMB',
@@ -363,6 +373,11 @@ class MasterBiayaService
             return $details;
         }
 
+        Log::warning('SPMB: Master Biaya daftar ulang tidak ditemukan untuk tipe jalur + prodi; memakai fallback tarif SIKEU.', [
+            'master_tipe_jalur_id' => $masterTipeJalurId,
+            'program_studi_id' => $programStudiId,
+        ]);
+
         $biayaDaftarUlang = TarifSpmb::with('masterBiaya')
             ->whereHas('masterBiaya', function ($q) {
                 $q->where('kode', 'like', '%UKT%')->orWhere('nama', 'like', '%UKT%');
@@ -371,6 +386,7 @@ class MasterBiayaService
         $masterBiaya = $biayaDaftarUlang->masterBiaya ?? null;
 
         return [[
+            'komponen_biaya_id' => null,
             'master_biaya_kode' => $masterBiaya->kode ?? 'UKT_SMT1',
             'nominal' => $biayaDaftarUlang->nominal ?? 5000000,
             'keterangan' => 'Biaya UKT Semester 1',

@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\SpmbMenuCalonMahasiswaSeeder::class,
             \Database\Seeders\SpmbMenuAdminSeeder::class,
             \Database\Seeders\IAM\AdminUserSeeder::class,
+            \Database\Seeders\SpmbBerkasRequirementSeeder::class,
             \Database\Seeders\SpmbTemplateSuratSeeder::class,
         ]);
     }

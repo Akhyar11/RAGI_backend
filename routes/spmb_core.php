@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\API\Spmb\CalonMahasiswaController;
 use App\Http\Controllers\API\Spmb\DaftarUlangController;
+use App\Http\Controllers\API\Spmb\HasilSeleksiController;
 use App\Http\Controllers\API\Spmb\LaporanSpmbController;
 use App\Http\Controllers\API\Spmb\MasterSpmbController;
 use App\Http\Controllers\API\Spmb\PendaftaranController;
+use App\Http\Controllers\API\Spmb\PotonganCalonController;
 use App\Http\Controllers\API\Spmb\SpmbKuotaProdiController;
 use App\Http\Controllers\API\Spmb\SpmbSekolahMitraController;
 
@@ -52,6 +54,16 @@ Route::get('pendaftaran/{id}/sk-lulus', [PendaftaranController::class, 'download
 Route::post('pendaftaran/{id}/status', [PendaftaranController::class, 'updateStatus']);
 Route::post('pendaftaran/berkas/{id}/verify', [PendaftaranController::class, 'verifyBerkas']);
 Route::middleware('can:spmb.manage')->post('pendaftaran/{id}/konversi-mahasiswa', [PendaftaranController::class, 'konversiMahasiswa']);
+
+// Potongan biaya kustom per calon mahasiswa (Admin SPMB)
+Route::middleware('can:spmb.potongan.read')->get('pendaftaran/{id}/potongan', [PotonganCalonController::class, 'index']);
+Route::middleware('can:spmb.potongan.create')->post('pendaftaran/{id}/potongan', [PotonganCalonController::class, 'store']);
+Route::middleware('can:spmb.potongan.update')->put('potongan-calon/{id}', [PotonganCalonController::class, 'update']);
+Route::middleware('can:spmb.potongan.delete')->delete('potongan-calon/{id}', [PotonganCalonController::class, 'destroy']);
+
+// Penetapan Hasil Seleksi (Admin SPMB)
+Route::middleware('can:spmb.seleksi.read')->get('pendaftaran/{id}/hasil-seleksi', [HasilSeleksiController::class, 'show']);
+Route::middleware('can:spmb.seleksi.update')->post('pendaftaran/{id}/tetapkan-kelulusan', [HasilSeleksiController::class, 'tetapkan']);
 
 // Seleksi & Verifikasi (Admin SPMB)
 // (Dikonsolidasikan ke PendaftaranController — endpoint /pendaftar lama dihapus)

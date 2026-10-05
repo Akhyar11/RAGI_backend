@@ -88,6 +88,9 @@ class PaymentGatewayConfigController extends Controller
                     'auto_disbursement_enabled' => $data['auto_disbursement_enabled'],
                     'account_validation_enabled' => $data['account_validation_enabled'],
                     'max_disbursement_limit' => $data['max_disbursement_limit'],
+                    'va_fee' => $data['va_fee'] ?? 0,
+                    'vat_percent' => $data['vat_percent'] ?? 11,
+                    'charge_fee_to_payer' => $data['charge_fee_to_payer'] ?? false,
                 ];
             }
 

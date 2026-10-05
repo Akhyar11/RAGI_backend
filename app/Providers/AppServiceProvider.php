@@ -50,6 +50,7 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Spmb\ReferralUsage::observe(\App\Observers\Spmb\ReferralUsageObserver::class);
         \App\Models\Spmb\PayoutReferral::observe(\App\Observers\Spmb\PayoutReferralObserver::class);
         \App\Models\Spmb\KomponenBiayaRoleReward::observe(\App\Observers\Spmb\KomponenBiayaRoleRewardObserver::class);
+        \App\Models\Spmb\PotonganCalon::observe(\App\Observers\Spmb\PotonganCalonObserver::class);
 
         \Illuminate\Support\Facades\Gate::policy(
             \App\Models\Spmb\PayoutReferral::class,

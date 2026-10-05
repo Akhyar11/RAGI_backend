@@ -14,6 +14,7 @@ class VirtualAccount extends Model
     protected $fillable = [
         'tagihan_id',
         'va_number',
+        'xendit_va_id',
         'bank_kode',
         'bank_nama',
         'nominal',

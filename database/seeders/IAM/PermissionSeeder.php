@@ -234,6 +234,12 @@ class PermissionSeeder extends Seeder
             // ── MODUL SPMB (PENERIMAAN MAHASISWA BARU) ──────────────────────
             ['name' => 'Portal Calon Mahasiswa', 'slug' => 'spmb.student.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Akses dashboard & formulir registrasi calon mahasiswa'],
             ['name' => 'Kelola Admin SPMB', 'slug' => 'spmb.manage', 'module' => 'spmb', 'action' => 'update', 'description' => 'Akses penuh pengelolaan data & administrasi SPMB'],
+            ['name' => 'Lihat Potongan Calon', 'slug' => 'spmb.potongan.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Melihat potongan biaya kustom per calon mahasiswa'],
+            ['name' => 'Tambah Potongan Calon', 'slug' => 'spmb.potongan.create', 'module' => 'spmb', 'action' => 'create', 'description' => 'Menambahkan potongan biaya kustom per calon mahasiswa'],
+            ['name' => 'Ubah Potongan Calon', 'slug' => 'spmb.potongan.update', 'module' => 'spmb', 'action' => 'update', 'description' => 'Mengubah potongan biaya kustom per calon mahasiswa'],
+            ['name' => 'Hapus Potongan Calon', 'slug' => 'spmb.potongan.delete', 'module' => 'spmb', 'action' => 'delete', 'description' => 'Menghapus potongan biaya kustom per calon mahasiswa'],
+            ['name' => 'Lihat Hasil Seleksi', 'slug' => 'spmb.seleksi.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Melihat hasil seleksi/kelulusan calon mahasiswa'],
+            ['name' => 'Tetapkan Hasil Seleksi', 'slug' => 'spmb.seleksi.update', 'module' => 'spmb', 'action' => 'update', 'description' => 'Menetapkan hasil seleksi/kelulusan calon mahasiswa'],
 
             // ── MODUL SIAKAD (GRANULAR LEVEL PERMISSION) ──────────
             ['name' => 'Lihat Dashboard Akademik', 'slug' => 'siakad.dashboard.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat dashboard akademik sesuai role'],
@@ -570,6 +576,12 @@ class PermissionSeeder extends Seeder
                 'spmb.pendaftaran.create',
                 'spmb.laporan.read',
                 'spmb.laporan.export',
+                'spmb.potongan.read',
+                'spmb.potongan.create',
+                'spmb.potongan.update',
+                'spmb.potongan.delete',
+                'spmb.seleksi.read',
+                'spmb.seleksi.update',
             ];
             $perms = Permission::whereIn('slug', $adminSpmbSlugs)->get();
             foreach ($perms as $p) {
