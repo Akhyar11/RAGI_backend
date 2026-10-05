@@ -17,6 +17,7 @@ use App\Http\Requests\Siakad\Lms\AjukanIzinRequest;
 use App\Http\Requests\Siakad\Lms\ProsesIzinRequest;
 use App\Http\Requests\Siakad\Lms\UpdateKelasLmsSettingRequest;
 use App\Http\Requests\Siakad\Lms\UpdatePertemuanRequest;
+use App\Models\Lms\KelasLmsSetting;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\Pertemuan;
 use App\Services\AuditLogService;
@@ -120,6 +121,11 @@ class LmsController extends Controller
             : 'nama_kelas';
         $sortOrder = $request->input('sort_order') === 'desc' ? 'desc' : 'asc';
         $tahunAkademikId = $request->filled('tahun_akademik_id') ? (int) $request->input('tahun_akademik_id') : null;
+        // Nilai di luar closed-set resmi diabaikan (fallback diam), sama seperti
+        // perlakuan pada sort_by, agar filter tidak pernah menghasilkan 500.
+        $metodeAbsensi = in_array($request->input('metode_absensi'), KelasLmsSetting::METODE_ABSENSI, true)
+            ? (string) $request->input('metode_absensi')
+            : null;
 
         $paginator = $this->lmsService->indexPengaturan(
             (int) $request->user()->id,
@@ -127,7 +133,8 @@ class LmsController extends Controller
             $search,
             $sortBy,
             $sortOrder,
-            $tahunAkademikId
+            $tahunAkademikId,
+            $metodeAbsensi
         );
 
         return response()->json([
@@ -147,6 +154,7 @@ class LmsController extends Controller
                 'sort_by'           => $sortBy,
                 'sort_order'        => $sortOrder,
                 'tahun_akademik_id' => $tahunAkademikId,
+                'metode_absensi'    => $metodeAbsensi,
             ],
         ]);
     }

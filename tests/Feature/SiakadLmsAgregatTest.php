@@ -189,4 +189,28 @@ class SiakadLmsAgregatTest extends TestCase
         // Kelas yang tidak dikonfigurasi tetap muncul dengan nilai bawaan.
         $this->assertNull($res->json('data.0.lms_setting'));
     }
+
+    public function test_filter_metode_absensi_menyaring_nilai_efektif(): void
+    {
+        Passport::actingAs($this->userDosen);
+
+        // Belum dikonfigurasi → nilai efektif = nilai bawaan (keduanya).
+        $bawaan = $this->getJson('/api/v1/lms/pengaturan?metode_absensi=keduanya');
+        $bawaan->assertStatus(200)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('filters.metode_absensi', 'keduanya');
+        $this->assertSame([$this->kelasA->id], collect($bawaan->json('data'))->pluck('id')->all());
+
+        // Nilai lain tidak cocok untuk kelas yang belum dikonfigurasi.
+        $lain = $this->getJson('/api/v1/lms/pengaturan?metode_absensi=manual_dosen');
+        $lain->assertStatus(200)
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.total', 0);
+
+        // Nilai di luar closed-set diabaikan diam-diam, bukan 422.
+        $ngawur = $this->getJson('/api/v1/lms/pengaturan?metode_absensi=ngawur');
+        $ngawur->assertStatus(200)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('filters.metode_absensi', null);
+    }
 }

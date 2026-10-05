@@ -309,6 +309,7 @@ dari halaman daftar tanpa perlu membuka tiap kelas satu per satu.
 | `sort_by` | string | ❌ | `kode_kelas` | `kode_kelas`, `nama_kelas`, `kapasitas`, `created_at` |
 | `sort_order` | string | ❌ | `asc` | `asc` / `desc` |
 | `tahun_akademik_id` | integer | ❌ | — | Filter periode |
+| `metode_absensi` | string | ❌ | — | Filter metode absensi efektif: `manual_dosen` / `token_mahasiswa` / `keduanya`. Nilai di luar daftar ini diabaikan (fallback diam, bukan `422`) |
 
 #### Response Sukses (200 OK)
 
@@ -356,7 +357,8 @@ dari halaman daftar tanpa perlu membuka tiap kelas satu per satu.
         "search": null,
         "sort_by": "kode_kelas",
         "sort_order": "asc",
-        "tahun_akademik_id": null
+        "tahun_akademik_id": null,
+        "metode_absensi": null
     }
 }
 ```
@@ -365,6 +367,11 @@ dari halaman daftar tanpa perlu membuka tiap kelas satu per satu.
 > tidak membuat baris default saat membaca, agar UI dapat membedakan "belum dikonfigurasi"
 > dari "sudah dikonfigurasi dengan nilai tersebut". Nilai bawaan ketika menyimpan pertama
 > kali berasal dari default kolom database (`KelasLmsSetting::defaultSetting()`).
+
+> **Filter `metode_absensi` menyaring nilai efektif**, bukan hanya baris setting yang ada:
+> kelas tanpa `lms_setting` memakai nilai bawaan `KelasLmsSetting::METODE_KEDUANYA`
+> (`keduanya`), sehingga `?metode_absensi=keduanya` tetap memunculkan kelas yang belum
+> pernah dikonfigurasi. Kelas yang sudah dikonfigurasi dengan nilai lain tidak ikut.
 
 #### Response Error
 

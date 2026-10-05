@@ -1035,7 +1035,8 @@ class LmsService
         ?string $search = null,
         string $sortBy = 'nama_kelas',
         string $sortOrder = 'asc',
-        ?int $tahunAkademikId = null
+        ?int $tahunAkademikId = null,
+        ?string $metodeAbsensi = null
     ): \Illuminate\Contracts\Pagination\LengthAwarePaginator {
         $query = Kelas::with(['mataKuliah', 'tahunAkademik', 'programStudi', 'lmsSetting'])
             ->withCount([
@@ -1048,6 +1049,21 @@ class LmsService
 
         if ($tahunAkademikId) {
             $query->where('tahun_akademik_id', $tahunAkademikId);
+        }
+
+        if ($metodeAbsensi) {
+            // Filter menyaring nilai EFEKTIF: kelas tanpa baris setting memakai
+            // nilai bawaan (KelasLmsSetting::METODE_KEDUANYA), jadi kelas
+            // belum terkonfigurasi ikut muncul saat yang dicari adalah nilai bawaan.
+            $query->where(function ($q) use ($metodeAbsensi) {
+                $q->whereHas('lmsSetting', function ($setting) use ($metodeAbsensi) {
+                    $setting->where('metode_absensi', $metodeAbsensi);
+                });
+
+                if ($metodeAbsensi === KelasLmsSetting::METODE_KEDUANYA) {
+                    $q->orWhereDoesntHave('lmsSetting');
+                }
+            });
         }
 
         if (!empty($search)) {
