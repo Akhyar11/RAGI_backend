@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/sikeu`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-08-05  
-> **Diperbarui**: 2026-09-21
+> **Diperbarui**: 2026-10-06
 
 ## Daftar Endpoint
 
@@ -13,6 +13,8 @@
 | GET | `/api/v1/sikeu/akuntansi/coa` | Chart of Accounts (Daftar Akun Keuangan) | ✅ Staf Keuangan |
 | POST | `/api/v1/sikeu/akuntansi/coa` | Tambah Akun Keuangan (COA) Baru | ✅ Staf Keuangan |
 | GET | `/api/v1/sikeu/akuntansi/jurnal` | List Jurnal Umum (envelope `data` + `meta`) | ✅ Staf Keuangan |
+
+> Filter pelacakan ref pengajuan: `?referensi_id={pengajuan_id}`, `?nomor_pengajuan={PO/OPR/RMB/CAIR-ST}` (ikut menarik jurnal anak reimbursement), `?jenis_sumber=reimbursement` (khusus `JRN-RMB`). Detail jurnal operasional menyertakan relasi `referensi` (pengajuan + induknya) di dalam `data`.
 | POST | `/api/v1/sikeu/akuntansi/jurnal` | Buat Entri Jurnal Umum Manual | ✅ Staf Keuangan |
 | GET | `/api/v1/sikeu/akuntansi/jurnal/{id}` | Detail jurnal + rincian akun | ✅ Staf Keuangan |
 | PUT | `/api/v1/sikeu/akuntansi/jurnal/{id}` | Edit jurnal MANUAL (kunci: otomatis, penutup, periode tutup) | ✅ Staf Keuangan |
@@ -28,6 +30,28 @@
 > UI pengaturan: `/sikeu/akuntansi/pengaturan` (menu Pengaturan Akuntansi, grup AKUNTANSI & LAPORAN).
 
 > UI: `/sikeu/akuntansi/pengaturan` (menu Pengaturan Akuntansi di grup AKUNTANSI & LAPORAN).
+
+---
+
+## GET /api/v1/sikeu/akuntansi/jurnal
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `search` | string | ❌ | — | Cari nomor jurnal / keterangan |
+| `jenis_sumber` | string | ❌ | — | Filter sumber: `pembayaran_mahasiswa`, `pemasukan_hibah`, `pencairan_kas`, `pengeluaran_manual`, `penyesuaian`, `penutupan`, `reimbursement` |
+| `referensi_id` | integer | ❌ | — | Filter jurnal by ID pengajuan operasional yang dirujuk |
+| `nomor_pengajuan` | string | ❌ | — | Filter by nomor pengajuan (`PO-*`/`OPR-*`/`RMB-*`/`CAIR-ST-*`); ikut menarik jurnal anak reimbursement |
+| `status_posting` | string | ❌ | — | `draft` / `posted` |
+| `dari` | date | ❌ | — | Batas bawah `tanggal_jurnal` |
+| `sampai` | date | ❌ | — | Batas atas `tanggal_jurnal` |
+| `sort_by` | string | ❌ | `created_at` | Kolom pengurutan |
+| `sort_order` | string | ❌ | `desc` | Arah urutan: `asc` / `desc` |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+| `page` | integer | ❌ | `1` | Halaman yang diminta |
+
+> Detail jurnal operasional (`pencairan_kas`, `reimbursement`) menyertakan relasi `referensi` (pengajuan + induknya) di dalam `data`.
 
 ---
 

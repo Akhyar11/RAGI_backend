@@ -92,6 +92,28 @@ class AkuntansiController extends Controller
             $query->where('jenis_sumber', $request->jenis_sumber);
         }
 
+        // Ref pengajuan operasional: filter langsung by ID ...
+        if ($request->filled('referensi_id')) {
+            $query->where('referensi_id', $request->referensi_id);
+        }
+
+        // ... atau by nomor pengajuan (PO-*/OPR-*/RMB-*/CAIR-ST-*).
+        // Mencakup pula jurnal anak reimbursement dari pengajuan yang dicari.
+        if ($request->filled('nomor_pengajuan')) {
+            $np = trim((string) $request->nomor_pengajuan);
+            $parentIds = \App\Models\Sikeu\PengajuanPencairanKas::where('nomor_pengajuan', 'like', "%{$np}%")->pluck('id');
+            if ($parentIds->isNotEmpty()) {
+                $childIds = \App\Models\Sikeu\PengajuanPencairanKas::whereIn('parent_pengajuan_id', $parentIds)->pluck('id');
+                $refIds = $parentIds->merge($childIds)->all();
+                $query->where(function ($q) use ($refIds, $np) {
+                    $q->whereIn('referensi_id', $refIds)
+                        ->orWhere('keterangan', 'like', "%{$np}%");
+                });
+            } else {
+                $query->where('keterangan', 'like', "%{$np}%");
+            }
+        }
+
         if ($request->filled('status_posting')) {
             $query->where('status_posting', $request->status_posting);
         }
@@ -133,6 +155,14 @@ class AkuntansiController extends Controller
     {
         $jurnal = JurnalUmum::with(['details.akun'])->findOrFail($id);
 
+        // Ref balik ke pengajuan operasional bila jurnal berasal dari sana.
+        $referensi = null;
+        if (in_array($jurnal->jenis_sumber, ['pencairan_kas', 'reimbursement'], true) && $jurnal->referensi_id) {
+            $referensi = \App\Models\Sikeu\PengajuanPencairanKas::with(['parent', 'unitKas'])
+                ->find($jurnal->referensi_id);
+        }
+        $jurnal->setRelation('referensi', $referensi);
+
         return response()->json([
             'status' => 'success',
             'message' => 'Detail jurnal berhasil dimuat',
@@ -167,7 +197,7 @@ class AkuntansiController extends Controller
 
         $validator = Validator::make($request->all(), [
             'tanggal_jurnal' => 'sometimes|required|date',
-            'jenis_sumber' => 'sometimes|required|in:pembayaran_mahasiswa,pemasukan_hibah,pencairan_kas,pengeluaran_manual,penyesuaian,penutupan',
+            'jenis_sumber' => 'sometimes|required|in:pembayaran_mahasiswa,pemasukan_hibah,pencairan_kas,pengeluaran_manual,penyesuaian,penutupan,reimbursement',
             'keterangan' => 'sometimes|required|string',
             'details' => 'sometimes|required|array|min:2',
             'details.*.akun_id' => 'required|exists:sikeu_akun_keuangan,id',
@@ -346,7 +376,7 @@ class AkuntansiController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'tanggal_jurnal' => 'required|date',
-            'jenis_sumber' => 'required|in:pembayaran_mahasiswa,pemasukan_hibah,pencairan_kas,pengeluaran_manual,penyesuaian,penutupan',
+            'jenis_sumber' => 'required|in:pembayaran_mahasiswa,pemasukan_hibah,pencairan_kas,pengeluaran_manual,penyesuaian,penutupan,reimbursement',
             'keterangan' => 'required|string',
             'details' => 'required|array|min:2',
             'details.*.akun_id' => 'required|exists:sikeu_akun_keuangan,id',

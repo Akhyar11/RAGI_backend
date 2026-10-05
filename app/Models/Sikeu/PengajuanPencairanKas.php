@@ -22,6 +22,7 @@ class PengajuanPencairanKas extends Model
         'deskripsi',
         'nominal_diajukan',
         'nominal_disetujui',
+        'parent_pengajuan_id',
         'nama_bank_penerima',
         'nomor_rekening_penerima',
         'nama_rekening_penerima',
@@ -154,6 +155,16 @@ class PengajuanPencairanKas extends Model
     public function suratTugas()
     {
         return $this->hasOne(\App\Models\Simpeg\SuratTugas::class, 'sikeu_pencairan_id');
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(self::class, 'parent_pengajuan_id');
+    }
+
+    public function reimbursements()
+    {
+        return $this->hasMany(self::class, 'parent_pengajuan_id');
     }
 
     public function pengadaanSinapra()

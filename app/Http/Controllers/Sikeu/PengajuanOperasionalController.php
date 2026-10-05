@@ -25,6 +25,8 @@ class PengajuanOperasionalController extends Controller
             'ruangan',
             'unitKas',
             'lpj',
+            'parent',
+            'reimbursements',
             'suratTugas.pegawai.unitKerja',
             'pemohon',
         ]);
@@ -62,6 +64,25 @@ class PengajuanOperasionalController extends Controller
         }
         if ($request->filled('kategori') && $request->kategori !== 'all') {
             $query->where('kategori_pengajuan', $request->kategori);
+        }
+        if ($request->filled('jenis_pengajuan') && $request->jenis_pengajuan !== 'all') {
+            $query->where('jenis_pengajuan', $request->jenis_pengajuan);
+        }
+        if ($request->filled('parent_pengajuan_id')) {
+            $query->where('parent_pengajuan_id', $request->parent_pengajuan_id);
+        }
+        // Belum dicairkan: sudah disetujui direktur tapi dana belum keluar.
+        if ($request->boolean('belum_cair')) {
+            $query->where('status', 'disetujui');
+        }
+        // Butuh reimburse: realisasi LPJ melebihi pencairan (sisa negatif).
+        if ($request->boolean('butuh_reimburse')) {
+            $query->where('sisa_nominal', '<', 0);
+        }
+        // LPJ defisit tapi belum ada pengajuan reimbursement aktif.
+        if ($request->boolean('belum_diajukan_reimburse')) {
+            $query->where('sisa_nominal', '<', 0)
+                ->whereDoesntHave('reimbursements', fn ($q) => $q->whereNotIn('status', ['ditolak']));
         }
         if ($request->filled('dari')) {
             $query->whereDate('created_at', '>=', $request->dari);
@@ -124,7 +145,17 @@ class PengajuanOperasionalController extends Controller
      */
     public function show($id)
     {
-        $item = PengajuanPencairanKas::with(['items', 'fakultas', 'ruangan', 'unitKas', 'historyApproval', 'lpj.details'])->findOrFail($id);
+        $item = PengajuanPencairanKas::with(['items', 'fakultas', 'ruangan', 'unitKas', 'historyApproval', 'lpj.details', 'parent', 'reimbursements.unitKas'])->findOrFail($id);
+
+        // Ref akuntansi: semua jurnal yang merujuk pengajuan ini maupun
+        // anak reimbursement-nya (pencairan JRN-EXP + reimbursement JRN-RMB + realisasi).
+        $refIds = array_merge([$item->id], $item->reimbursements->pluck('id')->all());
+        $jurnal = \App\Models\Sikeu\JurnalUmum::with(['details.akun'])
+            ->whereIn('jenis_sumber', ['pencairan_kas', 'reimbursement'])
+            ->whereIn('referensi_id', $refIds)
+            ->orderBy('id', 'asc')
+            ->get();
+        $item->setRelation('jurnal', $jurnal);
 
         return response()->json(['status' => 'success', 'data' => $item]);
     }
@@ -209,6 +240,49 @@ class PengajuanOperasionalController extends Controller
         } catch (\Exception $e) {
             \Log::error('Gagal simpan LPJ: ' . $e->getMessage());
             return response()->json(['status' => 'error', 'message' => 'Gagal menyimpan LPJ: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * POST /api/v1/sikeu/pengajuan-operasional/{id}/reimburse
+     * Buat pengajuan reimbursement (RMB-*) atas selisih kurang bayar LPJ.
+     */
+    public function ajukanReimburse(Request $request, $id)
+    {
+        $user = $request->user();
+        if (!$user->isSuperAdmin() && !$user->isAdmin() && !$user->hasPermission('sikeu.pengajuan.create')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk mengajukan reimbursement keuangan.',
+            ], 403);
+        }
+
+        $request->validate([
+            'nominal_diajukan' => 'nullable|numeric|min:1',
+            'unit_kas_id' => 'nullable|integer|exists:sikeu_unit_kas,id',
+            'deskripsi' => 'nullable|string|min:10|max:2000',
+            'file_lampiran' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+        ]);
+
+        try {
+            $asal = PengajuanPencairanKas::findOrFail($id);
+            $result = $this->service->ajukanReimbursement(
+                $asal,
+                $request->only(['nominal_diajukan', 'unit_kas_id', 'deskripsi']),
+                $request
+            );
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Pengajuan reimbursement berhasil dibuat dan menunggu verifikasi keuangan',
+                'data' => $result,
+            ], 201);
+        } catch (\InvalidArgumentException | \RuntimeException $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+        } catch (\Exception $e) {
+            \Log::error('Gagal ajukan reimbursement: ' . $e->getMessage());
+
+            return response()->json(['status' => 'error', 'message' => 'Gagal mengajukan reimbursement: ' . $e->getMessage()], 500);
         }
     }
 

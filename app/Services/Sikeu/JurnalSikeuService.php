@@ -25,6 +25,14 @@ use Illuminate\Support\Str;
 class JurnalSikeuService
 {
     /**
+     * Kode akun COA baku SIKEU (terpusat di satu lokasi agar tidak
+     * tersebar sebagai literal di tiap method jurnal).
+     */
+    public const AKUN_BEBAN_OPERASIONAL = '502.01';
+    public const AKUN_KAS_TUNAI = '101.01';
+    public const AKUN_KAS_BANK = '102.01';
+
+    /**
      * Prefix nomor jurnal per jenis, dapat dikonfigurasi kampus via
      * menu Pengaturan (SystemSetting `sikeu.jurnal_prefix_*`).
      */
@@ -39,6 +47,7 @@ class JurnalSikeuService
         'penutupan' => 'JRN-TUTUP',
         'pemasukan' => 'JRN-INC',
         'pengeluaran' => 'JRN-EXP',
+        'reimbursement' => 'JRN-RMB',
         'penyusutan' => 'JRN-DEP',
         'manual' => 'JRN-',
     ];
@@ -384,6 +393,40 @@ class JurnalSikeuService
 
         self::baris($jurnal, $akunBeban->id, $nominal, 0, "Beban operasional: {$keterangan}");
         self::baris($jurnal, $akunKas->id, 0, $nominal, "Kas keluar realisasi: {$keterangan}");
+
+        return $jurnal;
+    }
+
+    /**
+     * Pencairan reimbursement (kekurangan bayar LPJ):
+     * Dr Beban Operasional (502.01) / Cr Kas unit kas pembayar.
+     * jenis_sumber 'reimbursement' agar terpisah dari 'pencairan_kas'
+     * sehingga keuangan bisa memfilter ref pengajuan/RMB yang belum cair.
+     */
+    public static function jurnalReimbursement(int $referensiId, float $nominal, string $keterangan, ?UnitKas $unitKas = null, string $kodeBeban = self::AKUN_BEBAN_OPERASIONAL): JurnalUmum
+    {
+        if ($nominal <= 0) {
+            throw new \RuntimeException('Nominal reimbursement harus lebih dari nol.');
+        }
+
+        $akunBeban = AkunKeuangan::where('kode_akun', $kodeBeban)->first()
+            ?? AkunKeuangan::where('kelompok', 'beban')->first();
+        $akunKas = self::akunKasUnit($unitKas, self::AKUN_KAS_TUNAI);
+
+        if (!$akunBeban || !$akunKas) {
+            throw new \RuntimeException('Akun Beban (502.01) atau Kas (101.01) belum dikonfigurasi di COA.');
+        }
+
+        $jurnal = self::header(
+            self::prefix('reimbursement'),
+            'reimbursement',
+            $referensiId,
+            $keterangan,
+            $nominal
+        );
+
+        self::baris($jurnal, $akunBeban->id, $nominal, 0, "Beban reimbursement: {$keterangan}");
+        self::baris($jurnal, $akunKas->id, 0, $nominal, "Kas keluar reimbursement: {$keterangan}");
 
         return $jurnal;
     }

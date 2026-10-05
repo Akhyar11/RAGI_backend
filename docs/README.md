@@ -87,6 +87,7 @@
 | TagihanApprovalController | Approval Pimpinan untuk Tagihan & Dispensasi | [docs/api/SIKEU/TagihanApprovalController.md](api/SIKEU/TagihanApprovalController.md) |
 | UnitKasController | Master Unit Kas & Saldo Operasional | [docs/api/SIKEU/UnitKasController.md](api/SIKEU/UnitKasController.md) |
 | PengajuanKasController | Pengajuan pencairan kas operasional unit, panjar dinas, persetujuan & penolakan | [docs/api/SIKEU/PengajuanKasController.md](api/SIKEU/PengajuanKasController.md) |
+| PengajuanOperasionalController | Pengajuan operasional & reimbursement (PO/RMB), LPJ defisit, pencairan & jurnal otomatis | [docs/api/SIKEU/PengajuanOperasionalController.md](api/SIKEU/PengajuanOperasionalController.md) |
 | PemasukanKampusController | Pencatatan Pemasukan Hibah, Donatur, & Kerjasama | [docs/api/SIKEU/PemasukanKampusController.md](api/SIKEU/PemasukanKampusController.md) |
 | AkuntansiController | Chart of Accounts (COA), Jurnal Umum, & Buku Besar | [docs/api/SIKEU/AkuntansiController.md](api/SIKEU/AkuntansiController.md) |
 | ReferralPencairanController | Invoice payout reward referral SPMB (tab SPMB Pengajuan Operasional): approval keuangan → direktur, cairkan (pengeluaran + jurnal otomatis), tolak | [docs/api/SIKEU/ReferralPencairanController.md](api/SIKEU/ReferralPencairanController.md) |
