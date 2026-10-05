@@ -1,7 +1,7 @@
 # Verifikasi Fase 5 — LMS & Absensi (E2E, Regresi, Storage, Dokumentasi)
 
 > **Tanggal**: 2026-09-29
-> **Cakupan**: Modul LMS backend (`LmsController`, `LmsService`), frontend (`/siakad/lms`, `lms.service.ts`), storage R2/lokal, dokumentasi API.
+> **Cakupan**: Modul LMS backend (`LmsController`, `LmsService`), frontend (`/lms`, `lms.service.ts`), storage R2/lokal, dokumentasi API.
 
 ## 1. Uji Alur Penuh (E2E) — `tests/Feature/SiakadLmsE2ETest.php`
 

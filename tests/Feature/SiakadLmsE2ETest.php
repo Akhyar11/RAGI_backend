@@ -197,7 +197,7 @@ class SiakadLmsE2ETest extends TestCase
         $refFile = \Illuminate\Support\Facades\DB::table('spmb_master_referensi')
             ->where('modul', 'siakad')->where('tipe', 'tipe_konten_lms')->where('kode', 'file')->first();
 
-        $resStore = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/materi", [
+        $resStore = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/materi", [
             'judul'          => 'Slide E2E: Pengantar Testing',
             'deskripsi'      => 'Materi alur penuh untuk diunduh mahasiswa.',
             'tipe_konten_id' => $refFile->id,
@@ -222,7 +222,7 @@ class SiakadLmsE2ETest extends TestCase
         // 2. Mahasiswa download file via endpoint download aman
         Passport::actingAs($this->userMhs);
 
-        $resDownload = $this->getJson("/api/v1/siakad/lms/download/materi/{$fileId}");
+        $resDownload = $this->getJson("/api/v1/lms/download/materi/{$fileId}");
         $resDownload->assertStatus(200)
             ->assertJsonPath('status', 'success')
             ->assertJsonStructure([
@@ -239,7 +239,7 @@ class SiakadLmsE2ETest extends TestCase
     {
         // 1. Dosen generate token
         Passport::actingAs($this->userDosen);
-        $resToken = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/token");
+        $resToken = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token");
         $resToken->assertStatus(200)
             ->assertJsonStructure(['status', 'data' => ['token', 'expired_at']]);
 
@@ -249,7 +249,7 @@ class SiakadLmsE2ETest extends TestCase
 
         // 2. Mahasiswa input token valid -> absensi tersimpan 'hadir'
         Passport::actingAs($this->userMhs);
-        $resInput = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/input-token", [
+        $resInput = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/input-token", [
             'token' => $token,
         ]);
         $resInput->assertStatus(200);
@@ -261,14 +261,14 @@ class SiakadLmsE2ETest extends TestCase
         ]);
 
         // 3. Token salah ditolak
-        $resInvalid = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/input-token", [
+        $resInvalid = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/input-token", [
             'token' => '000000',
         ]);
         $resInvalid->assertStatus(422);
 
         // 4. Token kedaluwarsa ditolak
         $this->pertemuan->update(['token_expired_at' => now()->subMinute()]);
-        $resExpired = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/input-token", [
+        $resExpired = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/input-token", [
             'token' => $token,
         ]);
         $resExpired->assertStatus(422);
@@ -288,7 +288,7 @@ class SiakadLmsE2ETest extends TestCase
         ]);
 
         // 1. Dosen buat tugas link OBE
-        $resTugas = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/tugas", [
+        $resTugas = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/tugas", [
             'judul'                 => 'Tugas E2E: Studi Kasus',
             'deskripsi'             => 'Kerjakan studi kasus berikut.',
             'deadline_at'           => now()->addDays(7)->toDateTimeString(),
@@ -301,7 +301,7 @@ class SiakadLmsE2ETest extends TestCase
 
         // 2. Mahasiswa submit
         Passport::actingAs($this->userMhs);
-        $resKumpul = $this->postJson("/api/v1/siakad/lms/tugas/{$tugasId}/kumpul", [
+        $resKumpul = $this->postJson("/api/v1/lms/tugas/{$tugasId}/kumpul", [
             'catatan_mahasiswa' => 'Pengumpulan E2E.',
             'file'              => UploadedFile::fake()->create('tugas_e2e.zip', 512, 'application/zip'),
         ]);
@@ -310,7 +310,7 @@ class SiakadLmsE2ETest extends TestCase
 
         // 3. Dosen nilai -> masuk OBE
         Passport::actingAs($this->userDosen);
-        $this->putJson("/api/v1/siakad/lms/pengumpulan/{$pengumpulanId}/nilai", [
+        $this->putJson("/api/v1/lms/pengumpulan/{$pengumpulanId}/nilai", [
             'nilai'          => 80.00,
             'feedback_dosen' => 'Cukup baik.',
         ])->assertStatus(200);
@@ -322,7 +322,7 @@ class SiakadLmsE2ETest extends TestCase
         ]);
 
         // 4. Dosen revisi nilai -> OBE ter-overwrite (sumber kebenaran = LMS)
-        $this->putJson("/api/v1/siakad/lms/pengumpulan/{$pengumpulanId}/nilai", [
+        $this->putJson("/api/v1/lms/pengumpulan/{$pengumpulanId}/nilai", [
             'nilai'          => 95.00,
             'feedback_dosen' => 'Revisi: sangat baik.',
         ])->assertStatus(200);
@@ -334,7 +334,7 @@ class SiakadLmsE2ETest extends TestCase
         ]);
 
         // 5. Tugas standalone (tanpa link OBE) -> nilai TIDAK masuk OBE
-        $resStandalone = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/tugas", [
+        $resStandalone = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/tugas", [
             'judul'            => 'Tugas E2E Standalone',
             'deadline_at'      => now()->addDays(7)->toDateTimeString(),
             'max_file_size_mb' => 10,
@@ -344,14 +344,14 @@ class SiakadLmsE2ETest extends TestCase
         $standaloneId = $resStandalone->json('data.id');
 
         Passport::actingAs($this->userMhs);
-        $resKumpul2 = $this->postJson("/api/v1/siakad/lms/tugas/{$standaloneId}/kumpul", [
+        $resKumpul2 = $this->postJson("/api/v1/lms/tugas/{$standaloneId}/kumpul", [
             'catatan_mahasiswa' => 'Standalone.',
             'file'              => UploadedFile::fake()->create('standalone.zip', 256, 'application/zip'),
         ]);
         $resKumpul2->assertStatus(200);
 
         Passport::actingAs($this->userDosen);
-        $this->putJson("/api/v1/siakad/lms/pengumpulan/{$resKumpul2->json('data.id')}/nilai", [
+        $this->putJson("/api/v1/lms/pengumpulan/{$resKumpul2->json('data.id')}/nilai", [
             'nilai' => 70.00,
         ])->assertStatus(200);
 
@@ -372,7 +372,7 @@ class SiakadLmsE2ETest extends TestCase
 
         // 1. Mahasiswa ajukan izin -> dosen approve -> absensi otomatis 'sakit'
         Passport::actingAs($this->userMhs);
-        $resIzin = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/izin", [
+        $resIzin = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/izin", [
             'tipe_izin_id' => $refSakit->id,
             'alasan'       => 'Sakit demam, istirahat di rumah.',
             'file_surat'   => UploadedFile::fake()->create('surat_e2e.pdf', 300, 'application/pdf'),
@@ -382,7 +382,7 @@ class SiakadLmsE2ETest extends TestCase
         $this->assertDatabaseHas('lms_izin_absensi', ['id' => $izinId, 'status' => 'pending']);
 
         Passport::actingAs($this->userDosen);
-        $this->patchJson("/api/v1/siakad/lms/izin/{$izinId}/proses", [
+        $this->patchJson("/api/v1/lms/izin/{$izinId}/proses", [
             'status_id'     => $refSetuju->id,
             'catatan_dosen' => 'Semoga lekas sembuh.',
         ])->assertStatus(200);
@@ -404,7 +404,7 @@ class SiakadLmsE2ETest extends TestCase
         ]);
 
         Passport::actingAs($this->userMhs);
-        $resIzin2 = $this->postJson("/api/v1/siakad/lms/pertemuan/{$pertemuan2->id}/izin", [
+        $resIzin2 = $this->postJson("/api/v1/lms/pertemuan/{$pertemuan2->id}/izin", [
             'tipe_izin_id' => $refSakit->id,
             'alasan'       => 'Pengajuan kedua untuk skenario tolak.',
         ]);
@@ -412,7 +412,7 @@ class SiakadLmsE2ETest extends TestCase
         $izinId2 = $resIzin2->json('data.id');
 
         Passport::actingAs($this->userDosen);
-        $this->patchJson("/api/v1/siakad/lms/izin/{$izinId2}/proses", [
+        $this->patchJson("/api/v1/lms/izin/{$izinId2}/proses", [
             'status_id'     => $refTolak->id,
             'catatan_dosen' => 'Surat tidak valid.',
         ])->assertStatus(200);
@@ -457,7 +457,7 @@ class SiakadLmsE2ETest extends TestCase
         Passport::actingAs($this->userDosen);
         $refHadir = \Illuminate\Support\Facades\DB::table('spmb_master_referensi')
             ->where('modul', 'siakad')->where('tipe', 'status_absensi')->where('kode', 'hadir')->first();
-        $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/bulk-absensi", [
+        $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/bulk-absensi", [
             'absensi' => [
                 ['mahasiswa_id' => $this->mahasiswa->id, 'status_id' => $refHadir->id],
                 ['mahasiswa_id' => $mhs2->id, 'status_id' => $refHadir->id],
@@ -466,14 +466,14 @@ class SiakadLmsE2ETest extends TestCase
 
         // Mahasiswa 1: rekap hanya 1 baris miliknya
         Passport::actingAs($this->userMhs);
-        $resRekap = $this->getJson("/api/v1/siakad/lms/kelas/{$this->kelas->id}/rekap-absensi");
+        $resRekap = $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/rekap-absensi");
         $resRekap->assertStatus(200);
         $rows = $resRekap->json('data.rekapitulasi');
         $this->assertCount(1, $rows);
         $this->assertEquals($this->mahasiswa->id, $rows[0]['mahasiswa_id']);
 
         // Mahasiswa 1: detail pertemuan hanya memuat absensi miliknya
-        $resPertemuan = $this->getJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}");
+        $resPertemuan = $this->getJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}");
         $resPertemuan->assertStatus(200);
         $absensiList = $resPertemuan->json('data.absensi_list');
         $this->assertCount(1, $absensiList);
@@ -482,7 +482,7 @@ class SiakadLmsE2ETest extends TestCase
 
         // Dosen: tetap melihat semua baris
         Passport::actingAs($this->userDosen);
-        $resRekapDosen = $this->getJson("/api/v1/siakad/lms/kelas/{$this->kelas->id}/rekap-absensi");
+        $resRekapDosen = $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/rekap-absensi");
         $resRekapDosen->assertStatus(200);
         $this->assertCount(2, $resRekapDosen->json('data.rekapitulasi'));
     }
@@ -501,7 +501,7 @@ class SiakadLmsE2ETest extends TestCase
 
         // Dosen pengampu: hanya kelasnya sendiri
         Passport::actingAs($this->userDosen);
-        $resDosen = $this->getJson('/api/v1/siakad/lms/kelas/my');
+        $resDosen = $this->getJson('/api/v1/lms/kelas/my');
         $resDosen->assertStatus(200);
         $idsDosen = collect($resDosen->json('data'))->pluck('id')->all();
         $this->assertContains($this->kelas->id, $idsDosen);
@@ -515,7 +515,7 @@ class SiakadLmsE2ETest extends TestCase
         $userTaktertaut->roles()->attach($roleDosen->id);
 
         Passport::actingAs($userTaktertaut);
-        $resTaktertaut = $this->getJson('/api/v1/siakad/lms/kelas/my');
+        $resTaktertaut = $this->getJson('/api/v1/lms/kelas/my');
         $resTaktertaut->assertStatus(200);
         $this->assertCount(0, $resTaktertaut->json('data'));
 
@@ -526,7 +526,7 @@ class SiakadLmsE2ETest extends TestCase
         $userAdmin->roles()->attach($roleAdmin->id);
 
         Passport::actingAs($userAdmin);
-        $resAdmin = $this->getJson('/api/v1/siakad/lms/kelas/my');
+        $resAdmin = $this->getJson('/api/v1/lms/kelas/my');
         $resAdmin->assertStatus(200);
         $idsAdmin = collect($resAdmin->json('data'))->pluck('id')->all();
         $this->assertContains($this->kelas->id, $idsAdmin);
@@ -562,14 +562,14 @@ class SiakadLmsE2ETest extends TestCase
         Passport::actingAs($this->userDosen);
 
         // Default: hanya periode aktif
-        $resDefault = $this->getJson('/api/v1/siakad/lms/kelas/my');
+        $resDefault = $this->getJson('/api/v1/lms/kelas/my');
         $resDefault->assertStatus(200);
         $idsDefault = collect($resDefault->json('data'))->pluck('id')->all();
         $this->assertContains($this->kelas->id, $idsDefault);
         $this->assertNotContains($kelasLalu->id, $idsDefault);
 
         // Eksplisit tahun lalu: hanya kelas tahun lalu
-        $resLalu = $this->getJson("/api/v1/siakad/lms/kelas/my?tahun_akademik_id={$taLalu->id}");
+        $resLalu = $this->getJson("/api/v1/lms/kelas/my?tahun_akademik_id={$taLalu->id}");
         $resLalu->assertStatus(200);
         $idsLalu = collect($resLalu->json('data'))->pluck('id')->all();
         $this->assertNotContains($this->kelas->id, $idsLalu);

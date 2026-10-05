@@ -160,6 +160,8 @@ class LmsService
             'materiList.files',
             'tugasList.komponenPenilaian',
             'tugasList.pengumpulan.mahasiswa',
+            'quizList.komponenPenilaian',
+            'quizList.soal',
             'absensi.mahasiswa',
             'izinAbsensiList.mahasiswa',
         ])->findOrFail($pertemuanId);
@@ -174,9 +176,11 @@ class LmsService
         // Jika mahasiswa, filter hanya materi dan tugas yang sudah dipublish
         $materiList = $pertemuan->materiList;
         $tugasList = $pertemuan->tugasList;
+        $quizList = $pertemuan->quizList;
         if ($isMahasiswa) {
             $materiList = $materiList->where('is_published', true)->values();
             $tugasList = $tugasList->where('is_published', true)->values();
+            $quizList = $quizList->where('is_published', true)->values();
         }
 
         // Status absensi mahasiswa login
@@ -206,6 +210,7 @@ class LmsService
         // Status token aktif
         $tokenAktif = !empty($pertemuan->token_absensi) &&
             $pertemuan->token_expired_at &&
+            !$pertemuan->presensi_closed_at &&
             now()->lt($pertemuan->token_expired_at);
 
         // Privasi data: mahasiswa hanya boleh melihat catatan miliknya sendiri,
@@ -231,11 +236,18 @@ class LmsService
             'pertemuan' => $pertemuan,
             'materi_list' => $materiList,
             'tugas_list' => $tugasList,
+            'quiz_list' => $quizList->values(),
+            'komponen_obe_list' => \App\Models\Siakad\KomponenPenilaian::where('kelas_id', $pertemuan->kelas_id)
+                ->where('is_aktif', true)
+                ->orderBy('urutan')
+                ->get(['id', 'nama_komponen', 'bobot']),
             'absensi_list' => $pertemuan->absensi,
             'absensi_summary' => $absensiSummary,
             'izin_list' => $pertemuan->izinAbsensiList,
             'token_aktif' => $tokenAktif,
             'token_sisa_detik' => $tokenAktif ? now()->diffInSeconds($pertemuan->token_expired_at) : 0,
+            'presensi_ditutup' => $pertemuan->presensi_closed_at !== null,
+            'presensi_closed_at' => $pertemuan->presensi_closed_at?->toIso8601String(),
             'my_absensi' => $myAbsensi,
             'my_pengumpulan' => $myPengumpulan,
             'my_izin' => $myIzin,
@@ -504,37 +516,113 @@ class LmsService
 
     /**
      * Generate 6-digit token absensi realtime dengan masa aktif berbatas.
+     * Membuka/membuka-ulang sesi: reset penanda tutup + set jendela sesi.
      */
-    public function generateTokenAbsensi(int $pertemuanId): array
+    public function generateTokenAbsensi(int $pertemuanId, ?int $windowMenit = null): array
     {
         $pertemuan = Pertemuan::with('kelas.lmsSetting')->findOrFail($pertemuanId);
+
+        if ($pertemuan->presensi_closed_at) {
+            throw ValidationException::withMessages([
+                'pertemuan' => ['Sesi presensi sudah ditutup. Buka ulang sesi bila ingin menerbitkan token baru.'],
+            ]);
+        }
 
         $ttlMinutes = (int) SystemSetting::get('lms_token_ttl_minutes', 15);
         if ($ttlMinutes < 1) {
             $ttlMinutes = 15;
         }
 
+        $defaultWindow = (int) SystemSetting::get('lms_presensi_window_menit', 30);
+        if ($defaultWindow < 5) {
+            $defaultWindow = 30;
+        }
+        $window = $windowMenit !== null ? max(5, min(180, $windowMenit)) : $defaultWindow;
+
         // Generate 6 digit angka acak
         $token = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
         $expiredAt = now()->addMinutes($ttlMinutes);
 
         $pertemuan->update([
-            'token_absensi'    => $token,
-            'token_expired_at' => $expiredAt,
-            'status_pertemuan' => 'berlangsung',
+            'token_absensi'      => $token,
+            'token_expired_at'   => $expiredAt,
+            'token_rotated_at'   => now(),
+            'window_menit'       => $window,
+            'presensi_closed_at' => null,
+            'status_pertemuan'   => 'berlangsung',
         ]);
 
         return [
             'pertemuan_id' => $pertemuanId,
             'token'      => $token,
             'ttl_menit'  => $ttlMinutes,
+            'window_menit' => $window,
             'expired_at' => $expiredAt->toIso8601String(),
             'sisa_detik' => $ttlMinutes * 60,
         ];
     }
 
     /**
+     * Putar ulang token absensi dengan umur pendek (anti titip-hadir:
+     * screenshot/kiriman chat cepat basi selama dashboard dosen terbuka).
+     * Durasi diambil dari `lms_token_rotate_seconds` (default 120 detik).
+     */
+    public function rotateTokenAbsensi(int $pertemuanId): array
+    {
+        $pertemuan = Pertemuan::findOrFail($pertemuanId);
+
+        if ($pertemuan->presensi_closed_at) {
+            throw ValidationException::withMessages([
+                'pertemuan' => ['Sesi presensi sudah ditutup. Token tidak dapat diputar ulang.'],
+            ]);
+        }
+
+        $rotateSeconds = (int) SystemSetting::get('lms_token_rotate_seconds', 120);
+        if ($rotateSeconds < 30) {
+            $rotateSeconds = 120;
+        }
+
+        $token = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+        $expiredAt = now()->addSeconds($rotateSeconds);
+
+        $pertemuan->update([
+            'token_absensi'    => $token,
+            'token_expired_at' => $expiredAt,
+            'token_rotated_at' => now(),
+            'status_pertemuan' => 'berlangsung',
+        ]);
+
+        return [
+            'pertemuan_id'  => $pertemuanId,
+            'token'       => $token,
+            'ttl_detik'   => $rotateSeconds,
+            'expired_at'  => $expiredAt->toIso8601String(),
+            'sisa_detik'  => $rotateSeconds,
+        ];
+    }
+
+    /**
+     * Dosen menutup sesi presensi: input token mahasiswa ditolak setelah ini,
+     * input manual dosen (bulk) tetap dimungkinkan untuk koreksi susulan.
+     */
+    public function tutupPresensi(int $pertemuanId): Pertemuan
+    {
+        $pertemuan = Pertemuan::findOrFail($pertemuanId);
+
+        $pertemuan->update([
+            'presensi_closed_at' => now(),
+            'token_absensi'      => null,
+            'token_expired_at'   => null,
+            'status_pertemuan'   => 'selesai',
+        ]);
+
+        return $pertemuan->fresh();
+    }
+
+    /**
      * Mahasiswa menginputkan token absensi untuk mencatatkan kehadiran.
+     * Syarat: sesi belum ditutup + token cocok ( timing-safe ) + belum kedaluwarsa
+     * + mahasiswa terdaftar di kelas via KRS.
      */
     public function inputTokenAbsensi(int $pertemuanId, int $userId, string $token): void
     {
@@ -543,7 +631,13 @@ class LmsService
 
         $pertemuan = Pertemuan::with('kelas')->findOrFail($pertemuanId);
 
-        if (empty($pertemuan->token_absensi) || trim($pertemuan->token_absensi) !== trim($token)) {
+        if ($pertemuan->presensi_closed_at || $pertemuan->status_pertemuan === 'selesai') {
+            throw ValidationException::withMessages([
+                'token' => ['Sesi presensi sudah ditutup dosen.'],
+            ]);
+        }
+
+        if (empty($pertemuan->token_absensi) || !hash_equals((string) $pertemuan->token_absensi, trim($token))) {
             throw ValidationException::withMessages([
                 'token' => ['Token absensi tidak cocok atau tidak valid.'],
             ]);
@@ -552,6 +646,18 @@ class LmsService
         if (!$pertemuan->token_expired_at || now()->gt($pertemuan->token_expired_at)) {
             throw ValidationException::withMessages([
                 'token' => ['Token absensi telah kedaluwarsa. Mintalah token baru kepada dosen pengampu.'],
+            ]);
+        }
+
+        // Mahasiswa wajib peserta kelas (KRS) — cegah presensi ke kelas lain.
+        $terdaftar = KrsDetail::where('kelas_id', $pertemuan->kelas_id)
+            ->whereHas('krs', function ($q) use ($mahasiswaId) {
+                $q->where('mahasiswa_id', $mahasiswaId);
+            })
+            ->exists();
+        if (!$terdaftar) {
+            throw ValidationException::withMessages([
+                'token' => ['Anda tidak terdaftar pada kelas perkuliahan ini.'],
             ]);
         }
 
@@ -798,6 +904,234 @@ class LmsService
         $direction = strtolower($sortOrder) === 'asc' ? 'asc' : 'desc';
 
         return $query->orderBy($sortField, $direction)->paginate($perPage);
+    }
+
+    /**
+     * Daftar id kelas yang boleh diakses user.
+     *
+     * - Dosen    -> kelas yang diampu (DosenPengampu).
+     * - Mahasiswa-> kelas yang diambil lewat KRS.
+     * - Admin/Superadmin/Kaprodi/Wakil Prodi -> null (berarti SEMUA kelas).
+     * - User tanpa relasi dosen/mahasiswa & bukan privileged -> array kosong.
+     *
+     * Dipakai bersama oleh seluruh endpoint agregat module-level LMS
+     * (pertemuan/tryout/forum/pengaturan) agar scoping konsisten dengan getMyKelas().
+     *
+     * @return array<int>|null
+     */
+    public function resolveAccessibleKelasIds(int $userId): ?array
+    {
+        $dosen = Dosen::where('user_id', $userId)->first();
+        if ($dosen) {
+            return DosenPengampu::where('dosen_id', $dosen->id)->pluck('kelas_id')->all();
+        }
+
+        $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
+        if ($mahasiswa) {
+            return KrsDetail::whereHas('krs', function ($q) use ($mahasiswa) {
+                $q->where('mahasiswa_id', $mahasiswa->id);
+            })->pluck('kelas_id')->all();
+        }
+
+        $user = User::find($userId);
+        $isPrivileged = $user && (
+            $user->isSuperAdmin()
+            || $user->hasRole('admin')
+            || $user->hasRole('kaprodi')
+            || $user->hasRole('wakil_prodi')
+        );
+
+        return $isPrivileged ? null : [];
+    }
+
+    /**
+     * Terapkan scoping akses kelas ke sebuah query yang sudah punya relasi `kelas`.
+     * $kelasIds null = semua kelas (privileged), array kosong = tidak ada akses.
+     */
+    private function applyKelasScope($query, int $userId, string $kelasRelation = 'kelas_id'): void
+    {
+        $kelasIds = $this->resolveAccessibleKelasIds($userId);
+
+        if ($kelasIds === null) {
+            return;
+        }
+
+        if ($kelasIds === []) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        $query->whereIn($kelasRelation, $kelasIds);
+    }
+
+    /**
+     * Daftar pertemuan dari SELURUH kelas yang bisa diakses user (agregat module-level).
+     *
+     * Dipakai halaman /lms/pertemuan. Endpoint per-kelas
+     * (/siakad/perkuliahan/kelas/{kelasId}/pertemuan) tetap tersedia untuk
+     * kebutuhan di dalam konteks satu kelas.
+     */
+    public function listPertemuanSaya(
+        int $userId,
+        int $perPage = 15,
+        ?string $search = null,
+        string $sortBy = 'tanggal',
+        string $sortOrder = 'desc',
+        ?int $tahunAkademikId = null,
+        ?string $statusPertemuan = null
+    ): \Illuminate\Contracts\Pagination\LengthAwarePaginator {
+        $query = Pertemuan::with(['kelas.mataKuliah', 'kelas.tahunAkademik', 'kelas.programStudi', 'kelas.dosenPengampu.dosen']);
+
+        $this->applyKelasScope($query, $userId);
+
+        if ($tahunAkademikId) {
+            $query->whereHas('kelas', function ($q) use ($tahunAkademikId) {
+                $q->where('tahun_akademik_id', $tahunAkademikId);
+            });
+        }
+
+        if ($statusPertemuan) {
+            $query->where('status_pertemuan', $statusPertemuan);
+        }
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('materi', 'like', "%{$search}%")
+                  ->orWhere('catatan_pertemuan', 'like', "%{$search}%")
+                  ->orWhereHas('kelas', function ($kelas) use ($search) {
+                      $kelas->where('nama_kelas', 'like', "%{$search}%")
+                            ->orWhere('kode_kelas', 'like', "%{$search}%")
+                            ->orWhereHas('mataKuliah', function ($mk) use ($search) {
+                                $mk->where('nama', 'like', "%{$search}%")
+                                   ->orWhere('kode_mk', 'like', "%{$search}%");
+                            });
+                  });
+            });
+        }
+
+        $allowedSorts = ['id', 'tanggal', 'pertemuan_ke', 'jam_mulai', 'status_pertemuan', 'created_at'];
+        $sortField = in_array($sortBy, $allowedSorts, true) ? $sortBy : 'tanggal';
+        $direction = strtolower($sortOrder) === 'asc' ? 'asc' : 'desc';
+
+        return $query->orderBy($sortField, $direction)->paginate($perPage);
+    }
+
+    /**
+     * Rekap pengaturan LMS yang bisa diakses user (agregat module-level).
+     *
+     * Mengembalikan setting per kelas yang sudah ada, dilengkapi kelas yang
+     * belum punya setting (agar UI bisa menampilkan "Belum dikonfigurasi").
+     */
+    public function indexPengaturan(
+        int $userId,
+        int $perPage = 15,
+        ?string $search = null,
+        string $sortBy = 'nama_kelas',
+        string $sortOrder = 'asc',
+        ?int $tahunAkademikId = null
+    ): \Illuminate\Contracts\Pagination\LengthAwarePaginator {
+        $query = Kelas::with(['mataKuliah', 'tahunAkademik', 'programStudi', 'lmsSetting'])
+            ->withCount([
+                'pertemuans as pertemuan_count',
+                'krsDetails as mahasiswa_count',
+            ]);
+
+        // Query ini berakar di tabel siakad_kelas, jadi kolomnya primary key 'id'.
+        $this->applyKelasScope($query, $userId, 'id');
+
+        if ($tahunAkademikId) {
+            $query->where('tahun_akademik_id', $tahunAkademikId);
+        }
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('nama_kelas', 'like', "%{$search}%")
+                  ->orWhere('kode_kelas', 'like', "%{$search}%")
+                  ->orWhereHas('mataKuliah', function ($mk) use ($search) {
+                      $mk->where('nama', 'like', "%{$search}%")
+                         ->orWhere('kode_mk', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $allowedSorts = ['id', 'nama_kelas', 'kode_kelas', 'created_at', 'updated_at'];
+        $sortField = in_array($sortBy, $allowedSorts, true) ? $sortBy : 'nama_kelas';
+        $direction = strtolower($sortOrder) === 'asc' ? 'asc' : 'desc';
+
+        return $query->orderBy($sortField, $direction)->paginate($perPage);
+    }
+
+    /**
+     * Ubah data pertemuan.
+     *
+     * Nomor pertemuan uniqueness dijaga terhadap pertemuan lain di kelas yang sama.
+     */
+    public function updatePertemuan(Pertemuan $pertemuan, array $data): Pertemuan
+    {
+        return DB::transaction(function () use ($pertemuan, $data) {
+            $kelasId = $pertemuan->kelas_id;
+            $pertemuanKe = $data['pertemuan_ke'] ?? $pertemuan->pertemuan_ke;
+
+            $bentrok = Pertemuan::where('kelas_id', $kelasId)
+                ->where('pertemuan_ke', $pertemuanKe)
+                ->where('id', '!=', $pertemuan->id)
+                ->exists();
+
+            if ($bentrok) {
+                throw ValidationException::withMessages([
+                    'pertemuan_ke' => "Pertemuan ke-{$pertemuanKe} sudah ada pada kelas ini.",
+                ]);
+            }
+
+            $pertemuan->fill($data);
+            $pertemuan->save();
+
+            // `load()` bukan `fresh()`: instance yang sama perlu dipertahankan agar
+            // `getChanges()` tetap berisi daftar atribut yang benar-benar berubah,
+            // dipakai controller untuk `$newValues` pada audit log.
+            $pertemuan->load(['kelas.mataKuliah', 'kelas.tahunAkademik']);
+
+            return $pertemuan;
+        });
+    }
+
+    /**
+     * Hapus pertemuan.
+     *
+     * Diblokir (422) bila sudah ada data turunan yang akan ikut hilang atau
+     * membuat data absensi/penilaian jadi tidak konsisten: materi, tugas,
+     * quiz, izin absensi, dan rekap absensi mahasiswa.
+     */
+    public function destroyPertemuan(Pertemuan $pertemuan): void
+    {
+        $penghalang = [];
+
+        if ($pertemuan->materiList()->exists()) {
+            $penghalang[] = 'materi pertemuan';
+        }
+        if ($pertemuan->tugasList()->exists()) {
+            $penghalang[] = 'tugas';
+        }
+        if ($pertemuan->quizList()->exists()) {
+            $penghalang[] = 'quiz';
+        }
+        if ($pertemuan->izinAbsensiList()->exists()) {
+            $penghalang[] = 'pengajuan izin absensi';
+        }
+        if ($pertemuan->absensi()->exists()) {
+            $penghalang[] = 'rekap absensi mahasiswa';
+        }
+
+        if ($penghalang) {
+            throw ValidationException::withMessages([
+                'pertemuan_id' => 'Pertemuan tidak dapat dihapus karena sudah memiliki: '
+                    . implode(', ', $penghalang) . '. Hapus atau pindahkan datanya terlebih dahulu.',
+            ]);
+        }
+
+        DB::transaction(function () use ($pertemuan) {
+            $pertemuan->delete();
+        });
     }
 
     /**

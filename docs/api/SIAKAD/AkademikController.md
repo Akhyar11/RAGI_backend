@@ -205,9 +205,80 @@ Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata
 {
     "status": "success",
     "data": [
-        { "id": 7, "kode_prodi": "TI01", "nama": "Teknik Informatika", "jenjang": "S1", "is_active": true }
+        { "id": 7, "kode_prodi": "TI01", "prefix_nim": "A", "nama": "Teknik Informatika", "jenjang": "S1", "is_active": true }
     ],
     "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 }
+}
+```
+
+### Prefix NIM per Prodi
+
+> Atur via `POST /prodi` / `PUT /prodi/{id}` dengan field `prefix_nim` (nullable, huruf/angka maks. 10, unik, cth `"A"`).
+> Jika terisi, generate NIM otomatis memakai `{PREFIX}{YY}{3-digit urut}` (cth `A25001`); jika kosong memakai format standar.
+
+---
+
+## [GET] /api/v1/siakad/akademik/matakuliah
+
+Mengambil daftar mata kuliah kurikulum (paginated).
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `search` | string | ❌ | — | Cari kode (`kode_mk`) atau nama mata kuliah |
+| `kurikulum_id` | integer | ❌ | — | Filter ID kurikulum |
+| `program_studi_id` | integer | ❌ | — | Filter ID program studi (melalui `kurikulum.program_studi_id`) |
+| `tipe` | string | ❌ | — | Filter tipe mata kuliah |
+| `angkatan` | integer | ❌ | — | Filter tahun berlaku kurikulum (`tahun_berlaku <= angkatan`, kurikulum terbaru bila tidak ada yang sama persis) |
+| `sort_by` | string | ❌ | `nama` | Kolom pengurutan (`nama`, `kode_mk`, `total_sks`, `semester_anjuran`, `tipe`, `created_at`); nilai di luar daftar itu diabaikan dan fallback ke `nama` |
+| `sort_order` | string | ❌ | `asc` | Arah pengurutan (`asc`, `desc`) |
+| `per_page` | integer | ❌ | 20 | Jumlah data per halaman (maks. 100) |
+| `page` | integer | ❌ | 1 | Nomor halaman |
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Daftar mata kuliah berhasil diambil.",
+    "data": [
+        {
+            "id": 1,
+            "kurikulum_id": 1,
+            "kode_mk": "IF101",
+            "nama": "Algoritma & Pemrograman I",
+            "sks_teori": 2,
+            "sks_praktik": 1,
+            "total_sks": 3,
+            "semester_anjuran": 1,
+            "tipe": "wajib_prodi",
+            "is_active": true,
+            "kurikulum": {
+                "id": 1,
+                "program_studi_id": 1,
+                "kode": "KUR-2024-IF",
+                "tahun_berlaku": 2024
+            },
+            "prasyarats": []
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 20,
+        "total": 8,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    }
+}
+```
+
+### Response Error
+
+**403 Forbidden** — caller tidak memegang `siakad.kurikulum.read`.
+```json
+{
+    "message": "This action is unauthorized."
 }
 ```
 

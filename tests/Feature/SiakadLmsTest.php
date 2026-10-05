@@ -206,7 +206,7 @@ class SiakadLmsTest extends TestCase
     {
         Passport::actingAs($this->userDosen);
 
-        $responseOverview = $this->getJson("/api/v1/siakad/lms/kelas/{$this->kelas->id}/overview");
+        $responseOverview = $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/overview");
         $responseOverview->assertStatus(200)
             ->assertJsonStructure([
                 'status',
@@ -219,7 +219,7 @@ class SiakadLmsTest extends TestCase
                 ],
             ]);
 
-        $responsePertemuan = $this->getJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}");
+        $responsePertemuan = $this->getJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}");
         $responsePertemuan->assertStatus(200)
             ->assertJsonStructure([
                 'status',
@@ -232,7 +232,7 @@ class SiakadLmsTest extends TestCase
     {
         // 1. Dosen view my kelas
         Passport::actingAs($this->userDosen);
-        $resKelasDosen = $this->getJson('/api/v1/siakad/lms/kelas/my?per_page=10&sort_by=nama_kelas&sort_order=asc');
+        $resKelasDosen = $this->getJson('/api/v1/lms/kelas/my?per_page=10&sort_by=nama_kelas&sort_order=asc');
         $resKelasDosen->assertStatus(200)
             ->assertJsonStructure([
                 'status',
@@ -253,7 +253,7 @@ class SiakadLmsTest extends TestCase
 
         // 2. Mahasiswa view my kelas
         Passport::actingAs($this->userMhs);
-        $resKelasMhs = $this->getJson('/api/v1/siakad/lms/kelas/my');
+        $resKelasMhs = $this->getJson('/api/v1/lms/kelas/my');
         $resKelasMhs->assertStatus(200)
             ->assertJsonStructure([
                 'status',
@@ -264,7 +264,7 @@ class SiakadLmsTest extends TestCase
             ]);
 
         // 3. Mahasiswa view my tugas
-        $resTugasMhs = $this->getJson('/api/v1/siakad/lms/tugas/my');
+        $resTugasMhs = $this->getJson('/api/v1/lms/tugas/my');
         $resTugasMhs->assertStatus(200)
             ->assertJsonStructure([
                 'status',
@@ -288,7 +288,7 @@ class SiakadLmsTest extends TestCase
             ->first();
 
         // 1. Tambah Materi Berkas
-        $responseStore = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/materi", [
+        $responseStore = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/materi", [
             'judul'          => 'Slide Pengantar Kuliah',
             'deskripsi'      => 'Silakan unduh dan pelajari materi presentasi.',
             'tipe_konten_id' => $refFile->id,
@@ -308,7 +308,7 @@ class SiakadLmsTest extends TestCase
 
         // 2. Upload Berkas Tambahan ke Materi
         $fileExtra = UploadedFile::fake()->create('source_code.zip', 2048, 'application/zip');
-        $responseUpload = $this->postJson("/api/v1/siakad/lms/materi/{$materiId}/file", [
+        $responseUpload = $this->postJson("/api/v1/lms/materi/{$materiId}/file", [
             'file' => $fileExtra,
         ]);
 
@@ -317,12 +317,12 @@ class SiakadLmsTest extends TestCase
         $this->assertDatabaseHas('lms_materi_file', ['id' => $fileId]);
 
         // 3. Hapus File Tambahan
-        $responseDeleteFile = $this->deleteJson("/api/v1/siakad/lms/materi-file/{$fileId}");
+        $responseDeleteFile = $this->deleteJson("/api/v1/lms/materi-file/{$fileId}");
         $responseDeleteFile->assertStatus(200);
         $this->assertDatabaseMissing('lms_materi_file', ['id' => $fileId]);
 
         // 4. Update Materi
-        $responseUpdate = $this->putJson("/api/v1/siakad/lms/materi/{$materiId}", [
+        $responseUpdate = $this->putJson("/api/v1/lms/materi/{$materiId}", [
             'judul'          => 'Slide Pengantar Kuliah (Revisi)',
             'deskripsi'      => 'Deskripsi revisi terbaru.',
             'tipe_konten_id' => $refFile->id,
@@ -350,7 +350,7 @@ class SiakadLmsTest extends TestCase
         ]);
 
         // 1. Dosen membuat tugas terhubung OBE
-        $responseTugas = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/tugas", [
+        $responseTugas = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/tugas", [
             'judul'                 => 'Tugas 1: Framework MVC',
             'deskripsi'             => 'Implementasikan konsep MVC dalam sebuah program mini.',
             'deadline_at'           => now()->addDays(7)->toDateTimeString(),
@@ -366,7 +366,7 @@ class SiakadLmsTest extends TestCase
         Passport::actingAs($this->userMhs);
         $fileTugas = UploadedFile::fake()->create('tugas_mvc_2026001001.zip', 512, 'application/zip');
 
-        $responseKumpul = $this->postJson("/api/v1/siakad/lms/tugas/{$tugasId}/kumpul", [
+        $responseKumpul = $this->postJson("/api/v1/lms/tugas/{$tugasId}/kumpul", [
             'catatan_mahasiswa' => 'Tugas sudah selesai dikerjakan sesuai spesifikasi.',
             'file'              => $fileTugas,
         ]);
@@ -380,7 +380,7 @@ class SiakadLmsTest extends TestCase
 
         // 3. Dosen memberi nilai & auto-sync OBE
         Passport::actingAs($this->userDosen);
-        $responseNilai = $this->putJson("/api/v1/siakad/lms/pengumpulan/{$pengumpulanId}/nilai", [
+        $responseNilai = $this->putJson("/api/v1/lms/pengumpulan/{$pengumpulanId}/nilai", [
             'nilai'          => 88.50,
             'feedback_dosen' => 'Bagus sekali, kode rapi dan modular.',
         ]);
@@ -403,7 +403,7 @@ class SiakadLmsTest extends TestCase
     {
         // 1. Dosen generate token
         Passport::actingAs($this->userDosen);
-        $responseToken = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/token");
+        $responseToken = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token");
         $responseToken->assertStatus(200);
 
         $tokenGenerated = $responseToken->json('data.token');
@@ -412,7 +412,7 @@ class SiakadLmsTest extends TestCase
 
         // 2. Mahasiswa input token valid
         Passport::actingAs($this->userMhs);
-        $responseInput = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/input-token", [
+        $responseInput = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/input-token", [
             'token' => $tokenGenerated,
         ]);
         $responseInput->assertStatus(200);
@@ -425,7 +425,7 @@ class SiakadLmsTest extends TestCase
         ]);
 
         // 3. Percobaan input token salah oleh mahasiswa lain (atau token acak)
-        $responseInvalid = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/input-token", [
+        $responseInvalid = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/input-token", [
             'token' => '999999',
         ]);
         $responseInvalid->assertStatus(422);
@@ -443,7 +443,7 @@ class SiakadLmsTest extends TestCase
             ->where('kode', 'sakit')
             ->first();
 
-        $responseIzin = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/izin", [
+        $responseIzin = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/izin", [
             'tipe_izin_id' => $refSakit->id,
             'alasan'       => 'Sakit tifus rawat inap di RS.',
             'file_surat'   => $fileSurat,
@@ -464,7 +464,7 @@ class SiakadLmsTest extends TestCase
             ->where('kode', 'disetujui')
             ->first();
 
-        $responseProses = $this->patchJson("/api/v1/siakad/lms/izin/{$izinId}/proses", [
+        $responseProses = $this->patchJson("/api/v1/lms/izin/{$izinId}/proses", [
             'status_id'     => $refDisetujui->id,
             'catatan_dosen' => 'Semoga lekas pulih.',
         ]);
@@ -493,7 +493,7 @@ class SiakadLmsTest extends TestCase
             ->where('kode', 'hadir')
             ->first();
 
-        $responseBulk = $this->postJson("/api/v1/siakad/lms/pertemuan/{$this->pertemuan->id}/bulk-absensi", [
+        $responseBulk = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/bulk-absensi", [
             'absensi' => [
                 [
                     'mahasiswa_id' => $this->mahasiswa->id,
@@ -511,7 +511,7 @@ class SiakadLmsTest extends TestCase
         ]);
 
         // Cek Rekapitulasi Absensi Kelas
-        $responseRekap = $this->getJson("/api/v1/siakad/lms/kelas/{$this->kelas->id}/rekap-absensi");
+        $responseRekap = $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/rekap-absensi");
         $responseRekap->assertStatus(200)
             ->assertJsonStructure([
                 'status',

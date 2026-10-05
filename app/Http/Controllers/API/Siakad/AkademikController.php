@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Siakad;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Gate;
 use App\Http\Requests\Siakad\StoreTahunAkademikRequest;
 use App\Http\Requests\Siakad\UpdateModePenilaianRequest;
 use Illuminate\Http\Request;
@@ -440,6 +441,8 @@ class AkademikController extends Controller
     // --- MATA KULIAH CRUD ---
     public function listMataKuliah(Request $request)
     {
+        Gate::authorize('siakad.kurikulum.read');
+
         $query = MataKuliah::with(['kurikulum.programStudi', 'prasyarats.prasyarat']);
 
         if ($request->filled('search')) {
@@ -461,10 +464,34 @@ class AkademikController extends Controller
             $query->where('tipe', $request->tipe);
         }
 
-        $data = $query->paginate($request->integer('per_page', 20));
+        if ($request->filled('angkatan')) {
+            $angkatan = (int) $request->angkatan;
+            $exactExists = Kurikulum::where('tahun_berlaku', $angkatan)->exists();
+            if ($exactExists) {
+                $query->whereHas('kurikulum', fn($q) => $q->where('tahun_berlaku', $angkatan));
+            } else {
+                $applicableKurikulumIds = Kurikulum::where('tahun_berlaku', '<=', $angkatan)
+                    ->orderBy('tahun_berlaku', 'desc')
+                    ->pluck('id');
+                $query->whereIn('kurikulum_id', $applicableKurikulumIds);
+            }
+        }
+
+        $sortColumn = $request->input('sort_by', 'nama');
+        $sortOrder = $request->input('sort_order') === 'desc' ? 'desc' : 'asc';
+        $allowedSorts = ['nama', 'kode_mk', 'total_sks', 'semester_anjuran', 'tipe', 'created_at'];
+        if (in_array($sortColumn, $allowedSorts)) {
+            $query->orderBy($sortColumn, $sortOrder);
+        } else {
+            $query->orderBy('nama', $sortOrder);
+        }
+
+        $perPage = min(100, $request->integer('per_page', 20));
+        $data = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
+            'message' => 'Daftar mata kuliah berhasil diambil.',
             'data' => $data->items(),
             'meta' => [
                 'current_page' => $data->currentPage(),

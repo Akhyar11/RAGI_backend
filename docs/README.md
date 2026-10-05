@@ -69,8 +69,15 @@
 | ObeController | Kurikulum OBE (CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, Nilai) | [docs/api/SIAKAD/ObeController.md](api/SIAKAD/ObeController.md) |
 | PerkuliahanController | Kelas, KRS, nilai, transkrip, pertemuan & absensi | [docs/api/SIAKAD/PerkuliahanController.md](api/SIAKAD/PerkuliahanController.md) |
 | PaController | Pembimbing Akademik: Rekap bimbingan, filter aktivitas tanggal, catatan jurnal, sesi per kelas (SIMPA), & cetak PDF | [docs/api/SIAKAD/PaController.md](api/SIAKAD/PaController.md) |
-| LmsController | LMS terintegrasi SIAKAD: kelas daring (kelas/my per periode), materi, penugasan, OBE sync, absensi token & izin | [docs/api/SIAKAD/LmsController.md](api/SIAKAD/LmsController.md) |
 
+
+---
+
+## 📚 Modul LMS (standalone, pisah dari SIAKAD)
+
+| Controller | Deskripsi | Dokumen |
+|---|---|---|
+| LmsController | LMS standalone (`/api/v1/lms`, UI `/lms`): kelas/my per periode, materi, tugas + OBE sync, absensi token & izin. Otorisasi tetap Gate `siakad.kelas.*` | [docs/api/LMS/LmsController.md](api/LMS/LmsController.md) |
 ---
 
 ## 💰 Modul SIKEU
@@ -135,15 +142,6 @@
 | MasterGolonganPangkatController | Master referensi jenjang golongan & pangkat kepegawaian (I/a s.d. IV/e) | [docs/api/SIMPEG/MasterGolonganPangkatController.md](api/SIMPEG/MasterGolonganPangkatController.md) |
 | MasterJenisTransportasiController | Master moda dan jenis transportasi penugasan dinas luar (armada kampus vs umum/pribadi) | [docs/api/SIMPEG/MasterJenisTransportasiController.md](api/SIMPEG/MasterJenisTransportasiController.md) |
 
----
-
-## 📚 Modul LMS
-
-| Controller | Deskripsi | Dokumen |
-|---|---|---|
-| — | *Belum diimplementasikan* | — |
-
----
 
 ## 🏢 Modul SINAPRA (Sarana, Prasarana, & Aset)
 
