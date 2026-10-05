@@ -20,14 +20,20 @@ class AsetRequest extends FormRequest
 
     public function rules(): array
     {
-        $asetId = $this->route('aset') ? $this->route('aset')->id : null;
+        $aset = $this->route('aset');
+        $asetId = $aset instanceof \App\Models\Aset ? $aset->id : $aset;
 
         return [
             'kategori_id' => 'required|exists:sinapra_kategori_aset,id',
             'ruangan_id' => 'nullable|exists:sinapra_ruangan,id',
             'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'penanggung_jawab_pegawai_id' => 'nullable|exists:simpeg_pegawai,id',
-            'kode_aset' => 'required|string|max:100|unique:sinapra_aset,kode_aset,' . $asetId,
+            'kode_aset' => [
+                'required',
+                'string',
+                'max:100',
+                \Illuminate\Validation\Rule::unique('sinapra_aset', 'kode_aset')->ignore($asetId)->whereNull('deleted_at'),
+            ],
             'nama' => 'required|string|max:150',
             'merk' => 'nullable|string|max:100',
             'model' => 'nullable|string|max:100',

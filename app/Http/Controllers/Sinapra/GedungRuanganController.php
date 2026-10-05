@@ -36,7 +36,12 @@ class GedungRuanganController extends Controller
         }
 
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $statusVal = $request->status;
+            if ($statusVal === 'nonaktif' || $statusVal === 'tidak_aktif') {
+                $query->whereIn('status', ['tidak_aktif', 'nonaktif']);
+            } else {
+                $query->where('status', $statusVal);
+            }
         }
 
         $allowedSort = ['created_at', 'updated_at', 'kode', 'nama', 'jumlah_lantai'];
@@ -155,7 +160,12 @@ class GedungRuanganController extends Controller
         }
 
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $ruanganStatus = $request->status;
+            if ($ruanganStatus === 'nonaktif' || $ruanganStatus === 'tidak_aktif') {
+                $query->whereIn('status', ['tidak_aktif', 'nonaktif']);
+            } else {
+                $query->where('status', $ruanganStatus);
+            }
         }
 
         if ($request->filled('search')) {

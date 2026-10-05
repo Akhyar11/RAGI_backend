@@ -4,7 +4,7 @@
 > **Base URL**: `/api/sinapra`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-08-19  
-> **Diperbarui**: 2026-09-24  
+> **Diperbarui**: 2026-10-05  
 
 ## Daftar Endpoint
 
@@ -40,7 +40,7 @@ Deskripsi: Mengambil daftar gedung yang terdaftar dalam sistem.
 
 ### Query Parameters
 - `search` (string, optional) - Filter pencarian kode, nama, atau alamat.
-- `status` (enum: aktif, renovasi, nonaktif, optional) - Filter status gedung.
+- `status` (enum: `aktif`, `renovasi`, `nonaktif`, `tidak_aktif`, optional) - Filter status gedung (mendukung `nonaktif` maupun `tidak_aktif`).
 - `sort_by` (string, default: `created_at`) - Whitelist: `created_at`, `updated_at`, `kode`, `nama`, `jumlah_lantai`.
 - `sort_order` (enum: `asc`, `desc`, default: `desc`) - Urutan data.
 - `per_page` (integer, default: 15, max: 100) - Jumlah data per halaman.
@@ -110,7 +110,7 @@ Deskripsi: Mengambil daftar ruangan kampus dengan relasi tipe ruangan, gedung, d
 - `tipe_ruangan_id` (integer, optional) - Filter relasi master tipe ruangan.
 - `program_studi_id` (integer|string, optional) - Filter ruangan berdasarkan Program Studi SIAKAD (`null` atau `umum` untuk ruangan umum kampus).
 - `tipe` (string, optional) - Filter kode tipe ruangan (mencakup data legacy atau relasi kode master tipe ruangan).
-- `status` (enum: aktif, maintenance, nonaktif, optional) - Filter status operasional ruangan.
+- `status` (enum: `aktif`, `maintenance`, `nonaktif`, `tidak_aktif`, optional) - Filter status operasional ruangan (mendukung `nonaktif` maupun `tidak_aktif`).
 - `sort_by` (string, default: `created_at`) - Whitelist: `created_at`, `updated_at`, `kode`, `nama`, `kapasitas`, `lantai`.
 - `sort_order` (enum: `asc`, `desc`, default: `desc`) - Urutan data.
 - `per_page` (integer, default: 15, max: 100) - Jumlah data per halaman.

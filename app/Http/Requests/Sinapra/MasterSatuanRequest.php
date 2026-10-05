@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Sinapra;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class MasterSatuanRequest extends FormRequest
 {
@@ -13,10 +14,15 @@ class MasterSatuanRequest extends FormRequest
 
     public function rules(): array
     {
-        $id = $this->route('satuan') ? $this->route('satuan')->id : null;
+        $id = $this->route('id') ?? ($this->route('satuan') instanceof \App\Models\Sinapra\MasterSatuan ? $this->route('satuan')->id : $this->route('satuan'));
 
         return [
-            'kode' => 'required|string|max:50|unique:sinapra_master_satuan,kode,' . $id,
+            'kode' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('sinapra_master_satuan', 'kode')->ignore($id)->whereNull('deleted_at'),
+            ],
             'nama' => 'required|string|max:100',
             'keterangan' => 'nullable|string',
             'is_active' => 'boolean',

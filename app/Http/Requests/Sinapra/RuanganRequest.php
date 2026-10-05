@@ -37,6 +37,11 @@ class RuanganRequest extends FormRequest
             $jumlahWifi = 1;
         }
 
+        $status = $this->input('status');
+        if ($status === 'nonaktif') {
+            $status = 'tidak_aktif';
+        }
+
         $this->merge([
             'ada_ac' => $adaAc,
             'jumlah_ac' => $adaAc ? $jumlahAc : 0,
@@ -44,18 +49,25 @@ class RuanganRequest extends FormRequest
             'jumlah_proyektor' => $adaProyektor ? $jumlahProyektor : 0,
             'ada_wifi' => $adaWifi,
             'jumlah_wifi' => $adaWifi ? $jumlahWifi : 0,
+            'status' => $status ?: 'aktif',
         ]);
     }
 
     public function rules(): array
     {
-        $ruanganId = $this->route('ruangan') ? $this->route('ruangan')->id : null;
+        $ruangan = $this->route('ruangan');
+        $ruanganId = $ruangan instanceof \App\Models\Ruangan ? $ruangan->id : $ruangan;
 
         return [
             'gedung_id' => 'required|exists:sinapra_gedung,id',
             'tipe_ruangan_id' => 'nullable|exists:sinapra_master_tipe_ruangan,id',
             'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
-            'kode' => 'required|string|max:50|unique:sinapra_ruangan,kode,' . $ruanganId,
+            'kode' => [
+                'required',
+                'string',
+                'max:50',
+                \Illuminate\Validation\Rule::unique('sinapra_ruangan', 'kode')->ignore($ruanganId)->whereNull('deleted_at'),
+            ],
             'nama' => 'required|string|max:150',
             'lantai' => 'required|integer|min:1',
             'tipe' => 'nullable|string|max:50',
