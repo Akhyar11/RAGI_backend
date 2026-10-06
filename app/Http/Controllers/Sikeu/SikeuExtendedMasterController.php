@@ -698,6 +698,11 @@ class SikeuExtendedMasterController extends Controller
             $query->whereHas('tipeTagihanMahasiswa', fn($tm) => $tm->where('jalur_kelas', $jalur));
         }
 
+        if ($request->filled('kelas') && $request->kelas !== 'all') {
+            $kelas = strtoupper(trim((string) $request->kelas));
+            $query->whereHas('mahasiswa', fn($m) => $m->where('kelas', $kelas));
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {

@@ -752,4 +752,96 @@ class LmsController extends Controller
             'data'    => $download,
         ]);
     }
+
+    /**
+     * Salin materi dari kelas sumber ke kelas target (pertemuan_ke sama).
+     */
+    public function importMateri(Request $request, int $kelasId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $validated = $request->validate([
+            'sumber_kelas_id' => 'required|integer|exists:siakad_kelas,id',
+            'copy_materi'     => 'sometimes|boolean',
+            'copy_deskripsi'  => 'sometimes|boolean',
+        ]);
+
+        $hasil = $this->lmsService->importMateriDariKelas(
+            $kelasId,
+            (int) $validated['sumber_kelas_id'],
+            [
+                'copy_materi'    => $validated['copy_materi'] ?? true,
+                'copy_deskripsi' => $validated['copy_deskripsi'] ?? true,
+            ]
+        );
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'create',
+                tableName: 'lms_materi_pertemuan',
+                recordId: $kelasId,
+                oldValues: null,
+                newValues: [
+                    'sumber_kelas_id' => $validated['sumber_kelas_id'],
+                    'disalin_materi'  => $hasil['disalin_materi'],
+                    'dibuat_pertemuan' => $hasil['dibuat_pertemuan'],
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log import materi: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Materi kelas sumber berhasil disalin ke kelas target.',
+            'data'    => $hasil,
+        ]);
+    }
+
+    /**
+     * Rekap matriks kehadiran (rekap + peta status per pertemuan).
+     * Pemanggil mahasiswa hanya menerima baris miliknya sendiri (privasi data).
+     */
+    public function rekapMatrix(Request $request, int $kelasId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        $user = $request->user();
+        $onlyMahasiswaId = null;
+        if ($user && $user->hasRole('mahasiswa') && !$user->can('siakad.kelas.manage')) {
+            $onlyMahasiswaId = Mahasiswa::where('user_id', $user->id)->value('id');
+        }
+
+        $matriks = $this->lmsService->getRekapMatrix($kelasId, $onlyMahasiswaId);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Matriks rekapitulasi absensi kelas berhasil diambil.',
+            'data'    => $matriks,
+        ]);
+    }
+
+    /**
+     * Ketercapaian mata kuliah per komponen penilaian OBE.
+     * Mahasiswa hanya melihat miliknya sendiri; dosen/pengelola melihat semua.
+     */
+    public function ketercapaian(Request $request, int $kelasId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        $user = $request->user();
+        $mahasiswaId = null;
+        if ($user && $user->hasRole('mahasiswa') && !$user->can('siakad.kelas.manage')) {
+            $mahasiswaId = Mahasiswa::where('user_id', $user->id)->value('id');
+        }
+
+        $capaian = $this->lmsService->getKetercapaianMk($kelasId, $mahasiswaId);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Ketercapaian mata kuliah berhasil diambil.',
+            'data'    => $capaian,
+        ]);
+    }
 }

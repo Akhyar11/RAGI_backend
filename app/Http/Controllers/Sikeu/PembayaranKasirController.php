@@ -603,6 +603,7 @@ class PembayaranKasirController extends Controller
         $validator = Validator::make($request->all(), [
             'tahun_angkatan' => 'required|integer|min:2020|max:2040',
             'jalur_kelas' => 'required|string',
+            'kelas' => 'nullable|string|max:10|regex:/^[0-9]{2}[A-Z]{1,3}$/',
             'semester' => 'nullable|integer|min:1|max:14',
             'program_studi_id' => 'nullable|integer',
             'jatuh_tempo' => 'required|date|after_or_equal:today',
@@ -616,6 +617,10 @@ class PembayaranKasirController extends Controller
                 'errors' => $validator->errors(),
             ], 422);
         }
+
+        $kelas = $request->filled('kelas')
+            ? strtoupper(trim((string) $request->input('kelas')))
+            : null;
 
         try {
             DB::beginTransaction();
@@ -672,6 +677,12 @@ class PembayaranKasirController extends Controller
                 });
             }
 
+            if ($kelas) {
+                $tipeQuery->whereHas('mahasiswa', function ($mq) use ($kelas) {
+                    $mq->where('kelas', $kelas);
+                });
+            }
+
             $tipeList = $tipeQuery->get();
 
             if ($tipeList->isNotEmpty()) {
@@ -691,6 +702,10 @@ class PembayaranKasirController extends Controller
                     $siakadQuery->where('program_studi_id', $request->program_studi_id);
                 }
 
+                if ($kelas) {
+                    $siakadQuery->where('kelas', $kelas);
+                }
+
                 $siakadList = $siakadQuery->get();
                 if ($siakadList->isNotEmpty()) {
                     $mahasiswaList = $siakadList->map(function ($item) {
@@ -706,7 +721,7 @@ class PembayaranKasirController extends Controller
             if ($mahasiswaList->isEmpty()) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Tidak ditemukan mahasiswa aktif untuk Angkatan ' . $request->tahun_angkatan . ' dan Jalur ' . $request->jalur_kelas . '. Pastikan data mahasiswa / penetapan tipe tagihan sudah tersedia.',
+                    'message' => 'Tidak ditemukan mahasiswa aktif untuk Angkatan ' . $request->tahun_angkatan . ' dan Jalur ' . $request->jalur_kelas . ($kelas ? ' dan Kelas ' . $kelas : '') . '. Pastikan data mahasiswa / penetapan tipe tagihan sudah tersedia.',
                 ], 404);
             }
 

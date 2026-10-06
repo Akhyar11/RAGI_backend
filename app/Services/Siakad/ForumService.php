@@ -100,7 +100,8 @@ class ForumService
         int $userId,
         int $perPage = 15,
         string $sortBy = 'id',
-        string $sortOrder = 'asc'
+        string $sortOrder = 'asc',
+        ?int $pertemuanId = null
     ): LengthAwarePaginator {
         $kelas = Kelas::with('mataKuliah')->findOrFail($kelasId);
         $this->assertAnggotaKelas($kelasId, $userId);
@@ -112,6 +113,7 @@ class ForumService
         // `is_pinned` selalu jadi kunci pertama supaya topik terkunci tidak
         // tenggelam; `id` jadi kunci terakhir sebagai penentu stabil (tie-break).
         $paginator = ForumTopik::where('kelas_id', $kelas->id)
+            ->when($pertemuanId !== null, fn ($q) => $q->where('pertemuan_id', $pertemuanId))
             ->withCount('posts')
             ->orderByDesc('is_pinned')
             ->orderBy($sortField, $direction)

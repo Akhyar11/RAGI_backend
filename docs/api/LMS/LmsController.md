@@ -4,7 +4,8 @@
 > **Modul**: LMS (standalone, pisah dari SIAKAD)  
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
-> **Dibuat/Diperbarui**: 2026-09-25
+> **Dibuat**: 2026-09-25
+> **Diperbarui**: 2026-10-06 (import materi antar-kelas, matriks rekap, ketercapaian MK)
 
 Controller untuk menangani seluruh aktivitas Learning Management System (LMS) dan Absensi Terintegrasi Perkuliahan. Meliputi manajemen materi perkuliahan multi-file, penugasan mahasiswa dengan auto-sync ke sistem penilaian OBE (`siakad_nilai_komponen_mhs`), absensi token 6-digit dengan masa aktif dinamis, rekapitulasi kehadiran kelas, pengajuan dan persetujuan izin/sakit mahasiswa, serta pengaturan media penyimpanan (Cloudflare R2 atau storage lokal).
 
@@ -24,6 +25,9 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | GET | `/api/v1/lms/tugas/my` | Seluruh daftar tugas mahasiswa di semester aktif | ✅ |
 | GET | `/api/v1/lms/kelas/{kelasId}/overview` | Ringkasan 16 pertemuan kelas, silabus, & progres perkuliahan | ✅ |
 | GET | `/api/v1/lms/kelas/{kelasId}/rekap-absensi` | Rekap kehadiran (dosen: sekelas; mahasiswa: miliknya saja) | ✅ |
+| POST | `/api/v1/lms/kelas/{kelasId}/import-materi` | Salin materi dari kelas sumber (pasangan `pertemuan_ke` sama) | ✅ kelola |
+| GET | `/api/v1/lms/kelas/{kelasId}/rekap-matrix` | Matriks kehadiran + peta status per pertemuan | ✅ |
+| GET | `/api/v1/lms/kelas/{kelasId}/ketercapaian` | Ketercapaian MK per komponen OBE (mahasiswa: miliknya saja) | ✅ |
 | PUT | `/api/v1/lms/kelas/{kelasId}/setting` | Perbarui konfigurasi LMS kelas (storage, bobot, izin token) | ✅ |
 | GET | `/api/v1/lms/pertemuan` | Daftar pertemuan agregat seluruh kelas yang diakses (halaman `/lms/pertemuan`) | ✅ |
 | PUT | `/api/v1/lms/pertemuan/{pertemuanId}` | Perbarui data pertemuan | ✅ kelola |
@@ -894,6 +898,151 @@ Dosen pengampu memproses status persetujuan surat izin. Jika disetujui, kehadira
         "catatan_dosen": "Semoga lekas sembuh, pelajari materi bab 1 di LMS.",
         "diproses_by": 8,
         "diproses_at": "2026-10-05T11:00:00.000000Z"
+    }
+}
+```
+
+---
+
+## 6. Alur Baru: Import Materi, Matriks Rekap & Ketercapaian
+
+### [POST] `/api/v1/lms/kelas/{kelasId}/import-materi`
+
+Menyalin seluruh materi pertemuan dari kelas sumber ke kelas target, dipasangkan per
+nomor pertemuan (`pertemuan_ke` sama). Pertemuan target yang belum ada dibuat otomatis
+(tanggal mengikuti sumber). Berkas hanya disalin record-nya (`file_path`/`disk` sama,
+tanpa duplikat fisik). Wajib permission `siakad.kelas.manage`; tercatat pada `audit_logs`.
+
+#### Request Body
+
+```json
+{
+    "sumber_kelas_id": 15,
+    "copy_materi": true,
+    "copy_deskripsi": true
+}
+```
+
+| Field | Type | Wajib | Validasi |
+|---|---|---|---|
+| `sumber_kelas_id` | integer | ✅ | `exists:siakad_kelas,id` |
+| `copy_materi` | boolean | ❌ | default `true` |
+| `copy_deskripsi` | boolean | ❌ | default `true` |
+
+#### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Materi kelas sumber berhasil disalin ke kelas target.",
+    "data": {
+        "disalin_materi": 6,
+        "dibuat_pertemuan": 2
+    }
+}
+```
+
+#### Response Error
+
+**403 Forbidden** — tidak memegang `siakad.kelas.manage`.
+
+```json
+{ "message": "This action is unauthorized." }
+```
+
+**422 Unprocessable Entity** — `sumber_kelas_id` tidak ada.
+
+```json
+{
+    "message": "Data yang diberikan tidak valid.",
+    "errors": { "sumber_kelas_id": ["The selected sumber kelas id is invalid."] }
+}
+```
+
+### [GET] `/api/v1/lms/kelas/{kelasId}/rekap-matrix`
+
+Perluasan `rekap-absensi`: selain ringkasan per mahasiswa, mengembalikan `pertemuan_list`
+(`id`, `pertemuan_ke`, `tanggal`) dan `detail_pertemuan` (map
+`mahasiswa_id` → `{pertemuan_ke: status|null}`). Mahasiswa hanya menerima baris miliknya.
+
+#### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Matriks rekapitulasi absensi kelas berhasil diambil.",
+    "data": {
+        "kelas_id": 14,
+        "total_pertemuan": 2,
+        "batas_min_hadir_persen": 75,
+        "rekapitulasi": [
+            {
+                "mahasiswa_id": 312,
+                "nim": "2026001001",
+                "nama_lengkap": "Mahasiswa LMS Testing",
+                "hadir": 2,
+                "sakit": 0,
+                "izin": 0,
+                "alfa": 0,
+                "total_pertemuan": 2,
+                "persen_kehadiran": 100,
+                "memenuhi_syarat": true
+            }
+        ],
+        "pertemuan_list": [
+            { "id": 101, "pertemuan_ke": 1, "tanggal": "2026-10-01" },
+            { "id": 102, "pertemuan_ke": 2, "tanggal": "2026-10-08" }
+        ],
+        "detail_pertemuan": {
+            "312": { "1": "hadir", "2": "hadir" }
+        }
+    }
+}
+```
+
+### [GET] `/api/v1/lms/kelas/{kelasId}/ketercapaian`
+
+Ketercapaian mata kuliah: daftar komponen penilaian OBE kelas (`komponen`) beserta nilai
+per mahasiswa (`ketercapaian`: `nilai_per_komponen`, `rata_rata`, `persen_capaian`).
+Mahasiswa hanya melihat miliknya sendiri; dosen/pengelola melihat semua.
+
+#### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Ketercapaian mata kuliah berhasil diambil.",
+    "data": {
+        "kelas_id": 14,
+        "komponen": [
+            {
+                "id": 18,
+                "kelas_id": 14,
+                "nama_komponen": "Tugas 1 - LMS",
+                "teknik_penilaian": "tugas",
+                "bobot": "15.00",
+                "urutan": 1,
+                "is_aktif": true
+            }
+        ],
+        "ketercapaian": [
+            {
+                "mahasiswa_id": 312,
+                "nim": "2026001001",
+                "nama_lengkap": "Mahasiswa LMS Testing",
+                "nilai_per_komponen": [
+                    {
+                        "komponen_penilaian_id": 18,
+                        "nama_komponen": "Tugas 1 - LMS",
+                        "bobot": 15,
+                        "nilai": 88.5,
+                        "persen_capaian": 88.5
+                    }
+                ],
+                "rata_rata": 88.5,
+                "persen_capaian": 88.5
+            }
+        ]
     }
 }
 ```

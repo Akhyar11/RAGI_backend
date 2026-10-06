@@ -50,6 +50,7 @@ class Mahasiswa extends Model
         'jenis_pendaftaran',
         'status',
         'dosen_wali_id',
+        'kelas',
         'id_feeder',
         'id_feeder_biodata',
         'id_feeder_riwayat',

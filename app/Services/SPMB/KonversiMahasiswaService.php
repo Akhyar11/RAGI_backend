@@ -31,7 +31,14 @@ class KonversiMahasiswaService
             $nimBaru = $tahun . $kodeProdi . $urut;
 
             // 3. Masukkan ke tabel `mahasiswa` (SIAKAD Core)
-            $mahasiswa = Mahasiswa::create([
+            // Skema pendaftaran tidak memiliki info kelas/jalur kelas yang
+            // relevan, sehingga `kelas` dibiarkan null (tidak dikarang).
+            $kelas = null;
+            $kelasRaw = $pendaftaran->getAttribute('kelas');
+            if (is_string($kelasRaw) && trim($kelasRaw) !== '') {
+                $kelas = strtoupper(trim($kelasRaw));
+            }
+            $mahasiswaData = [
                 'user_id' => $pendaftaran->user_id,
                 'program_studi_id' => $hasilSeleksi->program_studi_diterima_id,
                 'nim' => $nimBaru,
@@ -45,7 +52,11 @@ class KonversiMahasiswaService
                 'angkatan' => date('Y'),
                 'tanggal_masuk' => now(),
                 'status' => 'aktif',
-            ]);
+            ];
+            if ($kelas !== null) {
+                $mahasiswaData['kelas'] = $kelas;
+            }
+            $mahasiswa = Mahasiswa::create($mahasiswaData);
 
             // 4. Update tabel `users` (IAM)
             $user = $pendaftaran->user;

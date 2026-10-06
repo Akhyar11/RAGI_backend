@@ -15,6 +15,7 @@ class ManualQuizGradeRequest extends FormRequest
     {
         return [
             'poin' => 'required|numeric|min:0',
+            'feedback_dosen' => 'nullable|string|max:2000',
         ];
     }
 }

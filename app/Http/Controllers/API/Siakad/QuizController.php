@@ -13,6 +13,7 @@ use App\Http\Requests\Siakad\Lms\UpdateQuizRequest;
 use App\Models\Lms\Quiz;
 use App\Models\Lms\QuizAttempt;
 use App\Models\Lms\QuizAttemptJawaban;
+use App\Models\Lms\QuizKolaborator;
 use App\Models\Lms\QuizSoal;
 use App\Models\Lms\TryoutPeserta;
 use App\Services\AuditLogService;
@@ -243,7 +244,8 @@ class QuizController extends Controller
         $row = $this->quizService->beriNilaiManual(
             $attemptJawabanId,
             $poin,
-            (int) $request->user()->id
+            (int) $request->user()->id,
+            $request->validated('feedback_dosen')
         );
 
         try {
@@ -253,7 +255,7 @@ class QuizController extends Controller
                 tableName: 'lms_quiz_attempt_jawaban',
                 recordId: $attemptJawabanId,
                 oldValues: $oldValues,
-                newValues: ['poin_didapat' => $poin, 'is_benar' => $row->is_benar]
+                newValues: ['poin_didapat' => $poin, 'is_benar' => $row->is_benar, 'feedback_dosen' => $row->feedback_dosen]
             );
         } catch (\Throwable $e) {
             Log::warning('Gagal mencatat audit log nilai manual quiz: ' . $e->getMessage());
@@ -423,6 +425,50 @@ class QuizController extends Controller
     }
 
     /**
+     * Tambah peserta tryout per kelas (mis. "25A") + filter prodi opsional.
+     */
+    public function addPesertaByKelas(Request $request, int $quizId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $validated = $request->validate([
+            'kelas' => 'required|string|max:10|regex:/^[0-9]{2}[A-Z]{1,3}$/',
+            'program_studi_id' => 'nullable|integer|exists:siakad_program_studi,id',
+        ]);
+
+        $result = $this->quizService->addTryoutPesertaByKelas(
+            $quizId,
+            strtoupper(trim($validated['kelas'])),
+            isset($validated['program_studi_id']) ? (int) $validated['program_studi_id'] : null,
+            (int) $request->user()->id
+        );
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'create',
+                tableName: 'lms_tryout_peserta',
+                recordId: $quizId,
+                oldValues: null,
+                newValues: [
+                    'kelas' => $result['kelas'],
+                    'program_studi_id' => $validated['program_studi_id'] ?? null,
+                    'added' => $result['added'],
+                    'skipped' => $result['skipped'],
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log tambah peserta tryout per kelas: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Berhasil menambahkan {$result['added']} peserta tryout kelas {$result['kelas']}." . ($result['skipped'] > 0 ? " ({$result['skipped']} dilewati karena sudah terdaftar)" : ''),
+            'data' => $result,
+        ], 201);
+    }
+
+    /**
      * Hapus peserta eksplisit tryout.
      */
     public function removePeserta(int $pesertaId): JsonResponse
@@ -548,6 +594,137 @@ class QuizController extends Controller
             'status' => 'success',
             'message' => 'Quiz berhasil disubmit dan dinilai.',
             'data' => $attempt,
+        ]);
+    }
+
+    /**
+     * Daftar kolaborator dosen satu quiz (pengawas/pemantau/penginput soal).
+     */
+    public function listKolaborator(int $quizId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar kolaborator quiz berhasil diambil.',
+            'data' => $this->quizService->listKolaborator($quizId),
+        ]);
+    }
+
+    /**
+     * Tambah (atau perbarui peran) kolaborator dosen pada quiz.
+     */
+    public function addKolaborator(Request $request, int $quizId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $validated = $request->validate([
+            'dosen_id' => 'required|integer|exists:siakad_dosen,id',
+            'peran'    => 'required|in:' . implode(',', QuizKolaborator::PERAN),
+        ]);
+
+        $kolaborator = $this->quizService->addKolaborator(
+            $quizId,
+            (int) $validated['dosen_id'],
+            (string) $validated['peran'],
+            (int) $request->user()->id
+        );
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'create',
+                tableName: 'lms_quiz_kolaborator',
+                recordId: $kolaborator->id,
+                oldValues: null,
+                newValues: $kolaborator->toArray()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log tambah kolaborator quiz: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Kolaborator quiz berhasil ditambahkan.',
+            'data' => $kolaborator->load('dosen'),
+        ], 201);
+    }
+
+    /**
+     * Hapus kolaborator dosen dari quiz.
+     */
+    public function removeKolaborator(int $id): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $kolaborator = QuizKolaborator::find($id);
+        $oldValues = $kolaborator?->getOriginal();
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'delete',
+                tableName: 'lms_quiz_kolaborator',
+                recordId: $id,
+                oldValues: $oldValues,
+                newValues: null
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log hapus kolaborator quiz: ' . $e->getMessage());
+        }
+
+        $this->quizService->removeKolaborator($id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Kolaborator quiz berhasil dihapus.',
+            'data' => null,
+        ]);
+    }
+
+    /**
+     * Reset attempt mahasiswa agar bisa mengulang (dosen).
+     */
+    public function resetAttempt(Request $request, int $attemptId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        // Jejak audit dicatat atomik di dalam service (termasuk snapshot
+        // jawaban yang ikut terhapus), bukan di controller.
+        $this->quizService->resetAttempt($attemptId, (int) $request->user()->id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Attempt quiz berhasil direset. Mahasiswa dapat mengerjakan kembali.',
+            'data' => null,
+        ]);
+    }
+
+    /**
+     * Detail satu attempt untuk layar grading dosen (soal + kunci + jawaban mahasiswa).
+     */
+    public function attemptDetail(int $attemptId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Detail attempt quiz berhasil diambil.',
+            'data' => $this->quizService->getAttemptDetailForManage($attemptId),
+        ]);
+    }
+
+    /**
+     * Preview quiz untuk dosen: simulasi tampilan mahasiswa tanpa kunci jawaban.
+     */
+    public function preview(int $quizId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Preview quiz berhasil diambil.',
+            'data' => $this->quizService->getPreview($quizId),
         ]);
     }
 }

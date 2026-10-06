@@ -2,6 +2,7 @@
 
 > **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/mahasiswa` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-25
 > **Diperbarui**: 2026-10-01 — NIM prefix per prodi (`prefix_nim`)
+> **Diperbarui**: 2026-10-07 — pemisah `kelas` mahasiswa + plotting PA per kelas (`assign-pa-kelas`)
 
 Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan penugasan Pembimbing Akademik. Validasi `program_studi_id` mengacu ke `siakad_program_studi`.
 
@@ -32,6 +33,8 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 | PATCH | `/api/v1/siakad/mahasiswa/konversi/{id}/status` | Ubah status konversi | ✅ |
 | DELETE | `/api/v1/siakad/mahasiswa/konversi/{id}` | Hapus konversi | ✅ |
 | POST | `/api/v1/siakad/mahasiswa/bulk-assign-pa` | Penugasan PA massal | ✅ |
+| POST | `/api/v1/siakad/mahasiswa/assign-pa-kelas` | Penugasan PA per kelas | ✅ |
+| POST | `/api/v1/siakad/mahasiswa/auto-distribute-pa` | Distribusi PA merata | ✅ |
 | GET | `/api/v1/siakad/mahasiswa/{id}` | Detail mahasiswa | ✅ |
 | PUT | `/api/v1/siakad/mahasiswa/{id}` | Perbarui mahasiswa | ✅ |
 | DELETE | `/api/v1/siakad/mahasiswa/{id}` | Hapus mahasiswa (soft delete) | ✅ |
@@ -47,7 +50,8 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 | `search` | string | ❌ | — | Cari `nim` / `nama_lengkap` |
 | `program_studi_id` | integer | ❌ | — | Filter program studi |
 | `angkatan` | integer | ❌ | — | Filter angkatan |
-| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `nama_lengkap`, `nim`, `id` |
+| `kelas` | string | ❌ | — | Filter/search kelas mahasiswa (format `25A` = 2 digit angkatan + huruf; search memakai LIKE) |
+| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `nama_lengkap`, `nim`, `id`, `kelas` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 | `page` | integer | ❌ | `1` | Halaman |
@@ -89,7 +93,8 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
     "program_studi_id": 7,
     "angkatan": 2026,
     "jenis_kelamin": "L",
-    "tanggal_lahir": "2008-01-15"
+    "tanggal_lahir": "2008-01-15",
+    "kelas": "25A"
 }
 ```
 
@@ -288,6 +293,138 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 ---
 
+---
+
+## [POST] /api/v1/siakad/mahasiswa/assign-pa-kelas
+
+> Menetapkan satu Dosen PA untuk seluruh mahasiswa aktif pada kelas tertentu
+> (cth `25A`), opsional dibatasi per program studi. Hanya untuk
+> superadmin/admin/kaprodi/wakil_prodi (selain itu 403). Perubahan dicatat ke
+> `audit_logs` (modul `SIAKAD`, action `update`, tabel `siakad_mahasiswa`).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "kelas": "25A",
+    "program_studi_id": 7,
+    "dosen_wali_id": 3,
+    "hanya_belum_punya_pa": true
+}
+```
+
+| Field | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `kelas` | string | ✅ | — | Kode kelas format `^[0-9]{2}[A-Z]{1,3}$` (cth `25A`; 422 bila salah format) |
+| `program_studi_id` | integer | ❌ | — | Batas prodi, `exists:siakad_program_studi,id` |
+| `dosen_wali_id` | integer | ✅ | — | Dosen PA tujuan, `exists:siakad_dosen,id` |
+| `hanya_belum_punya_pa` | boolean | ❌ | `true` | `true` = hanya mahasiswa tanpa PA; `false` = timpa semua di kelas |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Berhasil menetapkan Dr. Andi sebagai Dosen PA untuk 30 mahasiswa kelas 25A.",
+    "data": {
+        "updated_count": 30,
+        "dosen_wali": { "id": 3, "nama_lengkap": "Dr. Andi" },
+        "kelas": "25A"
+    }
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Plotting PA hanya untuk BAAK/Kaprodi." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "The given data was invalid.",
+    "errors": { "kelas": ["The kelas field is required."] }
+}
+```
+
+---
+
+## [POST] /api/v1/siakad/mahasiswa/auto-distribute-pa
+
+> Mendistribusikan mahasiswa aktif yang belum memiliki Dosen PA secara merata
+> (round-robin) ke daftar dosen terpilih. Mendukung pembatasan prodi,
+> angkatan, dan kelas (`kelas` format `^[0-9]{2}[A-Z]{1,3}$`, cth `25A`).
+> Hanya untuk superadmin/admin/kaprodi/wakil_prodi (selain itu 403).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "dosen_ids": [3, 5],
+    "program_studi_id": 7,
+    "angkatan": 2025,
+    "kelas": "25A"
+}
+```
+
+| Field | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `dosen_ids` | array | ✅ | — | Daftar id dosen PA, tiap item `exists:siakad_dosen,id`, min 1 |
+| `program_studi_id` | integer | ❌ | — | Batas prodi, `exists:siakad_program_studi,id` |
+| `angkatan` | integer | ❌ | — | Batas tahun angkatan |
+| `kelas` | string | ❌ | — | Batas kelas format `^[0-9]{2}[A-Z]{1,3}$` (cth `25A`; 422 bila salah format) |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Berhasil mendistribusikan 30 mahasiswa secara merata kepada 2 Dosen PA terpilih.",
+    "data": {
+        "assigned_count": 30,
+        "dosen_count": 2
+    }
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Plotting PA hanya untuk BAAK/Kaprodi." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Tidak ditemukan mahasiswa aktif yang belum memiliki Dosen PA pada kriteria ini."
+}
+```
+
+---
+
 ### Catatan Tambahan
 
 > - Format NIM otomatis mengikuti `siakad_program_studi.prefix_nim`:
@@ -297,5 +434,10 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 >   - Berlaku untuk `POST /generate-nim`, `POST /generate-missing-nims`, dan konversi otomatis SPMB (`sync-from-spmb` / event daftar-ulang lunas).
 >   - Untuk format bebas sekali pakai tetap bisa via `custom_nim` (satuan) atau kolom `NIM_BARU` pada Export/Import CSV massal.
 > - Perubahan data mahasiswa dicatat oleh observer audit (`MahasiswaObserver`, modul `SIAKAD`).
+> - Field `kelas` (maks. 10, cth `25A`) dinormalisasi uppercase-trim saat simpan
+>   (`store`/`update`) dan saat filter (`index` `?kelas=`, `auto-distribute-pa`).
+>   Konversi SPMB mengisi `kelas` hanya bila data pendaftaran memiliki info
+>   kelas yang relevan; saat ini skema pendaftaran belum memilikinya sehingga
+>   dibiarkan null (tidak dikarang).
 > - Soft delete + restore berlaku pada data mahasiswa.
 > - Password/token tidak pernah dikembalikan pada response.

@@ -75,6 +75,11 @@ class Quiz extends Model
         return $this->hasMany(QuizAttempt::class, 'quiz_id');
     }
 
+    public function kolaborators()
+    {
+        return $this->hasMany(QuizKolaborator::class, 'quiz_id');
+    }
+
     /**
      * Batch size efektif: override per quiz, fallback ke setting global.
      */

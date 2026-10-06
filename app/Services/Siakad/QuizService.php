@@ -5,10 +5,12 @@ namespace App\Services\Siakad;
 use App\Models\Lms\Quiz;
 use App\Models\Lms\QuizAttempt;
 use App\Models\Lms\QuizAttemptJawaban;
+use App\Models\Lms\QuizKolaborator;
 use App\Models\Lms\QuizSoal;
 use App\Models\Lms\TryoutPeserta;
 use App\Models\Siakad\BankSoal;
 use App\Models\Siakad\BankSoalOpsi;
+use App\Models\Siakad\Dosen;
 use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\NilaiKomponenMahasiswa;
@@ -260,6 +262,51 @@ class QuizService
         );
     }
 
+    /**
+     * Tambah peserta tryout per kelas (mis. "25A"): seluruh mahasiswa aktif
+     * dengan kolom siakad_mahasiswa.kelas yang cocok + filter prodi opsional.
+     * Idempoten per mahasiswa (firstOrCreate).
+     *
+     * @return array{added: int, skipped: int, kelas: string}
+     */
+    public function addTryoutPesertaByKelas(int $quizId, string $kelas, ?int $programStudiId, int $olehUserId): array
+    {
+        return DB::transaction(function () use ($quizId, $kelas, $programStudiId, $olehUserId) {
+            $quiz = Quiz::findOrFail($quizId);
+
+            if ($quiz->tipe !== 'tryout') {
+                throw ValidationException::withMessages([
+                    'quiz' => ['Peserta eksplisit hanya berlaku untuk tryout.'],
+                ]);
+            }
+
+            $kelas = strtoupper(trim($kelas));
+
+            $mahasiswaIds = Mahasiswa::where('status', 'aktif')
+                ->where('kelas', $kelas)
+                ->when($programStudiId, fn ($q) => $q->where('program_studi_id', $programStudiId))
+                ->pluck('id');
+
+            $added = 0;
+            $skipped = 0;
+
+            foreach ($mahasiswaIds as $mahasiswaId) {
+                $peserta = TryoutPeserta::firstOrCreate(
+                    ['quiz_id' => $quizId, 'mahasiswa_id' => $mahasiswaId],
+                    ['ditambah_oleh' => $olehUserId]
+                );
+
+                if ($peserta->wasRecentlyCreated) {
+                    $added++;
+                } else {
+                    $skipped++;
+                }
+            }
+
+            return ['added' => $added, 'skipped' => $skipped, 'kelas' => $kelas];
+        });
+    }
+
     public function removeTryoutPeserta(int $pesertaId): bool
     {
         return (bool) TryoutPeserta::findOrFail($pesertaId)->delete();
@@ -368,6 +415,7 @@ class QuizService
 
         $myAttempts = QuizAttempt::where('quiz_id', $quizId)
             ->where('mahasiswa_id', $mahasiswa->id)
+            ->with('jawaban')
             ->orderBy('attempt_ke')
             ->get();
 
@@ -391,6 +439,164 @@ class QuizService
             ->with(['mahasiswa', 'jawaban'])
             ->orderByDesc('id')
             ->paginate($perPage);
+    }
+
+    /**
+     * Reset attempt mahasiswa agar bisa mengulang (dosen).
+     * Hapus jawaban dulu lalu attempt dalam satu transaksi; jejak audit
+     * dicatat atomik di dalam transaksi yang sama (bukan di controller).
+     */
+    public function resetAttempt(int $attemptId, ?int $olehUserId = null): void
+    {
+        DB::transaction(function () use ($attemptId, $olehUserId) {
+            $attempt = QuizAttempt::with('jawaban')->findOrFail($attemptId);
+
+            $oldValues = [
+                'attempt' => $attempt->getOriginal(),
+                'jawaban_count' => $attempt->jawaban->count(),
+                'jawaban' => $attempt->jawaban->map->getOriginal()->all(),
+            ];
+            $attemptIdSnapshot = $attempt->id;
+
+            QuizAttemptJawaban::where('attempt_id', $attempt->id)->delete();
+            $attempt->delete();
+
+            try {
+                \App\Services\AuditLogService::record(
+                    module: 'LMS',
+                    action: 'delete',
+                    tableName: 'lms_quiz_attempt',
+                    recordId: $attemptIdSnapshot,
+                    oldValues: $oldValues,
+                    newValues: null
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log reset quiz attempt: ' . $e->getMessage());
+            }
+        });
+    }
+
+    /**
+     * Detail satu attempt untuk layar grading dosen:
+     * attempt + mahasiswa (nim, nama) + quiz (judul) + per-soal beserta
+     * kunci opsi dan jawaban mahasiswa.
+     */
+    public function getAttemptDetailForManage(int $attemptId): array
+    {
+        $attempt = QuizAttempt::with([
+            'mahasiswa',
+            'quiz.soal.bankSoal.opsi',
+            'jawaban',
+        ])->findOrFail($attemptId);
+
+        $bySoal = $attempt->jawaban->keyBy('quiz_soal_id');
+
+        $questions = $attempt->quiz->soal->map(function (QuizSoal $qs) use ($bySoal) {
+            $bank = $qs->bankSoal;
+            $row = $bySoal->get($qs->id);
+
+            return [
+                'quiz_soal_id' => $qs->id,
+                'urutan' => $qs->urutan,
+                'poin' => (float) $qs->poin,
+                'tipe_soal' => $bank?->tipe_soal,
+                'pertanyaan' => $bank?->pertanyaan,
+                'gambar_path' => $bank?->gambar_path,
+                'opsi' => $bank?->opsi->map(fn ($o) => [
+                    'id' => $o->id,
+                    'teks' => $o->teks,
+                    'gambar_path' => $o->gambar_path,
+                    'urutan' => $o->urutan,
+                    'is_benar' => (bool) $o->is_benar,
+                ])->values()->all() ?? [],
+                'jawaban' => $row ? [
+                    'bank_opsi_id' => $row->bank_opsi_id,
+                    'jawaban_teks' => $row->jawaban_teks,
+                    'is_benar' => $row->is_benar,
+                    'poin_didapat' => $row->poin_didapat !== null ? (float) $row->poin_didapat : null,
+                    'feedback_dosen' => $row->feedback_dosen,
+                ] : null,
+            ];
+        })->values()->all();
+
+        return [
+            'attempt' => $attempt->only([
+                'id', 'quiz_id', 'mahasiswa_id', 'attempt_ke', 'status',
+                'dimulai_at', 'disubmit_at', 'nilai_akhir',
+                'butuh_penilaian_manual', 'dinilai_oleh', 'dinilai_at',
+            ]),
+            'mahasiswa' => [
+                'id' => $attempt->mahasiswa?->id,
+                'nim' => $attempt->mahasiswa?->nim,
+                'nama' => $attempt->mahasiswa?->nama_lengkap,
+            ],
+            'quiz' => [
+                'id' => $attempt->quiz?->id,
+                'judul' => $attempt->quiz?->judul,
+                'tipe' => $attempt->quiz?->tipe,
+                'durasi_menit' => $attempt->quiz?->durasi_menit,
+                'max_attempt' => $attempt->quiz?->max_attempt,
+            ],
+            'questions' => $questions,
+        ];
+    }
+
+    /**
+     * Preview quiz untuk dosen: meta quiz + soal + opsi TANPA kunci
+     * (tanpa is_benar / kunci_jawaban / pembahasan). Simulasi tampilan
+     * mahasiswa; dosen tidak mengerjakan, hanya melihat.
+     */
+    public function getPreview(int $quizId): array
+    {
+        $quiz = Quiz::with(['soal.bankSoal.opsi'])->findOrFail($quizId);
+
+        $soal = $quiz->soal->map(function (QuizSoal $qs) {
+            $bank = $qs->bankSoal;
+
+            return [
+                'quiz_soal_id' => $qs->id,
+                'urutan' => $qs->urutan,
+                'poin' => (float) $qs->poin,
+                'tipe_soal' => $bank?->tipe_soal,
+                'pertanyaan' => $bank?->pertanyaan,
+                'gambar_path' => $bank?->gambar_path,
+                // SENGAJA tanpa is_benar / kunci_jawaban / pembahasan.
+                'opsi' => $bank?->opsi->map(fn ($o) => [
+                    'id' => $o->id,
+                    'teks' => $o->teks,
+                    'gambar_path' => $o->gambar_path,
+                    'urutan' => $o->urutan,
+                ])->values()->all() ?? [],
+            ];
+        })->values()->all();
+
+        return [
+            // Meta quiz SENGAJA tanpa relasi soal agar kunci (is_benar /
+            // kunci_jawaban / pembahasan) tidak bocor lewat nested relation.
+            'quiz' => [
+                'id' => $quiz->id,
+                'pertemuan_id' => $quiz->pertemuan_id,
+                'kelas_id' => $quiz->kelas_id,
+                'tipe' => $quiz->tipe,
+                'komponen_penilaian_id' => $quiz->komponen_penilaian_id,
+                'judul' => $quiz->judul,
+                'deskripsi' => $quiz->deskripsi,
+                'durasi_menit' => $quiz->durasi_menit,
+                'max_attempt' => $quiz->max_attempt,
+                'acak_soal' => $quiz->acak_soal,
+                'acak_jawaban' => $quiz->acak_jawaban,
+                'batch_size' => $quiz->batch_size,
+                'dibuka_at' => $quiz->dibuka_at,
+                'ditutup_at' => $quiz->ditutup_at,
+                'is_published' => $quiz->is_published,
+                'kode_akses' => $quiz->kode_akses,
+                'is_archived' => $quiz->is_archived,
+                'dibuat_oleh' => $quiz->dibuat_oleh,
+            ],
+            'total_soal' => count($soal),
+            'total_poin' => (float) $quiz->soal->sum('poin'),
+            'data' => $soal,
+        ];
     }
 
     // ---------- Alur pengerjaan (mahasiswa) ----------
@@ -716,10 +922,10 @@ class QuizService
     /**
      * Dosen menilai manual satu jawaban (uraian / koreksi), lalu recompute + OBE resync.
      */
-    public function beriNilaiManual(int $attemptJawabanId, float $poin, int $dosenUserId): QuizAttemptJawaban
+    public function beriNilaiManual(int $attemptJawabanId, float $poin, int $dosenUserId, ?string $feedback = null): QuizAttemptJawaban
     {
-        return DB::transaction(function () use ($attemptJawabanId, $poin, $dosenUserId) {
-            $row = QuizAttemptJawaban::with(['attempt.quiz.soal', 'quizSoal'])->findOrFail($attemptJawabanId);
+        return DB::transaction(function () use ($attemptJawabanId, $poin, $dosenUserId, $feedback) {
+            $row = QuizAttemptJawaban::with(['attempt.quiz.soal', 'quizSoal.bankSoal'])->findOrFail($attemptJawabanId);
             $batas = (float) $row->quizSoal->poin;
 
             if ($poin < 0 || $poin > $batas) {
@@ -731,6 +937,7 @@ class QuizService
             $row->update([
                 'poin_didapat' => $poin,
                 'is_benar' => $poin >= $batas,
+                'feedback_dosen' => $feedback,
             ]);
 
             $attempt = $row->attempt;
@@ -752,8 +959,7 @@ class QuizService
 
     /**
      * Upsert nilai akhir quiz ke OBE (pola sama dengan nilai tugas).
-     */
-    protected function syncNilaiKeObe(QuizAttempt $attempt): void
+     */    protected function syncNilaiKeObe(QuizAttempt $attempt): void
     {
         $quiz = $attempt->quiz;
 
@@ -797,5 +1003,46 @@ class QuizService
                 'diinput_oleh' => $attempt->dinilai_oleh,
             ]
         );
+    }
+
+    // ---------- Kolaborator quiz (dosen pengawas/pemantau/penginput soal) ----------
+
+    /**
+     * Daftar kolaborator satu quiz beserta data dosennya.
+     */
+    public function listKolaborator(int $quizId): \Illuminate\Support\Collection
+    {
+        Quiz::findOrFail($quizId);
+
+        return QuizKolaborator::where('quiz_id', $quizId)
+            ->with(['dosen'])
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Tambah (atau perbarui peran) kolaborator dosen pada quiz.
+     * Idempoten per pasangan quiz-dosen; peran divalidasi closed-set.
+     */
+    public function addKolaborator(int $quizId, int $dosenId, string $peran, ?int $olehUserId): QuizKolaborator
+    {
+        Quiz::findOrFail($quizId);
+        Dosen::findOrFail($dosenId);
+
+        if (!in_array($peran, QuizKolaborator::PERAN, true)) {
+            throw ValidationException::withMessages([
+                'peran' => ['Peran kolaborator tidak valid. Pilihan: ' . implode(', ', QuizKolaborator::PERAN) . '.'],
+            ]);
+        }
+
+        return QuizKolaborator::updateOrCreate(
+            ['quiz_id' => $quizId, 'dosen_id' => $dosenId],
+            ['peran' => $peran, 'ditambah_oleh' => $olehUserId]
+        );
+    }
+
+    public function removeKolaborator(int $kolaboratorId): bool
+    {
+        return (bool) QuizKolaborator::findOrFail($kolaboratorId)->delete();
     }
 }

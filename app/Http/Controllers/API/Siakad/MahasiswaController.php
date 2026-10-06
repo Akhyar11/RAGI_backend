@@ -13,6 +13,8 @@ use App\Models\Role;
 use App\Services\Siakad\KonversiTransferService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 
 class MahasiswaController extends Controller
 {
@@ -24,9 +26,11 @@ class MahasiswaController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
+                // Pencarian global: nama/NIM/NIK/kelas (cth "25A" langsung ketemu).
                 $q->where('nama_lengkap', 'like', "%{$search}%")
                   ->orWhere('nim', 'like', "%{$search}%")
-                  ->orWhere('nik', 'like', "%{$search}%");
+                  ->orWhere('nik', 'like', "%{$search}%")
+                  ->orWhere('kelas', 'like', "%{$search}%");
             });
         }
 
@@ -52,6 +56,11 @@ class MahasiswaController extends Controller
             $query->where('dosen_wali_id', $request->dosen_wali_id);
         }
 
+        if ($request->filled('kelas')) {
+            $kelas = strtoupper(trim((string) $request->kelas));
+            $query->where('kelas', $kelas);
+        }
+
         // Dosen/PA hanya melihat mahasiswa bimbingannya (kecuali BAAK/kaprodi).
         // Catatan: isAdmin() true juga untuk dosen (permission update SIMPEG),
         // sehingga dipakai cek peran eksplisit.
@@ -63,7 +72,7 @@ class MahasiswaController extends Controller
             $query->where('dosen_wali_id', $dosen?->id ?? -1);
         }
 
-        $allowedSortColumns = ['created_at', 'nim', 'nama_lengkap', 'angkatan'];
+        $allowedSortColumns = ['created_at', 'nim', 'nama_lengkap', 'angkatan', 'kelas'];
         $sortBy = in_array($request->sort_by, $allowedSortColumns) ? $request->sort_by : 'created_at';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
@@ -88,6 +97,7 @@ class MahasiswaController extends Controller
                 'angkatan' => $request->angkatan,
                 'status' => $request->status,
                 'kelas_id' => $request->kelas_id,
+                'kelas' => $request->filled('kelas') ? strtoupper(trim((string) $request->kelas)) : $request->kelas,
                 'sort_by' => $sortBy,
                 'sort_order' => $sortOrder,
             ]
@@ -116,6 +126,7 @@ class MahasiswaController extends Controller
             'angkatan' => 'required|integer',
             'dosen_wali_id' => 'nullable|exists:siakad_dosen,id',
             'status' => 'nullable|in:aktif,cuti,mangkir,dropout,lulus',
+            'kelas' => 'nullable|string|max:10|regex:/^[0-9]{2}[A-Z]{1,3}$/',
         ]);
 
         return DB::transaction(function () use ($request) {
@@ -141,6 +152,7 @@ class MahasiswaController extends Controller
                 'user_id' => $user->id,
                 'status' => $request->input('status', 'aktif'),
                 'tanggal_masuk' => now()->toDateString(),
+                'kelas' => $request->filled('kelas') ? strtoupper(trim((string) $request->kelas)) : null,
             ]));
 
             return response()->json([
@@ -163,6 +175,7 @@ class MahasiswaController extends Controller
             'alamat' => 'nullable|string',
             'dosen_wali_id' => 'nullable|exists:siakad_dosen,id',
             'status' => 'nullable|in:aktif,cuti,mangkir,dropout,lulus',
+            'kelas' => 'nullable|string|max:10|regex:/^[0-9]{2}[A-Z]{1,3}$/',
             
             // Biodata fields
             'tempat_lahir' => 'nullable|string|max:100',
@@ -187,6 +200,12 @@ class MahasiswaController extends Controller
             'nik_ayah' => 'nullable|string|max:30',
             'nama_wali' => 'nullable|string|max:150',
         ]);
+
+        if (array_key_exists('kelas', $validated)) {
+            $validated['kelas'] = trim((string) $validated['kelas']) !== ''
+                ? strtoupper(trim((string) $validated['kelas']))
+                : null;
+        }
 
         $mhs->update($validated);
 
@@ -937,11 +956,8 @@ class MahasiswaController extends Controller
             'dosen_wali_id' => 'required|exists:siakad_dosen,id',
         ]);
 
-        // Plotting PA hanya BAAK/kaprodi — dosen tidak boleh memetakan sendiri
-        $user = $request->user();
-        if (!$user || !($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'))) {
-            return response()->json(['status' => 'error', 'message' => 'Plotting PA hanya untuk BAAK/Kaprodi.'], 403);
-        }
+        // Plotting PA hanya pemegang permission siakad.pa.manage (BAAK/kaprodi)
+        Gate::authorize('siakad.pa.manage');
 
         $dosen = \App\Models\Siakad\Dosen::findOrFail($request->dosen_wali_id);
         $count = Mahasiswa::whereIn('id', $request->mahasiswa_ids)
@@ -958,6 +974,74 @@ class MahasiswaController extends Controller
     }
 
     /**
+     * Plotting PA per kelas: tetapkan satu Dosen PA untuk seluruh
+     * mahasiswa aktif pada kelas (+prodi opsional) tertentu.
+     */
+    public function assignPaKelas(Request $request)
+    {
+        $validated = $request->validate([
+            'kelas' => 'required|string|max:10|regex:/^[0-9]{2}[A-Z]{1,3}$/',
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'dosen_wali_id' => 'required|exists:siakad_dosen,id',
+            'hanya_belum_punya_pa' => 'nullable|boolean',
+        ]);
+
+        // Otorisasi sama dengan plotting PA lainnya
+        // Plotting PA hanya pemegang permission siakad.pa.manage (BAAK/kaprodi)
+        Gate::authorize('siakad.pa.manage');
+
+        $kelas = strtoupper(trim((string) $validated['kelas']));
+        $hanyaBelumPunyaPa = $request->boolean('hanya_belum_punya_pa', true);
+
+        $dosen = \App\Models\Siakad\Dosen::findOrFail($validated['dosen_wali_id']);
+
+        $query = Mahasiswa::where('kelas', $kelas)->where('status', 'aktif');
+        if (!empty($validated['program_studi_id'])) {
+            $query->where('program_studi_id', $validated['program_studi_id']);
+        }
+        if ($hanyaBelumPunyaPa) {
+            $query->whereNull('dosen_wali_id');
+        }
+
+        // Snapshot sebelum mass-update agar jejak audit memuat nilai lama.
+        $sebelum = $query->pluck('dosen_wali_id', 'id')->all();
+
+        $count = $query->update(['dosen_wali_id' => $dosen->id]);
+
+        try {
+            \App\Services\AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_mahasiswa',
+                recordId: null,
+                oldValues: [
+                    'kelas' => $kelas,
+                    'dosen_wali_sebelum' => $sebelum,
+                ],
+                newValues: [
+                    'kelas' => $kelas,
+                    'program_studi_id' => $validated['program_studi_id'] ?? null,
+                    'dosen_wali_id' => $dosen->id,
+                    'updated_count' => $count,
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log plotting PA per kelas: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Berhasil menetapkan {$dosen->nama_lengkap} sebagai Dosen PA untuk {$count} mahasiswa kelas {$kelas}.",
+            'data' => [
+                'updated_count' => $count,
+                'dosen_wali' => $dosen,
+                'kelas' => $kelas,
+            ]
+        ]);
+    }
+
+    /**
      * Distribusi mahasiswa tanpa Dosen PA secara merata (Round-Robin) ke dosen terpilih
      */
     public function autoDistributePa(Request $request)
@@ -967,12 +1051,11 @@ class MahasiswaController extends Controller
             'dosen_ids.*' => 'exists:siakad_dosen,id',
             'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'angkatan' => 'nullable|integer',
+            'kelas' => 'nullable|string|max:10|regex:/^[0-9]{2}[A-Z]{1,3}$/',
         ]);
 
-        $user = $request->user();
-        if (!$user || !($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'))) {
-            return response()->json(['status' => 'error', 'message' => 'Plotting PA hanya untuk BAAK/Kaprodi.'], 403);
-        }
+        // Plotting PA hanya pemegang permission siakad.pa.manage (BAAK/kaprodi)
+        Gate::authorize('siakad.pa.manage');
 
         $query = Mahasiswa::whereNull('dosen_wali_id')->where('status', 'aktif');
 
@@ -981,6 +1064,9 @@ class MahasiswaController extends Controller
         }
         if ($request->filled('angkatan')) {
             $query->where('angkatan', $request->angkatan);
+        }
+        if ($request->filled('kelas')) {
+            $query->where('kelas', strtoupper(trim((string) $request->kelas)));
         }
 
         $unassignedMahasiswas = $query->orderBy('nim')->get();

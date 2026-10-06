@@ -9,6 +9,7 @@ use App\Models\Lms\Tugas;
 use App\Models\Lms\PengumpulanTugas;
 use App\Models\Lms\IzinAbsensi;
 use App\Models\Siakad\Kelas;
+use App\Models\Siakad\KomponenPenilaian;
 use App\Models\Siakad\Pertemuan;
 use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\Mahasiswa;
@@ -143,18 +144,69 @@ class LmsService
         // Total tugas aktif
         $totalTugas = Tugas::whereIn('pertemuan_id', $kelas->pertemuans->pluck('id'))->count();
 
+        // Total materi & izin pending untuk kartu statistik
+        $pertemuanIds = $kelas->pertemuans->pluck('id');
+        $totalMateri = MateriPertemuan::whereIn('pertemuan_id', $pertemuanIds)->count();
+        $totalIzinPending = IzinAbsensi::whereIn('pertemuan_id', $pertemuanIds)
+            ->where('status', 'pending')->count();
+
+        // Daftar pertemuan untuk tab Perkuliahan (kontrak frontend: pertemuan_list).
+        $pertemuanList = $kelas->pertemuans->map(function ($p) {
+            $tokenAktif = !empty($p->token_absensi)
+                && $p->token_expired_at
+                && !$p->presensi_closed_at
+                && now()->lt($p->token_expired_at);
+
+            return [
+                'id' => $p->id,
+                'kelas_id' => $p->kelas_id,
+                'pertemuan_ke' => $p->pertemuan_ke,
+                'tanggal' => $p->tanggal,
+                'materi' => $p->materi,
+                'catatan_pertemuan' => $p->catatan_pertemuan,
+                'jam_mulai' => $p->jam_mulai,
+                'jam_selesai' => $p->jam_selesai,
+                'status_pertemuan' => $p->status_pertemuan,
+                'token_absensi' => $p->token_absensi,
+                'token_expired_at' => $p->token_expired_at,
+                'is_token_active' => (bool) $tokenAktif,
+                'materi_list_count' => $p->materi_list_count ?? 0,
+                'tugas_list_count' => $p->tugas_list_count ?? 0,
+                'hadir_count' => $p->absensi_count ?? 0,
+            ];
+        })->values()->all();
+
+        $pertemuanSelesai = $kelas->pertemuans->where('status_pertemuan', 'selesai')->count();
+        $pertemuanBerjalan = $kelas->pertemuans->where('status_pertemuan', 'berlangsung')->count();
+
+        $komponenObe = \App\Models\Siakad\KomponenPenilaian::where('kelas_id', $kelasId)
+            ->where('is_aktif', true)
+            ->orderBy('urutan')
+            ->get(['id', 'nama_komponen', 'bobot']);
+
         return [
             'kelas' => $kelas,
             'lms_setting' => $kelas->lmsSetting ?? $this->getDefaultKelasSetting($kelas),
+            'komponen_obe' => $komponenObe,
+            'pertemuan_list' => $pertemuanList,
             'progress' => [
                 'total' => $totalPertemuan,
                 'terisi' => $pertemuanTerisi,
                 'persen' => $totalPertemuan > 0 ? round(($pertemuanTerisi / $totalPertemuan) * 100) : 0,
+                // Alias kontrak frontend (tab Perkuliahan & kartu progres)
+                'total_pertemuan_terencana' => $totalPertemuan,
+                'pertemuan_selesai' => $pertemuanSelesai,
+                'pertemuan_berjalan' => $pertemuanBerjalan,
+                'persentase_selesai' => $totalPertemuan > 0 ? round(($pertemuanTerisi / $totalPertemuan) * 100) : 0,
             ],
             'statistik' => [
                 'total_mahasiswa' => $totalMahasiswa,
                 'total_tugas' => $totalTugas,
                 'rata_hadir_persen' => $rataHadirPersen,
+                // Alias kontrak frontend
+                'total_materi' => $totalMateri,
+                'total_izin_pending' => $totalIzinPending,
+                'total_mahasiswa_krs' => $totalMahasiswa,
             ],
         ];
     }
@@ -1288,6 +1340,204 @@ class LmsService
             'can_submit_late'         => true,
             'show_nilai_to_mahasiswa' => true,
             'storage_disk'            => $this->resolveDisk($kelas),
+        ];
+    }
+
+    /**
+     * Salin seluruh materi pertemuan dari kelas sumber ke kelas target,
+     * dipasangkan per nomor pertemuan (`pertemuan_ke` sama). Pertemuan target
+     * yang belum ada dibuat otomatis (tanggal mengikuti sumber, fallback hari ini
+     * karena kolom `siakad_pertemuan.tanggal` NOT NULL).
+     *
+     * Berkas hanya disalin record-nya (path/disk sama, tanpa duplikat fisik).
+     *
+     * @param array $opsi ['copy_materi' => bool, 'copy_deskripsi' => bool]
+     * @return array{disalin_materi: int, dibuat_pertemuan: int}
+     */
+    public function importMateriDariKelas(int $targetKelasId, int $sumberKelasId, array $opsi = []): array
+    {
+        return DB::transaction(function () use ($targetKelasId, $sumberKelasId, $opsi) {
+            Kelas::findOrFail($targetKelasId);
+            Kelas::findOrFail($sumberKelasId);
+
+            $copyMateri = $opsi['copy_materi'] ?? true;
+            $copyDeskripsi = $opsi['copy_deskripsi'] ?? true;
+
+            if (!$copyMateri) {
+                return ['disalin_materi' => 0, 'dibuat_pertemuan' => 0];
+            }
+
+            $sumberList = Pertemuan::where('kelas_id', $sumberKelasId)
+                ->with(['materiList.files'])
+                ->orderBy('pertemuan_ke')
+                ->get();
+
+            $disalin = 0;
+            $dibuat = 0;
+
+            foreach ($sumberList as $sumber) {
+                $target = Pertemuan::where('kelas_id', $targetKelasId)
+                    ->where('pertemuan_ke', $sumber->pertemuan_ke)
+                    ->first();
+
+                if (!$target) {
+                    $target = Pertemuan::create([
+                        'kelas_id'         => $targetKelasId,
+                        'pertemuan_ke'     => $sumber->pertemuan_ke,
+                        'tanggal'          => $sumber->tanggal ?? now()->toDateString(),
+                        'materi'           => $sumber->materi,
+                        'status_pertemuan' => Pertemuan::STATUS_BELUM,
+                    ]);
+                    $dibuat++;
+                }
+
+                foreach ($sumber->materiList as $materi) {
+                    $salinan = MateriPertemuan::create([
+                        'pertemuan_id'   => $target->id,
+                        'tipe_konten_id' => $materi->tipe_konten_id,
+                        'judul'          => $materi->judul,
+                        'deskripsi'      => $copyDeskripsi ? $materi->deskripsi : null,
+                        'tipe_konten'    => $materi->tipe_konten,
+                        'link_eksternal' => $materi->link_eksternal,
+                        'urutan'         => $materi->urutan,
+                        'is_published'   => $materi->is_published,
+                    ]);
+
+                    foreach ($materi->files as $berkas) {
+                        MateriFile::create([
+                            'materi_id'    => $salinan->id,
+                            'nama_file'    => $berkas->nama_file,
+                            'file_path'    => $berkas->file_path,
+                            'disk'         => $berkas->disk,
+                            'ukuran_bytes' => $berkas->ukuran_bytes,
+                            'mime_type'    => $berkas->mime_type,
+                        ]);
+                    }
+
+                    $disalin++;
+                }
+            }
+
+            return ['disalin_materi' => $disalin, 'dibuat_pertemuan' => $dibuat];
+        });
+    }
+
+    /**
+     * Rekap matriks kehadiran: getRekapAbsensiKelas + `pertemuan_list`
+     * (id, pertemuan_ke, tanggal) + `detail_pertemuan` (map
+     * mahasiswa_id => [pertemuan_ke => status|null]).
+     */
+    public function getRekapMatrix(int $kelasId, ?int $onlyMahasiswaId = null): array
+    {
+        $dasar = $this->getRekapAbsensiKelas($kelasId, $onlyMahasiswaId);
+
+        $kelas = Kelas::with(['pertemuans' => fn ($q) => $q->orderBy('pertemuan_ke')])
+            ->findOrFail($kelasId);
+
+        $pertemuanList = $kelas->pertemuans->map(fn (Pertemuan $p) => [
+            'id'           => $p->id,
+            'pertemuan_ke' => $p->pertemuan_ke,
+            'tanggal'      => $p->tanggal,
+        ])->values()->all();
+
+        $krsDetails = KrsDetail::with('krs.mahasiswa')
+            ->where('kelas_id', $kelasId)
+            ->get();
+
+        $detail = [];
+        foreach ($krsDetails as $kd) {
+            $mhs = $kd->krs?->mahasiswa;
+            if (!$mhs) {
+                continue;
+            }
+            if ($onlyMahasiswaId && (int) $mhs->id !== (int) $onlyMahasiswaId) {
+                continue;
+            }
+
+            $statusByPertemuan = AbsensiMahasiswa::whereIn('pertemuan_id', $kelas->pertemuans->pluck('id'))
+                ->where('mahasiswa_id', $mhs->id)
+                ->pluck('status', 'pertemuan_id');
+
+            $baris = [];
+            foreach ($kelas->pertemuans as $pertemuan) {
+                $baris[$pertemuan->pertemuan_ke] = $statusByPertemuan->get($pertemuan->id);
+            }
+            $detail[$mhs->id] = $baris;
+        }
+
+        return array_merge($dasar, [
+            'pertemuan_list'   => $pertemuanList,
+            'detail_pertemuan' => $detail,
+        ]);
+    }
+
+    /**
+     * Ketercapaian mata kuliah per komponen penilaian OBE kelas.
+     *
+     * @return array{kelas_id: int, komponen: mixed, ketercapaian: array}
+     */
+    public function getKetercapaianMk(int $kelasId, ?int $mahasiswaId = null): array
+    {
+        Kelas::findOrFail($kelasId);
+
+        $komponens = KomponenPenilaian::where('kelas_id', $kelasId)
+            ->orderBy('urutan')
+            ->get();
+
+        $krsDetails = KrsDetail::with('krs.mahasiswa')
+            ->where('kelas_id', $kelasId)
+            ->when($mahasiswaId, fn ($q) => $q->whereHas('krs', fn ($k) => $k->where('mahasiswa_id', $mahasiswaId)))
+            ->get();
+
+        $ketercapaian = [];
+        foreach ($krsDetails as $kd) {
+            $mhs = $kd->krs?->mahasiswa;
+            if (!$mhs) {
+                continue;
+            }
+
+            $nilaiRows = NilaiKomponenMahasiswa::where('krs_detail_id', $kd->id)
+                ->whereIn('komponen_penilaian_id', $komponens->pluck('id'))
+                ->pluck('nilai_angka', 'komponen_penilaian_id');
+
+            $nilaiPerKomponen = [];
+            $total = 0.0;
+            $terisi = 0;
+
+            foreach ($komponens as $komponen) {
+                $mentah = $nilaiRows->get($komponen->id);
+                $nilai = $mentah !== null ? (float) $mentah : null;
+
+                $nilaiPerKomponen[] = [
+                    'komponen_penilaian_id' => $komponen->id,
+                    'nama_komponen'         => $komponen->nama_komponen,
+                    'bobot'                 => (float) $komponen->bobot,
+                    'nilai'                 => $nilai,
+                    'persen_capaian'        => $nilai !== null ? round($nilai, 2) : null,
+                ];
+
+                if ($nilai !== null) {
+                    $total += $nilai;
+                    $terisi++;
+                }
+            }
+
+            $rata = $terisi > 0 ? round($total / $terisi, 2) : null;
+
+            $ketercapaian[] = [
+                'mahasiswa_id'       => $mhs->id,
+                'nim'                => $mhs->nim,
+                'nama_lengkap'       => $mhs->nama_lengkap,
+                'nilai_per_komponen' => $nilaiPerKomponen,
+                'rata_rata'          => $rata,
+                'persen_capaian'     => $rata,
+            ];
+        }
+
+        return [
+            'kelas_id'     => $kelasId,
+            'komponen'     => $komponens,
+            'ketercapaian' => $ketercapaian,
         ];
     }
 }

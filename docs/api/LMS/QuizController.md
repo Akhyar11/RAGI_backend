@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-10-05  
-> **Diperbarui**: 2026-10-05
+> **Diperbarui**: 2026-10-07 (respon manual dosen `feedback_dosen` pada penilaian jawaban isian/uraian)
 
 Quiz per pertemuan dan tryout level kelas dengan mesin pengerjaan yang sama:
 batch-loading soal (kunci tidak pernah ke client), autosave bulk, auto-grade
@@ -28,7 +28,7 @@ pilihan ganda/isian, penilaian manual uraian, dan auto-sync nilai ke OBE
 
 | Permission | Dipakai untuk |
 |---|---|
-| `siakad.kelas.manage` | Semua endpoint pengelolaan: buat quiz/tryout, update, hapus, lampir/lepas soal, daftar attempt, tambah/hapus peserta tryout |
+| `siakad.kelas.manage` | Semua endpoint pengelolaan: buat quiz/tryout, update, hapus, lampir/lepas soal, daftar attempt, reset attempt, detail attempt, preview quiz, tambah/hapus peserta tryout (perorangan maupun per kelas) |
 | `siakad.kelas.read` | Endpoint baca & pengerjaan mahasiswa: agregat tryout, daftar tryout kelas, detail quiz, start, batch soal, autosave, submit |
 | `siakad.nilai.manage` | Penilaian manual jawaban uraian (`PUT /attempt-jawaban/{id}/nilai`) |
 
@@ -48,9 +48,16 @@ Super admin (sesuai `system_settings.superadmin_role`) melewati seluruh gate.
 | POST | `/api/v1/lms/quiz/{quizId}/soal` | Lampirkan soal bank soal (`bank_soal_id`, `poin`) | ✅ `siakad.kelas.manage` |
 | DELETE | `/api/v1/lms/quiz-soal/{quizSoalId}` | Lepas soal (ditolak bila attempt ada) | ✅ `siakad.kelas.manage` |
 | GET | `/api/v1/lms/quiz/{quizId}/attempts` | Daftar attempt (paginated) | ✅ `siakad.kelas.manage` |
+| POST | `/api/v1/lms/attempt/{attemptId}/reset` | Reset attempt agar mahasiswa bisa mengulang | ✅ `siakad.kelas.manage` |
+| GET | `/api/v1/lms/attempt/{attemptId}/detail` | Detail attempt untuk layar grading dosen | ✅ `siakad.kelas.manage` |
+| GET | `/api/v1/lms/quiz/{quizId}/preview` | Preview quiz ala mahasiswa (tanpa kunci) | ✅ `siakad.kelas.manage` |
 | PUT | `/api/v1/lms/attempt-jawaban/{id}/nilai` | Nilai manual + recompute + OBE resync | ✅ `siakad.nilai.manage` |
 | POST | `/api/v1/lms/quiz/{quizId}/peserta` | Tambah peserta eksplisit tryout | ✅ `siakad.kelas.manage` |
+| POST | `/api/v1/lms/quiz/{quizId}/peserta-kelas` | Tambah peserta tryout per kelas (cth `25A`) + filter prodi opsional | ✅ `siakad.kelas.manage` |
 | DELETE | `/api/v1/lms/tryout-peserta/{id}` | Hapus peserta eksplisit | ✅ `siakad.kelas.manage` |
+| GET | `/api/v1/lms/quiz/{quizId}/kolaborator` | Daftar kolaborator dosen quiz | ✅ `siakad.kelas.manage` |
+| POST | `/api/v1/lms/quiz/{quizId}/kolaborator` | Tambah/perbarui peran kolaborator dosen | ✅ `siakad.kelas.manage` |
+| DELETE | `/api/v1/lms/quiz-kolaborator/{id}` | Hapus kolaborator dosen quiz | ✅ `siakad.kelas.manage` |
 | GET | `/api/v1/lms/quiz/{quizId}` | Detail quiz mahasiswa (tanpa kunci) + attempt miliknya | ✅ `siakad.kelas.read` |
 | POST | `/api/v1/lms/quiz/{quizId}/start` | Mulai/lanjutkan attempt (`kode_akses` bila tryout berkode) | ✅ `siakad.kelas.read` |
 | GET | `/api/v1/lms/quiz/{quizId}/soal?page=` | Batch soal tanpa kunci (`batch_size` per quiz / global `lms_quiz_batch_size`) | ✅ `siakad.kelas.read` |
@@ -910,10 +917,181 @@ untuk soal uraian.
 { "message": "No query results for model [App\\Models\\Lms\\Quiz] 999999" }
 ```
 
+## [POST] /api/v1/lms/attempt/{attemptId}/reset
+
+Reset attempt mahasiswa yang terkendala agar bisa mengerjakan kembali. Attempt beserta
+seluruh jawabannya dihapus dalam satu transaksi. `attempt_ke` attempt berikutnya tetap
+increment alami via `count + 1` di `startAttempt`. Tercatat pada audit log modul `LMS`
+tabel `lms_quiz_attempt` (`action: delete`).
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `attemptId` | integer | ✅ | ID attempt |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Attempt quiz berhasil direset. Mahasiswa dapat mengerjakan kembali.",
+    "data": null
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found**
+
+```json
+{ "message": "No query results for model [App\\Models\\Lms\\QuizAttempt] 999." }
+```
+
+## [GET] /api/v1/lms/attempt/{attemptId}/detail
+
+Detail satu attempt untuk layar grading dosen: data attempt, mahasiswa (`nim`, `nama`),
+quiz (`judul`), dan per-soal (`quiz_soal_id`, `urutan`, `poin`, `tipe_soal`,
+`pertanyaan`, `opsi` beserta penanda `is_benar` sebagai kunci, serta `jawaban`
+mahasiswa berisi `bank_opsi_id`, `jawaban_teks`, `is_benar`, `poin_didapat`,
+`feedback_dosen` — respon tertulis dosen untuk jawaban isian/uraian).
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `attemptId` | integer | ✅ | ID attempt |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Detail attempt quiz berhasil diambil.",
+    "data": {
+        "attempt": {
+            "id": 7,
+            "quiz_id": 1,
+            "mahasiswa_id": 312,
+            "attempt_ke": 1,
+            "status": "selesai",
+            "dimulai_at": "2026-10-05T08:44:08.000000Z",
+            "disubmit_at": "2026-10-05T09:12:44.000000Z",
+            "nilai_akhir": "50.00",
+            "butuh_penilaian_manual": false,
+            "dinilai_oleh": null,
+            "dinilai_at": null
+        },
+        "mahasiswa": { "id": 312, "nim": "2026010123", "nama": "Budi Santoso" },
+        "quiz": { "id": 1, "judul": "Tryout UTS", "tipe": "tryout", "durasi_menit": 60, "max_attempt": 2 },
+        "questions": [
+            {
+                "quiz_soal_id": 31,
+                "urutan": 1,
+                "poin": 50,
+                "tipe_soal": "pilihan_ganda",
+                "pertanyaan": "Apa kepanjangan dari OOP?",
+                "gambar_path": null,
+                "opsi": [
+                    { "id": 101, "teks": "Object-Oriented Programming", "gambar_path": null, "urutan": 1, "is_benar": true },
+                    { "id": 102, "teks": "Online Order Platform", "gambar_path": null, "urutan": 2, "is_benar": false }
+                ],
+                "jawaban": { "bank_opsi_id": 101, "jawaban_teks": null, "is_benar": true, "poin_didapat": 50, "feedback_dosen": "Penjelasan sudah tepat, pertahankan." }
+            }
+        ]
+    }
+}
+```
+
+`jawaban` bernilai `null` bila soal belum dijawab pada attempt tersebut.
+
+### Response Error
+
+**403 Forbidden**
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found**
+
+```json
+{ "message": "No query results for model [App\\Models\\Lms\\QuizAttempt] 999." }
+```
+
+## [GET] /api/v1/lms/quiz/{quizId}/preview
+
+Preview quiz untuk dosen: simulasi tampilan mahasiswa (meta quiz + daftar soal + opsi)
+**tanpa kunci jawaban** (`is_benar`, `kunci_jawaban`, `pembahasan` tidak disertakan).
+Dosen tidak mengerjakan, hanya melihat.
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `quizId` | integer | ✅ | ID quiz |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Preview quiz berhasil diambil.",
+    "data": {
+        "quiz": {
+            "id": 1,
+            "judul": "Tryout UTS",
+            "deskripsi": "Latihan UTS",
+            "durasi_menit": 60,
+            "max_attempt": 2,
+            "tipe": "tryout"
+        },
+        "total_soal": 2,
+        "total_poin": 100.0,
+        "data": [
+            {
+                "quiz_soal_id": 31,
+                "urutan": 1,
+                "poin": 50,
+                "tipe_soal": "pilihan_ganda",
+                "pertanyaan": "Apa kepanjangan dari OOP?",
+                "gambar_path": null,
+                "opsi": [
+                    { "id": 101, "teks": "Object-Oriented Programming", "gambar_path": null, "urutan": 1 },
+                    { "id": 102, "teks": "Online Order Platform", "gambar_path": null, "urutan": 2 }
+                ]
+            }
+        ]
+    }
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found**
+
+```json
+{ "message": "No query results for model [App\\Models\\Lms\\Quiz] 999999" }
+```
+
 ## [PUT] /api/v1/lms/attempt-jawaban/{id}/nilai
 
-Dosen menilai manual satu jawaban (soal uraian atau koreksi). Nilai akhir attempt
-dihitung ulang (`recompute`) dan langsung disinkronkan ke OBE.
+Dosen menilai manual satu jawaban (soal uraian/isian atau koreksi) beserta respon
+tertulis untuk mahasiswa. Nilai akhir attempt dihitung ulang (`recompute`) dan
+langsung disinkronkan ke OBE. `is_benar` dikonsistensikan otomatis
+(`poin >= poin maksimum soal`).
 
 ### Path Parameters
 
@@ -924,10 +1102,13 @@ dihitung ulang (`recompute`) dan langsung disinkronkan ke OBE.
 ### Request Body
 
 ```json
-{ "poin": 40 }
+{ "poin": 40, "feedback_dosen": "Argumen sudah benar, tambahkan contoh enkapsulasi pada jawaban." }
 ```
 
-`poin` harus numerik ≥ 0 dan tidak boleh melebihi poin maksimum soal tersebut.
+| Field | Tipe | Required | Validasi |
+|---|---|---|---|
+| `poin` | numeric | ✅ | `min:0`; tidak boleh melebihi poin maksimum soal tersebut |
+| `feedback_dosen` | string | ❌ | `max:2000`; respon tertulis dosen, terbaca mahasiswa pada `my_attempts` |
 
 ### Response Sukses (200 OK)
 
@@ -943,6 +1124,7 @@ dihitung ulang (`recompute`) dan langsung disinkronkan ke OBE.
         "jawaban_teks": "enkapsulasi",
         "is_benar": false,
         "poin_didapat": "40.00",
+        "feedback_dosen": "Argumen sudah benar, tambahkan contoh enkapsulasi pada jawaban.",
         "created_at": "2026-10-05T08:50:00.000000Z",
         "updated_at": "2026-10-05T09:30:00.000000Z",
         "attempt": {
@@ -1070,6 +1252,83 @@ Idempoten: menambahkan mahasiswa yang sudah terdaftar tidak menggandakan baris.
 }
 ```
 
+## [POST] /api/v1/lms/quiz/{quizId}/peserta-kelas
+
+Tambah peserta tryout **per kelas** (kolom `siakad_mahasiswa.kelas`, mis. `25A` =
+2 digit angkatan + huruf) dengan filter program studi opsional. Seluruh
+mahasiswa berstatus `aktif` yang cocok didaftarkan idempoten (`firstOrCreate`
+per mahasiswa) dalam satu transaksi. Tercatat pada audit log modul `LMS`
+tabel `lms_tryout_peserta` (`action: create`, `new_values` ringkas berisi
+`kelas`, `program_studi_id`, `added`, `skipped`).
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `quizId` | integer | ✅ | ID quiz (wajib bertipe `tryout`) |
+
+### Request Body
+
+```json
+{ "kelas": "25A", "program_studi_id": 1 }
+```
+
+| Field | Tipe | Required | Validasi |
+|---|---|---|---|
+| `kelas` | string | ✅ | `max:10`, `regex:/^[0-9]{2}[A-Z]{1,3}$/` (dinormalisasi uppercase + trim) |
+| `program_studi_id` | integer | ❌ | `exists:siakad_program_studi,id` |
+
+### Response Sukses (201 Created)
+
+```json
+{
+    "status": "success",
+    "message": "Berhasil menambahkan 30 peserta tryout kelas 25A.",
+    "data": {
+        "added": 30,
+        "skipped": 2,
+        "kelas": "25A"
+    }
+}
+```
+
+`skipped` menghitung mahasiswa yang sudah terdaftar sebelumnya (tidak
+digandakan). Bila tidak ada mahasiswa aktif yang cocok, `added` dan `skipped`
+keduanya `0` dengan status tetap `201`.
+
+### Response Error
+
+**403 Forbidden**
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found**
+
+```json
+{ "message": "No query results for model [App\\Models\\Lms\\Quiz] 999999" }
+```
+
+**422 Unprocessable Entity** — format kelas salah, prodi tidak ada, atau quiz
+bukan tryout.
+
+```json
+{
+    "status": "error",
+    "message": "The selected kelas format is invalid.",
+    "errors": { "kelas": ["The selected kelas format is invalid."] }
+}
+```
+
+```json
+{
+    "status": "error",
+    "message": "Peserta eksplisit hanya berlaku untuk tryout.",
+    "errors": { "quiz": ["Peserta eksplisit hanya berlaku untuk tryout."] }
+}
+```
+
 ## [DELETE] /api/v1/lms/tryout-peserta/{id}
 
 Hapus peserta eksplisit. Mahasiswa lose akses ke tryout bila tidak lagi terdaftar lewat KRS.
@@ -1166,7 +1425,9 @@ attempt milik user sendiri. Field `kode_akses` disembunyikan dari mahasiswa.
 
 `active_attempt` berisi attempt `berlangsung` milik user bila ada (gunakan `id`-nya untuk
 melanjutkan). `dalam_jendela` menyatakan apakah saat ini berada dalam rentang
-`dibuka_at`–`ditutup_at`.
+`dibuka_at`–`ditutup_at`. Setiap entri `my_attempts` memuat relasi `jawaban`
+(`quiz_soal_id`, `jawaban_teks`, `is_benar`, `poin_didapat`, `feedback_dosen`)
+sehingga mahasiswa dapat membaca respon tertulis dosen atas jawaban isian/uraiannya.
 
 ### Response Error
 
@@ -1497,6 +1758,164 @@ Bila quiz punya `komponen_penilaian_id`, nilai otomatis tersinkron ke OBE
 
 ---
 
+## F. Kolaborator Quiz (Dosen)
+
+Kolaborator adalah dosen tambahan pada satu quiz dengan peran closed-set
+`pengawas` / `pemantau` / `penginput_soal` (konstanta `QuizKolaborator::PERAN`).
+Satu dosen hanya sekali per quiz (unik `quiz_id` + `dosen_id`); penambahan ulang
+memperbarui peran. Seluruh aksi tercatat pada audit log modul `LMS` tabel
+`lms_quiz_kolaborator`.
+
+## [GET] /api/v1/lms/quiz/{quizId}/kolaborator
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `quizId` | integer | ✅ | ID quiz |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Daftar kolaborator quiz berhasil diambil.",
+    "data": [
+        {
+            "id": 3,
+            "quiz_id": 1,
+            "dosen_id": 8,
+            "peran": "pengawas",
+            "ditambah_oleh": 41,
+            "created_at": "2026-10-06T09:00:00.000000Z",
+            "updated_at": "2026-10-06T09:00:00.000000Z",
+            "dosen": {
+                "id": 8,
+                "nidn": "0011223344",
+                "nama_lengkap": "Dosen Pengampu M.Kom"
+            }
+        }
+    ]
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found** — quiz tidak ada.
+
+```json
+{ "message": "No query results for model [App\\Models\\Lms\\Quiz] 999999" }
+```
+
+## [POST] /api/v1/lms/quiz/{quizId}/kolaborator
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `quizId` | integer | ✅ | ID quiz |
+
+### Request Body
+
+```json
+{ "dosen_id": 8, "peran": "pengawas" }
+```
+
+| Field | Tipe | Required | Validasi |
+|---|---|---|---|
+| `dosen_id` | integer | ✅ | `exists:siakad_dosen,id` |
+| `peran` | string | ✅ | `in:pengawas,pemantau,penginput_soal` |
+
+### Response Sukses (201 Created)
+
+```json
+{
+    "status": "success",
+    "message": "Kolaborator quiz berhasil ditambahkan.",
+    "data": {
+        "id": 3,
+        "quiz_id": 1,
+        "dosen_id": 8,
+        "peran": "pengawas",
+        "ditambah_oleh": 41,
+        "created_at": "2026-10-06T09:00:00.000000Z",
+        "updated_at": "2026-10-06T09:00:00.000000Z",
+        "dosen": {
+            "id": 8,
+            "nidn": "0011223344",
+            "nama_lengkap": "Dosen Pengampu M.Kom"
+        }
+    }
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found** — quiz atau dosen tidak ada.
+
+```json
+{ "message": "No query results for model [App\\Models\\Siakad\\Dosen] 999." }
+```
+
+**422 Unprocessable Entity** — validasi payload gagal.
+
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "dosen_id": ["The selected dosen id is invalid."],
+        "peran": ["The selected peran is invalid."]
+    }
+}
+```
+
+## [DELETE] /api/v1/lms/quiz-kolaborator/{id}
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID baris `lms_quiz_kolaborator` |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Kolaborator quiz berhasil dihapus.",
+    "data": null
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found**
+
+```json
+{ "message": "No query results for model [App\\Models\\Lms\\QuizKolaborator] 999." }
+```
+
+---
+
 ## Catatan Tambahan
 
 > - `start` idempoten: attempt `berlangsung` yang ada dikembalikan (lanjutkan).
@@ -1505,5 +1924,5 @@ Bila quiz punya `komponen_penilaian_id`, nilai otomatis tersinkron ke OBE
 > - Kode akses dibandingkan timing-safe (`hash_equals`) dan tidak pernah dikirim ke mahasiswa.
 > - Semua aksi tulis tercatat pada audit log modul `LMS`: `lms_quiz` (create/update/delete),
 >   `lms_quiz_soal` (create/delete), `lms_tryout_peserta` (create/delete),
->   `lms_quiz_attempt` (update saat submit), `lms_quiz_attempt_jawaban` (update saat nilai manual).
+>   `lms_quiz_attempt` (update saat submit, delete saat reset attempt), `lms_quiz_attempt_jawaban` (update saat nilai manual).
 > - `soal_count` pada endpoint daftartryout dihitung dengan agregasi, bukan N+1 query.

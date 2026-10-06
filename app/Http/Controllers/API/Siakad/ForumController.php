@@ -97,8 +97,9 @@ class ForumController extends Controller
             (string) $request->input('sort_order', 'asc'),
             ForumService::SORT_TOPIK
         );
+        $pertemuanId = $request->filled('pertemuan_id') ? (int) $request->input('pertemuan_id') : null;
 
-        $paginator = $this->forumService->listTopik($kelasId, (int) $request->user()->id, $perPage, $sortBy, $sortOrder);
+        $paginator = $this->forumService->listTopik($kelasId, (int) $request->user()->id, $perPage, $sortBy, $sortOrder, $pertemuanId);
         $paginator->appends($request->query());
 
         return response()->json([
@@ -115,6 +116,7 @@ class ForumController extends Controller
                 'filters' => [
                     'sort_by' => $sortBy,
                     'sort_order' => $sortOrder,
+                    'pertemuan_id' => $pertemuanId,
                 ],
             ],
         ]);

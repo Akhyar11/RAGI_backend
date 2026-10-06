@@ -16,6 +16,7 @@ class QuizAttemptJawaban extends Model
         'jawaban_teks',
         'is_benar',
         'poin_didapat',
+        'feedback_dosen',
     ];
 
     protected $casts = [

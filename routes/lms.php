@@ -39,6 +39,10 @@ Route::middleware(['can:siakad.kelas.read'])->group(function () {
     Route::post('/attempt/{attemptId}/submit', [QuizController::class, 'submit']);
     // Tryout — daftar per kelas (dosen & mahasiswa terdaftar)
     Route::get('/kelas/{kelasId}/tryout', [QuizController::class, 'listTryout']);
+    // Alur baru: matriks rekap + ketercapaian MK (controller melakukan scoping:
+    // mahasiswa hanya melihat baris/nilai miliknya sendiri).
+    Route::get('/kelas/{kelasId}/rekap-matrix', [LmsController::class, 'rekapMatrix']);
+    Route::get('/kelas/{kelasId}/ketercapaian', [LmsController::class, 'ketercapaian']);
 
     // --- Agregat level modul (mendukung halaman /lms/* di sidebar) ---
     // Tanpa kelasId: menggabungkan seluruh kelas yang boleh diakses user.
@@ -95,15 +99,25 @@ Route::middleware(['can:siakad.kelas.manage'])->group(function () {
     Route::post('/quiz/{quizId}/soal', [QuizController::class, 'attachSoal']);
     Route::delete('/quiz-soal/{quizSoalId}', [QuizController::class, 'detachSoal']);
     Route::get('/quiz/{quizId}/attempts', [QuizController::class, 'listAttempts']);
+    Route::post('/attempt/{attemptId}/reset', [QuizController::class, 'resetAttempt']);
+    Route::get('/attempt/{attemptId}/detail', [QuizController::class, 'attemptDetail']);
+    Route::get('/quiz/{quizId}/preview', [QuizController::class, 'preview']);
     // Tryout — buat & kelola peserta (level kelas)
     Route::post('/kelas/{kelasId}/tryout', [QuizController::class, 'storeTryout']);
     Route::post('/quiz/{quizId}/peserta', [QuizController::class, 'addPeserta']);
+    Route::post('/quiz/{quizId}/peserta-kelas', [QuizController::class, 'addPesertaByKelas']);
     Route::delete('/tryout-peserta/{pesertaId}', [QuizController::class, 'removePeserta']);
     // Manajemen Pertemuan — ubah & hapus
     Route::put('/pertemuan/{pertemuanId}', [LmsController::class, 'updatePertemuan']);
     Route::delete('/pertemuan/{pertemuanId}', [LmsController::class, 'destroyPertemuan']);
     Route::post('/pertemuan/{pertemuanId}/bulk-absensi', [LmsController::class, 'bulkAbsensi']);
     Route::patch('/izin/{izinId}/proses', [LmsController::class, 'prosesIzin']);
+    // Alur LMS baru: import materi antar-kelas (mutasi, tetap manage)
+    Route::post('/kelas/{kelasId}/import-materi', [LmsController::class, 'importMateri']);
+    // Quiz — kolaborator dosen (pengawas/pemantau/penginput soal)
+    Route::get('/quiz/{quizId}/kolaborator', [QuizController::class, 'listKolaborator']);
+    Route::post('/quiz/{quizId}/kolaborator', [QuizController::class, 'addKolaborator']);
+    Route::delete('/quiz-kolaborator/{id}', [QuizController::class, 'removeKolaborator']);
 });
 
 // Hak Akses Penilaian Akademik (OBE Sync)

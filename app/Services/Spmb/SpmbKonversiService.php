@@ -45,6 +45,7 @@ class SpmbKonversiService
 
             $jalurKelasNama = $pendaftaran->tipeJalur?->nama ?? $pendaftaran->jalur_masuk ?? 'Reguler';
             $kelompokUkt = $pendaftaran->kelompok_ukt ?? 3;
+            $kelas = $this->resolveKelas($pendaftaran);
 
             if (!$mahasiswa) {
                 $mahasiswa = Mahasiswa::create([
@@ -63,6 +64,7 @@ class SpmbKonversiService
                     'status' => 'aktif',
                     'kelompok_ukt' => $kelompokUkt,
                     'jalur_masuk' => $jalurKelasNama,
+                    'kelas' => $kelas,
                 ]);
             } else {
                 $updateMhs = [];
@@ -74,6 +76,9 @@ class SpmbKonversiService
                 }
                 if (empty($mahasiswa->jalur_masuk)) {
                     $updateMhs['jalur_masuk'] = $jalurKelasNama;
+                }
+                if (empty($mahasiswa->kelas) && $kelas !== null) {
+                    $updateMhs['kelas'] = $kelas;
                 }
                 if (!empty($updateMhs)) {
                     $mahasiswa->update($updateMhs);
@@ -183,6 +188,24 @@ class SpmbKonversiService
                 'username' => $nim, // username diganti menjadi nim mahasiswa
             ]);
         }
+    }
+
+    /**
+     * Ambil info kelas mahasiswa dari data pendaftaran bila tersedia.
+     * Skema `spmb_pendaftaran_calon_mhs` saat ini TIDAK memiliki kolom
+     * kelas/jalur kelas (termasuk relasi hasil seleksi & tipe jalur),
+     * sehingga method ini mengembalikan null dan kolom `kelas` mahasiswa
+     * dibiarkan null (tidak dikarang). Jika suatu saat kolom `kelas`
+     * ditambahkan ke pendaftaran, nilainya dinormalisasi uppercase-trim.
+     */
+    protected function resolveKelas(PendaftaranCalonMhs $pendaftaran): ?string
+    {
+        $raw = $pendaftaran->getAttribute('kelas');
+        if (is_string($raw) && trim($raw) !== '') {
+            return strtoupper(trim($raw));
+        }
+
+        return null;
     }
 
     /**

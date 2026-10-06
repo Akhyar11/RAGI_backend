@@ -225,6 +225,7 @@ agregat yang read-only.
 | `per_page` | integer | ❌ | `15` | Jumlah data per halaman (nilai dibatasi 1–100) |
 | `sort_by` | string | ❌ | `id` | `id`, `judul`, `is_pinned`, `created_at` |
 | `sort_order` | string | ❌ | `asc` | `asc` / `desc` |
+| `pertemuan_id` | integer | ❌ | `null` | Saring topik milik satu pertemuan (halaman detail pertemuan mengirim `?pertemuan_id={id}`) |
 
 Kunci pertama pengurutan selalu `is_pinned DESC` supaya topik terkunci tidak
 tenggelam, lalu kunci `sort_by`, lalu `id` sebagai penentu stabil bila nilainya
@@ -270,11 +271,16 @@ halaman), bukan mengambil seluruh baris topik lalu memotongnya di memori.
         "to": 2,
         "filters": {
             "sort_by": "id",
-            "sort_order": "asc"
+            "sort_order": "asc",
+            "pertemuan_id": null
         }
     }
 }
 ```
+
+`pertemuan_id` memfilter topik per pertemuan (`?pertemuan_id=101` hanya
+mengembalikan topik dengan `pertemuan_id = 101`); tanpa parameter seluruh topik
+kelas dikembalikan.
 
 `post_terakhir.isi` dipotong maksimal 120 karakter untuk preview daftar.
 `total_post` menghitung pesan **dan** balasan. `meta.filters` mengembalikan nilai

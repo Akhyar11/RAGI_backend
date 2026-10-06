@@ -164,6 +164,7 @@
 {
     "tahun_angkatan": 2025,
     "jalur_kelas": "Reguler",
+    "kelas": "25A",
     "semester": 3,
     "program_studi_id": null,
     "jatuh_tempo": "2026-09-30",
@@ -175,6 +176,7 @@
 |---|---|---|---|
 | `tahun_angkatan` | integer | ✅ | Tahun angkatan (2020-2040) |
 | `jalur_kelas` | string | ✅ | Jalur kelas (Reguler/Karyawan/Internasional) |
+| `kelas` | string | ❌ | Filter kelas mahasiswa, format 2 digit angkatan + huruf (cth `25A`, regex `^[0-9]{2}[A-Z]{1,3}$`, maks 10 karakter, dinormalisasi uppercase). Bila diisi, target dibatasi ke mahasiswa dengan `siakad_mahasiswa.kelas` tersebut (via relasi maupun fallback SIAKAD) |
 | `semester` | integer | ❌ | Semester target (1-14) |
 | `program_studi_id` | integer | ❌ | ID program studi (null = semua prodi) |
 | `jatuh_tempo` | date | ✅ | Tanggal jatuh tempo (harus setelah hari ini) |
@@ -205,6 +207,25 @@
 {
     "status": "error",
     "message": "Tidak ditemukan setting tarif yang cocok untuk kombinasi Angkatan 2025 / Reguler. Silakan atur setting tarif terlebih dahulu di menu Master."
+}
+```
+
+**404 — Tidak ada mahasiswa (disebutkan kelas bila filter diisi)**
+```json
+{
+    "status": "error",
+    "message": "Tidak ditemukan mahasiswa aktif untuk Angkatan 2025 dan Jalur Reguler dan Kelas 25A. Pastikan data mahasiswa / penetapan tipe tagihan sudah tersedia."
+}
+```
+
+**422 — Format kelas salah**
+```json
+{
+    "status": "error",
+    "message": "Validasi generate tagihan masal gagal: The selected kelas format is invalid.",
+    "errors": {
+        "kelas": ["The selected kelas format is invalid."]
+    }
 }
 ```
 

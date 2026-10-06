@@ -272,6 +272,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'Kelola Buka Kelas & Ruang', 'slug' => 'siakad.kelas.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Membuka kelas perkuliahan & alokasi ruang SINAPRA'],
             ['name' => 'Kelola Integrasi Neo Feeder', 'slug' => 'siakad.feeder.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Sinkronisasi data ke Neo Feeder PDDIKTI'],
             ['name' => 'Kelola Penerima Beasiswa Mahasiswa', 'slug' => 'siakad.beasiswa.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Menetapkan mahasiswa penerima beasiswa'],
+            ['name' => 'Plotting Dosen PA', 'slug' => 'siakad.pa.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Menetapkan dan mendistribusikan Dosen Pembimbing Akademik (BAAK/Kaprodi)'],
 
             // ── MODUL ARSIP (TATA PERSURATAN) ─────────────────────
             ['name' => 'Lihat Dashboard Arsip', 'slug' => 'arsip.dashboard.read', 'module' => 'arsip', 'action' => 'read', 'description' => 'Melihat statistik & metrik tata persuratan'],

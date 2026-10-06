@@ -53,6 +53,7 @@ Route::prefix('mahasiswa')->group(function () {
     Route::post('/konversi/bulk-status', [MahasiswaController::class, 'bulkUpdateKonversiStatus']);
     Route::delete('/konversi/{id}', [MahasiswaController::class, 'destroyKonversi']);
     Route::post('/bulk-assign-pa', [MahasiswaController::class, 'bulkAssignPa']);
+    Route::post('/assign-pa-kelas', [MahasiswaController::class, 'assignPaKelas']);
     Route::post('/bulk-status', [MahasiswaController::class, 'bulkUpdateStatus']);
     Route::post('/auto-distribute-pa', [MahasiswaController::class, 'autoDistributePa']);
     Route::get('/{id}', [MahasiswaController::class, 'show']);
