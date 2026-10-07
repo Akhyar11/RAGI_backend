@@ -151,8 +151,14 @@ class AppServiceProvider extends ServiceProvider
         // Refresh token berlaku 30 hari
         Passport::refreshTokensExpireIn(now()->addDays(30));
 
-        // Personal access token berlaku 1 tahun
-        Passport::personalAccessTokensExpireIn(now()->addYear());
+        // Personal access token: default 1 tahun HANYA untuk kompatibilitas
+        // token mobile/integrasi (API\AuthController) yang belum punya alur
+        // refresh. Sesi web interaktif TIDAK memakai default ini — mereka
+        // diterbitkan per-token dengan TTL pendek (lihat AuthController::
+        // issueWebSession + EnsurePassportTokenIsFresh).
+        Passport::personalAccessTokensExpireIn(
+            now()->addDays((int) config('passport.personal_access_expire_days', 365))
+        );
 
         // Konfigurasi dinamis mail/SMTP dari core_system_settings
         try {

@@ -24,6 +24,51 @@ class AuthController extends Controller
         private SpmbReferralService $referralService
     ) {}
 
+    /**
+     * F-004: terbitkan sesi web berumur pendek.
+     *
+     * - Access token Passport (dipakai guard `auth:api`) diberi `expires_at`
+     *   pendek per-token (default 15 menit, via PASSPORT_WEB_ACCESS_TOKEN_MINUTES)
+     *   dan ditegakkan oleh middleware EnsurePassportTokenIsFresh.
+     * - Refresh token single-use dengan rotasi via SsoService (client_app `web`):
+     *   remember-me => 30 hari, selain itu 1 hari.
+     *
+     * @return array{0: string, 1: \App\Models\SsoToken, 2: int} [accessToken, pair, expiresInSeconds]
+     */
+    private function issueWebSession(
+        \App\Models\User $user,
+        Request $request,
+        bool $remember
+    ): array {
+        $accessTtlMinutes = max(1, (int) config('passport.web_access_token_minutes', 15));
+
+        $tokenResult = $user->createToken('auth_token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        $passportTokenId = null;
+        if (isset($tokenResult->token) && $tokenResult->token) {
+            $tokenResult->token->expires_at = now()->addMinutes($accessTtlMinutes);
+            $tokenResult->token->save();
+            $passportTokenId = $tokenResult->token->getKey();
+        }
+
+        $refreshTtlMinutes = $remember
+            ? SsoService::REFRESH_TOKEN_TTL
+            : SsoService::REFRESH_TOKEN_TTL_SHORT;
+        $pair = $this->ssoService->issueSessionPair($user, 'web', $refreshTtlMinutes);
+
+        \App\Models\UserSessionIam::create([
+            'user_id' => $user->id,
+            'token' => $passportTokenId,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'expires_at' => now()->addMinutes($accessTtlMinutes),
+            'created_at' => now(),
+        ]);
+
+        return [$token, $pair, $accessTtlMinutes * 60];
+    }
+
     public function register(RegisterRequest $request)
     {
         $request->validated();
@@ -104,14 +149,18 @@ class AuthController extends Controller
         // Send email
         Mail::to($user->email)->send(new VerifyEmailMail($verifyUrl, $user->username));
 
-        $tokenResult = $user->createToken('auth_token');
-        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+        // F-004: sesi web berumur pendek + refresh pair (refresh 1 hari utk akun baru).
+        [$token, $pair, $expiresIn] = $this->issueWebSession($user, $request, false);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Pendaftaran berhasil. Silakan periksa email Anda untuk verifikasi akun.',
             'data' => $user->load(['roles', 'roles.permissions']),
             'access_token' => $token,
+            'refresh_token' => $pair->refresh_token,
+            'expires_in' => $expiresIn,
+            'access_expires_at' => $pair->access_expires_at,
+            'refresh_expires_at' => $pair->refresh_expires_at,
             'token_type' => 'Bearer',
         ], 201);
     }
@@ -206,7 +255,10 @@ class AuthController extends Controller
         // 2FA Check (Opsi B: Temporary Token)
         if ($user->two_factor_confirmed_at) {
             $tempToken = Str::random(60);
-            Cache::put('2fa_login_' . $tempToken, $user->id, now()->addMinutes(10));
+            Cache::put('2fa_login_' . $tempToken, [
+                'user_id' => $user->id,
+                'remember' => $request->boolean('remember_me'),
+            ], now()->addMinutes(10));
 
             return response()->json([
                 'status' => 'success',
@@ -217,16 +269,14 @@ class AuthController extends Controller
         }
 
         $user->update(['last_login_at' => now()]);
-        $tokenResult = $user->createToken('auth_token');
-        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
-        
-        \App\Models\UserSessionIam::create([
-            'user_id' => $user->id,
-            'token' => $tokenResult->token->id,
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-            'created_at' => now(),
-        ]);
+
+        // F-004: sesi web berumur pendek + refresh pair dengan rotasi.
+        // remember_me=true => refresh 30 hari, selain itu 1 hari.
+        [$token, $pair, $expiresIn] = $this->issueWebSession(
+            $user,
+            $request,
+            $request->boolean('remember_me')
+        );
 
         AuditLogService::record('IAM', 'login', 'users', $user->id);
 
@@ -236,6 +286,10 @@ class AuthController extends Controller
             'requires_2fa' => false,
             'data' => $user->load(['roles', 'roles.permissions']),
             'access_token' => $token,
+            'refresh_token' => $pair->refresh_token,
+            'expires_in' => $expiresIn,
+            'access_expires_at' => $pair->access_expires_at,
+            'refresh_expires_at' => $pair->refresh_expires_at,
             'token_type' => 'Bearer',
         ]);
     }
@@ -247,14 +301,18 @@ class AuthController extends Controller
             'totp_code' => 'required|string|size:6'
         ]);
 
-        $userId = Cache::get('2fa_login_' . $request->temp_token);
+        $cached = Cache::get('2fa_login_' . $request->temp_token);
 
-        if (!$userId) {
+        if (!$cached) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Sesi login telah kedaluwarsa. Silakan login ulang dengan password.'
             ], 400);
         }
+
+        // Kompatibel dengan cache lama (int user_id) maupun baru (array).
+        $userId = is_array($cached) ? ($cached['user_id'] ?? null) : $cached;
+        $remember = is_array($cached) ? (bool) ($cached['remember'] ?? false) : false;
 
         $user = User::find($userId);
         $google2fa = new \PragmaRX\Google2FA\Google2FA();
@@ -265,17 +323,9 @@ class AuthController extends Controller
         if ($valid) {
             Cache::forget('2fa_login_' . $request->temp_token);
             $user->update(['last_login_at' => now()]);
-            
-            $tokenResult = $user->createToken('auth_token');
-            $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
 
-            \App\Models\UserSessionIam::create([
-                'user_id' => $user->id,
-                'token' => $tokenResult->token->id,
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-                'created_at' => now(),
-            ]);
+            // F-004: sesi web berumur pendek + refresh pair dengan rotasi.
+            [$token, $pair, $expiresIn] = $this->issueWebSession($user, $request, $remember);
 
             AuditLogService::record('IAM', 'login', 'users', $user->id);
 
@@ -284,6 +334,10 @@ class AuthController extends Controller
                 'message' => 'Login successful',
                 'data' => $user->load(['roles', 'roles.permissions']),
                 'access_token' => $token,
+                'refresh_token' => $pair->refresh_token,
+                'expires_in' => $expiresIn,
+                'access_expires_at' => $pair->access_expires_at,
+                'refresh_expires_at' => $pair->refresh_expires_at,
                 'token_type' => 'Bearer',
             ]);
         }
@@ -309,23 +363,35 @@ class AuthController extends Controller
             'refresh_token' => 'required|string',
         ]);
 
+        // F-004: rotasi single-use — pasangan lama langsung tidak berlaku.
         $newToken = $this->ssoService->refreshTokens($request->refresh_token);
 
-        if (!$newToken) {
+        if (!$newToken || !$newToken->user || !$newToken->user->is_active) {
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Refresh token tidak valid atau sudah kedaluwarsa.',
             ], 401);
         }
 
+        // Terbitkan ulang bearer Passport berumur pendek agar guard `auth:api`
+        // tetap dapat dipakai setelah access token kedaluwarsa.
+        $accessTtlMinutes = max(1, (int) config('passport.web_access_token_minutes', 15));
+        $tokenResult = $newToken->user->createToken('auth_token');
+        $accessToken = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+        if (isset($tokenResult->token) && $tokenResult->token) {
+            $tokenResult->token->expires_at = now()->addMinutes($accessTtlMinutes);
+            $tokenResult->token->save();
+        }
+
         return response()->json([
             'status'  => 'success',
             'message' => 'Token berhasil diperbarui',
             'data'    => [
-                'access_token'       => $newToken->access_token,
+                'access_token'       => $accessToken,
                 'refresh_token'      => $newToken->refresh_token,
+                'expires_in'         => $accessTtlMinutes * 60,
                 'client_app'         => $newToken->client_app,
-                'access_expires_at'  => $newToken->access_expires_at,
+                'access_expires_at'  => now()->addMinutes($accessTtlMinutes),
                 'refresh_expires_at' => $newToken->refresh_expires_at,
             ],
         ]);
@@ -340,6 +406,10 @@ class AuthController extends Controller
             \App\Models\UserSessionIam::where('token', $token->id)->delete();
             $token->revoke();
         }
+
+        // F-004: cabut juga refresh pair sesi web agar tidak bisa dipakai
+        // untuk menerbitkan bearer baru pasca-logout.
+        $this->ssoService->revokeTokens($request->user(), 'web');
 
         return response()->json([
             'message' => 'Successfully logged out'

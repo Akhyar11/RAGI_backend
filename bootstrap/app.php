@@ -16,15 +16,19 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         then: function () {
             // Protected SPMB module routes (auth:api + CheckMenuAccess + prefix api/spmb)
-            Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->prefix('api/spmb')->group(base_path('routes/spmb_core.php'));
+            Route::middleware(['auth:api', \App\Http\Middleware\EnsurePassportTokenIsFresh::class, \Illuminate\Routing\Middleware\SubstituteBindings::class, \App\Http\Middleware\CheckMenuAccess::class])->prefix('api/spmb')->group(base_path('routes/spmb_core.php'));
             // Protected SIAKAD module routes
-            Route::middleware('auth:api')->prefix('api/v1/siakad')->group(base_path('routes/siakad.php'));
+            Route::middleware(['auth:api', \App\Http\Middleware\EnsurePassportTokenIsFresh::class, \Illuminate\Routing\Middleware\SubstituteBindings::class])->prefix('api/v1/siakad')->group(base_path('routes/siakad.php'));
             // Standalone LMS module routes (pisah dari SIAKAD agar menu tidak menumpuk)
-            Route::middleware('auth:api')->prefix('api/v1/lms')->group(base_path('routes/lms.php'));
+            Route::middleware(['auth:api', \App\Http\Middleware\EnsurePassportTokenIsFresh::class])->prefix('api/v1/lms')->group(base_path('routes/lms.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
+
+        // F-004: tegakkan expires_at per-baris oauth_access_tokens pada semua
+        // rute grup `api` (melewatkan sesi tanpa token / token transien).
+        $middleware->appendToGroup('api', \App\Http\Middleware\EnsurePassportTokenIsFresh::class);
 
         $middleware->redirectTo(
             guests: fn (Request $request) => $request->is('api/*') ? null : '/login'

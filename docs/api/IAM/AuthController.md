@@ -73,6 +73,10 @@
         "updated_at": "2026-07-28T04:23:36.000000Z"
     },
     "access_token": "1|eyJ0eXA...",
+    "refresh_token": "def50200...",
+    "expires_in": 900,
+    "access_expires_at": "2026-07-28T04:38:36.000000Z",
+    "refresh_expires_at": "2026-07-29T04:23:36.000000Z",
     "token_type": "Bearer"
 }
 ```
@@ -164,9 +168,15 @@
         "last_login_at": "2026-07-28T04:25:10.000000Z"
     },
     "access_token": "2|eyJ0eXA...",
+    "refresh_token": "def50200...",
+    "expires_in": 900,
+    "access_expires_at": "2026-07-28T04:40:10.000000Z",
+    "refresh_expires_at": "2026-07-29T04:25:10.000000Z",
     "token_type": "Bearer"
 }
 ```
+
+> **Kebijakan sesi (F-004):** `access_token` sesi web berumur pendek (default 15 menit, `expires_in` detik) dan ditegakkan per-baris `oauth_access_tokens`. `refresh_token` bersifat single-use dengan rotasi otomatis; masa berlakunya 30 hari bila `remember_me=true`, selain itu 1 hari.
 
 ### Response Sukses (200 OK) - Membutuhkan 2FA
 
@@ -243,6 +253,8 @@ Mengembalikan payload yang persis sama dengan respons *Login sukses tanpa 2FA* (
 ## POST /api/auth/refresh
 
 > Digunakan untuk mendapatkan `access_token` baru dengan menggunakan `refresh_token` yang masih valid tanpa perlu login ulang (terutama untuk aplikasi Frontend pihak pertama / SPA / Mobile).
+>
+> **Kebijakan rotasi (F-004):** setiap pemakaian refresh token yang valid langsung menghanguskan pasangan lama (single-use) dan menerbitkan pasangan baru. Refresh token sesi web berlaku 30 hari bila `remember_me=true`, selain itu 1 hari. Access token yang dikembalikan adalah bearer Passport berumur pendek (default 15 menit, `expires_in` detik) yang ditegakkan per-baris `oauth_access_tokens` oleh middleware `EnsurePassportTokenIsFresh`.
 
 ### Request Body
 
@@ -262,6 +274,7 @@ Mengembalikan payload yang persis sama dengan respons *Login sukses tanpa 2FA* (
     "data": {
         "access_token": "eyJ0eXAiOiJKV...",
         "refresh_token": "def50200...",
+        "expires_in": 900,
         "client_app": "spmb",
         "access_expires_at": "2026-07-29T16:00:00.000000Z",
         "refresh_expires_at": "2026-08-12T14:00:00.000000Z"

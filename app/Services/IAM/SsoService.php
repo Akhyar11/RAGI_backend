@@ -12,14 +12,18 @@ class SsoService
     // Durasi token (menit)
     const ACCESS_TOKEN_TTL  = 15;    // 15 menit
     const REFRESH_TOKEN_TTL = 43200; // 30 hari
+    /** Refresh TTL untuk sesi tanpa "remember me" (1 hari). */
+    const REFRESH_TOKEN_TTL_SHORT = 1440;
 
     /**
      * Generate pasangan access & refresh token SSO untuk user + client_app tertentu.
      * Jika token untuk kombinasi user+client_app sudah ada, token lama dihapus dulu.
+     *
+     * Dipakai untuk alur SSO antar-aplikasi (satu sesi aktif per client_app).
      */
-    public function generateTokens(User $user, string $clientApp): SsoToken
+    public function generateTokens(User $user, string $clientApp, ?int $refreshTtlMinutes = null): SsoToken
     {
-        return DB::transaction(function () use ($user, $clientApp) {
+        return DB::transaction(function () use ($user, $clientApp, $refreshTtlMinutes) {
             // Hapus token lama untuk client_app yang sama
             SsoToken::where('user_id', $user->id)
                 ->where('client_app', $clientApp)
@@ -31,7 +35,29 @@ class SsoService
                 'refresh_token'       => Str::random(64),
                 'client_app'          => $clientApp,
                 'access_expires_at'   => now()->addMinutes(self::ACCESS_TOKEN_TTL),
-                'refresh_expires_at'  => now()->addMinutes(self::REFRESH_TOKEN_TTL),
+                'refresh_expires_at'  => now()->addMinutes($refreshTtlMinutes ?? self::REFRESH_TOKEN_TTL),
+            ]);
+        });
+    }
+
+    /**
+     * Terbitkan pasangan token sesi baru TANPA menghapus sesi lain milik user
+     * yang sama (mendukung multi-perangkat). Baris kedaluwarsa dibersihkan.
+     */
+    public function issueSessionPair(User $user, string $clientApp, ?int $refreshTtlMinutes = null): SsoToken
+    {
+        return DB::transaction(function () use ($user, $clientApp, $refreshTtlMinutes) {
+            SsoToken::where('user_id', $user->id)
+                ->where('refresh_expires_at', '<', now())
+                ->delete();
+
+            return SsoToken::create([
+                'user_id'             => $user->id,
+                'access_token'        => Str::random(64),
+                'refresh_token'       => Str::random(64),
+                'client_app'          => $clientApp,
+                'access_expires_at'   => now()->addMinutes(self::ACCESS_TOKEN_TTL),
+                'refresh_expires_at'  => now()->addMinutes($refreshTtlMinutes ?? self::REFRESH_TOKEN_TTL),
             ]);
         });
     }
@@ -58,7 +84,9 @@ class SsoService
     }
 
     /**
-     * Tukar refresh_token yang valid dengan pasangan token baru.
+     * Tukar refresh_token yang valid dengan pasangan token baru (rotasi).
+     * Hanya pasangan yang dipresentasikan yang dirotasi (single-use); sesi
+     * lain milik user yang sama TIDAK ikut dicabut (mendukung multi-perangkat).
      */
     public function refreshTokens(string $refreshToken): ?SsoToken
     {
@@ -70,7 +98,36 @@ class SsoService
             return null;
         }
 
-        return $this->generateTokens($ssoToken->user, $ssoToken->client_app);
+        return $this->rotatePair($ssoToken);
+    }
+
+    /**
+     * Rotasi satu pasangan token: hapus baris lama (berdasarkan id) lalu
+     * terbitkan pasangan baru untuk user + client_app yang sama dengan TTL
+     * refresh yang setara dengan pasangan lama.
+     */
+    public function rotatePair(SsoToken $old): SsoToken
+    {
+        return DB::transaction(function () use ($old) {
+            $oldRefreshTtl = self::REFRESH_TOKEN_TTL;
+            if ($old->created_at && $old->refresh_expires_at) {
+                $oldRefreshTtl = max(
+                    1,
+                    (int) $old->created_at->diffInMinutes($old->refresh_expires_at)
+                );
+            }
+
+            SsoToken::whereKey($old->getKey())->delete();
+
+            return SsoToken::create([
+                'user_id'             => $old->user_id,
+                'access_token'        => Str::random(64),
+                'refresh_token'       => Str::random(64),
+                'client_app'          => $old->client_app,
+                'access_expires_at'   => now()->addMinutes(self::ACCESS_TOKEN_TTL),
+                'refresh_expires_at'  => now()->addMinutes($oldRefreshTtl),
+            ]);
+        });
     }
 
     /**

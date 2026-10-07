@@ -45,4 +45,31 @@ return [
 
     'connection' => env('PASSPORT_CONNECTION'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Web Session Access Token TTL
+    |--------------------------------------------------------------------------
+    |
+    | Durasi (menit) access token Passport yang diterbitkan khusus untuk
+    | sesi web interaktif (AuthController::login/register/mfaLoginVerify).
+    | Ditegakkan per-baris oauth_access_tokens oleh middleware
+    | EnsurePassportTokenIsFresh. Token mobile (API\AuthController) dan
+    | alur OAuth lain tetap memakai TTL global personalAccessTokensExpireIn.
+    |
+    */
+
+    'web_access_token_minutes' => (int) env('PASSPORT_WEB_ACCESS_TOKEN_MINUTES', 15),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Personal Access Token Default TTL
+    |--------------------------------------------------------------------------
+    |
+    | Default global (hari) untuk personal access token Passport. Dipakai
+    | khusus kompatibilitas token mobile/integrasi tanpa alur refresh.
+    |
+    */
+
+    'personal_access_expire_days' => (int) env('PASSPORT_PAT_EXPIRE_DAYS', 365),
+
 ];
