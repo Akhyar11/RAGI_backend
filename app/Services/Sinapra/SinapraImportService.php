@@ -299,6 +299,19 @@ class SinapraImportService
             }
         }
 
+        // Cari Program Studi (optional)
+        $prodiId = null;
+        $kodeProdi = trim((string)($data['kode_prodi'] ?? $data['prodi'] ?? $data['program_studi'] ?? ''));
+        if (!empty($kodeProdi)) {
+            $prodiObj = DB::table('siakad_program_studi')
+                ->where('kode_prodi', $kodeProdi)
+                ->orWhere('nama', $kodeProdi)
+                ->first();
+            if ($prodiObj) {
+                $prodiId = $prodiObj->id;
+            }
+        }
+
         $statusRaw = strtolower(trim((string)($data['status'] ?? 'aktif')));
         $status = ($statusRaw === 'nonaktif' || $statusRaw === 'tidak_aktif' || $statusRaw === '0') ? 'tidak_aktif' : 'aktif';
 
@@ -309,6 +322,7 @@ class SinapraImportService
         $payload = [
             'gedung_id' => $gedung->id,
             'tipe_ruangan_id' => $tipeRuanganId,
+            'program_studi_id' => $prodiId,
             'nama' => $nama,
             'lantai' => !empty($data['lantai']) ? (int)$data['lantai'] : 1,
             'tipe' => !empty($data['tipe']) ? $data['tipe'] : 'umum',
@@ -534,9 +548,25 @@ class SinapraImportService
         $isBorrowable = $this->parseBoolean($data['is_borrowable'] ?? $data['dapat_dipinjam'] ?? 0);
         $isLabAsset = $this->parseBoolean($data['is_lab_asset'] ?? $data['aset_lab'] ?? 0);
 
+        // Resolusi Program Studi (jika diisi atau inherit dari ruangan)
+        $prodiId = null;
+        $kodeProdi = trim((string)($data['kode_prodi'] ?? $data['prodi'] ?? $data['program_studi'] ?? ''));
+        if (!empty($kodeProdi)) {
+            $prodiObj = DB::table('siakad_program_studi')
+                ->where('kode_prodi', $kodeProdi)
+                ->orWhere('nama', $kodeProdi)
+                ->first();
+            if ($prodiObj) {
+                $prodiId = $prodiObj->id;
+            }
+        } elseif ($ruang && !empty($ruang->program_studi_id)) {
+            $prodiId = $ruang->program_studi_id;
+        }
+
         $payload = [
             'kategori_id' => $kategoriId,
             'ruangan_id' => $ruanganId,
+            'program_studi_id' => $prodiId,
             'nama' => $nama,
             'merk' => $data['merk'] ?? null,
             'model' => $data['model'] ?? null,
@@ -726,10 +756,10 @@ class SinapraImportService
                 ],
             ],
             'ruangan' => [
-                'headers' => ['KODE GEDUNG', 'KODE RUANGAN', 'NAMA RUANGAN', 'LANTAI', 'KODE TIPE RUANGAN', 'KAPASITAS (ORANG)', 'ADA AC (1/0)', 'JUMLAH AC', 'ADA PROYEKTOR (1/0)', 'JUMLAH PROYEKTOR', 'ADA WIFI (1/0)', 'JUMLAH WIFI', 'STATUS'],
+                'headers' => ['KODE GEDUNG', 'KODE RUANGAN', 'NAMA RUANGAN', 'LANTAI', 'KODE TIPE RUANGAN', 'KAPASITAS (ORANG)', 'KODE PRODI', 'ADA AC (1/0)', 'JUMLAH AC', 'ADA PROYEKTOR (1/0)', 'JUMLAH PROYEKTOR', 'ADA WIFI (1/0)', 'JUMLAH WIFI', 'STATUS'],
                 'rows' => [
-                    ['GDG-B', 'R-LAB-01', 'Lab Pemrograman Komputer 1', 1, 'LAB_KOMP', 35, 1, 2, 1, 1, 1, 2, 'aktif'],
-                    ['GDG-A', 'R-KUL-101', 'Ruang Kuliah Teori 101', 1, 'R_KULIAH', 45, 1, 2, 1, 1, 1, 1, 'aktif'],
+                    ['GDG-B', 'R-LAB-01', 'Lab Pemrograman Komputer 1', 1, 'LAB_KOMP', 35, 'TRPL', 1, 2, 1, 1, 1, 2, 'aktif'],
+                    ['GDG-A', 'R-KUL-101', 'Ruang Kuliah Teori 101', 1, 'R_KULIAH', 45, '', 1, 2, 1, 1, 1, 1, 'aktif'],
                 ],
             ],
             'kategori-aset' => [
@@ -762,10 +792,10 @@ class SinapraImportService
                 ],
             ],
             'aset' => [
-                'headers' => ['KODE ASET', 'NAMA ASET', 'KODE KATEGORI', 'KODE RUANGAN', 'MERK', 'MODEL', 'SERIAL NUMBER', 'TANGGAL PEROLEHAN', 'HARGA PEROLEHAN', 'NILAI BUKU', 'KONDISI', 'STATUS', 'DAPAT DIPINJAM (1/0)', 'ASET LAB (1/0)'],
+                'headers' => ['KODE ASET', 'NAMA ASET', 'KODE KATEGORI', 'KODE RUANGAN', 'KODE PRODI', 'MERK', 'MODEL', 'SERIAL NUMBER', 'TANGGAL PEROLEHAN', 'HARGA PEROLEHAN', 'NILAI BUKU', 'KONDISI', 'STATUS', 'DAPAT DIPINJAM (1/0)', 'ASET LAB (1/0)'],
                 'rows' => [
-                    ['AST-PC-001', 'PC Workstation Lab Core i7', 'KAT-PC', 'R-LAB-01', 'Dell', 'OptiPlex 7090', 'SN-DELL-88912', '2025-01-15', 15000000, 15000000, 'baik', 'aktif', 0, 1],
-                    ['AST-PRJ-002', 'Proyektor LCD Epson 4000 Lumens', 'KAT-IT', 'R-KUL-101', 'Epson', 'EB-X51', 'SN-EPS-3341', '2025-02-10', 7500000, 7500000, 'baik', 'aktif', 1, 0],
+                    ['AST-PC-001', 'PC Workstation Lab Core i7', 'KAT-PC', 'R-LAB-01', 'TRPL', 'Dell', 'OptiPlex 7090', 'SN-DELL-88912', '2025-01-15', 15000000, 15000000, 'baik', 'aktif', 0, 1],
+                    ['AST-PRJ-002', 'Proyektor LCD Epson 4000 Lumens', 'KAT-IT', 'R-KUL-101', '', 'Epson', 'EB-X51', 'SN-EPS-3341', '2025-02-10', 7500000, 7500000, 'baik', 'aktif', 1, 0],
                 ],
             ],
             default => [
