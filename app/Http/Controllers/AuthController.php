@@ -45,12 +45,15 @@ class AuthController extends Controller
         $tokenResult = $user->createToken('auth_token');
         $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
 
+        $passportToken = $tokenResult->token ?? (method_exists($tokenResult, 'getToken') ? $tokenResult->getToken() : null);
         $passportTokenId = null;
-        if (isset($tokenResult->token) && $tokenResult->token) {
-            $tokenResult->token->expires_at = now()->addMinutes($accessTtlMinutes);
-            $tokenResult->token->save();
-            $passportTokenId = $tokenResult->token->getKey();
+        if ($passportToken) {
+            $passportToken->expires_at = now()->addMinutes($accessTtlMinutes);
+            $passportToken->save();
+            $passportTokenId = $passportToken->getKey();
         }
+
+        $passportTokenId = $passportTokenId ?? $tokenResult->accessTokenId ?? (string) Str::uuid();
 
         $refreshTtlMinutes = $remember
             ? SsoService::REFRESH_TOKEN_TTL
@@ -378,9 +381,10 @@ class AuthController extends Controller
         $accessTtlMinutes = max(1, (int) config('passport.web_access_token_minutes', 15));
         $tokenResult = $newToken->user->createToken('auth_token');
         $accessToken = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
-        if (isset($tokenResult->token) && $tokenResult->token) {
-            $tokenResult->token->expires_at = now()->addMinutes($accessTtlMinutes);
-            $tokenResult->token->save();
+        $passportToken = $tokenResult->token ?? (method_exists($tokenResult, 'getToken') ? $tokenResult->getToken() : null);
+        if ($passportToken) {
+            $passportToken->expires_at = now()->addMinutes($accessTtlMinutes);
+            $passportToken->save();
         }
 
         return response()->json([

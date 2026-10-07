@@ -17,6 +17,7 @@ class AuthApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->setUpPassport();
         Artisan::call('migrate');
         
         // Buat setting default register role
@@ -48,7 +49,7 @@ class AuthApiTest extends TestCase
 
         $response->assertStatus(201)
             ->assertJsonPath('status', 'success')
-            ->assertJsonStructure(['data' => ['user', 'token']]);
+            ->assertJsonStructure(['data' => ['id', 'username', 'email'], 'access_token', 'refresh_token']);
 
         $this->assertDatabaseHas('core_users', [
             'email' => 'budi@example.com',
@@ -75,7 +76,7 @@ class AuthApiTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('status', 'success')
-            ->assertJsonStructure(['data' => ['access_token']]);
+            ->assertJsonStructure(['data' => ['id', 'username', 'email'], 'access_token', 'refresh_token']);
         
         $this->assertDatabaseHas('core_user_sessions_iam', [
             'user_id' => $user->id
@@ -94,7 +95,7 @@ class AuthApiTest extends TestCase
             'password' => 'WrongPassword!'
         ]);
 
-        $response->assertStatus(401)
+        $response->assertStatus(422)
             ->assertJsonPath('status', 'error');
     }
 
@@ -105,37 +106,48 @@ class AuthApiTest extends TestCase
 
         $response = $this->withHeaders([
             'Authorization' => 'Bearer ' . $token
-        ])->postJson('/api/sso/generate-token', [
-            'target_module' => 'siakad'
+        ])->postJson('/api/sso/token', [
+            'client_app' => 'siakad'
         ]);
 
         $response->assertStatus(200)
-            ->assertJsonStructure(['data' => ['sso_token']]);
+            ->assertJsonStructure(['data' => ['access_token', 'refresh_token', 'client_app']]);
 
         $this->assertDatabaseHas('core_sso_tokens', [
             'user_id' => $user->id,
-            'target_module' => 'siakad'
+            'client_app' => 'siakad'
         ]);
     }
 
-    public function test_user_can_validate_sso_token()
+    public function test_login_creates_user_session_with_valid_token()
     {
-        $user = User::factory()->create();
-        $ssoTokenStr = \Illuminate\Support\Str::random(40);
-        
-        $user->ssoTokens()->create([
-            'token' => hash('sha256', $ssoTokenStr),
-            'target_module' => 'siakad',
-            'expires_at' => now()->addMinutes(5)
+        $user = User::factory()->create([
+            'email' => 'sessiontest@example.com',
+            'username' => 'sessiontest',
+            'password' => Hash::make('Secret123!')
         ]);
 
-        $response = $this->postJson('/api/sso/validate-token', [
-            'sso_token' => $ssoTokenStr,
-            'target_module' => 'siakad'
+        $response = $this->postJson('/api/auth/login', [
+            'identifier' => 'sessiontest@example.com',
+            'password' => 'Secret123!'
         ]);
 
-        $response->assertStatus(200)
+        $response->assertStatus(200);
+
+        $session = \App\Models\UserSessionIam::where('user_id', $user->id)->first();
+        $this->assertNotNull($session);
+        $this->assertNotEmpty($session->token);
+
+        $refreshToken = $response->json('refresh_token');
+        $this->assertNotEmpty($refreshToken);
+
+        // Refresh token rotation
+        $refreshRes = $this->postJson('/api/auth/refresh', [
+            'refresh_token' => $refreshToken,
+        ]);
+
+        $refreshRes->assertStatus(200)
             ->assertJsonPath('status', 'success')
-            ->assertJsonPath('data.user.id', $user->id);
+            ->assertJsonStructure(['data' => ['access_token', 'refresh_token', 'expires_in']]);
     }
 }
