@@ -8,7 +8,10 @@ use App\Models\Aset;
 use App\Models\Ruangan;
 use App\Models\Simpeg\TandaTanganPegawai;
 use App\Services\AuditLogService;
+use App\Services\Storage\FileStorageService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Exception;
 
 class PeminjamanService
@@ -38,6 +41,21 @@ class PeminjamanService
 
             $data['user_id'] = $userId;
             $data['status'] = $isLab ? 'pending_laboran' : 'pending_admin_sinapra';
+
+            if (empty($data['kode_peminjaman'])) {
+                $data['kode_peminjaman'] = 'PMR-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(5));
+            }
+
+            if (empty($data['nomor_identitas'])) {
+                $user = \App\Models\User::with(['mahasiswa', 'pegawai'])->find($userId);
+                if ($user) {
+                    $data['nomor_identitas'] = $user->mahasiswa?->nim 
+                        ?? $user->pegawai?->nidn 
+                        ?? $user->pegawai?->nuptk 
+                        ?? $user->pegawai?->nip 
+                        ?? $user->username;
+                }
+            }
 
             $peminjaman = PeminjamanRuangan::create($data);
 
@@ -121,6 +139,15 @@ class PeminjamanService
                 }
 
                 $peminjaman->status = 'disetujui';
+
+                // Otomatis generate nomor surat bukti peminjaman jika belum ada
+                if (empty($peminjaman->nomor_surat)) {
+                    $bulan = date('m');
+                    $tahun = date('Y');
+                    $nomorSurat = sprintf('%03d/SINAPRA-RUANG/%s/%s', $peminjaman->id, $bulan, $tahun);
+                    $peminjaman->nomor_surat = $nomorSurat;
+                    $peminjaman->surat_generated_at = now();
+                }
             } else {
                 $peminjaman->status = 'ditolak_admin_sinapra';
                 $peminjaman->catatan_penolakan = $catatanPenolakan;
@@ -508,5 +535,131 @@ class PeminjamanService
 
             return $peminjaman->fresh(['aset.ruangan', 'user']);
         });
+    }
+
+    /**
+     * Mengambil data lengkap Surat Bukti Peminjaman Ruangan beserta tanda tangan digital SIMPEG.
+     */
+    public function getSuratPeminjamanRuangan(PeminjamanRuangan $peminjaman): array
+    {
+        // Validasi status bisnis: surat peminjaman ruangan hanya sah diakses jika sudah disetujui / selesai
+        if (!in_array($peminjaman->status, ['disetujui', 'selesai'])) {
+            throw ValidationException::withMessages([
+                'peminjaman' => ['Surat peminjaman ruangan hanya dapat diakses untuk peminjaman yang telah disetujui.'],
+            ]);
+        }
+
+        $peminjaman->load(['ruangan.gedung', 'ruangan.tipeRuangan']);
+        $user = $peminjaman->user()->with(['pegawai.unitKerja', 'mahasiswa.prodi'])->first();
+
+        $storage = app(FileStorageService::class);
+
+        // 1. Tanda Tangan Approver (Admin Sarpras / Approver) dari Master SIMPEG
+        $approverUser = null;
+        $approverTtd = null;
+        if ($peminjaman->disetujui_oleh) {
+            $approverUser = \App\Models\User::with('pegawai')->find($peminjaman->disetujui_oleh);
+            $approverTtd = TandaTanganPegawai::where('user_id', $peminjaman->disetujui_oleh)
+                ->where('is_active', true)
+                ->latest()
+                ->first();
+        }
+
+        // 2. Tanda Tangan Laboran dari Master SIMPEG (jika ada)
+        $laboranUser = null;
+        $laboranTtd = null;
+        if ($peminjaman->laboran_approved_by) {
+            $laboranUser = \App\Models\User::with('pegawai')->find($peminjaman->laboran_approved_by);
+            $laboranTtd = TandaTanganPegawai::where('user_id', $peminjaman->laboran_approved_by)
+                ->where('is_active', true)
+                ->latest()
+                ->first();
+        }
+
+        // 3. Tanda Tangan Peminjam dari Master SIMPEG (jika ada)
+        $peminjamTtd = TandaTanganPegawai::where('user_id', $peminjaman->user_id)
+            ->where('is_active', true)
+            ->latest()
+            ->first();
+
+        // Identitas peminjam
+        $namaPeminjam = $user?->pegawai?->nama_lengkap ?? $user?->mahasiswa?->nama_lengkap ?? $user?->name ?? '-';
+        $nomorIdentitas = $peminjaman->nomor_identitas 
+            ?? $user?->mahasiswa?->nim 
+            ?? $user?->pegawai?->nidn 
+            ?? $user?->pegawai?->nuptk 
+            ?? $user?->pegawai?->nip 
+            ?? '-';
+
+        $unitKerja = $user?->pegawai?->unitKerja?->nama 
+            ?? $user?->mahasiswa?->prodi?->nama 
+            ?? 'Civitas Akademika Kampus';
+
+        // Audit log akses dokumen sensitif/resmi
+        try {
+            AuditLogService::record(
+                module: 'SINAPRA',
+                action: 'export',
+                tableName: 'sinapra_peminjaman_ruangan',
+                recordId: $peminjaman->id,
+                oldValues: null,
+                newValues: ['nomor_surat' => $peminjaman->nomor_surat]
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log akses surat peminjaman ruangan: ' . $e->getMessage());
+        }
+
+        return [
+            'peminjaman_id' => $peminjaman->id,
+            'kode_peminjaman' => $peminjaman->kode_peminjaman,
+            'nomor_surat' => $peminjaman->nomor_surat,
+            'surat_generated_at' => $peminjaman->surat_generated_at?->format('Y-m-d H:i:s'),
+            'tanggal' => $peminjaman->tanggal?->format('Y-m-d'),
+            'jam_mulai' => $peminjaman->jam_mulai,
+            'jam_selesai' => $peminjaman->jam_selesai,
+            'keperluan' => $peminjaman->keperluan,
+            'status' => $peminjaman->status,
+            'ruangan' => [
+                'id' => $peminjaman->ruangan?->id,
+                'nama' => $peminjaman->ruangan?->nama,
+                'kode' => $peminjaman->ruangan?->kode,
+                'lantai' => $peminjaman->ruangan?->lantai,
+                'kapasitas' => $peminjaman->ruangan?->kapasitas,
+                'gedung' => $peminjaman->ruangan?->gedung?->nama ?? '-',
+                'tipe_ruangan' => $peminjaman->ruangan?->tipeRuangan?->nama ?? $peminjaman->ruangan?->tipe ?? '-',
+                'ada_ac' => (bool) $peminjaman->ruangan?->ada_ac,
+                'ada_proyektor' => (bool) $peminjaman->ruangan?->ada_proyektor,
+                'ada_wifi' => (bool) $peminjaman->ruangan?->ada_wifi,
+            ],
+            'peminjam' => [
+                'user_id' => $peminjaman->user_id,
+                'nama' => $namaPeminjam,
+                'nomor_identitas' => $nomorIdentitas,
+                'unit_kerja' => $unitKerja,
+                'kontak' => $peminjaman->kontak_peminjam ?? $user?->email,
+                'email' => $user?->email,
+                'tanda_tangan_url' => $peminjamTtd?->file_path ? $storage->url($peminjamTtd->file_path) : null,
+                'qr_token' => $peminjamTtd?->qr_token,
+            ],
+            'laboran' => $laboranUser ? [
+                'user_id' => $laboranUser->id,
+                'nama' => $laboranUser->pegawai?->nama_lengkap ?? $laboranUser->name,
+                'nip' => $laboranUser->pegawai?->nip ?? '-',
+                'nidn' => $laboranUser->pegawai?->nidn ?? null,
+                'verified_at' => $peminjaman->laboran_approved_at?->format('Y-m-d H:i:s'),
+                'tanda_tangan_url' => $laboranTtd?->file_path ? $storage->url($laboranTtd->file_path) : null,
+                'qr_token' => $laboranTtd?->qr_token,
+            ] : null,
+            'approver' => $approverUser ? [
+                'user_id' => $approverUser->id,
+                'nama' => $approverUser->pegawai?->nama_lengkap ?? $approverUser->name,
+                'nip' => $approverUser->pegawai?->nip ?? '-',
+                'nidn' => $approverUser->pegawai?->nidn ?? null,
+                'approved_at' => $peminjaman->admin_approved_at?->format('Y-m-d H:i:s'),
+                'tanda_tangan_url' => $approverTtd?->file_path ? $storage->url($approverTtd->file_path) : null,
+                'qr_token' => $approverTtd?->qr_token,
+            ] : null,
+            'verifikasi_token' => hash('sha256', ($peminjaman->nomor_surat ?? '') . ($peminjaman->created_at ?? '')),
+        ];
     }
 }

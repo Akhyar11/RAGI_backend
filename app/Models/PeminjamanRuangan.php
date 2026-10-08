@@ -13,8 +13,13 @@ class PeminjamanRuangan extends Model
     protected $table = 'sinapra_peminjaman_ruangan';
 
     protected $fillable = [
+        'kode_peminjaman',
+        'nomor_surat',
+        'surat_generated_at',
         'ruangan_id',
         'user_id',
+        'nomor_identitas',
+        'kontak_peminjam',
         'keperluan',
         'tanggal',
         'jam_mulai',
@@ -32,6 +37,7 @@ class PeminjamanRuangan extends Model
         'tanggal' => 'date',
         'laboran_approved_at' => 'datetime',
         'admin_approved_at' => 'datetime',
+        'surat_generated_at' => 'datetime',
     ];
 
     /**

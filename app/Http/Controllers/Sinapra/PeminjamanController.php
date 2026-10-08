@@ -146,6 +146,19 @@ class PeminjamanController extends Controller
         ]);
     }
 
+    public function suratRuangan(PeminjamanRuangan $peminjaman): JsonResponse
+    {
+        $this->authorize('view', $peminjaman);
+
+        $surat = $this->service->getSuratPeminjamanRuangan($peminjaman);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data surat peminjaman ruangan berhasil diambil',
+            'data' => $surat,
+        ]);
+    }
+
     // ── PEMINJAMAN ASET ENDPOINTS ─────────────────────────────────────────
 
     public function indexAset(Request $request): JsonResponse

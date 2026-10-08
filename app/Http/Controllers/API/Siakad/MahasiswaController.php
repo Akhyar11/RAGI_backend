@@ -564,14 +564,26 @@ class MahasiswaController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Gagal membaca file CSV.'], 422);
         }
 
-        $header = fgetcsv($handle, 1000, ',');
+        $firstLine = fgets($handle);
+        if (!$firstLine) {
+            fclose($handle);
+            return response()->json(['status' => 'error', 'message' => 'Berkas CSV kosong.'], 422);
+        }
+
+        // Hapus BOM UTF-8 jika ada
+        $firstLine = preg_replace('/^\xEF\xBB\xBF/', '', $firstLine);
+
+        // Auto-detect delimiter (, atau ;)
+        $delimiter = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
+        $header = str_getcsv($firstLine, $delimiter);
+
         $updatedCount = 0;
         $errors = [];
         $line = 1;
 
         DB::beginTransaction();
         try {
-            while (($data = fgetcsv($handle, 1000, ',')) !== false) {
+            while (($data = fgetcsv($handle, 1000, $delimiter)) !== false) {
                 $line++;
                 if (count($data) < 4) {
                     continue;

@@ -176,7 +176,12 @@ class SinapraImportController extends Controller
 
         $requiredPermission = $permissionMap[$entity][$ability] ?? null;
 
-        if (!$requiredPermission || !$user || !method_exists($user, 'hasPermission') || !$user->hasPermission($requiredPermission)) {
+        $hasAccess = $user && method_exists($user, 'hasPermission') && (
+            ($requiredPermission && $user->hasPermission($requiredPermission)) ||
+            $user->hasPermission('sinapra.master.manage')
+        );
+
+        if (!$hasAccess) {
             abort(403, "Anda tidak memiliki hak akses untuk melakukan operasi ini pada entitas {$entity}.");
         }
     }
