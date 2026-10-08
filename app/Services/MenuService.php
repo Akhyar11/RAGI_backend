@@ -66,6 +66,7 @@ class MenuService
         }
 
         $isSuperAdmin = $user->isSuperAdmin();
+        $isAdminObeProdi = $user->siakadAdminProdis()->where('is_active', true)->exists();
 
         // 1. Dapatkan daftar id role dan slug permissions yang dimiliki user
         $roleIds = $user->roles()->pluck('core_roles.id')->toArray();
@@ -78,28 +79,53 @@ class MenuService
             ->unique()
             ->toArray();
 
+        if ($isAdminObeProdi) {
+            $permissionSlugs = array_unique(array_merge($permissionSlugs, [
+                'siakad.master.manage',
+                'siakad.kurikulum.manage',
+                'siakad.kurikulum.read',
+                'siakad.matakuliah.manage',
+                'siakad.nilai.manage',
+            ]));
+        }
+
+        // 1b. Dapatkan menu khusus Admin OBE berdasarkan Role (Dosen / Pegawai yang di-set Admin OBE)
+        $adminProdiMenuIds = [];
+        if ($isAdminObeProdi) {
+            // Cek plotting khusus per role di tabel siakad_admin_obe_role_menus
+            $adminProdiMenuIds = \Illuminate\Support\Facades\DB::table('siakad_admin_obe_role_menus')
+                ->whereIn('role_id', $roleIds)
+                ->pluck('menu_id')
+                ->toArray();
+        }
+
         // 2. Query builder
-        $query = Menu::with(['permission', 'children' => function($cq) use ($roleIds, $permissionSlugs, $isSuperAdmin) {
+        $query = Menu::with(['permission', 'children' => function($cq) use ($roleIds, $permissionSlugs, $isSuperAdmin, $isAdminObeProdi, $adminProdiMenuIds) {
             $cq->with('permission')->where('is_active', true);
             if (!$isSuperAdmin) {
-                $cq->where(function($q) use ($roleIds, $permissionSlugs) {
-                    $q->where(function($permQ) use ($roleIds, $permissionSlugs) {
-                        $permQ->whereNotNull('permission_id')
-                              ->whereHas('permission', function($pq) use ($permissionSlugs) {
-                                  $pq->whereIn('slug', $permissionSlugs);
-                              });
-                        $this->onlyMappedRoles($permQ, $roleIds);
-                    })
-                    ->orWhere(function($roleQ) use ($roleIds) {
-                        $roleQ->whereNull('permission_id')
-                              ->whereHas('roles', function($rq) use ($roleIds) {
-                                  $rq->whereIn('core_roles.id', $roleIds);
-                              });
-                    })
-                    ->orWhere(function($pub) {
-                        $pub->whereNull('permission_id')
-                            ->whereDoesntHave('roles');
-                    });
+                $cq->where(function($q) use ($roleIds, $permissionSlugs, $isAdminObeProdi, $adminProdiMenuIds) {
+                    // Jika user adalah Admin OBE dan sudah di-plot di siakad_admin_obe_role_menus, strictly ikuti daftar menu tersebut
+                    if ($isAdminObeProdi && !empty($adminProdiMenuIds)) {
+                        $q->whereIn('id', $adminProdiMenuIds);
+                    } else {
+                        $q->where(function($permQ) use ($roleIds, $permissionSlugs) {
+                            $permQ->whereNotNull('permission_id')
+                                  ->whereHas('permission', function($pq) use ($permissionSlugs) {
+                                      $pq->whereIn('slug', $permissionSlugs);
+                                  });
+                            $this->onlyMappedRoles($permQ, $roleIds);
+                        })
+                        ->orWhere(function($roleQ) use ($roleIds) {
+                            $roleQ->whereNull('permission_id')
+                                  ->whereHas('roles', function($rq) use ($roleIds) {
+                                      $rq->whereIn('core_roles.id', $roleIds);
+                                  });
+                        })
+                        ->orWhere(function($pub) {
+                            $pub->whereNull('permission_id')
+                                ->whereDoesntHave('roles');
+                        });
+                    }
                 });
             }
             $cq->orderBy('order_index');
@@ -111,41 +137,48 @@ class MenuService
         ->where('is_active', true);
 
         if (!$isSuperAdmin) {
-            $query->where(function($q) use ($roleIds, $permissionSlugs) {
-                // 1. Root menu memiliki permission yang dimiliki user
-                $q->where(function($permQ) use ($roleIds, $permissionSlugs) {
-                    $permQ->whereNotNull('permission_id')
-                          ->whereHas('permission', function($pq) use ($permissionSlugs) {
-                              $pq->whereIn('slug', $permissionSlugs);
-                          });
-                    $this->onlyMappedRoles($permQ, $roleIds);
-                })
-                // 2. ATAU root menu memiliki role yang cocok di tabel pivot menu_roles
-                ->orWhere(function($roleQ) use ($roleIds) {
-                    $roleQ->whereHas('roles', function($rq) use ($roleIds) {
-                        $rq->whereIn('core_roles.id', $roleIds);
-                    });
-                })
-                // 3. ATAU root menu adalah grup hierarki yang memiliki child aktif yang berizin bagi user
-                ->orWhere(function($grp) use ($roleIds, $permissionSlugs) {
-                    $grp->whereHas('children', function($cq) use ($roleIds, $permissionSlugs) {
-                        $cq->where('is_active', true)
-                           ->where(function($subQ) use ($roleIds, $permissionSlugs) {
-                               $subQ->where(function($sp) use ($roleIds, $permissionSlugs) {
-                                   $sp->whereNotNull('permission_id')
-                                      ->whereHas('permission', function($pq) use ($permissionSlugs) {
-                                          $pq->whereIn('slug', $permissionSlugs);
-                                      });
-                                   $this->onlyMappedRoles($sp, $roleIds);
-                               })
-                               ->orWhere(function($sr) use ($roleIds) {
-                                   $sr->whereHas('roles', function($rq) use ($roleIds) {
-                                       $rq->whereIn('core_roles.id', $roleIds);
+            $query->where(function($q) use ($roleIds, $permissionSlugs, $isAdminObeProdi, $adminProdiMenuIds) {
+                if ($isAdminObeProdi && !empty($adminProdiMenuIds)) {
+                    $q->whereIn('id', $adminProdiMenuIds)
+                      ->orWhereHas('children', function($cq) use ($adminProdiMenuIds) {
+                          $cq->whereIn('id', $adminProdiMenuIds);
+                      });
+                } else {
+                    // 1. Root menu memiliki permission yang dimiliki user
+                    $q->where(function($permQ) use ($roleIds, $permissionSlugs) {
+                        $permQ->whereNotNull('permission_id')
+                              ->whereHas('permission', function($pq) use ($permissionSlugs) {
+                                  $pq->whereIn('slug', $permissionSlugs);
+                              });
+                        $this->onlyMappedRoles($permQ, $roleIds);
+                    })
+                    // 2. ATAU root menu memiliki role yang cocok di tabel pivot menu_roles
+                    ->orWhere(function($roleQ) use ($roleIds) {
+                        $roleQ->whereHas('roles', function($rq) use ($roleIds) {
+                            $rq->whereIn('core_roles.id', $roleIds);
+                        });
+                    })
+                    // 3. ATAU root menu adalah grup hierarki yang memiliki child aktif yang berizin bagi user
+                    ->orWhere(function($grp) use ($roleIds, $permissionSlugs) {
+                        $grp->whereHas('children', function($cq) use ($roleIds, $permissionSlugs) {
+                            $cq->where('is_active', true)
+                               ->where(function($subQ) use ($roleIds, $permissionSlugs) {
+                                   $subQ->where(function($sp) use ($roleIds, $permissionSlugs) {
+                                       $sp->whereNotNull('permission_id')
+                                          ->whereHas('permission', function($pq) use ($permissionSlugs) {
+                                              $pq->whereIn('slug', $permissionSlugs);
+                                          });
+                                       $this->onlyMappedRoles($sp, $roleIds);
+                                   })
+                                   ->orWhere(function($sr) use ($roleIds) {
+                                       $sr->whereHas('roles', function($rq) use ($roleIds) {
+                                           $rq->whereIn('core_roles.id', $roleIds);
+                                       });
                                    });
                                });
-                           });
+                        });
                     });
-                });
+                }
             });
         }
 

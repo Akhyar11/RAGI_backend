@@ -107,6 +107,20 @@ class SiakadObeTest extends TestCase
             'cpl_id' => $this->cpl->id,
         ]);
 
+        // 3b. Uncheck / Clear mapping (empty cpl_ids)
+        $responseUnmap = $this->postJson('/api/v1/siakad/obe/profil-lulusan/cpl', [
+            'profil_lulusan_id' => $plId,
+            'cpl_ids' => [],
+        ]);
+        $responseUnmap->assertStatus(200)
+                      ->assertJsonPath('status', 'success')
+                      ->assertJsonPath('data.cpls', []);
+
+        $this->assertDatabaseMissing('siakad_profil_lulusan_cpl', [
+            'profil_lulusan_id' => $plId,
+            'cpl_id' => $this->cpl->id,
+        ]);
+
         // 4. Delete Profil Lulusan
         $responseDelete = $this->deleteJson("/api/v1/siakad/obe/profil-lulusan/{$plId}");
         $responseDelete->assertStatus(200);

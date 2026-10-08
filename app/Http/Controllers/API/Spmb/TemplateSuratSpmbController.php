@@ -23,7 +23,7 @@ class TemplateSuratSpmbController extends Controller
     {
         abort_unless($request->user()?->hasPermission('spmb.manage'), 403, 'Akses ditolak.');
 
-        $query = TemplateSuratSpmb::with(['jalurMasuk', 'gelombang']);
+        $query = TemplateSuratSpmb::with(['jalurMasuk', 'gelombang', 'module', 'klasifikasiSurat', 'unitSurat']);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -103,7 +103,7 @@ class TemplateSuratSpmbController extends Controller
     {
         abort_unless($request->user()?->hasPermission('spmb.manage'), 403, 'Akses ditolak.');
 
-        $templateSurat->loadMissing(['jalurMasuk', 'gelombang']);
+        $templateSurat->loadMissing(['jalurMasuk', 'gelombang', 'module', 'klasifikasiSurat', 'unitSurat']);
 
         return response()->json([
             'status' => 'success',
@@ -123,6 +123,40 @@ class TemplateSuratSpmbController extends Controller
             'status' => 'success',
             'message' => 'Template surat berhasil diperbarui.',
             'data' => $template,
+        ]);
+    }
+
+    /**
+     * Opsi master Arsip (klasifikasi & unit pengolah) untuk konfigurasi penomoran SK.
+     * Disediakan agar admin SPMB tidak memerlukan permission master Arsip.
+     */
+    public function arsipOptions(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->hasPermission('spmb.manage'), 403, 'Akses ditolak.');
+
+        $klasifikasi = \App\Models\Arsip\KlasifikasiSurat::query()
+            ->where('kategori', 'klasifikasi')
+            ->where('is_active', true)
+            ->orderBy('kode')
+            ->get(['id', 'kode', 'nama', 'kategori']);
+
+        $unit = \App\Models\Arsip\KlasifikasiSurat::query()
+            ->where('kategori', 'unit')
+            ->where('is_active', true)
+            ->orderBy('kode')
+            ->get(['id', 'kode', 'nama', 'kategori']);
+
+        $kopSurat = app(\App\Services\Arsip\KopSuratService::class)
+            ->getKopSuratByTahun((int) date('Y'));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Opsi master Arsip berhasil diambil.',
+            'data' => [
+                'klasifikasi' => $klasifikasi,
+                'unit' => $unit,
+                'kop_surat' => $kopSurat,
+            ],
         ]);
     }
 

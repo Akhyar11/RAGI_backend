@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\IAM\AdminUserSeeder::class,
             \Database\Seeders\SpmbBerkasRequirementSeeder::class,
             \Database\Seeders\SpmbTemplateSuratSeeder::class,
+            \Database\Seeders\ArsipUnitSeeder::class,
         ]);
     }
 }

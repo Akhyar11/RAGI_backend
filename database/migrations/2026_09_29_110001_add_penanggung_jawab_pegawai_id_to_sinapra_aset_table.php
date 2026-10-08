@@ -14,12 +14,12 @@ return new class extends Migration
         if (Schema::hasTable('sinapra_aset')) {
             Schema::table('sinapra_aset', function (Blueprint $table) {
                 if (!Schema::hasColumn('sinapra_aset', 'penanggung_jawab_pegawai_id')) {
-                    $table->foreignId('penanggung_jawab_pegawai_id')
-                        ->nullable()
-                        ->after('ruangan_id')
-                        ->constrained('simpeg_pegawai')
-                        ->nullOnDelete()
-                        ->index();
+                    $table->unsignedBigInteger('penanggung_jawab_pegawai_id')->nullable()->after('ruangan_id');
+                    $table->foreign('penanggung_jawab_pegawai_id', 'fk_sinapra_aset_pj_pegawai')
+                        ->references('id')
+                        ->on('simpeg_pegawai')
+                        ->nullOnDelete();
+                    $table->index('penanggung_jawab_pegawai_id', 'idx_sinapra_aset_pj');
                 }
             });
         }

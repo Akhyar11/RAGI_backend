@@ -266,6 +266,7 @@ class PermissionSeeder extends Seeder
             // Level Administrator / BAAK Only
             ['name' => 'Kelola Master Fakultas & Prodi', 'slug' => 'siakad.master.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Mengelola fakultas, prodi, dan kurikulum OBE'],
             ['name' => 'Kelola Master Mata Kuliah', 'slug' => 'siakad.matakuliah.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Mengelola mata kuliah dan prasyarat'],
+            ['name' => 'Lihat Kurikulum & Mata Kuliah', 'slug' => 'siakad.kurikulum.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat daftar kurikulum dan mata kuliah'],
             ['name' => 'Kelola Data Mahasiswa & NIM', 'slug' => 'siakad.mahasiswa.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'CRUD data mahasiswa dan generate NIM'],
             ['name' => 'Kelola Konversi Transfer', 'slug' => 'siakad.konversi.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Input dan persetujuan penyetaraan nilai transfer'],
             ['name' => 'Kelola Data Dosen Pengajar', 'slug' => 'siakad.dosen.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'CRUD data dosen pengajar & NIDN'],
@@ -359,16 +360,12 @@ class PermissionSeeder extends Seeder
             }
         }
 
-        // 3. Dosen -> Dosen Wali & Pengampu
+        // 3. Dosen -> Dosen Wali & Pengampu & Admin OBE
         if ($dosenRole) {
             $dosenSlugs = [
                 'siakad.dashboard.read',
-                'siakad.kelas.read',
-                'siakad.kelas.manage',
-                'siakad.krs.read',
-                'siakad.krs.approve',
                 'siakad.nilai.read',
-                'siakad.nilai.manage',
+                'siakad.kurikulum.read',
                 'siakad.mahasiswa.read',
                 'siakad.konversi.manage',
                 'lms.forum.read',
@@ -622,6 +619,21 @@ class PermissionSeeder extends Seeder
             $arsipPerms = Permission::where('module', 'arsip')->get();
             foreach ($arsipPerms as $p) {
                 RolePermission::firstOrCreate(['role_id' => $adminArsipRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 17. Admin SIAKAD -> Kelola seluruh data akademik, master kurikulum, perkuliahan, nilai, dan OBE
+        $adminSiakadRole = Role::firstOrCreate(
+            ['slug' => 'admin_siakad'],
+            [
+                'name' => 'Admin Siakad',
+                'description' => 'Administrator Sistem Informasi Akademik & Kurikulum OBE',
+            ]
+        );
+        if ($adminSiakadRole) {
+            $siakadPerms = Permission::where('module', 'siakad')->orWhere('slug', 'like', 'siakad.%')->get();
+            foreach ($siakadPerms as $p) {
+                RolePermission::firstOrCreate(['role_id' => $adminSiakadRole->id, 'permission_id' => $p->id]);
             }
         }
     }

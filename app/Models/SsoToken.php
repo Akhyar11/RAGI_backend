@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'client_app',
     'access_expires_at',
     'refresh_expires_at',
+    'revoked_at',
+    'rotated_to_id',
 ])]
 class SsoToken extends Model
 {
@@ -26,6 +28,8 @@ class SsoToken extends Model
         return [
             'access_expires_at'  => 'datetime',
             'refresh_expires_at' => 'datetime',
+            'revoked_at'         => 'datetime',
+            'rotated_to_id'      => 'integer',
         ];
     }
 
@@ -34,12 +38,17 @@ class SsoToken extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function rotatedTo(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'rotated_to_id');
+    }
+
     /**
-     * Cek apakah access_token masih berlaku.
+     * Cek apakah access_token masih berlaku dan belum di-revoke.
      */
     public function isAccessTokenValid(): bool
     {
-        return $this->access_expires_at->isFuture();
+        return empty($this->revoked_at) && $this->access_expires_at->isFuture();
     }
 
     /**
@@ -48,5 +57,17 @@ class SsoToken extends Model
     public function isRefreshTokenValid(): bool
     {
         return $this->refresh_expires_at->isFuture();
+    }
+
+    /**
+     * Cek apakah token berada dalam grace period setelah rotasi (mis. 30 detik).
+     */
+    public function isInGracePeriod(int $graceSeconds = 30): bool
+    {
+        if (empty($this->revoked_at)) {
+            return false;
+        }
+
+        return $this->revoked_at->diffInSeconds(now()) <= $graceSeconds;
     }
 }

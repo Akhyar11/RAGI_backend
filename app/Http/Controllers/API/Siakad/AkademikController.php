@@ -305,17 +305,51 @@ class AkademikController extends Controller
     // --- PROGRAM STUDI CRUD ---
     public function listProgramStudi(Request $request)
     {
+        Gate::authorize('siakad.master.manage');
         $query = ProgramStudi::with(['fakultas', 'kaprodi.user']);
         if ($request->filled('fakultas_id')) {
             $query->where('fakultas_id', $request->fakultas_id);
         }
+        if ($request->filled('jenjang')) {
+            $query->where('jenjang', $request->jenjang);
+        }
+        if ($request->filled('akreditasi')) {
+            $query->where('akreditasi', $request->akreditasi);
+        }
         if ($request->filled('search')) {
             $s = $request->search;
-            $query->where(fn($q) => $q->where('nama', 'like', "%{$s}%")->orWhere('kode_prodi', 'like', "%{$s}%"));
+            $query->where(fn($q) => $q->where('nama', 'like', "%{$s}%")->orWhere('kode_prodi', 'like', "%{$s}%")->orWhere('kode_prodi_dikti', 'like', "%{$s}%"));
         }
-        $prodis = $query->where('is_active', true)->get();
+
+        $allowedSort = ['nama', 'kode_prodi', 'kode_prodi_dikti', 'jenjang', 'akreditasi', 'id', 'created_at'];
+        $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'nama';
+        $sortOrder = $request->sort_order === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        $query->where('is_active', true);
+
+        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
+            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+            $data = $query->paginate($perPage);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Daftar program studi berhasil diambil',
+                'data' => $data->items(),
+                'meta' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ]
+            ]);
+        }
+
+        $prodis = $query->get();
         return response()->json([
             'status' => 'success',
+            'message' => 'Daftar program studi berhasil diambil',
             'data' => $prodis
         ]);
     }
@@ -361,42 +395,106 @@ class AkademikController extends Controller
     // --- KURIKULUM CRUD ---
     public function listKurikulum(Request $request)
     {
+        Gate::authorize('siakad.kurikulum.read');
+        $user = $request->user();
         $query = Kurikulum::with(['programStudi', 'mataKuliahs']);
+
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+            $allowedProdiIds = $user->getSiakadProdiIds();
+            if ($allowedProdiIds->isNotEmpty()) {
+                $query->whereIn('program_studi_id', $allowedProdiIds);
+            }
+        } elseif ($request->filled('program_studi_id')) {
+            $query->where('program_studi_id', $request->program_studi_id);
+        }
 
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(fn($q) => $q->where('nama', 'like', "%{$s}%")->orWhere('kode', 'like', "%{$s}%"));
         }
 
-        if ($request->filled('program_studi_id')) {
-            $query->where('program_studi_id', $request->program_studi_id);
+        if ($request->filled('status')) {
+            $status = strtolower((string) $request->query('status'));
+            $query->where('is_active', in_array($status, ['aktif', 'active', 'true', '1'], true));
+        } elseif ($request->filled('is_active')) {
+            $query->where('is_active', filter_var($request->query('is_active'), FILTER_VALIDATE_BOOLEAN));
+        } else {
+            $query->where('is_active', true);
         }
 
-        $data = $query->paginate($request->integer('per_page', 15));
+        $allowedSorts = ['kode', 'nama', 'tahun_berlaku', 'total_sks_lulus', 'created_at'];
+        $sortBy = in_array($request->query('sort_by'), $allowedSorts, true)
+            ? $request->query('sort_by')
+            : 'tahun_berlaku';
+        $sortOrder = strtolower((string) $request->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
 
+        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
+            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+            $data = $query->paginate($perPage);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Daftar kurikulum berhasil diambil',
+                'data' => $data->items(),
+                'meta' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ]
+            ]);
+        }
+
+        $kurikulums = $query->get();
         return response()->json([
             'status' => 'success',
-            'data' => $data->items(),
-            'meta' => [
-                'current_page' => $data->currentPage(),
-                'per_page' => $data->perPage(),
-                'total' => $data->total(),
-            ]
+            'message' => 'Daftar kurikulum berhasil diambil',
+            'data' => $kurikulums
         ]);
     }
 
     public function storeKurikulum(Request $request)
     {
-        $request->validate([
-            'program_studi_id' => ['required', Rule::exists(ProgramStudi::class, 'id')],
+        Gate::authorize('siakad.kurikulum.manage');
+        $user = $request->user();
+        $validated = $request->validate([
+            'program_studi_id' => ['nullable', Rule::exists(ProgramStudi::class, 'id')],
             'kode' => 'required|string|unique:siakad_kurikulum,kode',
             'nama' => 'required|string|max:255',
             'tahun_berlaku' => 'required|integer',
             'total_sks_lulus' => 'required|integer|min:100',
             'deskripsi' => 'nullable|string',
+            'is_active' => 'boolean',
         ]);
 
-        $kurikulum = Kurikulum::create($request->all());
+        if (empty($validated['program_studi_id'])) {
+            $prodiIds = $user && method_exists($user, 'getSiakadProdiIds') ? $user->getSiakadProdiIds() : collect();
+            $validated['program_studi_id'] = $prodiIds->first();
+            if (empty($validated['program_studi_id'])) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Program studi wajib ditentukan.'
+                ], 422);
+            }
+        }
+
+        $kurikulum = Kurikulum::create($validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_kurikulum',
+                recordId: $kurikulum->id,
+                oldValues: null,
+                newValues: $kurikulum->toArray(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
@@ -407,15 +505,34 @@ class AkademikController extends Controller
 
     public function updateKurikulum(Request $request, $id)
     {
+        Gate::authorize('siakad.kurikulum.manage');
         $kurikulum = Kurikulum::findOrFail($id);
-        $request->validate([
+        $oldValues = $kurikulum->getOriginal();
+        $validated = $request->validate([
+            'kode' => 'nullable|string|max:50',
             'nama' => 'required|string|max:255',
-            'tahun_berlaku' => 'required|integer',
-            'total_sks_lulus' => 'required|integer|min:100',
+            'tahun_berlaku' => 'nullable|integer',
+            'total_sks_lulus' => 'nullable|integer|min:100',
             'deskripsi' => 'nullable|string',
+            'is_active' => 'boolean',
         ]);
 
-        $kurikulum->update($request->all());
+        $kurikulum->update($validated);
+        $newValues = $kurikulum->getChanges();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_kurikulum',
+                recordId: $kurikulum->id,
+                oldValues: $oldValues,
+                newValues: $newValues,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
@@ -426,6 +543,7 @@ class AkademikController extends Controller
 
     public function destroyKurikulum($id)
     {
+        Gate::authorize('siakad.kurikulum.manage');
         $kurikulum = Kurikulum::findOrFail($id);
         if ($kurikulum->mataKuliahs()->exists()) {
             return response()->json(['status' => 'error', 'message' => 'Kurikulum tidak dapat dihapus karena masih memiliki mata kuliah.'], 422);
@@ -444,6 +562,15 @@ class AkademikController extends Controller
         Gate::authorize('siakad.kurikulum.read');
 
         $query = MataKuliah::with(['kurikulum.programStudi', 'prasyarats.prasyarat']);
+
+        // Scoped user: batasi pada MK dari kurikulum prodinya (cermin listKurikulum).
+        $user = $request->user();
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+            $allowedProdiIds = $user->getSiakadProdiIds();
+            if ($allowedProdiIds->isNotEmpty()) {
+                $query->whereHas('kurikulum', fn($q) => $q->whereIn('program_studi_id', $allowedProdiIds));
+            }
+        }
 
         if ($request->filled('search')) {
             $s = $request->search;
@@ -464,6 +591,14 @@ class AkademikController extends Controller
             $query->where('tipe', $request->tipe);
         }
 
+        if ($request->filled('semester_anjuran')) {
+            $query->where('semester_anjuran', (int) $request->semester_anjuran);
+        }
+
+        if ($request->filled('is_active')) {
+            $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
+        }
+
         if ($request->filled('angkatan')) {
             $angkatan = (int) $request->angkatan;
             $exactExists = Kurikulum::where('tahun_berlaku', $angkatan)->exists();
@@ -479,7 +614,7 @@ class AkademikController extends Controller
 
         $sortColumn = $request->input('sort_by', 'nama');
         $sortOrder = $request->input('sort_order') === 'desc' ? 'desc' : 'asc';
-        $allowedSorts = ['nama', 'kode_mk', 'total_sks', 'semester_anjuran', 'tipe', 'created_at'];
+        $allowedSorts = ['nama', 'kode_mk', 'total_sks', 'semester_anjuran', 'tipe', 'is_active', 'created_at'];
         if (in_array($sortColumn, $allowedSorts)) {
             $query->orderBy($sortColumn, $sortOrder);
         } else {
@@ -547,7 +682,7 @@ class AkademikController extends Controller
     // --- DOSEN CRUD ---
     public function listDosen(Request $request)
     {
-        $query = Dosen::with(['programStudi']);
+        $query = Dosen::with(['programStudi', 'user']);
 
         if ($request->filled('search')) {
             $s = $request->search;

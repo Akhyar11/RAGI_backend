@@ -14,7 +14,7 @@ class UpdateTemplateSuratRequest extends FormRequest
 
     public function rules(): array
     {
-        $template = $this->route('template_surat');
+        $template = $this->route('templateSurat');
         $id = is_object($template) ? $template->id : $template;
 
         return [
@@ -26,6 +26,15 @@ class UpdateTemplateSuratRequest extends FormRequest
             ],
             'nama' => 'required|string|max:150',
             'jenis_surat' => 'required|string|max:50',
+            'hasil' => 'nullable|string|in:diterima,ditolak',
+            'label_keputusan' => 'nullable|string|max:150',
+            'teks_pernyataan' => 'nullable|string',
+            'teks_prodi' => 'nullable|string|max:255',
+            'teks_penutup' => 'nullable|string',
+            'judul_petunjuk' => 'nullable|string|max:150',
+            'module_id' => 'nullable|integer|exists:core_modules,id',
+            'klasifikasi_surat_id' => 'nullable|integer|exists:core_arsip_klasifikasi,id',
+            'unit_surat_id' => 'nullable|integer|exists:core_arsip_klasifikasi,id',
             'jalur_masuk_id' => 'nullable|integer|exists:spmb_jalur_masuk,id',
             'gelombang_id' => 'nullable|integer|exists:spmb_gelombang_penerimaan,id',
             'is_active' => 'nullable|boolean',

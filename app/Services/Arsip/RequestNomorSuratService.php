@@ -216,6 +216,13 @@ class RequestNomorSuratService
                     }
                 }
             }
+
+            if ($referenceType === \App\Models\Spmb\PendaftaranCalonMhs::class || $referenceType === 'spmb_pendaftaran' || str_ends_with($referenceType, 'PendaftaranCalonMhs')) {
+                $pendaftaran = \App\Models\Spmb\PendaftaranCalonMhs::find($referenceId);
+                if ($pendaftaran) {
+                    $pendaftaran->update(['nomor_sk' => $nomorSurat]);
+                }
+            }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning("Gagal sinkronisasi nomor surat ke {$referenceType} #{$referenceId}: " . $e->getMessage());
         }

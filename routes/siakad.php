@@ -95,6 +95,17 @@ Route::prefix('akademik')->group(function () {
     Route::put('/prodi/{id}', [AkademikController::class, 'updateProgramStudi']);
     Route::delete('/prodi/{id}', [AkademikController::class, 'destroyProgramStudi']);
 
+    // Admin OBE Homebase Prodi CRUD & Role Menu Plotting
+    Route::get('/admin-prodi', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'index']);
+    Route::post('/admin-prodi', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'store']);
+    Route::get('/admin-prodi/{id}', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'show']);
+    Route::put('/admin-prodi/{id}', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'update']);
+    Route::delete('/admin-prodi/{id}', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'destroy']);
+    Route::post('/admin-prodi/{id}/impersonate', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'impersonate']);
+    Route::get('/admin-obe-roles', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'getAdminObeEligibleRoles']);
+    Route::get('/admin-obe-role-menus/{roleId}', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'getAdminObeRoleMenus']);
+    Route::post('/admin-obe-role-menus/{roleId}', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'assignAdminObeRoleMenus']);
+
     Route::get('/kurikulum', [AkademikController::class, 'listKurikulum']);
     Route::post('/kurikulum', [AkademikController::class, 'storeKurikulum']);
     Route::put('/kurikulum/{id}', [AkademikController::class, 'updateKurikulum']);
@@ -192,11 +203,41 @@ Route::prefix('obe')->group(function () {
 
     Route::get('/cpl', [ObeController::class, 'getCpl']);
     Route::post('/cpl', [ObeController::class, 'storeCpl']);
+    Route::put('/cpl/{id}', [ObeController::class, 'updateCpl']);
+    Route::delete('/cpl/{id}', [ObeController::class, 'destroyCpl']);
     Route::get('/cpmk', [ObeController::class, 'getCpmk']);
     Route::post('/cpmk', [ObeController::class, 'storeCpmk']);
     Route::get('/sub-cpmk', [ObeController::class, 'getSubCpmk']);
     Route::post('/sub-cpmk', [ObeController::class, 'storeSubCpmk']);
     Route::delete('/sub-cpmk/{id}', [ObeController::class, 'deleteSubCpmk']);
+
+    // --- Master OBE Tambahan (Rumpun MK, Jenis CPL, Rubrik, Distribusi MK) ---
+    Route::get('/rumpun-mk', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'listRumpunMk']);
+    Route::post('/rumpun-mk', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'storeRumpunMk']);
+    Route::put('/rumpun-mk/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'updateRumpunMk']);
+    Route::delete('/rumpun-mk/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'destroyRumpunMk']);
+
+    Route::get('/jenis-cpl', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'listJenisCpl']);
+    Route::post('/jenis-cpl', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'storeJenisCpl']);
+    Route::put('/jenis-cpl/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'updateJenisCpl']);
+    Route::delete('/jenis-cpl/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'destroyJenisCpl']);
+
+    Route::get('/profesi-karir', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'listProfesiKarir']);
+    Route::post('/profesi-karir', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'storeProfesiKarir']);
+    Route::put('/profesi-karir/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'updateProfesiKarir']);
+    Route::delete('/profesi-karir/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'destroyProfesiKarir']);
+
+    Route::get('/rubrik', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'listRubrik']);
+    Route::get('/rubrik/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'showRubrik']);
+    Route::post('/rubrik', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'storeRubrik']);
+    Route::put('/rubrik/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'updateRubrik']);
+    Route::delete('/rubrik/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'destroyRubrik']);
+
+    Route::get('/distribusi-mengajar', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'listDistribusiMengajar']);
+    Route::post('/distribusi-mengajar', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'storeDistribusiMengajar']);
+    Route::put('/distribusi-mengajar/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'updateDistribusiMengajar']);
+    Route::delete('/distribusi-mengajar/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'destroyDistribusiMengajar']);
+    Route::get('/distribusi-matakuliah', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'getDistribusiMataKuliah']);
 
     // --- Profil Lulusan & Bahan Kajian ---
     Route::get('/profil-lulusan', [ObeController::class, 'getProfilLulusan']);

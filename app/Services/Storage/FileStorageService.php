@@ -128,6 +128,48 @@ class FileStorageService
     }
 
     /**
+     * Simpan berkas hasil generate (mis. PDF dari Dompdf) ke "<baseDir>/Y/m/".
+     * Nama berkas tetap mengikuti pola aman: UUID + ekstensi, bukan nama dari pengguna.
+     *
+     * @return string Path relatif untuk disimpan ke DB
+     */
+    public function storeContents(string $contents, string $baseDir, string $extension = 'pdf', ?string $disk = null, bool $private = false): string
+    {
+        $diskName = $this->resolveDisk($disk, $private);
+        $extension = strtolower(ltrim($extension, '.'));
+
+        $this->assertAllowedExtension($extension);
+
+        $directory = trim($baseDir, '/').'/'.date('Y/m');
+        $fileName = (string) Str::uuid().($extension !== '' ? '.'.$extension : '');
+
+        Storage::disk($diskName)->put($directory.'/'.$fileName, $contents);
+
+        return $directory.'/'.$fileName;
+    }
+
+    /**
+     * Ambil berkas sebagai data URI (base64) untuk disematkan ke dokumen
+     * (mis. kop surat pada PDF Dompdf). Mengembalikan null bila berkas tidak ada.
+     */
+    public function dataUri(?string $path, ?string $disk = null, bool $private = false): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        try {
+            $tmp = $this->temporaryLocalPath($path, $disk, $private);
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        $mime = @mime_content_type($tmp) ?: 'image/png';
+
+        return 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($tmp));
+    }
+
+    /**
      * Cek keberadaan file. Otomatis fallback ke disk legacy (public/local)
      * selama masa migrasi local -> R2.
      */

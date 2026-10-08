@@ -13,6 +13,7 @@ class MenuSeeder extends Seeder
     public function run(): void
     {
         Schema::disableForeignKeyConstraints();
+        DB::table('core_menu_role')->truncate();
         Menu::truncate();
         Schema::enableForeignKeyConstraints();
 
@@ -170,17 +171,27 @@ $menus = \App\Support\MenuCatalog::definitions();
             $tendikRole->menus()->syncWithoutDetaching($tendikSimpegMenuIds);
         }
 
-        // Dosen: portal SIAKAD (jadwal, KRS bimbingan, nilai, CPMK/RPS, hasil studi, panduan)
+        // Dosen & Admin OBE Homebase Prodi: portal SIAKAD
         if ($dosenRole) {
             $dosenSiakadMenuIds = Menu::where('module', 'siakad')
                 ->whereIn('url', [
                     '/siakad',
                     '#perkuliahan_siakad',
-                    '/siakad/perkuliahan/kelas',
-                    '/siakad/krs',
                     '/siakad/nilai',
+                    '/siakad/bimbingan',
+                    '#obe_siakad',
+                    '/siakad/obe/tahun-kurikulum',
+                    '/siakad/obe/rumpun-mk',
+                    '/siakad/obe/jenis-cpl',
+                    '/siakad/obe/matakuliah',
+                    '/siakad/obe/distribusi-mk',
+                    '/siakad/obe/rubrik',
                     '/siakad/obe/cpmk',
-                    '/siakad/obe/rps',
+                    '#skl_siakad',
+                    '/siakad/obe/profil-lulusan',
+                    '/siakad/obe/profesi',
+                    '/siakad/obe/cpl',
+                    '/siakad/obe/pemetaan-cpl-pl',
                     '/siakad/hasil-studi',
                     '/siakad/civitas/mahasiswa',
                     '/siakad/panduan',
@@ -313,6 +324,50 @@ $menus = \App\Support\MenuCatalog::definitions();
         $adminSpmbRole = \App\Models\Role::where('slug', 'admin_spmb')->first();
         if ($adminSpmbRole) {
             $adminSpmbRole->menus()->syncWithoutDetaching($spmbMenuIds);
+        }
+
+        // Attach ARSIP menus to Arsip admin role (slug resmi: admin_arsip)
+        $arsipMenuIds = Menu::where('module', 'arsip')->pluck('id')->toArray();
+        $adminArsipRole = \App\Models\Role::where('slug', 'admin_arsip')->first();
+        if ($adminArsipRole) {
+            $adminArsipRole->menus()->syncWithoutDetaching($arsipMenuIds);
+        }
+
+        // Attach SIAKAD menus to SIAKAD admin role (slug resmi: admin_siakad)
+        // Admin SIAKAD / BAAK difokuskan pada manajemen operasional BAAK & Master Akademik.
+        // Menu operasional dosen murni / OBE detail prodi (KHS/Transkrip, Penilaian Kelas OBE, CPMK, RPS, Bank Soal, Ketertiban Nilai Dosen) tidak perlu masuk ke Admin SIAKAD.
+        $adminSiakadMenuIds = Menu::where('module', 'siakad')
+            ->whereIn('url', [
+                '/siakad',
+                '#perkuliahan_siakad',
+                '/siakad/perkuliahan/kelas',
+                '/siakad/krs',
+                '/siakad/obe', // Pemantauan OBE Global Institusi
+                '#civitas_siakad',
+                '/siakad/civitas/mahasiswa',
+                '/siakad/civitas/konversi',
+                '/siakad/civitas/dosen',
+                '/siakad/civitas/biodata',
+                '/siakad/civitas/beasiswa',
+                '#master_siakad',
+                '/siakad/master/tahun-akademik',
+                '/siakad/master/fakultas',
+                '/siakad/master/kurikulum',
+                '/siakad/master/matakuliah',
+                '/siakad/master/skala-nilai',
+                '/siakad/master/konfigurasi-penilaian',
+                '/siakad/master/referensi',
+                '/siakad/master/tipe-referensi',
+                '#feeder_siakad',
+                '/siakad/feeder-sync',
+                '/siakad/panduan',
+            ])
+            ->pluck('id')
+            ->toArray();
+
+        $adminSiakadRole = \App\Models\Role::where('slug', 'admin_siakad')->first();
+        if ($adminSiakadRole) {
+            $adminSiakadRole->menus()->sync($adminSiakadMenuIds);
         }
     }
 }

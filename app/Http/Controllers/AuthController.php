@@ -356,7 +356,7 @@ class AuthController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Profil pengguna berhasil diambil',
-            'data' => $request->user()->load(['roles', 'roles.permissions', 'pegawai', 'mahasiswa'])
+            'data' => $request->user()->load(['roles', 'roles.permissions', 'pegawai', 'mahasiswa', 'siakadAdminProdis.programStudi.fakultas'])
         ]);
     }
 

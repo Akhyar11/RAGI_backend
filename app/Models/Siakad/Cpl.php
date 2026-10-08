@@ -15,15 +15,32 @@ class Cpl extends Model
 
     protected $fillable = [
         'program_studi_id',
+        'kurikulum_id',
+        'jenis_cpl_id',
         'kode_cpl',
         'kategori',
+        'jenis_list',
         'deskripsi',
         'is_active',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'program_studi_id' => 'integer',
+        'kurikulum_id' => 'integer',
+        'jenis_cpl_id' => 'integer',
+        'jenis_list' => 'array',
     ];
+
+    public function kurikulum()
+    {
+        return $this->belongsTo(Kurikulum::class, 'kurikulum_id');
+    }
+
+    public function jenisCpl()
+    {
+        return $this->belongsTo(JenisCpl::class, 'jenis_cpl_id');
+    }
 
     public function programStudi()
     {

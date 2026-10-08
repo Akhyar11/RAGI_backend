@@ -93,6 +93,11 @@ class RoleSeeder extends Seeder
                 'description' => 'Pengelola operasional laboratorium, aset lab, peminjaman alat lab, & tiket perbaikan lab binaan',
             ],
             [
+                'name' => 'Admin SIAKAD (BAAK)',
+                'slug' => 'admin_siakad',
+                'description' => 'Administrator Sistem Informasi Akademik & Kurikulum (BAAK/Akademik)',
+            ],
+            [
                 'name' => 'Admin SPMB',
                 'slug' => 'admin_spmb',
                 'description' => 'Administrator Penerimaan Mahasiswa Baru (SPMB)',

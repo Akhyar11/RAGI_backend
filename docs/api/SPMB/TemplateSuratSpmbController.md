@@ -22,6 +22,7 @@ Mengelola **Template Surat Keputusan (SK) dan Surat Resmi SPMB** secara dinamis.
 | PUT | `/api/spmb/template-surat/{id}` | Perbarui template surat | ✅ |
 | DELETE | `/api/spmb/template-surat/{id}` | Hapus template surat (soft delete) | ✅ |
 | GET | `/api/spmb/template-surat/{id}/preview` | Pratinjau cetak PDF template surat (dummy data) | ✅ |
+| GET | `/api/spmb/template-surat-arsip-opsi` | Opsi master Arsip (klasifikasi & unit pengolah) untuk konfigurasi penomoran SK | ✅ `spmb.manage` |
 
 > Semua endpoint dilindungi middleware `auth:sanctum` dan izin `can:spmb.manage`. Pengguna tanpa otorisasi akan menerima response `401 Unauthorized` atau `403 Forbidden`.
 
@@ -148,6 +149,9 @@ Membuat template surat baru di database.
     "kode": "SK_LULUS_PRESTASI_2026",
     "nama": "Template SK Kelulusan Jalur Prestasi",
     "jenis_surat": "sk_lulus",
+    "module_id": 4,
+    "klasifikasi_surat_id": 8,
+    "unit_surat_id": 14,
     "jalur_masuk_id": 2,
     "gelombang_id": null,
     "is_active": true,
@@ -166,6 +170,8 @@ Membuat template surat baru di database.
     "catatan_kaki": "SK Kelulusan ini sah dan diterbitkan secara elektronik oleh sistem SPMB kampus terintegrasi."
 }
 ```
+
+> **Integrasi Arsip (opsional):** `module_id` merujuk ke Master Modul (`core_modules.id`), `klasifikasi_surat_id` & `unit_surat_id` merujuk ke Master Klasifikasi/Unit Arsip (`core_arsip_klasifikasi.id`). Bila ketiganya diisi, penerbitan SK (`POST /api/spmb/pendaftaran/{id}/terbitkan-sk`) akan memakai penomoran resmi modul Arsip. Bila kosong, SK memakai format nomor internal SPMB (`format_nomor_surat`).
 
 ### Response Sukses
 
@@ -257,6 +263,9 @@ Memperbarui data konfigurasi template surat yang sudah ada.
     "kode": "SK_LULUS_DEFAULT",
     "nama": "Template Standar SK Kelulusan SPMB (Revisi 2026)",
     "jenis_surat": "sk_lulus",
+    "module_id": 4,
+    "klasifikasi_surat_id": 8,
+    "unit_surat_id": 14,
     "jalur_masuk_id": null,
     "gelombang_id": null,
     "is_active": true,
@@ -339,6 +348,37 @@ Melakukan rendering dan pratinjau langsung template surat ke dalam stream dokume
 - **Content-Type**: `application/pdf`
 - **Content-Disposition**: `inline; filename="Preview-Template-SK_LULUS_DEFAULT.pdf"`
 - **Body**: Binary PDF stream dokumen SK Tanda Lulus.
+
+---
+
+## [GET] /api/spmb/template-surat-arsip-opsi
+
+> Mengambil opsi master modul **Arsip** yang diperlukan untuk mengonfigurasi penomoran SK: daftar **Klasifikasi Surat** dan **Kode Unit Pengolah** (hanya yang aktif). Endpoint ini disediakan agar admin SPMB (permission `spmb.manage`) dapat mengisi referensi penomoran tanpa memerlukan permission master Arsip.
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Opsi master Arsip berhasil diambil.",
+    "data": {
+        "klasifikasi": [
+            { "id": 8, "kode": "DVIII", "nama": "Surat Keterangan", "kategori": "klasifikasi" }
+        ],
+        "unit": [
+            { "id": 14, "kode": "SPMB", "nama": "Panitia Penerimaan Mahasiswa Baru", "kategori": "unit" }
+        ]
+    }
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Akses ditolak." }
+```
 
 ---
 

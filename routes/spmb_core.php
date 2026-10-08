@@ -51,6 +51,7 @@ Route::post('pendaftaran/reset', [CalonMahasiswaController::class, 'resetPendaft
 
 Route::get('pendaftaran/{id}', [PendaftaranController::class, 'show']);
 Route::get('pendaftaran/{id}/sk-lulus', [PendaftaranController::class, 'downloadSkLulus']);
+Route::middleware('can:spmb.manage')->post('pendaftaran/{id}/terbitkan-sk', [PendaftaranController::class, 'terbitkanSk']);
 Route::post('pendaftaran/{id}/status', [PendaftaranController::class, 'updateStatus']);
 Route::post('pendaftaran/berkas/{id}/verify', [PendaftaranController::class, 'verifyBerkas']);
 Route::middleware('can:spmb.manage')->post('pendaftaran/{id}/konversi-mahasiswa', [PendaftaranController::class, 'konversiMahasiswa']);
@@ -109,6 +110,8 @@ Route::middleware('can:spmb.manage')->group(function () {
     Route::post('master/biaya/{id}/restore', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'restore']);
 
     // Template Surat SPMB
-    Route::get('template-surat/{template_surat}/preview', [\App\Http\Controllers\API\Spmb\TemplateSuratSpmbController::class, 'preview']);
-    Route::apiResource('template-surat', \App\Http\Controllers\API\Spmb\TemplateSuratSpmbController::class);
+    Route::get('template-surat-arsip-opsi', [\App\Http\Controllers\API\Spmb\TemplateSuratSpmbController::class, 'arsipOptions']);
+    Route::get('template-surat/{templateSurat}/preview', [\App\Http\Controllers\API\Spmb\TemplateSuratSpmbController::class, 'preview']);
+    Route::apiResource('template-surat', \App\Http\Controllers\API\Spmb\TemplateSuratSpmbController::class)
+        ->parameters(['template-surat' => 'templateSurat']);
 });

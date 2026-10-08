@@ -218,9 +218,47 @@ Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata
 
 ---
 
+## [GET] /api/v1/siakad/akademik/kurikulum
+
+Mengambil daftar kurikulum (tahun kurikulum OBE). Tanpa parameter paginasi, mengembalikan seluruh data aktif; dengan `page`/`per_page`/`limit`, mengembalikan envelope paginasi standar (`data` + `meta`).
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `search` | string | ❌ | — | Cari `nama` / `kode` |
+| `program_studi_id` | integer | ❌ | — | Filter ID program studi |
+| `status` | string | ❌ | aktif saja | `aktif` / `nonaktif` (tanpa parameter ini hanya kurikulum aktif yang dikembalikan) |
+| `is_active` | boolean | ❌ | — | Alternatif filter status (`true` / `false`) |
+| `sort_by` | string | ❌ | `tahun_berlaku` | `kode`, `nama`, `tahun_berlaku`, `total_sks_lulus`, `created_at`; nilai di luar daftar itu diabaikan dan fallback ke `tahun_berlaku` |
+| `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
+| `per_page` | integer | ❌ | `15` | Maks. 100 (alias: `limit`) |
+| `page` | integer | ❌ | `1` | Halaman |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "data": [
+        { "id": 1, "program_studi_id": 1, "kode": "KUR-2026-TI", "nama": "Kurikulum OBE Berbasis MBKM 2026", "tahun_berlaku": 2026, "total_sks_lulus": 144, "is_active": true }
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 }
+}
+```
+
+### Catatan Tambahan
+
+> - `DELETE /kurikulum/{id}` ditolak (422) bila kurikulum masih memiliki mata kuliah.
+> - Relasi `programStudi` dan `mataKuliahs` ikut dimuat (`with`) pada setiap item.
+
+---
+
 ## [GET] /api/v1/siakad/akademik/matakuliah
 
 Mengambil daftar mata kuliah kurikulum (paginated).
+
+> **Scope prodi (2026-10-08):** user scoped (non-admin tanpa role `admin`/`admin_siakad`) yang memiliki mapping prodi hanya melihat MK dari kurikulum prodinya (`kurikulum.program_studi_id ∈ getSiakadProdiIds()`), cermin `listKurikulum`.
 
 ### Query Parameters
 

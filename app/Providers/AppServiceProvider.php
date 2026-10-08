@@ -118,6 +118,31 @@ class AppServiceProvider extends ServiceProvider
             \App\Policies\Lms\ForumTopikPolicy::class
         );
 
+        // Gate siakad.kurikulum.read untuk melihat daftar kurikulum & mata kuliah & master OBE
+        Gate::define('siakad.kurikulum.read', function (User $user) {
+            return $user->isSuperAdmin()
+                || $user->hasRole('admin')
+                || $user->hasRole('admin_siakad')
+                || $user->hasPermission('siakad.master.manage')
+                || $user->hasPermission('siakad.matakuliah.manage')
+                || $user->hasPermission('siakad.kelas.read')
+                || $user->hasPermission('siakad.dashboard.read')
+                || $user->hasPermission('siakad.krs.read')
+                || $user->hasPermission('siakad.nilai.read')
+                || $user->hasPermission('siakad.nilai.manage')
+                || (method_exists($user, 'getSiakadProdiIds') && $user->getSiakadProdiIds()->isNotEmpty());
+        });
+
+        // Gate siakad.kurikulum.manage untuk membuat/mengubah/menghapus master kurikulum & OBE
+        Gate::define('siakad.kurikulum.manage', function (User $user) {
+            return $user->isSuperAdmin()
+                || $user->hasRole('admin')
+                || $user->hasRole('admin_siakad')
+                || $user->hasPermission('siakad.master.manage')
+                || $user->hasPermission('siakad.matakuliah.manage')
+                || (method_exists($user, 'getSiakadProdiIds') && $user->getSiakadProdiIds()->isNotEmpty());
+        });
+
         // Bimbingan PA — menambah catatan bimbingan.
         // Dosen PA/kaprodi/admin lewat `siakad.krs.approve` & `siakad.mahasiswa.manage`,
         // mahasiswa menambah catatan atas dirinya sendiri lewat `siakad.krs.create`.

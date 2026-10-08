@@ -10,6 +10,7 @@ use App\Models\Sikeu\TagihanMahasiswa;
 use App\Services\AuditLogService;
 use App\Services\Spmb\SpmbKonversiService;
 use App\Services\Spmb\SpmbPendaftaranService;
+use App\Services\Storage\FileStorageService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,7 @@ class PendaftaranController extends Controller
     public function __construct(
         private SpmbPendaftaranService $pendaftaranService,
         private SpmbKonversiService $konversiService,
+        private FileStorageService $fileStorage,
     ) {}
 
     /**
@@ -267,7 +269,6 @@ class PendaftaranController extends Controller
             ], 400);
         }
 
-        $pdf = $this->pendaftaranService->generateSkLulusPdf($pendaftaran);
         $filename = 'SK-Tanda-Lulus-'.$pendaftaran->no_pendaftaran.'.pdf';
 
         try {
@@ -287,9 +288,68 @@ class PendaftaranController extends Controller
             Log::warning('Gagal mencatat audit log: ' . $e->getMessage());
         }
 
+        // Bila SK sudah pernah diterbitkan & diarsipkan, sajikan berkas tersimpan (privat).
+        if ($pendaftaran->sk_file_path && $this->fileStorage->exists($pendaftaran->sk_file_path, private: true)) {
+            return $this->fileStorage->download($pendaftaran->sk_file_path, $filename, private: true);
+        }
+
+        $pdf = $this->pendaftaranService->generateSkLulusPdf($pendaftaran);
+
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
+    }
+
+    /**
+     * Terbitkan & arsipkan SK Tanda Lulus: ajukan nomor ke modul Arsip,
+     * setujui otomatis, lalu simpan PDF secara privat pada pendaftaran.
+     */
+    public function terbitkanSk(Request $request, $id): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user || (! $user->isSuperAdmin() && ! $user->hasPermission('spmb.manage') && ! $user->hasPermission('spmb.pendaftaran.update'))) {
+            return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses untuk menerbitkan SK.'], 403);
+        }
+
+        $pendaftaran = PendaftaranCalonMhs::findOrFail($id);
+
+        $isLulus = $pendaftaran->status === PendaftaranCalonMhs::STATUS_LULUS_ADMINISTRASI
+            || $pendaftaran->status === PendaftaranCalonMhs::STATUS_MAHASISWA_BARU
+            || ($pendaftaran->hasilSeleksi && $pendaftaran->hasilSeleksi->status === HasilSeleksi::STATUS_LULUS);
+
+        if (! $isLulus) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'SK Tanda Lulus hanya dapat diterbitkan untuk pendaftaran yang sudah dinyatakan lulus seleksi.',
+            ], 400);
+        }
+
+        $result = $this->pendaftaranService->terbitkanDanArsipkanSk($pendaftaran, (int) $request->user()->id);
+
+        try {
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'create',
+                tableName: $pendaftaran->getTable(),
+                recordId: $pendaftaran->id,
+                oldValues: null,
+                newValues: [
+                    'no_pendaftaran' => $pendaftaran->no_pendaftaran,
+                    'nomor_sk' => $result['nomor_sk'],
+                    'sk_file_path' => $result['sk_file_path'],
+                    'jenis_dokumen' => 'SK_TANDA_LULUS',
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'SK Tanda Lulus berhasil diterbitkan dan diarsipkan.',
+            'data' => $result,
         ]);
     }
 }

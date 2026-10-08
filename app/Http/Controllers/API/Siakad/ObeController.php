@@ -44,29 +44,203 @@ class ObeController extends Controller
     // --- CPL (Capaian Pembelajaran Lulusan) ---
     public function getCpl(Request $request)
     {
-        $query = Cpl::with('programStudi');
-        if ($request->filled('program_studi_id')) {
+        Gate::authorize('siakad.kurikulum.read');
+        $user = $request->user();
+        $query = Cpl::with(['programStudi', 'kurikulum', 'jenisCpl']);
+
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+            $allowedProdiIds = $user->getSiakadProdiIds();
+            if ($allowedProdiIds->isNotEmpty()) {
+                $query->whereIn('program_studi_id', $allowedProdiIds);
+            }
+        } elseif ($request->filled('program_studi_id')) {
             $query->where('program_studi_id', $request->program_studi_id);
         }
+
+        if ($request->filled('kurikulum_id')) {
+            $query->where('kurikulum_id', $request->integer('kurikulum_id'));
+        }
+        if ($request->filled('kategori')) {
+            $cat = $request->kategori;
+            $query->where(fn($q) => $q->where('kategori', $cat)->orWhere('jenis_list', 'like', "%{$cat}%"));
+        }
+        if ($request->filled('jenis_cpl_id')) {
+            $query->where('jenis_cpl_id', $request->integer('jenis_cpl_id'));
+        }
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(fn($q) => $q->where('kode_cpl', 'like', "%{$s}%")->orWhere('deskripsi', 'like', "%{$s}%"));
+        }
+        if ($request->has('is_active') && $request->is_active !== '' && $request->is_active !== null) {
+            $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
+        }
+
+        $allowedSorts = ['kode_cpl', 'kategori', 'created_at', 'id'];
+        $sortBy = in_array($request->query('sort_by'), $allowedSorts, true)
+            ? $request->query('sort_by')
+            : 'kode_cpl';
+        $sortOrder = strtolower((string) $request->query('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
+            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+            $data = $query->paginate($perPage);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Daftar CPL berhasil diambil',
+                'data' => $data->items(),
+                'meta' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ],
+            ]);
+        }
+
         return response()->json([
             'status' => 'success',
+            'message' => 'Daftar CPL berhasil diambil',
             'data' => $query->get()
         ]);
     }
 
     public function storeCpl(StoreCplRequest $request)
     {
+        $user = $request->user();
+        if (!$user || !($user->isSuperAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'))) {
+            return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses.'], 403);
+        }
+
         $validated = $request->validated();
+
+        if (empty($validated['program_studi_id']) && !empty($validated['kurikulum_id'])) {
+            $kur = \App\Models\Siakad\Kurikulum::find($validated['kurikulum_id']);
+            $validated['program_studi_id'] = $kur?->program_studi_id;
+        }
+
+        if (empty($validated['program_studi_id'])) {
+            $user = $request->user();
+            $prodiIds = $user && method_exists($user, 'getSiakadProdiIds') ? $user->getSiakadProdiIds() : collect();
+            $validated['program_studi_id'] = $prodiIds->first();
+            if (empty($validated['program_studi_id'])) {
+                return response()->json(['status' => 'error', 'message' => 'Program studi wajib ditentukan.'], 422);
+            }
+        }
 
         $cpl = Cpl::updateOrCreate(
             ['program_studi_id' => $validated['program_studi_id'], 'kode_cpl' => $validated['kode_cpl']],
-            ['kategori' => $validated['kategori'], 'deskripsi' => $validated['deskripsi'], 'is_active' => true]
+            [
+                'kurikulum_id' => $validated['kurikulum_id'] ?? null,
+                'jenis_cpl_id' => $validated['jenis_cpl_id'] ?? null,
+                'kategori' => $validated['kategori'],
+                'jenis_list' => $validated['jenis_list'] ?? null,
+                'deskripsi' => $validated['deskripsi'],
+                'is_active' => $validated['is_active'] ?? true,
+            ]
         );
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_cpl',
+                recordId: $cpl->id,
+                oldValues: null,
+                newValues: $cpl->toArray(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
             'message' => 'CPL berhasil disimpan',
-            'data' => $cpl
+            'data' => $cpl->load(['programStudi', 'kurikulum', 'jenisCpl'])
+        ], 201);
+    }
+
+    public function updateCpl(StoreCplRequest $request, int $id)
+    {
+        $user = $request->user();
+        if (!$user || !($user->isSuperAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'))) {
+            return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses.'], 403);
+        }
+
+        $cpl = Cpl::findOrFail($id);
+        $old = $cpl->getOriginal();
+        $validated = $request->validated();
+
+        if (empty($validated['program_studi_id']) && !empty($validated['kurikulum_id'])) {
+            $kur = \App\Models\Siakad\Kurikulum::find($validated['kurikulum_id']);
+            $validated['program_studi_id'] = $kur?->program_studi_id ?? $cpl->program_studi_id;
+        }
+
+        $cpl->update([
+            'program_studi_id' => $validated['program_studi_id'] ?? $cpl->program_studi_id,
+            'kurikulum_id' => $validated['kurikulum_id'] ?? null,
+            'jenis_cpl_id' => $validated['jenis_cpl_id'] ?? null,
+            'kode_cpl' => $validated['kode_cpl'] ?? $cpl->kode_cpl,
+            'kategori' => $validated['kategori'] ?? $cpl->kategori,
+            'jenis_list' => $validated['jenis_list'] ?? $cpl->jenis_list,
+            'deskripsi' => $validated['deskripsi'] ?? $cpl->deskripsi,
+            'is_active' => $validated['is_active'] ?? $cpl->is_active,
+        ]);
+        $new = $cpl->getChanges();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_cpl',
+                recordId: $cpl->id,
+                oldValues: $old,
+                newValues: $new,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'CPL berhasil diperbarui',
+            'data' => $cpl->load(['programStudi', 'kurikulum', 'jenisCpl'])
+        ]);
+    }
+
+    public function destroyCpl(Request $request, int $id)
+    {
+        $user = $request->user();
+        if (!$user || (! $user->isSuperAdmin() && ! $user->hasRole('admin') && ! $user->hasRole('admin_siakad') && ! $user->hasPermission('siakad.kurikulum.manage') && ! $user->hasPermission('siakad.master.manage'))) {
+            return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses.'], 403);
+        }
+
+        $cpl = Cpl::findOrFail($id);
+        $old = $cpl->getOriginal();
+        $cpl->delete();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_cpl',
+                recordId: $id,
+                oldValues: $old,
+                newValues: null,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'CPL berhasil dihapus',
+            'data' => null,
         ]);
     }
 
@@ -1725,16 +1899,30 @@ class ObeController extends Controller
             'catatan_revisi' => 'nullable|string',
         ]);
 
+        $rps = \App\Models\Siakad\Rps::with('mataKuliah.kurikulum')->findOrFail($id);
+        $prodiId = $rps->mataKuliah?->kurikulum?->program_studi_id;
+
         $user = $request->user();
-        if (!$user->isSuperAdmin() && !$user->isAdmin() && !$user->hasRole('kaprodi') && !$user->hasRole('wakil_prodi')) {
+        if (!$user) {
+            return response()->json(['status' => 'error', 'message' => 'Unauthenticated.'], 401);
+        }
+
+        $canApprove = false;
+        if ($user->isSuperAdmin() || $user->hasPermission('siakad.master.manage') || $user->hasPermission('siakad.kurikulum.manage')) {
+            $canApprove = true;
+        } elseif ($prodiId && $user->canApproveRpsForProdi($prodiId)) {
+            $canApprove = true;
+        }
+
+        if (!$canApprove) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Anda tidak memiliki hak akses (Kaprodi / Wakil Kaprodi) untuk melakukan verifikasi RPS.'
+                'message' => 'Anda tidak memiliki hak akses untuk memverifikasi/menyetujui RPS program studi ini.'
             ], 403);
         }
 
-        $rps = \App\Models\Siakad\Rps::findOrFail($id);
         $dosen = \App\Models\Siakad\Dosen::where('user_id', $user?->id)->first();
+        $oldValues = $rps->getOriginal();
 
         $rps->update([
             'status' => $request->status,
@@ -1743,10 +1931,24 @@ class ObeController extends Controller
             'disetujui_at' => $request->status === 'disetujui' ? now() : null,
         ]);
 
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: $request->status === 'disetujui' ? 'approve' : 'reject',
+                tableName: 'siakad_rps',
+                recordId: $rps->id,
+                oldValues: $oldValues,
+                newValues: $rps->getChanges(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log approve RPS: ' . $e->getMessage());
+        }
+
         return response()->json([
             'status' => 'success',
             'message' => $request->status === 'disetujui'
-                ? 'RPS berhasil diverifikasi dan disetujui oleh Kaprodi.'
+                ? 'RPS berhasil diverifikasi dan disetujui.'
                 : 'RPS dikembalikan ke Dosen Pengembang dengan catatan revisi.',
             'data' => $rps
         ]);
@@ -1818,43 +2020,121 @@ class ObeController extends Controller
     // --- Profil Lulusan (PL) ---
     public function getProfilLulusan(Request $request)
     {
-        $query = ProfilLulusan::with(['programStudi', 'cpls']);
-        if ($request->filled('program_studi_id')) {
+        Gate::authorize('siakad.kurikulum.read');
+        $user = $request->user();
+        $query = ProfilLulusan::with(['programStudi', 'cpls', 'kurikulum']);
+
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+            $allowedProdiIds = $user->getSiakadProdiIds();
+            $query->whereIn('program_studi_id', $allowedProdiIds);
+        } elseif ($request->filled('program_studi_id')) {
             $query->where('program_studi_id', $request->program_studi_id);
         }
+
+        if ($request->filled('kurikulum_id')) {
+            $query->where('kurikulum_id', $request->kurikulum_id);
+        }
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('kode_pl', 'like', "%{$s}%")
+                  ->orWhere('nama', 'like', "%{$s}%")
+                  ->orWhere('deskripsi', 'like', "%{$s}%");
+            });
+        }
+
+        $allowedSorts = ['kode_pl', 'nama', 'urutan', 'id', 'created_at'];
+        $sortBy = in_array($request->query('sort_by'), $allowedSorts, true) ? $request->query('sort_by') : 'kode_pl';
+        $sortOrder = strtolower((string) $request->query('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
+            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+            $data = $query->paginate($perPage);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Daftar profil lulusan berhasil diambil',
+                'data' => $data->items(),
+                'meta' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ]
+            ]);
+        }
+
         return response()->json([
             'status' => 'success',
+            'message' => 'Daftar profil lulusan berhasil diambil',
             'data' => $query->get()
         ]);
     }
 
     public function storeProfilLulusan(Request $request)
     {
-        $request->validate([
-            'program_studi_id' => 'required|exists:siakad_program_studi,id',
+        Gate::authorize('siakad.kurikulum.manage');
+        $user = $request->user();
+        $validated = $request->validate([
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'kurikulum_id' => 'nullable|exists:siakad_kurikulum,id',
             'kode_pl' => 'required|string|max:50',
             'nama' => 'required|string|max:255',
             'deskripsi' => 'required|string',
             'urutan' => 'nullable|integer',
         ]);
 
+        if (empty($validated['program_studi_id'])) {
+            $prodiIds = $user && method_exists($user, 'getSiakadProdiIds') ? $user->getSiakadProdiIds() : collect();
+            $validated['program_studi_id'] = $prodiIds->first();
+            if (empty($validated['program_studi_id'])) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Program studi wajib ditentukan.'
+                ], 422);
+            }
+        }
+
+        $existingPl = ProfilLulusan::where('program_studi_id', $validated['program_studi_id'])
+            ->where('kode_pl', $validated['kode_pl'])
+            ->first();
+        $oldValues = $existingPl ? $existingPl->getOriginal() : null;
+
         $pl = ProfilLulusan::updateOrCreate(
             [
-                'program_studi_id' => $request->program_studi_id,
-                'kode_pl' => $request->kode_pl
+                'program_studi_id' => $validated['program_studi_id'],
+                'kode_pl' => $validated['kode_pl']
             ],
             [
-                'nama' => $request->nama,
-                'deskripsi' => $request->deskripsi,
-                'urutan' => $request->urutan ?? 1,
+                'kurikulum_id' => $validated['kurikulum_id'] ?? null,
+                'nama' => $validated['nama'],
+                'deskripsi' => $validated['deskripsi'],
+                'urutan' => $validated['urutan'] ?? 1,
             ]
         );
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: $pl->wasRecentlyCreated ? 'create' : 'update',
+                tableName: 'siakad_profil_lulusan',
+                recordId: $pl->id,
+                oldValues: $oldValues,
+                newValues: $pl->wasRecentlyCreated ? $pl->toArray() : $pl->getChanges(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
             'message' => 'Profil Lulusan berhasil disimpan',
-            'data' => $pl
-        ]);
+            'data' => $pl->load(['programStudi', 'kurikulum'])
+        ], 201);
     }
 
     public function deleteProfilLulusan($id)
@@ -1870,14 +2150,30 @@ class ObeController extends Controller
 
     public function mapProfilLulusanCpl(Request $request)
     {
+        Gate::authorize('siakad.kurikulum.manage');
         $request->validate([
             'profil_lulusan_id' => 'required|exists:siakad_profil_lulusan,id',
-            'cpl_ids' => 'required|array',
+            'cpl_ids' => 'present|array',
             'cpl_ids.*' => 'exists:siakad_cpl,id',
         ]);
 
         $pl = ProfilLulusan::findOrFail($request->profil_lulusan_id);
-        $pl->cpls()->sync($request->cpl_ids);
+        $oldIds = $pl->cpls()->pluck('siakad_cpl.id')->toArray();
+        $pl->cpls()->sync($request->cpl_ids ?? []);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'map_cpl',
+                tableName: 'siakad_profil_lulusan_cpl',
+                recordId: $pl->id,
+                oldValues: ['cpl_ids' => $oldIds],
+                newValues: ['cpl_ids' => $request->cpl_ids ?? []],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
@@ -1939,14 +2235,30 @@ class ObeController extends Controller
 
     public function mapMataKuliahBahanKajian(Request $request)
     {
+        Gate::authorize('siakad.kurikulum.manage');
         $request->validate([
             'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
-            'bahan_kajian_ids' => 'required|array',
+            'bahan_kajian_ids' => 'present|array',
             'bahan_kajian_ids.*' => 'exists:siakad_bahan_kajian,id',
         ]);
 
         $mk = MataKuliah::findOrFail($request->mata_kuliah_id);
-        $mk->bahanKajians()->sync($request->bahan_kajian_ids);
+        $oldIds = $mk->bahanKajians()->pluck('siakad_bahan_kajian.id')->toArray();
+        $mk->bahanKajians()->sync($request->bahan_kajian_ids ?? []);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'map_bahan_kajian',
+                tableName: 'siakad_mata_kuliah_bahan_kajian',
+                recordId: $mk->id,
+                oldValues: ['bahan_kajian_ids' => $oldIds],
+                newValues: ['bahan_kajian_ids' => $request->bahan_kajian_ids ?? []],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
@@ -2031,7 +2343,7 @@ class ObeController extends Controller
             ->when($prodiId, function($q) use ($prodiId) {
                 $q->whereHas('kurikulum', fn($k) => $k->where('program_studi_id', $prodiId));
             })
-            ->orderBy('semester_default')
+            ->orderBy('semester_anjuran')
             ->orderBy('kode_mk')
             ->get();
 
@@ -2066,7 +2378,8 @@ class ObeController extends Controller
                 'kode_mk' => $mk->kode_mk,
                 'nama' => $mk->nama,
                 'total_sks' => $mk->total_sks,
-                'semester_default' => $mk->semester_default,
+                'semester_default' => $mk->semester_anjuran,
+                'semester_anjuran' => $mk->semester_anjuran,
                 'program_studi' => [
                     'id' => $mk->kurikulum?->programStudi?->id,
                     'nama' => $mk->kurikulum?->programStudi?->nama,

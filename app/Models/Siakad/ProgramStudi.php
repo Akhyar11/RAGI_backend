@@ -100,4 +100,19 @@ class ProgramStudi extends Model
             ->withPivot('keterangan')
             ->withTimestamps();
     }
+
+    /**
+     * Relasi ke Penugasan Admin OBE / Tim Kurikulum Prodi SIAKAD
+     */
+    public function adminProdis()
+    {
+        return $this->hasMany(\App\Models\Siakad\AdminProdi::class, 'program_studi_id');
+    }
+
+    public function obeAdmins()
+    {
+        return $this->belongsToMany(\App\Models\User::class, 'siakad_admin_prodi', 'program_studi_id', 'user_id')
+            ->withPivot(['jabatan', 'can_approve_rps', 'is_active', 'assigned_by'])
+            ->withTimestamps();
+    }
 }

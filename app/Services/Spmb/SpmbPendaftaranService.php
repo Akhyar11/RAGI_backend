@@ -15,6 +15,10 @@ use App\Models\Spmb\PendaftaranAlur;
 use App\Models\Spmb\MasterTipeJalurAlur;
 use App\Models\Siakad\TahunAkademik;
 use App\Models\Spmb\TemplateSuratSpmb;
+use App\Models\Arsip\RequestNomorSurat;
+use App\Services\Arsip\RequestNomorSuratService;
+use App\Services\Arsip\KopSuratService;
+use App\Services\Storage\FileStorageService;
 use App\Services\AuditLogService;
 use Illuminate\Support\Facades\Log;
 use Dompdf\Dompdf;
@@ -22,7 +26,12 @@ use Dompdf\Options;
 
 class SpmbPendaftaranService
 {
-    public function __construct(private SpmbReferralService $referralService) {}
+    public function __construct(
+        private SpmbReferralService $referralService,
+        private RequestNomorSuratService $requestNomorService,
+        private KopSuratService $kopSuratService,
+        private FileStorageService $fileStorage,
+    ) {}
 
     /**
      * Submit pendaftaran dari draft ke submitted
@@ -437,6 +446,8 @@ class SpmbPendaftaranService
      */
     public function generateSkLulusPdf(PendaftaranCalonMhs $pendaftaran, ?TemplateSuratSpmb $template = null): string
     {
+        \Carbon\Carbon::setLocale('id');
+
         $pendaftaran->loadMissing([
             'gelombangPenerimaan.jalurMasuk',
             'programStudi',
@@ -491,20 +502,59 @@ class SpmbPendaftaranService
             'kota' => $template?->kota_penetapan ?? 'Surakarta',
         ];
 
-        // Format nomor surat
+        // Format nomor surat: utamakan nomor definitif dari modul Arsip bila sudah terbit.
         $nomorSuratFormat = $template?->format_nomor_surat ?: 'SKL/SPMB/{tahun}/{romawi_bulan}/{no_pendaftaran}';
-        $nomorSurat = $this->replacePlaceholders($nomorSuratFormat, $placeholders);
+        $nomorSurat = $pendaftaran->nomor_sk ?: $this->replacePlaceholders($nomorSuratFormat, $placeholders);
 
-        // Kop
-        $kopInstitusi = $template?->kop_nama_institusi ?: config('app.institution_name', config('app.name', 'UNIVERSITAS INDONUSA'));
+        // Kop: utamakan master Kop Surat Arsip (per tahun), fallback ke kop template SPMB.
+        $kopArsip = $this->kopSuratService->getKopSuratByTahun((int) date('Y'));
+        $kopInstitusi = $kopArsip?->nama_institusi
+            ?: ($template?->kop_nama_institusi ?: config('app.institution_name', config('app.name', 'UNIVERSITAS INDONUSA')));
         $kopSub = $template?->kop_nama_sub ?: 'PANITIA PENERIMAAN MAHASISWA BARU (SPMB)';
-        $kopKontak = $this->replacePlaceholders($template?->kop_alamat_kontak ?: "Sekretariat SPMB Kampus Terpadu • Email: spmb@kampus.ac.id • Website: spmb.kampus.ac.id\nTahun Akademik {tahun_akademik}", $placeholders);
+        $kopKontakArsip = $kopArsip
+            ? trim(implode(' • ', array_filter([
+                $kopArsip->alamat_institusi,
+                $kopArsip->kontak_institusi,
+                $kopArsip->website_institusi,
+            ])))
+            : '';
+        $kopKontak = $kopKontakArsip !== ''
+            ? $kopKontakArsip
+            : $this->replacePlaceholders($template?->kop_alamat_kontak ?: "Sekretariat SPMB Kampus Terpadu • Email: spmb@kampus.ac.id • Website: spmb.kampus.ac.id\nTahun Akademik {tahun_akademik}", $placeholders);
+
+        // Gambar kop surat resmi dari master Arsip (disematkan sebagai data URI untuk Dompdf).
+        $kopSuratDataUri = $kopArsip?->file_path
+            ? $this->fileStorage->dataUri($kopArsip->file_path, private: true)
+            : null;
+
+        // Tinggi gambar kop saat direntang penuh selebar A4 (untuk reserve margin header tiap halaman).
+        $kopSuratHeightMm = null;
+        if ($kopArsip?->file_path) {
+            try {
+                $tmpKop = $this->fileStorage->temporaryLocalPath($kopArsip->file_path, private: true);
+                $dim = @getimagesize($tmpKop);
+                if ($dim && ($dim[0] ?? 0) > 0) {
+                    $kopSuratHeightMm = round(210 * $dim[1] / $dim[0], 2);
+                }
+            } catch (\Throwable $e) {
+                $kopSuratHeightMm = null;
+            }
+        }
 
         // Judul, Teks, Petunjuk
         $judulSurat = $template?->judul_surat ?: 'SURAT KETERANGAN TANDA LULUS SELEKSI';
         $teksPembuka = $this->replacePlaceholders($template?->teks_pembuka ?: 'Berdasarkan hasil evaluasi verifikasi kelengkapan berkas administrasi dan pemenuhan syarat seleksi penerimaan mahasiswa baru Tahun Akademik {tahun_akademik}, Panitia Penerimaan Mahasiswa Baru menyatakan bahwa:', $placeholders);
-        $teksKeputusan = $this->replacePlaceholders($template?->teks_keputusan ?: 'DINYATAKAN LULUS / DITERIMA', $placeholders);
+        // Logika keputusan Diterima/Ditolak + teks yang dapat diedit penuh.
+        $hasil = $template?->hasil ?: TemplateSuratSpmb::HASIL_DITERIMA;
+        $teksKeputusanDefault = ($hasil === TemplateSuratSpmb::HASIL_DITOLAK) ? 'DINYATAKAN TIDAK LULUS' : 'DINYATAKAN LULUS / DITERIMA';
+        $teksKeputusan = $this->replacePlaceholders($template?->teks_keputusan ?: $teksKeputusanDefault, $placeholders);
         $petunjukDaftarUlang = $this->replacePlaceholders($template?->petunjuk_daftar_ulang ?: "1. Calon mahasiswa yang dinyatakan lulus wajib melakukan Daftar Ulang melalui portal resmi SPMB pada menu Daftar Ulang.\n2. Selesaikan pembayaran biaya registrasi/UKT menggunakan nomor Virtual Account resmi yang tertera pada invoice tagihan Anda sebelum batas waktu yang ditentukan.\n3. Setelah pembayaran daftar ulang terkonfirmasi lunas, sistem akan menerbitkan Nomor Induk Mahasiswa (NIM) resmi dan akun akademik mahasiswa baru.\n4. Surat keterangan ini sah dan dihasilkan secara otomatis oleh Sistem Informasi Penerimaan Mahasiswa Baru terintegrasi.", $placeholders);
+
+        $labelKeputusan = $template?->label_keputusan ?: 'Keputusan Hasil Seleksi:';
+        $teksPernyataan = $this->replacePlaceholders($template?->teks_pernyataan ?: 'Sehubungan dengan hasil seleksi penerimaan mahasiswa baru tersebut di atas, dengan ini dinyatakan:', $placeholders);
+        $teksProdi = $this->replacePlaceholders($template?->teks_prodi ?: 'Program Studi: {prodi_diterima} ({jenjang})', $placeholders);
+        $teksPenutup = $this->replacePlaceholders($template?->teks_penutup ?: 'Demikian surat keterangan ini dibuat untuk dipergunakan sebagaimana mestinya.', $placeholders);
+        $judulPetunjuk = $template?->judul_petunjuk ?: 'Petunjuk & Ketentuan Daftar Ulang:';
 
         // Pejabat & Tanda Tangan
         $kotaPenetapan = $template?->kota_penetapan ?: 'Surakarta';
@@ -515,17 +565,25 @@ class SpmbPendaftaranService
 
         $html = view('spmb.sk-tanda-lulus', [
             'pendaftaran' => $pendaftaran,
-            'tahunAkademik' => $tahunAkademik,
+            'tahunAkademik' => $tahunAkademikNama,
             'generatedAt' => now(),
             'template' => $template,
             'nomorSurat' => $nomorSurat,
             'kopInstitusi' => $kopInstitusi,
             'kopSub' => $kopSub,
             'kopKontak' => $kopKontak,
+            'kopSuratDataUri' => $kopSuratDataUri,
+            'kopSuratHeightMm' => $kopSuratHeightMm,
             'judulSurat' => $judulSurat,
             'teksPembuka' => $teksPembuka,
+            'teksPernyataan' => $teksPernyataan,
             'teksKeputusan' => $teksKeputusan,
+            'labelKeputusan' => $labelKeputusan,
+            'teksProdi' => $teksProdi,
+            'teksPenutup' => $teksPenutup,
+            'hasil' => $hasil,
             'petunjukDaftarUlang' => $petunjukDaftarUlang,
+            'judulPetunjuk' => $judulPetunjuk,
             'kotaPenetapan' => $kotaPenetapan,
             'namaPenandatangan' => $namaPenandatangan,
             'jabatanPenandatangan' => $jabatanPenandatangan,
@@ -545,6 +603,91 @@ class SpmbPendaftaranService
         $dompdf->render();
 
         return (string) $dompdf->output();
+    }
+
+    /**
+     * Mengajukan nomor surat SK Tanda Lulus ke modul Arsip.
+     * Klasifikasi & unit diambil dinamis dari master KlasifikasiSurat melalui konfigurasi template.
+     */
+    public function requestNomorSkArsip(PendaftaranCalonMhs $pendaftaran, ?TemplateSuratSpmb $template, int $userId): ?RequestNomorSurat
+    {
+        if (! $template) {
+            return null;
+        }
+
+        $template->loadMissing(['module', 'klasifikasiSurat', 'unitSurat']);
+
+        $kodeKlasifikasi = $template->klasifikasiSurat?->kode;
+        $kodeUnit = $template->unitSurat?->kode;
+
+        // Belum dikonfigurasi di template → biarkan SK memakai format nomor internal SPMB.
+        if (! $kodeKlasifikasi || ! $kodeUnit) {
+            return null;
+        }
+
+        return $this->requestNomorService->createRequest([
+            'module_origin' => $template->module?->code,
+            'reference_type' => PendaftaranCalonMhs::class,
+            'reference_id' => $pendaftaran->id,
+            'perihal' => 'SK Tanda Lulus Seleksi '.($pendaftaran->nama_lengkap ?? '-'),
+            'tujuan' => $pendaftaran->nama_lengkap,
+            'tanggal_surat' => now()->toDateString(),
+            'kode_unit' => $kodeUnit,
+            'kode_klasifikasi' => $kodeKlasifikasi,
+            'jumlah_nomor' => 1,
+            'catatan_pemohon' => 'Penerbitan SK Tanda Lulus SPMB untuk '.$pendaftaran->no_pendaftaran,
+        ], $userId);
+    }
+
+    /**
+     * Terbitkan & arsipkan SK Tanda Lulus: minta nomor ke Arsip, setujui, generate PDF,
+     * lalu simpan berkas secara privat dan catat pathnya pada pendaftaran.
+     *
+     * @return array{nomor_sk: ?string, sk_file_path: string, sk_file_url: ?string}
+     */
+    public function terbitkanDanArsipkanSk(PendaftaranCalonMhs $pendaftaran, int $userId): array
+    {
+        $pendaftaran->loadMissing(['gelombangPenerimaan.jalurMasuk']);
+
+        $jalurId = $pendaftaran->gelombangPenerimaan?->jalur_masuk_id;
+        $template = $this->resolveTemplateSurat($jalurId, $pendaftaran->gelombang_id, 'sk_lulus');
+
+        // 1. Ajukan nomor ke modul Arsip (sekali saja).
+        if (! $pendaftaran->sk_arsip_request_id) {
+            $request = $this->requestNomorSkArsip($pendaftaran, $template, $userId);
+            if ($request) {
+                $pendaftaran->sk_arsip_request_id = $request->id;
+                $pendaftaran->save();
+            }
+        }
+
+        // 2. Setujui otomatis agar nomor definitif terbit & tersinkron ke pendaftaran.
+        if ($pendaftaran->sk_arsip_request_id) {
+            $arsipRequest = $pendaftaran->skArsipRequest()->first();
+            if ($arsipRequest && $arsipRequest->status === 'menunggu_verifikasi') {
+                $this->requestNomorService->verifyRequest(
+                    $arsipRequest->id,
+                    'setujui',
+                    'Penerbitan SK Tanda Lulus SPMB.',
+                    $userId
+                );
+            }
+        }
+
+        // 3. Generate PDF (memakai nomor definitif bila ada) lalu simpan privat.
+        $pendaftaran->refresh();
+        $pdf = $this->generateSkLulusPdf($pendaftaran, $template);
+        $path = $this->fileStorage->storeContents($pdf, 'spmb/sk-tanda-lulus', 'pdf', private: true);
+
+        $pendaftaran->sk_file_path = $path;
+        $pendaftaran->sk_generated_at = now();
+        $pendaftaran->save();
+
+        return [
+            'nomor_sk' => $pendaftaran->nomor_sk,
+            'sk_file_path' => $path,
+            'sk_file_url' => $this->fileStorage->url($path),
+        ];
     }
 
     /**
@@ -575,7 +718,7 @@ class SpmbPendaftaranService
         }
 
         $template = TemplateSuratSpmb::create($data);
-        $template->load(['jalurMasuk', 'gelombang']);
+        $template->load(['jalurMasuk', 'gelombang', 'module', 'klasifikasiSurat', 'unitSurat']);
 
         try {
             AuditLogService::record(
@@ -601,7 +744,7 @@ class SpmbPendaftaranService
     {
         $oldValues = $template->getOriginal();
         $template->update($data);
-        $template->load(['jalurMasuk', 'gelombang']);
+        $template->load(['jalurMasuk', 'gelombang', 'module', 'klasifikasiSurat', 'unitSurat']);
         $newValues = $template->getChanges();
 
         try {

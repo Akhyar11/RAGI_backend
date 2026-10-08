@@ -43,5 +43,25 @@ class AdminUserSeeder extends Seeder
                 ['assigned_by' => $superadmin->id, 'valid_from' => now()->toDateString(), 'created_at' => now()]
             );
         }
+
+        // 2. Seed Admin SIAKAD (BAAK)
+        $adminSiakad = $createOrRestoreUser(
+            'adminsiakad@campus.ac.id',
+            [
+                'username'    => 'admin_siakad',
+                'name'        => 'Admin Siakad',
+                'password'    => Hash::make('password'),
+                'is_active'   => true,
+                'is_verified' => true,
+            ]
+        );
+
+        $roleAdminSiakad = Role::where('slug', 'admin_siakad')->first();
+        if ($roleAdminSiakad && $adminSiakad) {
+            DB::table('core_user_roles')->updateOrInsert(
+                ['user_id' => $adminSiakad->id, 'role_id' => $roleAdminSiakad->id],
+                ['assigned_by' => $superadmin?->id, 'valid_from' => now()->toDateString(), 'created_at' => now()]
+            );
+        }
     }
 }

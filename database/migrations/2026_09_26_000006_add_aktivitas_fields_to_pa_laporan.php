@@ -9,7 +9,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('siakad_pa_laporan', function (Blueprint $table) {
+            $table->dropForeign(['dosen_id']);
+            $table->dropForeign(['tahun_akademik_id']);
             $table->dropUnique(['dosen_id', 'tahun_akademik_id']);
+            $table->foreign('dosen_id')->references('id')->on('siakad_dosen')->cascadeOnDelete();
+            $table->foreign('tahun_akademik_id')->references('id')->on('siakad_tahun_akademik')->cascadeOnDelete();
 
             $table->date('tanggal')->nullable()->after('tahun_akademik_id');
             $table->string('kelas', 100)->nullable()->after('tanggal');

@@ -111,6 +111,112 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function siakadAdminProdis()
+    {
+        return $this->hasMany(\App\Models\Siakad\AdminProdi::class, 'user_id');
+    }
+
+    public function obeProdis()
+    {
+        return $this->belongsToMany(\App\Models\Siakad\ProgramStudi::class, 'siakad_admin_prodi', 'user_id', 'program_studi_id')
+            ->withPivot(['jabatan', 'can_approve_rps', 'is_active', 'assigned_by'])
+            ->withTimestamps();
+    }
+
+    /**
+     * Dapatkan daftar ID Program Studi yang menjadi wewenang user dalam Modul SIAKAD / OBE.
+     * Bersumber dari:
+     * 1. Global Admin (SuperAdmin / Admin / Admin SIAKAD / BAAK) -> Seluruh prodi aktif.
+     * 2. Direct Assignment tabel `siakad_admin_prodi` (Admin OBE Prodi / Tim Kurikulum).
+     * 3. Jabatan struktural Kaprodi di `siakad_program_studi.kaprodi_id`.
+     * 4. Homebase Dosen untuk role Kaprodi / Wakil Prodi.
+     *
+     * @return \Illuminate\Support\Collection<int>
+     */
+    public function getSiakadProdiIds(): \Illuminate\Support\Collection
+    {
+        if ($this->isSuperAdmin() || $this->hasRole('admin') || $this->hasRole('admin_siakad')) {
+            return \App\Models\Siakad\ProgramStudi::where('is_active', true)->pluck('id');
+        }
+
+        // 1. Direct assignment di siakad_admin_prodi
+        $prodiDirect = \Illuminate\Support\Facades\DB::table('siakad_admin_prodi')
+            ->where('user_id', $this->id)
+            ->where('is_active', true)
+            ->pluck('program_studi_id');
+
+        // 2. Pejabat kaprodi terdaftar di master prodi
+        $dosen = \App\Models\Siakad\Dosen::where('user_id', $this->id)->first();
+        $prodiKaprodi = collect();
+        if ($dosen) {
+            $prodiKaprodi = \App\Models\Siakad\ProgramStudi::where('kaprodi_id', $dosen->id)->pluck('id');
+        }
+
+        // 3. Homebase dosen bila user ber-role kaprodi/wakil_prodi
+        $prodiHomebase = collect();
+        if (($this->hasRole('kaprodi') || $this->hasRole('wakil_prodi')) && $dosen && $dosen->program_studi_id) {
+            $prodiHomebase = collect([$dosen->program_studi_id]);
+        }
+
+        return $prodiDirect
+            ->concat($prodiKaprodi)
+            ->concat($prodiHomebase)
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Cek apakah user memiliki hak kelola OBE di program studi tertentu.
+     */
+    public function canManageObeForProdi(int|string $prodiId): bool
+    {
+        if ($this->isSuperAdmin() || $this->hasRole('admin') || $this->hasRole('admin_siakad')) {
+            return true;
+        }
+
+        return $this->getSiakadProdiIds()->contains((int) $prodiId);
+    }
+
+    /**
+     * Cek apakah user berhak memverifikasi/menyetujui RPS di program studi tertentu.
+     */
+    public function canApproveRpsForProdi(int|string $prodiId): bool
+    {
+        if ($this->isSuperAdmin() || $this->hasRole('admin') || $this->hasRole('admin_siakad')) {
+            return true;
+        }
+
+        $prodiId = (int) $prodiId;
+
+        // Cek direct assignment dengan flag can_approve_rps
+        $hasDirect = \App\Models\Siakad\AdminProdi::where('user_id', $this->id)
+            ->where('program_studi_id', $prodiId)
+            ->where('is_active', true)
+            ->where('can_approve_rps', true)
+            ->exists();
+
+        if ($hasDirect) {
+            return true;
+        }
+
+        // Kaprodi prodi tersebut
+        $dosen = \App\Models\Siakad\Dosen::where('user_id', $this->id)->first();
+        if ($dosen) {
+            $isKaprodi = \App\Models\Siakad\ProgramStudi::where('id', $prodiId)
+                ->where('kaprodi_id', $dosen->id)
+                ->exists();
+            if ($isKaprodi) {
+                return true;
+            }
+
+            if (($this->hasRole('kaprodi') || $this->hasRole('wakil_prodi')) && $dosen->program_studi_id === $prodiId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Dapatkan daftar ID Program Studi yang terikat wewenangnya dengan user di SINAPRA.
      * Bersumber dari:

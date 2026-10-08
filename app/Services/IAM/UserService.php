@@ -251,7 +251,7 @@ class UserService
                 'token' => $token,
                 'access_token' => $token,
                 'token_type' => 'Bearer',
-                'user' => $targetUser->load(['roles', 'roles.permissions']),
+                'user' => $targetUser->load(['roles', 'roles.permissions', 'siakadAdminProdis.programStudi.fakultas', 'pegawai', 'mahasiswa']),
                 'impersonated_by' => [
                     'id' => $admin->id,
                     'username' => $admin->username,

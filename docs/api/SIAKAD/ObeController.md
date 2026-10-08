@@ -17,8 +17,10 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, k
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
 | GET | `/api/v1/siakad/obe/dashboard` | Ringkasan OBE | ✅ |
-| GET | `/api/v1/siakad/obe/cpl` | Daftar CPL | ✅ |
+| GET | `/api/v1/siakad/obe/cpl` | Daftar CPL (search, filter prodi/kurikulum/kategori/jenis/status, sort whitelist, pagination) | ✅ |
 | POST | `/api/v1/siakad/obe/cpl` | Tambah CPL | ✅ |
+| PUT | `/api/v1/siakad/obe/cpl/{id}` | Perbarui CPL | ✅ |
+| DELETE | `/api/v1/siakad/obe/cpl/{id}` | Hapus CPL (soft delete) | ✅ |
 | GET | `/api/v1/siakad/obe/cpmk` | Daftar CPMK | ✅ |
 | POST | `/api/v1/siakad/obe/cpmk` | Tambah CPMK | ✅ |
 | GET | `/api/v1/siakad/obe/profil-lulusan` | Daftar Profil Lulusan | ✅ |
@@ -57,10 +59,27 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, k
 |---|---|---|---|---|
 | `search` | string | ❌ | — | Cari kode/nama |
 | `program_studi_id` | integer | ❌ | — | Filter program studi |
-| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `nama`, `id` |
+| `kurikulum_id` | integer | ❌ | — | Filter kurikulum (CPL, Profil Lulusan) |
+| `kategori` | string | ❌ | — | Filter kategori CPL (`sikap`, `pengetahuan`, `keterampilan_umum`, `keterampilan_khusus`); cocok ke kolom `kategori` atau isi `jenis_list` (multi) |
+| `jenis_cpl_id` | integer | ❌ | — | Filter jenis CPL (`siakad_jenis_cpl`) |
+| `is_active` | boolean | ❌ | — | Filter status aktif (CPL) |
+| `sort_by` | string | ❌ | `created_at` | Umum: `created_at`, `updated_at`, `nama`, `id`; CPL whitelist: `kode_cpl`, `kategori`, `created_at`, `id` (default `kode_cpl` asc) |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 | `page` | integer | ❌ | `1` | Halaman |
+
+### Body `POST /api/v1/siakad/obe/cpl` & `PUT /api/v1/siakad/obe/cpl/{id}`
+
+| Field | Type | Wajib | Deskripsi |
+|---|---|---|---|
+| `program_studi_id` | integer | ❌ bila `kurikulum_id` diisi | FK `siakad_program_studi`; diturunkan dari kurikulum bila kosong |
+| `kurikulum_id` | integer | ❌ | FK `siakad_kurikulum` |
+| `jenis_cpl_id` | integer | ❌ | FK `siakad_jenis_cpl` |
+| `kode_cpl` | string | ✅ | Kode unik per prodi, maks 50 |
+| `kategori` | string | ✅ | Kode master `kategori_cpl` (kategori utama; bila multi, kirim yang pertama) |
+| `jenis_list` | array | ❌ | Daftar kode kategori tambahan (multiple choice, mis. `["sikap","pengetahuan"]`) |
+| `deskripsi` | string | ✅ | Deskripsi capaian |
+| `is_active` | boolean | ❌ | Default `true` |
 
 ---
 

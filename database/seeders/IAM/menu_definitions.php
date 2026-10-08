@@ -218,22 +218,45 @@ return [
                 'order_index' => 4,
             ],
             [
-                'name' => 'PERKULIAHAN & OBE',
+                'name' => 'PERKULIAHAN (AKADEMIK)',
                 'url' => '#perkuliahan_siakad',
                 'icon' => 'FaCalendarCheck',
                 'module' => 'siakad',
-                'order_index' => 5,
+                'order_index' => 4,
                 'children' => [
                     ['name' => 'Kelas & Jadwal', 'url' => '/siakad/perkuliahan/kelas', 'icon' => 'FaCalendarCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.kelas.read', 'order_index' => 1],
                     ['name' => 'KRS Mahasiswa', 'url' => '/siakad/krs', 'icon' => 'FaClipboardCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.krs.read', 'order_index' => 2],
                     ['name' => 'Penilaian Kelas (OBE)', 'url' => '/siakad/nilai', 'icon' => 'FaPen', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 3],
-                    ['name' => 'Pemantauan OBE', 'url' => '/siakad/obe', 'icon' => 'FaChartBar', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 4],
-                    ['name' => 'CPL & Kurikulum', 'url' => '/siakad/obe/cpl', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 5],
-                    ['name' => 'CPMK Mata Kuliah', 'url' => '/siakad/obe/cpmk', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 6],
-                    ['name' => 'RPS & Verifikasi', 'url' => '/siakad/obe/rps', 'icon' => 'FaFileAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 7],
-                    ['name' => 'Bank Soal', 'url' => '/siakad/obe/soal', 'icon' => 'FaBookOpen', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 8],
-                    ['name' => 'Ketertiban Dosen Nilai', 'url' => '/siakad/obe/kepatuhan', 'icon' => 'FaUserCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 9],
-                    ['name' => 'Bimbingan PA', 'url' => '/siakad/bimbingan', 'icon' => 'FaHandshake', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 10],
+                    ['name' => 'Bimbingan PA', 'url' => '/siakad/bimbingan', 'icon' => 'FaHandshake', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 4],
+                ]
+            ],
+            [
+                'name' => 'MASTER',
+                'url' => '#obe_siakad',
+                'icon' => 'FaDatabase',
+                'module' => 'siakad',
+                'order_index' => 5,
+                'children' => [
+                    ['name' => 'Tahun Kurikulum', 'url' => '/siakad/obe/tahun-kurikulum', 'icon' => 'FaCalendarCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 1],
+                    ['name' => 'Rumpun Mata Kuliah', 'url' => '/siakad/obe/rumpun-mk', 'icon' => 'FaLayers', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
+                    ['name' => 'Jenis CPL', 'url' => '/siakad/obe/jenis-cpl', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 3],
+                    ['name' => 'Mata Kuliah', 'url' => '/siakad/obe/matakuliah', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 4],
+                    ['name' => 'Distribusi Mata Kuliah', 'url' => '/siakad/obe/distribusi-mk', 'icon' => 'FaThList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 5],
+                    ['name' => 'Rubrik Penilaian', 'url' => '/siakad/obe/rubrik', 'icon' => 'FaCheckSquare', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 6],
+                    ['name' => 'CPMK Mata Kuliah', 'url' => '/siakad/obe/cpmk', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 7],
+                ]
+            ],
+            [
+                'name' => 'RUMUSAN SKL',
+                'url' => '#skl_siakad',
+                'icon' => 'FaAward',
+                'module' => 'siakad',
+                'order_index' => 55,
+                'children' => [
+                    ['name' => 'Profil Lulusan (PL)', 'url' => '/siakad/obe/profil-lulusan', 'icon' => 'FaUserGraduate', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 1],
+                    ['name' => 'Profesi', 'url' => '/siakad/obe/profesi', 'icon' => 'FaBriefcase', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
+                    ['name' => 'Perumusan CPL Prodi', 'url' => '/siakad/obe/cpl', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 3],
+                    ['name' => 'Pemetaan CPL-PL', 'url' => '/siakad/obe/pemetaan-cpl-pl', 'icon' => 'FaTh', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 4],
                 ]
             ],
             [
@@ -259,12 +282,10 @@ return [
                 'children' => [
                     ['name' => 'Tahun Akademik', 'url' => '/siakad/master/tahun-akademik', 'icon' => 'FaCalendarCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 1],
                     ['name' => 'Fakultas & Prodi', 'url' => '/siakad/master/fakultas', 'icon' => 'FaBuilding', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 2],
-                    ['name' => 'Kurikulum OBE', 'url' => '/siakad/master/kurikulum', 'icon' => 'FaBookOpen', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 3],
-                    ['name' => 'Mata Kuliah', 'url' => '/siakad/master/matakuliah', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.matakuliah.manage', 'order_index' => 4],
-                    ['name' => 'Skala Nilai', 'url' => '/siakad/master/skala-nilai', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 5],
-                    ['name' => 'Konfigurasi Penilaian & OBE', 'url' => '/siakad/master/konfigurasi-penilaian', 'icon' => 'FaSlidersH', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 6],
-                    ['name' => 'Master Referensi', 'url' => '/siakad/master/referensi', 'icon' => 'FaDatabase', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 7],
-                    ['name' => 'Master Tipe Referensi', 'url' => '/siakad/master/tipe-referensi', 'icon' => 'FaTags', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 8],
+                    ['name' => 'Skala Nilai', 'url' => '/siakad/master/skala-nilai', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 3],
+                    ['name' => 'Konfigurasi Penilaian & OBE', 'url' => '/siakad/master/konfigurasi-penilaian', 'icon' => 'FaSlidersH', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 4],
+                    ['name' => 'Master Referensi', 'url' => '/siakad/master/referensi', 'icon' => 'FaDatabase', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 5],
+                    ['name' => 'Master Tipe Referensi', 'url' => '/siakad/master/tipe-referensi', 'icon' => 'FaTags', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 6],
                 ]
             ],
             [

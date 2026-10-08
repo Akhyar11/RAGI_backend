@@ -85,26 +85,40 @@ class SsoService
 
     /**
      * Tukar refresh_token yang valid dengan pasangan token baru (rotasi).
-     * Hanya pasangan yang dipresentasikan yang dirotasi (single-use); sesi
-     * lain milik user yang sama TIDAK ikut dicabut (mendukung multi-perangkat).
+     * Mendukung Grace Period (30 detik) untuk mencegah logout mendadak akibat
+     * request multi-tab / asynchronous race condition yang terjadi bersamaan.
      */
     public function refreshTokens(string $refreshToken): ?SsoToken
     {
-        $ssoToken = SsoToken::with('user')
+        $ssoToken = SsoToken::with(['user', 'rotatedTo.user'])
             ->where('refresh_token', $refreshToken)
             ->first();
 
-        if (!$ssoToken || !$ssoToken->isRefreshTokenValid()) {
+        if (!$ssoToken) {
             return null;
         }
 
-        return $this->rotatePair($ssoToken);
+        // KASUS 1: Token normal (belum di-revoke) dan masih berlaku
+        if (empty($ssoToken->revoked_at)) {
+            if (!$ssoToken->isRefreshTokenValid()) {
+                return null;
+            }
+            return $this->rotatePair($ssoToken);
+        }
+
+        // KASUS 2: Token sudah di-revoke tetapi masih dalam Grace Period (30 detik)
+        // Kembalikan token aktif hasil rotasi sebelumnya
+        if ($ssoToken->isInGracePeriod(30) && $ssoToken->rotatedTo) {
+            return $ssoToken->rotatedTo;
+        }
+
+        // KASUS 3: Digunakan ulang setelah grace period habis (Potensi Token Reuse / Stolen Token)
+        return null;
     }
 
     /**
-     * Rotasi satu pasangan token: hapus baris lama (berdasarkan id) lalu
-     * terbitkan pasangan baru untuk user + client_app yang sama dengan TTL
-     * refresh yang setara dengan pasangan lama.
+     * Rotasi satu pasangan token dengan Grace Period:
+     * Alih-alih langsung men-delete, token lama ditandai revoked_at dan dihubungkan ke token baru.
      */
     public function rotatePair(SsoToken $old): SsoToken
     {
@@ -117,9 +131,8 @@ class SsoService
                 );
             }
 
-            SsoToken::whereKey($old->getKey())->delete();
-
-            return SsoToken::create([
+            // Buat pasangan token baru
+            $newToken = SsoToken::create([
                 'user_id'             => $old->user_id,
                 'access_token'        => Str::random(64),
                 'refresh_token'       => Str::random(64),
@@ -127,6 +140,20 @@ class SsoService
                 'access_expires_at'   => now()->addMinutes(self::ACCESS_TOKEN_TTL),
                 'refresh_expires_at'  => now()->addMinutes($oldRefreshTtl),
             ]);
+
+            // Tandai token lama sebagai revoked dengan tautan ke token baru
+            $old->update([
+                'revoked_at'    => now(),
+                'rotated_to_id' => $newToken->id,
+            ]);
+
+            // Hapus token lama yang sudah kadaluarsa & lewat grace period (> 5 menit yang lalu)
+            SsoToken::where('user_id', $old->user_id)
+                ->whereNotNull('revoked_at')
+                ->where('revoked_at', '<', now()->subMinutes(5))
+                ->delete();
+
+            return $newToken;
         });
     }
 

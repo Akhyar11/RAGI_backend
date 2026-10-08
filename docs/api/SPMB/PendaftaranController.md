@@ -10,7 +10,8 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan cal
 |---|---|---|---|
 | GET | `/api/spmb/pendaftaran` | Daftar pendaftar (filter, sorting, paginasi) | ✅ |
 | GET | `/api/spmb/pendaftaran/{id}` | Detail pendaftar + ringkasan daftar ulang | ✅ |
-| GET | `/api/spmb/pendaftaran/{id}/sk-lulus` | Unduh dokumen PDF SK Tanda Lulus resmi | ✅ |
+| GET | `/api/spmb/pendaftaran/{id}/sk-lulus` | Unduh dokumen PDF SK Tanda Lulus resmi (memakai berkas terarsip bila sudah diterbitkan) | ✅ |
+| POST | `/api/spmb/pendaftaran/{id}/terbitkan-sk` | Terbitkan nomor SK via modul Arsip + arsipkan berkas PDF SK | ✅ `spmb.manage` |
 | POST | `/api/spmb/pendaftaran/berkas/{id}/verify` | Verifikasi satu berkas pendaftaran | ✅ |
 | POST | `/api/spmb/pendaftaran/{id}/status` | Tetapkan status pendaftaran (verifikasi) | ✅ |
 | POST | `/api/spmb/pendaftaran/{id}/konversi-mahasiswa` | Konversi manual calon mahasiswa → mahasiswa resmi (generate NIM, role, email) | ✅ `spmb.manage` |
@@ -326,6 +327,8 @@ Mengembalikan stream biner berkas PDF (`application/pdf`) dengan header:
 - `Content-Type: application/pdf`
 - `Content-Disposition: attachment; filename="SK-Tanda-Lulus-REG-20260930-1234.pdf"`
 
+> Bila pendaftaran sudah pernah diterbitkan & diarsipkan melalui `POST /api/spmb/pendaftaran/{id}/terbitkan-sk`, endpoint ini menyajikan berkas PDF tersimpan (disk privat) apa adanya. Jika belum, PDF digenerate on-the-fly memakai template SPMB (format nomor internal) tanpa nomor Arsip.
+
 ### Response Error
 
 **401 Unauthorized**
@@ -347,6 +350,59 @@ Mengembalikan stream biner berkas PDF (`application/pdf`) dengan header:
     "message": "SK Tanda Lulus belum dapat diunduh karena pendaftaran belum dinyatakan lulus seleksi administrasi."
 }
 ```
+
+---
+
+## POST /api/spmb/pendaftaran/{id}/terbitkan-sk
+
+> Menerbitkan **SK Tanda Lulus** secara resmi: (1) mengajukan permohonan nomor ke modul **Arsip** memakai konfigurasi template (`module_id`, `klasifikasi_surat_id`, `unit_surat_id`), (2) menyetujui permohonan sehingga nomor definitif terbit & tersinkron ke `nomor_sk` pendaftaran, (3) men-generate PDF memakai nomor Arsip + master **Kop Surat**, dan (4) menyimpan PDF pada disk **privat** serta mencatat `sk_file_path`. Hanya dapat dipanggil oleh pengguna dengan permission `spmb.manage` dan pendaftaran berstatus lulus.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID `spmb_pendaftaran_calon_mhs` |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "SK Tanda Lulus berhasil diterbitkan dan diarsipkan.",
+    "data": {
+        "nomor_sk": "1/DVIII/SPMB/X/2026",
+        "sk_file_path": "spmb/sk-tanda-lulus/2026/10/781138ef-761c-4cf9-9313-adefda652778.pdf",
+        "sk_file_url": "http://localhost:9000/api/files/view?path=spmb%2Fsk-tanda-lulus%2F...&signature=..."
+    }
+}
+```
+
+### Response Error
+
+**400 Bad Request**
+```json
+{
+    "status": "error",
+    "message": "SK Tanda Lulus hanya dapat diterbitkan untuk pendaftaran yang sudah dinyatakan lulus seleksi."
+}
+```
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+### Catatan Tambahan
+
+> - `module_id`, `klasifikasi_surat_id`, dan `unit_surat_id` diambil dari master data (Master Modul, Master Klasifikasi/Unit Arsip) — bukan nilai hardcode. Bila template belum dikonfigurasi, SK tetap digenerate memakai format nomor internal SPMB.
+> - `nomor_sk`, `sk_file_path`, dan `sk_file_url` juga tersedia pada response `GET /api/spmb/pendaftaran/{id}`.
 
 ---
 

@@ -13,23 +13,34 @@ class MataKuliah extends Model
 
     protected $fillable = [
         'kurikulum_id',
+        'rumpun_mk_id',
         'kode_mk',
         'nama',
+        'kategori',
         'sks_teori',
         'sks_praktik',
         'total_sks',
         'semester_anjuran',
+        'jumlah_pertemuan',
         'tipe',
         'is_active',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'kurikulum_id' => 'integer',
+        'rumpun_mk_id' => 'integer',
         'sks_teori' => 'integer',
         'sks_praktik' => 'integer',
         'total_sks' => 'integer',
         'semester_anjuran' => 'integer',
+        'jumlah_pertemuan' => 'integer',
     ];
+
+    public function rumpunMataKuliah()
+    {
+        return $this->belongsTo(RumpunMataKuliah::class, 'rumpun_mk_id');
+    }
 
     public function kurikulum()
     {

@@ -58,7 +58,7 @@ return [
     |
     */
 
-    'web_access_token_minutes' => (int) env('PASSPORT_WEB_ACCESS_TOKEN_MINUTES', 15),
+    'web_access_token_minutes' => (int) env('PASSPORT_WEB_ACCESS_TOKEN_MINUTES', 120),
 
     /*
     |--------------------------------------------------------------------------

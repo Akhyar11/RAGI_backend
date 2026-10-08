@@ -49,6 +49,10 @@ class PendaftaranCalonMhs extends Model
         'referral_validated_at',
         'no_pendaftaran',
         'nim',
+        'nomor_sk',
+        'sk_file_path',
+        'sk_arsip_request_id',
+        'sk_generated_at',
         'nama_lengkap',
         'nik',
         'tanggal_lahir',
@@ -100,9 +104,28 @@ class PendaftaranCalonMhs extends Model
         'tanggal_lahir' => 'date',
         'diverifikasi_at' => 'datetime',
         'referral_validated_at' => 'datetime',
+        'sk_generated_at' => 'datetime',
         'nilai_rata_rapor' => 'decimal:2',
         'kelompok_ukt' => 'integer',
     ];
+
+    protected $appends = [
+        'sk_file_url',
+    ];
+
+    public function getSkFileUrlAttribute(): ?string
+    {
+        if (! $this->sk_file_path) {
+            return null;
+        }
+
+        return app(\App\Services\Storage\FileStorageService::class)->url($this->sk_file_path);
+    }
+
+    public function skArsipRequest()
+    {
+        return $this->belongsTo(\App\Models\Arsip\RequestNomorSurat::class, 'sk_arsip_request_id');
+    }
 
     public function gelombangPenerimaan()
     {
