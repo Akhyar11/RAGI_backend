@@ -97,15 +97,26 @@ class SimpegPegawaiImportTest extends TestCase
 
     public function test_manual_store_pegawai_auto_creates_sso_user_with_indonusa_password()
     {
+        $shift = \App\Models\ShiftTemplate::create([
+            'name' => 'Shift Reguler Pagi',
+            'start_time' => '08:00:00',
+            'end_time' => '17:00:00',
+            'is_active' => true,
+        ]);
+
         $payload = [
             'nama_lengkap' => 'Rian Hidayat, M.Si.',
             'nip' => '199505052020051003',
+            'nidn' => '0405059501',
+            'nuptk' => '3271010505950001',
             'nik' => '3271010505950003',
             'jenis_kelamin' => 'L',
             'jenis_pegawai' => 'dosen',
             'status_kepegawaian' => 'tetap_yayasan',
             'unit_kerja_id' => $this->unitKerja->id,
             'email' => 'rian.hidayat@campus.ac.id',
+            'tanggal_masuk' => '2020-05-01',
+            'shift_template_id' => $shift->id,
             'status' => 'aktif',
         ];
 

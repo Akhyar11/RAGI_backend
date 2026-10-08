@@ -25,6 +25,7 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 | POST | `/api/v1/siakad/mahasiswa` | Tambah mahasiswa | ✅ |
 | POST | `/api/v1/siakad/mahasiswa/generate-nim` | Generate NIM mahasiswa | ✅ |
 | POST | `/api/v1/siakad/mahasiswa/generate-missing-nims` | Generate NIM massal | ✅ |
+| POST | `/api/v1/siakad/mahasiswa/import-nim` | Import hasil pemetaan NIM dari file CSV | ✅ |
 | POST | `/api/v1/siakad/mahasiswa/sync-from-spmb` | Sinkronisasi dari pendaftar SPMB | ✅ |
 | GET | `/api/v1/siakad/mahasiswa/konversi` | Daftar konversi transfer | ✅ |
 | GET | `/api/v1/siakad/mahasiswa/konversi/{id}` | Detail konversi transfer + rincian MK | ✅ |
@@ -420,6 +421,44 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 {
     "status": "error",
     "message": "Tidak ditemukan mahasiswa aktif yang belum memiliki Dosen PA pada kriteria ini."
+}
+```
+
+---
+
+## [POST] /api/v1/siakad/mahasiswa/import-nim
+
+Deskripsi: Mengunggah berkas CSV pemetaan NIM mahasiswa untuk memperbarui NIM secara massal. Mendukung auto-detection delimiter (koma `,` dan titik koma `;` untuk Excel Indonesia) serta pembersihan UTF-8 BOM otomatis.
+
+### Headers
+- `Authorization: Bearer <access_token>`
+- `Accept: application/json`
+
+### Request Body (`multipart/form-data`)
+| Field | Type | Required | Deskripsi |
+|---|---|---|---|
+| `file` | file | ✅ | Berkas CSV/TXT pemetaan NIM (maks. 5MB) |
+
+Format kolom CSV:
+`ID, Nama, Prodi, NIM Baru` (atau dipisahkan titik koma `;`)
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Berhasil memperbarui NIM untuk 25 mahasiswa.",
+    "data": {
+        "updated_count": 25,
+        "errors": []
+    }
+}
+```
+
+### Response Error (422 Unprocessable Entity)
+```json
+{
+    "status": "error",
+    "message": "Gagal membaca file CSV."
 }
 ```
 

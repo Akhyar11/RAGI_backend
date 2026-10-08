@@ -214,7 +214,7 @@ class SinapraImportService
         }
 
         $statusRaw = strtolower(trim((string)($data['status'] ?? 'aktif')));
-        $status = ($statusRaw === 'nonaktif' || $statusRaw === 'tidak_aktif' || $statusRaw === '0') ? 'tidak_aktif' : 'aktif';
+        $status = ($statusRaw === 'nonaktif' || $statusRaw === 'tidak_aktif' || $statusRaw === '0') ? 'tidak_aktif' : (($statusRaw === 'renovasi') ? 'renovasi' : 'aktif');
 
         $payload = [
             'nama' => $nama,
@@ -292,8 +292,19 @@ class SinapraImportService
 
         // Cari Tipe Ruangan (optional)
         $tipeRuanganId = null;
+        $tipeObj = null;
         if (!empty($kodeTipe)) {
             $tipeObj = MasterTipeRuangan::where('kode', $kodeTipe)->orWhere('nama', $kodeTipe)->first();
+            if ($tipeObj) {
+                $tipeRuanganId = $tipeObj->id;
+            } elseif (is_numeric($kodeTipe)) {
+                $tipeObj = MasterTipeRuangan::find((int)$kodeTipe);
+                if ($tipeObj) {
+                    $tipeRuanganId = $tipeObj->id;
+                }
+            }
+        } elseif (!empty($data['tipe_ruangan_id'])) {
+            $tipeObj = MasterTipeRuangan::find((int)$data['tipe_ruangan_id']);
             if ($tipeObj) {
                 $tipeRuanganId = $tipeObj->id;
             }
@@ -313,11 +324,15 @@ class SinapraImportService
         }
 
         $statusRaw = strtolower(trim((string)($data['status'] ?? 'aktif')));
-        $status = ($statusRaw === 'nonaktif' || $statusRaw === 'tidak_aktif' || $statusRaw === '0') ? 'tidak_aktif' : 'aktif';
+        $status = in_array($statusRaw, ['nonaktif', 'tidak_aktif', '0']) ? 'tidak_aktif' : ($statusRaw === 'maintenance' ? 'maintenance' : 'aktif');
 
         $adaAc = $this->parseBoolean($data['ada_ac'] ?? 0);
         $adaProyektor = $this->parseBoolean($data['ada_proyektor'] ?? 0);
         $adaWifi = $this->parseBoolean($data['ada_wifi'] ?? 0);
+
+        // Resolusi nilai kolom tipe legacy (menjamin nilai sah pada MySQL enum maupun kolom string)
+        $rawTipe = $data['tipe'] ?? $data['jenis_ruangan'] ?? $data['jenis'] ?? null;
+        $tipeValue = $this->resolveLegacyRuanganTipe($rawTipe, $tipeObj, $nama);
 
         $payload = [
             'gedung_id' => $gedung->id,
@@ -325,7 +340,7 @@ class SinapraImportService
             'program_studi_id' => $prodiId,
             'nama' => $nama,
             'lantai' => !empty($data['lantai']) ? (int)$data['lantai'] : 1,
-            'tipe' => !empty($data['tipe']) ? $data['tipe'] : 'umum',
+            'tipe' => $tipeValue,
             'kapasitas' => !empty($data['kapasitas']) ? (int)$data['kapasitas'] : 30,
             'ada_ac' => $adaAc,
             'jumlah_ac' => $adaAc ? (!empty($data['jumlah_ac']) ? (int)$data['jumlah_ac'] : 1) : 0,
@@ -344,6 +359,65 @@ class SinapraImportService
         $payload['kode'] = $kode;
         $ruangan = new Ruangan();
         return $this->saveOrUpdateWithAudit($ruangan, $payload, 'sinapra_ruangan', true);
+    }
+
+    /**
+     * Resolusi nilai kolom legacy 'tipe' pada sinapra_ruangan agar kompatibel dengan MySQL ENUM:
+     * ('kelas', 'lab', 'aula', 'kantor', 'gudang', 'toilet', 'lainnya')
+     */
+    protected function resolveLegacyRuanganTipe(?string $rawInput, ?MasterTipeRuangan $tipeObj, string $namaRuangan): string
+    {
+        $validEnums = ['kelas', 'lab', 'aula', 'kantor', 'gudang', 'toilet', 'lainnya'];
+        $cleanInput = strtolower(trim((string)$rawInput));
+
+        if (in_array($cleanInput, $validEnums)) {
+            return $cleanInput;
+        }
+
+        // Kumpulkan teks konteks dari input, master tipe ruangan, dan nama ruangan
+        $context = strtolower(
+            $cleanInput . ' ' .
+            ($tipeObj ? ($tipeObj->kode . ' ' . $tipeObj->nama) : '') . ' ' .
+            $namaRuangan
+        );
+
+        if (str_contains($context, 'lab')) {
+            return 'lab';
+        }
+
+        if (str_contains($context, 'kelas') || str_contains($context, 'kuliah') || str_contains($context, 'teori') || str_contains($context, 'seminar')) {
+            return 'kelas';
+        }
+
+        if (
+            str_contains($context, 'kantor') ||
+            str_contains($context, 'office') ||
+            str_contains($context, 'biro') ||
+            str_contains($context, 'administrasi') ||
+            str_contains($context, 'tu') ||
+            str_contains($context, 'tata usaha') ||
+            str_contains($context, 'rektor') ||
+            str_contains($context, 'dekan') ||
+            str_contains($context, 'dosen') ||
+            str_contains($context, 'pimpinan') ||
+            str_contains($context, 'sarpras')
+        ) {
+            return 'kantor';
+        }
+
+        if (str_contains($context, 'aula') || str_contains($context, 'hall') || str_contains($context, 'auditorium') || str_contains($context, 'serbaguna')) {
+            return 'aula';
+        }
+
+        if (str_contains($context, 'gudang') || str_contains($context, 'storage') || str_contains($context, 'arsip')) {
+            return 'gudang';
+        }
+
+        if (str_contains($context, 'toilet') || str_contains($context, 'wc') || str_contains($context, 'kamar mandi')) {
+            return 'toilet';
+        }
+
+        return 'lainnya';
     }
 
     /**
@@ -510,17 +584,16 @@ class SinapraImportService
             throw new \Exception("Kategori Aset dengan kode/nama '{$kodeKategori}' tidak ditemukan di database.");
         }
 
-        // Resolusi Ruangan (Lokasi)
+        // Resolusi Ruangan (Lokasi) - opsional jika aset baru belum ditempatkan
         $ruanganId = null;
+        $ruang = null;
         if (!empty($kodeRuangan)) {
             $ruang = Ruangan::where('kode', $kodeRuangan)->orWhere('nama', $kodeRuangan)->first();
             if ($ruang) {
                 $ruanganId = $ruang->id;
+            } else {
+                throw new \Exception("Ruangan dengan kode/nama '{$kodeRuangan}' tidak ditemukan di database.");
             }
-        }
-
-        if (!$ruanganId) {
-            throw new \Exception("Ruangan dengan kode/nama '{$kodeRuangan}' tidak ditemukan di database.");
         }
 
         $hargaPerolehan = !empty($data['harga_perolehan']) ? (float)$data['harga_perolehan'] : 0.0;
@@ -528,24 +601,42 @@ class SinapraImportService
 
         $tglPerolehan = null;
         if (!empty($data['tanggal_perolehan'])) {
-            $tglPerolehan = date('Y-m-d', strtotime((string)$data['tanggal_perolehan']));
+            $rawDate = (string)$data['tanggal_perolehan'];
+            if (is_numeric($rawDate) && (int)$rawDate > 30000) {
+                try {
+                    $tglPerolehan = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($rawDate)->format('Y-m-d');
+                } catch (\Throwable) {
+                    $tglPerolehan = date('Y-m-d');
+                }
+            } else {
+                $parsed = strtotime($rawDate);
+                $tglPerolehan = ($parsed !== false) ? date('Y-m-d', $parsed) : date('Y-m-d');
+            }
         } else {
             $tglPerolehan = date('Y-m-d');
         }
 
-        $kondisi = strtolower(trim((string)($data['kondisi'] ?? 'baik')));
-        $allowedKondisi = ['baik', 'rusak_ringan', 'rusak_berat'];
-        if (!in_array($kondisi, $allowedKondisi)) {
-            $kondisi = 'baik';
-        }
+        // Resolusi Kondisi Aset (enum: 'baik', 'rusak_ringan', 'rusak_berat', 'hilang')
+        $kondisiRaw = strtolower(trim((string)($data['kondisi'] ?? 'baik')));
+        $kondisi = match ($kondisiRaw) {
+            'baik', 'bagus', 'good', '1' => 'baik',
+            'rusak_ringan', 'ringan' => 'rusak_ringan',
+            'rusak_berat', 'berat' => 'rusak_berat',
+            'hilang' => 'hilang',
+            default => 'baik',
+        };
 
-        $status = strtolower(trim((string)($data['status'] ?? 'aktif')));
-        $allowedStatus = ['aktif', 'dalam_perbaikan', 'dipinjam', 'disposal', 'hilang', 'nonaktif'];
-        if (!in_array($status, $allowedStatus)) {
-            $status = 'aktif';
-        }
+        // Resolusi Status Aset (enum: 'tersedia', 'dipinjam', 'maintenance', 'dihapus')
+        $statusRaw = strtolower(trim((string)($data['status'] ?? 'tersedia')));
+        $status = match ($statusRaw) {
+            'tersedia', 'aktif', 'ready', '1' => 'tersedia',
+            'dipinjam', 'pinjam' => 'dipinjam',
+            'maintenance', 'dalam_perbaikan', 'rusak', 'perbaikan' => 'maintenance',
+            'dihapus', 'dihapuskan', 'disposal', 'nonaktif', 'hilang' => 'dihapus',
+            default => 'tersedia',
+        };
 
-        $isBorrowable = $this->parseBoolean($data['is_borrowable'] ?? $data['dapat_dipinjam'] ?? 0);
+        $isBorrowable = $this->parseBoolean($data['is_borrowable'] ?? $data['dapat_dipinjam'] ?? 1);
         $isLabAsset = $this->parseBoolean($data['is_lab_asset'] ?? $data['aset_lab'] ?? 0);
 
         // Resolusi Program Studi (jika diisi atau inherit dari ruangan)
@@ -563,10 +654,24 @@ class SinapraImportService
             $prodiId = $ruang->program_studi_id;
         }
 
+        // Resolusi Penanggung Jawab Pegawai (opsional)
+        $pegawaiId = null;
+        $picRaw = trim((string)($data['penanggung_jawab'] ?? $data['nip_penanggung_jawab'] ?? $data['pic'] ?? ''));
+        if (!empty($picRaw)) {
+            $pegawai = DB::table('simpeg_pegawai')
+                ->where('nip', $picRaw)
+                ->orWhere('nama_lengkap', 'like', "%{$picRaw}%")
+                ->first();
+            if ($pegawai) {
+                $pegawaiId = $pegawai->id;
+            }
+        }
+
         $payload = [
             'kategori_id' => $kategoriId,
             'ruangan_id' => $ruanganId,
             'program_studi_id' => $prodiId,
+            'penanggung_jawab_pegawai_id' => $pegawaiId,
             'nama' => $nama,
             'merk' => $data['merk'] ?? null,
             'model' => $data['model'] ?? null,
