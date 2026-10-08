@@ -885,6 +885,7 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
     Route::get('peminjaman-ruangan', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'indexRuangan']);
     Route::post('peminjaman-ruangan', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'applyRuangan']);
     Route::get('peminjaman-ruangan/{peminjaman}', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'showRuangan']);
+    Route::get('peminjaman-ruangan/{peminjaman}/surat', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'suratRuangan']);
     Route::post('peminjaman-ruangan/{peminjaman}/approve-laboran', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'approveLaboranRuangan']);
     Route::post('peminjaman-ruangan/{peminjaman}/approve', [App\Http\Controllers\Sinapra\PeminjamanController::class, 'approveRuangan']);
 

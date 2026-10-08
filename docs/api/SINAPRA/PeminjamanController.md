@@ -15,6 +15,7 @@
 | GET | `/api/sinapra/peminjaman-ruangan/{id}` | Detail peminjaman ruangan | ✅ |
 | POST | `/api/sinapra/peminjaman-ruangan/{id}/approve-laboran` | Verifikasi/Persetujuan tahap Laboran ruangan | ✅ |
 | POST | `/api/sinapra/peminjaman-ruangan/{id}/approve` | Persetujuan/Penolakan akhir peminjaman ruangan (Admin) | ✅ |
+| GET | `/api/sinapra/peminjaman-ruangan/{id}/surat` | Generate data surat peminjaman ruangan resmi & TTD digital SIMPEG | ✅ |
 | GET | `/api/sinapra/peminjaman-aset` | Listing permohonan peminjaman barang/aset | ✅ |
 | POST | `/api/sinapra/peminjaman-aset` | Permohonan peminjaman barang/aset baru | ✅ |
 | GET | `/api/sinapra/peminjaman-aset/{id}` | Detail peminjaman barang/aset | ✅ |
@@ -200,6 +201,113 @@ Deskripsi: Persetujuan atau penolakan tahap akhir oleh Admin SINAPRA. Jika diset
         "disetujui_oleh": 1,
         "admin_approved_at": "2026-09-23T08:30:00.000000Z",
         "catatan_penolakan": null
+    }
+}
+```
+
+---
+
+## GET /api/sinapra/peminjaman-ruangan/{id}/surat
+
+Deskripsi: Mengambil rincian Surat Izin Peminjaman Ruangan resmi kampus lengkap dengan nomor surat otomatis, pakta integritas peminjaman sarana prasarana, data peminjam, spesifikasi ruangan & fasilitas, serta penarikan otomatis tanda tangan digital milik pejabat approver/Admin Sarpras, laboran (jika lab), dan peminjam dari Master Tanda Tangan SIMPEG. Dokumen hanya dapat diakses apabila status peminjaman telah disetujui (`disetujui`) atau selesai (`selesai`).
+
+### Request Headers
+| Header | Tipe | Wajib | Deskripsi |
+| --- | --- | --- | --- |
+| Authorization | String | Ya | Bearer `<token>` |
+| Accept | String | Ya | `application/json` |
+
+### Path Parameters
+| Parameter | Tipe | Wajib | Deskripsi |
+| --- | --- | --- | --- |
+| id | Integer | Ya | ID peminjaman ruangan (`sinapra_peminjaman_ruangan.id`) |
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Data surat peminjaman ruangan berhasil diambil",
+    "data": {
+        "peminjaman_id": 1,
+        "kode_peminjaman": "PMR-20261001-A1B2C",
+        "nomor_surat": "001/SINAPRA-RUANG/10/2026",
+        "surat_generated_at": "2026-10-01 10:15:00",
+        "tanggal": "2026-10-01",
+        "jam_mulai": "08:00:00",
+        "jam_selesai": "12:00:00",
+        "keperluan": "Seminar & Workshop Teknologi Informasi",
+        "status": "disetujui",
+        "ruangan": {
+            "id": 2,
+            "nama": "Auditorium Utama",
+            "kode": "AUD-01",
+            "lantai": 3,
+            "kapasitas": 200,
+            "gedung": "Gedung Rektorat",
+            "tipe_ruangan": "Auditorium",
+            "ada_ac": true,
+            "ada_proyektor": true,
+            "ada_wifi": true
+        },
+        "peminjam": {
+            "user_id": 10,
+            "nama": "Wasis Waluyo",
+            "nomor_identitas": "202401001",
+            "unit_kerja": "Program Studi Teknik Informatika",
+            "kontak": "081234567890",
+            "email": "wasis@student.poltekindonusa.ac.id",
+            "tanda_tangan_url": "https://ragibe.poltekindonusa.ac.id/api/files/view?path=simpeg%2Ftanda-tangan%2Fuuid-peminjam.png&expires=1760000000&signature=sig001",
+            "qr_token": "a1b2c3d4-uuid-peminjam"
+        },
+        "laboran": null,
+        "approver": {
+            "user_id": 2,
+            "nama": "Budi Santoso, M.T. (Ka. Bagian Sarpras)",
+            "nip": "198001012005011001",
+            "nidn": "0601018001",
+            "approved_at": "2026-10-01 10:15:00",
+            "tanda_tangan_url": "https://ragibe.poltekindonusa.ac.id/api/files/view?path=simpeg%2Ftanda-tangan%2Fuuid-approver.png&expires=1760000000&signature=sig456",
+            "qr_token": "e5f6g7h8-uuid-approver"
+        },
+        "verifikasi_token": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    }
+}
+```
+
+### Response Error
+
+#### 401 Unauthorized
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+#### 403 Forbidden
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+#### 404 Not Found
+```json
+{
+    "status": "error",
+    "message": "Data peminjaman ruangan tidak ditemukan"
+}
+```
+
+#### 422 Unprocessable Content (Status Belum Disetujui)
+```json
+{
+    "status": "error",
+    "message": "Surat peminjaman ruangan hanya dapat diakses untuk peminjaman yang telah disetujui.",
+    "errors": {
+        "peminjaman": [
+            "Surat peminjaman ruangan hanya dapat diakses untuk peminjaman yang telah disetujui."
+        ]
     }
 }
 ```
