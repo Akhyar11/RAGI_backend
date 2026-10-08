@@ -260,6 +260,18 @@ return [
                 ]
             ],
             [
+                'name' => 'PENETAPAN BAHAN KAJIAN',
+                'url' => '#bahan_kajian_siakad',
+                'icon' => 'FaBookOpen',
+                'module' => 'siakad',
+                'order_index' => 56,
+                'children' => [
+                    ['name' => 'Perumusan BK', 'url' => '/siakad/obe/bahan-kajian', 'icon' => 'FaBookOpen', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 1],
+                    ['name' => 'Pemetaan CPL-BK', 'url' => '/siakad/obe/pemetaan-cpl-bk', 'icon' => 'FaTh', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
+                    ['name' => 'Pemetaan BK-MK', 'url' => '/siakad/obe/pemetaan-bk-mk', 'icon' => 'FaThList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 3],
+                ]
+            ],
+            [
                 'name' => 'CIVITAS AKADEMIKA (BAAK)',
                 'url' => '#civitas_siakad',
                 'icon' => 'FaUsers',

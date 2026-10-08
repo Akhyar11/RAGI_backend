@@ -247,7 +247,12 @@ Route::prefix('obe')->group(function () {
 
     Route::get('/bahan-kajian', [ObeController::class, 'getBahanKajian']);
     Route::post('/bahan-kajian', [ObeController::class, 'storeBahanKajian']);
+    Route::put('/bahan-kajian/{id}', [ObeController::class, 'updateBahanKajian']);
     Route::delete('/bahan-kajian/{id}', [ObeController::class, 'deleteBahanKajian']);
+    Route::get('/bahan-kajian/matrix/cpl', [ObeController::class, 'getMatrixCplBahanKajian']);
+    Route::post('/cpl/bahan-kajian', [ObeController::class, 'syncCplBahanKajian']);
+    Route::get('/bahan-kajian/matrix/mata-kuliah', [ObeController::class, 'getMatrixBahanKajianMataKuliah']);
+    Route::post('/bahan-kajian/mata-kuliah', [ObeController::class, 'syncBahanKajianMataKuliah']);
     Route::post('/matakuliah/bahan-kajian', [ObeController::class, 'mapMataKuliahBahanKajian']);
 
     Route::get('/rps', [ObeController::class, 'listRps']);

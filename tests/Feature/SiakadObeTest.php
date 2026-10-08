@@ -142,7 +142,7 @@ class SiakadObeTest extends TestCase
             'deskripsi' => 'Pengkajian siklus hidup perangkat lunak.',
         ]);
 
-        $responseStore->assertStatus(200)
+        $responseStore->assertStatus(201)
                       ->assertJsonPath('status', 'success')
                       ->assertJsonPath('data.kode_bk', 'BK-01');
 

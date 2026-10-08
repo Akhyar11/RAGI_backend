@@ -27,10 +27,15 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, k
 | POST | `/api/v1/siakad/obe/profil-lulusan` | Tambah Profil Lulusan | ✅ |
 | DELETE | `/api/v1/siakad/obe/profil-lulusan/{id}` | Hapus Profil Lulusan | ✅ |
 | POST | `/api/v1/siakad/obe/profil-lulusan/cpl` | Pemetaan Profil Lulusan ↔ CPL | ✅ |
-| GET | `/api/v1/siakad/obe/bahan-kajian` | Daftar Bahan Kajian | ✅ |
-| POST | `/api/v1/siakad/obe/bahan-kajian` | Tambah Bahan Kajian | ✅ |
-| DELETE | `/api/v1/siakad/obe/bahan-kajian/{id}` | Hapus Bahan Kajian | ✅ |
-| POST | `/api/v1/siakad/obe/matakuliah/bahan-kajian` | Pemetaan Mata Kuliah ↔ Bahan Kajian | ✅ |
+| GET | `/api/v1/siakad/obe/bahan-kajian` | Daftar Bahan Kajian (filter prodi/kurikulum/koordinator/search, sort whitelist, pagination) | ✅ `siakad.kurikulum.read` |
+| POST | `/api/v1/siakad/obe/bahan-kajian` | Simpan Bahan Kajian (create/update via kode+prodi) | ✅ `siakad.kurikulum.manage` |
+| PUT | `/api/v1/siakad/obe/bahan-kajian/{id}` | Perbarui Bahan Kajian | ✅ `siakad.kurikulum.manage` |
+| DELETE | `/api/v1/siakad/obe/bahan-kajian/{id}` | Hapus Bahan Kajian (soft delete + lepas pivot CPL/MK) | ✅ `siakad.kurikulum.manage` |
+| GET | `/api/v1/siakad/obe/bahan-kajian/matrix/cpl` | Matriks pemetaan CPL ↔ BK | ✅ `siakad.kurikulum.read` |
+| POST | `/api/v1/siakad/obe/cpl/bahan-kajian` | Simpan pemetaan satu CPL → daftar BK (checkbox) | ✅ `siakad.kurikulum.manage` |
+| GET | `/api/v1/siakad/obe/bahan-kajian/matrix/mata-kuliah` | Matriks pemetaan BK ↔ MK | ✅ `siakad.kurikulum.read` |
+| POST | `/api/v1/siakad/obe/bahan-kajian/mata-kuliah` | Simpan pemetaan satu BK → daftar MK (checkbox) | ✅ `siakad.kurikulum.manage` |
+| POST | `/api/v1/siakad/obe/matakuliah/bahan-kajian` | Pemetaan Mata Kuliah ↔ Bahan Kajian (payload `mata_kuliah_id` + `bahan_kajian_ids`) | ✅ |
 | GET | `/api/v1/siakad/obe/rps` | Daftar RPS | ✅ |
 | GET | `/api/v1/siakad/obe/rps/{id}` | Detail RPS | ✅ |
 | POST | `/api/v1/siakad/obe/rps` | Simpan RPS | ✅ |
@@ -205,6 +210,319 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, k
     "errors": { "program_studi_id": ["The selected program studi id is invalid."] }
 }
 ```
+
+---
+
+## [GET] /api/v1/siakad/obe/bahan-kajian
+
+> Daftar Bahan Kajian (BK) milik program studi pengguna. Wajib permission `siakad.kurikulum.read`.
+
+### Request Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `search` | string | ❌ | — | Cari pada `kode_bk` / `nama_bk` |
+| `program_studi_id` | integer | ❌ | — | Filter program studi (diabaikan bila user ter-scope prodi) |
+| `kurikulum_id` | integer | ❌ | — | Filter kurikulum acuan |
+| `koordinator_id` | integer | ❌ | — | Filter dosen koordinator |
+| `sort_by` | string | ❌ | `kode_bk` | Whitelist: `kode_bk`, `nama_bk`, `kurikulum_id`, `created_at`, `id` |
+| `sort_order` | string | ❌ | `asc` | `asc` / `desc` |
+| `page` | integer | ❌ | `1` | Halaman |
+| `per_page` | integer | ❌ | `15` | Maks. 100 |
+
+### Response Sukses
+
+**200 OK** (dengan `page`/`per_page`/`limit`)
+```json
+{
+    "status": "success",
+    "message": "Daftar bahan kajian berhasil diambil",
+    "data": [
+        {
+            "id": 3,
+            "program_studi_id": 7,
+            "kurikulum_id": 2,
+            "kode_bk": "BK-01",
+            "nama_bk": "Analisis dan Perancangan Sistem",
+            "koordinator_id": 11,
+            "kurikulum": { "id": 2, "nama": "Kurikulum OBE 2026", "tahun_berlaku": 2026 },
+            "koordinator": { "id": 11, "nama_lengkap": "Dr. Koordinator", "nik": "3273..." },
+            "program_studi": { "id": 7, "kode_prodi": "S1-TI", "nama": "Teknik Informatika" },
+            "cpls": [],
+            "mata_kuliahs": []
+        }
+    ],
+    "meta": {
+        "current_page": 1, "per_page": 15, "total": 1,
+        "last_page": 1, "from": 1, "to": 1
+    }
+}
+```
+
+Tanpa parameter paginasi, field `data` berisi seluruh hasil (tanpa `meta`).
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+**403 Forbidden**
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+---
+
+## [POST] /api/v1/siakad/obe/bahan-kajian
+
+> Menyimpan Bahan Kajian. Wajib permission `siakad.kurikulum.manage`. Bila `program_studi_id` kosong, diturunkan dari `kurikulum_id`; bila tetap kosong dan user tidak memiliki prodi, dibalas **422**.
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `program_studi_id` | integer | ❌ | `exists:siakad_program_studi,id` |
+| `kurikulum_id` | integer | ❌ | `exists:siakad_kurikulum,id` |
+| `koordinator_id` | integer | ❌ | `exists:siakad_dosen,id` |
+| `kode_bk` | string | ✅ | Maks 50, unik per program studi |
+| `nama_bk` | string | ✅ | Rumusan bahan kajian, maks 255 |
+| `deskripsi` | string | ❌ | Keterangan, maks 2000 |
+
+```json
+{
+    "program_studi_id": 7,
+    "kurikulum_id": 2,
+    "koordinator_id": 11,
+    "kode_bk": "BK-01",
+    "nama_bk": "Analisis dan Perancangan Sistem",
+    "deskripsi": null
+}
+```
+
+### Response Sukses
+
+**201 Created**
+```json
+{
+    "status": "success",
+    "message": "Bahan Kajian berhasil disimpan",
+    "data": { "id": 3, "kode_bk": "BK-01", "nama_bk": "Analisis dan Perancangan Sistem" }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+**403 Forbidden**
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": { "kode_bk": ["Kode bahan kajian sudah digunakan pada program studi ini."] }
+}
+```
+
+---
+
+## [PUT] /api/v1/siakad/obe/bahan-kajian/{id}
+
+> Memperbarui Bahan Kajian. Wajib permission `siakad.kurikulum.manage`.
+
+### URL Parameters
+
+| Parameter | Type | Keterangan |
+|---|---|---|
+| `id` | integer | ID bahan kajian |
+
+### Request Body
+
+Body sama seperti `POST /bahan-kajian`. Bila `program_studi_id` tidak dikirim, memakai nilai lama.
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Bahan Kajian berhasil diperbarui",
+    "data": { "id": 3, "kode_bk": "BK-01", "nama_bk": "Analisis dan Perancangan Sistem (Revisi)" }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** / **422 Unprocessable Entity** — sama seperti `POST /bahan-kajian`.
+**404 Not Found**
+```json
+{ "status": "error", "message": "No query results for model [App\\Models\\Siakad\\BahanKajian] 999" }
+```
+
+---
+
+## [DELETE] /api/v1/siakad/obe/bahan-kajian/{id}
+
+> Menghapus Bahan Kajian (soft delete) dan melepas seluruh pivot CPL & MK. Wajib permission `siakad.kurikulum.manage`.
+
+### URL Parameters
+
+| Parameter | Type | Keterangan |
+|---|---|---|
+| `id` | integer | ID bahan kajian |
+
+### Response Sukses
+
+**200 OK**
+```json
+{ "status": "success", "message": "Bahan Kajian berhasil dihapus", "data": null }
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** — seperti endpoint lain.
+**404 Not Found** — bila ID tidak ada.
+
+---
+
+## [GET] /api/v1/siakad/obe/bahan-kajian/matrix/cpl
+
+> Matriks pemetaan CPL ↔ BK untuk keperluan matriks cetak. Wajib permission `siakad.kurikulum.read`.
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `program_studi_id` | integer | ❌ | Filter program studi |
+| `kurikulum_id` | integer | ❌ | Filter kurikulum acuan |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Matriks pemetaan CPL-BK berhasil diambil",
+    "data": {
+        "cpls": [{ "id": 1, "kode_cpl": "CPL-01", "kategori": "pengetahuan", "program_studi_id": 7 }],
+        "bahan_kajians": [{ "id": 3, "kode_bk": "BK-01", "nama_bk": "Analisis dan Perancangan Sistem", "program_studi_id": 7 }],
+        "pairs": [{ "cpl_id": 1, "bahan_kajian_id": 3 }]
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** — seperti endpoint lain.
+
+---
+
+## [POST] /api/v1/siakad/obe/cpl/bahan-kajian
+
+> Menyimpan pemetaan satu CPL ke daftar Bahan Kajian (checkbox). Wajib permission `siakad.kurikulum.manage`.
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `cpl_id` | integer | ✅ | `exists:siakad_cpl,id` |
+| `bahan_kajian_ids` | array | ❌ | Daftar `exists:siakad_bahan_kajian,id` (boleh kosong untuk melepas semua) |
+
+```json
+{ "cpl_id": 1, "bahan_kajian_ids": [3, 4] }
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Pemetaan CPL ke Bahan Kajian berhasil disimpan",
+    "data": { "id": 1, "kode_cpl": "CPL-01" }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** / **422 Unprocessable Entity** — seperti endpoint lain.
+
+---
+
+## [GET] /api/v1/siakad/obe/bahan-kajian/matrix/mata-kuliah
+
+> Matriks pemetaan BK ↔ MK. Wajib permission `siakad.kurikulum.read`.
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `program_studi_id` | integer | ❌ | Filter program studi |
+| `kurikulum_id` | integer | ❌ | Filter kurikulum |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Matriks pemetaan BK-MK berhasil diambil",
+    "data": {
+        "mata_kuliahs": [{ "id": 5, "kode_mk": "PM-IK-1-1-005", "nama": "Teori Fotografi", "kurikulum_id": 2 }],
+        "bahan_kajians": [{ "id": 3, "kode_bk": "BK-01", "nama_bk": "Analisis dan Perancangan Sistem" }],
+        "pairs": [{ "mata_kuliah_id": 5, "bahan_kajian_id": 3 }]
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** — seperti endpoint lain.
+
+---
+
+## [POST] /api/v1/siakad/obe/bahan-kajian/mata-kuliah
+
+> Menyimpan pemetaan satu Bahan Kajian ke daftar Mata Kuliah (checkbox). Wajib permission `siakad.kurikulum.manage`.
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `bahan_kajian_id` | integer | ✅ | `exists:siakad_bahan_kajian,id` |
+| `mata_kuliah_ids` | array | ❌ | Daftar `exists:siakad_mata_kuliah,id` (boleh kosong untuk melepas semua) |
+
+```json
+{ "bahan_kajian_id": 3, "mata_kuliah_ids": [5, 6] }
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Pemetaan Bahan Kajian ke Mata Kuliah berhasil disimpan",
+    "data": { "id": 3, "kode_bk": "BK-01" }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** / **422 Unprocessable Entity** — seperti endpoint lain.
 
 ---
 
