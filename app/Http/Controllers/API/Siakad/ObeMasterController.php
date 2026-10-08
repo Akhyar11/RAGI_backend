@@ -26,7 +26,7 @@ class ObeMasterController extends Controller
         $user = $request->user();
         $query = RumpunMataKuliah::with(['programStudi', 'dosenKoordinator']);
 
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
             $allowedProdiIds = $user->getSiakadProdiIds();
             // Scoped user: hanya data prodi sendiri (baris global disembunyikan).
             $query->whereIn('program_studi_id', $allowedProdiIds);
@@ -104,7 +104,7 @@ class ObeMasterController extends Controller
         // Scoped user tanpa pilihan prodi: atribusikan ke prodi sendiri agar baris
         // tidak menjadi global (global disembunyikan dari user prodi saat list).
         if (empty($validated['program_studi_id'])) {
-            $scoped = $user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasRole('admin') && !$user->hasRole('admin_siakad')
+            $scoped = $user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()
                 ? $user->getSiakadProdiIds()
                 : collect();
             if ($scoped->isNotEmpty()) {
@@ -214,7 +214,7 @@ class ObeMasterController extends Controller
         $user = $request->user();
         $query = JenisCpl::with('programStudi');
 
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
             $allowedProdiIds = $user->getSiakadProdiIds();
             // Scoped user: hanya data prodi sendiri (baris global disembunyikan).
             $query->whereIn('program_studi_id', $allowedProdiIds);
@@ -284,7 +284,7 @@ class ObeMasterController extends Controller
         // Scoped user tanpa pilihan prodi: atribusikan ke prodi sendiri agar baris
         // tidak menjadi global (global disembunyikan dari user prodi saat list).
         if (empty($validated['program_studi_id'])) {
-            $scoped = $user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasRole('admin') && !$user->hasRole('admin_siakad')
+            $scoped = $user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()
                 ? $user->getSiakadProdiIds()
                 : collect();
             if ($scoped->isNotEmpty()) {
@@ -394,7 +394,7 @@ class ObeMasterController extends Controller
         $user = $request->user();
         $query = \App\Models\Siakad\ProfesiKarir::with('programStudi');
 
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
             $allowedProdiIds = $user->getSiakadProdiIds();
             // Scoped user: hanya data prodi sendiri (baris global disembunyikan).
             $query->whereIn('program_studi_id', $allowedProdiIds);
@@ -564,7 +564,7 @@ class ObeMasterController extends Controller
         $user = $request->user();
         $query = ObeRubrik::with(['programStudi', 'cpmk', 'kriterias']);
 
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
             $allowedProdiIds = $user->getSiakadProdiIds();
             $query->whereIn('program_studi_id', $allowedProdiIds);
         } elseif ($request->filled('program_studi_id')) {
@@ -835,7 +835,7 @@ class ObeMasterController extends Controller
             'dosenKoordinator',
         ]);
 
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
             $allowedProdiIds = $user->getSiakadProdiIds();
             $query->whereIn('program_studi_id', $allowedProdiIds);
         } elseif ($request->filled('program_studi_id')) {
@@ -1069,7 +1069,7 @@ class ObeMasterController extends Controller
         $query = MataKuliah::with(['kurikulum.programStudi', 'rumpunMataKuliah'])
             ->where('is_active', true);
 
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
             $allowedProdiIds = $user->getSiakadProdiIds();
             $query->whereHas('kurikulum', function($q) use ($allowedProdiIds) {
                 $q->whereIn('program_studi_id', $allowedProdiIds);

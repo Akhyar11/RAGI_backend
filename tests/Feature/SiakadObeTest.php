@@ -77,7 +77,7 @@ class SiakadObeTest extends TestCase
             'urutan' => 1,
         ]);
 
-        $responseStore->assertStatus(200)
+        $responseStore->assertStatus(201)
                       ->assertJsonPath('status', 'success')
                       ->assertJsonPath('data.kode_pl', 'PL-01');
 

@@ -399,7 +399,7 @@ class AkademikController extends Controller
         $user = $request->user();
         $query = Kurikulum::with(['programStudi', 'mataKuliahs']);
 
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
             $allowedProdiIds = $user->getSiakadProdiIds();
             if ($allowedProdiIds->isNotEmpty()) {
                 $query->whereIn('program_studi_id', $allowedProdiIds);
@@ -565,7 +565,7 @@ class AkademikController extends Controller
 
         // Scoped user: batasi pada MK dari kurikulum prodinya (cermin listKurikulum).
         $user = $request->user();
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
             $allowedProdiIds = $user->getSiakadProdiIds();
             if ($allowedProdiIds->isNotEmpty()) {
                 $query->whereHas('kurikulum', fn($q) => $q->whereIn('program_studi_id', $allowedProdiIds));

@@ -48,7 +48,7 @@ class ObeController extends Controller
         $user = $request->user();
         $query = Cpl::with(['programStudi', 'kurikulum', 'jenisCpl']);
 
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
             $allowedProdiIds = $user->getSiakadProdiIds();
             if ($allowedProdiIds->isNotEmpty()) {
                 $query->whereIn('program_studi_id', $allowedProdiIds);
@@ -215,7 +215,7 @@ class ObeController extends Controller
     public function destroyCpl(Request $request, int $id)
     {
         $user = $request->user();
-        if (!$user || (! $user->isSuperAdmin() && ! $user->hasRole('admin') && ! $user->hasRole('admin_siakad') && ! $user->hasPermission('siakad.kurikulum.manage') && ! $user->hasPermission('siakad.master.manage'))) {
+        if (!$user || (! $user->isSuperAdmin() && ! $user->hasPermission('siakad.kurikulum.manage') && ! $user->hasPermission('siakad.master.manage'))) {
             return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses.'], 403);
         }
 
@@ -2024,7 +2024,7 @@ class ObeController extends Controller
         $user = $request->user();
         $query = ProfilLulusan::with(['programStudi', 'cpls', 'kurikulum']);
 
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
             $allowedProdiIds = $user->getSiakadProdiIds();
             $query->whereIn('program_studi_id', $allowedProdiIds);
         } elseif ($request->filled('program_studi_id')) {
