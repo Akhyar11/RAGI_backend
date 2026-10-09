@@ -272,6 +272,12 @@ Route::prefix('obe')->group(function () {
     // Pemetaan CPL-BK-MK: laporan read-only hasil komposisi CPL -> BK -> MK.
     Route::get('/matrix/cpl-bahan-kajian-mata-kuliah', [ObeController::class, 'getMatrixCplBahanKajianMataKuliah']);
 
+    // Referensi RPS (Bentuk, Metode, Kriteria, Komponen)
+    Route::get('/rps-referensi', [ObeController::class, 'getRpsReferensi']);
+    Route::post('/rps-referensi', [ObeController::class, 'storeRpsReferensi']);
+    Route::put('/rps-referensi/{id}', [ObeController::class, 'updateRpsReferensi']);
+    Route::delete('/rps-referensi/{id}', [ObeController::class, 'destroyRpsReferensi']);
+
     Route::get('/rps', [ObeController::class, 'listRps']);
     Route::get('/rps/{id}', [ObeController::class, 'showRps']);
     Route::post('/rps', [ObeController::class, 'storeRps']);

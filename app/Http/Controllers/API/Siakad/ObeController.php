@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Siakad\Cpl;
 use App\Models\Siakad\Cpmk;
 use App\Models\Siakad\CpmkProdi;
+use App\Models\Siakad\RpsReferensi;
 use App\Models\Siakad\SubCpmk;
 use App\Models\Siakad\ProfilLulusan;
 use App\Models\Siakad\BahanKajian;
@@ -529,6 +530,158 @@ class ObeController extends Controller
             'status' => 'success',
             'message' => 'Pemetaan Mata Kuliah untuk CPMK ' . $cpmkProdi->kode_cpmk . ' berhasil disimpan',
             'data' => $cpmkProdi->load(['kurikulum', 'cpl', 'mataKuliahs']),
+        ]);
+    }
+
+    // ============================================================
+    // Referensi RPS: Bentuk, Metode, Kriteria, Komponen
+    // ============================================================
+
+    public function getRpsReferensi(Request $request)
+    {
+        Gate::authorize('siakad.kurikulum.read');
+
+        $query = RpsReferensi::query();
+
+        if ($request->filled('tipe')) {
+            $query->where('tipe', $request->tipe);
+        }
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('nama', 'like', "%{$s}%")
+                    ->orWhere('kode', 'like', "%{$s}%")
+                    ->orWhere('deskripsi', 'like', "%{$s}%");
+            });
+        }
+
+        $allowedSort = ['nama', 'kode', 'created_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'nama';
+        $query->orderBy($sortBy, $request->sort_order === 'desc' ? 'desc' : 'asc');
+
+        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
+            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+            $data = $query->paginate($perPage);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Data referensi RPS berhasil dimuat',
+                'data' => $data->items(),
+                'meta' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data referensi RPS berhasil dimuat',
+            'data' => $query->get(),
+        ]);
+    }
+
+    public function storeRpsReferensi(Request $request)
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $validated = $request->validate([
+            'tipe' => 'required|in:bentuk,metode,kriteria,komponen',
+            'kode' => 'nullable|string|max:50',
+            'nama' => 'required|string|max:255',
+            'deskripsi' => 'nullable|string|max:2000',
+        ]);
+
+        $item = RpsReferensi::create($validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_rps_referensi',
+                recordId: $item->id,
+                oldValues: null,
+                newValues: $item->toArray(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log store RPS Referensi: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data referensi RPS berhasil disimpan',
+            'data' => $item,
+        ], 201);
+    }
+
+    public function updateRpsReferensi(Request $request, int $id)
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $item = RpsReferensi::findOrFail($id);
+        $old = $item->getOriginal();
+
+        $validated = $request->validate([
+            'kode' => 'nullable|string|max:50',
+            'nama' => 'required|string|max:255',
+            'deskripsi' => 'nullable|string|max:2000',
+        ]);
+
+        $item->update($validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_rps_referensi',
+                recordId: $item->id,
+                oldValues: $old,
+                newValues: $item->getChanges(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log update RPS Referensi: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data referensi RPS berhasil diperbarui',
+            'data' => $item,
+        ]);
+    }
+
+    public function destroyRpsReferensi(Request $request, int $id)
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $item = RpsReferensi::findOrFail($id);
+        $old = $item->getOriginal();
+        $item->delete();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_rps_referensi',
+                recordId: $id,
+                oldValues: $old,
+                newValues: null,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log destroy RPS Referensi: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data referensi RPS berhasil dihapus',
+            'data' => null,
         ]);
     }
 

@@ -170,7 +170,49 @@ class AkademikController extends Controller
             $query->where('program_studi_id', $request->program_studi_id);
         }
 
-        $data = $query->orderBy('bobot_indeks', 'desc')->get();
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function($q) use ($s) {
+                $q->where('nilai_huruf', 'like', "%{$s}%")
+                  ->orWhere('keterangan', 'like', "%{$s}%")
+                  ->orWhereHas('programStudi', function($pq) use ($s) {
+                      $pq->where('nama', 'like', "%{$s}%")
+                         ->orWhere('kode', 'like', "%{$s}%");
+                  });
+            });
+        }
+
+        if ($request->filled('is_lulus')) {
+            $query->where('is_lulus', filter_var($request->is_lulus, FILTER_VALIDATE_BOOLEAN));
+        }
+
+        $allowedSorts = ['nilai_huruf', 'bobot_indeks', 'batas_bawah', 'batas_atas', 'is_lulus', 'id', 'created_at'];
+        $sortBy = in_array($request->query('sort_by'), $allowedSorts, true)
+            ? $request->query('sort_by')
+            : 'bobot_indeks';
+        $sortOrder = strtolower((string) $request->query('sort_order', $request->query('sort_dir', 'desc'))) === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
+            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+            $data = $query->paginate($perPage);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Data skala nilai berhasil dimuat',
+                'data' => $data->items(),
+                'meta' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ],
+            ]);
+        }
+
+        $data = $query->get();
 
         return response()->json([
             'status' => 'success',

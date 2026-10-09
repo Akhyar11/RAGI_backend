@@ -43,6 +43,12 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, k
 | POST | `/api/v1/siakad/obe/cpmk-prodi` | Tambah Rumusan CPMK Program Studi | ✅ `StoreCpmkProdiRequest::authorize()` |
 | PUT | `/api/v1/siakad/obe/cpmk-prodi/{id}` | Perbarui Rumusan CPMK Program Studi | ✅ `StoreCpmkProdiRequest::authorize()` |
 | DELETE | `/api/v1/siakad/obe/cpmk-prodi/{id}` | Hapus Rumusan CPMK Program Studi (soft delete) | ✅ `canManageObeForProdi()` |
+| GET | `/api/v1/siakad/obe/pemetaan-cpl-cpmk-mk` | Daftar Pemetaan CPL-CPMK-MK (distribusi ke MK) | ✅ `siakad.kurikulum.read` |
+| POST | `/api/v1/siakad/obe/pemetaan-cpl-cpmk-mk/sync` | Simpan Pemetaan Mata Kuliah untuk CPMK Prodi | ✅ `siakad.kurikulum.manage` |
+| GET | `/api/v1/siakad/obe/rps-referensi` | Daftar referensi RPS (Bentuk, Metode, Kriteria, Komponen) | ✅ `siakad.kurikulum.read` |
+| POST | `/api/v1/siakad/obe/rps-referensi` | Tambah referensi RPS | ✅ `siakad.kurikulum.manage` |
+| PUT | `/api/v1/siakad/obe/rps-referensi/{id}` | Perbarui referensi RPS | ✅ `siakad.kurikulum.manage` |
+| DELETE | `/api/v1/siakad/obe/rps-referensi/{id}` | Hapus referensi RPS (soft delete) | ✅ `siakad.kurikulum.manage` |
 | GET | `/api/v1/siakad/obe/rps` | Daftar RPS | ✅ |
 | GET | `/api/v1/siakad/obe/rps/{id}` | Detail RPS | ✅ |
 | POST | `/api/v1/siakad/obe/rps` | Simpan RPS | ✅ |
@@ -945,6 +951,178 @@ satu jalur dijamin berasal dari program studi yang sama.
 ### Response Error
 
 **401 Unauthorized** / **403 Forbidden** / **422 Unprocessable Entity**.
+
+---
+
+## [GET] /api/v1/siakad/obe/rps-referensi
+
+> Mengambil daftar master referensi RPS (Bentuk, Metode, Kriteria, Komponen). Wajib permission `siakad.kurikulum.read`.
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `tipe` | string | ❌ | Filter tipe: `bentuk`, `metode`, `kriteria`, `komponen` |
+| `search` | string | ❌ | Cari nama / kode / deskripsi |
+| `sort_by` | string | ❌ | Whitelist: `nama`, `kode`, `created_at`, `id` (default `nama`) |
+| `sort_order` | string | ❌ | `asc` / `desc` |
+| `per_page` | integer | ❌ | Default 15, maks 100 |
+| `page` | integer | ❌ | Halaman |
+
+### Response Sukses
+
+**200 OK** (dengan pagination)
+```json
+{
+    "status": "success",
+    "message": "Data referensi RPS berhasil dimuat",
+    "data": [
+        {
+            "id": 1,
+            "tipe": "bentuk",
+            "kode": "BTK-01",
+            "nama": "Kuliah / Responsi",
+            "deskripsi": "Bentuk pembelajaran tatap muka terjadwal",
+            "is_active": true
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden**.
+
+---
+
+## [POST] /api/v1/siakad/obe/rps-referensi
+
+> Menambah data master referensi RPS baru. Wajib permission `siakad.kurikulum.manage`.
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `tipe` | string | ✅ | `in:bentuk,metode,kriteria,komponen` |
+| `kode` | string | ❌ | Maks. 50 |
+| `nama` | string | ✅ | Nama/label referensi, maks. 255 |
+| `deskripsi` | string | ❌ | Deskripsi detail, maks. 2000 |
+
+```json
+{
+    "tipe": "bentuk",
+    "kode": "BTK-01",
+    "nama": "Kuliah / Responsi",
+    "deskripsi": "Bentuk pembelajaran tatap muka terjadwal di kelas."
+}
+```
+
+### Response Sukses
+
+**201 Created**
+```json
+{
+    "status": "success",
+    "message": "Data referensi RPS berhasil disimpan",
+    "data": {
+        "id": 1,
+        "tipe": "bentuk",
+        "kode": "BTK-01",
+        "nama": "Kuliah / Responsi",
+        "deskripsi": "Bentuk pembelajaran tatap muka terjadwal di kelas.",
+        "is_active": true
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** / **422 Unprocessable Entity**.
+
+---
+
+## [PUT] /api/v1/siakad/obe/rps-referensi/{id}
+
+> Memperbarui data master referensi RPS. Wajib permission `siakad.kurikulum.manage`.
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID referensi RPS |
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `kode` | string | ❌ | Maks. 50 |
+| `nama` | string | ✅ | Nama/label referensi, maks. 255 |
+| `deskripsi` | string | ❌ | Deskripsi detail, maks. 2000 |
+
+```json
+{
+    "kode": "BTK-01B",
+    "nama": "Kuliah / Responsi Tatap Muka & Daring",
+    "deskripsi": "Perkuliahan hybrid sinkron"
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Data referensi RPS berhasil diperbarui",
+    "data": {
+        "id": 1,
+        "tipe": "bentuk",
+        "kode": "BTK-01B",
+        "nama": "Kuliah / Responsi Tatap Muka & Daring",
+        "deskripsi": "Perkuliahan hybrid sinkron",
+        "is_active": true
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** / **404 Not Found** / **422 Unprocessable Entity**.
+
+---
+
+## [DELETE] /api/v1/siakad/obe/rps-referensi/{id}
+
+> Menghapus data master referensi RPS (soft delete). Wajib permission `siakad.kurikulum.manage`.
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID referensi RPS |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Data referensi RPS berhasil dihapus",
+    "data": null
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** / **404 Not Found**.
 
 ---
 
