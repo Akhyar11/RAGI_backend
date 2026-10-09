@@ -870,6 +870,10 @@ satu jalur dijamin berasal dari program studi yang sama.
 | `kurikulum_id` | integer | ❌ | Filter kurikulum |
 | `cpl_id` | integer | ❌ | Filter CPL prodi |
 | `search` | string | ❌ | Cari kata kunci pada kode/rumusan CPL atau CPMK |
+| `sort_by` | string | ❌ | Whitelist: `kode_cpmk`, `cpl_id`, `created_at`, `id` (default `kode_cpmk`) |
+| `sort_order` | string | ❌ | `asc` / `desc` |
+| `per_page` | integer | ❌ | Default 15, maks 100 |
+| `page` | integer | ❌ | Halaman |
 
 ### Response Sukses
 
@@ -891,7 +895,15 @@ satu jalur dijamin berasal dari program studi yang sama.
                 { "id": 10, "kode_mk": "PM-IK-1-3-004", "nama": "WORKSHOP CREATIVE THINKING" }
             ]
         }
-    ]
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    }
 }
 ```
 

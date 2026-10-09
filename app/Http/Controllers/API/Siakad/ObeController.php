@@ -453,7 +453,30 @@ class ObeController extends Controller
             });
         }
 
-        $items = $query->orderBy('kode_cpmk')->get();
+        $allowedSort = ['kode_cpmk', 'cpl_id', 'created_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'kode_cpmk';
+        $query->orderBy($sortBy, $request->sort_order === 'desc' ? 'desc' : 'asc');
+
+        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
+            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+            $data = $query->paginate($perPage);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Data pemetaan CPL-CPMK-MK berhasil dimuat',
+                'data' => $data->items(),
+                'meta' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ],
+            ]);
+        }
+
+        $items = $query->get();
 
         return response()->json([
             'status' => 'success',
