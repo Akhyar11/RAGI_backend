@@ -36,6 +36,9 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, k
 | GET | `/api/v1/siakad/obe/bahan-kajian/matrix/mata-kuliah` | Matriks pemetaan BK ↔ MK | ✅ `siakad.kurikulum.read` |
 | POST | `/api/v1/siakad/obe/bahan-kajian/mata-kuliah` | Simpan pemetaan satu BK → daftar MK (checkbox) | ✅ `siakad.kurikulum.manage` |
 | POST | `/api/v1/siakad/obe/matakuliah/bahan-kajian` | Pemetaan Mata Kuliah ↔ Bahan Kajian (payload `mata_kuliah_id` + `bahan_kajian_ids`) | ✅ |
+| GET | `/api/v1/siakad/obe/matrix/cpl-mata-kuliah` | Matriks Pemetaan CPL-MK + status kelayakan sel (`eligible` / `pairs` / `yatim`) | ✅ `siakad.kurikulum.read` |
+| POST | `/api/v1/siakad/obe/cpl/mata-kuliah` | Simpan / lepas satu sel CPL-MK (hanya jika ada jalur CPL → BK → MK) | ✅ `siakad.kurikulum.manage` |
+| GET | `/api/v1/siakad/obe/matrix/cpl-bahan-kajian-mata-kuliah` | Laporan read-only Pemetaan CPL-BK-MK (baris BK × kolom CPL, isi sel = daftar MK) | ✅ `siakad.kurikulum.read` |
 | GET | `/api/v1/siakad/obe/rps` | Daftar RPS | ✅ |
 | GET | `/api/v1/siakad/obe/rps/{id}` | Detail RPS | ✅ |
 | POST | `/api/v1/siakad/obe/rps` | Simpan RPS | ✅ |
@@ -525,6 +528,140 @@ Body sama seperti `POST /bahan-kajian`. Bila `program_studi_id` tidak dikirim, m
 ### Response Error
 
 **401 Unauthorized** / **403 Forbidden** / **422 Unprocessable Entity** — seperti endpoint lain.
+
+---
+
+## [GET] /api/v1/siakad/obe/matrix/cpl-mata-kuliah
+
+> Matriks Pemetaan CPL ↔ MK beserta **status kelayakan tiap sel**. Wajib permission `siakad.kurikulum.read`.
+>
+> **Aturan kelayakan:** sebuah sel (CPL × MK) hanya boleh dicentang bila sudah ada
+> jalur `CPL -> BK -> MK`, yaitu ada minimal satu Bahan Kajian yang dipetakan ke CPL
+> tersebut sekaligus dipetakan ke MK tersebut. Kelayakan dihitung ulang oleh
+> backend pada setiap pemanggilan (bukan rely on cache), sehingga perubahan pada
+> Pemetaan CPL-BK maupun Pemetaan BK-MK langsung tercermin.
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `program_studi_id` | integer | ❌ | Membatasi tampilan pada satu prodi; diabaikan bila di luar scope prodi aktif user |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Matriks pemetaan CPL-MK berhasil diambil",
+    "data": {
+        "cpls": [{ "id": 1, "kode_cpl": "CPL-01", "deskripsi": "Mampu menganalisis data" }],
+        "mata_kuliahs": [{ "id": 5, "kode_mk": "PM-IK-1-1-005", "nama": "Teori Fotografi" }],
+        "eligible": [{ "cpl_id": 1, "mata_kuliah_id": 5 }],
+        "pairs": [{ "cpl_id": 1, "mata_kuliah_id": 5 }],
+        "yatim": []
+    }
+}
+```
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| `eligible` | array | Pasangan yang punya jalur CPL → BK → MK; sel ini boleh dicentang |
+| `pairs` | array | Pasangan yang sudah dicentang pada `siakad_mata_kuliah_cpl` |
+| `yatim` | array of string | Kunci `${cpl_id}-${mata_kuliah_id}` yang sudah dicentang tetapi jalurnya sudah hilang. Tetap ditampilkan agar riwayat akreditasi tidak hilang, namun ditandai ⚠️ untuk ditinjau |
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** — seperti endpoint lain.
+
+---
+
+## [POST] /api/v1/siakad/obe/cpl/mata-kuliah
+
+> Menyimpan atau melepas satu sel Pemetaan CPL-MK. Wajib permission `siakad.kurikulum.manage`.
+>
+> Guard kelayakan ditegakkan di server: pasangan tanpa jalur CPL → BK → MK ditolak
+> `422` meskipun request dibuat langsung ke API, bukan hanya dari UI.
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `cpl_id` | integer | ✅ | `exists:siakad_cpl,id` |
+| `mata_kuliah_id` | integer | ✅ | `exists:siakad_mata_kuliah,id` |
+| `is_checked` | boolean | ✅ | `true` menyimpan, `false` melepas |
+
+```json
+{ "cpl_id": 1, "mata_kuliah_id": 5, "is_checked": true }
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Pemetaan CPL-MK berhasil disimpan",
+    "data": { "cpl_id": 1, "mata_kuliah_id": 5, "is_checked": true }
+}
+```
+
+### Response Error
+
+| Kode | Keterangan |
+|---|---|
+| **401 / 403** | Token tidak valid atau prodi di luar scope user |
+| **404** | CPL atau mata kuliah tidak ditemukan |
+| **422** | CPL dan MK berada pada prodi berbeda, atau belum ada jalur CPL → BK → MK |
+
+> Melepas centang (`is_checked: false`) **selalu diizinkan**, termasuk untuk sel yang
+> sudah berstatus `yatim` — justru itulah perbaikan atas pemetaan yang jalurnya hilang.
+
+---
+
+## [GET] /api/v1/siakad/obe/matrix/cpl-bahan-kajian-mata-kuliah
+
+> Laporan **read-only** Pemetaan CPL-BK-MK. Wajib permission `siakad.kurikulum.read`.
+>
+> Tidak ada endpoint tulis untuk matriks ini. Isi laporan disusun langsung dari
+> komposisi Pemetaan CPL-BK dan Pemetaan BK-MK, sehingga mustahil melenceng dari
+> pemetaan induknya. Baris = Bahan Kajian, kolom = CPL, isi sel = daftar Mata Kuliah
+> yang menjembatani keduanya.
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `program_studi_id` | integer | ❌ | Membatasi tampilan pada satu prodi; diabaikan bila di luar scope prodi aktif user |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Matriks pemetaan CPL-BK-MK berhasil diambil",
+    "data": {
+        "cpls": [{ "id": 1, "kode_cpl": "CPL-01" }],
+        "bahan_kajians": [{ "id": 3, "kode_bk": "BK01", "nama_bk": "Social Issues, Ethics and Profesionalism" }],
+        "isi": {
+            "1": {
+                "3": [
+                    { "kode_mk": "PM-IK-1-1-005", "nama_mk": "Teori Fotografi" },
+                    { "kode_mk": "PM-IK-2-3-003", "nama_mk": "Psikologi Komunikasi" }
+                ]
+            }
+        }
+    }
+}
+```
+
+Struktur `isi` adalah `isi[cpl_id][bahan_kajian_id]` → array MK. CPL, BK, dan MK pada
+satu jalur dijamin berasal dari program studi yang sama.
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** — seperti endpoint lain.
 
 ---
 

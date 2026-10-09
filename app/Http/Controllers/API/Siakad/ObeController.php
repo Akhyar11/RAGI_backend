@@ -2526,6 +2526,279 @@ class ObeController extends Controller
     }
 
     /**
+     * Daftar pasangan (CPL, MK) yang memiliki minimal satu jalur CPL -> BK -> MK.
+     *
+     * Inilah sumber kebenaran kelayakan sel pada matriks Pemetaan CPL-MK: backend
+     * menghitung ulang (bukan rely on cache), sehingga perubahan pada CPL-BK atau
+     * BK-MK langsung tercermin tanpa perlu sinkronisasi manual.
+     *
+     * @param  array<int, int>|int|null  $prodiIds  Satu id prodi atau daftar id prodi.
+     * @return \Illuminate\Support\Collection<int, array{cpl_id:int, mata_kuliah_id:int}>
+     */
+    private function eligibleCplMataKuliahPairs(array|int|null $prodiIds = null): \Illuminate\Support\Collection
+    {
+        $prodiIds = array_filter(array_map('intval', (array) $prodiIds));
+        $jalur = DB::table('siakad_cpl_bahan_kajian as cpl_bk')
+            ->join('siakad_mata_kuliah_bahan_kajian as mk_bk', 'mk_bk.bahan_kajian_id', '=', 'cpl_bk.bahan_kajian_id')
+            ->join('siakad_cpl as cpl', 'cpl.id', '=', 'cpl_bk.cpl_id')
+            ->join('siakad_mata_kuliah as mk', 'mk.id', '=', 'mk_bk.mata_kuliah_id')
+            ->join('siakad_kurikulum as kur', 'kur.id', '=', 'mk.kurikulum_id')
+            ->where('cpl.is_active', true)
+            ->where('mk.is_active', true)
+            // CPL dan MK harus berasal dari program studi yang sama, sama seperti
+            // guard lintas-prodi pada matriks CPL-BK dan BK-MK.
+            ->whereColumn('cpl.program_studi_id', 'kur.program_studi_id')
+            ->when($prodiIds !== [], fn($q) => $q->whereIn('cpl.program_studi_id', $prodiIds))
+            ->select([
+                'cpl_bk.cpl_id',
+                'mk_bk.mata_kuliah_id',
+            ])
+            ->get()
+            ->map(fn($r) => [
+                'cpl_id' => (int) $r->cpl_id,
+                'mata_kuliah_id' => (int) $r->mata_kuliah_id,
+            ])
+            ->unique(fn($r) => $r['cpl_id'] . '-' . $r['mata_kuliah_id'])
+            ->values();
+
+        return $jalur;
+    }
+
+    /**
+     * Matriks Pemetaan CPL-MK.
+     *
+     * Mengembalikan tiga lapis informasi dalam satu panggilan:
+     *  - `eligible` : pasangan yang memiliki jalur CPL -> BK -> MK (sel boleh dicentang).
+     *  - `pairs`    : pasangan yang sudah dicentang user di `siakad_mata_kuliah_cpl`.
+     *  - `yatim`    : pasangan yang sudah dicentang tetapi jalur CPL-BK / BK-MK-nya
+     *                 sudah berubah. Tetap ditampilkan agar riwayat akreditasi tidak
+     *                 hilang, namun ditandai untuk ditinjau kembali.
+     */
+    public function getMatrixCplMataKuliah(Request $request)
+    {
+        Gate::authorize('siakad.kurikulum.read');
+
+        $user = $request->user();
+        $prodiId = $this->resolveObeProdiId($request);
+
+        $cpls = Cpl::where('is_active', true)
+            ->whereIn('program_studi_id', $prodiId)
+            ->orderBy('kode_cpl')
+            ->get(['id', 'kode_cpl', 'kategori', 'deskripsi', 'program_studi_id']);
+
+        $mataKuliahs = MataKuliah::with('kurikulum')
+            ->where('is_active', true)
+            ->whereHas('kurikulum', fn($q) => $q->whereIn('program_studi_id', $prodiId))
+            ->orderBy('kode_mk')
+            ->get(['id', 'kurikulum_id', 'kode_mk', 'nama', 'sks', 'semester_anjuran']);
+
+        $eligible = $this->eligibleCplMataKuliahPairs($prodiId);
+
+        $pairs = DB::table('siakad_mata_kuliah_cpl')
+            ->whereIn('cpl_id', $cpls->pluck('id'))
+            ->whereIn('mata_kuliah_id', $mataKuliahs->pluck('id'))
+            ->get(['cpl_id', 'mata_kuliah_id'])
+            ->map(fn($r) => [
+                'cpl_id' => (int) $r->cpl_id,
+                'mata_kuliah_id' => (int) $r->mata_kuliah_id,
+            ])
+            ->values();
+
+        $eligibleKeys = $eligible->map(fn($r) => $r['cpl_id'] . '-' . $r['mata_kuliah_id'])->flip();
+        $yatimKeys = $pairs
+            ->reject(fn($r) => $eligibleKeys->has($r['cpl_id'] . '-' . $r['mata_kuliah_id']))
+            ->map(fn($r) => $r['cpl_id'] . '-' . $r['mata_kuliah_id'])
+            ->flip();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Matriks pemetaan CPL-MK berhasil diambil',
+            'data' => [
+                'cpls' => $cpls,
+                'mata_kuliahs' => $mataKuliahs,
+                'eligible' => $eligible,
+                'pairs' => $pairs,
+                'yatim' => $yatimKeys->keys()->values(),
+            ],
+        ]);
+    }
+
+    /**
+     * Simpan / lepas satu sel Pemetaan CPL-MK.
+     *
+     * Guard kelayakan ditegakkan di server: pasangan yang tidak memiliki jalur
+     * CPL -> BK -> MK ditolak 422 meskipun request dibuat langsung ke API.
+     */
+    public function toggleMatrixCplMataKuliah(Request $request)
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $validated = $request->validate([
+            'cpl_id' => 'required|exists:siakad_cpl,id',
+            'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
+            'is_checked' => 'required|boolean',
+        ]);
+
+        $cplId = (int) $validated['cpl_id'];
+        $mataKuliahId = (int) $validated['mata_kuliah_id'];
+        $isChecked = $request->boolean('is_checked');
+
+        $cpl = Cpl::find($cplId);
+        $mataKuliah = MataKuliah::with('kurikulum')->find($mataKuliahId);
+
+        if (!$cpl || !$mataKuliah) {
+            return response()->json(['status' => 'error', 'message' => 'CPL atau mata kuliah tidak ditemukan.'], 404);
+        }
+
+        $prodiCpl = (int) $cpl->program_studi_id;
+        $prodiMk = (int) ($mataKuliah->kurikulum?->program_studi_id ?? 0);
+
+        if ($prodiCpl !== $prodiMk) {
+            abort(422, sprintf(
+                'Pemetaan CPL-MK tidak tersedia: %s (%s) dan %s berada pada program studi berbeda.',
+                $cpl->kode_cpl,
+                $cpl->program_studi_id,
+                $mataKuliah->kode_mk
+            ));
+        }
+
+        if (!in_array($prodiCpl, $this->allowedObeProdiIds($request), true)) {
+            abort(403, 'Program studi ini bukan berada pada program studi yang boleh Anda kelola.');
+        }
+
+        // Lepas centang selalu boleh terjadi: itu justru perbaikan untuk sel yatim.
+        if (!$isChecked) {
+            DB::table('siakad_mata_kuliah_cpl')
+                ->where('cpl_id', $cplId)
+                ->where('mata_kuliah_id', $mataKuliahId)
+                ->delete();
+
+            try {
+                AuditLogService::record(
+                    module: 'SIAKAD',
+                    action: 'delete',
+                    tableName: 'siakad_mata_kuliah_cpl',
+                    oldValues: ['cpl_id' => $cplId, 'mata_kuliah_id' => $mataKuliahId],
+                    newValues: null,
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal audit log: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Pemetaan CPL-MK berhasil dilepas',
+                'data' => ['cpl_id' => $cplId, 'mata_kuliah_id' => $mataKuliahId, 'is_checked' => false],
+            ]);
+        }
+
+        // Sel hanya boleh dicentang bila sudah ada jalur CPL -> BK -> MK.
+        $sudahDipetakan = $this->eligibleCplMataKuliahPairs($prodiCpl)
+            ->contains(fn($r) => $r['cpl_id'] === $cplId && $r['mata_kuliah_id'] === $mataKuliahId);
+
+        if (!$sudahDipetakan) {
+            abort(422, sprintf(
+                'Pemetaan CPL-MK tidak tersedia: %s belum memiliki jalur CPL -> BK -> MK menuju %s. Lengkapi Pemetaan CPL-BK dan BK-MK terlebih dahulu.',
+                $cpl->kode_cpl,
+                $mataKuliah->kode_mk
+            ));
+        }
+
+        DB::table('siakad_mata_kuliah_cpl')->insertOrIgnore([
+            'mata_kuliah_id' => $mataKuliahId,
+            'cpl_id' => $cplId,
+            'created_at' => now(),
+        ]);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_mata_kuliah_cpl',
+                oldValues: null,
+                newValues: ['cpl_id' => $cplId, 'mata_kuliah_id' => $mataKuliahId],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pemetaan CPL-MK berhasil disimpan',
+            'data' => ['cpl_id' => $cplId, 'mata_kuliah_id' => $mataKuliahId, 'is_checked' => true],
+        ]);
+    }
+
+    /**
+     * Laporan read-only Pemetaan CPL-BK-MK.
+     *
+     * Baris = Bahan Kajian, kolom = CPL, isi sel = daftar Mata Kuliah yang
+     * menjembatani keduanya. murni komposisi CPL -> BK -> MK, tanpa penyimpanan
+     * terpisah sehingga tidak mungkin melenceng dari pemetaan induknya.
+     */
+    public function getMatrixCplBahanKajianMataKuliah(Request $request)
+    {
+        Gate::authorize('siakad.kurikulum.read');
+
+        $prodiId = $this->resolveObeProdiId($request);
+
+        $cpls = Cpl::where('is_active', true)
+            ->whereIn('program_studi_id', $prodiId)
+            ->orderBy('kode_cpl')
+            ->get(['id', 'kode_cpl', 'kategori', 'deskripsi', 'program_studi_id']);
+
+        // `siakad_bahan_kajian` tidak memiliki kolom is_active; bahan kajian aktif
+        // ditentukan oleh kurikulum aktif yang dirujuknya.
+        $bahanKajians = BahanKajian::whereIn('program_studi_id', $prodiId)
+            ->whereHas('kurikulum', fn($q) => $q->where('is_active', true))
+            ->orderBy('kode_bk')
+            ->get(['id', 'kode_bk', 'nama_bk', 'program_studi_id']);
+
+        $jembatan = DB::table('siakad_cpl_bahan_kajian as cpl_bk')
+            ->join('siakad_mata_kuliah_bahan_kajian as mk_bk', 'mk_bk.bahan_kajian_id', '=', 'cpl_bk.bahan_kajian_id')
+            ->join('siakad_mata_kuliah as mk', 'mk.id', '=', 'mk_bk.mata_kuliah_id')
+            ->join('siakad_kurikulum as kur', 'kur.id', '=', 'mk.kurikulum_id')
+            ->whereIn('cpl_bk.cpl_id', $cpls->pluck('id'))
+            ->whereIn('cpl_bk.bahan_kajian_id', $bahanKajians->pluck('id'))
+            ->where('mk.is_active', true)
+            // Guard lintas-prodi: CPL, BK, dan MK harus satu program studi.
+            ->join('siakad_bahan_kajian as bk', 'bk.id', '=', 'cpl_bk.bahan_kajian_id')
+            ->join('siakad_cpl as cpl', 'cpl.id', '=', 'cpl_bk.cpl_id')
+            ->whereColumn('bk.program_studi_id', 'kur.program_studi_id')
+            ->whereColumn('cpl.program_studi_id', 'kur.program_studi_id')
+            ->select([
+                'cpl_bk.cpl_id',
+                'cpl_bk.bahan_kajian_id',
+                'mk.id as mata_kuliah_id',
+                'mk.kode_mk',
+                'mk.nama as nama_mk',
+            ])
+            ->get();
+
+        // Grouping per (CPL, BK) dengan MK unik, mengikuti urutan appearance.
+        $isi = [];
+        foreach ($jembatan as $r) {
+            $isi[$r->cpl_id][$r->bahan_kajian_id] ??= [];
+            $isi[$r->cpl_id][$r->bahan_kajian_id][$r->mata_kuliah_id] = [
+                'kode_mk' => $r->kode_mk,
+                'nama_mk' => $r->nama_mk,
+            ];
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Matriks pemetaan CPL-BK-MK berhasil diambil',
+            'data' => [
+                'cpls' => $cpls,
+                'bahan_kajians' => $bahanKajians,
+                'isi' => collect($isi)->map(fn($perCpl) => collect($perCpl)->map(fn($perMk) => array_values($perMk))->all())->all(),
+            ],
+        ]);
+    }
+
+    /**
      * Simpan pemetaan satu Bahan Kajian ke daftar Mata Kuliah (checkbox).
      */
     public function syncBahanKajianMataKuliah(Request $request)
@@ -2594,68 +2867,6 @@ class ObeController extends Controller
             'status' => 'success',
             'message' => 'Pemetaan Mata Kuliah ke Bahan Kajian berhasil disimpan',
             'data' => $mk->load('bahanKajians')
-        ]);
-    }
-
-    // --- Matriks Korelasi CPL ↔ Mata Kuliah (Checklist Matrix) ---
-    public function getMatrixCplMk(Request $request)
-    {
-        $prodiId = $request->input('program_studi_id');
-        
-        $cpls = Cpl::where('is_active', true)
-            ->when($prodiId, fn($q) => $q->where('program_studi_id', $prodiId))
-            ->orderBy('kode_cpl')
-            ->get();
-
-        $matakuliahs = MataKuliah::with(['cpls', 'cpmks', 'kurikulum'])
-            ->where('is_active', true)
-            ->when($prodiId, function($q) use ($prodiId) {
-                $q->whereHas('kurikulum', fn($k) => $k->where('program_studi_id', $prodiId));
-            })
-            ->orderBy('semester_anjuran')
-            ->orderBy('kode_mk')
-            ->get();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Data matriks CPL dan Mata Kuliah berhasil dimuat',
-            'data' => [
-                'cpls' => $cpls,
-                'matakuliahs' => $matakuliahs,
-            ]
-        ]);
-    }
-
-    public function toggleMatrixCplMk(Request $request)
-    {
-        $request->validate([
-            'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
-            'cpl_id' => 'required|exists:siakad_cpl,id',
-            'is_checked' => 'required|boolean',
-        ]);
-
-        // Matriks CPL-MK hanya Kaprodi/BAAK
-        $user = $request->user();
-        if (!$user || !($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'))) {
-            return response()->json(['status' => 'error', 'message' => 'Pemetaan CPL-MK hanya untuk Kaprodi/BAAK.'], 403);
-        }
-
-        $mk = MataKuliah::findOrFail($request->mata_kuliah_id);
-
-        if ($request->boolean('is_checked')) {
-            $mk->cpls()->syncWithoutDetaching([$request->cpl_id]);
-        } else {
-            $mk->cpls()->detach($request->cpl_id);
-        }
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Korelasi CPL terhadap mata kuliah berhasil diperbarui',
-            'data' => [
-                'mata_kuliah_id' => $mk->id,
-                'cpl_id' => (int) $request->cpl_id,
-                'is_checked' => $request->boolean('is_checked'),
-            ]
         ]);
     }
 
@@ -2849,5 +3060,46 @@ class ObeController extends Controller
                 'dosen_kepatuhan' => $result,
             ]
         ]);
+    }
+
+    /**
+     * Daftar id program studi yang boleh diakses user pada matriks OBE.
+     *
+     * Mengembalikan array berisi id agar bisa dipakai langsung pada `in_array`
+     * strict comparison dan `whereIn`.
+     *
+     * @return array<int, int>
+     */
+    private function allowedObeProdiIds(Request $request): array
+    {
+        $user = $request->user();
+        if (!$user || !method_exists($user, 'getSiakadProdiIds')) {
+            return [];
+        }
+
+        return $user->getSiakadProdiIds()
+            ->map(fn($id) => (int) $id)
+            ->all();
+    }
+
+    /**
+     * Program studi aktif yang dipakai matriks OBE.
+     *
+     * Sesuai aturan OBE admin, halaman tidak menyediakan input program studi karena
+     * prodi mengikuti prodi aktif akun. Superadmin tetap dapat membatasi tampilan
+     * lewat query string `program_studi_id` tanpa mengabaikan scope prodi aktif.
+     *
+     * @return array<int, int>
+     */
+    private function resolveObeProdiId(Request $request): array
+    {
+        $allowed = $this->allowedObeProdiIds($request);
+        $requested = $request->filled('program_studi_id') ? (int) $request->program_studi_id : null;
+
+        if ($requested && in_array($requested, $allowed, true)) {
+            return [$requested];
+        }
+
+        return $allowed;
     }
 }

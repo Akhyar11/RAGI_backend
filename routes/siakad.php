@@ -255,6 +255,13 @@ Route::prefix('obe')->group(function () {
     Route::post('/bahan-kajian/mata-kuliah', [ObeController::class, 'syncBahanKajianMataKuliah']);
     Route::post('/matakuliah/bahan-kajian', [ObeController::class, 'mapMataKuliahBahanKajian']);
 
+    // Pemetaan CPL-MK: hanya sel yang sudah punya jalur CPL -> BK -> MK yang boleh dicentang.
+    Route::get('/matrix/cpl-mata-kuliah', [ObeController::class, 'getMatrixCplMataKuliah']);
+    Route::post('/cpl/mata-kuliah', [ObeController::class, 'toggleMatrixCplMataKuliah']);
+
+    // Pemetaan CPL-BK-MK: laporan read-only hasil komposisi CPL -> BK -> MK.
+    Route::get('/matrix/cpl-bahan-kajian-mata-kuliah', [ObeController::class, 'getMatrixCplBahanKajianMataKuliah']);
+
     Route::get('/rps', [ObeController::class, 'listRps']);
     Route::get('/rps/{id}', [ObeController::class, 'showRps']);
     Route::post('/rps', [ObeController::class, 'storeRps']);
@@ -280,8 +287,7 @@ Route::prefix('obe')->group(function () {
     Route::post('/kelas/{kelasId}/nilai', [ObeController::class, 'saveKelasNilaiObe']);
     Route::post('/kelas/{kelasId}/bulk-nilai', [ObeController::class, 'saveBulkNilaiObe']);
 
-    Route::get('/matrix-cpl-mk', [ObeController::class, 'getMatrixCplMk']);
-    Route::post('/matrix-cpl-mk/toggle', [ObeController::class, 'toggleMatrixCplMk']);
+    // Pemetaan CPL-MK kini dilayani oleh /matrix/cpl-mata-kuliah (menu "Mata Kuliah & SKS").
 
     // Pemantauan & Audit Pemetaan OBE
     Route::get('/audit-pemetaan', [ObeController::class, 'getAuditPemetaan']);
