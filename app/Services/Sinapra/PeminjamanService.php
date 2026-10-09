@@ -140,11 +140,62 @@ class PeminjamanService
 
                 $peminjaman->status = 'disetujui';
 
-                // Otomatis generate nomor surat bukti peminjaman jika belum ada
+                // Otomatis integrasikan penomoran surat ke modul ARSIP jika belum ada nomor surat
                 if (empty($peminjaman->nomor_surat)) {
-                    $bulan = date('m');
-                    $tahun = date('Y');
-                    $nomorSurat = sprintf('%03d/SINAPRA-RUANG/%s/%s', $peminjaman->id, $bulan, $tahun);
+                    $nomorSurat = null;
+                    try {
+                        $peminjamUser = $peminjaman->user()->with(['pegawai.unitKerja', 'mahasiswa.prodi'])->first();
+                        $unitKerjaKode = $peminjamUser?->pegawai?->unitKerja?->kode ?? 'BAUK-01';
+                        $tanggalSurat = $peminjaman->tanggal ? $peminjaman->tanggal->toDateString() : now()->toDateString();
+                        $ruanganNama = $peminjaman->ruangan?->nama ?? 'Ruangan Kampus';
+
+                        // Buat permohonan nomor surat resmi ke modul ARSIP
+                        $arsipRequestService = app(\App\Services\Arsip\RequestNomorSuratService::class);
+                        $arsipReq = $arsipRequestService->createRequest([
+                            'module_origin' => 'sinapra',
+                            'reference_type' => \App\Models\PeminjamanRuangan::class,
+                            'reference_id' => $peminjaman->id,
+                            'perihal' => 'Izin Peminjaman Ruangan: ' . $ruanganNama . ' - ' . $peminjaman->keperluan,
+                            'tujuan' => $peminjamUser?->name ?? 'Peminjam Ruangan',
+                            'tanggal_surat' => $tanggalSurat,
+                            'kode_unit' => $unitKerjaKode,
+                            'kode_klasifikasi' => 'DVIII', // Surat Keterangan / Izin Pemakaian
+                            'jumlah_nomor' => 1,
+                            'catatan_pemohon' => 'Permohonan nomor surat bukti peminjaman ruangan SINAPRA kode ' . $peminjaman->kode_peminjaman,
+                        ], $approverId);
+
+                        // Terbitkan nomor resmi langsung via ARSIP NomorSuratService yang terdaftar di agenda ARSIP
+                        $arsipNomorService = app(\App\Services\Arsip\NomorSuratService::class);
+                        $nomorResmi = $arsipNomorService->generateSatuan([
+                            'tanggal_surat' => $tanggalSurat,
+                            'kode_unit' => $unitKerjaKode,
+                            'kode_klasifikasi' => 'DVIII',
+                            'perihal' => 'Izin Peminjaman Ruangan: ' . $ruanganNama . ' - ' . $peminjaman->keperluan,
+                            'tujuan' => $peminjamUser?->name ?? 'Peminjam Ruangan',
+                            'status' => 'terpakai',
+                            'module_origin' => 'sinapra',
+                            'request_id' => $arsipReq->id,
+                            'reference_type' => \App\Models\PeminjamanRuangan::class,
+                            'reference_id' => $peminjaman->id,
+                            'catatan' => 'Peminjaman Ruangan SINAPRA #' . $peminjaman->id,
+                        ], $approverId);
+
+                        $arsipReq->update([
+                            'status' => 'disetujui',
+                            'verified_by' => $approverId,
+                            'verified_at' => now(),
+                            'catatan_verifikasi' => 'Disetujui otomatis melalui persetujuan peminjaman ruangan SINAPRA.',
+                        ]);
+
+                        $nomorSurat = $nomorResmi->nomor_surat;
+                    } catch (\Throwable $e) {
+                        Log::warning('Gagal generate nomor surat ARSIP untuk PeminjamanRuangan #' . $peminjaman->id . ': ' . $e->getMessage());
+                        // Fallback penomoran jika layanan ARSIP terkendala
+                        $bulan = date('m');
+                        $tahun = date('Y');
+                        $nomorSurat = sprintf('%03d/SINAPRA-RUANG/%s/%s', $peminjaman->id, $bulan, $tahun);
+                    }
+
                     $peminjaman->nomor_surat = $nomorSurat;
                     $peminjaman->surat_generated_at = now();
                 }
@@ -313,11 +364,62 @@ class PeminjamanService
                 $peminjaman->status = 'disetujui';
                 $aset->update(['status' => 'dipinjam']);
 
-                // Generate nomor surat peminjaman resmi jika belum ada
+                // Otomatis integrasikan penomoran surat ke modul ARSIP jika belum ada nomor surat
                 if (empty($peminjaman->nomor_surat)) {
-                    $bulan = date('m');
-                    $tahun = date('Y');
-                    $nomorSurat = sprintf('%03d/SINAPRA-ASET/%s/%s', $peminjaman->id, $bulan, $tahun);
+                    $nomorSurat = null;
+                    try {
+                        $peminjamUser = $peminjaman->user()->with(['pegawai.unitKerja', 'mahasiswa.prodi'])->first();
+                        $unitKerjaKode = $peminjamUser?->pegawai?->unitKerja?->kode ?? 'BAUK-01';
+                        $tanggalSurat = $peminjaman->tanggal_pinjam ? $peminjaman->tanggal_pinjam->toDateString() : now()->toDateString();
+                        $asetNama = $aset->nama ?? 'Aset Kampus';
+
+                        // Buat permohonan nomor surat resmi ke modul ARSIP
+                        $arsipRequestService = app(\App\Services\Arsip\RequestNomorSuratService::class);
+                        $arsipReq = $arsipRequestService->createRequest([
+                            'module_origin' => 'sinapra',
+                            'reference_type' => \App\Models\PeminjamanAset::class,
+                            'reference_id' => $peminjaman->id,
+                            'perihal' => 'Izin Peminjaman Barang/Aset: ' . $asetNama . ' - ' . $peminjaman->keperluan,
+                            'tujuan' => $peminjamUser?->name ?? 'Peminjam Aset',
+                            'tanggal_surat' => $tanggalSurat,
+                            'kode_unit' => $unitKerjaKode,
+                            'kode_klasifikasi' => 'DVIII', // Surat Keterangan / Izin Pemakaian
+                            'jumlah_nomor' => 1,
+                            'catatan_pemohon' => 'Permohonan nomor surat bukti peminjaman aset SINAPRA kode ' . $peminjaman->kode_peminjaman,
+                        ], $approverId);
+
+                        // Terbitkan nomor resmi langsung via ARSIP NomorSuratService yang terdaftar di agenda ARSIP
+                        $arsipNomorService = app(\App\Services\Arsip\NomorSuratService::class);
+                        $nomorResmi = $arsipNomorService->generateSatuan([
+                            'tanggal_surat' => $tanggalSurat,
+                            'kode_unit' => $unitKerjaKode,
+                            'kode_klasifikasi' => 'DVIII',
+                            'perihal' => 'Izin Peminjaman Barang/Aset: ' . $asetNama . ' - ' . $peminjaman->keperluan,
+                            'tujuan' => $peminjamUser?->name ?? 'Peminjam Aset',
+                            'status' => 'terpakai',
+                            'module_origin' => 'sinapra',
+                            'request_id' => $arsipReq->id,
+                            'reference_type' => \App\Models\PeminjamanAset::class,
+                            'reference_id' => $peminjaman->id,
+                            'catatan' => 'Peminjaman Aset SINAPRA #' . $peminjaman->id,
+                        ], $approverId);
+
+                        $arsipReq->update([
+                            'status' => 'disetujui',
+                            'verified_by' => $approverId,
+                            'verified_at' => now(),
+                            'catatan_verifikasi' => 'Disetujui otomatis melalui persetujuan peminjaman aset SINAPRA.',
+                        ]);
+
+                        $nomorSurat = $nomorResmi->nomor_surat;
+                    } catch (\Throwable $e) {
+                        Log::warning('Gagal generate nomor surat ARSIP untuk PeminjamanAset #' . $peminjaman->id . ': ' . $e->getMessage());
+                        // Fallback penomoran jika layanan ARSIP terkendala
+                        $bulan = date('m');
+                        $tahun = date('Y');
+                        $nomorSurat = sprintf('%03d/SINAPRA-ASET/%s/%s', $peminjaman->id, $bulan, $tahun);
+                    }
+
                     $peminjaman->nomor_surat = $nomorSurat;
                     $peminjaman->surat_generated_at = now();
 

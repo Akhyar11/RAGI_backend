@@ -138,7 +138,19 @@ class SinapraPeminjamanSuratTest extends TestCase
         $this->assertEquals('disetujui', $peminjaman->status);
         $this->assertNotEmpty($peminjaman->nomor_surat);
         $this->assertNotNull($peminjaman->surat_generated_at);
-        $this->assertStringContainsString('SINAPRA-RUANG', $peminjaman->nomor_surat);
+        $this->assertStringContainsString('DVIII', $peminjaman->nomor_surat);
+        $this->assertDatabaseHas('core_arsip_request_nomor', [
+            'module_origin' => 'sinapra',
+            'reference_type' => PeminjamanRuangan::class,
+            'reference_id' => $peminjaman->id,
+            'status' => 'disetujui',
+        ]);
+        $this->assertDatabaseHas('core_arsip_nomor_surat', [
+            'module_origin' => 'sinapra',
+            'nomor_surat' => $peminjaman->nomor_surat,
+            'reference_type' => PeminjamanRuangan::class,
+            'reference_id' => $peminjaman->id,
+        ]);
 
         // Get surat endpoint
         $suratResponse = $this->getJson("/api/sinapra/peminjaman-ruangan/{$peminjamanId}/surat");
@@ -201,7 +213,19 @@ class SinapraPeminjamanSuratTest extends TestCase
         $this->assertEquals('disetujui', $peminjaman->status);
         $this->assertNotEmpty($peminjaman->nomor_surat);
         $this->assertNotNull($peminjaman->surat_generated_at);
-        $this->assertStringContainsString('SINAPRA-ASET', $peminjaman->nomor_surat);
+        $this->assertStringContainsString('DVIII', $peminjaman->nomor_surat);
+        $this->assertDatabaseHas('core_arsip_request_nomor', [
+            'module_origin' => 'sinapra',
+            'reference_type' => PeminjamanAset::class,
+            'reference_id' => $peminjaman->id,
+            'status' => 'disetujui',
+        ]);
+        $this->assertDatabaseHas('core_arsip_nomor_surat', [
+            'module_origin' => 'sinapra',
+            'nomor_surat' => $peminjaman->nomor_surat,
+            'reference_type' => PeminjamanAset::class,
+            'reference_id' => $peminjaman->id,
+        ]);
 
         // Get surat endpoint
         $suratResponse = $this->getJson("/api/sinapra/peminjaman-aset/{$peminjamanId}/surat");

@@ -230,7 +230,7 @@ Deskripsi: Mengambil rincian Surat Izin Peminjaman Ruangan resmi kampus lengkap 
     "data": {
         "peminjaman_id": 1,
         "kode_peminjaman": "PMR-20261001-A1B2C",
-        "nomor_surat": "001/SINAPRA-RUANG/10/2026",
+        "nomor_surat": "1/DVIII/BAUK-01/X/2026",
         "surat_generated_at": "2026-10-01 10:15:00",
         "tanggal": "2026-10-01",
         "jam_mulai": "08:00:00",
@@ -498,7 +498,7 @@ Deskripsi: Mengambil rincian Surat Izin Peminjaman Aset resmi kampus lengkap den
     "data": {
         "peminjaman_id": 1,
         "kode_peminjaman": "PMA-20261001-A1B2C",
-        "nomor_surat": "001/SINAPRA-ASET/10/2026",
+        "nomor_surat": "2/DVIII/BAUK-01/X/2026",
         "surat_generated_at": "2026-10-01 10:15:00",
         "tanggal_pinjam": "2026-10-01",
         "tanggal_kembali_rencana": "2026-10-05",

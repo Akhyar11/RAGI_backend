@@ -199,7 +199,7 @@ class RequestNomorSuratService
     }
 
     /**
-     * Sinkronisasi nomor surat resmi yang telah disahkan ke model pemohon (seperti SIMPEG Surat Tugas)
+     * Sinkronisasi nomor surat resmi yang telah disahkan ke model pemohon (seperti SIMPEG Surat Tugas, SINAPRA Peminjaman Ruangan & Aset)
      */
     protected function syncNumberToEntity(string $referenceType, int $referenceId, string $nomorSurat): void
     {
@@ -213,6 +213,30 @@ class RequestNomorSuratService
                     if ($st->sikeu_pencairan_id) {
                         \App\Models\Sikeu\PengajuanPencairanKas::where('id', $st->sikeu_pencairan_id)
                             ->update(['referensi_eksternal' => $nomorSurat]);
+                    }
+                }
+            } elseif ($referenceType === \App\Models\PeminjamanRuangan::class || $referenceType === 'sinapra_peminjaman_ruangan' || str_ends_with($referenceType, 'PeminjamanRuangan')) {
+                $pr = \App\Models\PeminjamanRuangan::find($referenceId);
+                if ($pr) {
+                    $pr->update([
+                        'nomor_surat' => $nomorSurat,
+                        'surat_generated_at' => Carbon::now(),
+                    ]);
+                }
+            } elseif ($referenceType === \App\Models\PeminjamanAset::class || $referenceType === 'sinapra_peminjaman_aset' || str_ends_with($referenceType, 'PeminjamanAset')) {
+                $pa = \App\Models\PeminjamanAset::find($referenceId);
+                if ($pa) {
+                    $pa->update([
+                        'nomor_surat' => $nomorSurat,
+                        'surat_generated_at' => Carbon::now(),
+                    ]);
+
+                    if (!empty($pa->kode_peminjaman)) {
+                        \App\Models\PeminjamanAset::where('kode_peminjaman', $pa->kode_peminjaman)
+                            ->update([
+                                'nomor_surat' => $nomorSurat,
+                                'surat_generated_at' => Carbon::now(),
+                            ]);
                     }
                 }
             }
