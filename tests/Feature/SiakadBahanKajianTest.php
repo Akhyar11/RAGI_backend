@@ -111,6 +111,58 @@ class SiakadBahanKajianTest extends TestCase
         $this->assertSoftDeleted('siakad_bahan_kajian', ['id' => $id]);
     }
 
+    public function test_bahan_kajian_scoped_to_active_prodi(): void
+    {
+        $prodiLain = ProgramStudi::create([
+            'kode_prodi' => 'BK98',
+            'nama' => 'Prodi Lain',
+            'jenjang' => 'S1',
+            'is_active' => true,
+        ]);
+        BahanKajian::create([
+            'program_studi_id' => $prodiLain->id,
+            'kode_bk' => 'BK-LAIN',
+            'nama_bk' => 'Bahan milik prodi lain',
+        ]);
+        BahanKajian::create([
+            'program_studi_id' => $this->prodi->id,
+            'kode_bk' => 'BK-MINE',
+            'nama_bk' => 'Bahan milik prodi sendiri',
+        ]);
+
+        // Tim kurikulum dengan penugasan prodi sendiri: hanya melihat BK prodi sendiri.
+        $scoped = User::factory()->create(['is_active' => true]);
+        $role = \App\Models\Role::create(['name' => 'Tim Kurikulum BK', 'slug' => 'tim_kurikulum_bk', 'is_active' => true]);
+        $role->permissions()->attach(\App\Models\Permission::where('slug', 'siakad.kurikulum.read')->first()->id);
+        $scoped->roles()->attach($role->id);
+        DB::table('siakad_admin_prodi')->insert([
+            'user_id' => $scoped->id,
+            'program_studi_id' => $this->prodi->id,
+            'jabatan' => 'Admin OBE',
+            'is_active' => true,
+        ]);
+        Passport::actingAs($scoped);
+
+        $res = $this->getJson('/api/v1/siakad/obe/bahan-kajian');
+        $res->assertStatus(200)->assertJsonCount(1, 'data');
+        $this->assertSame('BK-MINE', $res->json('data.0.kode_bk'));
+
+        // Tanpa penugasan prodi sama sekali: tidak boleh melihat data prodi lain.
+        $tanpaProdi = User::factory()->create(['is_active' => true]);
+        $role2 = \App\Models\Role::create(['name' => 'Tanpa Prodi', 'slug' => 'tanpa_prodi_bk', 'is_active' => true]);
+        $role2->permissions()->attach(\App\Models\Permission::where('slug', 'siakad.kurikulum.read')->first()->id);
+        $tanpaProdi->roles()->attach($role2->id);
+        Passport::actingAs($tanpaProdi);
+
+        $this->getJson('/api/v1/siakad/obe/bahan-kajian')
+            ->assertStatus(200)
+            ->assertJsonPath('data', []);
+
+        $this->getJson('/api/v1/siakad/obe/bahan-kajian/matrix/cpl')
+            ->assertStatus(200)
+            ->assertJsonPath('data.bahan_kajians', []);
+    }
+
     public function test_matrix_cpl_bahan_kajian(): void
     {
         $cpl = Cpl::create([

@@ -2191,11 +2191,10 @@ class ObeController extends Controller
 
         $query = BahanKajian::with(['programStudi', 'kurikulum', 'koordinator', 'mataKuliahs', 'cpls']);
 
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
-            $allowedProdiIds = $user->getSiakadProdiIds();
-            if ($allowedProdiIds->isNotEmpty()) {
-                $query->whereIn('program_studi_id', $allowedProdiIds);
-            }
+        // Data BK hanya milik prodi aktif pengguna. User tanpa prodi aktif
+        // tidak boleh melihat data prodi lain sama sekali.
+        if ($user && !$user->isSuperAdmin() && method_exists($user, 'getSiakadProdiIds')) {
+            $query->whereIn('program_studi_id', $user->getSiakadProdiIds());
         } elseif ($request->filled('program_studi_id')) {
             $query->where('program_studi_id', $request->program_studi_id);
         }
@@ -2387,11 +2386,8 @@ class ObeController extends Controller
         $cplQuery = Cpl::query()->where('is_active', true)->orderBy('kode_cpl');
 
         $scope = function ($query, $user, $request) {
-            if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
-                $allowedProdiIds = $user->getSiakadProdiIds();
-                if ($allowedProdiIds->isNotEmpty()) {
-                    $query->whereIn('program_studi_id', $allowedProdiIds);
-                }
+            if ($user && !$user->isSuperAdmin() && method_exists($user, 'getSiakadProdiIds')) {
+                $query->whereIn('program_studi_id', $user->getSiakadProdiIds());
             } elseif ($request->filled('program_studi_id')) {
                 $query->where('program_studi_id', $request->program_studi_id);
             }
@@ -2476,12 +2472,10 @@ class ObeController extends Controller
             ->where('is_active', true)
             ->orderBy('kode_mk');
 
-        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
+        if ($user && !$user->isSuperAdmin() && method_exists($user, 'getSiakadProdiIds')) {
             $allowedProdiIds = $user->getSiakadProdiIds();
-            if ($allowedProdiIds->isNotEmpty()) {
-                $bkQuery->whereIn('program_studi_id', $allowedProdiIds);
-                $mkQuery->whereHas('kurikulum', fn($q) => $q->whereIn('program_studi_id', $allowedProdiIds));
-            }
+            $bkQuery->whereIn('program_studi_id', $allowedProdiIds);
+            $mkQuery->whereHas('kurikulum', fn($q) => $q->whereIn('program_studi_id', $allowedProdiIds));
         } else {
             if ($request->filled('program_studi_id')) {
                 $bkQuery->where('program_studi_id', $request->program_studi_id);

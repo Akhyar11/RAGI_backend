@@ -216,6 +216,8 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, k
 ## [GET] /api/v1/siakad/obe/bahan-kajian
 
 > Daftar Bahan Kajian (BK) milik program studi pengguna. Wajib permission `siakad.kurikulum.read`.
+> Untuk user non-superadmin, hasil **selalu** dibatasi ke program studi aktif miliknya
+> (user tanpa penugasan prodi akan memperoleh `data: []`, bukan seluruh data).
 
 ### Request Headers
 
