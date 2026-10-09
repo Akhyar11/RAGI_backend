@@ -39,6 +39,10 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, k
 | GET | `/api/v1/siakad/obe/matrix/cpl-mata-kuliah` | Matriks Pemetaan CPL-MK + status kelayakan sel (`eligible` / `pairs` / `yatim`) | ✅ `siakad.kurikulum.read` |
 | POST | `/api/v1/siakad/obe/cpl/mata-kuliah` | Simpan / lepas satu sel CPL-MK (hanya jika ada jalur CPL → BK → MK) | ✅ `siakad.kurikulum.manage` |
 | GET | `/api/v1/siakad/obe/matrix/cpl-bahan-kajian-mata-kuliah` | Laporan read-only Pemetaan CPL-BK-MK (baris BK × kolom CPL, isi sel = daftar MK) | ✅ `siakad.kurikulum.read` |
+| GET | `/api/v1/siakad/obe/cpmk-prodi` | Daftar Rumusan CPMK Program Studi (CPMK-PS) | ✅ `siakad.kurikulum.read` |
+| POST | `/api/v1/siakad/obe/cpmk-prodi` | Tambah Rumusan CPMK Program Studi | ✅ `StoreCpmkProdiRequest::authorize()` |
+| PUT | `/api/v1/siakad/obe/cpmk-prodi/{id}` | Perbarui Rumusan CPMK Program Studi | ✅ `StoreCpmkProdiRequest::authorize()` |
+| DELETE | `/api/v1/siakad/obe/cpmk-prodi/{id}` | Hapus Rumusan CPMK Program Studi (soft delete) | ✅ `canManageObeForProdi()` |
 | GET | `/api/v1/siakad/obe/rps` | Daftar RPS | ✅ |
 | GET | `/api/v1/siakad/obe/rps/{id}` | Detail RPS | ✅ |
 | POST | `/api/v1/siakad/obe/rps` | Simpan RPS | ✅ |
@@ -671,6 +675,187 @@ satu jalur dijamin berasal dari program studi yang sama.
 ### Response Error
 
 **401 Unauthorized** / **403 Forbidden** — seperti endpoint lain.
+
+---
+
+## [GET] /api/v1/siakad/obe/cpmk-prodi
+
+> Daftar Rumusan CPMK Program Studi (CPMK-PS). Wajib permission `siakad.kurikulum.read`.
+> Program studi mengikuti prodi aktif akun user.
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `kurikulum_id` | integer | ❌ | Filter kurikulum |
+| `cpl_id` | integer | ❌ | Filter CPL prodi |
+| `search` | string | ❌ | Cari kode/rumusan CPMK |
+| `sort_by` | string | ❌ | Whitelist: `kode_cpmk`, `created_at`, `id` (default `kode_cpmk`) |
+| `sort_order` | string | ❌ | `asc` / `desc` |
+| `per_page` | integer | ❌ | Default 15, maks 100 |
+| `page` | integer | ❌ | Halaman |
+
+### Response Sukses
+
+**200 OK** (dengan pagination)
+```json
+{
+    "status": "success",
+    "message": "Daftar rumusan CPMK program studi berhasil diambil",
+    "data": [
+        {
+            "id": 1,
+            "kurikulum_id": 2,
+            "cpl_id": 4,
+            "kode_cpmk": "CPMK-01",
+            "deskripsi": "Mampu merancang arsitektur sistem cloud",
+            "kurikulum": { "id": 2, "nama": "K23 Indonesia Mantap" },
+            "cpl": { "id": 4, "kode_cpl": "CPL01", "deskripsi": "..." }
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** — seperti endpoint lain.
+
+---
+
+## [POST] /api/v1/siakad/obe/cpmk-prodi
+
+> Menyimpan rumusan CPMK program studi baru. Menggunakan validasi `StoreCpmkProdiRequest`
+> yang memverifikasi prodi aktif user (`canManageObeForProdi()`).
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `kurikulum_id` | integer | ✅ | `exists:siakad_kurikulum,id` |
+| `cpl_id` | integer | ✅ | `exists:siakad_cpl,id`; wajib milik prodi yang sama dengan kurikulum |
+| `kode_cpmk` | string | ✅ | Unik per kurikulum, maks 50 |
+| `deskripsi` | string | ✅ | Rumusan CPMK, maks 2000 |
+
+```json
+{
+    "kurikulum_id": 2,
+    "cpl_id": 4,
+    "kode_cpmk": "CPMK-01",
+    "deskripsi": "Mampu merancang arsitektur sistem cloud"
+}
+```
+
+### Response Sukses
+
+**201 Created**
+```json
+{
+    "status": "success",
+    "message": "Rumusan CPMK program studi berhasil disimpan",
+    "data": {
+        "id": 1,
+        "kurikulum_id": 2,
+        "cpl_id": 4,
+        "kode_cpmk": "CPMK-01",
+        "deskripsi": "Mampu merancang arsitektur sistem cloud"
+    }
+}
+```
+
+### Response Error
+
+| Kode | Keterangan |
+|---|---|
+| **401 / 403** | Token tidak valid atau prodi di luar scope user |
+| **422** | CPL bukan milik prodi kurikulum tersebut, atau kode CPMK sudah terpakai |
+
+---
+
+## [PUT] /api/v1/siakad/obe/cpmk-prodi/{id}
+
+> Memperbarui rumusan CPMK program studi. Kurikulum bersifat tetap; CPL, kode, dan
+> rumusan dapat diubah.
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID rumusan CPMK prodi |
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `kurikulum_id` | integer | ✅ | `exists:siakad_kurikulum,id` (harus sama dengan kurikulum tersimpan) |
+| `cpl_id` | integer | ✅ | `exists:siakad_cpl,id`; wajib milik prodi yang sama |
+| `kode_cpmk` | string | ✅ | Kode CPMK unik per kurikulum |
+| `deskripsi` | string | ✅ | Rumusan CPMK, maks 2000 |
+
+```json
+{
+    "kurikulum_id": 2,
+    "cpl_id": 4,
+    "kode_cpmk": "CPMK-01",
+    "deskripsi": "Mampu merancang arsitektur sistem cloud terdistribusi"
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Rumusan CPMK program studi berhasil diperbarui",
+    "data": {
+        "id": 1,
+        "kurikulum_id": 2,
+        "cpl_id": 4,
+        "kode_cpmk": "CPMK-01",
+        "deskripsi": "Mampu merancang arsitektur sistem cloud terdistribusi"
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** / **404 Not Found** / **422 Unprocessable Entity**.
+
+---
+
+## [DELETE] /api/v1/siakad/obe/cpmk-prodi/{id}
+
+> Menghapus rumusan CPMK program studi (soft delete). Tim Kurikulum hanya boleh
+> menghapus rumusan milik prodi aktifnya.
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID rumusan CPMK prodi |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Rumusan CPMK program studi berhasil dihapus",
+    "data": null
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** / **404 Not Found**.
 
 ---
 

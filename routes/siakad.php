@@ -205,6 +205,12 @@ Route::prefix('obe')->group(function () {
     Route::post('/cpl', [ObeController::class, 'storeCpl']);
     Route::put('/cpl/{id}', [ObeController::class, 'updateCpl']);
     Route::delete('/cpl/{id}', [ObeController::class, 'destroyCpl']);
+    // Rumusan CPMK Program Studi (CPMK-PS): terpisah dari CPMK per Mata Kuliah.
+    Route::get('/cpmk-prodi', [ObeController::class, 'getCpmkProdi']);
+    Route::post('/cpmk-prodi', [ObeController::class, 'storeCpmkProdi']);
+    Route::put('/cpmk-prodi/{id}', [ObeController::class, 'updateCpmkProdi']);
+    Route::delete('/cpmk-prodi/{id}', [ObeController::class, 'destroyCpmkProdi']);
+
     Route::get('/cpmk', [ObeController::class, 'getCpmk']);
     Route::post('/cpmk', [ObeController::class, 'storeCpmk']);
     Route::get('/sub-cpmk', [ObeController::class, 'getSubCpmk']);

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Siakad\Cpl;
 use App\Models\Siakad\Cpmk;
+use App\Models\Siakad\CpmkProdi;
 use App\Models\Siakad\SubCpmk;
 use App\Models\Siakad\ProfilLulusan;
 use App\Models\Siakad\BahanKajian;
@@ -27,6 +28,7 @@ use App\Models\Siakad\MataKuliah;
 use App\Services\Siakad\SiakadAkademikService;
 use App\Http\Requests\Siakad\StoreCplRequest;
 use App\Http\Requests\Siakad\StoreBahanKajianRequest;
+use App\Http\Requests\Siakad\StoreCpmkProdiRequest;
 use App\Http\Requests\Siakad\StoreKelasKomponenRequest;
 use App\Services\AuditLogService;
 use Illuminate\Support\Facades\DB;
@@ -250,6 +252,175 @@ class ObeController extends Controller
         return response()->json([
             'status' => 'success',
             'data' => $query->get()
+        ]);
+    }
+
+    // ============================================================
+    // Rumusan CPMK Program Studi (CPMK-PS)
+    // Terpisah dari `siakad_cpmk` yang merupakan CPMK per Mata Kuliah.
+    // ============================================================
+
+    /**
+     * Daftar rumusan CPMK program studi dengan filter, sort whitelist, dan
+     * pagination server-side. Program studi mengikuti prodi aktif user.
+     */
+    public function getCpmkProdi(Request $request)
+    {
+        Gate::authorize('siakad.kurikulum.read');
+
+        $prodiIds = $this->resolveObeProdiId($request);
+
+        $query = CpmkProdi::with(['kurikulum', 'cpl'])
+            ->whereHas('kurikulum', fn ($q) => $q->whereIn('program_studi_id', $prodiIds));
+
+        if ($request->filled('kurikulum_id')) {
+            $query->where('kurikulum_id', $request->kurikulum_id);
+        }
+
+        if ($request->filled('cpl_id')) {
+            $query->where('cpl_id', $request->cpl_id);
+        }
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('kode_cpmk', 'like', "%{$s}%")
+                    ->orWhere('deskripsi', 'like', "%{$s}%");
+            });
+        }
+
+        $allowedSort = ['kode_cpmk', 'created_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'kode_cpmk';
+        $query->orderBy($sortBy, $request->sort_order === 'desc' ? 'desc' : 'asc');
+
+        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
+            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+            $data = $query->paginate($perPage);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Daftar rumusan CPMK program studi berhasil diambil',
+                'data' => $data->items(),
+                'meta' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar rumusan CPMK program studi berhasil diambil',
+            'data' => $query->get(),
+        ]);
+    }
+
+    /**
+     * Simpan rumusan CPMK program studi baru (create/update berdasar kode + kurikulum).
+     */
+    public function storeCpmkProdi(StoreCpmkProdiRequest $request)
+    {
+        $validated = $request->validated();
+
+        $cpmkProdi = CpmkProdi::updateOrCreate(
+            ['kurikulum_id' => $validated['kurikulum_id'], 'kode_cpmk' => $validated['kode_cpmk']],
+            [
+                'cpl_id' => $validated['cpl_id'],
+                'deskripsi' => $validated['deskripsi'],
+            ]
+        );
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: $cpmkProdi->wasRecentlyCreated ? 'create' : 'update',
+                tableName: 'siakad_cpmk_prodi',
+                recordId: $cpmkProdi->id,
+                oldValues: null,
+                newValues: $cpmkProdi->toArray(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Rumusan CPMK program studi berhasil disimpan',
+            'data' => $cpmkProdi->load(['kurikulum', 'cpl']),
+        ], 201);
+    }
+
+    public function updateCpmkProdi(StoreCpmkProdiRequest $request, int $id)
+    {
+        // Otorisasi per prodi ditangani StoreCpmkProdiRequest.
+        $cpmkProdi = CpmkProdi::findOrFail($id);
+        $old = $cpmkProdi->getOriginal();
+
+        $validated = $request->validated();
+
+        // Kurikulum bersifat tetap: hanya CPL, kode, dan rumusan yang dapat diubah.
+        $cpmkProdi->update([
+            'cpl_id' => $validated['cpl_id'],
+            'kode_cpmk' => $validated['kode_cpmk'],
+            'deskripsi' => $validated['deskripsi'],
+        ]);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_cpmk_prodi',
+                recordId: $cpmkProdi->id,
+                oldValues: $old,
+                newValues: $cpmkProdi->getChanges(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Rumusan CPMK program studi berhasil diperbarui',
+            'data' => $cpmkProdi->load(['kurikulum', 'cpl']),
+        ]);
+    }
+
+    public function destroyCpmkProdi(Request $request, int $id)
+    {
+        $cpmkProdi = CpmkProdi::with('kurikulum')->findOrFail($id);
+
+        $user = $request->user();
+        if (!$user || !$user->canManageObeForProdi((int) $cpmkProdi->kurikulum?->program_studi_id)) {
+            return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses.'], 403);
+        }
+
+        $old = $cpmkProdi->getOriginal();
+        $cpmkProdi->delete();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_cpmk_prodi',
+                recordId: $id,
+                oldValues: $old,
+                newValues: null,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Rumusan CPMK program studi berhasil dihapus',
+            'data' => null,
         ]);
     }
 
