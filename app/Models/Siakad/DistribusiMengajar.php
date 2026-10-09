@@ -19,6 +19,7 @@ class DistribusiMengajar extends Model
         'semester',
         'dosen_koordinator_id',
         'dosen_anggota_ids',
+        'kelas_ids',
         'is_active',
     ];
 
@@ -30,6 +31,7 @@ class DistribusiMengajar extends Model
         'semester' => 'integer',
         'dosen_koordinator_id' => 'integer',
         'dosen_anggota_ids' => 'array',
+        'kelas_ids' => 'array',
         'is_active' => 'boolean',
     ];
 

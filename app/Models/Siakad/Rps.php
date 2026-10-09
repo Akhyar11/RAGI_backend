@@ -14,11 +14,15 @@ class Rps extends Model
 
     protected $fillable = [
         'mata_kuliah_id',
+        'kode_rps',
         'tahun_ajaran',
         'semester',
+        'tanggal_penyusunan',
         'dosen_pengembang_id',
+        'dosen_anggota_ids',
         'koordinator_rmk_id',
         'kaprodi_id',
+        'dosen_bisa_edit',
         'deskripsi_singkat',
         'pustaka_utama',
         'pustaka_pendukung',
@@ -31,6 +35,9 @@ class Rps extends Model
 
     protected $casts = [
         'disetujui_at' => 'datetime',
+        'tanggal_penyusunan' => 'date',
+        'dosen_anggota_ids' => 'array',
+        'dosen_bisa_edit' => 'boolean',
     ];
 
     public function mataKuliah()

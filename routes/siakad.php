@@ -221,7 +221,14 @@ Route::prefix('obe')->group(function () {
     Route::post('/sub-cpmk', [ObeController::class, 'storeSubCpmk']);
     Route::delete('/sub-cpmk/{id}', [ObeController::class, 'deleteSubCpmk']);
 
-    // --- Master OBE Tambahan (Rumpun MK, Jenis CPL, Rubrik, Distribusi MK) ---
+    // --- Master OBE Tambahan (Rumpun MK, Jenis CPL, Rubrik, Distribusi MK, Master Kelas) ---
+    Route::get('/master-kelas', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'listMasterKelas']);
+    Route::post('/master-kelas', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'storeMasterKelas']);
+    Route::put('/master-kelas/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'updateMasterKelas']);
+    Route::delete('/master-kelas/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'destroyMasterKelas']);
+    Route::get('/master-kelas/mahasiswa-pemetaan', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'listMahasiswaForPemetaan']);
+    Route::post('/master-kelas/assign-mahasiswa', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'assignMahasiswaToKelas']);
+
     Route::get('/rumpun-mk', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'listRumpunMk']);
     Route::post('/rumpun-mk', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'storeRumpunMk']);
     Route::put('/rumpun-mk/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'updateRumpunMk']);
@@ -281,6 +288,8 @@ Route::prefix('obe')->group(function () {
     Route::get('/rps', [ObeController::class, 'listRps']);
     Route::get('/rps/{id}', [ObeController::class, 'showRps']);
     Route::post('/rps', [ObeController::class, 'storeRps']);
+    Route::delete('/rps/{id}', [ObeController::class, 'destroyRps']);
+    Route::patch('/rps/{id}/toggle-dosen-edit', [ObeController::class, 'toggleDosenBisaEditRps']);
     Route::post('/rps/{id}/duplicate', [ObeController::class, 'duplicateRps']);
     Route::get('/soal', [ObeController::class, 'listSoal']);
     Route::post('/soal', [ObeController::class, 'storeSoal']);

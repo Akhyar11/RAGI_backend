@@ -11,8 +11,46 @@ Mengelola data master kurikulum OBE untuk Admin OBE Homebase Program Studi dan B
 3. Profesi / Prospek Karir Lulusan (`siakad_profesi_karir`)
 4. Rubrik Asesmen OBE & Butir Kriteria (`siakad_obe_rubrik`, `siakad_obe_rubrik_kriteria`)
 5. Distribusi Mengajar Dosen per Semester (`siakad_distribusi_mengajar`)
-6. Distribusi Mata Kuliah visual (`siakad_distribusi_matakuliah`)
-7. Plotting Role-Menu Admin OBE (`siakad_admin_obe_role_menus`)
+6. Master Kelas & Pemetaan Mahasiswa Kelas (`siakad_master_kelas`)
+7. Distribusi Mata Kuliah visual (`siakad_distribusi_matakuliah`)
+8. Plotting Role-Menu Admin OBE (`siakad_admin_obe_role_menus`)
+
+---
+
+## Daftar Endpoint
+
+| Method | Endpoint | Fungsi | Auth |
+|---|---|---|---|
+| GET | `/api/v1/siakad/obe/rumpun-mk` | Daftar Rumpun Mata Kuliah | ✅ |
+| POST | `/api/v1/siakad/obe/rumpun-mk` | Tambah Rumpun Mata Kuliah | ✅ |
+| PUT | `/api/v1/siakad/obe/rumpun-mk/{id}` | Perbarui Rumpun Mata Kuliah | ✅ |
+| DELETE | `/api/v1/siakad/obe/rumpun-mk/{id}` | Hapus Rumpun Mata Kuliah | ✅ |
+| GET | `/api/v1/siakad/obe/jenis-cpl` | Daftar Jenis CPL | ✅ |
+| POST | `/api/v1/siakad/obe/jenis-cpl` | Tambah Jenis CPL | ✅ |
+| PUT | `/api/v1/siakad/obe/jenis-cpl/{id}` | Perbarui Jenis CPL | ✅ |
+| DELETE | `/api/v1/siakad/obe/jenis-cpl/{id}` | Hapus Jenis CPL | ✅ |
+| GET | `/api/v1/siakad/obe/profesi-karir` | Daftar Profesi / Karir | ✅ |
+| POST | `/api/v1/siakad/obe/profesi-karir` | Tambah Profesi / Karir | ✅ |
+| PUT | `/api/v1/siakad/obe/profesi-karir/{id}` | Perbarui Profesi / Karir | ✅ |
+| DELETE | `/api/v1/siakad/obe/profesi-karir/{id}` | Hapus Profesi / Karir | ✅ |
+| GET | `/api/v1/siakad/obe/rubrik` | Daftar Rubrik Penilaian | ✅ |
+| POST | `/api/v1/siakad/obe/rubrik` | Tambah Rubrik Penilaian | ✅ |
+| PUT | `/api/v1/siakad/obe/rubrik/{id}` | Perbarui Rubrik Penilaian | ✅ |
+| DELETE | `/api/v1/siakad/obe/rubrik/{id}` | Hapus Rubrik Penilaian | ✅ |
+| GET | `/api/v1/siakad/obe/distribusi-mengajar` | Daftar Distribusi Mengajar | ✅ |
+| POST | `/api/v1/siakad/obe/distribusi-mengajar` | Simpan Distribusi Mengajar | ✅ |
+| PUT | `/api/v1/siakad/obe/distribusi-mengajar/{id}` | Perbarui Distribusi Mengajar | ✅ |
+| DELETE | `/api/v1/siakad/obe/distribusi-mengajar/{id}` | Hapus Distribusi Mengajar | ✅ |
+| GET | `/api/v1/siakad/obe/master-kelas` | Daftar Master Kelas | ✅ |
+| POST | `/api/v1/siakad/obe/master-kelas` | Buat Master Kelas | ✅ |
+| PUT | `/api/v1/siakad/obe/master-kelas/{id}` | Perbarui Master Kelas | ✅ |
+| DELETE | `/api/v1/siakad/obe/master-kelas/{id}` | Hapus Master Kelas | ✅ |
+| GET | `/api/v1/siakad/obe/master-kelas/mahasiswa-pemetaan` | Daftar Mahasiswa Pemetaan Kelas | ✅ |
+| POST | `/api/v1/siakad/obe/master-kelas/assign-mahasiswa` | Petakan Mahasiswa ke Kelas | ✅ |
+| GET | `/api/v1/siakad/obe/distribusi-matakuliah` | Distribusi Mata Kuliah visual | ✅ |
+| GET | `/api/v1/siakad/akademik/admin-obe-roles` | Daftar Role Admin OBE | ✅ |
+| GET | `/api/v1/siakad/akademik/admin-obe-role-menus/{roleId}` | Daftar Menu Role Admin OBE | ✅ |
+| POST | `/api/v1/siakad/akademik/admin-obe-role-menus/{roleId}` | Simpan Menu Role Admin OBE | ✅ |
 
 ---
 
@@ -189,7 +227,193 @@ Hapus penugasan mengajar.
 
 ---
 
-## 6. Role Menu Plotting Admin OBE
+## 6. Master Kelas & Pemetaan Mahasiswa Kelas
+
+### [GET] `/api/v1/siakad/obe/master-kelas`
+Mengambil daftar master kelas (paginated, scoped prodi aktif).
+
+**Query Parameters**:
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `search` | string | ❌ | Cari nama kelas, keterangan, atau nama Dosen PA |
+| `tahun_angkatan` | integer | ❌ | Filter tahun angkatan (contoh: 2025) |
+| `dosen_pa_id` | integer | ❌ | Filter dosen PA |
+| `is_active` | boolean | ❌ | Filter status |
+| `sort_by` | string | ❌ | `nama_kelas`, `tahun_angkatan`, `id`, `created_at` |
+| `sort_order` | string | ❌ | `asc` / `desc` |
+| `per_page` | integer | ❌ | Default 15 |
+| `page` | integer | ❌ | Halaman |
+
+**Response Sukses (200 OK)**:
+```json
+{
+  "status": "success",
+  "message": "Daftar master kelas berhasil diambil",
+  "data": [
+    {
+      "id": 1,
+      "program_studi_id": 1,
+      "nama_kelas": "25A",
+      "tahun_angkatan": 2025,
+      "dosen_pa_id": 1,
+      "dosen_pa": { "id": 1, "nama_lengkap": "Dr. Dosen, M.Kom." },
+      "mahasiswas_count": 30,
+      "is_active": true
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "per_page": 15,
+    "total": 1,
+    "last_page": 1
+  }
+}
+```
+
+### [POST] `/api/v1/siakad/obe/master-kelas`
+Membuat master kelas baru.
+
+**Request Body**:
+```json
+{
+  "nama_kelas": "25A",
+  "tahun_angkatan": 2025,
+  "dosen_pa_id": 1,
+  "keterangan": "Kelas Reguler Pagi",
+  "is_active": true
+}
+```
+
+**Response Sukses (201 Created)**:
+```json
+{
+  "status": "success",
+  "message": "Master kelas berhasil dibuat",
+  "data": {
+    "id": 1,
+    "program_studi_id": 1,
+    "nama_kelas": "25A",
+    "tahun_angkatan": 2025,
+    "dosen_pa_id": 1,
+    "keterangan": "Kelas Reguler Pagi",
+    "is_active": true,
+    "dosen_pa": { "id": 1, "nama_lengkap": "Dr. Dosen, M.Kom." }
+  }
+}
+```
+
+**Response Error (422 Unprocessable Entity)**:
+```json
+{
+  "status": "error",
+  "message": "Nama kelas 25A sudah ada untuk angkatan 2025 di program studi ini."
+}
+```
+
+### [PUT] `/api/v1/siakad/obe/master-kelas/{id}`
+Memperbarui master kelas.
+
+**Request Body**:
+```json
+{
+  "nama_kelas": "25A",
+  "tahun_angkatan": 2025,
+  "dosen_pa_id": 1,
+  "keterangan": "Kelas Reguler Pagi - Update",
+  "is_active": true
+}
+```
+
+**Response Sukses (200 OK)**:
+```json
+{
+  "status": "success",
+  "message": "Master kelas berhasil diperbarui",
+  "data": {
+    "id": 1,
+    "nama_kelas": "25A",
+    "tahun_angkatan": 2025,
+    "dosen_pa_id": 1
+  }
+}
+```
+
+### [DELETE] `/api/v1/siakad/obe/master-kelas/{id}`
+Menghapus master kelas (soft delete).
+
+**Response Sukses (200 OK)**:
+```json
+{
+  "status": "success",
+  "message": "Master kelas berhasil dihapus",
+  "data": null
+}
+```
+
+### [GET] `/api/v1/siakad/obe/master-kelas/mahasiswa-pemetaan`
+Mengambil daftar mahasiswa aktif untuk pemetaan kelas (dikunci server-side ke prodi aktif).
+
+**Query Parameters**:
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `search` | string | ❌ | Cari NIM, Nama, atau Kelas saat ini |
+| `angkatan` | integer | ❌ | Filter tahun angkatan mahasiswa |
+| `kelas` | string | ❌ | Filter kelas saat ini |
+| `hanya_belum_ada_kelas` | boolean | ❌ | Filter hanya mahasiswa yang belum memiliki kelas |
+| `per_page` | integer | ❌ | Default 25 |
+| `page` | integer | ❌ | Halaman |
+
+**Response Sukses (200 OK)**:
+```json
+{
+  "status": "success",
+  "message": "Daftar mahasiswa untuk pemetaan kelas berhasil diambil",
+  "data": [
+    {
+      "id": 10,
+      "nim": "2501001",
+      "nama_lengkap": "Budi Santoso",
+      "angkatan": 2025,
+      "kelas": "25A",
+      "master_kelas_id": 1
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "per_page": 25,
+    "total": 1,
+    "last_page": 1
+  }
+}
+```
+
+### [POST] `/api/v1/siakad/obe/master-kelas/assign-mahasiswa`
+Menetapkan daftar mahasiswa ke dalam suatu master kelas secara massal dan menyinkronkan Dosen PA kelas.
+
+**Request Body**:
+```json
+{
+  "master_kelas_id": 1,
+  "mahasiswa_ids": [10, 11, 12],
+  "sync_dosen_pa": true
+}
+```
+
+**Response Sukses (200 OK)**:
+```json
+{
+  "status": "success",
+  "message": "Berhasil memetakan 3 mahasiswa ke kelas 25A.",
+  "data": {
+    "updated_count": 3,
+    "kelas": "25A"
+  }
+}
+```
+
+---
+
+## 7. Role Menu Plotting Admin OBE
 
 ### [GET] `/api/v1/siakad/akademik/admin-obe-roles`
 Daftar role pengguna yang relevan untuk penugasan Admin OBE.

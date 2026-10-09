@@ -9,6 +9,8 @@ use App\Models\Siakad\ObeRubrik;
 use App\Models\Siakad\ObeRubrikKriteria;
 use App\Models\Siakad\Kurikulum;
 use App\Models\Siakad\MataKuliah;
+use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\MasterKelas;
 use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -916,17 +918,28 @@ class ObeMasterController extends Controller
             : collect();
 
         $mkIds = collect($items)->pluck('mata_kuliah_id')->filter()->unique()->values();
+        $masterKelasIds = collect($items)->pluck('kelas_ids')->flatten()->map(fn($v) => (int) $v)->filter()->unique()->values();
+
+        $masterKelasMap = $masterKelasIds->isNotEmpty()
+            ? \App\Models\Siakad\MasterKelas::whereIn('id', $masterKelasIds)->get()->keyBy('id')
+            : collect();
+
         $kelasRows = $mkIds->isNotEmpty()
             ? \App\Models\Siakad\Kelas::whereIn('mata_kuliah_id', $mkIds)
                 ->get(['id', 'mata_kuliah_id', 'tahun_akademik_id', 'kode_kelas'])
             : collect();
 
-        return array_map(function ($item) use ($anggotaMap, $kelasRows) {
+        return array_map(function ($item) use ($anggotaMap, $kelasRows, $masterKelasMap) {
             $row = $item instanceof \Illuminate\Database\Eloquent\Model ? $item->toArray() : (array) $item;
             $ids = $item->dosen_anggota_ids ?? $row['dosen_anggota_ids'] ?? [];
             $ids = collect(is_array($ids) ? $ids : [])->map(fn($v) => (int) $v)->filter()->values();
             $row['dosen_anggotas'] = $ids->map(fn($id) => $anggotaMap->get($id))->filter()->values()->all();
-            $row['kelas_list'] = $kelasRows
+
+            $kIds = $item->kelas_ids ?? $row['kelas_ids'] ?? [];
+            $kIds = collect(is_array($kIds) ? $kIds : [])->map(fn($v) => (int) $v)->filter()->values();
+            $masterKelasNames = $kIds->map(fn($kid) => $masterKelasMap->get($kid)?->nama_kelas)->filter()->values()->all();
+
+            $autoKelasList = $kelasRows
                 ->where('mata_kuliah_id', (int) ($item->mata_kuliah_id ?? $row['mata_kuliah_id'] ?? 0))
                 ->when(isset($item->tahun_akademik_id) || isset($row['tahun_akademik_id']), function ($c) use ($item, $row) {
                     $taId = $item->tahun_akademik_id ?? $row['tahun_akademik_id'] ?? null;
@@ -936,6 +949,10 @@ class ObeMasterController extends Controller
                 ->filter()
                 ->values()
                 ->all();
+
+            $row['kelas_list'] = !empty($masterKelasNames) ? $masterKelasNames : $autoKelasList;
+            $row['master_kelas_items'] = $kIds->map(fn($kid) => $masterKelasMap->get($kid))->filter()->values()->all();
+
             return $row;
         }, $items);
     }
@@ -953,6 +970,7 @@ class ObeMasterController extends Controller
             'semester' => 'required|integer|min:1|max:8',
             'dosen_koordinator_id' => 'nullable|exists:siakad_dosen,id',
             'dosen_anggota_ids' => 'nullable|array',
+            'kelas_ids' => 'nullable|array',
             'is_active' => 'boolean',
         ]);
 
@@ -1009,6 +1027,7 @@ class ObeMasterController extends Controller
             'semester' => 'required|integer|min:1|max:8',
             'dosen_koordinator_id' => 'nullable|exists:siakad_dosen,id',
             'dosen_anggota_ids' => 'nullable|array',
+            'kelas_ids' => 'nullable|array',
             'is_active' => 'boolean',
         ]);
 
@@ -1112,6 +1131,329 @@ class ObeMasterController extends Controller
                 'total_mk_keseluruhan' => $allMk->count(),
                 'semesters' => $distribusi,
             ],
+        ]);
+    }
+
+    /**
+     * ==========================================
+     * 6. MASTER KELAS OBE & PEMETAAN MAHASISWA
+     * ==========================================
+     */
+    public function listMasterKelas(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kurikulum.read');
+        $user = $request->user();
+
+        $query = \App\Models\Siakad\MasterKelas::with([
+            'programStudi',
+            'dosenPa',
+        ])->withCount(['mahasiswas']);
+
+        if ($request->filled('program_studi_id')) {
+            $query->where('program_studi_id', $request->program_studi_id);
+        } elseif ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
+            $allowedProdiIds = $user->getSiakadProdiIds();
+            if ($allowedProdiIds->isNotEmpty()) {
+                $query->whereIn('program_studi_id', $allowedProdiIds);
+            }
+        }
+
+        if ($request->filled('tahun_angkatan')) {
+            $query->where('tahun_angkatan', $request->tahun_angkatan);
+        }
+
+        if ($request->filled('dosen_pa_id')) {
+            $query->where('dosen_pa_id', $request->dosen_pa_id);
+        }
+
+        if ($request->filled('is_active')) {
+            $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
+        }
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('nama_kelas', 'like', "%{$s}%")
+                  ->orWhere('keterangan', 'like', "%{$s}%")
+                  ->orWhereHas('dosenPa', fn($dq) => $dq->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nidn', 'like', "%{$s}%"));
+            });
+        }
+
+        $allowedSort = ['nama_kelas', 'tahun_angkatan', 'id', 'created_at'];
+        $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'nama_kelas';
+        $sortOrder = $request->sort_order === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
+            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+            $data = $query->paginate($perPage);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Daftar master kelas berhasil diambil',
+                'data' => $data->items(),
+                'meta' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar master kelas berhasil diambil',
+            'data' => $query->get(),
+        ]);
+    }
+
+    public function storeMasterKelas(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $user = $request->user();
+        $validated = $request->validate([
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'nama_kelas' => 'required|string|max:50',
+            'tahun_angkatan' => 'nullable|integer|min:2000|max:2100',
+            'dosen_pa_id' => 'nullable|exists:siakad_dosen,id',
+            'keterangan' => 'nullable|string|max:255',
+            'is_active' => 'boolean',
+        ]);
+
+        if (empty($validated['program_studi_id'])) {
+            $validated['program_studi_id'] = $this->resolveRubrikProdiId($request, null);
+        }
+
+        $item = \App\Models\Siakad\MasterKelas::create($validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_master_kelas',
+                recordId: $item->id,
+                oldValues: null,
+                newValues: $item->toArray(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Master kelas berhasil ditambahkan',
+            'data' => $item->load(['programStudi', 'dosenPa']),
+        ], 201);
+    }
+
+    public function updateMasterKelas(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $item = \App\Models\Siakad\MasterKelas::findOrFail($id);
+        $old = $item->getOriginal();
+
+        $validated = $request->validate([
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'nama_kelas' => 'required|string|max:50',
+            'tahun_angkatan' => 'nullable|integer|min:2000|max:2100',
+            'dosen_pa_id' => 'nullable|exists:siakad_dosen,id',
+            'keterangan' => 'nullable|string|max:255',
+            'is_active' => 'boolean',
+        ]);
+
+        $item->update($validated);
+        $new = $item->getChanges();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_master_kelas',
+                recordId: $item->id,
+                oldValues: $old,
+                newValues: $new,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Master kelas berhasil diperbarui',
+            'data' => $item->load(['programStudi', 'dosenPa']),
+        ]);
+    }
+
+    public function destroyMasterKelas(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $item = \App\Models\Siakad\MasterKelas::findOrFail($id);
+        $old = $item->toArray();
+        $item->delete();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_master_kelas',
+                recordId: $id,
+                oldValues: $old,
+                newValues: null,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Master kelas berhasil dihapus',
+            'data' => null,
+        ]);
+    }
+
+    /**
+     * Mengambil daftar mahasiswa untuk pemetaan kelas (dikunci per prodi aktif).
+     */
+    public function listMahasiswaForPemetaan(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kurikulum.read');
+        $user = $request->user();
+
+        // Scope prodi aktif dari user OBE
+        $scopedProdiIds = $user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()
+            ? $user->getSiakadProdiIds()
+            : collect();
+
+        $prodiId = $request->filled('program_studi_id')
+            ? (int) $request->program_studi_id
+            : ($scopedProdiIds->first() ?: null);
+
+        $query = Mahasiswa::with(['programStudi', 'dosenWali'])
+            ->where('status', 'aktif');
+
+        if ($scopedProdiIds->isNotEmpty()) {
+            $query->whereIn('program_studi_id', $scopedProdiIds);
+        } elseif ($prodiId) {
+            $query->where('program_studi_id', $prodiId);
+        }
+
+        if ($request->filled('angkatan')) {
+            $query->where('angkatan', $request->angkatan);
+        }
+
+        if ($request->filled('kelas')) {
+            $query->where('kelas', $request->kelas);
+        }
+
+        if ($request->boolean('hanya_belum_ada_kelas')) {
+            $query->where(function($q) {
+                $q->whereNull('kelas')->orWhere('kelas', '');
+            });
+        }
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('nama_lengkap', 'like', "%{$s}%")
+                  ->orWhere('nim', 'like', "%{$s}%")
+                  ->orWhere('kelas', 'like', "%{$s}%");
+            });
+        }
+
+        $perPage = min(100, $request->integer('per_page', $request->integer('limit', 25)));
+        $data = $query->orderBy('nim', 'asc')->paginate($perPage);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar mahasiswa untuk pemetaan kelas berhasil diambil',
+            'data' => $data->items(),
+            'meta' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem(),
+            ],
+        ]);
+    }
+
+    /**
+     * Simpan pemetaan mahasiswa ke kelas & sinkronkan dosen PA jika diset.
+     */
+    public function assignMahasiswaToKelas(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $validated = $request->validate([
+            'master_kelas_id' => 'required|exists:siakad_master_kelas,id',
+            'mahasiswa_ids' => 'required|array|min:1',
+            'mahasiswa_ids.*' => 'required|exists:siakad_mahasiswa,id',
+            'sync_dosen_pa' => 'boolean',
+        ]);
+
+        $user = $request->user();
+        $masterKelas = \App\Models\Siakad\MasterKelas::with('dosenPa')->findOrFail($validated['master_kelas_id']);
+
+        // Pastikan master kelas ini sesuai dengan prodi aktif user (jika scoped)
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
+            $allowedProdiIds = $user->getSiakadProdiIds();
+            if (!$allowedProdiIds->contains($masterKelas->program_studi_id)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda tidak memiliki hak akses untuk memetakan kelas pada program studi ini.',
+                ], 403);
+            }
+        }
+
+        $queryMhs = Mahasiswa::whereIn('id', $validated['mahasiswa_ids'])
+            ->where('program_studi_id', $masterKelas->program_studi_id);
+
+        $updateData = [
+            'kelas' => $masterKelas->nama_kelas,
+        ];
+
+        // Jika sync_dosen_pa aktif dan master kelas punya dosen_pa_id, update dosen_wali_id juga
+        if ($request->boolean('sync_dosen_pa', true) && $masterKelas->dosen_pa_id) {
+            $updateData['dosen_wali_id'] = $masterKelas->dosen_pa_id;
+        }
+
+        $count = $queryMhs->update($updateData);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_mahasiswa',
+                recordId: null,
+                oldValues: null,
+                newValues: [
+                    'master_kelas_id' => $masterKelas->id,
+                    'nama_kelas' => $masterKelas->nama_kelas,
+                    'mahasiswa_ids' => $validated['mahasiswa_ids'],
+                    'updated_count' => $count,
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Berhasil memetakan {$count} mahasiswa ke kelas {$masterKelas->nama_kelas}.",
+            'data' => [
+                'updated_count' => $count,
+                'kelas' => $masterKelas->nama_kelas,
+            ]
         ]);
     }
 

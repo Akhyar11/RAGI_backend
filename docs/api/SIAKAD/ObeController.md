@@ -49,9 +49,11 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, R
 | POST | `/api/v1/siakad/obe/rps-referensi` | Tambah referensi RPS | ✅ `siakad.kurikulum.manage` |
 | PUT | `/api/v1/siakad/obe/rps-referensi/{id}` | Perbarui referensi RPS | ✅ `siakad.kurikulum.manage` |
 | DELETE | `/api/v1/siakad/obe/rps-referensi/{id}` | Hapus referensi RPS (soft delete) | ✅ `siakad.kurikulum.manage` |
-| GET | `/api/v1/siakad/obe/rps` | Daftar RPS | ✅ |
+| GET | `/api/v1/siakad/obe/rps` | Daftar RPS (filter + pagination) | ✅ |
 | GET | `/api/v1/siakad/obe/rps/{id}` | Detail RPS | ✅ |
-| POST | `/api/v1/siakad/obe/rps` | Simpan RPS | ✅ |
+| POST | `/api/v1/siakad/obe/rps` | Simpan RPS (header + pengesahan + mingguan) | ✅ |
+| PATCH | `/api/v1/siakad/obe/rps/{id}/toggle-dosen-edit` | Toggle izin edit dosen pada RPS | ✅ `siakad.kurikulum.manage` |
+| DELETE | `/api/v1/siakad/obe/rps/{id}` | Hapus dokumen RPS | ✅ `canManageObeForProdi()` |
 | POST | `/api/v1/siakad/obe/rps/{id}/submit` | Ajukan RPS | ✅ |
 | PATCH | `/api/v1/siakad/obe/rps/{id}/approve` | Setujui RPS | ✅ |
 | GET | `/api/v1/siakad/obe/kelas/{kelasId}/komponen` | Komponen nilai kelas | ✅ |
@@ -1123,6 +1125,75 @@ satu jalur dijamin berasal dari program studi yang sama.
 {
     "status": "success",
     "message": "Data referensi RPS berhasil dihapus",
+    "data": null
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** / **404 Not Found**.
+
+---
+
+## [PATCH] /api/v1/siakad/obe/rps/{id}/toggle-dosen-edit
+
+> Mengubah izin edit dokumen RPS oleh Dosen Pengampu / Koordinator. Wajib permission `siakad.kurikulum.manage`.
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID dokumen RPS |
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `dosen_bisa_edit` | boolean | ✅ | `true` atau `false` |
+
+```json
+{
+    "dosen_bisa_edit": true
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Hak akses edit dosen untuk RPS berhasil diperbarui",
+    "data": {
+        "id": 1,
+        "dosen_bisa_edit": true
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** / **404 Not Found** / **422 Unprocessable Entity**.
+
+---
+
+## [DELETE] /api/v1/siakad/obe/rps/{id}
+
+> Menghapus dokumen RPS (soft delete). Tim Kurikulum hanya boleh menghapus RPS milik prodi aktifnya.
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID dokumen RPS |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Dokumen RPS berhasil dihapus",
     "data": null
 }
 ```

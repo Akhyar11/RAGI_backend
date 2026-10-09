@@ -238,12 +238,14 @@ return [
                 'order_index' => 5,
                 'children' => [
                     ['name' => 'Tahun Kurikulum', 'url' => '/siakad/obe/tahun-kurikulum', 'icon' => 'FaCalendarCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 1],
-                    ['name' => 'Rumpun Mata Kuliah', 'url' => '/siakad/obe/rumpun-mk', 'icon' => 'FaLayers', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
-                    ['name' => 'Jenis CPL', 'url' => '/siakad/obe/jenis-cpl', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 3],
-                    ['name' => 'Mata Kuliah', 'url' => '/siakad/obe/matakuliah', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 4],
-                    ['name' => 'Distribusi Mata Kuliah', 'url' => '/siakad/obe/distribusi-mk', 'icon' => 'FaThList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 5],
-                    ['name' => 'Rubrik Penilaian', 'url' => '/siakad/obe/rubrik', 'icon' => 'FaCheckSquare', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 6],
-                    ['name' => 'CPMK Mata Kuliah', 'url' => '/siakad/obe/cpmk', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 7],
+                    ['name' => 'Kelas', 'url' => '/siakad/obe/kelas', 'icon' => 'FaChalkboard', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
+                    ['name' => 'Pemetaan Mahasiswa Kelas', 'url' => '/siakad/obe/pemetaan-mahasiswa-kelas', 'icon' => 'FaUserCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 3],
+                    ['name' => 'Rumpun Mata Kuliah', 'url' => '/siakad/obe/rumpun-mk', 'icon' => 'FaLayers', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 4],
+                    ['name' => 'Jenis CPL', 'url' => '/siakad/obe/jenis-cpl', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 5],
+                    ['name' => 'Mata Kuliah', 'url' => '/siakad/obe/matakuliah', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 6],
+                    ['name' => 'Distribusi Mata Kuliah', 'url' => '/siakad/obe/distribusi-mk', 'icon' => 'FaThList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 7],
+                    ['name' => 'Rubrik Penilaian', 'url' => '/siakad/obe/rubrik', 'icon' => 'FaCheckSquare', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 8],
+                    ['name' => 'CPMK Mata Kuliah', 'url' => '/siakad/obe/cpmk', 'icon' => 'FaList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 9],
                 ]
             ],
             [

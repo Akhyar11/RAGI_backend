@@ -181,6 +181,8 @@ $menus = \App\Support\MenuCatalog::definitions();
                     '/siakad/bimbingan',
                     '#obe_siakad',
                     '/siakad/obe/tahun-kurikulum',
+                    '/siakad/obe/kelas',
+                    '/siakad/obe/pemetaan-mahasiswa-kelas',
                     '/siakad/obe/rumpun-mk',
                     '/siakad/obe/jenis-cpl',
                     '/siakad/obe/matakuliah',

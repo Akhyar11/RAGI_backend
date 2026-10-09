@@ -1480,32 +1480,180 @@ class ObeController extends Controller
         ]);
     }
 
-    // --- RPS & Alur Approval Prodi ---
+    // --- RPS & Alur Approval Prodi (Menampilkan Semua Distribusi Mengajar Prodi) ---
     public function listRps(Request $request)
     {
         $prodiIds = $this->resolveObeProdiId($request);
 
-        $query = \App\Models\Siakad\Rps::with(['mataKuliah.kurikulum.programStudi', 'dosenPengembang', 'koordinatorRmk', 'kaprodi'])
-            ->whereHas('mataKuliah.kurikulum', fn($q) => $q->whereIn('program_studi_id', $prodiIds));
+        // Query basis: Distribusi Mengajar prodi aktif
+        $distQuery = \App\Models\Siakad\DistribusiMengajar::with([
+            'mataKuliah.kurikulum.programStudi',
+            'mataKuliah.rumpunMataKuliah',
+            'dosenKoordinator',
+            'kurikulum',
+            'tahunAkademik'
+        ])->whereHas('mataKuliah.kurikulum', fn($q) => $q->whereIn('program_studi_id', $prodiIds));
 
-        if ($request->filled('mata_kuliah_id')) {
-            $query->where('mata_kuliah_id', $request->mata_kuliah_id);
+        if ($request->filled('kurikulum_id')) {
+            $distQuery->where('kurikulum_id', $request->kurikulum_id);
         }
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        if ($request->filled('mata_kuliah_id')) {
+            $distQuery->where('mata_kuliah_id', $request->mata_kuliah_id);
+        }
+
+        if ($request->filled('semester')) {
+            $distQuery->where('semester', $request->semester);
+        }
+
+        if ($request->filled('dosen_id')) {
+            $dosenId = (int) $request->dosen_id;
+            $distQuery->where(function ($q) use ($dosenId) {
+                $q->where('dosen_koordinator_id', $dosenId)
+                  ->orWhereJsonContains('dosen_anggota_ids', $dosenId);
+            });
         }
 
         if ($request->filled('search')) {
             $s = $request->search;
-            $query->whereHas('mataKuliah', fn($q) => $q->where('nama', 'like', "%{$s}%")->orWhere('kode_mk', 'like', "%{$s}%"));
+            $distQuery->where(function ($q) use ($s) {
+                $q->whereHas('mataKuliah', fn($mq) => $mq->where('nama', 'like', "%{$s}%")->orWhere('kode_mk', 'like', "%{$s}%"))
+                  ->orWhereHas('dosenKoordinator', fn($dq) => $dq->where('nama_lengkap', 'like', "%{$s}%"));
+            });
         }
 
-        $rpsList = $query->orderBy('created_at', 'desc')->get();
+        $allowedSort = ['created_at', 'id', 'semester'];
+        $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'semester';
+        $distQuery->orderBy($sortBy, $request->sort_order === 'desc' ? 'desc' : 'asc');
+
+        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
+            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+            $data = $distQuery->paginate($perPage);
+
+            $items = $this->transformDistribusiToRpsRow($data->items());
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Daftar dokumen RPS berhasil dimuat',
+                'data' => $items,
+                'meta' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ],
+            ]);
+        }
+
+        $distList = $distQuery->get();
+        $items = $this->transformDistribusiToRpsRow($distList->all());
 
         return response()->json([
             'status' => 'success',
-            'data' => $rpsList
+            'message' => 'Daftar dokumen RPS berhasil dimuat',
+            'data' => $items
+        ]);
+    }
+
+    private function transformDistribusiToRpsRow(array $distribusiItems): array
+    {
+        $mkIds = collect($distribusiItems)->map(fn($r) => $r->mata_kuliah_id ?? $r['mata_kuliah_id'] ?? null)->filter()->unique()->values();
+
+        $rpsRows = $mkIds->isNotEmpty()
+            ? \App\Models\Siakad\Rps::with(['dosenPengembang', 'koordinatorRmk', 'kaprodi'])->whereIn('mata_kuliah_id', $mkIds)->get()->keyBy('mata_kuliah_id')
+            : collect();
+
+        $allKelasIds = collect($distribusiItems)->pluck('kelas_ids')->flatten()->map(fn($v) => (int) $v)->filter()->unique()->values();
+
+        $masterKelasMap = $allKelasIds->isNotEmpty()
+            ? \App\Models\Siakad\MasterKelas::whereIn('id', $allKelasIds)->get()->keyBy('id')
+            : collect();
+
+        $allAnggotaIds = collect($distribusiItems)->pluck('dosen_anggota_ids')->flatten()
+            ->concat($rpsRows->pluck('dosen_anggota_ids')->flatten())
+            ->map(fn($v) => (int) $v)->filter()->unique()->values();
+
+        $dosenMap = $allAnggotaIds->isNotEmpty()
+            ? \App\Models\Siakad\Dosen::whereIn('id', $allAnggotaIds)->get()->keyBy('id')
+            : collect();
+
+        return array_map(function ($item) use ($rpsRows, $masterKelasMap, $dosenMap) {
+            $dist = $item instanceof \Illuminate\Database\Eloquent\Model ? $item : (object) $item;
+            $mkId = $dist->mata_kuliah_id;
+
+            $rps = $rpsRows->get($mkId);
+            $hasRps = (bool) $rps;
+
+            $kIds = $dist->kelas_ids ?? [];
+            $kIds = collect(is_array($kIds) ? $kIds : [])->map(fn($v) => (int) $v)->filter()->values();
+            $kelasList = $kIds->map(fn($kid) => $masterKelasMap->get($kid)?->nama_kelas)->filter()->values()->all();
+
+            $rawAnggotaIds = $rps->dosen_anggota_ids ?? $dist->dosen_anggota_ids ?? [];
+            $rawAnggotaIds = collect(is_array($rawAnggotaIds) ? $rawAnggotaIds : [])->map(fn($v) => (int) $v)->filter()->values();
+            $anggotas = $rawAnggotaIds->map(fn($aid) => $dosenMap->get($aid))->filter()->values()->all();
+
+            return [
+                'id' => $rps?->id ?? null,
+                'has_rps' => $hasRps,
+                'distribusi_id' => $dist->id,
+                'mata_kuliah_id' => $mkId,
+                'mata_kuliah' => $dist->mataKuliah,
+                'kurikulum' => $dist->kurikulum ?? $dist->mataKuliah?->kurikulum,
+                'semester' => $dist->semester ?? $dist->mataKuliah?->semester_anjuran ?? 1,
+                'tahun_ajaran' => $rps?->tahun_ajaran ?? ($dist->tahunAkademik?->nama ?? null),
+                'kode_rps' => $rps?->kode_rps ?? null,
+                'dosen_bisa_edit' => $rps?->dosen_bisa_edit ?? true,
+                'dosen_koordinator' => $rps?->koordinatorRmk ?? $dist->dosenKoordinator,
+                'dosen_anggotas' => $anggotas,
+                'kaprodi' => $rps?->kaprodi ?? null,
+                'distribusi_kelas_list' => $kelasList,
+                'distribusi_kelas_formatted' => !empty($kelasList) ? implode(',', $kelasList) : null,
+                'created_at' => $rps?->created_at ?? $dist->created_at,
+                'updated_at' => $rps?->updated_at ?? $dist->updated_at,
+            ];
+        }, $distribusiItems);
+    }
+
+    public function toggleDosenBisaEditRps(Request $request, int $id)
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $rps = \App\Models\Siakad\Rps::with('mataKuliah.kurikulum')->findOrFail($id);
+
+        $prodiId = (int) ($rps->mataKuliah?->kurikulum?->program_studi_id ?? 0);
+        $user = $request->user();
+        if ($user && !$user->canManageObeForProdi($prodiId)) {
+            abort(403, 'Anda tidak memiliki hak akses mengubah pengaturan RPS prodi ini.');
+        }
+
+        $validated = $request->validate([
+            'dosen_bisa_edit' => 'required|boolean',
+        ]);
+
+        $rps->update([
+            'dosen_bisa_edit' => $validated['dosen_bisa_edit'],
+        ]);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_rps',
+                recordId: $rps->id,
+                oldValues: ['dosen_bisa_edit' => !$validated['dosen_bisa_edit']],
+                newValues: ['dosen_bisa_edit' => $validated['dosen_bisa_edit']],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log toggle dosen_bisa_edit RPS: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Hak akses edit dosen untuk RPS berhasil diperbarui',
+            'data' => $rps,
         ]);
     }
 
@@ -1543,14 +1691,18 @@ class ObeController extends Controller
     {
         $request->validate([
             'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
-            'tahun_ajaran' => 'required|string',
-            'semester' => 'required|integer',
-            'deskripsi_singkat' => 'required|string',
-            'pustaka_utama' => 'nullable|string',
-            'pustaka_pendukung' => 'nullable|string',
+            'kode_rps' => 'nullable|string|max:100',
+            'tahun_ajaran' => 'nullable|string',
+            'semester' => 'nullable|integer',
+            'tanggal_penyusunan' => 'nullable|date',
             'dosen_pengembang_id' => 'nullable|exists:siakad_dosen,id',
+            'dosen_anggota_ids' => 'nullable|array',
             'koordinator_rmk_id' => 'nullable|exists:siakad_dosen,id',
             'kaprodi_id' => 'nullable|exists:siakad_dosen,id',
+            'dosen_bisa_edit' => 'nullable|boolean',
+            'deskripsi_singkat' => 'nullable|string',
+            'pustaka_utama' => 'nullable|string',
+            'pustaka_pendukung' => 'nullable|string',
             'mingguan' => 'nullable|array',
         ]);
 
@@ -1592,6 +1744,41 @@ class ObeController extends Controller
             'status' => 'success',
             'message' => 'Dokumen RPS beserta 16 rencana pertemuan mingguan berhasil disimpan',
             'data' => $rps->load(['mingguan', 'dosenPengembang', 'kaprodi'])
+        ]);
+    }
+
+    public function destroyRps(Request $request, int $id)
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $rps = \App\Models\Siakad\Rps::with('mataKuliah.kurikulum')->findOrFail($id);
+        $prodiId = (int) ($rps->mataKuliah?->kurikulum?->program_studi_id ?? 0);
+        $user = $request->user();
+        if ($user && !$user->canManageObeForProdi($prodiId)) {
+            abort(403, 'Anda tidak memiliki hak akses menghapus dokumen RPS prodi ini.');
+        }
+
+        $old = $rps->toArray();
+        $rps->delete();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_rps',
+                recordId: $id,
+                oldValues: $old,
+                newValues: null,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log delete RPS: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Dokumen RPS berhasil dihapus',
+            'data' => null,
         ]);
     }
 
