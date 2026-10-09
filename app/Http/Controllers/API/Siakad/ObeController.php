@@ -1662,6 +1662,8 @@ class ObeController extends Controller
         $rps = \App\Models\Siakad\Rps::with([
             'mataKuliah.cpmks.subCpmks',
             'mataKuliah.cpmks.cpl',
+            'mataKuliah.cpls',
+            'mataKuliah.cpmkProdis.cpl',
             'mataKuliah.kurikulum.programStudi.fakultas',
             'dosenPengembang',
             'koordinatorRmk',
@@ -1681,9 +1683,23 @@ class ObeController extends Controller
             ->orderByDesc('tahun_akademik_id')
             ->get(['id', 'mata_kuliah_id', 'tahun_akademik_id', 'program_studi_id', 'ruangan_id', 'kode_kelas', 'nama_kelas', 'hari', 'jam_mulai', 'jam_selesai', 'kapasitas', 'status']);
 
+        // Resolve anggota RPS (JSON array of ID) menjadi objek Dosen agar label
+        // dapat ditampilkan pada form Edit tanpa fetch tambahan dari FE.
+        $anggotaIds = collect($rps->dosen_anggota_ids ?? [])
+            ->map(fn($v) => (int) $v)
+            ->filter()
+            ->unique()
+            ->values();
+        $dosenAnggotas = $anggotaIds->isNotEmpty()
+            ? \App\Models\Siakad\Dosen::whereIn('id', $anggotaIds)->get()
+            : collect();
+
         return response()->json([
             'status' => 'success',
-            'data' => array_merge($rps->toArray(), ['kelas_pemakai' => $kelasPemakai])
+            'data' => array_merge($rps->toArray(), [
+                'kelas_pemakai' => $kelasPemakai,
+                'dosen_anggotas' => $dosenAnggotas,
+            ])
         ]);
     }
 
@@ -2096,11 +2112,20 @@ class ObeController extends Controller
     // --- SubCPMK (di bawah CPMK) ---
     public function getSubCpmk(Request $request)
     {
-        $request->validate(['cpmk_id' => 'nullable|exists:siakad_cpmk,id']);
+        Gate::authorize('siakad.kurikulum.read');
+
+        $request->validate([
+            'cpmk_id' => 'nullable|exists:siakad_cpmk,id',
+            'mata_kuliah_id' => 'nullable|exists:siakad_mata_kuliah,id',
+        ]);
 
         $query = SubCpmk::with('cpmk.mataKuliah')->orderBy('kode_sub_cpmk');
         if ($request->filled('cpmk_id')) {
             $query->where('cpmk_id', $request->cpmk_id);
+        } elseif ($request->filled('mata_kuliah_id')) {
+            $query->whereHas('cpmk', function ($q) use ($request) {
+                $q->where('mata_kuliah_id', $request->mata_kuliah_id);
+            });
         }
 
         return response()->json(['status' => 'success', 'data' => $query->get()]);
@@ -2108,16 +2133,91 @@ class ObeController extends Controller
 
     public function storeSubCpmk(Request $request)
     {
+        Gate::authorize('siakad.kurikulum.manage');
+
         $validated = $request->validate([
             'id' => 'nullable|exists:siakad_sub_cpmk,id',
-            'cpmk_id' => 'required|exists:siakad_cpmk,id',
+            'cpmk_id' => 'nullable|exists:siakad_cpmk,id',
+            'cpmk_prodi_id' => 'nullable|exists:siakad_cpmk_prodi,id',
+            'mata_kuliah_id' => 'nullable|exists:siakad_mata_kuliah,id',
             'kode_sub_cpmk' => 'required|string|max:50',
             'deskripsi' => 'required|string',
             'indikator' => 'nullable|string',
             'bobot_persentase' => 'nullable|numeric|min:0|max:100',
         ]);
 
+        $cpmkId = $request->cpmk_id;
+
+        // Jika dikirim cpmk_prodi_id, auto-resolve atau buatkan record siakad_cpmk untuk mata kuliah tersebut
+        if (!$cpmkId && $request->filled('cpmk_prodi_id')) {
+            $cpmkProdi = CpmkProdi::find($request->cpmk_prodi_id);
+            if ($cpmkProdi) {
+                $mkId = $request->mata_kuliah_id;
+                if (!$mkId) {
+                    $firstMk = $cpmkProdi->mataKuliahs()->first();
+                    $mkId = $firstMk?->id;
+                }
+
+                if ($mkId) {
+                    $cpmk = Cpmk::firstOrCreate(
+                        [
+                            'mata_kuliah_id' => $mkId,
+                            'kode_cpmk' => $cpmkProdi->kode_cpmk,
+                        ],
+                        [
+                            'cpl_id' => $cpmkProdi->cpl_id,
+                            'deskripsi' => $cpmkProdi->deskripsi,
+                            'bobot_persentase' => 0,
+                        ]
+                    );
+
+                    if ($cpmk->wasRecentlyCreated) {
+                        try {
+                            AuditLogService::record(
+                                module: 'SIAKAD',
+                                action: 'create',
+                                tableName: 'siakad_cpmk',
+                                recordId: $cpmk->id,
+                                oldValues: null,
+                                newValues: $cpmk->toArray(),
+                                request: $request
+                            );
+                        } catch (\Throwable $e) {
+                            Log::warning('Gagal mencatat audit log CPMK auto-create: ' . $e->getMessage());
+                        }
+                    }
+
+                    $cpmkId = $cpmk->id;
+                }
+            }
+        }
+
+        if (!$cpmkId) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'CPMK tidak valid atau belum dipilih.'
+            ], 422);
+        }
+
+        $validated['cpmk_id'] = $cpmkId;
+        unset($validated['cpmk_prodi_id'], $validated['mata_kuliah_id']);
+
+        $oldValues = $request->filled('id') ? SubCpmk::find($request->id)?->toArray() : null;
         $sub = SubCpmk::updateOrCreate(['id' => $request->id], $validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: $request->filled('id') ? 'update' : 'create',
+                tableName: 'siakad_sub_cpmk',
+                recordId: $sub->id,
+                oldValues: $oldValues,
+                newValues: $sub->toArray(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log Sub CPMK: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',

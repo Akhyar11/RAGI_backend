@@ -23,6 +23,9 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, R
 | DELETE | `/api/v1/siakad/obe/cpl/{id}` | Hapus CPL (soft delete) | ✅ `canManageObeForProdi()` |
 | GET | `/api/v1/siakad/obe/cpmk` | Daftar CPMK | ✅ |
 | POST | `/api/v1/siakad/obe/cpmk` | Tambah CPMK | ✅ |
+| GET | `/api/v1/siakad/obe/sub-cpmk` | Daftar Sub-CPMK (filter `cpmk_id` atau `mata_kuliah_id`) | ✅ `siakad.kurikulum.read` |
+| POST | `/api/v1/siakad/obe/sub-cpmk` | Simpan Sub-CPMK (create/update via `id` atau auto-resolve `cpmk_prodi_id`) | ✅ `siakad.kurikulum.manage` |
+| DELETE | `/api/v1/siakad/obe/sub-cpmk/{id}` | Hapus Sub-CPMK (soft delete) | ✅ `siakad.nilai.manage` |
 | GET | `/api/v1/siakad/obe/profil-lulusan` | Daftar Profil Lulusan | ✅ |
 | POST | `/api/v1/siakad/obe/profil-lulusan` | Tambah Profil Lulusan | ✅ |
 | DELETE | `/api/v1/siakad/obe/profil-lulusan/{id}` | Hapus Profil Lulusan | ✅ |
@@ -1177,6 +1180,121 @@ satu jalur dijamin berasal dari program studi yang sama.
 
 ---
 
+## [GET] /api/v1/siakad/obe/rps/{id}
+
+> Mengambil detail satu dokumen RPS lengkap dengan relasi mata kuliah, CPL-PRODI yang dibebankan, CPMK, Sub-CPMK, dosen pengesahan, rencana mingguan, serta kelas pemakai.
+>
+> Sumber data sesuai modul OBE:
+> - `mataKuliah.cpls` — CPL-PRODI dari pivot `siakad_mata_kuliah_cpl`.
+> - `mataKuliah.cpmkProdis` — CPMK dari `siakad_cpmk_prodi` (CPMK Program Studi) melalui pivot `siakad_cpmk_prodi_mata_kuliah`. Tabel `siakad_cpmk` (CPMK per mata kuliah) tetap dimuat pada `mataKuliah.cpmks` namun tidak dipakai untuk pembebanan.
+> - `dosen_anggotas` — hasil resolve `dosen_anggota_ids` (JSON array of ID) menjadi objek Dosen agar label dapat ditampilkan pada form Edit tanpa fetch tambahan.
+
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID dokumen RPS |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": {
+        "id": 1,
+        "mata_kuliah_id": 1,
+        "kode_rps": "RPS-PM-IK-1-1-2026",
+        "tanggal_penyusunan": "2026-02-26",
+        "semester": 1,
+        "tahun_ajaran": "2026/2027",
+        "dosen_bisa_edit": true,
+        "deskripsi_singkat": "Mata kuliah ini membahas teori dan teknik fotografi dasar.",
+        "bahan_kajian_mk": "Dasar pencahayaan, komposisi visual, pengenalan kamera.",
+        "mata_kuliah_syarat": "-",
+        "jenis_pembelajaran": "Kuliah / Responsi",
+        "dosen_anggota_ids": [1, 2],
+        "dosen_anggotas": [
+            { "id": 1, "nama_lengkap": "Makmun Syaifudin, M.Pd", "nidn": "0405038804" },
+            { "id": 2, "nama_lengkap": "Dewi Lestari, S.T., M.Kom.", "nidn": "0412058001" }
+        ],
+        "koordinator_rmk_id": 2,
+        "koordinatorRmk": { "id": 2, "nama_lengkap": "Makmun Syaifudin, M.Pd", "nidn": "0405038804" },
+        "kaprodi_id": 3,
+        "kaprodi": { "id": 3, "nama_lengkap": "Dwi Iskandar, M.Kom", "nidn": "0419088502" },
+        "mataKuliah": {
+            "id": 1,
+            "kode_mk": "PM-IK-1",
+            "nama": "Fotografi Dasar",
+            "sks_teori": 2,
+            "sks_praktik": 1,
+            "total_sks": 3,
+            "semester_anjuran": 1,
+            "cpls": [
+                { "id": 1, "kode_cpl": "CPL01", "deskripsi": "Mampu mengembangkan jiwa wirausaha mandiri, kreatif, dan inovatif berbasis teknologi." }
+            ],
+            "cpmkProdis": [
+                {
+                    "id": 1,
+                    "kode_cpmk": "CPMK011",
+                    "deskripsi": "Mampu mengembangkan jiwa wirausaha mandiri, kreatif, dan inovatif berbasis teknologi serta potensi lokal.",
+                    "cpl": { "id": 1, "kode_cpl": "CPL01", "deskripsi": "Mampu mengembangkan jiwa wirausaha mandiri, kreatif, dan inovatif berbasis teknologi." }
+                }
+            ],
+            "cpmks": [
+                {
+                    "id": 10,
+                    "kode_cpmk": "CPMK01",
+                    "deskripsi": "Mahasiswa mampu memahami dan mempraktikkan teknik fotografi dasar.",
+                    "cpl": { "id": 1, "kode_cpl": "CPL01", "deskripsi": "Mampu membuat karya komunikasi visual." },
+                    "subCpmks": [
+                        { "id": 100, "kode_sub_cpmk": "CPMK01.1", "deskripsi": "Mahasiswa mampu memahami konsep pencahayaan." }
+                    ]
+                }
+            ]
+        },
+        "mingguan": [],
+        "kelas_pemakai": [
+            { "id": 7, "kode_kelas": "KLS-1", "nama_kelas": "Fotografi Dasar - A" }
+        ]
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses melihat dokumen RPS program studi ini."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "No query results for model [App\\Models\\Siakad\\Rps]."
+}
+```
+
+---
+
 ## [DELETE] /api/v1/siakad/obe/rps/{id}
 
 > Menghapus dokumen RPS (soft delete). Tim Kurikulum hanya boleh menghapus RPS milik prodi aktifnya.
@@ -1594,6 +1712,222 @@ Menambahkan opsi jawaban baru untuk soal pilihan ganda. Satu soal hanya boleh pu
     "errors": {
         "teks": ["The teks field is required."]
     }
+}
+```
+
+---
+
+## [GET] /api/v1/siakad/obe/sub-cpmk
+
+> Mengambil daftar Sub-CPMK (Indikator Capaian Pembelajaran Khusus) dengan filter `cpmk_id` atau `mata_kuliah_id`.
+
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `cpmk_id` | integer | ❌ | Filter berdasarkan ID CPMK mata kuliah (`siakad_cpmk`) |
+| `mata_kuliah_id` | integer | ❌ | Filter berdasarkan ID mata kuliah (`siakad_mata_kuliah`) |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": [
+        {
+            "id": 1,
+            "cpmk_id": 10,
+            "kode_sub_cpmk": "sub.cpmk.PM-IK-1.CPMK01.1",
+            "deskripsi": "Mahasiswa mampu memahami konsep pencahayaan fotografi dasar.",
+            "indikator": null,
+            "bobot_persentase": null,
+            "cpmk": {
+                "id": 10,
+                "kode_cpmk": "CPMK01",
+                "mata_kuliah": {
+                    "id": 1,
+                    "kode_mk": "PM-IK-1",
+                    "nama": "Fotografi Dasar"
+                }
+            }
+        }
+    ]
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+---
+
+## [POST] /api/v1/siakad/obe/sub-cpmk
+
+> Membuat atau memperbarui data Sub-CPMK. Mendukung `cpmk_id` langsung atau `cpmk_prodi_id` + `mata_kuliah_id` yang akan meng-auto-create/resolve record `siakad_cpmk`.
+
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ❌ | ID Sub-CPMK jika operasi update |
+| `cpmk_id` | integer | ❌ | ID CPMK mata kuliah (`siakad_cpmk`) |
+| `cpmk_prodi_id` | integer | ❌ | ID rumusan CPMK program studi (`siakad_cpmk_prodi`) |
+| `mata_kuliah_id` | integer | ❌ | ID mata kuliah pemilik dokumen |
+| `kode_sub_cpmk` | string | ✅ | Kode Sub-CPMK (maksimal 50 karakter) |
+| `deskripsi` | string | ✅ | Rumusan kemampuan akhir tahapan belajar |
+| `indikator` | string | ❌ | Indikator capaian |
+| `bobot_persentase` | numeric | ❌ | Bobot persentase penilaian (0 - 100) |
+
+### Contoh Request
+
+```json
+{
+    "cpmk_prodi_id": 1,
+    "mata_kuliah_id": 1,
+    "kode_sub_cpmk": "sub.cpmk.PM-IK-1.CPMK011.1",
+    "deskripsi": "Mahasiswa mampu mengidentifikasi komponen dasar kamera."
+}
+```
+
+### Response Sukses
+
+**201 Created / 200 OK**
+```json
+{
+    "status": "success",
+    "message": "SubCPMK berhasil disimpan",
+    "data": {
+        "id": 1,
+        "cpmk_id": 10,
+        "kode_sub_cpmk": "sub.cpmk.PM-IK-1.CPMK011.1",
+        "deskripsi": "Mahasiswa mampu mengidentifikasi komponen dasar kamera.",
+        "cpmk": {
+            "id": 10,
+            "kode_cpmk": "CPMK011",
+            "mata_kuliah": {
+                "id": 1,
+                "kode_mk": "PM-IK-1",
+                "nama": "Fotografi Dasar"
+            }
+        }
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+**422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "CPMK tidak valid atau belum dipilih."
+}
+```
+
+---
+
+## [DELETE] /api/v1/siakad/obe/sub-cpmk/{id}
+
+> Menghapus data Sub-CPMK (soft delete).
+
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID Sub-CPMK |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "SubCPMK berhasil dihapus.",
+    "data": null
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+**422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "SubCPMK dipakai komponen penilaian — lepas dulu sebelum dihapus."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "No query results for model [App\\Models\\Siakad\\SubCpmk] 999"
 }
 ```
 

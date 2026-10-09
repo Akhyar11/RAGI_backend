@@ -71,4 +71,21 @@ class MataKuliah extends Model
     {
         return $this->belongsToMany(Cpl::class, 'siakad_mata_kuliah_cpl', 'mata_kuliah_id', 'cpl_id');
     }
+
+    /**
+     * Rumusan CPMK Program Studi (CPMK-PS) yang dibebankan ke mata kuliah ini.
+     *
+     * Berbeda dengan relasi {@see cpmks()} (CPMK per mata kuliah), sumber
+     * CPL/CPMK yang aktif dipakai modul OBE adalah CPMK-PS melalui pivot
+     * `siakad_cpmk_prodi_mata_kuliah`.
+     */
+    public function cpmkProdis()
+    {
+        return $this->belongsToMany(
+            CpmkProdi::class,
+            'siakad_cpmk_prodi_mata_kuliah',
+            'mata_kuliah_id',
+            'cpmk_prodi_id'
+        )->withTimestamps();
+    }
 }
