@@ -2405,16 +2405,24 @@ class ObeController extends Controller
             ->whereIn('siakad_cpl_bahan_kajian.cpl_id', $cpls->pluck('id'))
             ->get(['siakad_cpl_bahan_kajian.cpl_id', 'siakad_cpl_bahan_kajian.bahan_kajian_id']);
 
+        // Matriks hanya relevan bila CPL & BK berasal dari program studi yang sama,
+        // sehingga superadmin (yang dapat melihat seluruh prodi) tidak melihat
+        // korelasi lintas prodi.
+        $prodiCpl = $cpls->pluck('program_studi_id', 'id');
+        $prodiBk = $bahanKajians->pluck('program_studi_id', 'id');
+
         return response()->json([
             'status' => 'success',
             'message' => 'Matriks pemetaan CPL-BK berhasil diambil',
             'data' => [
                 'cpls' => $cpls,
                 'bahan_kajians' => $bahanKajians,
-                'pairs' => $pairs->map(fn($p) => [
-                    'cpl_id' => (int) $p->cpl_id,
-                    'bahan_kajian_id' => (int) $p->bahan_kajian_id,
-                ])->values(),
+                'pairs' => $pairs
+                    ->filter(fn($p) => (int) $prodiCpl[$p->cpl_id] === (int) $prodiBk[$p->bahan_kajian_id])
+                    ->map(fn($p) => [
+                        'cpl_id' => (int) $p->cpl_id,
+                        'bahan_kajian_id' => (int) $p->bahan_kajian_id,
+                    ])->values(),
             ],
         ]);
     }
@@ -2497,16 +2505,22 @@ class ObeController extends Controller
             ->whereIn('mata_kuliah_id', $mataKuliahs->pluck('id'))
             ->get(['mata_kuliah_id', 'bahan_kajian_id']);
 
+        // Matriks hanya relevan bila MK dan BK berasal dari program studi yang sama.
+        $prodiMk = $mataKuliahs->mapWithKeys(fn($m) => [$m->id => (int) ($m->kurikulum?->program_studi_id ?? 0)]);
+        $prodiBk = $bahanKajians->pluck('program_studi_id', 'id');
+
         return response()->json([
             'status' => 'success',
             'message' => 'Matriks pemetaan BK-MK berhasil diambil',
             'data' => [
                 'mata_kuliahs' => $mataKuliahs,
                 'bahan_kajians' => $bahanKajians,
-                'pairs' => $pairs->map(fn($p) => [
-                    'mata_kuliah_id' => (int) $p->mata_kuliah_id,
-                    'bahan_kajian_id' => (int) $p->bahan_kajian_id,
-                ])->values(),
+                'pairs' => $pairs
+                    ->filter(fn($p) => (int) $prodiMk[$p->mata_kuliah_id] === (int) $prodiBk[$p->bahan_kajian_id])
+                    ->map(fn($p) => [
+                        'mata_kuliah_id' => (int) $p->mata_kuliah_id,
+                        'bahan_kajian_id' => (int) $p->bahan_kajian_id,
+                    ])->values(),
             ],
         ]);
     }

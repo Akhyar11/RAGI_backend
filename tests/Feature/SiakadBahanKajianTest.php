@@ -163,6 +163,56 @@ class SiakadBahanKajianTest extends TestCase
             ->assertJsonPath('data.bahan_kajians', []);
     }
 
+    public function test_matrix_tidak_menampilkan_korelasi_lintas_prodi(): void
+    {
+        $prodiLain = ProgramStudi::create([
+            'kode_prodi' => 'BK97',
+            'nama' => 'Prodi Lain Matrix',
+            'jenjang' => 'S1',
+            'is_active' => true,
+        ]);
+        $kurikulum = Kurikulum::create([
+            'program_studi_id' => $this->prodi->id,
+            'kode' => 'KUR-XPRODI',
+            'nama' => 'Kurikulum X Prodi',
+            'tahun_berlaku' => 2026,
+            'total_sks_lulus' => 144,
+            'is_active' => true,
+        ]);
+
+        $cplLokal = Cpl::create([
+            'program_studi_id' => $this->prodi->id,
+            'kode_cpl' => 'CPL-LOKAL',
+            'kategori' => 'pengetahuan',
+            'deskripsi' => 'CPL lokal',
+            'is_active' => true,
+        ]);
+        $bkLokal = BahanKajian::create([
+            'program_studi_id' => $this->prodi->id,
+            'kurikulum_id' => $kurikulum->id,
+            'kode_bk' => 'BK-LOKAL',
+            'nama_bk' => 'BK lokal',
+        ]);
+        $bkLain = BahanKajian::create([
+            'program_studi_id' => $prodiLain->id,
+            'kode_bk' => 'BK-LAIN',
+            'nama_bk' => 'BK prodi lain',
+        ]);
+
+        // Dua pemetaan pada CPL yang sama: satu lokal, satu lintas prodi.
+        DB::table('siakad_cpl_bahan_kajian')->insert([
+            ['cpl_id' => $cplLokal->id, 'bahan_kajian_id' => $bkLokal->id],
+            ['cpl_id' => $cplLokal->id, 'bahan_kajian_id' => $bkLain->id],
+        ]);
+
+        $res = $this->getJson('/api/v1/siakad/obe/bahan-kajian/matrix/cpl');
+        $res->assertStatus(200);
+
+        $pairs = collect($res->json('data.pairs'));
+        $this->assertCount(1, $pairs, 'Korelasi lintas prodi tidak boleh tampil di matriks');
+        $this->assertSame($bkLokal->id, $pairs->first()['bahan_kajian_id']);
+    }
+
     public function test_matrix_cpl_bahan_kajian(): void
     {
         $cpl = Cpl::create([
