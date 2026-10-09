@@ -1204,6 +1204,95 @@ satu jalur dijamin berasal dari program studi yang sama.
 
 ---
 
+## [POST] /api/v1/siakad/obe/rps
+
+> Menyimpan atau memperbarui dokumen RPS mata kuliah. Wajib permission `siakad.kurikulum.manage` atau Tim Kurikulum prodi.
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `mata_kuliah_id` | integer | ✅ | `exists:siakad_mata_kuliah,id` |
+| `kode_rps` | string | ❌ | Kode identitas RPS, misal `RPS-PM-IK-1-1-2026` |
+| `tahun_ajaran` | string | ❌ | Contoh `2026/2027` |
+| `semester` | integer | ❌ | Semester RPS |
+| `tanggal_penyusunan` | date | ❌ | Format `YYYY-MM-DD` |
+| `dosen_pengembang_id` | integer | ❌ | `exists:siakad_dosen,id` |
+| `dosen_anggota_ids` | array | ❌ | Array ID `exists:siakad_dosen,id` |
+| `koordinator_rmk_id` | integer | ❌ | `exists:siakad_dosen,id` |
+| `kaprodi_id` | integer | ❌ | `exists:siakad_dosen,id` |
+| `dosen_bisa_edit` | boolean | ❌ | Default `true` |
+| `deskripsi_singkat` | string | ❌ | Deskripsi singkat MK |
+| `bahan_kajian_mk` | string | ❌ | Rincian Bahan Kajian MK |
+| `mata_kuliah_syarat` | string | ❌ | Mata kuliah prasyarat (default `-`) |
+| `jenis_pembelajaran` | string | ❌ | Jenis pembelajaran (Kuliah, Seminar, dsb) |
+| `pustaka_utama` | string | ❌ | Pustaka utama |
+| `pustaka_pendukung` | string | ❌ | Pustaka pendukung |
+
+```json
+{
+    "mata_kuliah_id": 1,
+    "kode_rps": "RPS-PM-IK-1-1-2026",
+    "tanggal_penyusunan": "2026-02-26",
+    "semester": 1,
+    "dosen_bisa_edit": true,
+    "deskripsi_singkat": "Mata kuliah ini membahas teori dan teknik fotografi dasar.",
+    "bahan_kajian_mk": "Dasar pencahayaan, komposisi visual, pengenalan kamera.",
+    "mata_kuliah_syarat": "-",
+    "jenis_pembelajaran": "Kuliah / Responsi",
+    "dosen_pengembang_id": 1,
+    "koordinator_rmk_id": 2,
+    "kaprodi_id": 3
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Dokumen RPS berhasil disimpan",
+    "data": {
+        "id": 1,
+        "mata_kuliah_id": 1,
+        "kode_rps": "RPS-PM-IK-1-1-2026"
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "User does not have the right permissions."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Validasi gagal.",
+    "errors": {
+        "mata_kuliah_id": ["Field mata kuliah id wajib diisi."],
+        "jenis_pembelajaran": ["Field jenis pembelajaran tidak boleh lebih dari 100 karakter."]
+    }
+}
+```
+
+---
+
 ## [GET] /api/v1/siakad/obe/kelas/{kelasId}/nilai
 
 ### Response Sukses
