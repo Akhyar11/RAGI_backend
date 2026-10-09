@@ -2397,7 +2397,7 @@ class ObeController extends Controller
         $scope($cplQuery, $user, $request);
 
         $bahanKajians = $bkQuery->get(['id', 'kode_bk', 'nama_bk', 'program_studi_id']);
-        $cpls = $cplQuery->get(['id', 'kode_cpl', 'kategori', 'program_studi_id']);
+        $cpls = $cplQuery->get(['id', 'kode_cpl', 'kategori', 'deskripsi', 'program_studi_id']);
 
         $pairs = DB::table('siakad_cpl_bahan_kajian')
             ->join('siakad_bahan_kajian', 'siakad_bahan_kajian.id', '=', 'siakad_cpl_bahan_kajian.bahan_kajian_id')
