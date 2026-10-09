@@ -424,6 +424,91 @@ class ObeController extends Controller
         ]);
     }
 
+    /**
+     * Mengambil daftar pemetaan CPL-CPMK-MK (Rumusan CPMK beserta CPL dan MK yang diampunya)
+     */
+    public function getPemetaanCplCpmkMk(Request $request)
+    {
+        Gate::authorize('siakad.kurikulum.read');
+
+        $prodiIds = $this->resolveObeProdiId($request);
+
+        $query = CpmkProdi::with(['kurikulum', 'cpl', 'mataKuliahs'])
+            ->whereHas('kurikulum', fn ($q) => $q->whereIn('program_studi_id', $prodiIds));
+
+        if ($request->filled('kurikulum_id')) {
+            $query->where('kurikulum_id', $request->kurikulum_id);
+        }
+
+        if ($request->filled('cpl_id')) {
+            $query->where('cpl_id', $request->cpl_id);
+        }
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('kode_cpmk', 'like', "%{$s}%")
+                    ->orWhere('deskripsi', 'like', "%{$s}%")
+                    ->orWhereHas('cpl', fn($c) => $c->where('kode_cpl', 'like', "%{$s}%")->orWhere('deskripsi', 'like', "%{$s}%"));
+            });
+        }
+
+        $items = $query->orderBy('kode_cpmk')->get();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data pemetaan CPL-CPMK-MK berhasil dimuat',
+            'data' => $items,
+        ]);
+    }
+
+    /**
+     * Menyimpan pemetaan Mata Kuliah ke satu Rumusan CPMK Prodi
+     */
+    public function syncCpmkProdiMataKuliah(Request $request)
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $validated = $request->validate([
+            'cpmk_prodi_id' => 'required|exists:siakad_cpmk_prodi,id',
+            'mata_kuliah_ids' => 'present|array',
+            'mata_kuliah_ids.*' => 'exists:siakad_mata_kuliah,id',
+        ]);
+
+        $cpmkProdi = CpmkProdi::with('kurikulum')->findOrFail($validated['cpmk_prodi_id']);
+
+        $user = $request->user();
+        $prodiId = (int) ($cpmkProdi->kurikulum?->program_studi_id ?? 0);
+        if (!$user || !$user->canManageObeForProdi($prodiId)) {
+            return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses.'], 403);
+        }
+
+        $oldIds = $cpmkProdi->mataKuliahs()->pluck('siakad_mata_kuliah.id')->toArray();
+        $newIds = $validated['mata_kuliah_ids'] ?? [];
+
+        $cpmkProdi->mataKuliahs()->sync($newIds);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_cpmk_prodi_mata_kuliah',
+                recordId: $cpmkProdi->id,
+                oldValues: ['mata_kuliah_ids' => $oldIds],
+                newValues: ['mata_kuliah_ids' => $newIds],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log sync CPMK Prodi MK: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pemetaan Mata Kuliah untuk CPMK ' . $cpmkProdi->kode_cpmk . ' berhasil disimpan',
+            'data' => $cpmkProdi->load(['kurikulum', 'cpl', 'mataKuliahs']),
+        ]);
+    }
+
     public function storeCpmk(Request $request)
     {
         $request->validate([

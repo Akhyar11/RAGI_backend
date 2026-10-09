@@ -859,6 +859,83 @@ satu jalur dijamin berasal dari program studi yang sama.
 
 ---
 
+## [GET] /api/v1/siakad/obe/pemetaan-cpl-cpmk-mk
+
+> Mengambil daftar pemetaan CPL-CPMK-MK (Rumusan CPMK beserta CPL dan daftar Mata Kuliah yang mengampunya). Wajib permission `siakad.kurikulum.read`.
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `kurikulum_id` | integer | ❌ | Filter kurikulum |
+| `cpl_id` | integer | ❌ | Filter CPL prodi |
+| `search` | string | ❌ | Cari kata kunci pada kode/rumusan CPL atau CPMK |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Data pemetaan CPL-CPMK-MK berhasil dimuat",
+    "data": [
+        {
+            "id": 1,
+            "kurikulum_id": 2,
+            "cpl_id": 4,
+            "kode_cpmk": "CPMK011",
+            "deskripsi": "Mampu mengembangkan jiwa wirausaha mandiri...",
+            "kurikulum": { "id": 2, "nama": "K23 Indonesia Mantap" },
+            "cpl": { "id": 4, "kode_cpl": "CPL01", "deskripsi": "Mampu mengembangkan jiwa wirausaha..." },
+            "mata_kuliahs": [
+                { "id": 10, "kode_mk": "PM-IK-1-3-004", "nama": "WORKSHOP CREATIVE THINKING" }
+            ]
+        }
+    ]
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden**.
+
+---
+
+## [POST] /api/v1/siakad/obe/pemetaan-cpl-cpmk-mk/sync
+
+> Menyimpan pemetaan daftar Mata Kuliah ke satu Rumusan CPMK Prodi. Wajib permission `siakad.kurikulum.manage` atau Tim Kurikulum prodi.
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `cpmk_prodi_id` | integer | ✅ | `exists:siakad_cpmk_prodi,id` |
+| `mata_kuliah_ids` | array | ✅ | Array ID `exists:siakad_mata_kuliah,id` (boleh `[]` untuk melepas semua) |
+
+```json
+{
+    "cpmk_prodi_id": 1,
+    "mata_kuliah_ids": [10, 15]
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Pemetaan Mata Kuliah untuk CPMK CPMK011 berhasil disimpan",
+    "data": { "id": 1, "kode_cpmk": "CPMK011", "mata_kuliahs": [...] }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** / **403 Forbidden** / **422 Unprocessable Entity**.
+
+---
+
 ## [GET] /api/v1/siakad/obe/kelas/{kelasId}/nilai
 
 ### Response Sukses

@@ -36,6 +36,16 @@ class CpmkProdi extends Model
         return $this->belongsTo(Cpl::class, 'cpl_id');
     }
 
+    public function mataKuliahs()
+    {
+        return $this->belongsToMany(
+            MataKuliah::class,
+            'siakad_cpmk_prodi_mata_kuliah',
+            'cpmk_prodi_id',
+            'mata_kuliah_id'
+        )->withTimestamps();
+    }
+
     /**
      * Program studi pemilik, diturunkan dari kurikulum sehingga tidak perlu
      * kolom `program_studi_id` tersendiri (konsisten dengan aturan OBE admin).

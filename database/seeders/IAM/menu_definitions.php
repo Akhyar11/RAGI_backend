@@ -281,6 +281,7 @@ return [
                     ['name' => 'Pemetaan CPL-MK', 'url' => '/siakad/obe/pemetaan-cpl-mk', 'icon' => 'FaTh', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 1],
                     ['name' => 'Pemetaan CPL-BK-MK', 'url' => '/siakad/obe/pemetaan-cpl-bk-mk', 'icon' => 'FaProjectDiagram', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
                     ['name' => 'Rumusan CPMK', 'url' => '/siakad/obe/rumusan-cpmk', 'icon' => 'FaListOl', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 3],
+                    ['name' => 'Pemetaan CPL-CPMK-MK', 'url' => '/siakad/obe/pemetaan-cpl-cpmk-mk', 'icon' => 'FaThList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 4],
                 ]
             ],
             [

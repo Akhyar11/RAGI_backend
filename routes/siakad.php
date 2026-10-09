@@ -211,6 +211,10 @@ Route::prefix('obe')->group(function () {
     Route::put('/cpmk-prodi/{id}', [ObeController::class, 'updateCpmkProdi']);
     Route::delete('/cpmk-prodi/{id}', [ObeController::class, 'destroyCpmkProdi']);
 
+    // Pemetaan CPL-CPMK-MK (Distribusi Rumusan CPMK Prodi ke Mata Kuliah)
+    Route::get('/pemetaan-cpl-cpmk-mk', [ObeController::class, 'getPemetaanCplCpmkMk']);
+    Route::post('/pemetaan-cpl-cpmk-mk/sync', [ObeController::class, 'syncCpmkProdiMataKuliah']);
+
     Route::get('/cpmk', [ObeController::class, 'getCpmk']);
     Route::post('/cpmk', [ObeController::class, 'storeCpmk']);
     Route::get('/sub-cpmk', [ObeController::class, 'getSubCpmk']);
