@@ -641,7 +641,7 @@ class ObeMasterController extends Controller
         Gate::authorize('siakad.kurikulum.manage');
 
         $validated = $request->validate([
-            'program_studi_id' => 'required|exists:siakad_program_studi,id',
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'cpmk_id' => 'nullable|exists:siakad_cpmk,id',
             'kode_rubrik' => 'required|string|max:50|unique:siakad_obe_rubrik,kode_rubrik',
             'nama_rubrik' => 'required|string|max:255',
@@ -659,6 +659,8 @@ class ObeMasterController extends Controller
             'kriterias.*.deskripsi_cukup' => 'nullable|string',
             'kriterias.*.deskripsi_kurang' => 'nullable|string',
         ]);
+
+        $validated['program_studi_id'] = $this->resolveRubrikProdiId($request, $validated['program_studi_id'] ?? null);
 
         $rubrik = ObeRubrik::create([
             'program_studi_id' => $validated['program_studi_id'],
@@ -718,7 +720,7 @@ class ObeMasterController extends Controller
         $old = $rubrik->getOriginal();
 
         $validated = $request->validate([
-            'program_studi_id' => 'required|exists:siakad_program_studi,id',
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'cpmk_id' => 'nullable|exists:siakad_cpmk,id',
             'kode_rubrik' => 'required|string|max:50|unique:siakad_obe_rubrik,kode_rubrik,' . $id,
             'nama_rubrik' => 'required|string|max:255',
@@ -738,7 +740,9 @@ class ObeMasterController extends Controller
         ]);
 
         $rubrik->update([
-            'program_studi_id' => $validated['program_studi_id'],
+            // Prodi rubrik bersifat tetap: tidak berasal dari input pengguna dan tidak
+            // dipindahkan saat edit, mengikuti aturan OBE admin (prodi always aktif).
+            'program_studi_id' => $rubrik->program_studi_id,
             'cpmk_id' => $validated['cpmk_id'] ?? null,
             'kode_rubrik' => $validated['kode_rubrik'],
             'nama_rubrik' => $validated['nama_rubrik'],
@@ -1109,5 +1113,39 @@ class ObeMasterController extends Controller
                 'semesters' => $distribusi,
             ],
         ]);
+    }
+
+    /**
+     * Resolver program studi untuk penyimpanan rubrik.
+     *
+     * Rubrik tidak memiliki `kurikulum_id` sehingga prodi tidak dapat diturunkan dari
+     * data lain di payload. Sesuai aturan OBE admin, halaman tidak menyediakan input
+     * program studi karena prodi selalu aktif milik pengguna. Backend menerjemahkan
+     * aturan tersebut menjadi data:
+     *  - 1 prodi aktif  -> dipakai otomatis.
+     *  - 0 prodi aktif  -> 422 (user belum punya prodi aktif).
+     *  - >1 prodi aktif -> 422, kecuali request menyertakan `program_studi_id` yang
+     *                      memang berada di dalam rentang prodi aktif user.
+     */
+    private function resolveRubrikProdiId(Request $request, ?int $submitted): int
+    {
+        $user = $request->user();
+        $scoped = $user && method_exists($user, 'getSiakadProdiIds')
+            ? $user->getSiakadProdiIds()
+            : collect();
+
+        if ($scoped->count() === 1) {
+            return (int) $scoped->first();
+        }
+
+        if ($scoped->isEmpty()) {
+            abort(422, 'Program studi tidak dapat ditentukan: akun Anda belum memiliki program studi aktif.');
+        }
+
+        if ($submitted && $scoped->contains($submitted)) {
+            return (int) $submitted;
+        }
+
+        abort(422, 'Program studi tidak dapat ditentukan: akun Anda terhubung ke lebih dari satu program studi aktif. Kirimkan parameter program_studi_id secara eksplisit.');
     }
 }

@@ -121,6 +121,107 @@ class SiakadObeMasterTest extends TestCase
             ->assertStatus(200);
     }
 
+    public function test_rubrik_tidak_menerima_program_studi_dari_klien_saat_store(): void
+    {
+        $res = $this->postJson('/api/v1/siakad/obe/rubrik', [
+            'program_studi_id' => $this->prodi->id,
+            'kode_rubrik' => 'RBK-EXPLICIT-01',
+            'nama_rubrik' => 'Rubrik Prodi Eksplisit',
+            'tipe_rubrik' => 'analitik',
+            'is_active' => true,
+        ]);
+
+        // Superadmin terhubung ke seluruh prodi aktif; karena body mengirim prodi
+        // eksplisit yang berada di dalam rentang tersebut, nilai itu diterima.
+        $res->assertStatus(201);
+        $this->assertSame($this->prodi->id, (int) $res->json('data.program_studi_id'));
+    }
+
+    public function test_rubrik_tanpa_program_studi_diturunkan_dari_prodi_aktif_scoped(): void
+    {
+        $scoped = User::factory()->create(['is_active' => true]);
+        $role = \App\Models\Role::create(['name' => 'Tim Kurikulum Rubrik', 'slug' => 'tim_kurikulum_rubrik', 'is_active' => true]);
+        $role->permissions()->attach(\App\Models\Permission::where('slug', 'siakad.master.manage')->first()->id);
+        $scoped->roles()->attach($role->id);
+        \Illuminate\Support\Facades\DB::table('siakad_admin_prodi')->insert([
+            'user_id' => $scoped->id,
+            'program_studi_id' => $this->prodi->id,
+            'jabatan' => 'Admin OBE',
+            'is_active' => true,
+        ]);
+
+        Passport::actingAs($scoped);
+
+        $res = $this->postJson('/api/v1/siakad/obe/rubrik', [
+            'kode_rubrik' => 'RBK-NOPRODI-01',
+            'nama_rubrik' => 'Rubrik Tanpa Input Prodi',
+            'tipe_rubrik' => 'analitik',
+            'is_active' => true,
+        ]);
+
+        $res->assertStatus(201);
+        $this->assertSame(
+            $this->prodi->id,
+            (int) $res->json('data.program_studi_id'),
+            'Prodi rubrik harus diturunkan otomatis dari prodi aktif user.'
+        );
+    }
+
+    public function test_rubrik_422_bila_user_tidak_punya_prodi_aktif(): void
+    {
+        $tanpaProdi = User::factory()->create(['is_active' => true]);
+        $roleTanpaProdi = \App\Models\Role::create(['name' => 'Tanpa Prodi Rubrik', 'slug' => 'tanpa_prodi_rubrik', 'is_active' => true]);
+        $roleTanpaProdi->permissions()->attach(\App\Models\Permission::where('slug', 'siakad.master.manage')->first()->id);
+        $tanpaProdi->roles()->attach($roleTanpaProdi->id);
+        ProgramStudi::create([
+            'kode_prodi' => 'TK98',
+            'nama' => 'Teknik Kimia Tanpa Akses',
+            'jenjang' => 'S1',
+            'is_active' => true,
+        ]);
+
+        Passport::actingAs($tanpaProdi);
+
+        $this->postJson('/api/v1/siakad/obe/rubrik', [
+            'kode_rubrik' => 'RBK-NOPRODI-02',
+            'nama_rubrik' => 'Rubrik Tanpa Prodi Aktif',
+            'tipe_rubrik' => 'analitik',
+            'is_active' => true,
+        ])->assertStatus(422);
+    }
+
+    public function test_update_rubrik_tidak_memindahkan_program_studi(): void
+    {
+        $id = $this->postJson('/api/v1/siakad/obe/rubrik', [
+            'program_studi_id' => $this->prodi->id,
+            'kode_rubrik' => 'RBK-PIN-01',
+            'nama_rubrik' => 'Rubrik Prodi Terkunci',
+            'tipe_rubrik' => 'analitik',
+            'is_active' => true,
+        ])->json('data.id');
+
+        $prodiLain = ProgramStudi::create([
+            'kode_prodi' => 'TE97',
+            'nama' => 'Teknik Elektro Tujuan',
+            'jenjang' => 'S1',
+            'is_active' => true,
+        ]);
+
+        $this->putJson('/api/v1/siakad/obe/rubrik/' . $id, [
+            'program_studi_id' => $prodiLain->id,
+            'kode_rubrik' => 'RBK-PIN-01',
+            'nama_rubrik' => 'Rubrik Prodi Terkunci (Diubah)',
+            'tipe_rubrik' => 'analitik',
+            'is_active' => true,
+        ])->assertStatus(200);
+
+        $this->assertSame(
+            $this->prodi->id,
+            (int) ObeRubrik::findOrFail($id)->program_studi_id,
+            'Prodi rubrik tidak boleh dipindahkan lewat update.'
+        );
+    }
+
     public function test_crud_cpl(): void
     {
         \Illuminate\Support\Facades\DB::table('spmb_master_referensi')->updateOrInsert(

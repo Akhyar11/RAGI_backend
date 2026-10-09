@@ -26,6 +26,8 @@ Mengelola data master kurikulum OBE untuk Admin OBE Homebase Program Studi dan B
 
 > **Kebijakan scope prodi (2026-10-08):** user scoped (non-admin tanpa role `admin`/`admin_siakad`) pada list rumpun-mk / jenis-cpl / profesi-karir / rubrik **hanya melihat baris milik prodinya** (`program_studi_id ∈ getSiakadProdiIds()`); baris global (`program_studi_id = null`) disembunyikan. Admin melihat semua; bila mengirim `program_studi_id` eksplisit, baris global tetap diikutsertakan sebagai referensi bersama. Store rumpun-mk / jenis-cpl: scoped user tanpa pilihan prodi otomatis diatribusikan ke prodi pertamanya.
 
+> **Aturan umum OBE admin (2026-10-09):** halaman OBE admin tidak menyediakan input/filter Program Studi karena prodi selalu aktif milik pengguna. Store rubrik menolak prodi dari klien dan menurunkan sendiri dari `getSiakadProdiIds()` (lihat §4).
+
 ---
 
 ## 1. Rumpun Mata Kuliah
@@ -126,9 +128,15 @@ Detail rubrik beserta butir kriteria penilaian.
 ### [POST] `/api/v1/siakad/obe/rubrik`
 Membuat rubrik penilaian baru.
 
+> **Program studi tidak dikirim dari klien.** Sesuai aturan OBE admin, halaman tidak
+> menyediakan input program studi karena prodi selalu mengikuti prodi aktif akun.
+> Backend menurunkan `program_studi_id` dari `getSiakadProdiIds()`:
+> 1 prodi aktif → dipakai otomatis; 0 prodi aktif → `422`; >1 prodi aktif → `422`
+> kecuali body menyertakan `program_studi_id` yang berada di dalam rentang prodi
+> aktif user. Prodi bersifat tetap dan tidak dipindahkan saat `PUT`.
+
 ```json
 {
-  "program_studi_id": 1,
   "kode_rubrik": "RBK-PROJ-01",
   "nama_rubrik": "Rubrik Penilaian Proyek",
   "tipe_rubrik": "analitik",
@@ -146,7 +154,8 @@ Membuat rubrik penilaian baru.
 ```
 
 ### [PUT] `/api/v1/siakad/obe/rubrik/{id}`
-Memperbarui rubrik dan kriteria penilaian.
+Memperbarui rubrik dan kriteria penilaian. `program_studi_id` pada body diabaikan;
+prodi rubrik mengikuti nilai tersimpan saat pembuatan.
 
 ### [DELETE] `/api/v1/siakad/obe/rubrik/{id}`
 Menghapus rubrik penilaian.
