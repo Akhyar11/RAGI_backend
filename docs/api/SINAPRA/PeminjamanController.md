@@ -426,6 +426,87 @@ Deskripsi: Mengajukan peminjaman aset/barang tunggal (`aset_id`) atau multi-bara
 
 ---
 
+## GET /api/sinapra/peminjaman-aset/{id}
+
+Deskripsi: Mengambil rincian data permohonan peminjaman aset beserta relasi barang inventaris, data peminjam, approver, serta seluruh daftar barang yang termasuk dalam transaksi batch yang sama (`batch_items`).
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Detail peminjaman aset berhasil diambil",
+    "data": {
+        "id": 1,
+        "kode_peminjaman": "PMA-20260925-ABCD1",
+        "aset_id": 5,
+        "user_id": 10,
+        "keperluan": "Peminjaman Mikroskop dan Kamera Sensor untuk Uji Praktikum",
+        "tanggal_pinjam": "2026-09-25",
+        "tanggal_kembali_rencana": "2026-09-26",
+        "tanggal_kembali_aktual": null,
+        "kondisi_pinjam": "baik",
+        "kondisi_kembali": null,
+        "catatan_pengembalian": null,
+        "status": "pending_laboran",
+        "aset": {
+            "id": 5,
+            "kode_aset": "AST-LAB-005",
+            "nama": "Mikroskop Binokuler Olympus CX23",
+            "status": "tersedia",
+            "kondisi": "baik",
+            "kategori": {
+                "id": 1,
+                "nama": "Alat Laboratorium"
+            },
+            "ruangan": {
+                "id": 2,
+                "nama": "Laboratorium Biologi Terpadu"
+            }
+        },
+        "user": {
+            "id": 10,
+            "name": "Budi Santoso",
+            "email": "budi@kampus.ac.id",
+            "pegawai": null,
+            "mahasiswa": {
+                "nim": "2023001001",
+                "nama_lengkap": "Budi Santoso"
+            }
+        },
+        "approver": null,
+        "laboran_approver": null,
+        "batch_items": [
+            {
+                "id": 1,
+                "kode_peminjaman": "PMA-20260925-ABCD1",
+                "aset_id": 5,
+                "status": "pending_laboran",
+                "kondisi_pinjam": "baik",
+                "aset": {
+                    "id": 5,
+                    "kode_aset": "AST-LAB-005",
+                    "nama": "Mikroskop Binokuler Olympus CX23"
+                }
+            },
+            {
+                "id": 2,
+                "kode_peminjaman": "PMA-20260925-ABCD1",
+                "aset_id": 6,
+                "status": "pending_laboran",
+                "kondisi_pinjam": "baik",
+                "aset": {
+                    "id": 6,
+                    "kode_aset": "AST-LAB-006",
+                    "nama": "Kamera Sensor Mikroskop 14MP"
+                }
+            }
+        ]
+    }
+}
+```
+
+---
+
 ## POST /api/sinapra/peminjaman-aset/{id}/approve-laboran
 
 Deskripsi: Persetujuan/penolakan tahap Laboran atas peminjaman aset laboratorium.
@@ -556,7 +637,7 @@ Deskripsi: Mengambil rincian Surat Izin Peminjaman Aset resmi kampus lengkap den
 
 ## POST /api/sinapra/peminjaman-aset/{id}/kembalikan
 
-Deskripsi: Memproses pengembalian barang/aset pinjaman serta memperbarui kondisi fisik dan status ketersediaan barang kembali ke `tersedia` (atau `maintenance` bila rusak). Mendukung pengembalian satuan ataupun sekaligus seluruh aset dalam satu kode permohonan.
+Deskripsi: Memproses pengembalian barang/aset pinjaman serta memperbarui kondisi fisik dan status ketersediaan barang kembali ke `tersedia` (atau `maintenance` bila rusak berat dan `disetujui_diapkir` bila hilang). Mendukung pemeriksaan kondisi satuan, batch seragam, maupun inspeksi detail per-item barang dalam satu transaksi peminjaman. Jika kondisi barang adalah `rusak_berat`, sistem otomatis membuat tiket perawatan pada antrean `sinapra_maintenance_log` dengan prioritas tinggi.
 
 ### Request Body
 ```json
@@ -564,7 +645,19 @@ Deskripsi: Memproses pengembalian barang/aset pinjaman serta memperbarui kondisi
     "kondisi_kembali": "baik",
     "tanggal_kembali_aktual": "2026-10-05",
     "catatan_pengembalian": "Aset dikembalikan dalam keadaan bersih, lengkap bersama adaptor dan tas bawaan.",
-    "kembalikan_semua_dalam_batch": true
+    "kembalikan_semua_dalam_batch": true,
+    "items": [
+        {
+            "peminjaman_id": 1,
+            "kondisi_kembali": "baik",
+            "catatan": "Kondisi unit mulus dan baterai normal"
+        },
+        {
+            "peminjaman_id": 2,
+            "kondisi_kembali": "rusak_berat",
+            "catatan": "Layar monitor retak dan mati total, butuh perbaikan teknisi"
+        }
+    ]
 }
 ```
 

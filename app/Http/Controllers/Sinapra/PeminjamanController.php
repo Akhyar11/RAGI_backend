@@ -238,10 +238,23 @@ class PeminjamanController extends Controller
     {
         $this->authorize('view', $peminjaman);
 
+        $peminjaman->load(['aset.kategori', 'aset.ruangan', 'user.pegawai', 'user.mahasiswa', 'approver', 'laboranApprover']);
+
+        // Jika transaksi ini bagian dari batch pengajuan, muat seluruh item peminjaman dalam transaksi
+        $batchItems = [];
+        if (!empty($peminjaman->kode_peminjaman)) {
+            $batchItems = PeminjamanAset::with(['aset.kategori', 'aset.ruangan'])
+                ->where('kode_peminjaman', $peminjaman->kode_peminjaman)
+                ->get();
+        } else {
+            $batchItems = collect([$peminjaman]);
+        }
+        $peminjaman->setAttribute('batch_items', $batchItems);
+
         return response()->json([
             'status' => 'success',
             'message' => 'Detail peminjaman aset berhasil diambil',
-            'data' => $peminjaman->load(['aset.kategori', 'aset.ruangan', 'user', 'approver', 'laboranApprover']),
+            'data' => $peminjaman,
         ]);
     }
 
@@ -296,21 +309,28 @@ class PeminjamanController extends Controller
 
     public function kembalikanAset(Request $request, PeminjamanAset $peminjaman): JsonResponse
     {
-        $this->authorize('approve', $peminjaman);
+        $this->authorize('kembalikan', $peminjaman);
 
         $request->validate([
-            'kondisi_kembali' => 'required|in:baik,rusak_ringan,rusak_berat,hilang',
+            'kondisi_kembali' => 'nullable|in:baik,rusak_ringan,rusak_berat,hilang',
             'tanggal_kembali_aktual' => 'nullable|date',
             'catatan_pengembalian' => 'nullable|string|max:500',
             'kembalikan_semua_dalam_batch' => 'nullable|boolean',
+            'items' => 'nullable|array',
+            'items.*.peminjaman_id' => 'required_with:items|integer|exists:sinapra_peminjaman_aset,id',
+            'items.*.kondisi_kembali' => 'required_with:items|in:baik,rusak_ringan,rusak_berat,hilang',
+            'items.*.catatan' => 'nullable|string|max:500',
         ]);
+
+        $kondisiKembali = $request->input('kondisi_kembali', 'baik');
 
         $updated = $this->service->prosesPengembalianAset(
             peminjaman: $peminjaman,
-            kondisiKembali: $request->kondisi_kembali,
+            kondisiKembali: $kondisiKembali,
             tanggalKembaliAktual: $request->input('tanggal_kembali_aktual'),
             catatanPengembalian: $request->input('catatan_pengembalian'),
-            kembalikanSemuaDalamBatch: $request->boolean('kembalikan_semua_dalam_batch')
+            kembalikanSemuaDalamBatch: $request->boolean('kembalikan_semua_dalam_batch'),
+            items: $request->input('items', [])
         );
 
         return response()->json([

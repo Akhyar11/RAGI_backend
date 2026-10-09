@@ -40,6 +40,23 @@ class PeminjamanAsetPolicy
         return $peminjamanAset->aset?->ruangan?->laboran()->where('core_users.id', $user->id)->exists() ?? false;
     }
 
+    public function kembalikan(User $user, PeminjamanAset $peminjamanAset): bool
+    {
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($user->hasPermission('sinapra.peminjaman_aset.approve')) {
+            return true;
+        }
+
+        if ($user->hasPermission('sinapra.peminjaman_aset.approve_laboran')) {
+            return $peminjamanAset->aset?->ruangan?->laboran()->where('core_users.id', $user->id)->exists() ?? false;
+        }
+
+        return false;
+    }
+
     public function delete(User $user, PeminjamanAset $peminjamanAset): bool
     {
         return $user->hasPermission('sinapra.peminjaman_aset.delete') || $user->id === $peminjamanAset->user_id;

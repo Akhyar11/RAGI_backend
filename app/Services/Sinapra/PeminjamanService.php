@@ -6,6 +6,7 @@ use App\Models\PeminjamanRuangan;
 use App\Models\PeminjamanAset;
 use App\Models\Aset;
 use App\Models\Ruangan;
+use App\Models\MaintenanceLog;
 use App\Models\Simpeg\TandaTanganPegawai;
 use App\Services\AuditLogService;
 use App\Services\Storage\FileStorageService;
@@ -264,6 +265,24 @@ class PeminjamanService
                     throw new Exception("Aset '{$aset->nama}' sedang tidak tersedia untuk dipinjam (status: {$aset->status}).");
                 }
 
+                // Cek tumpang tindih rentang tanggal peminjaman aset yang aktif/berjalan
+                $tglPinjam = $data['tanggal_pinjam'];
+                $tglKembali = $data['tanggal_kembali_rencana'];
+                $isColliding = PeminjamanAset::where('aset_id', $asetId)
+                    ->whereIn('status', ['pending', 'pending_laboran', 'pending_admin_sinapra', 'disetujui', 'dipinjam'])
+                    ->where(function ($q) use ($tglPinjam, $tglKembali) {
+                        $q->whereBetween('tanggal_pinjam', [$tglPinjam, $tglKembali])
+                          ->orWhereBetween('tanggal_kembali_rencana', [$tglPinjam, $tglKembali])
+                          ->orWhere(function ($sub) use ($tglPinjam, $tglKembali) {
+                              $sub->where('tanggal_pinjam', '<=', $tglPinjam)
+                                  ->where('tanggal_kembali_rencana', '>=', $tglKembali);
+                          });
+                    })->exists();
+
+                if ($isColliding) {
+                    throw new Exception("Aset '{$aset->nama}' sudah diajukan atau sedang dipinjam oleh pihak lain pada rentang tanggal {$tglPinjam} s.d. {$tglKembali}.");
+                }
+
                 $isLab = $aset->is_lab_asset || ($aset->ruangan && $aset->ruangan->tipe === 'lab');
 
                 $recordData = [
@@ -433,23 +452,89 @@ class PeminjamanService
                             ]);
                     }
                 }
+
+                // Jika merupakan bagian dari batch (kode_peminjaman), setujui juga item lainnya dan tandai aset fisiknya sebagai dipinjam
+                if (!empty($peminjaman->kode_peminjaman)) {
+                    $otherBatchItems = PeminjamanAset::where('kode_peminjaman', $peminjaman->kode_peminjaman)
+                        ->where('id', '!=', $peminjaman->id)
+                        ->get();
+
+                    foreach ($otherBatchItems as $bItem) {
+                        $oldBatchValues = $bItem->toArray();
+                        $bItem->update([
+                            'status' => 'disetujui',
+                            'disetujui_oleh' => $approverId,
+                            'admin_approved_at' => now(),
+                            'nomor_surat' => $peminjaman->nomor_surat,
+                            'surat_generated_at' => now(),
+                        ]);
+
+                        Aset::where('id', $bItem->aset_id)->update(['status' => 'dipinjam']);
+
+                        try {
+                            AuditLogService::record(
+                                module: 'SINAPRA',
+                                action: 'approve',
+                                tableName: 'sinapra_peminjaman_aset',
+                                recordId: $bItem->id,
+                                oldValues: $oldBatchValues,
+                                newValues: $bItem->fresh()->toArray()
+                            );
+                        } catch (\Throwable $e) {
+                            Log::warning("Gagal mencatat audit log batch approve: " . $e->getMessage());
+                        }
+                    }
+                }
             } else {
                 $peminjaman->status = 'ditolak_admin_sinapra';
                 $peminjaman->catatan_penolakan = $catatanPenolakan;
+
+                if (!empty($peminjaman->kode_peminjaman)) {
+                    $rejectedBatch = PeminjamanAset::where('kode_peminjaman', $peminjaman->kode_peminjaman)
+                        ->where('id', '!=', $peminjaman->id)
+                        ->get();
+
+                    foreach ($rejectedBatch as $bItem) {
+                        $oldBatchValues = $bItem->toArray();
+                        $bItem->update([
+                            'status' => 'ditolak_admin_sinapra',
+                            'disetujui_oleh' => $approverId,
+                            'admin_approved_at' => now(),
+                            'catatan_penolakan' => $catatanPenolakan,
+                        ]);
+
+                        try {
+                            AuditLogService::record(
+                                module: 'SINAPRA',
+                                action: 'reject',
+                                tableName: 'sinapra_peminjaman_aset',
+                                recordId: $bItem->id,
+                                oldValues: $oldBatchValues,
+                                newValues: $bItem->fresh()->toArray()
+                            );
+                        } catch (\Throwable $e) {
+                            Log::warning("Gagal mencatat audit log batch reject: " . $e->getMessage());
+                        }
+                    }
+                }
             }
 
             $peminjaman->disetujui_oleh = $approverId;
             $peminjaman->admin_approved_at = now();
             $peminjaman->save();
 
-            AuditLogService::record(
-                module: 'SINAPRA',
-                action: $isApproved ? 'approve' : 'reject',
-                tableName: 'peminjaman_aset',
-                recordId: $peminjaman->id,
-                oldValues: $oldValues,
-                newValues: $peminjaman->fresh()->toArray()
-            );
+            try {
+                AuditLogService::record(
+                    module: 'SINAPRA',
+                    action: $isApproved ? 'approve' : 'reject',
+                    tableName: 'sinapra_peminjaman_aset',
+                    recordId: $peminjaman->id,
+                    oldValues: $oldValues,
+                    newValues: $peminjaman->fresh()->toArray()
+                );
+            } catch (\Throwable $e) {
+                Log::warning("Gagal mencatat audit log approval peminjaman aset: " . $e->getMessage());
+            }
 
             return $peminjaman->fresh();
         });
@@ -582,57 +667,167 @@ class PeminjamanService
     }
 
     /**
-     * Proses pengembalian barang/aset yang dipinjam (Mendukung pengembalian satuan atau batch).
+     * Proses pengembalian barang/aset yang dipinjam (Mendukung pengembalian satuan, per-item, atau batch).
      */
     public function prosesPengembalianAset(
         PeminjamanAset $peminjaman,
-        string $kondisiKembali,
+        ?string $kondisiKembali = 'baik',
         ?string $tanggalKembaliAktual = null,
         ?string $catatanPengembalian = null,
-        bool $kembalikanSemuaDalamBatch = false
+        bool $kembalikanSemuaDalamBatch = false,
+        array $items = []
     ): PeminjamanAset {
-        return DB::transaction(function () use ($peminjaman, $kondisiKembali, $tanggalKembaliAktual, $catatanPengembalian, $kembalikanSemuaDalamBatch) {
+        return DB::transaction(function () use ($peminjaman, $kondisiKembali, $tanggalKembaliAktual, $catatanPengembalian, $kembalikanSemuaDalamBatch, $items) {
             $tanggalKembali = $tanggalKembaliAktual ?: now()->toDateString();
 
-            // Kumpulan peminjaman yang akan diproses
-            $itemsToReturn = collect([$peminjaman]);
-            if ($kembalikanSemuaDalamBatch && !empty($peminjaman->kode_peminjaman)) {
-                $itemsToReturn = PeminjamanAset::where('kode_peminjaman', $peminjaman->kode_peminjaman)
-                    ->whereIn('status', ['dipinjam', 'disetujui'])
-                    ->get();
-            }
+            // Skenario 1: Pemeriksaan kondisi spesifik per-item barang
+            if (!empty($items)) {
+                foreach ($items as $itemData) {
+                    $itemId = $itemData['peminjaman_id'] ?? null;
+                    if (!$itemId) {
+                        continue;
+                    }
 
-            foreach ($itemsToReturn as $item) {
-                $oldValues = $item->toArray();
+                    $pItem = PeminjamanAset::find($itemId);
+                    if (!$pItem || !in_array($pItem->status, ['dipinjam', 'disetujui'])) {
+                        continue;
+                    }
 
-                $item->update([
-                    'tanggal_kembali_aktual' => $tanggalKembali,
-                    'kondisi_kembali' => $kondisiKembali,
-                    'catatan_pengembalian' => $catatanPengembalian,
-                    'status' => 'kembali',
-                ]);
+                    $itemKondisi = $itemData['kondisi_kembali'] ?? $kondisiKembali ?? 'baik';
+                    $itemCatatan = $itemData['catatan'] ?? $catatanPengembalian;
 
-                // Update status & kondisi aset
-                $aset = Aset::findOrFail($item->aset_id);
-                $asetStatus = match ($kondisiKembali) {
-                    'rusak_berat' => 'maintenance',
-                    'hilang' => 'disetujui_diapkir',
-                    default => 'tersedia',
-                };
+                    $oldValues = $pItem->toArray();
+                    $pItem->update([
+                        'tanggal_kembali_aktual' => $tanggalKembali,
+                        'kondisi_kembali' => $itemKondisi,
+                        'catatan_pengembalian' => $itemCatatan,
+                        'status' => 'kembali',
+                    ]);
 
-                $aset->update([
-                    'status' => $asetStatus,
-                    'kondisi' => ($kondisiKembali === 'hilang') ? 'rusak_berat' : $kondisiKembali,
-                ]);
+                    $aset = Aset::find($pItem->aset_id);
+                    if ($aset) {
+                        $asetStatus = match ($itemKondisi) {
+                            'rusak_berat' => 'maintenance',
+                            'hilang' => 'disetujui_diapkir',
+                            default => 'tersedia',
+                        };
 
-                AuditLogService::record(
-                    module: 'SINAPRA',
-                    action: 'update',
-                    tableName: 'peminjaman_aset',
-                    recordId: $item->id,
-                    oldValues: $oldValues,
-                    newValues: $item->fresh()->toArray()
-                );
+                        $aset->update([
+                            'status' => $asetStatus,
+                            'kondisi' => ($itemKondisi === 'hilang') ? 'rusak_berat' : $itemKondisi,
+                        ]);
+
+                        // Alur otomatis pembuatan tiket perawatan jika kondisi barang rusak berat
+                        if ($itemKondisi === 'rusak_berat') {
+                            $mLog = MaintenanceLog::create([
+                                'aset_id' => $aset->id,
+                                'ruangan_id' => $aset->ruangan_id,
+                                'judul' => 'Perbaikan Pengembalian Peminjaman: ' . $aset->nama,
+                                'deskripsi_kerusakan' => 'Pengembalian barang dari transaksi peminjaman (' . ($pItem->kode_peminjaman ?: 'PA-' . $pItem->id) . ') dalam kondisi rusak berat. Catatan teknis: ' . ($itemCatatan ?: 'Perlu perbaikan/servis segera.'),
+                                'prioritas' => 'tinggi',
+                                'tanggal_lapor' => $tanggalKembali,
+                                'status' => 'dilaporkan',
+                            ]);
+
+                            try {
+                                AuditLogService::record(
+                                    module: 'SINAPRA',
+                                    action: 'create',
+                                    tableName: 'sinapra_maintenance_log',
+                                    recordId: $mLog->id,
+                                    oldValues: null,
+                                    newValues: $mLog->toArray()
+                                );
+                            } catch (\Throwable $e) {
+                                Log::warning("Gagal mencatat audit log pembuatan tiket maintenance per-item: " . $e->getMessage());
+                            }
+                        }
+                    }
+
+                    try {
+                        AuditLogService::record(
+                            module: 'SINAPRA',
+                            action: 'update',
+                            tableName: 'sinapra_peminjaman_aset',
+                            recordId: $pItem->id,
+                            oldValues: $oldValues,
+                            newValues: $pItem->fresh()->toArray()
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning("Gagal mencatat audit log pengembalian aset per-item: " . $e->getMessage());
+                    }
+                }
+            } else {
+                // Skenario 2: Kumpulan peminjaman yang akan diproses secara seragam (single atau batch)
+                $itemsToReturn = collect([$peminjaman]);
+                if ($kembalikanSemuaDalamBatch && !empty($peminjaman->kode_peminjaman)) {
+                    $itemsToReturn = PeminjamanAset::where('kode_peminjaman', $peminjaman->kode_peminjaman)
+                        ->whereIn('status', ['dipinjam', 'disetujui'])
+                        ->get();
+                }
+
+                foreach ($itemsToReturn as $item) {
+                    $oldValues = $item->toArray();
+
+                    $item->update([
+                        'tanggal_kembali_aktual' => $tanggalKembali,
+                        'kondisi_kembali' => $kondisiKembali,
+                        'catatan_pengembalian' => $catatanPengembalian,
+                        'status' => 'kembali',
+                    ]);
+
+                    // Update status & kondisi fisik aset
+                    $aset = Aset::findOrFail($item->aset_id);
+                    $asetStatus = match ($kondisiKembali) {
+                        'rusak_berat' => 'maintenance',
+                        'hilang' => 'disetujui_diapkir',
+                        default => 'tersedia',
+                    };
+
+                    $aset->update([
+                        'status' => $asetStatus,
+                        'kondisi' => ($kondisiKembali === 'hilang') ? 'rusak_berat' : $kondisiKembali,
+                    ]);
+
+                    // Alur otomatis pembuatan tiket perawatan jika kondisi barang rusak berat
+                    if ($kondisiKembali === 'rusak_berat') {
+                        $mLog = MaintenanceLog::create([
+                            'aset_id' => $aset->id,
+                            'ruangan_id' => $aset->ruangan_id,
+                            'judul' => 'Perbaikan Pengembalian Peminjaman: ' . $aset->nama,
+                            'deskripsi_kerusakan' => 'Pengembalian barang dari transaksi peminjaman (' . ($item->kode_peminjaman ?: 'PA-' . $item->id) . ') dalam kondisi rusak berat. Catatan teknis: ' . ($catatanPengembalian ?: 'Perlu perbaikan/servis segera.'),
+                            'prioritas' => 'tinggi',
+                            'tanggal_lapor' => $tanggalKembali,
+                            'status' => 'dilaporkan',
+                        ]);
+
+                        try {
+                            AuditLogService::record(
+                                module: 'SINAPRA',
+                                action: 'create',
+                                tableName: 'sinapra_maintenance_log',
+                                recordId: $mLog->id,
+                                oldValues: null,
+                                newValues: $mLog->toArray()
+                            );
+                        } catch (\Throwable $e) {
+                            Log::warning("Gagal mencatat audit log pembuatan tiket maintenance batch: " . $e->getMessage());
+                        }
+                    }
+
+                    try {
+                        AuditLogService::record(
+                            module: 'SINAPRA',
+                            action: 'update',
+                            tableName: 'sinapra_peminjaman_aset',
+                            recordId: $item->id,
+                            oldValues: $oldValues,
+                            newValues: $item->fresh()->toArray()
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning("Gagal mencatat audit log pengembalian aset batch: " . $e->getMessage());
+                    }
+                }
             }
 
             return $peminjaman->fresh(['aset.ruangan', 'user']);
