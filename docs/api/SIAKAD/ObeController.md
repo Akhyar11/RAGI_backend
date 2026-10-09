@@ -18,9 +18,9 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, k
 |---|---|---|---|
 | GET | `/api/v1/siakad/obe/dashboard` | Ringkasan OBE | ✅ |
 | GET | `/api/v1/siakad/obe/cpl` | Daftar CPL (search, filter prodi/kurikulum/kategori/jenis/status, sort whitelist, pagination) | ✅ |
-| POST | `/api/v1/siakad/obe/cpl` | Tambah CPL | ✅ |
-| PUT | `/api/v1/siakad/obe/cpl/{id}` | Perbarui CPL | ✅ |
-| DELETE | `/api/v1/siakad/obe/cpl/{id}` | Hapus CPL (soft delete) | ✅ |
+| POST | `/api/v1/siakad/obe/cpl` | Tambah CPL | ✅ `StoreCplRequest::authorize()` (per prodi aktif) |
+| PUT | `/api/v1/siakad/obe/cpl/{id}` | Perbarui CPL | ✅ `StoreCplRequest::authorize()` (per prodi aktif) |
+| DELETE | `/api/v1/siakad/obe/cpl/{id}` | Hapus CPL (soft delete) | ✅ `canManageObeForProdi()` |
 | GET | `/api/v1/siakad/obe/cpmk` | Daftar CPMK | ✅ |
 | POST | `/api/v1/siakad/obe/cpmk` | Tambah CPMK | ✅ |
 | GET | `/api/v1/siakad/obe/profil-lulusan` | Daftar Profil Lulusan | ✅ |
@@ -75,6 +75,15 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, k
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 | `page` | integer | ❌ | `1` | Halaman |
+
+### Otorisasi per prodi
+
+`POST` dan `PUT` memvalidasi akses pada `StoreCplRequest::authorize()`, yaitu
+`canManageObeForProdi()`. Dengan demikian **Tim Kurikulum / Kaprodi yang terdaftar di
+`siakad_admin_prodi` tetap boleh menambah dan mengubah CPL prodi aktifnya**, walaupun
+hanya memiliki permission `siakad.kurikulum.read` dan bukan `siakad.kurikulum.manage`.
+`DELETE` memakai pemeriksaan `canManageObeForProdi()` terhadap prodi milik CPL yang
+dihapus. Request ke luar scope prodi user dijawab `403`.
 
 ### Body `POST /api/v1/siakad/obe/cpl` & `PUT /api/v1/siakad/obe/cpl/{id}`
 

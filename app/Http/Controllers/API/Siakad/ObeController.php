@@ -110,11 +110,8 @@ class ObeController extends Controller
 
     public function storeCpl(StoreCplRequest $request)
     {
-        $user = $request->user();
-        if (!$user || !($user->isSuperAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'))) {
-            return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses.'], 403);
-        }
-
+        // Otorisasi sudah divalidasi pada StoreCplRequest::authorize() yang memeriksa
+        // prodi aktif user (Tim Kurikulum / Kaprodi), bukan hanya permission global.
         $validated = $request->validated();
 
         if (empty($validated['program_studi_id']) && !empty($validated['kurikulum_id'])) {
@@ -166,11 +163,7 @@ class ObeController extends Controller
 
     public function updateCpl(StoreCplRequest $request, int $id)
     {
-        $user = $request->user();
-        if (!$user || !($user->isSuperAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'))) {
-            return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses.'], 403);
-        }
-
+        // Sama seperti storeCpl: otorisasi tiap prodi ditangani StoreCplRequest.
         $cpl = Cpl::findOrFail($id);
         $old = $cpl->getOriginal();
         $validated = $request->validated();
@@ -215,12 +208,14 @@ class ObeController extends Controller
 
     public function destroyCpl(Request $request, int $id)
     {
+        $cpl = Cpl::findOrFail($id);
+
+        // Otorisasi per prodi: Tim Kurikulum hanya boleh menghapus CPL prodi aktifnya.
         $user = $request->user();
-        if (!$user || (! $user->isSuperAdmin() && ! $user->hasPermission('siakad.kurikulum.manage') && ! $user->hasPermission('siakad.master.manage'))) {
+        if (!$user || !$user->canManageObeForProdi((int) $cpl->program_studi_id)) {
             return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses.'], 403);
         }
 
-        $cpl = Cpl::findOrFail($id);
         $old = $cpl->getOriginal();
         $cpl->delete();
 
@@ -2590,7 +2585,7 @@ class ObeController extends Controller
             ->where('is_active', true)
             ->whereHas('kurikulum', fn($q) => $q->whereIn('program_studi_id', $prodiId))
             ->orderBy('kode_mk')
-            ->get(['id', 'kurikulum_id', 'kode_mk', 'nama', 'sks', 'semester_anjuran']);
+            ->get(['id', 'kurikulum_id', 'kode_mk', 'nama', 'total_sks', 'semester_anjuran']);
 
         $eligible = $this->eligibleCplMataKuliahPairs($prodiId);
 
