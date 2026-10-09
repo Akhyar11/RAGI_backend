@@ -541,7 +541,14 @@ class ObeController extends Controller
     {
         Gate::authorize('siakad.kurikulum.read');
 
-        $query = RpsReferensi::query();
+        $prodiIds = $this->resolveObeProdiId($request);
+
+        $query = RpsReferensi::query()
+            ->where(function ($q) use ($prodiIds) {
+                // Tampilkan data milik prodi aktif user ATAU data global bawaan sistem
+                $q->whereIn('program_studi_id', $prodiIds)
+                  ->orWhereNull('program_studi_id');
+            });
 
         if ($request->filled('tipe')) {
             $query->where('tipe', $request->tipe);
@@ -590,12 +597,24 @@ class ObeController extends Controller
     {
         Gate::authorize('siakad.kurikulum.manage');
 
+        $user = $request->user();
+        $prodiIds = $this->allowedObeProdiIds($request);
+        $primaryProdiId = $prodiIds[0] ?? null;
+
         $validated = $request->validate([
             'tipe' => 'required|in:bentuk,metode,kriteria,komponen',
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'kode' => 'nullable|string|max:50',
             'nama' => 'required|string|max:255',
             'deskripsi' => 'nullable|string|max:2000',
         ]);
+
+        // Otomatis kaitkan ke prodi aktif pengguna agar tidak bocor ke prodi lain
+        if (empty($validated['program_studi_id'])) {
+            $validated['program_studi_id'] = $primaryProdiId;
+        } elseif (!in_array((int)$validated['program_studi_id'], $prodiIds, true) && !$user->isSuperAdmin()) {
+            abort(403, 'Anda tidak memiliki hak akses untuk menyimpan referensi pada program studi ini.');
+        }
 
         $item = RpsReferensi::create($validated);
 
@@ -625,6 +644,13 @@ class ObeController extends Controller
         Gate::authorize('siakad.kurikulum.manage');
 
         $item = RpsReferensi::findOrFail($id);
+
+        $user = $request->user();
+        $prodiIds = $this->allowedObeProdiIds($request);
+        if ($item->program_studi_id && !in_array((int)$item->program_studi_id, $prodiIds, true) && !$user->isSuperAdmin()) {
+            abort(403, 'Anda tidak memiliki hak akses untuk mengubah data prodi lain.');
+        }
+
         $old = $item->getOriginal();
 
         $validated = $request->validate([
@@ -661,6 +687,13 @@ class ObeController extends Controller
         Gate::authorize('siakad.kurikulum.manage');
 
         $item = RpsReferensi::findOrFail($id);
+
+        $user = $request->user();
+        $prodiIds = $this->allowedObeProdiIds($request);
+        if ($item->program_studi_id && !in_array((int)$item->program_studi_id, $prodiIds, true) && !$user->isSuperAdmin()) {
+            abort(403, 'Anda tidak memiliki hak akses untuk menghapus data prodi lain.');
+        }
+
         $old = $item->getOriginal();
         $item->delete();
 
@@ -1450,11 +1483,10 @@ class ObeController extends Controller
     // --- RPS & Alur Approval Prodi ---
     public function listRps(Request $request)
     {
-        $query = \App\Models\Siakad\Rps::with(['mataKuliah.kurikulum.programStudi', 'dosenPengembang', 'koordinatorRmk', 'kaprodi']);
+        $prodiIds = $this->resolveObeProdiId($request);
 
-        if ($request->filled('program_studi_id')) {
-            $query->whereHas('mataKuliah.kurikulum', fn($q) => $q->where('program_studi_id', $request->program_studi_id));
-        }
+        $query = \App\Models\Siakad\Rps::with(['mataKuliah.kurikulum.programStudi', 'dosenPengembang', 'koordinatorRmk', 'kaprodi'])
+            ->whereHas('mataKuliah.kurikulum', fn($q) => $q->whereIn('program_studi_id', $prodiIds));
 
         if ($request->filled('mata_kuliah_id')) {
             $query->where('mata_kuliah_id', $request->mata_kuliah_id);
@@ -1489,6 +1521,12 @@ class ObeController extends Controller
             'mingguan'
         ])->findOrFail($id);
 
+        $prodiId = (int) ($rps->mataKuliah?->kurikulum?->program_studi_id ?? 0);
+        $user = request()->user();
+        if ($user && !$user->canManageObeForProdi($prodiId)) {
+            abort(403, 'Anda tidak memiliki hak akses melihat dokumen RPS program studi ini.');
+        }
+
         // Kelas yang memakai RPS ini (MK sama) beserta jadwal & pengampu — read-only
         $kelasPemakai = \App\Models\Siakad\Kelas::with(['tahunAkademik', 'ruangan.gedung', 'programStudi', 'dosenPengampu.dosen'])
             ->where('mata_kuliah_id', $rps->mata_kuliah_id)
@@ -1515,6 +1553,13 @@ class ObeController extends Controller
             'kaprodi_id' => 'nullable|exists:siakad_dosen,id',
             'mingguan' => 'nullable|array',
         ]);
+
+        $mk = \App\Models\Siakad\MataKuliah::with('kurikulum')->findOrFail($request->mata_kuliah_id);
+        $prodiId = (int) ($mk->kurikulum?->program_studi_id ?? 0);
+        $user = $request->user();
+        if ($user && !$user->canManageObeForProdi($prodiId)) {
+            abort(403, 'Anda tidak memiliki hak akses menyimpan dokumen RPS untuk program studi ini.');
+        }
 
         $rps = \App\Models\Siakad\Rps::updateOrCreate(
             ['id' => $request->id],

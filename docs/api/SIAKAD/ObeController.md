@@ -1,8 +1,8 @@
 # ObeController
 
-> **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/obe` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-25
+> **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/obe` / **Autentikasi**: Bearer Token (Passport) / **Dibuat/Diperbarui**: 2026-10-09
 
-Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, komponen & nilai OBE. Validasi `program_studi_id` mengacu ke `siakad_program_studi`.
+Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, Referensi RPS (Bentuk, Metode, Kriteria, Komponen), komponen & nilai OBE. Seluruh data grup RPS terisolasi per Program Studi (`program_studi_id`).
 
 ## Headers
 
@@ -1005,13 +1005,14 @@ satu jalur dijamin berasal dari program studi yang sama.
 
 ## [POST] /api/v1/siakad/obe/rps-referensi
 
-> Menambah data master referensi RPS baru. Wajib permission `siakad.kurikulum.manage`.
+> Menambah data master referensi RPS baru. Wajib permission `siakad.kurikulum.manage`. Data otomatis terisolasi pada program studi aktif pengguna (`program_studi_id`).
 
 ### Request Body
 
 | Field | Type | Required | Keterangan |
 |---|---|---|---|
 | `tipe` | string | ✅ | `in:bentuk,metode,kriteria,komponen` |
+| `program_studi_id` | integer | ❌ | Otomatis diisi prodi aktif user (hanya superadmin boleh mengisi manual) |
 | `kode` | string | ❌ | Maks. 50 |
 | `nama` | string | ✅ | Nama/label referensi, maks. 255 |
 | `deskripsi` | string | ❌ | Deskripsi detail, maks. 2000 |
@@ -1019,6 +1020,7 @@ satu jalur dijamin berasal dari program studi yang sama.
 ```json
 {
     "tipe": "bentuk",
+    "program_studi_id": 1,
     "kode": "BTK-01",
     "nama": "Kuliah / Responsi",
     "deskripsi": "Bentuk pembelajaran tatap muka terjadwal di kelas."
@@ -1035,6 +1037,7 @@ satu jalur dijamin berasal dari program studi yang sama.
     "data": {
         "id": 1,
         "tipe": "bentuk",
+        "program_studi_id": 1,
         "kode": "BTK-01",
         "nama": "Kuliah / Responsi",
         "deskripsi": "Bentuk pembelajaran tatap muka terjadwal di kelas.",
@@ -1045,7 +1048,11 @@ satu jalur dijamin berasal dari program studi yang sama.
 
 ### Response Error
 
-**401 Unauthorized** / **403 Forbidden** / **422 Unprocessable Entity**.
+| Kode | Keterangan |
+|---|---|
+| **401** | Belum terautentikasi |
+| **403** | Mencoba menyimpan/mengubah/menghapus data referensi atau dokumen RPS milik program studi lain |
+| **422** | Validasi gagal |
 
 ---
 

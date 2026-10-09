@@ -17,6 +17,7 @@ class RpsReferensi extends Model
 
     protected $fillable = [
         'tipe',
+        'program_studi_id',
         'kode',
         'nama',
         'deskripsi',
@@ -26,4 +27,9 @@ class RpsReferensi extends Model
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    public function programStudi()
+    {
+        return $this->belongsTo(ProgramStudi::class, 'program_studi_id');
+    }
 }
