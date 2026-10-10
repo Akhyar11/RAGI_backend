@@ -23,6 +23,7 @@ class UpdateMasterKomponenGajiRequest extends FormRequest
             'nilai_default' => 'sometimes|required|numeric|min:0',
             'is_taxable' => 'boolean',
             'is_active' => 'boolean',
+            'is_kolom_aktif' => 'boolean',
             'urutan' => 'integer|min:1',
             'keterangan' => 'nullable|string',
         ];

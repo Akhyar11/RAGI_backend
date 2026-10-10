@@ -48,6 +48,7 @@ class Pegawai extends Model
         'face_enrolled_at',
         'consent_pdp_at',
         'is_active',
+        'terdampak_absensi',
         'sinta_id',
         'scopus_id',
         'google_scholar_id',
@@ -62,6 +63,7 @@ class Pegawai extends Model
         'face_enrolled_at' => 'datetime:Y-m-d H:i:s',
         'consent_pdp_at' => 'datetime:Y-m-d H:i:s',
         'is_active' => 'boolean',
+        'terdampak_absensi' => 'boolean',
     ];
 
     protected $hidden = [

@@ -323,7 +323,11 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('payroll/bracket-pph21', [App\Http\Controllers\Simpeg\PayrollController::class, 'indexBracketPph21']);
     Route::put('payroll/bracket-pph21/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'updateBracketPph21']);
 
-    // Komponen Gaji Pegawai
+    // Komponen Gaji Pegawai & Matriks
+    Route::get('payroll/pegawai-matriks', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'indexMatriks']);
+    Route::patch('payroll/komponen/{id}/toggle-kolom', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'toggleKolomKomponen']);
+    Route::patch('payroll/pegawai/{pegawaiId}/terdampak-absensi', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'updateTerdampakAbsensi']);
+    Route::post('payroll/pegawai/batch-terdampak-absensi', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'batchTerdampakAbsensi']);
     Route::get('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'show']);
     Route::put('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'update']);
     Route::post('payroll/pegawai/{pegawaiId}/komponen', [App\Http\Controllers\Simpeg\PegawaiKomponenGajiController::class, 'update']);

@@ -133,7 +133,7 @@
 | PenilaianKinerjaController | Sasaran Kinerja Pegawai (SKP) butir-per-butir & evaluasi capaian BKD | [docs/api/SIMPEG/PenilaianKinerjaController.md](api/SIMPEG/PenilaianKinerjaController.md) |
 | TridharmaDossierController | Agregasi portofolio Tridharma terpadu (SIAKAD, SIPPM, SIMPEG) | [docs/api/SIMPEG/TridharmaDossierController.md](api/SIMPEG/TridharmaDossierController.md) |
 | PayrollController | Penggajian fleksibel, master komponen insentif, honor SKS, PPh 21, & posting kas SIKEU | [docs/api/SIMPEG/PayrollController.md](api/SIMPEG/PayrollController.md) |
-| PegawaiKomponenGajiController | Kustomisasi konfigurasi komponen gaji spesifik pegawai | [docs/api/SIMPEG/PegawaiKomponenGajiController.md](api/SIMPEG/PegawaiKomponenGajiController.md) |
+| PegawaiKomponenGajiController | Matriks gaji pegawai, kustomisasi komponen, toggle kolom, & ploting absensi penggajian | [docs/api/SIMPEG/PegawaiKomponenGajiController.md](api/SIMPEG/PegawaiKomponenGajiController.md) |
 | UsulanJafungController | Usulan kenaikan jabatan fungsional dosen, angka kredit & verifikasi SK | [docs/api/SIMPEG/UsulanJafungController.md](api/SIMPEG/UsulanJafungController.md) |
 | CutiController | Pengajuan cuti pegawai terintegrasi, validasi durasi, approval, notifikasi & lampiran (Signed URL) | [docs/api/SIMPEG/CutiController.md](api/SIMPEG/CutiController.md) |
 | DokumenController | E-File arsip dokumen kepegawaian, secure view (Signed URL) & dynamic watermark | [docs/api/SIMPEG/DokumenController.md](api/SIMPEG/DokumenController.md) |

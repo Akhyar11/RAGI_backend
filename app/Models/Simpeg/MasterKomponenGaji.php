@@ -19,6 +19,7 @@ class MasterKomponenGaji extends Model
         'nilai_default',
         'is_taxable',
         'is_active',
+        'is_kolom_aktif',
         'urutan',
         'keterangan',
     ];
@@ -27,6 +28,7 @@ class MasterKomponenGaji extends Model
         'nilai_default' => 'float',
         'is_taxable' => 'boolean',
         'is_active' => 'boolean',
+        'is_kolom_aktif' => 'boolean',
         'urutan' => 'integer',
     ];
 

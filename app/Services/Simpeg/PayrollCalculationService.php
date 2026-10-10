@@ -165,18 +165,23 @@ class PayrollCalculationService
 
             // Hitung nilai dinamis sesuai tipe_nilai dan kode komponen
             if ($komp->tipe_nilai === 'rumus_kehadiran') {
-                $tarifHarian = $nominal;
-                if ($komp->kode === 'POT_KETERLAMBATAN') {
-                    $nominal = $hariTerlambat * $tarifHarian;
-                    $keterangan = "Potongan Terlambat: {$hariTerlambat} Kejadian @ Rp " . number_format($tarifHarian, 0, ',', '.');
-                } elseif ($komp->kode === 'POT_ALPHA') {
-                    $nominal = $hariAlpha * $tarifHarian;
-                    $keterangan = "Potongan Alpha: {$hariAlpha} Hari @ Rp " . number_format($tarifHarian, 0, ',', '.');
+                if (isset($pegawai->terdampak_absensi) && !$pegawai->terdampak_absensi) {
+                    $nominal = 0.0;
+                    $keterangan = "Bebas Presensi / Tidak Terdampak Absensi";
                 } else {
-                    // Default insentif/transport hadir tepat waktu
-                    $nominal = $hariTepatWaktu * $tarifHarian;
-                    $totalBiayaTransport = $nominal;
-                    $keterangan = "Presensi Tepat Waktu: {$hariTepatWaktu} Hari @ Rp " . number_format($tarifHarian, 0, ',', '.');
+                    $tarifHarian = $nominal;
+                    if ($komp->kode === 'POT_KETERLAMBATAN') {
+                        $nominal = $hariTerlambat * $tarifHarian;
+                        $keterangan = "Potongan Terlambat: {$hariTerlambat} Kejadian @ Rp " . number_format($tarifHarian, 0, ',', '.');
+                    } elseif ($komp->kode === 'POT_ALPHA') {
+                        $nominal = $hariAlpha * $tarifHarian;
+                        $keterangan = "Potongan Alpha: {$hariAlpha} Hari @ Rp " . number_format($tarifHarian, 0, ',', '.');
+                    } else {
+                        // Default insentif/transport hadir tepat waktu
+                        $nominal = $hariTepatWaktu * $tarifHarian;
+                        $totalBiayaTransport = $nominal;
+                        $keterangan = "Presensi Tepat Waktu: {$hariTepatWaktu} Hari @ Rp " . number_format($tarifHarian, 0, ',', '.');
+                    }
                 }
             } elseif ($komp->tipe_nilai === 'rumus_sks') {
                 $tarifPerSks = $nominal;
