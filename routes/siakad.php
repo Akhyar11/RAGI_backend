@@ -289,6 +289,9 @@ Route::prefix('obe')->group(function () {
     Route::get('/rps/{id}', [ObeController::class, 'showRps']);
     Route::post('/rps', [ObeController::class, 'storeRps']);
     Route::delete('/rps/{id}', [ObeController::class, 'destroyRps']);
+    Route::get('/rps/{id}/sesi', [ObeController::class, 'listRpsSesi']);
+    Route::post('/rps/{id}/sesi', [ObeController::class, 'storeRpsSesi']);
+    Route::delete('/rps-sesi/{sesiId}', [ObeController::class, 'deleteRpsSesi']);
     Route::patch('/rps/{id}/toggle-dosen-edit', [ObeController::class, 'toggleDosenBisaEditRps']);
     Route::post('/rps/{id}/duplicate', [ObeController::class, 'duplicateRps']);
     Route::get('/soal', [ObeController::class, 'listSoal']);

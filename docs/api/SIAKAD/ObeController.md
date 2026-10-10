@@ -57,6 +57,9 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, R
 | POST | `/api/v1/siakad/obe/rps` | Simpan RPS (header + pengesahan + mingguan) | ✅ |
 | PATCH | `/api/v1/siakad/obe/rps/{id}/toggle-dosen-edit` | Toggle izin edit dosen pada RPS | ✅ `siakad.kurikulum.manage` |
 | DELETE | `/api/v1/siakad/obe/rps/{id}` | Hapus dokumen RPS | ✅ `canManageObeForProdi()` |
+| GET | `/api/v1/siakad/obe/rps/{id}/sesi` | Daftar sesi pertemuan RPS + total bobot | ✅ `siakad.kurikulum.read` |
+| POST | `/api/v1/siakad/obe/rps/{id}/sesi` | Tambah/ubah sesi pertemuan RPS | ✅ `siakad.kurikulum.manage` |
+| DELETE | `/api/v1/siakad/obe/rps-sesi/{sesiId}` | Hapus sesi pertemuan RPS | ✅ `siakad.kurikulum.manage` |
 | POST | `/api/v1/siakad/obe/rps/{id}/submit` | Ajukan RPS | ✅ |
 | PATCH | `/api/v1/siakad/obe/rps/{id}/approve` | Setujui RPS | ✅ |
 | GET | `/api/v1/siakad/obe/kelas/{kelasId}/komponen` | Komponen nilai kelas | ✅ |
@@ -1347,6 +1350,234 @@ satu jalur dijamin berasal dari program studi yang sama.
 ### Response Error
 
 **401 Unauthorized** / **403 Forbidden** / **404 Not Found**.
+
+---
+
+## [GET] /api/v1/siakad/obe/rps/{id}/sesi
+
+> Mengambil daftar sesi pertemuan (rencana mingguan) satu dokumen RPS beserta total bobot penilaian. Wajib permission `siakad.kurikulum.read`.
+
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID dokumen RPS |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Daftar sesi pertemuan RPS berhasil dimuat",
+    "data": [
+        {
+            "id": 1,
+            "rps_id": 1,
+            "minggu_ke": 1,
+            "sub_cpmk_id": 100,
+            "kemampuan_akhir": "Mahasiswa mampu memahami konsep pencahayaan.",
+            "bahan_kajian": "Dasar pencahayaan dan komposisi visual.",
+            "bentuk_metode": "Kuliah, Diskusi",
+            "bentuk_luring": "Tatap muka 2x50 menit",
+            "bentuk_daring": "Modul LMS + forum diskusi",
+            "indikator_penilaian": "Ketepatan analisis pencahayaan.",
+            "kriteria_teknik": "Rubrik observasi + tes tulis.",
+            "penugasan_mahasiswa": "Tugas terstruktur membuat komposisi foto.",
+            "bobot_penilaian": 3.00,
+            "sub_cpmk": {
+                "id": 100,
+                "kode_sub_cpmk": "CPMK01.1"
+            }
+        }
+    ],
+    "meta": {
+        "total_bobot": 100.00
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses melihat sesi pertemuan RPS program studi ini."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "No query results for model [App\\Models\\Siakad\\Rps]."
+}
+```
+
+---
+
+## [POST] /api/v1/siakad/obe/rps/{id}/sesi
+
+> Menambah atau memperbarui satu sesi pertemuan RPS (berdasarkan `id` bila diisi, unik per `rps_id` + data sesi). Wajib permission `siakad.kurikulum.manage`.
+
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID dokumen RPS |
+
+### Request Body
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `id` | integer | ❌ | ID sesi bila operasi update (`exists:siakad_rps_mingguan,id`) |
+| `minggu_ke` | integer | ✅ | Pertemuan ke 1–16 |
+| `sub_cpmk_id` | integer | ❌ | `exists:siakad_sub_cpmk,id` |
+| `kemampuan_akhir` | string | ❌ | Kemampuan akhir tahapan belajar (Sub-CPMK) |
+| `bahan_kajian` | string | ❌ | Materi pembelajaran |
+| `bentuk_metode` | string | ❌ | Bentuk/metode ringkas, maks. 255 |
+| `bentuk_luring` | string | ❌ | Aktivitas luring |
+| `bentuk_daring` | string | ❌ | Aktivitas daring |
+| `estimasi_waktu` | string | ❌ | Estimasi waktu, maks. 100 |
+| `pengalaman_belajar` | string | ❌ | Pengalaman belajar mahasiswa |
+| `penugasan_mahasiswa` | string | ❌ | Penugasan mahasiswa |
+| `indikator_penilaian` | string | ❌ | Indikator penilaian |
+| `kriteria_teknik` | string | ❌ | Kriteria & teknik penilaian |
+| `bobot_penilaian` | numeric | ❌ | Bobot 0–100 |
+
+```json
+{
+    "minggu_ke": 1,
+    "sub_cpmk_id": 100,
+    "kemampuan_akhir": "Mahasiswa mampu memahami konsep pencahayaan.",
+    "bahan_kajian": "Dasar pencahayaan dan komposisi visual.",
+    "bentuk_luring": "Tatap muka 2x50 menit",
+    "bentuk_daring": "Modul LMS + forum diskusi",
+    "indikator_penilaian": "Ketepatan analisis pencahayaan.",
+    "kriteria_teknik": "Rubrik observasi + tes tulis.",
+    "penugasan_mahasiswa": "Tugas terstruktur membuat komposisi foto.",
+    "bobot_penilaian": 3
+}
+```
+
+### Response Sukses
+
+**201 Created / 200 OK**
+```json
+{
+    "status": "success",
+    "message": "Sesi pertemuan RPS berhasil ditambahkan",
+    "data": {
+        "id": 1,
+        "rps_id": 1,
+        "minggu_ke": 1,
+        "bobot_penilaian": 3.00
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses menyimpan sesi pertemuan RPS program studi ini."
+}
+```
+
+**422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "The minggu ke field is required."
+}
+```
+
+---
+
+## [DELETE] /api/v1/siakad/obe/rps-sesi/{sesiId}
+
+> Menghapus satu sesi pertemuan RPS. Wajib permission `siakad.kurikulum.manage`.
+
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `sesiId` | integer | ✅ | ID sesi pertemuan (`siakad_rps_mingguan`) |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Sesi pertemuan RPS berhasil dihapus.",
+    "data": null
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses menghapus sesi pertemuan RPS program studi ini."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "No query results for model [App\\Models\\Siakad\\RpsMingguan]."
+}
+```
 
 ---
 

@@ -1668,7 +1668,7 @@ class ObeController extends Controller
             'dosenPengembang',
             'koordinatorRmk',
             'kaprodi',
-            'mingguan'
+            'mingguan.subCpmk'
         ])->findOrFail($id);
 
         $prodiId = (int) ($rps->mataKuliah?->kurikulum?->program_studi_id ?? 0);
@@ -1746,12 +1746,17 @@ class ObeController extends Controller
                             'minggu_ke' => $m['minggu_ke'],
                         ],
                         [
+                            'sub_cpmk_id' => $m['sub_cpmk_id'] ?? null,
                             'kemampuan_akhir' => $m['kemampuan_akhir'] ?? "Sub-CPMK {$m['minggu_ke']}",
                             'bahan_kajian' => $m['bahan_kajian'] ?? "Bahan Kajian Minggu {$m['minggu_ke']}",
                             'bentuk_metode' => $m['bentuk_metode'] ?? 'Kuliah, Diskusi, & Problem-Based Learning',
+                            'bentuk_luring' => $m['bentuk_luring'] ?? null,
+                            'bentuk_daring' => $m['bentuk_daring'] ?? null,
                             'estimasi_waktu' => $m['estimasi_waktu'] ?? '2 x 50 Menit',
                             'pengalaman_belajar' => $m['pengalaman_belajar'] ?? 'Menganalisis studi kasus dan tugas terstruktur.',
+                            'penugasan_mahasiswa' => $m['penugasan_mahasiswa'] ?? null,
                             'indikator_penilaian' => $m['indikator_penilaian'] ?? 'Ketepatan analisis dan pemahaman materi.',
+                            'kriteria_teknik' => $m['kriteria_teknik'] ?? null,
                             'bobot_penilaian' => isset($m['bobot_penilaian']) ? (float)$m['bobot_penilaian'] : ($m['minggu_ke'] == 8 ? 25.0 : ($m['minggu_ke'] == 16 ? 30.0 : 3.0)),
                         ]
                     );
@@ -1797,6 +1802,126 @@ class ObeController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Dokumen RPS berhasil dihapus',
+            'data' => null,
+        ]);
+    }
+
+    // --- Sesi Pertemuan RPS (siakad_rps_mingguan) ---
+    public function listRpsSesi(Request $request, int $id)
+    {
+        Gate::authorize('siakad.kurikulum.read');
+
+        $rps = \App\Models\Siakad\Rps::with('mataKuliah.kurikulum')->findOrFail($id);
+        $prodiId = (int) ($rps->mataKuliah?->kurikulum?->program_studi_id ?? 0);
+        $user = $request->user();
+        if ($user && !$user->canManageObeForProdi($prodiId)) {
+            abort(403, 'Anda tidak memiliki hak akses melihat sesi pertemuan RPS program studi ini.');
+        }
+
+        $sesi = \App\Models\Siakad\RpsMingguan::with('subCpmk')
+            ->where('rps_id', $rps->id)
+            ->orderBy('minggu_ke')
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar sesi pertemuan RPS berhasil dimuat',
+            'data' => $sesi,
+            'meta' => [
+                'total_bobot' => (float) $sesi->sum('bobot_penilaian'),
+            ],
+        ]);
+    }
+
+    public function storeRpsSesi(Request $request, int $id)
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $rps = \App\Models\Siakad\Rps::with('mataKuliah.kurikulum')->findOrFail($id);
+        $prodiId = (int) ($rps->mataKuliah?->kurikulum?->program_studi_id ?? 0);
+        $user = $request->user();
+        if ($user && !$user->canManageObeForProdi($prodiId)) {
+            abort(403, 'Anda tidak memiliki hak akses menyimpan sesi pertemuan RPS program studi ini.');
+        }
+
+        $validated = $request->validate([
+            'id' => 'nullable|exists:siakad_rps_mingguan,id',
+            'minggu_ke' => 'required|integer|min:1|max:16',
+            'sub_cpmk_id' => 'nullable|exists:siakad_sub_cpmk,id',
+            'kemampuan_akhir' => 'nullable|string',
+            'bahan_kajian' => 'nullable|string',
+            'bentuk_metode' => 'nullable|string|max:255',
+            'bentuk_luring' => 'nullable|string',
+            'bentuk_daring' => 'nullable|string',
+            'estimasi_waktu' => 'nullable|string|max:100',
+            'pengalaman_belajar' => 'nullable|string',
+            'penugasan_mahasiswa' => 'nullable|string',
+            'indikator_penilaian' => 'nullable|string',
+            'kriteria_teknik' => 'nullable|string',
+            'bobot_penilaian' => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        $isUpdate = $request->filled('id');
+        $oldValues = $isUpdate ? \App\Models\Siakad\RpsMingguan::find($request->id)?->toArray() : null;
+
+        $sesi = \App\Models\Siakad\RpsMingguan::updateOrCreate(
+            ['id' => $request->id, 'rps_id' => $rps->id],
+            array_merge($validated, ['rps_id' => $rps->id])
+        );
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: $isUpdate ? 'update' : 'create',
+                tableName: 'siakad_rps_mingguan',
+                recordId: $sesi->id,
+                oldValues: $oldValues,
+                newValues: $sesi->toArray(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log sesi pertemuan RPS: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $isUpdate ? 'Sesi pertemuan RPS berhasil diperbarui' : 'Sesi pertemuan RPS berhasil ditambahkan',
+            'data' => $sesi->load('subCpmk'),
+        ], $isUpdate ? 200 : 201);
+    }
+
+    public function deleteRpsSesi(Request $request, int $sesiId)
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $sesi = \App\Models\Siakad\RpsMingguan::with('rps.mataKuliah.kurikulum')->findOrFail($sesiId);
+        $prodiId = (int) ($sesi->rps?->mataKuliah?->kurikulum?->program_studi_id ?? 0);
+        $user = $request->user();
+        if ($user && !$user->canManageObeForProdi($prodiId)) {
+            abort(403, 'Anda tidak memiliki hak akses menghapus sesi pertemuan RPS program studi ini.');
+        }
+
+        $oldValues = $sesi->toArray();
+        $sesiIdValue = $sesi->id;
+        $sesi->delete();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_rps_mingguan',
+                recordId: $sesiIdValue,
+                oldValues: $oldValues,
+                newValues: null,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log hapus sesi pertemuan RPS: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Sesi pertemuan RPS berhasil dihapus.',
             'data' => null,
         ]);
     }

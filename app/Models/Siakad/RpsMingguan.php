@@ -13,13 +13,18 @@ class RpsMingguan extends Model
 
     protected $fillable = [
         'rps_id',
+        'sub_cpmk_id',
         'minggu_ke',
         'kemampuan_akhir',
         'bahan_kajian',
         'bentuk_metode',
+        'bentuk_luring',
+        'bentuk_daring',
         'estimasi_waktu',
         'pengalaman_belajar',
+        'penugasan_mahasiswa',
         'indikator_penilaian',
+        'kriteria_teknik',
         'bobot_penilaian',
     ];
 
@@ -30,5 +35,10 @@ class RpsMingguan extends Model
     public function rps()
     {
         return $this->belongsTo(Rps::class, 'rps_id');
+    }
+
+    public function subCpmk()
+    {
+        return $this->belongsTo(SubCpmk::class, 'sub_cpmk_id');
     }
 }
