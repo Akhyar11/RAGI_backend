@@ -235,6 +235,11 @@ class PegawaiImportService
      */
     private function processRows(array $rows): array
     {
+        // Hindari timeout PHP 30 detik pada impor berkas dengan banyak baris data
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(300);
+        }
+
         $successCount = 0;
         $failedCount = 0;
         $errors = [];
@@ -243,6 +248,14 @@ class PegawaiImportService
         $dosenRole = Role::where('slug', 'dosen')->first();
         $tendikRole = Role::where('slug', 'tendik')->first();
         $defaultUnit = UnitKerja::first();
+
+        // Optimasi: Pre-hash default password satu kali di luar perulangan
+        // Bcrypt cost 12 membutuhkan ~250ms per baris. Dengan pre-hash, 100+ baris diproses instan tanpa CPU throttling.
+        $hashedDefaultPassword = Hash::make('indonusa');
+
+        // Pre-load master Unit Kerja dan Jabatan ke memori untuk menghindari N+1 query pencarian per baris
+        $allUnits = UnitKerja::all();
+        $allJabatans = Jabatan::all();
 
         foreach ($rows as $index => $row) {
             $rowNumber = $index + 2; // Mengingat baris 1 adalah header di spreadsheet
@@ -302,13 +315,13 @@ class PegawaiImportService
                 }
             }
 
-            // Cari Unit Kerja berdasarkan nama atau kode (null jika kosong)
+            // Cari Unit Kerja dari pre-loaded collection berdasarkan nama atau kode (null jika kosong)
             $unitKerjaId = null;
             if (!empty($row['unit_kerja'])) {
                 $searchUnit = trim($row['unit_kerja']);
-                $foundUnit = UnitKerja::where('nama', 'like', "%{$searchUnit}%")
-                    ->orWhere('kode', $searchUnit)
-                    ->first();
+                $foundUnit = $allUnits->first(function ($u) use ($searchUnit) {
+                    return stripos($u->nama, $searchUnit) !== false || strcasecmp($u->kode, $searchUnit) === 0;
+                });
                 if ($foundUnit) {
                     $unitKerjaId = $foundUnit->id;
                 }
@@ -373,12 +386,15 @@ class PegawaiImportService
                 $user = app(PegawaiService::class)->ensureSsoUserForPegawai($pegawai, [
                     'email' => $email,
                     'role_ids' => $roleIds,
+                    'hashed_password' => $hashedDefaultPassword,
                 ]);
 
                 // 3. Tambahkan riwayat jabatan awal jika kolom jabatan terisi
                 if (!empty($row['jabatan'])) {
                     $searchJabatan = trim($row['jabatan']);
-                    $jabatan = Jabatan::where('nama', 'like', "%{$searchJabatan}%")->first();
+                    $jabatan = $allJabatans->first(function ($j) use ($searchJabatan) {
+                        return stripos($j->nama, $searchJabatan) !== false;
+                    });
                     if ($jabatan) {
                         RiwayatJabatan::create([
                             'pegawai_id' => $pegawai->id,

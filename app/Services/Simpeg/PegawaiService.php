@@ -484,12 +484,15 @@ class PegawaiService
             }
 
             // Default password 'indonusa' (atau dari options jika ada)
-            $plainPassword = $options['password'] ?? 'indonusa';
+            // Jika caller mengirimkan 'hashed_password', gunakan langsung tanpa re-hashing
+            $passwordVal = !empty($options['hashed_password'])
+                ? $options['hashed_password']
+                : Hash::make($options['password'] ?? 'indonusa');
 
             $user = User::create([
                 'username' => $username,
                 'email' => $email,
-                'password' => Hash::make($plainPassword),
+                'password' => $passwordVal,
                 'phone' => $pegawai->telepon ?? null,
                 'is_active' => true,
                 'is_verified' => $options['is_verified'] ?? true,
