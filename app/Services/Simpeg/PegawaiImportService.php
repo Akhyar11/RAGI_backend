@@ -263,6 +263,12 @@ class PegawaiImportService
         $allUnits = UnitKerja::all();
         $allJabatans = Jabatan::all();
 
+        // Lacak identifier yang sudah diproses dalam berkas ini untuk mendeteksi duplikasi antar-baris
+        $seenNip = [];
+        $seenNidn = [];
+        $seenNuptk = [];
+        $seenNik = [];
+
         foreach ($rows as $index => $row) {
             $rowNumber = $index + 2; // Mengingat baris 1 adalah header di spreadsheet
 
@@ -273,24 +279,78 @@ class PegawaiImportService
                 continue;
             }
 
+            $pegawaiService = app(PegawaiService::class);
+
             $nipRaw = $row['nip'] ?? $row['nomor_induk_pegawai'] ?? null;
-            $nip = !empty($nipRaw) ? preg_replace('/[^0-9]/', '', (string) $nipRaw) : null;
+            $nip = $pegawaiService->sanitizeIdentifier(!empty($nipRaw) ? preg_replace('/[^0-9]/', '', (string) $nipRaw) : null);
 
             $nikRaw = $row['nik'] ?? $row['no_ktp'] ?? $row['ktp'] ?? null;
-            $nik = !empty($nikRaw) ? preg_replace('/[^0-9]/', '', (string) $nikRaw) : null;
+            $nik = $pegawaiService->sanitizeIdentifier(!empty($nikRaw) ? preg_replace('/[^0-9]/', '', (string) $nikRaw) : null);
+
+            $nidnRaw = $row['nidn'] ?? $row['nomor_induk_dosen_nasional'] ?? $row['no_nidn'] ?? null;
+            $nidn = $pegawaiService->sanitizeIdentifier(!empty($nidnRaw) ? trim((string) $nidnRaw) : null);
+
+            $nuptkRaw = $row['nuptk'] ?? $row['nomor_unik_pendidik_dan_tenaga_kependidikan'] ?? $row['no_nuptk'] ?? null;
+            $nuptk = $pegawaiService->sanitizeIdentifier(!empty($nuptkRaw) ? trim((string) $nuptkRaw) : null);
 
             // Validasi keunikan NIP jika ada
-            if ($nip && Pegawai::where('nip', $nip)->exists()) {
-                $errors[] = "Baris #{$rowNumber}: NIP '{$nip}' sudah terdaftar pada pegawai lain.";
-                $failedCount++;
-                continue;
+            if ($nip) {
+                if (isset($seenNip[$nip])) {
+                    $errors[] = "Baris #{$rowNumber}: NIP '{$nip}' duplikat dengan baris #{$seenNip[$nip]} pada berkas impor ini.";
+                    $failedCount++;
+                    continue;
+                }
+                if (Pegawai::where('nip', $nip)->exists()) {
+                    $errors[] = "Baris #{$rowNumber}: NIP '{$nip}' sudah terdaftar pada pegawai lain di sistem.";
+                    $failedCount++;
+                    continue;
+                }
+                $seenNip[$nip] = $rowNumber;
+            }
+
+            // Validasi keunikan NIDN jika ada
+            if ($nidn) {
+                if (isset($seenNidn[$nidn])) {
+                    $errors[] = "Baris #{$rowNumber}: NIDN '{$nidn}' duplikat dengan baris #{$seenNidn[$nidn]} pada berkas impor ini.";
+                    $failedCount++;
+                    continue;
+                }
+                if (Pegawai::where('nidn', $nidn)->exists()) {
+                    $errors[] = "Baris #{$rowNumber}: NIDN '{$nidn}' sudah terdaftar pada pegawai lain di sistem.";
+                    $failedCount++;
+                    continue;
+                }
+                $seenNidn[$nidn] = $rowNumber;
+            }
+
+            // Validasi keunikan NUPTK jika ada
+            if ($nuptk) {
+                if (isset($seenNuptk[$nuptk])) {
+                    $errors[] = "Baris #{$rowNumber}: NUPTK '{$nuptk}' duplikat dengan baris #{$seenNuptk[$nuptk]} pada berkas impor ini.";
+                    $failedCount++;
+                    continue;
+                }
+                if (Pegawai::where('nuptk', $nuptk)->exists()) {
+                    $errors[] = "Baris #{$rowNumber}: NUPTK '{$nuptk}' sudah terdaftar pada pegawai lain di sistem.";
+                    $failedCount++;
+                    continue;
+                }
+                $seenNuptk[$nuptk] = $rowNumber;
             }
 
             // Validasi keunikan NIK jika ada
-            if ($nik && Pegawai::where('nik', $nik)->exists()) {
-                $errors[] = "Baris #{$rowNumber}: NIK '{$nik}' sudah terdaftar pada pegawai lain.";
-                $failedCount++;
-                continue;
+            if ($nik) {
+                if (isset($seenNik[$nik])) {
+                    $errors[] = "Baris #{$rowNumber}: NIK '{$nik}' duplikat dengan baris #{$seenNik[$nik]} pada berkas impor ini.";
+                    $failedCount++;
+                    continue;
+                }
+                if (Pegawai::where('nik', $nik)->exists()) {
+                    $errors[] = "Baris #{$rowNumber}: NIK '{$nik}' sudah terdaftar pada pegawai lain di sistem.";
+                    $failedCount++;
+                    continue;
+                }
+                $seenNik[$nik] = $rowNumber;
             }
 
             // Jenis kelamin: null jika kosong di file
@@ -390,8 +450,6 @@ class PegawaiImportService
             $tempatLahir = $row['tempat_lahir'] ?? $row['tempatlahir'] ?? null;
             $telepon = $row['telepon'] ?? $row['nohp'] ?? $row['no_hp'] ?? $row['handphone'] ?? null;
             $alamat = $row['alamat'] ?? null;
-            $nidn = !empty($row['nidn']) ? trim($row['nidn']) : null;
-            $nuptk = !empty($row['nuptk']) ? trim($row['nuptk']) : null;
             $email = !empty($row['email']) ? trim($row['email']) : null;
 
             try {

@@ -227,5 +227,94 @@ class SimpegPegawaiImportTest extends TestCase
         $this->assertTrue($user->hasRole('tendik'));
         $this->assertFalse($user->hasRole('dosen'));
     }
+
+    public function test_import_pegawai_rejects_duplicate_nidn_and_nuptk_in_file_and_against_db()
+    {
+        // 1. Buat pegawai awal dengan NIDN dan NUPTK tertentu di DB
+        Pegawai::create([
+            'nama_lengkap' => 'Prof. Haryanto',
+            'nidn' => '0412345601',
+            'nuptk' => '9876543210123456',
+            'nip' => '198001012005011001',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+        ]);
+
+        // 2. Berkas impor:
+        // - Baris 1: Mencoba memakai NIDN yang sudah ada di database (harus ditolak)
+        // - Baris 2: Data valid dengan NIDN baru
+        // - Baris 3: Mencoba memakai NIDN yang sama dengan Baris 2 di dalam berkas ini (harus ditolak karena duplikat)
+        $csvContent = "\xEF\xBB\xBF" .
+            "nidn,nuptk,nip,nama_lengkap,jenis_pegawai\n" .
+            "0412345601,1111222233334444,198101012006011001,Dosen A,dosen\n" .
+            "0499999901,2222333344445555,198202022007021002,Dosen B,dosen\n" .
+            "0499999901,3333444455556666,198303032008031003,Dosen C,dosen\n";
+
+        $file = UploadedFile::fake()->createWithContent('test_duplicate_nidn.csv', $csvContent);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/pegawai/import', [
+                'file' => $file,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'total' => 3,
+                    'success' => 1,
+                    'failed' => 2,
+                ],
+            ]);
+
+        $responseData = $response->json('data');
+        $this->assertCount(2, $responseData['errors']);
+        $this->assertStringContainsString('NIDN \'0412345601\' sudah terdaftar', $responseData['errors'][0]);
+        $this->assertStringContainsString('NIDN \'0499999901\' duplikat dengan baris #3', $responseData['errors'][1]);
+
+        // Pastikan hanya Dosen B yang tersimpan
+        $this->assertDatabaseHas('simpeg_pegawai', ['nama_lengkap' => 'Dosen B', 'nidn' => '0499999901']);
+        $this->assertDatabaseMissing('simpeg_pegawai', ['nama_lengkap' => 'Dosen A']);
+        $this->assertDatabaseMissing('simpeg_pegawai', ['nama_lengkap' => 'Dosen C']);
+    }
+
+    public function test_import_pegawai_sanitizes_dash_and_zero_placeholders_without_collision()
+    {
+        // Simulasi jika beberapa baris memiliki placeholder "-" atau "0" pada NIDN/NUPTK/NIP
+        $csvContent = "\xEF\xBB\xBF" .
+            "nidn,nuptk,nip,nama_lengkap,jenis_pegawai\n" .
+            "-,0,-,Staf Pertama,tendik\n" .
+            "none,-,0,Staf Kedua,tendik\n";
+
+        $file = UploadedFile::fake()->createWithContent('test_placeholders.csv', $csvContent);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/pegawai/import', [
+                'file' => $file,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'total' => 2,
+                    'success' => 2,
+                    'failed' => 0,
+                ],
+            ]);
+
+        $staf1 = Pegawai::where('nama_lengkap', 'Staf Pertama')->first();
+        $staf2 = Pegawai::where('nama_lengkap', 'Staf Kedua')->first();
+
+        $this->assertNotNull($staf1);
+        $this->assertNotNull($staf2);
+        $this->assertNull($staf1->nidn);
+        $this->assertNull($staf1->nuptk);
+        $this->assertNull($staf1->nip);
+        $this->assertNull($staf2->nidn);
+        $this->assertNull($staf2->nuptk);
+        $this->assertNull($staf2->nip);
+    }
 }
+
 
