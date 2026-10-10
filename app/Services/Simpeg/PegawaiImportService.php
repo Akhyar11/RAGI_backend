@@ -148,7 +148,10 @@ class PegawaiImportService
         $delimiter = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
 
         $header = str_getcsv($firstLine, $delimiter);
-        $header = array_map(fn($h) => strtolower(trim(preg_replace('/[^a-zA-Z0-9_]/', '', $h))), $header);
+        $header = array_map(function ($h) {
+            $cleaned = preg_replace('/[\s\-]+/', '_', trim($h));
+            return strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', $cleaned));
+        }, $header);
 
         while (($data = fgetcsv($fp, 0, $delimiter)) !== false) {
             if (empty(array_filter($data, fn($v) => trim($v) !== ''))) {
@@ -216,7 +219,10 @@ class PegawaiImportService
             return [];
         }
 
-        $header = array_map(fn($h) => strtolower(trim(preg_replace('/[^a-zA-Z0-9_]/', '', $h))), $rawRows[0]);
+        $header = array_map(function ($h) {
+            $cleaned = preg_replace('/[\s\-]+/', '_', trim($h));
+            return strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', $cleaned));
+        }, $rawRows[0]);
         $rows = [];
 
         for ($i = 1; $i < count($rawRows); $i++) {
@@ -260,15 +266,18 @@ class PegawaiImportService
         foreach ($rows as $index => $row) {
             $rowNumber = $index + 2; // Mengingat baris 1 adalah header di spreadsheet
 
-            $namaLengkap = $row['nama_lengkap'] ?? $row['nama'] ?? '';
+            $namaLengkap = $row['nama_lengkap'] ?? $row['nama'] ?? $row['namalengkap'] ?? '';
             if (empty($namaLengkap)) {
                 $errors[] = "Baris #{$rowNumber}: Nama lengkap wajib diisi.";
                 $failedCount++;
                 continue;
             }
 
-            $nip = !empty($row['nip']) ? preg_replace('/[^0-9]/', '', (string) $row['nip']) : null;
-            $nik = !empty($row['nik']) ? preg_replace('/[^0-9]/', '', (string) $row['nik']) : null;
+            $nipRaw = $row['nip'] ?? $row['nomor_induk_pegawai'] ?? null;
+            $nip = !empty($nipRaw) ? preg_replace('/[^0-9]/', '', (string) $nipRaw) : null;
+
+            $nikRaw = $row['nik'] ?? $row['no_ktp'] ?? $row['ktp'] ?? null;
+            $nik = !empty($nikRaw) ? preg_replace('/[^0-9]/', '', (string) $nikRaw) : null;
 
             // Validasi keunikan NIP jika ada
             if ($nip && Pegawai::where('nip', $nip)->exists()) {
@@ -286,29 +295,56 @@ class PegawaiImportService
 
             // Jenis kelamin: null jika kosong di file
             $jk = null;
-            if (!empty($row['jenis_kelamin'])) {
-                $jkRaw = strtoupper(trim($row['jenis_kelamin']));
+            $jkVal = $row['jenis_kelamin'] ?? $row['jeniskelamin'] ?? $row['jk'] ?? $row['gender'] ?? null;
+            if (!empty($jkVal)) {
+                $jkRaw = strtoupper(trim($jkVal));
                 $jk = (str_starts_with($jkRaw, 'P') || str_contains($jkRaw, 'WANITA') || str_contains($jkRaw, 'PEREMPUAN')) ? 'P' : 'L';
             }
 
             // Jenis pegawai: null jika kosong di file
             $jenisPegawai = null;
-            if (!empty($row['jenis_pegawai'])) {
-                $jenisPegawaiRaw = strtolower(trim($row['jenis_pegawai']));
-                $jenisPegawai = (str_contains($jenisPegawaiRaw, 'tendik') || str_contains($jenisPegawaiRaw, 'staf') || str_contains($jenisPegawaiRaw, 'karyawan'))
-                    ? 'tendik'
-                    : (str_contains($jenisPegawaiRaw, 'honorer') ? 'honorer' : 'dosen');
+            $jpVal = $row['jenis_pegawai'] ?? $row['jenispegawai'] ?? $row['tipe_pegawai'] ?? $row['tipepegawai'] ?? null;
+            if (!empty($jpVal)) {
+                $jenisPegawaiRaw = strtolower(trim($jpVal));
+                if (
+                    str_contains($jenisPegawaiRaw, 'tendik') ||
+                    str_contains($jenisPegawaiRaw, 'pegawai') ||
+                    str_contains($jenisPegawaiRaw, 'staf') ||
+                    str_contains($jenisPegawaiRaw, 'staff') ||
+                    str_contains($jenisPegawaiRaw, 'karyawan') ||
+                    str_contains($jenisPegawaiRaw, 'kependidikan') ||
+                    str_contains($jenisPegawaiRaw, 'administrasi') ||
+                    str_contains($jenisPegawaiRaw, 'admin') ||
+                    str_contains($jenisPegawaiRaw, 'laboran') ||
+                    str_contains($jenisPegawaiRaw, 'teknisi') ||
+                    str_contains($jenisPegawaiRaw, 'tu')
+                ) {
+                    $jenisPegawai = 'tendik';
+                } elseif (str_contains($jenisPegawaiRaw, 'honorer')) {
+                    $jenisPegawai = 'honorer';
+                } elseif (
+                    str_contains($jenisPegawaiRaw, 'dosen') ||
+                    str_contains($jenisPegawaiRaw, 'pengajar') ||
+                    str_contains($jenisPegawaiRaw, 'pendidik') ||
+                    str_contains($jenisPegawaiRaw, 'lektor') ||
+                    str_contains($jenisPegawaiRaw, 'asisten')
+                ) {
+                    $jenisPegawai = 'dosen';
+                } else {
+                    $jenisPegawai = 'tendik';
+                }
             }
 
             // Status kepegawaian: null jika kosong di file
             $statusKepegawaian = null;
-            if (!empty($row['status_kepegawaian'])) {
-                $statusKepegawaianRaw = strtolower(trim($row['status_kepegawaian']));
-                if (str_contains($statusKepegawaianRaw, 'pns')) {
+            $skVal = $row['status_kepegawaian'] ?? $row['statuskepegawaian'] ?? $row['status_pegawai'] ?? null;
+            if (!empty($skVal)) {
+                $statusKepegawaianRaw = strtolower(trim($skVal));
+                if (str_contains($statusKepegawaianRaw, 'pns') && !str_contains($statusKepegawaianRaw, 'non')) {
                     $statusKepegawaian = 'pns';
                 } elseif (str_contains($statusKepegawaianRaw, 'kontrak')) {
                     $statusKepegawaian = 'kontrak';
-                } elseif (str_contains($statusKepegawaianRaw, 'non_pns')) {
+                } elseif (str_contains($statusKepegawaianRaw, 'non_pns') || str_contains($statusKepegawaianRaw, 'non pns')) {
                     $statusKepegawaian = 'non_pns';
                 } else {
                     $statusKepegawaian = 'tetap_yayasan';
@@ -317,8 +353,9 @@ class PegawaiImportService
 
             // Cari Unit Kerja dari pre-loaded collection berdasarkan nama atau kode (null jika kosong)
             $unitKerjaId = null;
-            if (!empty($row['unit_kerja'])) {
-                $searchUnit = trim($row['unit_kerja']);
+            $ukVal = $row['unit_kerja'] ?? $row['unitkerja'] ?? $row['unit'] ?? $row['fakultas'] ?? $row['prodi'] ?? null;
+            if (!empty($ukVal)) {
+                $searchUnit = trim($ukVal);
                 $foundUnit = $allUnits->first(function ($u) use ($searchUnit) {
                     return stripos($u->nama, $searchUnit) !== false || strcasecmp($u->kode, $searchUnit) === 0;
                 });
@@ -329,8 +366,9 @@ class PegawaiImportService
 
             // Tanggal masuk: null jika kosong
             $tanggalMasuk = null;
-            if (!empty($row['tanggal_masuk'])) {
-                $parsedTglMasuk = strtotime($row['tanggal_masuk']);
+            $tglMasukRaw = $row['tanggal_masuk'] ?? $row['tanggalmasuk'] ?? $row['tgl_masuk'] ?? null;
+            if (!empty($tglMasukRaw)) {
+                $parsedTglMasuk = strtotime($tglMasukRaw);
                 if ($parsedTglMasuk !== false) {
                     $tanggalMasuk = date('Y-m-d', $parsedTglMasuk);
                 }
@@ -338,8 +376,9 @@ class PegawaiImportService
 
             // Tanggal lahir: null jika kosong
             $tanggalLahir = null;
-            if (!empty($row['tanggal_lahir'])) {
-                $parsedTglLahir = strtotime($row['tanggal_lahir']);
+            $tglLahirRaw = $row['tanggal_lahir'] ?? $row['tanggallahir'] ?? $row['tgl_lahir'] ?? null;
+            if (!empty($tglLahirRaw)) {
+                $parsedTglLahir = strtotime($tglLahirRaw);
                 if ($parsedTglLahir !== false) {
                     $tanggalLahir = date('Y-m-d', $parsedTglLahir);
                 }
@@ -348,6 +387,9 @@ class PegawaiImportService
             // Agama: null jika kosong
             $agama = !empty($row['agama']) ? trim($row['agama']) : null;
 
+            $tempatLahir = $row['tempat_lahir'] ?? $row['tempatlahir'] ?? null;
+            $telepon = $row['telepon'] ?? $row['nohp'] ?? $row['no_hp'] ?? $row['handphone'] ?? null;
+            $alamat = $row['alamat'] ?? null;
             $nidn = !empty($row['nidn']) ? trim($row['nidn']) : null;
             $nuptk = !empty($row['nuptk']) ? trim($row['nuptk']) : null;
             $email = !empty($row['email']) ? trim($row['email']) : null;
@@ -364,15 +406,15 @@ class PegawaiImportService
                     'nik' => $nik,
                     'nama_lengkap' => $namaLengkap,
                     'jenis_kelamin' => $jk,
-                    'tempat_lahir' => !empty($row['tempat_lahir']) ? trim($row['tempat_lahir']) : null,
+                    'tempat_lahir' => !empty($tempatLahir) ? trim($tempatLahir) : null,
                     'tanggal_lahir' => $tanggalLahir,
                     'agama' => $agama,
                     'jenis_pegawai' => $jenisPegawai,
                     'status_kepegawaian' => $statusKepegawaian,
                     'tanggal_masuk' => $tanggalMasuk,
                     'status' => 'aktif',
-                    'telepon' => !empty($row['telepon']) ? trim($row['telepon']) : null,
-                    'alamat' => !empty($row['alamat']) ? trim($row['alamat']) : null,
+                    'telepon' => !empty($telepon) ? trim($telepon) : null,
+                    'alamat' => !empty($alamat) ? trim($alamat) : null,
                 ]);
 
                 // 2. Buat atau hubungkan akun SSO di core_users dengan skala prioritas username: NIDN -> NUPTK -> NIP
@@ -390,8 +432,9 @@ class PegawaiImportService
                 ]);
 
                 // 3. Tambahkan riwayat jabatan awal jika kolom jabatan terisi
-                if (!empty($row['jabatan'])) {
-                    $searchJabatan = trim($row['jabatan']);
+                $jabatanRaw = $row['jabatan'] ?? $row['posisi'] ?? null;
+                if (!empty($jabatanRaw)) {
+                    $searchJabatan = trim($jabatanRaw);
                     $jabatan = $allJabatans->first(function ($j) use ($searchJabatan) {
                         return stripos($j->nama, $searchJabatan) !== false;
                     });

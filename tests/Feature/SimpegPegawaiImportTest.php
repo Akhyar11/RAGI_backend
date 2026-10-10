@@ -189,4 +189,43 @@ class SimpegPegawaiImportTest extends TestCase
         $this->assertFalse($user->hasRole('dosen'));
         $this->assertFalse($user->hasRole('tendik'));
     }
+
+    public function test_import_pegawai_recognizes_pegawai_value_as_tendik_and_handles_spaced_headers()
+    {
+        // Simulasi berkas dengan header berspasi dan jenis pegawai bertuliskan 'pegawai'
+        $csvContent = "\xEF\xBB\xBF" .
+            "NIP,NIK,Nama Lengkap,Email,Jenis Kelamin,Jenis Pegawai,Status Kepegawaian,Unit Kerja\n" .
+            "199303032019032003,3271010303930003,Bambang Supriyanto,bambang@campus.ac.id,Laki-laki,Pegawai,Tetap,Fakultas Ilmu Komputer\n";
+
+        $file = UploadedFile::fake()->createWithContent('pegawai_tendik.csv', $csvContent);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/pegawai/import', [
+                'file' => $file,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'total' => 1,
+                    'success' => 1,
+                    'failed' => 0,
+                ],
+            ]);
+
+        $pegawai = Pegawai::where('nip', '199303032019032003')->first();
+        $this->assertNotNull($pegawai);
+        $this->assertEquals('Bambang Supriyanto', $pegawai->nama_lengkap);
+        $this->assertEquals('tendik', $pegawai->jenis_pegawai); // Wajib 'tendik', bukan 'dosen'!
+        $this->assertEquals('L', $pegawai->jenis_kelamin);
+        $this->assertEquals('tetap_yayasan', $pegawai->status_kepegawaian);
+        $this->assertEquals($this->unitKerja->id, $pegawai->unit_kerja_id);
+
+        $user = User::find($pegawai->user_id);
+        $this->assertNotNull($user);
+        $this->assertTrue($user->hasRole('tendik'));
+        $this->assertFalse($user->hasRole('dosen'));
+    }
 }
+
