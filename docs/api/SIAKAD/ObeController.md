@@ -1477,8 +1477,10 @@ satu jalur dijamin berasal dari program studi yang sama.
 | `kemampuan_akhir` | string | ❌ | Kemampuan akhir tahapan belajar (Sub-CPMK) |
 | `bahan_kajian` | string | ❌ | Materi pembelajaran |
 | `bentuk_metode` | string | ❌ | Bentuk/metode ringkas, maks. 255 |
-| `bentuk_luring` | string | ❌ | Aktivitas luring |
-| `bentuk_daring` | string | ❌ | Aktivitas daring |
+| `bentuk_luring` | string | ❌ | Aktivitas luring ringkas |
+| `bentuk_daring` | string | ❌ | Aktivitas daring ringkas |
+| `aktivitas_luring` | array | ❌ | Array of `{ bentuk, metode, waktu_menit }` |
+| `aktivitas_daring` | array | ❌ | Array of `{ bentuk, metode, waktu_menit }` |
 | `estimasi_waktu` | string | ❌ | Estimasi waktu, maks. 100 |
 | `pengalaman_belajar` | string | ❌ | Pengalaman belajar mahasiswa |
 | `penugasan_mahasiswa` | string | ❌ | Penugasan mahasiswa |

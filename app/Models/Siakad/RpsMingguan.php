@@ -23,6 +23,8 @@ class RpsMingguan extends Model
         'bentuk_metode',
         'bentuk_luring',
         'bentuk_daring',
+        'aktivitas_luring',
+        'aktivitas_daring',
         'estimasi_waktu',
         'pengalaman_belajar',
         'penugasan_mahasiswa',
@@ -35,6 +37,8 @@ class RpsMingguan extends Model
 
     protected $casts = [
         'sub_cpmk_ids' => 'array',
+        'aktivitas_luring' => 'array',
+        'aktivitas_daring' => 'array',
         'bobot_penilaian' => 'decimal:2',
     ];
 

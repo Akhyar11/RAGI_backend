@@ -1869,6 +1869,8 @@ class ObeController extends Controller
             'bentuk_metode' => 'nullable|string|max:255',
             'bentuk_luring' => 'nullable|string',
             'bentuk_daring' => 'nullable|string',
+            'aktivitas_luring' => 'nullable|array',
+            'aktivitas_daring' => 'nullable|array',
             'estimasi_waktu' => 'nullable|string|max:100',
             'pengalaman_belajar' => 'nullable|string',
             'penugasan_mahasiswa' => 'nullable|string',
