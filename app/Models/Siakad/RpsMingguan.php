@@ -15,6 +15,7 @@ class RpsMingguan extends Model
         'rps_id',
         'sub_cpmk_id',
         'sub_cpmk_ids',
+        'komponen_evaluasi_id',
         'minggu_ke',
         'jenis_pertemuan',
         'kemampuan_akhir',
@@ -26,6 +27,8 @@ class RpsMingguan extends Model
         'pengalaman_belajar',
         'penugasan_mahasiswa',
         'indikator_penilaian',
+        'kriteria_penilaian_id',
+        'teknik_penilaian',
         'kriteria_teknik',
         'bobot_penilaian',
     ];
@@ -43,5 +46,15 @@ class RpsMingguan extends Model
     public function subCpmk()
     {
         return $this->belongsTo(SubCpmk::class, 'sub_cpmk_id');
+    }
+
+    public function komponenEvaluasi()
+    {
+        return $this->belongsTo(RpsReferensi::class, 'komponen_evaluasi_id');
+    }
+
+    public function kriteriaPenilaian()
+    {
+        return $this->belongsTo(RpsReferensi::class, 'kriteria_penilaian_id');
     }
 }

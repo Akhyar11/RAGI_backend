@@ -1471,6 +1471,9 @@ satu jalur dijamin berasal dari program studi yang sama.
 | `jenis_pertemuan` | string | ❌ | Jenis pertemuan (Teori / Praktikum / referensi Jenis Pembelajaran) |
 | `sub_cpmk_id` | integer | ❌ | ID Sub-CPMK utama (`exists:siakad_sub_cpmk,id`) |
 | `sub_cpmk_ids` | array | ❌ | Array ID Sub-CPMK jika memilih lebih dari satu |
+| `komponen_evaluasi_id` | integer | ❌ | ID komponen evaluasi (`exists:siakad_rps_referensi,id`) |
+| `kriteria_penilaian_id` | integer | ❌ | ID kriteria penilaian (`exists:siakad_rps_referensi,id`) |
+| `teknik_penilaian` | string | ❌ | Uraian teknik penilaian |
 | `kemampuan_akhir` | string | ❌ | Kemampuan akhir tahapan belajar (Sub-CPMK) |
 | `bahan_kajian` | string | ❌ | Materi pembelajaran |
 | `bentuk_metode` | string | ❌ | Bentuk/metode ringkas, maks. 255 |

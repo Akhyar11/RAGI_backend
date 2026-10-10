@@ -1818,7 +1818,7 @@ class ObeController extends Controller
             abort(403, 'Anda tidak memiliki hak akses melihat sesi pertemuan RPS program studi ini.');
         }
 
-        $query = \App\Models\Siakad\RpsMingguan::with('subCpmk')
+        $query = \App\Models\Siakad\RpsMingguan::with(['subCpmk', 'komponenEvaluasi', 'kriteriaPenilaian'])
             ->where('rps_id', $rps->id)
             ->orderBy('minggu_ke');
 
@@ -1861,6 +1861,9 @@ class ObeController extends Controller
             'sub_cpmk_id' => 'nullable|exists:siakad_sub_cpmk,id',
             'sub_cpmk_ids' => 'nullable|array',
             'sub_cpmk_ids.*' => 'exists:siakad_sub_cpmk,id',
+            'komponen_evaluasi_id' => 'nullable|exists:siakad_rps_referensi,id',
+            'kriteria_penilaian_id' => 'nullable|exists:siakad_rps_referensi,id',
+            'teknik_penilaian' => 'nullable|string',
             'kemampuan_akhir' => 'nullable|string',
             'bahan_kajian' => 'nullable|string',
             'bentuk_metode' => 'nullable|string|max:255',
