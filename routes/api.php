@@ -265,6 +265,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::post('presensi/keterangan', [App\Http\Controllers\Simpeg\PresensiController::class, 'setKeterangan']);
     Route::get('presensi/recap', [App\Http\Controllers\Simpeg\PresensiController::class, 'recap']);
     Route::post('presensi/{id}/approve', [App\Http\Controllers\Simpeg\PresensiController::class, 'approve']);
+    Route::patch('presensi/log/{id}', [App\Http\Controllers\Simpeg\PresensiController::class, 'updateLog'])->whereNumber('id');
     Route::get('presensi/{id}', [App\Http\Controllers\Simpeg\PresensiController::class, 'show'])->whereNumber('id');
     Route::get('presensi', [App\Http\Controllers\Simpeg\PresensiController::class, 'index']);
     Route::post('presensi', [App\Http\Controllers\Simpeg\PresensiController::class, 'store']);

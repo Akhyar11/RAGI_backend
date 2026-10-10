@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Simpeg;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Simpeg\SetKeteranganRequest;
+use App\Http\Requests\Simpeg\UpdatePresensiLogRequest;
 use App\Models\Attendance;
 use App\Models\NationalHoliday;
 use App\Models\Simpeg\Pegawai;
@@ -628,7 +629,13 @@ class PresensiController extends Controller
     }
 
     /**
-     * Persetujuan manual presensi oleh HR / Admin
+     * Persetujuan manual presensi oleh HR / Admin.
+     *
+     * Scan wajah yang sukses langsung tercatat hadir/terlambat tanpa approval.
+     * Approval hanya untuk status menunggu_approval (scan hari libur) atau
+     * ditolak (wajah/GPS gagal berulang). Jika record ditolak belum punya
+     * clock_in, approval mengisi clock_in dengan waktu approval agar log
+     * punya jam masuk yang sah.
      */
     public function approve(Request $request, int $id): JsonResponse
     {
@@ -640,19 +647,155 @@ class PresensiController extends Controller
         }
 
         $attendance = Attendance::findOrFail($id);
-        $attendance->update([
+        $oldValues = $attendance->getOriginal();
+        $now = Carbon::now();
+        $payload = [
             'is_approved_by_admin' => true,
             'approved_by' => $request->user()->id,
-            'approved_at' => Carbon::now(),
+            'approved_at' => $now,
             'status_kehadiran' => 'hadir',
-            'notes' => ($attendance->notes ? $attendance->notes . ' | ' : '') . 'Disetujui oleh HR pada ' . Carbon::now()->format('d/m/Y H:i'),
-        ]);
+            'notes' => ($attendance->notes ? $attendance->notes . ' | ' : '') . 'Disetujui oleh HR pada ' . $now->format('d/m/Y H:i'),
+        ];
+
+        if (!$attendance->clock_in) {
+            $payload['clock_in'] = $now;
+        }
+
+        $attendance->update($payload);
+        $newValues = $attendance->getChanges();
+
+        try {
+            \App\Services\AuditLogService::record(
+                'SIMPEG',
+                'approve',
+                'simpeg_presensi_pegawai',
+                (int) $attendance->id,
+                $oldValues,
+                $newValues,
+                $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log approval presensi: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
             'message' => 'Presensi berhasil disetujui.',
-            'data' => $attendance,
+            'data' => $attendance->fresh(),
         ]);
+    }
+
+    /**
+     * Edit / reset sebagian log presensi realtime oleh HR / Admin.
+     *
+     * Untuk kasus salah tekan scan pulang: cukup reset clock_out saja tanpa
+     * menghapus seluruh log (clock_in tetap aman). Berlaku sebaliknya untuk
+     * reset clock_in. Mendukung juga koreksi jam manual (input WIB).
+     */
+    public function updateLog(UpdatePresensiLogRequest $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.presensi.manage')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk mengedit log presensi.',
+            ], 403);
+        }
+
+        $attendance = Attendance::findOrFail($id);
+        $validated = $request->validated();
+        $oldValues = $attendance->getOriginal();
+
+        $tanggal = $validated['tanggal'] ?? Carbon::parse($attendance->getAttribute('tanggal'))->toDateString();
+
+        if (!empty($validated['reset_clock_in'])) {
+            $attendance->clock_in = null;
+            $attendance->jam_masuk = null;
+            $attendance->clock_in_latitude = null;
+            $attendance->clock_in_longitude = null;
+            $attendance->clock_in_distance_meters = null;
+            $attendance->clock_in_accuracy = null;
+            $attendance->clock_in_face_score = null;
+            $attendance->clock_in_is_mock_location = false;
+        } elseif (array_key_exists('jam_masuk', $validated) && $validated['jam_masuk'] !== null && $validated['jam_masuk'] !== '') {
+            $jamMasuk = $this->normalizeJamInput($validated['jam_masuk']);
+            $clockInUtc = Carbon::createFromFormat('Y-m-d H:i:s', "{$tanggal} {$jamMasuk}", 'Asia/Jakarta');
+            if (!$clockInUtc) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Format jam_masuk tidak valid. Gunakan HH:MM atau HH:MM:SS (WIB).',
+                ], 422);
+            }
+            $attendance->clock_in = $clockInUtc->setTimezone('UTC');
+        }
+
+        if (!empty($validated['reset_clock_out'])) {
+            $attendance->clock_out = null;
+            $attendance->jam_keluar = null;
+            $attendance->clock_out_latitude = null;
+            $attendance->clock_out_longitude = null;
+            $attendance->clock_out_distance_meters = null;
+            $attendance->clock_out_accuracy = null;
+            $attendance->clock_out_face_score = null;
+            $attendance->clock_out_is_mock_location = false;
+            $attendance->early_leave_minutes = 0;
+        } elseif (array_key_exists('jam_keluar', $validated) && $validated['jam_keluar'] !== null && $validated['jam_keluar'] !== '') {
+            $jamKeluar = $this->normalizeJamInput($validated['jam_keluar']);
+            $clockOutUtc = Carbon::createFromFormat('Y-m-d H:i:s', "{$tanggal} {$jamKeluar}", 'Asia/Jakarta');
+            if (!$clockOutUtc) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Format jam_keluar tidak valid. Gunakan HH:MM atau HH:MM:SS (WIB).',
+                ], 422);
+            }
+            $attendance->clock_out = $clockOutUtc->setTimezone('UTC');
+        }
+
+        if (isset($validated['tanggal'])) {
+            $attendance->tanggal = $validated['tanggal'];
+        }
+
+        $statusBaru = $validated['status'] ?? $validated['status_kehadiran'] ?? null;
+        if ($statusBaru) {
+            $attendance->status = $statusBaru;
+        }
+
+        $catatanBaru = $validated['catatan'] ?? $validated['notes'] ?? null;
+        if ($catatanBaru !== null) {
+            $attendance->notes = $catatanBaru;
+        }
+
+        $attendance->save();
+
+        $newValues = $attendance->getChanges();
+        try {
+            \App\Services\AuditLogService::record(
+                'SIMPEG',
+                'update',
+                'simpeg_presensi_pegawai',
+                (int) $id,
+                $oldValues,
+                $newValues,
+                $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log presensi: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Log presensi berhasil diperbarui.',
+            'data' => $attendance->fresh(),
+        ]);
+    }
+
+    protected function normalizeJamInput(string $jam): string
+    {
+        $jam = trim($jam);
+        if (preg_match('/^\d{2}:\d{2}$/', $jam)) {
+            return $jam . ':00';
+        }
+        return $jam;
     }
 
     /**

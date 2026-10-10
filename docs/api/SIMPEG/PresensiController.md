@@ -355,6 +355,7 @@ Mengecek konektivitas dan kesiapan microservice Python yang berjalan di port 800
 |---|---|---|---|
 | GET | `/api/simpeg/presensi` | Daftar presensi (Realtime biometrik atau `type=bundle`) dengan filter & dynamic sorting (`sort_by`, `sort_order`) | ✅ Bearer |
 | POST | `/api/simpeg/presensi/{id}/approve` | Persetujuan manual HR (clock-in hari libur / upaya ditolak) | ✅ Bearer |
+| PATCH | `/api/simpeg/presensi/log/{id}` | Edit / reset sebagian log (reset masuk saja / pulang saja) | ✅ Bearer |
 | POST | `/api/simpeg/presensi/keterangan` | Tetapkan keterangan ketidakhadiran (izin/sakit/dinas/alfa) untuk pegawai terjadwal masuk tanpa log | ✅ Bearer |
 | GET | `/api/simpeg/presensi/recap` | Rekap bulanan per pegawai (silang cuti disetujui) | ✅ Bearer |
 
@@ -523,6 +524,85 @@ Menghapus 1 baris log presensi individual (`Attendance`) berdasarkan ID log.
   "message": "Log presensi berhasil dihapus."
 }
 ```
+
+---
+
+### PATCH `/api/simpeg/presensi/log/{id}`
+
+Edit / reset sebagian log presensi realtime (misal salah tekan scan pulang: reset `clock_out` saja tanpa menghapus `clock_in`).
+
+**Hak Akses RBAC:** `simpeg.presensi.manage` / `admin` / `admin_simpeg`.
+
+**Request Body (input jam dalam WIB, disimpan sebagai UTC):**
+```json
+{
+  "tanggal": "2026-10-10",
+  "jam_masuk": "07:41",
+  "jam_keluar": "16:05",
+  "reset_clock_in": false,
+  "reset_clock_out": true,
+  "status": "hadir",
+  "catatan": "Koreksi HR: reset pulang tidak sengaja"
+}
+```
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+| Field | Type | Deskripsi |
+|---|---|---|
+| `tanggal` | date YYYY-MM-DD | Ubah tanggal dinas |
+| `jam_masuk` | string HH:MM / HH:MM:SS | Koreksi jam masuk (WIB) |
+| `jam_keluar` | string HH:MM / HH:MM:SS | Koreksi jam pulang (WIB) |
+| `reset_clock_in` | boolean | `true` = kosongkan scan masuk saja |
+| `reset_clock_out` | boolean | `true` = kosongkan scan pulang saja |
+| `status` / `status_kehadiran` | enum | `hadir,terlambat,menunggu_approval,ditolak,izin,sakit,dinas,alfa` |
+| `catatan` / `notes` | string | Catatan koreksi |
+
+**Response Sukses (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Log presensi berhasil diperbarui.",
+  "data": { "id": 101, "tanggal": "2026-10-10", "clock_in": "2026-10-10T00:41:00.000000Z" }
+}
+```
+
+**Response Error:**
+
+**403 Forbidden** (tanpa permission `simpeg.presensi.manage`)
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki hak akses untuk mengedit log presensi."
+}
+```
+
+**404 Not Found** (ID log tidak ditemukan)
+```json
+{
+  "status": "error",
+  "message": "Data presensi tidak ditemukan."
+}
+```
+
+**422 Unprocessable Entity** (format jam salah / validasi gagal)
+```json
+{
+  "status": "error",
+  "message": "Format jam_masuk tidak valid. Gunakan HH:MM atau HH:MM:SS (WIB).",
+  "errors": {
+    "jam_masuk": ["Format jam HH:MM / HH:MM:SS."]
+  }
+}
+```
+
+> Waktu tersimpan UTC (`config/app.timezone = UTC`). Frontend WAJIB konversi ke `Asia/Jakarta` saat tampil.
 
 ---
 
