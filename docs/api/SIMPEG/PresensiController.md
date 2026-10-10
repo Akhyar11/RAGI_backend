@@ -57,6 +57,7 @@ Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Py
 | GET | `/api/simpeg/presensi/pegawai/{id}/office-locations` | Lokasi absen sah pegawai (utama + tambahan) | ✅ Bearer |
 | PUT | `/api/simpeg/presensi/pegawai/{id}/office-locations` | Atur lokasi absen tambahan pegawai | ✅ Bearer |
 | POST | `/api/simpeg/presensi/office-assign-bulk` | Tugaskan lokasi tambahan massal (misal semua dosen) | ✅ Bearer |
+| GET | `/api/simpeg/presensi/{id}?bundle=1&view=matrix` | Rincian Bundle Matriks Presensi Siklus 26 - 25 | ✅ Bearer |
 
 ---
 
@@ -784,5 +785,126 @@ Edit / reset sebagian log presensi realtime (misal salah tekan scan pulang: rese
    - **Terkunci di Mobile UI (`can_clock_out: false`)**: Setelah pegawai berhasil melakukan presensi masuk (misal jam 08:00), tombol presensi pulang di aplikasi mobile **tidak aktif** (`can_clock_out = false`) hingga jam kerja memasuki jendela jam pulang shift (misal pukul 15:45 pada shift 08:00 - 16:00).
    - **Pencegahan Duplikasi Masuk**: Jika pegawai mencoba scan masuk lagi di jam 08:01 untuk "memastikan", sistem menolak dengan status 422 (*"Karyawan sudah melakukan presensi masuk yang sah hari ini"*), sehingga data jam masuk awal (08:00:00) tetap aman dan tidak tertimpa.
    - **Validasi Server Cooldown**: Jika ada request presensi pulang sesaat setelah presensi masuk (kurang dari jeda minimal 15 menit), sistem menolak dengan validasi (*"Presensi pulang tidak dapat dilakukan sesaat setelah presensi masuk (jeda minimal 15 menit)"*).
+
+---
+
+### GET `/api/simpeg/presensi/{id}?bundle=1&view=matrix`
+
+Mengambil data rekap matriks presensi bulanan (siklus tanggal 26 s/d 25) per pegawai dengan indikator 2 kotak per hari (scan masuk dan scan pulang) lengkap dengan perhitungan persentase kehadiran.
+
+**Hak Akses RBAC:** `simpeg.presensi.read` / `simpeg.presensi.manage` / `admin` / `admin_simpeg`
+
+**Request Headers:**
+| Header | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `Authorization` | string | Ya | `Bearer <token>` |
+| `Accept` | string | Ya | `application/json` |
+
+**Query Parameters:**
+| Parameter | Tipe | Default | Keterangan |
+|---|---|---|---|
+| `bundle` | integer/boolean | `1` | Mengambil data dalam bentuk bundle periode |
+| `view` | string | `matrix` | Format tampilan matriks kehadiran per hari (`matrix`) |
+| `search` | string | - | Filter pencarian nama pegawai atau NIP |
+| `page` | integer | `1` | Nomor halaman pagination |
+| `per_page` | integer | `15` | Jumlah pegawai per halaman (alias: `limit`, maks 100) |
+| `sort_by` | string | `nama_lengkap` | Kolom pengurutan data (`nama_lengkap`, `nip`) |
+| `sort_dir` | string | `asc` | Arah pengurutan (`asc`, `desc`) |
+
+**Response Sukses (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Data matriks presensi berhasil diambil",
+  "data": {
+    "periode": {
+      "id": 2,
+      "nama_periode": "Presensi Oktober 2026",
+      "tanggal_awal": "2026-09-26",
+      "tanggal_akhir": "2026-10-25",
+      "bulan_tahun": "2026-10",
+      "total_record": 10,
+      "total_pegawai": 205
+    },
+    "days": [
+      {
+        "index": 1,
+        "date": "2026-09-26",
+        "day": 26,
+        "month": 9,
+        "day_name": "Sab",
+        "is_sunday": false,
+        "is_holiday": false,
+        "holiday_name": null
+      }
+    ],
+    "matrix": [
+      {
+        "pegawai_id": 1,
+        "nip": "19920815175838",
+        "nama_lengkap": "Dr. Superadmin, M.Kom",
+        "matrix": {
+          "2026-09-26": {
+            "date": "2026-09-26",
+            "is_holiday": false,
+            "status_kehadiran": "alfa",
+            "in_status": "absent",
+            "in_time": null,
+            "in_minutes_late": 0,
+            "out_status": "absent",
+            "out_time": null,
+            "out_minutes_early": 0,
+            "catatan": null
+          }
+        },
+        "summary": {
+          "total_hadir": 20,
+          "total_terlambat": 2,
+          "total_pulang_cepat": 0,
+          "total_izin": 1,
+          "total_alfa": 0,
+          "total_hari_kerja": 21,
+          "persentase": 95.2
+        }
+      }
+    ]
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 14,
+    "per_page": 15,
+    "to": 15,
+    "total": 205
+  }
+}
+```
+
+**Response Error:**
+
+*401 Unauthorized:*
+```json
+{
+  "status": "error",
+  "message": "Unauthenticated."
+}
+```
+
+*403 Forbidden:*
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki hak akses (permission) untuk melihat Presensi."
+}
+```
+
+*404 Not Found:*
+```json
+{
+  "status": "error",
+  "message": "Data presensi periode tidak ditemukan."
+}
+```
+
 
 

@@ -197,6 +197,239 @@ class PresensiController extends Controller
 
             $periode = PresensiPeriode::with('creator')->findOrFail($id);
 
+            // JIKA VIEW = MATRIX: Tampilkan data matriks pegawai dan log presensi per hari
+            if ($request->input('view') === 'matrix' || $request->input('format') === 'matrix') {
+                $startDate = Carbon::parse($periode->tanggal_awal)->startOfDay();
+                $endDate = Carbon::parse($periode->tanggal_akhir)->startOfDay();
+                $today = Carbon::today();
+
+                // Ambil daftar libur nasional jika tabel model tersedia
+                $holidaysMap = [];
+                $holidayTable = (new NationalHoliday())->getTable();
+                if (Schema::hasTable($holidayTable)) {
+                    $holidays = NationalHoliday::whereBetween('holiday_date', [$startDate->toDateString(), $endDate->toDateString()])->get();
+                    foreach ($holidays as $h) {
+                        $holidaysMap[Carbon::parse($h->holiday_date)->toDateString()] = $h->name ?? 'Libur Nasional';
+                    }
+                }
+
+                $days = [];
+                $curr = $startDate->copy();
+                $dayIndex = 1;
+                $namaHari = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+                while ($curr->lte($endDate)) {
+                    $dateStr = $curr->toDateString();
+                    $isSunday = $curr->dayOfWeek === Carbon::SUNDAY;
+                    $holidayName = $holidaysMap[$dateStr] ?? null;
+                    $isHoliday = $isSunday || !empty($holidayName);
+
+                    $days[] = [
+                        'index' => $dayIndex++,
+                        'date' => $dateStr,
+                        'day' => (int) $curr->format('d'),
+                        'month' => (int) $curr->format('m'),
+                        'day_name' => $namaHari[$curr->dayOfWeek],
+                        'is_sunday' => $isSunday,
+                        'is_holiday' => $isHoliday,
+                        'holiday_name' => $holidayName,
+                    ];
+                    $curr->addDay();
+                }
+
+                // Query Pegawai aktif atau yang memiliki data di bundle ini
+                $pegawaiQuery = Pegawai::query()->where('is_active', true);
+                if ($request->filled('search')) {
+                    $s = trim($request->search);
+                    $pegawaiQuery->where(function ($q) use ($s) {
+                        $q->where('nama_lengkap', 'like', "%{$s}%")
+                          ->orWhere('nip', 'like', "%{$s}%");
+                    });
+                }
+
+                $perPage = min(100, max(1, $request->integer('per_page', $request->integer('limit', 15))));
+
+                $paginatedPegawai = $pegawaiQuery->orderBy('nama_lengkap', 'asc')->paginate($perPage);
+                $pegawaiIds = $paginatedPegawai->pluck('id')->toArray();
+
+                // Ambil seluruh catatan presensi untuk pegawai pada periode ini
+                $presensiRecords = PresensiPegawai::where('presensi_periode_id', $periode->id)
+                    ->whereIn('pegawai_id', $pegawaiIds)
+                    ->get();
+
+                $presensiMap = [];
+                foreach ($presensiRecords as $rec) {
+                    $d = Carbon::parse($rec->tanggal)->toDateString();
+                    $presensiMap[$rec->pegawai_id][$d] = $rec;
+                }
+
+                $matrixRows = [];
+                foreach ($paginatedPegawai as $pegawai) {
+                    $attendanceMap = [];
+                    $totalHadir = 0;
+                    $totalTerlambat = 0;
+                    $totalPulangCepat = 0;
+                    $totalIzin = 0;
+                    $totalAlfa = 0;
+                    $totalHariKerjaBerjalan = 0;
+
+                    foreach ($days as $d) {
+                        $dateStr = $d['date'];
+                        $isHoliday = $d['is_holiday'];
+                        $carbonDate = Carbon::parse($dateStr);
+                        $isFuture = $carbonDate->gt($today);
+                        $isPastOrToday = !$isFuture;
+
+                        if (!$isHoliday && $isPastOrToday) {
+                            $totalHariKerjaBerjalan++;
+                        }
+
+                        $rec = $presensiMap[$pegawai->id][$dateStr] ?? null;
+
+                        if ($rec) {
+                            $st = strtolower($rec->status_kehadiran ?? 'hadir');
+                            $jamMasuk = $rec->jam_masuk ? substr($rec->jam_masuk, 0, 8) : null;
+                            $jamKeluar = $rec->jam_keluar ? substr($rec->jam_keluar, 0, 8) : null;
+
+                            $minutesLate = 0;
+                            $minutesEarly = 0;
+
+                            if (in_array($st, ['izin', 'sakit', 'dinas'])) {
+                                $inStatus = 'permission';
+                                $outStatus = 'permission';
+                                $totalIzin++;
+                                $totalHadir++;
+                            } elseif ($st === 'alfa') {
+                                $inStatus = 'absent';
+                                $outStatus = 'absent';
+                                $totalAlfa++;
+                            } else {
+                                $hasAnyScan = false;
+
+                                // 1. Kotak Masuk
+                                if ($jamMasuk) {
+                                    $hasAnyScan = true;
+                                    if ($jamMasuk <= '08:15:00') {
+                                        $inStatus = 'on_time';
+                                    } else {
+                                        $inStatus = 'late';
+                                        $totalTerlambat++;
+                                        $parts = explode(':', $jamMasuk);
+                                        $mIn = ((int)($parts[0] ?? 0)) * 60 + ((int)($parts[1] ?? 0));
+                                        $minutesLate = max(0, $mIn - (8 * 60));
+                                    }
+                                } else {
+                                    $inStatus = $isPastOrToday ? ($isHoliday ? 'holiday' : 'absent') : 'upcoming';
+                                }
+
+                                // 2. Kotak Pulang
+                                if ($jamKeluar) {
+                                    $hasAnyScan = true;
+                                    if ($jamKeluar >= '16:00:00') {
+                                        $outStatus = 'on_time';
+                                    } else {
+                                        $outStatus = 'early';
+                                        $totalPulangCepat++;
+                                        $parts = explode(':', $jamKeluar);
+                                        $mOut = ((int)($parts[0] ?? 0)) * 60 + ((int)($parts[1] ?? 0));
+                                        $minutesEarly = max(0, (16 * 60) - $mOut);
+                                    }
+                                } else {
+                                    $outStatus = $isPastOrToday ? ($isHoliday ? 'holiday' : 'absent') : 'upcoming';
+                                }
+
+                                if ($hasAnyScan) {
+                                    $totalHadir++;
+                                } elseif (!$isHoliday && $isPastOrToday) {
+                                    $totalAlfa++;
+                                }
+                            }
+
+                            $attendanceMap[$dateStr] = [
+                                'date' => $dateStr,
+                                'is_holiday' => $isHoliday,
+                                'status_kehadiran' => $st,
+                                'in_status' => $inStatus,
+                                'in_time' => $jamMasuk,
+                                'in_minutes_late' => $minutesLate,
+                                'out_status' => $outStatus,
+                                'out_time' => $jamKeluar,
+                                'out_minutes_early' => $minutesEarly,
+                                'catatan' => $rec->catatan,
+                            ];
+                        } else {
+                            if ($isHoliday) {
+                                $inStatus = 'holiday';
+                                $outStatus = 'holiday';
+                            } elseif ($isFuture) {
+                                $inStatus = 'upcoming';
+                                $outStatus = 'upcoming';
+                            } else {
+                                $inStatus = 'absent';
+                                $outStatus = 'absent';
+                                $totalAlfa++;
+                            }
+
+                            $attendanceMap[$dateStr] = [
+                                'date' => $dateStr,
+                                'is_holiday' => $isHoliday,
+                                'status_kehadiran' => $isHoliday ? 'libur' : ($isFuture ? 'belum' : 'alfa'),
+                                'in_status' => $inStatus,
+                                'in_time' => null,
+                                'in_minutes_late' => 0,
+                                'out_status' => $outStatus,
+                                'out_time' => null,
+                                'out_minutes_early' => 0,
+                                'catatan' => null,
+                            ];
+                        }
+                    }
+
+                    $persentase = $totalHariKerjaBerjalan > 0
+                        ? round(($totalHadir / $totalHariKerjaBerjalan) * 100, 1)
+                        : 100.0;
+
+                    $matrixRows[] = [
+                        'pegawai_id' => $pegawai->id,
+                        'nip' => $pegawai->nip ?? '-',
+                        'nama_lengkap' => $pegawai->nama_lengkap,
+                        'matrix' => $attendanceMap,
+                        'summary' => [
+                            'total_hadir' => $totalHadir,
+                            'total_terlambat' => $totalTerlambat,
+                            'total_pulang_cepat' => $totalPulangCepat,
+                            'total_izin' => $totalIzin,
+                            'total_alfa' => $totalAlfa,
+                            'total_hari_kerja' => $totalHariKerjaBerjalan,
+                            'persentase' => $persentase,
+                        ]
+                    ];
+                }
+
+                $totalPegawaiCount = Pegawai::where('is_active', true)->count();
+                $bundleData = $periode->toArray();
+                $bundleData['total_pegawai'] = $totalPegawaiCount;
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Data matriks presensi berhasil diambil',
+                    'data' => [
+                        'periode' => $bundleData,
+                        'days' => $days,
+                        'matrix' => $matrixRows,
+                    ],
+                    'meta' => [
+                        'current_page' => $paginatedPegawai->currentPage(),
+                        'from' => $paginatedPegawai->firstItem(),
+                        'last_page' => $paginatedPegawai->lastPage(),
+                        'per_page' => $paginatedPegawai->perPage(),
+                        'to' => $paginatedPegawai->lastItem(),
+                        'total' => $paginatedPegawai->total(),
+                    ]
+                ], 200);
+            }
+
+            // Mode Flat List (Default / Legacy)
             $query = PresensiPegawai::with('pegawai')->where('presensi_periode_id', $periode->id);
 
             if ($request->filled('search')) {
