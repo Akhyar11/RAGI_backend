@@ -19,6 +19,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class PresensiController extends Controller
 {
@@ -585,7 +586,39 @@ class PresensiController extends Controller
             ], 404);
         }
 
-        $attendance = $this->attendanceService->processClockOut($employee, $validated);
+        try {
+            $attendance = $this->attendanceService->processClockOut($employee, $validated);
+        } catch (ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first()
+                ?? 'Presensi pulang ditolak.';
+
+            // Idempoten: clock-out ganda (balapan 2 request) yang kedua
+            // tetap dianggap sukses bila clock_out SUDAH tercatat.
+            // Klien membedakan kasus ini via HTTP 200 + pesan khusus
+            // (kontrak envelope murni, tanpa flag tambahan).
+            if (str_contains(strtolower($msg), 'sudah melakukan presensi pulang')) {
+                $existing = Attendance::where('pegawai_id', $employee->id)
+                    ->whereDate('tanggal', Carbon::today()->toDateString())
+                    ->whereNotNull('clock_out')
+                    ->first() ?? Attendance::where('pegawai_id', $employee->id)
+                    ->whereDate('tanggal', Carbon::today()->subDay()->toDateString())
+                    ->whereNotNull('clock_out')
+                    ->first();
+                if ($existing) {
+                    return response()->json([
+                        'status' => 'success',
+                        'message' => 'Presensi pulang sudah tercatat sebelumnya.',
+                        'data' => $existing,
+                    ]);
+                }
+            }
+
+            return response()->json([
+                'status' => 'error',
+                'message' => $msg,
+                'errors' => $e->errors(),
+            ], 422);
+        }
 
         $message = ($attendance->clock_out && !$attendance->clock_in)
             ? 'Presensi pulang berhasil dicatat (tanpa presensi masuk sebelumnya).'
@@ -599,7 +632,9 @@ class PresensiController extends Controller
     }
 
     /**
-     * Rekap presensi bulanan
+     * Rekap presensi: dukung rentang `?start_date&end_date` (kontrak
+     * frontend §3.2) dengan fallback `?month&year`. Respons
+     * `{employee, filter, summary, rows}` berkunci alias `period`.
      */
     public function recap(Request $request): JsonResponse
     {
@@ -614,16 +649,31 @@ class PresensiController extends Controller
             ], 404);
         }
 
-        $month = (int) $request->input('month', Carbon::now()->month);
-        $year = (int) $request->input('year', Carbon::now()->year);
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
+            $endDate = Carbon::parse($request->input('end_date'))->startOfDay();
+            if ($endDate->lessThan($startDate)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tanggal akhir tidak boleh lebih awal dari tanggal awal.',
+                    'errors' => [
+                        'end_date' => ['Tanggal akhir tidak boleh lebih awal dari tanggal awal.'],
+                    ],
+                ], 422);
+            }
+        } else {
+            $month = (int) $request->input('month', Carbon::now()->month);
+            $year = (int) $request->input('year', Carbon::now()->year);
 
-        $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
-        $endDate = $startDate->copy()->endOfMonth();
+            $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+            $endDate = $startDate->copy()->endOfMonth();
+        }
 
-        $recap = $this->recapService->generateRecap($employee, $startDate, $endDate);
+        $recap = $this->recapService->presentRecap($employee, $startDate, $endDate);
 
         return response()->json([
             'status' => 'success',
+            'message' => 'Rekap presensi berhasil diambil',
             'data' => $recap,
         ]);
     }

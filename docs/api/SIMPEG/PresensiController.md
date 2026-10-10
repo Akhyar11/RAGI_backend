@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1` dan `/api/simpeg`  
 > **Autentikasi**: Bearer Token (Passport/Sanctum) / X-API-KEY (Integrasi)  
 > **Dibuat**: 2026-09-14  
-> **Diperbarui**: 2026-09-28
+> **Diperbarui**: 2026-10-10
 
 Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Python port 8001), geofencing Haversine, dan jadwal shift dinamis yang digunakan oleh aplikasi **Mobile Android (Flutter)** dan dashboard **SIMPEG Web**.
 
@@ -296,6 +296,35 @@ Mencatat presensi pulang karyawan. Nilai `face_score` dan `is_mock_location` ber
 
 > **Shift lintas hari (misal satpam 22:00-06:00):** clock-out pagi (misal Selasa 06:05) otomatis menutup record tanggal dinas kemarin (Senin), bukan mencari record hari ini. Endpoint `today`/`todayStatus` di jam 00:xx-06:xx menampilkan record dinas kemarin yang masih terbuka (`can_clock_out: true`) dengan `schedule.is_overnight: true` dan `schedule.duty_date` = tanggal dinas. Clock-in 00:xx (misal 00:30) tercatat sebagai `terlambat` pada tanggal dinas kemarin. Cut-off menunda Alfa sampai jam pulang shift terlewati.
 
+> **Idempoten clock-out ganda:** bila klien mengirim 2x `POST clock-out` (misal auto-detect + tombol manual beradu), request kedua yang pesannya mengandung *"sudah melakukan presensi pulang"* tetapi `clock_out` SUDAH tercatat dikembalikan sebagai **200 sukses** dengan pesan `Presensi pulang sudah tercatat sebelumnya.` (bukan 422) — sehingga klien hanya menampilkan 1 dialog sukses. Klien mengenali kasus duplikat via HTTP 200 + pesan khusus tersebut. Kegagalan validasi lain dikembalikan sebagai **422** dengan envelope murni `{status: "error", message, errors}`.
+
+**Response Sukses (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Presensi pulang berhasil dicatat.",
+  "data": { "id": 109, "tanggal": "2026-10-10", "clock_out": "2026-10-10T09:30:00.000000Z" }
+}
+```
+
+**Response Duplikat Idempoten (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Presensi pulang sudah tercatat sebelumnya.",
+  "data": { "id": 109, "tanggal": "2026-10-10", "clock_out": "2026-10-10T09:30:00.000000Z" }
+}
+```
+
+**Response Gagal Validasi (422 Unprocessable Entity):**
+```json
+{
+  "status": "error",
+  "message": "Presensi pulang ditolak: ...",
+  "errors": { "attendance": ["Presensi pulang ditolak: ..."] }
+}
+```
+
 ---
 
 ### POST `/api/v1/attendance/keterangan`
@@ -317,13 +346,86 @@ file: [File Binary: surat_dokter.pdf / .jpg / .png]  (atau key "lampiran" / "fot
 Mengambil riwayat presensi individu dengan paginasi server-side dan filter.
 
 **Query Parameters:**
-- `per_page`: int (default: 31, max: 100)
+- `per_page`: int (default: 30, max: 100)
 - `page`: int
-- `month`: int (1-12)
+- `month`: int (1-12, wajib bersama `year`)
 - `year`: int (e.g. 2026)
-- `start_date`: YYYY-MM-DD
+- `start_date`: YYYY-MM-DD (wajib bersama `end_date`)
 - `end_date`: YYYY-MM-DD
 - `status`: hadir | terlambat | izin | sakit | dinas | alfa
+
+> Jika `month`+`year` dikosongkan → data terakhir. Envelope standar: `data` berisi
+> array items, paginasi di `meta` (lihat panduan APK untuk cara parsing toleran).
+
+**Response Sukses (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Riwayat presensi berhasil diambil",
+  "data": [
+    {
+      "id": 123,
+      "tanggal": "2026-10-10",
+      "clock_in": "2026-10-10T00:02:11.000000Z",
+      "clock_out": "2026-10-10T09:30:05.000000Z",
+      "status": "hadir",
+      "late_minutes": 0,
+      "rejection_reason": null,
+      "clock_in_face_score": 0.91,
+      "clock_out_face_score": 0.88,
+      "office_location": { "id": 1, "name": "Kampus Utama" }
+    }
+  ],
+  "meta": { "current_page": 1, "per_page": 30, "total": 31, "last_page": 2 }
+}
+```
+
+### GET `/api/v1/attendance/recap` & `GET /api/simpeg/presensi/recap`
+
+Rekap sebulan untuk tabel `tanggal | scan masuk | terlambat | scan pulang | keterangan`.
+
+**Query Parameters (mobile):**
+- `start_date`: YYYY-MM-DD (diprioritaskan bila diisi bersama `end_date`)
+- `end_date`: YYYY-MM-DD
+- fallback `month` + `year` bila rentang tidak diisi
+
+**Query Parameters (web SIMPEG):** sama, ditambah `pegawai_id` untuk rekap pegawai tertentu.
+
+**Response Sukses (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Rekap presensi berhasil diambil",
+  "data": {
+    "employee": { "id": 5, "employee_code": "1990...", "name": "...", "department": "...", "position": "dosen", "shift_name": "Shift Reguler 5 Hari" },
+    "filter": { "start_date": "2026-10-01", "end_date": "2026-10-31" },
+    "summary": { "total_days": 31, "total_hadir": 20, "total_terlambat": 2, "total_alpa": 1, "total_libur": 8 },
+    "rows": [
+      {
+        "date": "2026-10-10",
+        "tanggal": "10 Okt 2026",
+        "day_name": "Jumat",
+        "scan_masuk": "07:02:11",
+        "terlambat": "-",
+        "scan_pulang": "16:30:05",
+        "keterangan": "-",
+        "status_badge": "hadir"
+      }
+    ]
+  }
+}
+```
+
+> `status_badge`: `hadir | terlambat | alpa | libur_nasional | libur_reguler | izin | sakit | dinas | cuti | ditolak | menunggu_approval | belum_absen`. Kolom `terlambat` memakai format `jam.menit` (mis. `0.16`) atau `-`.
+
+**Response Error (422 Unprocessable Entity)** — rentang tanggal terbalik:
+```json
+{
+  "status": "error",
+  "message": "Tanggal akhir tidak boleh lebih awal dari tanggal awal.",
+  "errors": { "end_date": ["Tanggal akhir tidak boleh lebih awal dari tanggal awal."] }
+}
+```
 
 ---
 
@@ -498,6 +600,10 @@ Idempotent per pasangan (`pegawai_id`, `tanggal`). Data hasil scan (`clock_in`/`
 ```
 
 ### GET `/api/simpeg/presensi/recap` — prioritas keterangan per tanggal
+
+**Query Parameters:** `pegawai_id` (default: pegawai login), `start_date` + `end_date` (diprioritaskan), fallback `month` + `year`.
+
+**Bentuk respons:** `{employee, filter, summary, rows}` — lihat contoh pada bagian `GET /api/v1/attendance/recap` di atas (kunci lama `period` dipertahankan sebagai alias).
 
 1. Ada log presensi → pakai status log (`hadir`, `terlambat`, `ditolak`, `menunggu_approval`, atau `izin`/`sakit`/`dinas`/`alfa` dari input HR).
 2. Tanpa log + tanggal merah → `libur_nasional`.

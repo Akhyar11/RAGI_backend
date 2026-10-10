@@ -12,6 +12,31 @@ use Carbon\CarbonPeriod;
 class AttendanceRecapService
 {
     /**
+     * Nama bulan Indonesia singkat (deterministik, tidak tergantung locale).
+     */
+    private const BULAN_ID = [
+        1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+        7 => 'Jul', 8 => 'Agu', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des',
+    ];
+
+    /**
+     * Nama hari Indonesia (0=Minggu .. 6=Sabtu, mengikuti Carbon::dayOfWeek).
+     */
+    private const HARI_ID = [
+        'Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu',
+    ];
+
+    public static function formatTanggalId(Carbon $date): string
+    {
+        return sprintf('%d %s %d', $date->day, self::BULAN_ID[$date->month], $date->year);
+    }
+
+    public static function namaHariId(int $dayOfWeek): string
+    {
+        return self::HARI_ID[$dayOfWeek] ?? '';
+    }
+
+    /**
      * Menghasilkan rekapan presensi harian per pegawai untuk rentang tanggal tertentu.
      */
     public function generateRecap(Pegawai $employee, Carbon $startDate, Carbon $endDate): array
@@ -56,10 +81,11 @@ class AttendanceRecapService
 
             if ($attendance) {
                 if ($attendance->clock_in) {
-                    $scanMasuk = $attendance->clock_in->format('H:i:s');
+                    // Kolom rekap berupa wall-time WIB (disimpan UTC di DB).
+                    $scanMasuk = $attendance->clock_in->copy()->setTimezone('Asia/Jakarta')->format('H:i:s');
                 }
                 if ($attendance->clock_out) {
-                    $scanPulang = $attendance->clock_out->format('H:i:s');
+                    $scanPulang = $attendance->clock_out->copy()->setTimezone('Asia/Jakarta')->format('H:i:s');
                 }
 
                 if ($attendance->late_minutes && $attendance->late_minutes > 0) {
@@ -116,8 +142,10 @@ class AttendanceRecapService
             }
 
             $recapRows[] = [
-                'tanggal' => $date->format('d/m/Y'),
-                'hari' => $schedule ? $schedule->day_name : $date->translatedFormat('l'),
+                'date' => $dateStr,
+                'tanggal' => self::formatTanggalId($date),
+                'day_name' => self::namaHariId($date->dayOfWeek),
+                'hari' => $schedule ? $schedule->day_name : self::namaHariId($date->dayOfWeek),
                 'scan_masuk' => $scanMasuk,
                 'terlambat' => $terlambat,
                 'scan_pulang' => $scanPulang,
@@ -144,6 +172,42 @@ class AttendanceRecapService
                 'total_cuti' => $totalCuti,
             ],
             'rows' => $recapRows,
+        ];
+    }
+
+    /**
+     * Sajikan rekap ke dalam kontrak frontend (dokumen
+     * BACKEND_FIX_CLOCKOUT_DAN_RIWAYAT §3.2):
+     * `{employee, filter, summary, rows}` dengan kolom tabel
+     * `tanggal | scan_masuk | terlambat | scan_pulang | keterangan`.
+     * Kunci lama (`period`, `hari`) dipertahankan sebagai alias.
+     *
+     * @return array{employee: array, filter: array, summary: array, rows: array, period: array}
+     */
+    public function presentRecap(Pegawai $employee, Carbon $startDate, Carbon $endDate): array
+    {
+        $recap = $this->generateRecap($employee, $startDate, $endDate);
+
+        return [
+            'employee' => [
+                'id' => $employee->id,
+                'employee_code' => $employee->nip,
+                'name' => $employee->nama_lengkap,
+                'department' => $employee->department,
+                'position' => $employee->position,
+                'shift_name' => $employee->shiftTemplate?->name,
+            ],
+            'filter' => [
+                'start_date' => $startDate->toDateString(),
+                'end_date' => $endDate->toDateString(),
+            ],
+            'summary' => array_merge(
+                ['total_days' => $startDate->diffInDays($endDate) + 1],
+                $recap['summary'],
+            ),
+            'rows' => $recap['rows'],
+            // Alias kompatibilitas mundur untuk klien lama.
+            'period' => $recap['period'],
         ];
     }
 

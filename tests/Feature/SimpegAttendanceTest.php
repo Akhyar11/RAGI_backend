@@ -429,13 +429,9 @@ class SimpegAttendanceTest extends TestCase
         $res->assertStatus(200)
             ->assertJson([
                 'status' => 'success',
-                'success' => true,
             ])
             ->assertJsonStructure([
-                'data' => [
-                    'attendances',
-                    'total',
-                ],
+                'data',
                 'meta' => [
                     'current_page',
                     'per_page',
@@ -444,7 +440,7 @@ class SimpegAttendanceTest extends TestCase
                 ],
             ]);
 
-        $this->assertCount(2, $res->json('data.attendances'));
+        $this->assertCount(2, $res->json('data'));
         $this->assertEquals(5, $res->json('meta.total'));
         $this->assertEquals(3, $res->json('meta.last_page'));
     }
@@ -989,6 +985,165 @@ class SimpegAttendanceTest extends TestCase
         $this->assertStringContainsString('Verifikasi wajah berhasil', $message);
         $this->assertStringContainsString('95%', $message);
         $this->assertStringContainsString('Di luar area kantor', $message);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_double_clock_out_is_idempotent_and_returns_duplicate_flag(): void
+    {
+        Carbon::setTestNow('2026-09-15 08:05:00');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+        $headers = ['Authorization' => 'Bearer ' . $token];
+
+        $this->withHeaders($headers)->postJson('/api/v1/attendance/clock-in', [
+            'latitude' => -7.5675,
+            'longitude' => 110.8036,
+            'accuracy' => 15.0,
+            'face_score' => 0.85,
+            'is_mock_location' => false,
+        ])->assertStatus(200);
+
+        Carbon::setTestNow('2026-09-15 17:05:00');
+
+        $payload = [
+            'latitude' => -7.5675,
+            'longitude' => 110.8036,
+            'accuracy' => 12.0,
+            'face_score' => 0.86,
+            'is_mock_location' => false,
+        ];
+
+        $this->withHeaders($headers)->postJson('/api/v1/attendance/clock-out', $payload)
+            ->assertStatus(200)
+            ->assertJson(['status' => 'success']);
+
+        // Request kedua (balapan / double-tap) wajib 200 idempoten, bukan 422.
+        // Klien mengenali kasus duplikat via pesan khusus (envelope murni).
+        $this->withHeaders($headers)->postJson('/api/v1/attendance/clock-out', $payload)
+            ->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'message' => 'Presensi pulang sudah tercatat sebelumnya.',
+            ])
+            ->assertJsonStructure(['data' => ['id', 'clock_out']])
+            ->assertJsonMissing(['duplicate' => true]);
+
+        // Hanya boleh ada 1 record presensi hari itu.
+        $this->assertEquals(1, \App\Models\Attendance::where('pegawai_id', $this->pegawai->id)
+            ->whereDate('tanggal', '2026-09-15')
+            ->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_clock_out_rejection_returns_pure_error_envelope(): void
+    {
+        // Clock-out sesaat setelah clock-in (< jeda minimal) wajib 422
+        // dengan envelope murni {status, message, errors}.
+        Carbon::setTestNow('2026-09-15 08:00:00');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+        $headers = ['Authorization' => 'Bearer ' . $token];
+
+        $this->withHeaders($headers)->postJson('/api/v1/attendance/clock-in', [
+            'latitude' => -7.5675,
+            'longitude' => 110.8036,
+            'accuracy' => 10.0,
+            'face_score' => 0.88,
+        ])->assertStatus(200);
+
+        Carbon::setTestNow('2026-09-15 08:01:00');
+
+        $this->withHeaders($headers)->postJson('/api/v1/attendance/clock-out', [
+            'latitude' => -7.5675,
+            'longitude' => 110.8036,
+            'accuracy' => 10.0,
+            'face_score' => 0.88,
+        ])
+            ->assertStatus(422)
+            ->assertJson(['status' => 'error'])
+            ->assertJsonStructure(['message', 'errors'])
+            ->assertJsonMissing(['success' => false]);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_history_returns_standard_envelope_with_items_array(): void
+    {
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        for ($i = 1; $i <= 3; $i++) {
+            \App\Models\Attendance::create([
+                'pegawai_id' => $this->pegawai->id,
+                'tanggal' => "2026-09-0{$i}",
+                'clock_in' => Carbon::parse("2026-09-0{$i} 08:00:00"),
+                'status' => 'hadir',
+            ]);
+        }
+
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/attendance/history?month=9&year=2026');
+
+        $res->assertStatus(200)
+            ->assertJson(['status' => 'success'])
+            ->assertJsonStructure([
+                'data',
+                'meta' => ['current_page', 'per_page', 'total', 'last_page'],
+            ]);
+
+        $this->assertCount(3, $res->json('data'));
+        $this->assertEquals(3, $res->json('meta.total'));
+    }
+
+    public function test_recap_supports_start_end_date_contract(): void
+    {
+        Carbon::setTestNow('2026-10-10 12:00:00');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        \App\Models\Attendance::create([
+            'pegawai_id' => $this->pegawai->id,
+            'tanggal' => '2026-10-02',
+            'clock_in' => Carbon::parse('2026-10-02 07:02:00'),
+            'clock_out' => Carbon::parse('2026-10-02 16:30:00'),
+            'status' => 'hadir',
+        ]);
+
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/attendance/recap?start_date=2026-10-01&end_date=2026-10-03');
+
+        $res->assertStatus(200)
+            ->assertJson(['status' => 'success'])
+            ->assertJson([
+                'data' => [
+                    'filter' => ['start_date' => '2026-10-01', 'end_date' => '2026-10-03'],
+                    'employee' => ['id' => $this->pegawai->id],
+                ],
+            ])
+            ->assertJsonStructure([
+                'data' => [
+                    'employee' => ['id', 'employee_code', 'name'],
+                    'filter' => ['start_date', 'end_date'],
+                    'summary' => ['total_days', 'total_hadir'],
+                    'rows' => [
+                        '*' => ['date', 'tanggal', 'day_name', 'scan_masuk', 'terlambat', 'scan_pulang', 'keterangan', 'status_badge'],
+                    ],
+                ],
+            ]);
+
+        $this->assertEquals(3, $res->json('data.summary.total_days'));
+        $this->assertCount(3, $res->json('data.rows'));
+
+        // Fallback month&year tetap jalan.
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/attendance/recap?month=10&year=2026')
+            ->assertStatus(200)
+            ->assertJson(['status' => 'success']);
 
         Carbon::setTestNow();
     }

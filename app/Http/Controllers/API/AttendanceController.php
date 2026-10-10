@@ -11,6 +11,7 @@ use App\Services\AttendanceService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class AttendanceController extends Controller
 {
@@ -380,7 +381,34 @@ class AttendanceController extends Controller
 
         $employee = $this->getOrCreateEmployee($request->user());
 
-        $attendance = $this->attendanceService->processClockOut($employee, $validated);
+        try {
+            $attendance = $this->attendanceService->processClockOut($employee, $validated);
+        } catch (ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first()
+                ?? 'Presensi pulang ditolak.';
+
+            // Idempoten: clock-out ganda (balapan 2 request) yang kedua
+            // tetap dianggap sukses bila clock_out SUDAH tercatat, agar
+            // klien tidak menampilkan dialog error di atas dialog sukses.
+            // Klien membedakan kasus ini via HTTP 200 + pesan khusus
+            // (kontrak envelope murni, tanpa flag tambahan).
+            if (str_contains(strtolower($msg), 'sudah melakukan presensi pulang')) {
+                $existing = $this->findRecordedClockOut($employee);
+                if ($existing) {
+                    return response()->json([
+                        'status' => 'success',
+                        'message' => 'Presensi pulang sudah tercatat sebelumnya.',
+                        'data' => $existing,
+                    ]);
+                }
+            }
+
+            return response()->json([
+                'status' => 'error',
+                'message' => $msg,
+                'errors' => $e->errors(),
+            ], 422);
+        }
 
         $message = ($attendance->clock_out && !$attendance->clock_in)
             ? 'Presensi pulang berhasil dicatat (tanpa presensi masuk sebelumnya).'
@@ -391,6 +419,29 @@ class AttendanceController extends Controller
             'message' => $message,
             'data' => $attendance,
         ]);
+    }
+
+    /**
+     * Cari record presensi yang clock_out-nya SUDAH tercatat (hari ini,
+     * fallback ke dinas lintas-hari kemarin yang masih/baru tertutup).
+     */
+    protected function findRecordedClockOut(Pegawai $employee): ?Attendance
+    {
+        $today = Carbon::today()->toDateString();
+
+        $existing = Attendance::where('pegawai_id', $employee->id)
+            ->whereDate('tanggal', $today)
+            ->whereNotNull('clock_out')
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        return Attendance::where('pegawai_id', $employee->id)
+            ->whereDate('tanggal', Carbon::today()->subDay()->toDateString())
+            ->whereNotNull('clock_out')
+            ->first();
     }
 
     /**
@@ -474,13 +525,20 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Riwayat presensi milik karyawan yang sedang login
+     * Riwayat presensi milik karyawan yang sedang login.
+     *
+     * Kontrak: filter bulan via `?month&year` (wajib bersamaan; bila
+     * dikosongkan → data terakhir), atau rentang `?start_date&end_date`.
+     * Envelope standar: `data` berisi array items, paginasi di `meta`.
      */
     public function history(Request $request): JsonResponse
     {
         $employee = $this->getOrCreateEmployee($request->user());
 
-        $query = Attendance::where('pegawai_id', $employee->id)->orderByDesc('tanggal');
+        $query = Attendance::with(['officeLocation', 'employee'])
+            ->where('pegawai_id', $employee->id)
+            ->orderByDesc('tanggal')
+            ->orderByDesc('clock_in');
 
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $query->whereBetween('tanggal', [$request->start_date, $request->end_date]);
@@ -499,17 +557,13 @@ class AttendanceController extends Controller
             });
         }
 
-        $perPage = min(100, max(1, (int) $request->input('per_page', $request->input('limit', 31))));
+        $perPage = min(100, max(1, (int) $request->input('per_page', $request->input('limit', 30))));
         $paginator = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
-            'success' => true,
             'message' => 'Riwayat presensi berhasil diambil',
-            'data' => [
-                'attendances' => $paginator->items(),
-                'total' => $paginator->total(),
-            ],
+            'data' => $paginator->items(),
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'per_page' => $paginator->perPage(),
@@ -522,23 +576,40 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Rekap bulanan untuk karyawan yang login
+     * Rekap sebulan untuk karyawan yang login.
+     *
+     * Kontrak: `GET /api/v1/attendance/recap?start_date=2026-10-01&end_date=2026-10-31`
+     * (fallback `?month&year`). Respons `{employee, filter, summary, rows}`
+     * dengan kolom tabel `tanggal | scan_masuk | terlambat | scan_pulang | keterangan`.
      */
     public function recap(Request $request): JsonResponse
     {
         $employee = $this->getOrCreateEmployee($request->user());
 
-        $month = (int) $request->input('month', Carbon::now()->month);
-        $year = (int) $request->input('year', Carbon::now()->year);
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
+            $endDate = Carbon::parse($request->input('end_date'))->startOfDay();
+            if ($endDate->lessThan($startDate)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tanggal akhir tidak boleh lebih awal dari tanggal awal.',
+                    'errors' => [
+                        'end_date' => ['Tanggal akhir tidak boleh lebih awal dari tanggal awal.'],
+                    ],
+                ], 422);
+            }
+        } else {
+            $month = (int) $request->input('month', Carbon::now()->month);
+            $year = (int) $request->input('year', Carbon::now()->year);
 
-        $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
-        $endDate = $startDate->copy()->endOfMonth();
+            $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+            $endDate = $startDate->copy()->endOfMonth();
+        }
 
-        $recap = $this->recapService->generateRecap($employee, $startDate, $endDate);
+        $recap = $this->recapService->presentRecap($employee, $startDate, $endDate);
 
         return response()->json([
             'status' => 'success',
-            'success' => true,
             'message' => 'Rekap presensi berhasil diambil',
             'data' => $recap,
         ]);
