@@ -1818,17 +1818,27 @@ class ObeController extends Controller
             abort(403, 'Anda tidak memiliki hak akses melihat sesi pertemuan RPS program studi ini.');
         }
 
-        $sesi = \App\Models\Siakad\RpsMingguan::with('subCpmk')
+        $query = \App\Models\Siakad\RpsMingguan::with('subCpmk')
             ->where('rps_id', $rps->id)
-            ->orderBy('minggu_ke')
-            ->get();
+            ->orderBy('minggu_ke');
+
+        $totalBobot = (float) (clone $query)->sum('bobot_penilaian');
+
+        $perPage = min(100, $request->integer('per_page', $request->integer('limit', 16)));
+        $paginated = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Daftar sesi pertemuan RPS berhasil dimuat',
-            'data' => $sesi,
+            'data' => $paginated->items(),
             'meta' => [
-                'total_bobot' => (float) $sesi->sum('bobot_penilaian'),
+                'current_page' => $paginated->currentPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'last_page' => $paginated->lastPage(),
+                'from' => $paginated->firstItem(),
+                'to' => $paginated->lastItem(),
+                'total_bobot' => $totalBobot,
             ],
         ]);
     }
@@ -2242,6 +2252,7 @@ class ObeController extends Controller
         $request->validate([
             'cpmk_id' => 'nullable|exists:siakad_cpmk,id',
             'mata_kuliah_id' => 'nullable|exists:siakad_mata_kuliah,id',
+            'search' => 'nullable|string|max:100',
         ]);
 
         $query = SubCpmk::with('cpmk.mataKuliah')->orderBy('kode_sub_cpmk');
@@ -2250,6 +2261,14 @@ class ObeController extends Controller
         } elseif ($request->filled('mata_kuliah_id')) {
             $query->whereHas('cpmk', function ($q) use ($request) {
                 $q->where('mata_kuliah_id', $request->mata_kuliah_id);
+            });
+        }
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('kode_sub_cpmk', 'like', "%{$s}%")
+                    ->orWhere('deskripsi', 'like', "%{$s}%");
             });
         }
 

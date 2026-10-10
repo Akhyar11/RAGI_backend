@@ -1370,6 +1370,13 @@ satu jalur dijamin berasal dari program studi yang sama.
 |---|---|---|---|
 | `id` | integer | ✅ | ID dokumen RPS |
 
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `page` | integer | ❌ | `1` | Halaman |
+| `per_page` | integer | ❌ | `16` | Maks. 100 |
+
 ### Response Sukses
 
 **200 OK**
@@ -1399,6 +1406,12 @@ satu jalur dijamin berasal dari program studi yang sama.
         }
     ],
     "meta": {
+        "current_page": 1,
+        "per_page": 16,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1,
         "total_bobot": 100.00
     }
 }
@@ -1993,6 +2006,7 @@ Menambahkan opsi jawaban baru untuk soal pilihan ganda. Satu soal hanya boleh pu
 |---|---|---|---|
 | `cpmk_id` | integer | ❌ | Filter berdasarkan ID CPMK mata kuliah (`siakad_cpmk`) |
 | `mata_kuliah_id` | integer | ❌ | Filter berdasarkan ID mata kuliah (`siakad_mata_kuliah`) |
+| `search` | string | ❌ | Cari kode / deskripsi Sub-CPMK |
 
 ### Response Sukses
 
