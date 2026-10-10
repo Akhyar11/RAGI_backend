@@ -20,6 +20,9 @@ class RpsMingguan extends Model
         'jenis_pertemuan',
         'kemampuan_akhir',
         'bahan_kajian',
+        'topik_materi',
+        'sub_topik_materi',
+        'pustaka_ids',
         'bentuk_metode',
         'bentuk_luring',
         'bentuk_daring',
@@ -30,6 +33,7 @@ class RpsMingguan extends Model
         'penugasan_mahasiswa',
         'indikator_penilaian',
         'kriteria_penilaian_id',
+        'rubrik_id',
         'teknik_penilaian',
         'kriteria_teknik',
         'bobot_penilaian',
@@ -37,6 +41,7 @@ class RpsMingguan extends Model
 
     protected $casts = [
         'sub_cpmk_ids' => 'array',
+        'pustaka_ids' => 'array',
         'aktivitas_luring' => 'array',
         'aktivitas_daring' => 'array',
         'bobot_penilaian' => 'decimal:2',
@@ -60,5 +65,10 @@ class RpsMingguan extends Model
     public function kriteriaPenilaian()
     {
         return $this->belongsTo(RpsReferensi::class, 'kriteria_penilaian_id');
+    }
+
+    public function rubrik()
+    {
+        return $this->belongsTo(ObeRubrik::class, 'rubrik_id');
     }
 }

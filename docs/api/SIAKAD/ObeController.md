@@ -1474,6 +1474,10 @@ satu jalur dijamin berasal dari program studi yang sama.
 | `komponen_evaluasi_id` | integer | ❌ | ID komponen evaluasi (`exists:siakad_rps_referensi,id`) |
 | `kriteria_penilaian_id` | integer | ❌ | ID kriteria penilaian (`exists:siakad_rps_referensi,id`) |
 | `teknik_penilaian` | string | ❌ | Uraian teknik penilaian |
+| `topik_materi` | string | ❌ | Topik materi pembelajaran |
+| `sub_topik_materi` | string | ❌ | Sub topik materi pembelajaran |
+| `pustaka_ids` | array | ❌ | Array ID referensi pustaka yang diacu |
+| `rubrik_id` | integer | ❌ | ID instrumen rubrik penilaian (`exists:siakad_obe_rubrik,id`) |
 | `kemampuan_akhir` | string | ❌ | Kemampuan akhir tahapan belajar (Sub-CPMK) |
 | `bahan_kajian` | string | ❌ | Materi pembelajaran |
 | `bentuk_metode` | string | ❌ | Bentuk/metode ringkas, maks. 255 |
