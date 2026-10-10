@@ -4,16 +4,16 @@
 > **Base URL**: `/api/v1/sikeu/pengajuan-operasional`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-25  
-> **Diperbarui**: 2026-10-06    
+> **Diperbarui**: 2026-10-11    
 
 ## Daftar Endpoint
 
 | Method | Endpoint | Fungsi | Auth / Permission |
 |---|---|---|---|
-| GET | `/api/v1/sikeu/pengajuan-operasional` | Daftar pengajuan operasional & panjar dinas (filter tab SINAPRA vs SIMPEG) | ✅ Sanctum |
-| GET | `/api/v1/sikeu/pengajuan-operasional/{id}` | Detail rincian pengajuan operasional / panjar | ✅ Sanctum |
+| GET | `/api/v1/sikeu/pengajuan-operasional` | Daftar antrean terpadu (filter `sumber`, `tab`, `kategori`, `status`) | ✅ Sanctum |
+| GET | `/api/v1/sikeu/pengajuan-operasional/{id}` | Detail rincian (termasuk rincian pegawai batch gaji + jurnal) | ✅ Sanctum |
 | POST | `/api/v1/sikeu/pengajuan-operasional` | Membuat pengajuan operasional baru | ✅ Sanctum |
-| POST | `/api/v1/sikeu/pengajuan-operasional/{id}/approve` | Persetujuan berjenjang pengajuan operasional barang/non-barang | ✅ Sanctum |
+| POST | `/api/v1/sikeu/pengajuan-operasional/{id}/approve` | Persetujuan berjenjang (termasuk batch gaji; reject batch gaji mengembalikan slip ke draft) | ✅ Sanctum |
 | POST | `/api/v1/sikeu/pengajuan-operasional/{id}/setujui-panjar-simpeg` | Penetapan kas pembayar & nominal panjar dinas SIMPEG (Tahap 3) | ✅ Sanctum |
 | POST | `/api/v1/sikeu/pengajuan-operasional/{id}/pencairan` | Pencairan kas & upload resi/bukti bayar panjar (Tahap 5) | ✅ Sanctum |
 | POST | `/api/v1/sikeu/pengajuan-operasional/{id}/lpj` | Pengunggahan LPJ operasional sarpras (boleh defisit sebagai dasar reimbursement) | ✅ Sanctum |
@@ -23,6 +23,47 @@
 | GET | `/api/v1/sikeu/referensi/fakultas` | Referensi fakultas | ✅ Sanctum |
 | GET | `/api/v1/sikeu/referensi/ruangan` | Referensi ruangan | ✅ Sanctum |
 | GET | `/api/v1/sikeu/referensi/kategori-pengajuan` | Referensi kategori pengajuan operasional | ✅ Sanctum |
+
+---
+
+## Antrean Terpadu & Batch Gaji (trial 2026-10-11)
+
+Satu tabel `sikeu_pengajuan_pencairan_kas` menampung banyak sumber dokumen (`sumber_type`/`sumber_id`, unique). Sumber baru = badge + renderer baru, bukan tab/endpoint baru.
+
+| Sumber | `sumber_type` | `sumber_id` | Pembuat |
+|---|---|---|---|
+| Batch gaji SIMPEG | `gaji_simpeg` | periode `YYYY-MM` | `POST /api/simpeg/payroll/submit-to-sikeu` (idempoten) |
+
+Batch gaji: `jenis_pengajuan = lainnya`, `kategori = non_barang`, status awal `pending_keuangan` (langsung keuangan, tanpa sarpras/LPJ). Rincian per pegawai di `sikeu_pengajuan_item.gaji_pegawai_id`. Alur: approve keuangan → direktur → `disetujui` → `pencairan` (wajib `unit_kas_id`): kas didebet sekali sebesar total bersih, jurnal akrual `JRN-GAJI` (`jenis_sumber = pengeluaran_manual`) diterbitkan per pegawai via `JurnalSikeuService::jurnalGajiPegawai` (Dr 501.01/501.02, Cr kas bersih + 202.01 + 201.01), slip ditandai `paid`. Reject batch mengembalikan slip ke `draft` agar bisa dikoreksi dan diajukan ulang.
+
+### Headers (semua endpoint batch)
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ (POST) |
+
+### GET /api/v1/sikeu/pengajuan-operasional?sumber=gaji_simpeg
+
+**Response Sukses (200 OK):** envelope standar `{status, message, data[], meta, filters}`; tiap baris memuat `sumber_type`, `sumber_id`, `nomor_pengajuan` (`GAJI-YYYYMM-XXXX`), `nominal_diajukan` (total bersih), `status`.
+
+### Response Error
+
+**403 Forbidden** (tanpa permission `simpeg.payroll.create`/`manage` saat submit)
+```json
+{ "status": "error", "message": "Anda tidak memiliki hak akses (permission) untuk mengajukan payroll ke SIKEU." }
+```
+
+**404 Not Found** (ID batch tidak ada saat approve/pencairan)
+```json
+{ "status": "error", "message": "No query results for model [App\\Models\\Sikeu\\PengajuanPencairanKas]." }
+```
+
+**422 Unprocessable Entity** (tidak ada slip draft / nominal cair ≠ total bersih / kas belum dipilih / saldo kurang)
+```json
+{ "status": "error", "message": "Tidak ada slip gaji draft periode 2026-10 untuk diajukan." }
+```
 
 ---
 

@@ -11,6 +11,12 @@ class PengajuanPencairanKas extends Model
 
     protected $table = 'sikeu_pengajuan_pencairan_kas';
 
+    /**
+     * Penanda sumber dokumen untuk antrean terpadu (satu tabel, banyak sumber).
+     * Sumber baru = badge + renderer baru, bukan tab/endpoint baru.
+     */
+    public const SUMBER_GAJI_SIMPEG = 'gaji_simpeg';
+
     protected $fillable = [
         'nomor_pengajuan',
         'unit_kerja_id',
@@ -30,6 +36,8 @@ class PengajuanPencairanKas extends Model
         'sisa_nominal',
         'jenis_pengajuan',
         'kategori_pengajuan',
+        'sumber_type',
+        'sumber_id',
         'file_lampiran',
         'status',
         'approved_sarpras_by',

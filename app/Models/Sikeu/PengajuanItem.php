@@ -13,6 +13,7 @@ class PengajuanItem extends Model
 
     protected $fillable = [
         'pengajuan_id',
+        'gaji_pegawai_id',
         'nama_barang',
         'qty',
         'satuan',
@@ -26,6 +27,11 @@ class PengajuanItem extends Model
         'harga_satuan' => 'decimal:2',
         'subtotal' => 'decimal:2',
     ];
+
+    public function gajiPegawai()
+    {
+        return $this->belongsTo(\App\Models\Simpeg\GajiPegawai::class, 'gaji_pegawai_id');
+    }
 
     public function pengajuan()
     {

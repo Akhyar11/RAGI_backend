@@ -31,6 +31,10 @@ class JurnalSikeuService
     public const AKUN_BEBAN_OPERASIONAL = '502.01';
     public const AKUN_KAS_TUNAI = '101.01';
     public const AKUN_KAS_BANK = '102.01';
+    public const AKUN_BEBAN_GAJI = '501.01';
+    public const AKUN_BEBAN_TUNJANGAN_SDM = '501.02';
+    public const AKUN_UTANG_PPH21 = '202.01';
+    public const AKUN_UTANG_POTONGAN = '201.01';
 
     /**
      * Prefix nomor jurnal per jenis, dapat dikonfigurasi kampus via
@@ -48,6 +52,7 @@ class JurnalSikeuService
         'pemasukan' => 'JRN-INC',
         'pengeluaran' => 'JRN-EXP',
         'reimbursement' => 'JRN-RMB',
+        'penggajian' => 'JRN-GAJI',
         'penyusutan' => 'JRN-DEP',
         'manual' => 'JRN-',
     ];
@@ -427,6 +432,68 @@ class JurnalSikeuService
 
         self::baris($jurnal, $akunBeban->id, $nominal, 0, "Beban reimbursement: {$keterangan}");
         self::baris($jurnal, $akunKas->id, 0, $nominal, "Kas keluar reimbursement: {$keterangan}");
+
+        return $jurnal;
+    }
+
+    /**
+     * Jurnal penggajian satu pegawai (dipakai saat pencairan batch gaji):
+     *   Dr Beban Gaji & Honorarium (501.01) sebesar pokok + honor SKS
+     *   Dr Beban Tunjangan & Insentif SDM (501.02) sebesar tunjangan non-honor
+     *   Cr Kas/Bank unit kas pencair sebesar gaji bersih
+     *   Cr Utang PPh 21 (202.01) sebesar potongan pajak
+     *   Cr Utang Potongan (201.01) sebesar potongan non-pajak
+     * Akun wajib ada di COA — gagal eksplisit bila hilang (dilarang silent-skip).
+     */
+    public static function jurnalGajiPegawai(\App\Models\Simpeg\GajiPegawai $gaji, ?UnitKas $unitKas = null): JurnalUmum
+    {
+        $pokok = (float) $gaji->gaji_pokok;
+        $honor = (float) ($gaji->total_honor_sks ?? 0);
+        $tunjanganLain = max(0, (float) ($gaji->total_tunjangan ?? 0) - $honor);
+        $bersih = (float) $gaji->gaji_bersih;
+        $pph21 = (float) ($gaji->total_pph21 ?? 0);
+        $nonPajak = max(0, (float) ($gaji->total_potongan ?? 0) - $pph21);
+        $bebanGaji = $pokok + $honor;
+
+        $totalDebet = $bebanGaji + $tunjanganLain;
+        $totalKredit = $bersih + $pph21 + $nonPajak;
+        if ($totalDebet <= 0) {
+            throw new \RuntimeException("Slip gaji ID #{$gaji->id} bernilai nol, jurnal dibatalkan.");
+        }
+        if (abs($totalDebet - $totalKredit) > 0.01) {
+            throw new \RuntimeException("Jurnal gaji ID #{$gaji->id} tidak seimbang (D: {$totalDebet}, K: {$totalKredit}). Periksa kalkulasi payroll.");
+        }
+
+        $akunBebanGaji = AkunKeuangan::where('kode_akun', self::AKUN_BEBAN_GAJI)->first()
+            ?? throw new \RuntimeException('Akun Beban Gaji (501.01) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.');
+        $akunBebanTunjangan = AkunKeuangan::where('kode_akun', self::AKUN_BEBAN_TUNJANGAN_SDM)->first()
+            ?? throw new \RuntimeException('Akun Beban Tunjangan (501.02) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.');
+        $akunKas = self::akunKasUnit($unitKas, self::AKUN_KAS_BANK);
+        $akunPajak = AkunKeuangan::where('kode_akun', self::AKUN_UTANG_PPH21)->first()
+            ?? throw new \RuntimeException('Akun Utang PPh 21 (202.01) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.');
+        $akunPotongan = AkunKeuangan::where('kode_akun', self::AKUN_UTANG_POTONGAN)->first()
+            ?? throw new \RuntimeException('Akun Utang Potongan (201.01) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.');
+
+        $nama = $gaji->pegawai?->nama_lengkap ?? "Pegawai #{$gaji->pegawai_id}";
+        $keterangan = "Penggajian {$gaji->periode_bulan_tahun} — {$nama}";
+
+        // jenis_sumber memakai nilai baku 'pengeluaran_manual' (CHECK constraint
+        // tabel jurnal); identitas batch gaji terlihat dari prefix JRN-GAJI.
+        $jurnal = self::header(self::prefix('penggajian'), 'pengeluaran_manual', $gaji->id, $keterangan, $totalDebet);
+
+        self::baris($jurnal, $akunBebanGaji->id, $bebanGaji, 0, "Beban gaji pokok & honor: {$keterangan}");
+        if ($tunjanganLain > 0) {
+            self::baris($jurnal, $akunBebanTunjangan->id, $tunjanganLain, 0, "Beban tunjangan: {$keterangan}");
+        }
+        if ($bersih > 0) {
+            self::baris($jurnal, $akunKas->id, 0, $bersih, "Kas keluar gaji bersih: {$keterangan}");
+        }
+        if ($pph21 > 0) {
+            self::baris($jurnal, $akunPajak->id, 0, $pph21, "Utang PPh 21: {$keterangan}");
+        }
+        if ($nonPajak > 0) {
+            self::baris($jurnal, $akunPotongan->id, 0, $nonPajak, "Utang potongan: {$keterangan}");
+        }
 
         return $jurnal;
     }

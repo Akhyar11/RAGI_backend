@@ -65,6 +65,10 @@ class PengajuanOperasionalController extends Controller
         if ($request->filled('kategori') && $request->kategori !== 'all') {
             $query->where('kategori_pengajuan', $request->kategori);
         }
+        // Antrean terpadu: saring berdasarkan sumber dokumen (mis. gaji_simpeg).
+        if ($request->filled('sumber') && $request->sumber !== 'all') {
+            $query->where('sumber_type', $request->sumber);
+        }
         if ($request->filled('jenis_pengajuan') && $request->jenis_pengajuan !== 'all') {
             $query->where('jenis_pengajuan', $request->jenis_pengajuan);
         }
@@ -145,16 +149,22 @@ class PengajuanOperasionalController extends Controller
      */
     public function show($id)
     {
-        $item = PengajuanPencairanKas::with(['items', 'fakultas', 'ruangan', 'unitKas', 'historyApproval', 'lpj.details', 'parent', 'reimbursements.unitKas'])->findOrFail($id);
+        $item = PengajuanPencairanKas::with(['items', 'items.gajiPegawai.pegawai', 'fakultas', 'ruangan', 'unitKas', 'historyApproval', 'lpj.details', 'parent', 'reimbursements.unitKas'])->findOrFail($id);
 
         // Ref akuntansi: semua jurnal yang merujuk pengajuan ini maupun
-        // anak reimbursement-nya (pencairan JRN-EXP + reimbursement JRN-RMB + realisasi).
+        // anak reimbursement-nya (pencairan JRN-EXP + reimbursement JRN-RMB + realisasi + penggajian JRN-GAJI).
         $refIds = array_merge([$item->id], $item->reimbursements->pluck('id')->all());
         $jurnal = \App\Models\Sikeu\JurnalUmum::with(['details.akun'])
             ->whereIn('jenis_sumber', ['pencairan_kas', 'reimbursement'])
             ->whereIn('referensi_id', $refIds)
             ->orderBy('id', 'asc')
             ->get();
+        $jurnalGajiIds = $item->items->pluck('gajiPegawai.jurnal_id')->filter()->all();
+        if (!empty($jurnalGajiIds)) {
+            $jurnal = $jurnal->concat(
+                \App\Models\Sikeu\JurnalUmum::with(['details.akun'])->whereIn('id', $jurnalGajiIds)->orderBy('id', 'asc')->get()
+            );
+        }
         $item->setRelation('jurnal', $jurnal);
 
         return response()->json(['status' => 'success', 'data' => $item]);

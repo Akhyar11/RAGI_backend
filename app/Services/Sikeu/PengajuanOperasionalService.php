@@ -9,6 +9,7 @@ use App\Models\Sikeu\PengajuanItem;
 use App\Models\Sikeu\PengajuanPencairanKas;
 use App\Models\Sikeu\TransaksiKasUnit;
 use App\Models\Sikeu\UnitKas;
+use App\Models\Simpeg\GajiPegawai;
 use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -110,6 +111,170 @@ class PengajuanOperasionalService
     }
 
     /**
+     * Batch penggajian SIMPEG → satu dokumen antrean terpadu (trial).
+     * Idempoten per periode via unique (sumber_type, sumber_id): pengajuan ulang
+     * menyinkronkan ulang rincian + nominal, bukan membuat dokumen ganda.
+     * Rute non-barang: pending_keuangan -> pending_direktur -> disetujui.
+     */
+    public function buatBatchGaji(string $periode, ?Request $request = null): PengajuanPencairanKas
+    {
+        if (!preg_match('/^\d{4}-\d{2}$/', $periode)) {
+            throw new \InvalidArgumentException('Format periode harus YYYY-MM.');
+        }
+
+        $pengajuan = DB::transaction(function () use ($periode) {
+            $rows = GajiPegawai::with('pegawai')
+                ->where('periode_bulan_tahun', $periode)
+                ->whereIn('status_transfer', ['draft', 'cancelled'])
+                ->lockForUpdate()
+                ->orderBy('pegawai_id')
+                ->get();
+
+            if ($rows->isEmpty()) {
+                throw new \InvalidArgumentException("Tidak ada slip gaji draft periode {$periode} untuk diajukan.");
+            }
+
+            $total = (float) $rows->sum('gaji_bersih');
+            if ($total <= 0) {
+                throw new \InvalidArgumentException("Total gaji bersih periode {$periode} nol, batch dibatalkan.");
+            }
+
+            $batch = PengajuanPencairanKas::firstOrNew([
+                'sumber_type' => PengajuanPencairanKas::SUMBER_GAJI_SIMPEG,
+                'sumber_id' => $periode,
+            ]);
+            if (!$batch->exists) {
+                $batch->nomor_pengajuan = 'GAJI-' . str_replace('-', '', $periode) . '-' . strtoupper(Str::random(4));
+                $batch->judul_pengajuan = "Penggajian Pegawai Periode {$periode}";
+                $batch->jenis_pengajuan = 'lainnya';
+                $batch->kategori_pengajuan = 'non_barang';
+                $batch->pemohon_id = auth()->id();
+            }
+            $batch->deskripsi = "Batch penggajian SIMPEG periode {$periode} ({$rows->count()} pegawai). Rincian per pegawai pada items.";
+            $batch->nominal_diajukan = $total;
+            $batch->nominal_disetujui = 0;
+            $batch->status = 'pending_keuangan';
+            $batch->catatan_penolakan = null;
+            $batch->save();
+
+            // Susun ulang rincian per pegawai agar pengajuan ulang selalu sinkron.
+            PengajuanItem::where('pengajuan_id', $batch->id)->delete();
+            foreach ($rows as $gaji) {
+                $nama = $gaji->pegawai?->nama_lengkap ?? "Pegawai #{$gaji->pegawai_id}";
+                $nip = $gaji->pegawai?->nip ?? '-';
+                PengajuanItem::create([
+                    'pengajuan_id' => $batch->id,
+                    'gaji_pegawai_id' => $gaji->id,
+                    'nama_barang' => "{$nama} ({$nip})",
+                    'qty' => 1,
+                    'satuan' => 'orang',
+                    'harga_satuan' => (float) $gaji->gaji_bersih,
+                    'subtotal' => (float) $gaji->gaji_bersih,
+                    'keterangan' => "Slip #{$gaji->id} periode {$periode}",
+                ]);
+                $gaji->update([
+                    'status_transfer' => 'submitted_to_sikeu',
+                    'submitted_at' => now(),
+                ]);
+            }
+
+            return $batch->fresh(['items', 'unitKas']);
+        });
+
+        if ($request) {
+            try {
+                AuditLogService::record(
+                    module: 'SIKEU',
+                    action: 'create',
+                    tableName: 'sikeu_pengajuan_pencairan_kas',
+                    recordId: $pengajuan->id,
+                    newValues: ['sumber_type' => $pengajuan->sumber_type, 'sumber_id' => $pengajuan->sumber_id, 'nominal' => (float) $pengajuan->nominal_diajukan],
+                    request: $request,
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('AuditLog batch gaji dilewati: ' . $e->getMessage());
+            }
+        }
+
+        return $pengajuan->load(['items.gajiPegawai.pegawai', 'unitKas']);
+    }
+
+    /**
+     * Pencairan batch gaji: kas didebet sekali (total bersih), jurnal akrual
+     * diterbitkan per pegawai via JurnalSikeuService, slip ditandai paid.
+     */
+    protected function cairkanBatchGaji(PengajuanPencairanKas $pengajuan, array $data, ?Request $request = null): PengajuanPencairanKas
+    {
+        $unitKas = UnitKas::find((int) ($data['unit_kas_id'] ?? $pengajuan->unit_kas_id ?? 0));
+        if (!$unitKas || !$unitKas->status) {
+            throw new \InvalidArgumentException('Pilih unit kas sumber dana yang aktif untuk pencairan gaji.');
+        }
+
+        $items = PengajuanItem::with('gajiPegawai.pegawai')
+            ->where('pengajuan_id', $pengajuan->id)
+            ->whereNotNull('gaji_pegawai_id')
+            ->get();
+        if ($items->isEmpty()) {
+            throw new \RuntimeException('Batch gaji tidak memiliki rincian pegawai.');
+        }
+
+        $total = (float) $items->sum('subtotal');
+        $nominal = (float) ($data['nominal_cair'] ?? $pengajuan->nominal_disetujui);
+        if (abs($nominal - $total) > 0.01) {
+            throw new \InvalidArgumentException('Nominal cair batch gaji harus sama dengan total gaji bersih.');
+        }
+
+        $saldoSebelum = (float) $unitKas->saldo_saat_ini;
+        if ($nominal > $saldoSebelum) {
+            throw ValidationException::withMessages([
+                'nominal' => ['Saldo unit kas tidak mencukupi untuk pencairan gaji ini.'],
+            ]);
+        }
+        $unitKas->decrement('saldo_saat_ini', $nominal);
+
+        TransaksiKasUnit::create([
+            'unit_kas_id' => $unitKas->id,
+            'pengajuan_pencairan_id' => $pengajuan->id,
+            'kode_transaksi' => 'CAIR-' . date('Ymd') . '-' . strtoupper(Str::random(4)),
+            'jenis_transaksi' => 'kredit_pengeluaran',
+            'nominal' => $nominal,
+            'saldo_sebelum' => $saldoSebelum,
+            'saldo_sesudah' => $saldoSebelum - $nominal,
+            'keterangan' => 'Pencairan batch gaji: ' . $pengajuan->nomor_pengajuan,
+            'tanggal_transaksi' => $data['tanggal_pencairan'] ?? now()->toDateString(),
+        ]);
+
+        $buktiPath = $pengajuan->bukti_pencairan_path;
+        if ($request && $request->hasFile('bukti_pencairan')) {
+            $buktiPath = $this->simpanFile($request->file('bukti_pencairan'), 'sikeu/pencairan_gaji');
+        }
+
+        foreach ($items as $item) {
+            $gaji = $item->gajiPegawai;
+            if (!$gaji || $gaji->status_transfer === 'paid') {
+                continue;
+            }
+            $jurnal = \App\Services\Sikeu\JurnalSikeuService::jurnalGajiPegawai($gaji, $unitKas);
+            $gaji->update([
+                'status_transfer' => 'paid',
+                'tanggal_transfer' => $data['tanggal_pencairan'] ?? now()->toDateString(),
+                'jurnal_id' => $jurnal->id,
+            ]);
+        }
+
+        $pengajuan->update([
+            'unit_kas_id' => $unitKas->id,
+            'status' => 'dicairkan',
+            'tanggal_pencairan' => $data['tanggal_pencairan'] ?? now()->toDateString(),
+            'bukti_pencairan_path' => $buktiPath,
+            'kanal' => $pengajuan->kanal ?? $unitKas?->kanal,
+            'referensi_eksternal' => $data['referensi_eksternal'] ?? $pengajuan->referensi_eksternal,
+        ]);
+
+        return $pengajuan->fresh(['items.gajiPegawai.pegawai', 'unitKas']);
+    }
+
+    /**
      * Approval bertahap. Urutan barang: pending_sarpras -> pending_keuangan -> pending_direktur -> disetujui.
      * Non-barang: pending_keuangan -> pending_direktur -> disetujui.
      */
@@ -144,6 +309,20 @@ class PengajuanOperasionalService
                     'status' => 'ditolak',
                     'catatan_penolakan' => $catatan,
                 ]);
+                // Batch gaji yang ditolak: kembalikan slip ke draft agar SIMPEG
+                // bisa koreksi lalu mengajukan ulang periode yang sama.
+                if ($pengajuan->sumber_type === PengajuanPencairanKas::SUMBER_GAJI_SIMPEG) {
+                    $gajiIds = PengajuanItem::where('pengajuan_id', $pengajuan->id)
+                        ->whereNotNull('gaji_pegawai_id')
+                        ->pluck('gaji_pegawai_id')
+                        ->all();
+                    if (!empty($gajiIds)) {
+                        GajiPegawai::whereIn('id', $gajiIds)->update([
+                            'status_transfer' => 'draft',
+                            'submitted_at' => null,
+                        ]);
+                    }
+                }
             } else {
                 if ($tahapSaatIni === 'pending_sarpras') {
                     $pengajuan->update([
@@ -198,6 +377,11 @@ class PengajuanOperasionalService
         $pengajuan = DB::transaction(function () use ($pengajuan, $data, $request) {
             if ($pengajuan->status !== 'disetujui') {
                 throw new \RuntimeException('Pencairan hanya untuk pengajuan berstatus disetujui.');
+            }
+
+            // Batch gaji: satu kas keluar + jurnal akrual per pegawai (tanpa jurnal operasional umum).
+            if ($pengajuan->sumber_type === PengajuanPencairanKas::SUMBER_GAJI_SIMPEG) {
+                return $this->cairkanBatchGaji($pengajuan, $data, $request);
             }
 
             $nominal = (float) ($data['nominal_cair'] ?? $pengajuan->nominal_disetujui);

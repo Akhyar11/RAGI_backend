@@ -301,7 +301,7 @@ Modul ini mengelola siklus penggajian fleksibel terintegrasi: Master Komponen Ga
 
 ## 4. POST /api/simpeg/payroll/submit-to-sikeu
 
-> Mengajukan rekapan payroll satu periode ke modul SIKEU untuk diproses pencairannya.
+> Mengajukan payroll satu periode ke antrean terpadu SIKEU sebagai SATU dokumen batch (`sumber_type = gaji_simpeg`, idempoten per periode). SIKEU tinggal verifikasi → setujui → cairkan; tanpa input ulang. Pengajuan ulang menyinkronkan ulang rincian + nominal.
 
 ### Headers
 
@@ -315,7 +315,7 @@ Modul ini mengelola siklus penggajian fleksibel terintegrasi: Master Komponen Ga
 
 | Field | Type | Required | Validasi | Deskripsi |
 |---|---|---|---|---|
-| `periode` | string | ✅ | `required|string` | Periode payroll format `YYYY-MM` |
+| `periode` | string | ✅ | `required|string|regex:/^\d{4}-\d{2}$/` | Periode payroll format `YYYY-MM` |
 
 ```json
 {
@@ -328,7 +328,15 @@ Modul ini mengelola siklus penggajian fleksibel terintegrasi: Master Komponen Ga
 ```json
 {
     "status": "success",
-    "message": "Pengajuan payroll periode 2026-09 (1 pegawai) berhasil dikirimkan ke modul SIKEU untuk proses pembayaran!"
+    "message": "Pengajuan payroll periode 2026-09 (2 pegawai, 15.300.000) masuk antrean SIKEU sebagai GAJI-202609-XXXX.",
+    "data": {
+        "id": 12,
+        "nomor_pengajuan": "GAJI-202609-XXXX",
+        "sumber_type": "gaji_simpeg",
+        "sumber_id": "2026-09",
+        "nominal_diajukan": 15300000,
+        "status": "pending_keuangan"
+    }
 }
 ```
 

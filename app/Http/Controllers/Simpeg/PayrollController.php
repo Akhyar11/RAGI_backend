@@ -186,9 +186,11 @@ class PayrollController extends Controller
 
     /**
      * POST /api/simpeg/payroll/submit-to-sikeu
-     * Kirim pengajuan payroll satu periode ke Modul SIKEU
+     * Kirim pengajuan payroll satu periode ke Modul SIKEU sebagai SATU dokumen
+     * batch antrean terpadu (idempoten per periode). SIKEU tinggal
+     * verifikasi → setujui → cairkan; tanpa input ulang.
      */
-    public function submitToSikeu(Request $request): JsonResponse
+    public function submitToSikeu(Request $request, \App\Services\Sikeu\PengajuanOperasionalService $batchService): JsonResponse
     {
         $user = $request->user();
         if (!$user->hasPermission('simpeg.payroll.create') && !$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
@@ -199,19 +201,22 @@ class PayrollController extends Controller
         }
 
         $validated = $request->validate([
-            'periode' => 'required|string',
+            'periode' => 'required|string|regex:/^\d{4}-\d{2}$/',
         ]);
 
-        $updatedCount = GajiPegawai::where('periode_bulan_tahun', $validated['periode'])
-            ->whereIn('status_transfer', ['draft', 'cancelled'])
-            ->update([
-                'status_transfer' => 'submitted_to_sikeu',
-                'submitted_at' => now(),
-            ]);
+        try {
+            $batch = $batchService->buatBatchGaji($validated['periode'], $request);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
 
         return response()->json([
             'status' => 'success',
-            'message' => "Pengajuan payroll periode {$validated['periode']} ({$updatedCount} pegawai) berhasil dikirimkan ke modul SIKEU untuk proses pembayaran!",
+            'message' => "Pengajuan payroll periode {$validated['periode']} ({$batch->items->count()} pegawai, " . number_format((float) $batch->nominal_diajukan, 0, ',', '.') . ") masuk antrean SIKEU sebagai {$batch->nomor_pengajuan}.",
+            'data' => $batch,
         ]);
     }
 
