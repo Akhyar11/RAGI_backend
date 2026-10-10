@@ -35,9 +35,11 @@ class PengajuanOperasionalController extends Controller
             if ($request->tab === 'simpeg') {
                 $query->where('kanal', 'simpeg_surat_tugas');
             } elseif ($request->tab === 'operasional') {
+                // Tab operasional murni: tanpa panjar dinas DAN tanpa batch sumber
+                // (batch gaji dkk. lewat filter `sumber` / antrean terpadu).
                 $query->where(function ($q) {
                     $q->whereNull('kanal')->orWhere('kanal', '!=', 'simpeg_surat_tugas');
-                });
+                })->whereNull('sumber_type');
             }
         }
 

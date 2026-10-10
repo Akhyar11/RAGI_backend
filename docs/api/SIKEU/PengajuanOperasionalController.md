@@ -10,7 +10,7 @@
 
 | Method | Endpoint | Fungsi | Auth / Permission |
 |---|---|---|---|
-| GET | `/api/v1/sikeu/pengajuan-operasional` | Daftar antrean terpadu (filter `sumber`, `tab`, `kategori`, `status`) | ✅ Sanctum |
+| GET | `/api/v1/sikeu/pengajuan-operasional` | Daftar antrean terpadu (filter `sumber`, `tab`, `kategori`, `status`; `tab=operasional` murni tanpa batch bersumber) | ✅ Sanctum |
 | GET | `/api/v1/sikeu/pengajuan-operasional/{id}` | Detail rincian (termasuk rincian pegawai batch gaji + jurnal) | ✅ Sanctum |
 | POST | `/api/v1/sikeu/pengajuan-operasional` | Membuat pengajuan operasional baru | ✅ Sanctum |
 | POST | `/api/v1/sikeu/pengajuan-operasional/{id}/approve` | Persetujuan berjenjang (termasuk batch gaji; reject batch gaji mengembalikan slip ke draft) | ✅ Sanctum |

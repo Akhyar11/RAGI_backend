@@ -165,4 +165,19 @@ class SikeuPengajuanGajiBatchTest extends TestCase
             $this->assertEquals('gaji_simpeg', $row['sumber_type']);
         }
     }
+
+    public function test_tab_operasional_tidak_menampilkan_batch_gaji(): void
+    {
+        $this->actingAs($this->admin, 'api')->postJson('/api/simpeg/payroll/submit-to-sikeu', ['periode' => '2026-10'])->assertStatus(200);
+
+        // Antrean tanpa filter tetap memuat batch (unified queue).
+        $all = $this->actingAs($this->admin, 'api')->getJson('/api/v1/sikeu/pengajuan-operasional');
+        $all->assertStatus(200);
+        $this->assertNotEmpty(collect($all->json('data'))->where('sumber_type', 'gaji_simpeg')->all());
+
+        // Tab operasional murni menyembunyikan batch bersumber.
+        $ops = $this->actingAs($this->admin, 'api')->getJson('/api/v1/sikeu/pengajuan-operasional?tab=operasional');
+        $ops->assertStatus(200);
+        $this->assertEmpty(collect($ops->json('data'))->where('sumber_type', 'gaji_simpeg')->all());
+    }
 }
