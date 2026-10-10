@@ -1468,7 +1468,9 @@ satu jalur dijamin berasal dari program studi yang sama.
 |---|---|---|---|
 | `id` | integer | ❌ | ID sesi bila operasi update (`exists:siakad_rps_mingguan,id`) |
 | `minggu_ke` | integer | ✅ | Pertemuan ke 1–16 |
-| `sub_cpmk_id` | integer | ❌ | `exists:siakad_sub_cpmk,id` |
+| `jenis_pertemuan` | string | ❌ | Jenis pertemuan (Teori / Praktikum / referensi Jenis Pembelajaran) |
+| `sub_cpmk_id` | integer | ❌ | ID Sub-CPMK utama (`exists:siakad_sub_cpmk,id`) |
+| `sub_cpmk_ids` | array | ❌ | Array ID Sub-CPMK jika memilih lebih dari satu |
 | `kemampuan_akhir` | string | ❌ | Kemampuan akhir tahapan belajar (Sub-CPMK) |
 | `bahan_kajian` | string | ❌ | Materi pembelajaran |
 | `bentuk_metode` | string | ❌ | Bentuk/metode ringkas, maks. 255 |
@@ -1484,7 +1486,8 @@ satu jalur dijamin berasal dari program studi yang sama.
 ```json
 {
     "minggu_ke": 1,
-    "sub_cpmk_id": 100,
+    "jenis_pertemuan": "Teori",
+    "sub_cpmk_ids": [100, 101],
     "kemampuan_akhir": "Mahasiswa mampu memahami konsep pencahayaan.",
     "bahan_kajian": "Dasar pencahayaan dan komposisi visual.",
     "bentuk_luring": "Tatap muka 2x50 menit",

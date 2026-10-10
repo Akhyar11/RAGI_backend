@@ -14,7 +14,9 @@ class RpsMingguan extends Model
     protected $fillable = [
         'rps_id',
         'sub_cpmk_id',
+        'sub_cpmk_ids',
         'minggu_ke',
+        'jenis_pertemuan',
         'kemampuan_akhir',
         'bahan_kajian',
         'bentuk_metode',
@@ -29,6 +31,7 @@ class RpsMingguan extends Model
     ];
 
     protected $casts = [
+        'sub_cpmk_ids' => 'array',
         'bobot_penilaian' => 'decimal:2',
     ];
 

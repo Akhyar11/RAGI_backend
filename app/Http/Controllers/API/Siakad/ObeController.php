@@ -1857,7 +1857,10 @@ class ObeController extends Controller
         $validated = $request->validate([
             'id' => 'nullable|exists:siakad_rps_mingguan,id',
             'minggu_ke' => 'required|integer|min:1|max:16',
+            'jenis_pertemuan' => 'nullable|string|max:100',
             'sub_cpmk_id' => 'nullable|exists:siakad_sub_cpmk,id',
+            'sub_cpmk_ids' => 'nullable|array',
+            'sub_cpmk_ids.*' => 'exists:siakad_sub_cpmk,id',
             'kemampuan_akhir' => 'nullable|string',
             'bahan_kajian' => 'nullable|string',
             'bentuk_metode' => 'nullable|string|max:255',
