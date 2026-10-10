@@ -48,7 +48,7 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, R
 | DELETE | `/api/v1/siakad/obe/cpmk-prodi/{id}` | Hapus Rumusan CPMK Program Studi (soft delete) | ✅ `canManageObeForProdi()` |
 | GET | `/api/v1/siakad/obe/pemetaan-cpl-cpmk-mk` | Daftar Pemetaan CPL-CPMK-MK (distribusi ke MK) | ✅ `siakad.kurikulum.read` |
 | POST | `/api/v1/siakad/obe/pemetaan-cpl-cpmk-mk/sync` | Simpan Pemetaan Mata Kuliah untuk CPMK Prodi | ✅ `siakad.kurikulum.manage` |
-| GET | `/api/v1/siakad/obe/rps-referensi` | Daftar referensi RPS (Bentuk, Metode, Kriteria, Komponen) | ✅ `siakad.kurikulum.read` |
+| GET | `/api/v1/siakad/obe/rps-referensi` | Daftar referensi RPS (Jenis Pembelajaran, Bentuk, Metode, Kriteria, Komponen) | ✅ `siakad.kurikulum.read` |
 | POST | `/api/v1/siakad/obe/rps-referensi` | Tambah referensi RPS | ✅ `siakad.kurikulum.manage` |
 | PUT | `/api/v1/siakad/obe/rps-referensi/{id}` | Perbarui referensi RPS | ✅ `siakad.kurikulum.manage` |
 | DELETE | `/api/v1/siakad/obe/rps-referensi/{id}` | Hapus referensi RPS (soft delete) | ✅ `siakad.kurikulum.manage` |
@@ -961,13 +961,20 @@ satu jalur dijamin berasal dari program studi yang sama.
 
 ## [GET] /api/v1/siakad/obe/rps-referensi
 
-> Mengambil daftar master referensi RPS (Bentuk, Metode, Kriteria, Komponen). Wajib permission `siakad.kurikulum.read`.
+> Mengambil daftar master referensi RPS (Jenis Pembelajaran, Bentuk, Metode, Kriteria, Komponen). Wajib permission `siakad.kurikulum.read`.
+
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
 
 ### Query Parameters
 
 | Parameter | Type | Required | Deskripsi |
 |---|---|---|---|
-| `tipe` | string | ❌ | Filter tipe: `bentuk`, `metode`, `kriteria`, `komponen` |
+| `tipe` | string | ❌ | Filter tipe: `jenis_pembelajaran`, `bentuk`, `metode`, `kriteria`, `komponen` |
 | `search` | string | ❌ | Cari nama / kode / deskripsi |
 | `sort_by` | string | ❌ | Whitelist: `nama`, `kode`, `created_at`, `id` (default `nama`) |
 | `sort_order` | string | ❌ | `asc` / `desc` |
@@ -984,10 +991,10 @@ satu jalur dijamin berasal dari program studi yang sama.
     "data": [
         {
             "id": 1,
-            "tipe": "bentuk",
-            "kode": "BTK-01",
+            "tipe": "jenis_pembelajaran",
+            "kode": "JP-01",
             "nama": "Kuliah / Responsi",
-            "deskripsi": "Bentuk pembelajaran tatap muka terjadwal",
+            "deskripsi": "Jenis pembelajaran tatap muka terjadwal di kelas",
             "is_active": true
         }
     ],
@@ -1004,7 +1011,20 @@ satu jalur dijamin berasal dari program studi yang sama.
 
 ### Response Error
 
-**401 Unauthorized** / **403 Forbidden**.
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
 
 ---
 
@@ -1012,11 +1032,19 @@ satu jalur dijamin berasal dari program studi yang sama.
 
 > Menambah data master referensi RPS baru. Wajib permission `siakad.kurikulum.manage`. Data otomatis terisolasi pada program studi aktif pengguna (`program_studi_id`).
 
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
 ### Request Body
 
 | Field | Type | Required | Keterangan |
 |---|---|---|---|
-| `tipe` | string | ✅ | `in:bentuk,metode,kriteria,komponen` |
+| `tipe` | string | ✅ | Pilihan: `jenis_pembelajaran`, `bentuk`, `metode`, `kriteria`, `komponen` |
 | `program_studi_id` | integer | ❌ | Otomatis diisi prodi aktif user (hanya superadmin boleh mengisi manual) |
 | `kode` | string | ❌ | Maks. 50 |
 | `nama` | string | ✅ | Nama/label referensi, maks. 255 |
@@ -1024,9 +1052,9 @@ satu jalur dijamin berasal dari program studi yang sama.
 
 ```json
 {
-    "tipe": "bentuk",
+    "tipe": "jenis_pembelajaran",
     "program_studi_id": 1,
-    "kode": "BTK-01",
+    "kode": "JP-01",
     "nama": "Kuliah / Responsi",
     "deskripsi": "Bentuk pembelajaran tatap muka terjadwal di kelas."
 }

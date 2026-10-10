@@ -17,7 +17,7 @@ return new class extends Migration
 
         Schema::create('siakad_rps_referensi', function (Blueprint $table) {
             $table->id();
-            $table->enum('tipe', ['bentuk', 'metode', 'kriteria', 'komponen']);
+            $table->string('tipe', 50); // jenis_pembelajaran, bentuk, metode, kriteria, komponen
             $table->string('kode', 50)->nullable();
             $table->string('nama', 255);
             $table->text('deskripsi')->nullable();

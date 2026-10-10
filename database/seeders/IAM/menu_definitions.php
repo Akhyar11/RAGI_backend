@@ -293,11 +293,12 @@ return [
                 'module' => 'siakad',
                 'order_index' => 58,
                 'children' => [
-                    ['name' => 'Bentuk', 'url' => '/siakad/obe/rps/bentuk', 'icon' => 'FaShapes', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 1],
-                    ['name' => 'Metode', 'url' => '/siakad/obe/rps/metode', 'icon' => 'FaLightbulb', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
-                    ['name' => 'Kriteria', 'url' => '/siakad/obe/rps/kriteria', 'icon' => 'FaCheckSquare', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 3],
-                    ['name' => 'Komponen', 'url' => '/siakad/obe/rps/komponen', 'icon' => 'FaCubes', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 4],
-                    ['name' => 'Kelola RPS', 'url' => '/siakad/obe/rps/kelola', 'icon' => 'FaFileContract', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 5],
+                    ['name' => 'Jenis Pembelajaran', 'url' => '/siakad/obe/rps/jenis-pembelajaran', 'icon' => 'FaGraduationCap', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 1],
+                    ['name' => 'Bentuk', 'url' => '/siakad/obe/rps/bentuk', 'icon' => 'FaShapes', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
+                    ['name' => 'Metode', 'url' => '/siakad/obe/rps/metode', 'icon' => 'FaLightbulb', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 3],
+                    ['name' => 'Kriteria', 'url' => '/siakad/obe/rps/kriteria', 'icon' => 'FaCheckSquare', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 4],
+                    ['name' => 'Komponen', 'url' => '/siakad/obe/rps/komponen', 'icon' => 'FaCubes', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 5],
+                    ['name' => 'Kelola RPS', 'url' => '/siakad/obe/rps/kelola', 'icon' => 'FaFileContract', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 6],
                 ]
             ],
             [

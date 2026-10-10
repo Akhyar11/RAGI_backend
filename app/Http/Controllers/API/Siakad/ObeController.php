@@ -602,7 +602,7 @@ class ObeController extends Controller
         $primaryProdiId = $prodiIds[0] ?? null;
 
         $validated = $request->validate([
-            'tipe' => 'required|in:bentuk,metode,kriteria,komponen',
+            'tipe' => 'required|in:jenis_pembelajaran,bentuk,metode,kriteria,komponen',
             'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'kode' => 'nullable|string|max:50',
             'nama' => 'required|string|max:255',
