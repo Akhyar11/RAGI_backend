@@ -456,12 +456,68 @@ Mengecek konektivitas dan kesiapan microservice Python yang berjalan di port 800
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
 | GET | `/api/simpeg/presensi` | Daftar presensi (Realtime biometrik atau `type=bundle`) dengan filter & dynamic sorting (`sort_by`, `sort_order`) | ✅ Bearer |
+| POST | `/api/simpeg/presensi/bundle/sync` | Sinkronisasi otomatis log realtime ke Rekap Bundle siklus 26 s/d 25 | ✅ Bearer |
 | POST | `/api/simpeg/presensi/{id}/approve` | Persetujuan manual HR (clock-in hari libur / upaya ditolak) | ✅ Bearer |
 | PATCH | `/api/simpeg/presensi/log/{id}` | Edit / reset sebagian log (reset masuk saja / pulang saja) | ✅ Bearer |
 | POST | `/api/simpeg/presensi/keterangan` | Tetapkan keterangan ketidakhadiran (izin/sakit/dinas/alfa) untuk pegawai terjadwal masuk tanpa log | ✅ Bearer |
 | GET | `/api/simpeg/presensi/recap` | Rekap bulanan per pegawai (silang cuti disetujui) | ✅ Bearer |
 
 > Clock-in valid langsung tercatat `hadir`/`terlambat` tanpa verifikasi. Verifikasi manual hanya untuk clock-in di hari libur jadwal shift (`menunggu_approval`) dan upaya yang ditolak validasi (`ditolak`).
+
+### POST `/api/simpeg/presensi/bundle/sync`
+
+Endpoint untuk menyinkronkan seluruh log presensi realtime (`simpeg_presensi_pegawai`) ke dalam Rekap Bundle periode yang sesuai dengan siklus kampus (tanggal 26 bulan sebelumnya s/d tanggal 25 bulan berjalan).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses (200 OK)
+
+```json
+{
+  "status": "success",
+  "message": "Seluruh log presensi realtime berhasil disinkronkan ke Rekap Bundle sesuai siklus periode 26 s/d 25.",
+  "data": {
+    "total_bundles": 1,
+    "bundles": [
+      {
+        "id": 1,
+        "nama_periode": "Presensi Februari 2026",
+        "bulan_tahun": "2026-02",
+        "tanggal_awal": "2026-01-26",
+        "tanggal_akhir": "2026-02-25",
+        "total_record": 24,
+        "total_pegawai": 4,
+        "is_completed": true,
+        "affected_rows": 24
+      }
+    ]
+  }
+}
+```
+
+### Response Error (403 Forbidden)
+
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki hak akses untuk menyinkronkan bundle presensi."
+}
+```
+
+### Response Error (401 Unauthorized)
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+
 
 ### GET `/api/simpeg/presensi`
 

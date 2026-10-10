@@ -48,3 +48,9 @@ Schedule::command('sikeu:sync-h2h')->everyFiveMinutes()->withoutOverlapping();
 
 // Tutup otomatis sesi presensi LMS yang jam selesainya sudah lewat
 Schedule::command('lms:tutup-presensi-otomatis')->hourly()->withoutOverlapping();
+
+// Sinkronisasi otomatis log presensi harian ke Rekap Bundle siklus 26 s/d 25
+Schedule::call(function () {
+    app(\App\Services\Simpeg\PresensiBundleService::class)->autoSyncBundlesFromRealtime();
+})->dailyAt('00:05')->name('simpeg-auto-bundle-presensi')->withoutOverlapping();
+

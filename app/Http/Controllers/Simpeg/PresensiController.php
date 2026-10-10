@@ -14,6 +14,7 @@ use App\Services\AttendanceCutoffService;
 use App\Services\AttendanceRecapService;
 use App\Services\AttendanceService;
 use App\Services\FingerprintSyncService;
+use App\Services\Simpeg\PresensiBundleService;
 use App\Services\Storage\FileStorageService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -44,6 +45,9 @@ class PresensiController extends Controller
                     'message' => 'Anda tidak memiliki hak akses (permission) untuk melihat Presensi.'
                 ], 403);
             }
+
+            // Sinkronisasi otomatis bundle dari log realtime sebelum mengambil data
+            app(PresensiBundleService::class)->autoSyncBundlesFromRealtime($user->id);
 
             $query = PresensiPeriode::with('creator');
 
@@ -1128,6 +1132,43 @@ class PresensiController extends Controller
             'message' => "Bundle '{$periode->nama_periode}' berhasil dibuat dan {$importedCount} data absensi berhasil di-import.",
             'data' => $periode,
         ], 201);
+    }
+
+    /**
+     * Sinkronisasi Otomatis Log Realtime ke Rekap Bundle Periode (Siklus 26 - 25)
+     */
+    public function syncBundleFromRealtime(Request $request, PresensiBundleService $bundleService): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.presensi.create') && !$user->hasPermission('simpeg.presensi.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk menyinkronkan bundle presensi.'
+            ], 403);
+        }
+
+        $result = $bundleService->autoSyncBundlesFromRealtime($user->id);
+
+        $bundleIds = array_column($result['bundles'] ?? [], 'id');
+        try {
+            \App\Services\AuditLogService::record(
+                'SIMPEG',
+                'sync',
+                'simpeg_presensi_periode',
+                $bundleIds[0] ?? null,
+                null,
+                array_merge($result, ['synced_bundle_ids' => $bundleIds]),
+                $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log sync bundle presensi: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Seluruh log presensi realtime berhasil disinkronkan ke Rekap Bundle sesuai siklus periode 26 s/d 25.',
+            'data' => $result,
+        ]);
     }
 
     /**

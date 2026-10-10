@@ -270,6 +270,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('presensi', [App\Http\Controllers\Simpeg\PresensiController::class, 'index']);
     Route::post('presensi', [App\Http\Controllers\Simpeg\PresensiController::class, 'store']);
     Route::post('presensi/upload-rekap', [App\Http\Controllers\Simpeg\PresensiController::class, 'uploadRekap']);
+    Route::post('presensi/bundle/sync', [App\Http\Controllers\Simpeg\PresensiController::class, 'syncBundleFromRealtime']);
     Route::delete('presensi/reset', [App\Http\Controllers\Simpeg\PresensiController::class, 'resetData']);
     Route::delete('presensi/log/{id}', [App\Http\Controllers\Simpeg\PresensiController::class, 'destroyLog'])->whereNumber('id');
     Route::delete('presensi/{id}', [App\Http\Controllers\Simpeg\PresensiController::class, 'destroy']);
