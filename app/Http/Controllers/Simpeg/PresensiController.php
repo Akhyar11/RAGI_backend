@@ -346,7 +346,7 @@ class PresensiController extends Controller
                                 }
                             }
 
-                            $isCorrected = !empty($rec->is_approved_by_admin) || ($rec->source === 'koreksi_admin') || str_contains((string)$rec->catatan, '[Koreksi Admin]');
+                            $isCorrected = ($rec->source === 'koreksi_admin') || str_contains((string)$rec->catatan, '[Koreksi Admin]');
 
                             $attendanceMap[$dateStr] = [
                                 'id' => $rec->id,
