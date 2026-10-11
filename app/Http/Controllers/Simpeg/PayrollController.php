@@ -15,11 +15,15 @@ use App\Models\Simpeg\MasterKomponenGaji;
 use App\Models\Simpeg\MasterSkalaGajiPokok;
 use App\Models\Simpeg\Pegawai;
 use App\Models\Simpeg\PegawaiKomponenGaji;
+use App\Models\Simpeg\PresensiPeriode;
+use App\Services\AuditLogService;
 use App\Services\Simpeg\PayrollCalculationService;
 use App\Services\Simpeg\SikeuIntegrationService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PayrollController extends Controller
 {
@@ -263,6 +267,105 @@ class PayrollController extends Controller
             'message' => "Pembayaran gaji {$gaji->pegawai?->nama_lengkap} periode {$gaji->periode_bulan_tahun} berhasil dibayarkan dan jurnal SIKEU diterbitkan!",
             'data' => $gaji->fresh(['jurnal', 'pengeluaranKampus']),
             'sikeu_journal' => $sikeuJournal,
+        ]);
+    }
+
+    /**
+     * POST /api/simpeg/payroll/reset
+     * Reset seluruh data draft payroll pada periode tertentu (atau seluruh draft),
+     * serta membuka kembali kunci bundle presensi bulan terkait agar dapat diproses ulang.
+     */
+    public function resetPayroll(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.payroll.manage') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk mereset payroll.'
+            ], 403);
+        }
+
+        $periode = $request->input('periode'); // e.g. '2026-10'
+
+        $query = GajiPegawai::where('status_transfer', 'draft');
+        if ($periode) {
+            $query->where('periode_bulan_tahun', $periode);
+        }
+
+        $gajiIds = $query->pluck('id')->all();
+        $totalDeleted = count($gajiIds);
+
+        DB::transaction(function () use ($gajiIds, $periode, $user, $request, $totalDeleted) {
+            if (!empty($gajiIds)) {
+                $oldGajiRows = GajiPegawai::whereIn('id', $gajiIds)->get()->toArray();
+                $detailCount = GajiDetail::whereIn('gaji_pegawai_id', $gajiIds)->count();
+
+                GajiDetail::whereIn('gaji_pegawai_id', $gajiIds)->delete();
+                GajiPegawai::whereIn('id', $gajiIds)->delete();
+
+                try {
+                    AuditLogService::record(
+                        'simpeg',
+                        'DELETE',
+                        'simpeg_gaji_pegawai',
+                        null,
+                        ['gaji_ids' => $gajiIds, 'rows' => $oldGajiRows, 'detail_count' => $detailCount, 'periode' => $periode],
+                        ['total_deleted' => $totalDeleted, 'periode' => $periode],
+                        $request
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('Gagal mencatat audit log reset payroll: ' . $e->getMessage());
+                }
+            }
+
+            // Buka kunci (unlock) bundle presensi periode terkait
+            $bundleQuery = PresensiPeriode::query();
+            if ($periode) {
+                $bundleQuery->where(function ($q) use ($periode) {
+                    $q->where('bulan_tahun', $periode)
+                      ->orWhere('nama_periode', 'like', "%{$periode}%");
+                });
+            } else {
+                $bundleQuery->where('is_locked', true);
+            }
+
+            $bundles = $bundleQuery->get();
+            foreach ($bundles as $bundle) {
+                $oldValues = $bundle->getOriginal();
+                $bundle->update([
+                    'is_locked' => false,
+                    'locked_at' => null,
+                    'locked_by' => null,
+                ]);
+                $newValues = $bundle->getChanges();
+
+                try {
+                    AuditLogService::record(
+                        'simpeg',
+                        'UPDATE',
+                        'simpeg_presensi_periode',
+                        $bundle->id,
+                        $oldValues,
+                        $newValues,
+                        $request
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('Gagal mencatat audit log unlock bundle presensi: ' . $e->getMessage());
+                }
+            }
+        });
+
+        $msg = $periode
+            ? "Payroll periode {$periode} berhasil di-reset ({$totalDeleted} data draft dihapus). Bundle presensi telah dibuka kuncinya dan dapat diproses ulang."
+            : "Seluruh draft payroll berhasil di-reset ({$totalDeleted} data dihapus). Bundle presensi telah dibuka kuncinya dan dapat diproses ulang.";
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $msg,
+            'data' => [
+                'total_deleted' => $totalDeleted,
+                'periode' => $periode,
+            ],
         ]);
     }
 

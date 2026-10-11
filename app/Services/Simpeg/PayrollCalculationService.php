@@ -165,11 +165,19 @@ class PayrollCalculationService
         }
 
         $kompGapok = $masterKomponens->firstWhere('kode', 'GAJI_POKOK');
-        $fallbackGajiPokok = $kompGapok ? (float) $kompGapok->nilai_default : 4500000.0;
-        $defaultGajiPokok = $skalaGaji ? (float) $skalaGaji->nominal_gaji : $fallbackGajiPokok;
-        $gajiPokokKeterangan = $skalaGaji
-            ? "Masa Kerja: {$masaKerjaTahun} Thn ({$skalaGaji->nama_skala})"
-            : "Masa Kerja: {$masaKerjaTahun} Thn (Tarif Standar)";
+        $fallbackGajiPokok = $kompGapok ? (float) $kompGapok->nilai_default : 0.0;
+
+        // Prioritaskan nilai default master komponen yang diatur user
+        if ($fallbackGajiPokok > 0) {
+            $defaultGajiPokok = $fallbackGajiPokok;
+            $gajiPokokKeterangan = $kompGapok->keterangan ?: "Gaji Pokok Master";
+        } elseif ($skalaGaji) {
+            $defaultGajiPokok = (float) $skalaGaji->nominal_gaji;
+            $gajiPokokKeterangan = "Masa Kerja: {$masaKerjaTahun} Thn ({$skalaGaji->nama_skala})";
+        } else {
+            $defaultGajiPokok = 4500000.0;
+            $gajiPokokKeterangan = "Tarif Standar";
+        }
 
         // 7. Iterasi Komponen Gaji & Hitung Butir-per-Butir
         $detailItems = [];
@@ -231,16 +239,27 @@ class PayrollCalculationService
                 $nominal = $totalSksDiampu * $tarifPerSks;
                 $totalHonorSks = $nominal;
                 $keterangan = "Honor Mengajar: {$totalSksDiampu} SKS @ Rp " . number_format($tarifPerSks, 0, ',', '.');
-            } elseif ($komp->kode === 'TUNJ_FUNGSIONAL' && (!$kustom || $kustom->nominal_kustom === null)) {
-                $nominal = $tunjanganFungsionalNominal;
+            } elseif ($komp->kode === 'TUNJ_FUNGSIONAL') {
+                if ($kustom && $kustom->nominal_kustom !== null) {
+                    $nominal = (float) $kustom->nominal_kustom;
+                    $keterangan = "Tunjangan Jafung (Kustom Pegawai)";
+                } elseif ($tunjanganFungsionalNominal > 0) {
+                    $nominal = $tunjanganFungsionalNominal;
+                    $keterangan = "Tunjangan Jafung: " . ($riwayatJafung?->jabatanFungsional?->nama ?? 'Akademik');
+                } else {
+                    $nominal = (float) $komp->nilai_default;
+                    $keterangan = $komp->keterangan ?: "Tunjangan Fungsional Standar";
+                }
                 $totalTunjFungsional = $nominal;
-                $keterangan = "Tunjangan Jafung: " . ($riwayatJafung?->jabatanFungsional?->nama ?? 'Akademik');
             } elseif ($komp->kode === 'GAJI_POKOK') {
-                if (!$kustom || $kustom->nominal_kustom === null) {
+                if ($kustom && $kustom->nominal_kustom !== null) {
+                    $nominal = (float) $kustom->nominal_kustom;
+                    $keterangan = "Gaji Pokok (Kustom Pegawai)";
+                } else {
                     $nominal = $defaultGajiPokok;
+                    $keterangan = $gajiPokokKeterangan;
                 }
                 $gajiPokok = $nominal;
-                $keterangan = $gajiPokokKeterangan;
             }
 
             // Skip PPh21 terlebih dahulu karena membutuhkan total bruto

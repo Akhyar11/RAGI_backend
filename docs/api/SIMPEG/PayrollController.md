@@ -13,6 +13,7 @@ Modul ini mengelola siklus penggajian fleksibel terintegrasi: Master Komponen Ga
 | GET | `/api/simpeg/payroll` | Daftar rekapan payroll bulanan | ✅ Bearer |
 | GET | `/api/simpeg/payroll/{id}` | Detail mendalam slip gaji & rincian butir | ✅ Bearer |
 | POST | `/api/simpeg/payroll/generate` | Hitung kalkulasi payroll dari master, presensi & SIAKAD | ✅ Bearer |
+| POST | `/api/simpeg/payroll/reset` | Reset seluruh data draft payroll dan buka kembali bundle presensi terkait | ✅ Bearer |
 | POST | `/api/simpeg/payroll/submit-to-sikeu` | Mengajukan rekapan payroll ke modul SIKEU | ✅ Bearer |
 | POST | `/api/simpeg/payroll/{id}/process-payment` | Eksekusi pencairan gaji, posting jurnal & pajak SIKEU | ✅ Bearer |
 | GET | `/api/simpeg/payroll/komponen` | Daftar master komponen gaji (Pendapatan & Potongan) | ✅ Bearer |
@@ -322,7 +323,58 @@ Modul ini mengelola siklus penggajian fleksibel terintegrasi: Master Komponen Ga
 
 ---
 
-## 4. POST /api/simpeg/payroll/submit-to-sikeu
+## 4. POST /api/simpeg/payroll/reset
+
+> Mereset seluruh data draft payroll pada periode tertentu (atau seluruh draft), menghapus rincian butir gaji, serta membuka kembali kunci (*unlock*) bundle presensi bulan terkait agar dapat dikoreksi dan diproses ulang.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+| Field | Type | Required | Validasi | Deskripsi |
+|---|---|---|---|---|
+| `periode` | string | ❌ Opsional | `string (YYYY-MM)` | Periode penggajian yang ingin di-reset (misal `2026-10`). Jika dikosongkan, seluruh draft payroll di-reset |
+
+### Response Success (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Payroll periode 2026-10 berhasil di-reset (15 data draft dihapus). Bundle presensi telah dibuka kuncinya dan dapat diproses ulang.",
+    "data": {
+        "total_deleted": 15,
+        "periode": "2026-10"
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk mereset payroll."
+}
+```
+
+---
+
+## 5. POST /api/simpeg/payroll/submit-to-sikeu
 
 > Mengajukan payroll satu periode ke antrean terpadu SIKEU sebagai SATU dokumen batch (`sumber_type = gaji_simpeg`, idempoten per periode). SIKEU tinggal verifikasi → setujui → cairkan; tanpa input ulang. Pengajuan ulang menyinkronkan ulang rincian + nominal.
 

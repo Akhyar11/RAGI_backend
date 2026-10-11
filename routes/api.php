@@ -338,6 +338,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('payroll', [App\Http\Controllers\Simpeg\PayrollController::class, 'index']);
     Route::get('payroll/{id}', [App\Http\Controllers\Simpeg\PayrollController::class, 'show']);
     Route::post('payroll/generate', [App\Http\Controllers\Simpeg\PayrollController::class, 'generatePayroll']);
+    Route::post('payroll/reset', [App\Http\Controllers\Simpeg\PayrollController::class, 'resetPayroll']);
     Route::post('payroll/submit-to-sikeu', [App\Http\Controllers\Simpeg\PayrollController::class, 'submitToSikeu']);
     Route::post('payroll/{id}/process-payment', [App\Http\Controllers\Simpeg\PayrollController::class, 'processPayment']);
 

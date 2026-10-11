@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\SpmbBerkasRequirementSeeder::class,
             \Database\Seeders\SpmbTemplateSuratSeeder::class,
             \Database\Seeders\ArsipUnitSeeder::class,
+            \Database\Seeders\Simpeg\SimpegPayrollFlexibleSeeder::class,
         ]);
     }
 }
