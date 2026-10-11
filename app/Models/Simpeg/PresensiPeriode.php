@@ -18,6 +18,7 @@ class PresensiPeriode extends Model
         'bulan_tahun',
         'total_record',
         'is_locked',
+        'status_pembayaran',
         'locked_at',
         'locked_by',
         'catatan',

@@ -44,6 +44,7 @@ Modul ini mengelola siklus penggajian fleksibel terintegrasi: Master Komponen Ga
 | `sort_by` | string | ❌ | `created_at` | Kolom pengurutan (`created_at`, `periode_bulan_tahun`, `gaji_bersih`, `total_tunjangan`, `total_potongan`, `id`) |
 | `sort_order` | string | ❌ | `desc` | Arah urutan: `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+| `limit` | integer | ❌ | `15` | Alias opsional untuk `per_page` (maks. 100) |
 | `page` | integer | ❌ | `1` | Halaman yang diminta |
 
 ### Response Sukses (200 OK)
@@ -325,7 +326,7 @@ Modul ini mengelola siklus penggajian fleksibel terintegrasi: Master Komponen Ga
 
 ## 4. POST /api/simpeg/payroll/reset
 
-> Mereset seluruh data draft payroll pada periode tertentu (atau seluruh draft), menghapus rincian butir gaji, serta membuka kembali kunci (*unlock*) bundle presensi bulan terkait agar dapat dikoreksi dan diproses ulang.
+> Mereset dan membersihkan seluruh meja kerja data payroll (`status_transfer: draft` dan `paid`) pada periode tertentu (atau seluruh periode), menghapus rincian butir gaji, serta membuka kembali kunci (*unlock*) bundle presensi bulan terkait yang belum berstatus `paid` (bundle berstatus `paid` tetap terkunci permanen). Data dengan status `submitted_to_sikeu` ditolak (422) demi integritas proses antrean keuangan.
 
 ### Headers
 
@@ -339,16 +340,28 @@ Modul ini mengelola siklus penggajian fleksibel terintegrasi: Master Komponen Ga
 
 | Field | Type | Required | Validasi | Deskripsi |
 |---|---|---|---|---|
-| `periode` | string | ❌ Opsional | `string (YYYY-MM)` | Periode penggajian yang ingin di-reset (misal `2026-10`). Jika dikosongkan, seluruh draft payroll di-reset |
+| `periode` | string | ❌ Opsional | `string (YYYY-MM)` | Periode penggajian yang ingin di-reset (misal `2026-10`). Jika dikosongkan, seluruh data draft/paid di meja kerja di-reset |
 
 ### Response Success (200 OK)
 
 ```json
 {
     "status": "success",
-    "message": "Payroll periode 2026-10 berhasil di-reset (15 data draft dihapus). Bundle presensi telah dibuka kuncinya dan dapat diproses ulang.",
+    "message": "Meja kerja payroll periode 2026-10 berhasil dibersihkan (15 data slip gaji dihapus). Bundle presensi telah dibuka kuncinya dan dapat diproses ulang.",
     "data": {
         "total_deleted": 15,
+        "periode": "2026-10"
+    }
+}
+```
+
+Jika tidak ada data yang perlu dihapus:
+```json
+{
+    "status": "success",
+    "message": "Tidak ada data payroll periode 2026-10 yang perlu dibersihkan di meja kerja.",
+    "data": {
+        "total_deleted": 0,
         "periode": "2026-10"
     }
 }
@@ -369,6 +382,14 @@ Modul ini mengelola siklus penggajian fleksibel terintegrasi: Master Komponen Ga
 {
     "status": "error",
     "message": "Anda tidak memiliki hak akses untuk mereset payroll."
+}
+```
+
+**422 Unprocessable Entity (Data Sudah Diajukan ke SIKEU)**
+```json
+{
+    "status": "error",
+    "message": "Tidak dapat mereset payroll. Terdapat 15 data payroll yang sedang diajukan ke SIKEU. Harap tolak (reject) pengajuan di modul SIKEU terlebih dahulu agar status kembali ke draft."
 }
 ```
 

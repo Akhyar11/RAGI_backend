@@ -178,6 +178,28 @@ class PengajuanOperasionalService
                 ]);
             }
 
+            $bundles = \App\Models\Simpeg\PresensiPeriode::where('bulan_tahun', $periode)
+                ->orWhere('nama_periode', 'like', "%{$periode}%")
+                ->get();
+            foreach ($bundles as $b) {
+                $oldBundleValues = $b->getOriginal();
+                $b->update(['status_pembayaran' => 'submitted_to_sikeu']);
+                $newBundleValues = $b->getChanges();
+                try {
+                    AuditLogService::record(
+                        module: 'SIKEU',
+                        action: 'update',
+                        tableName: 'simpeg_presensi_periode',
+                        recordId: $b->id,
+                        oldValues: $oldBundleValues,
+                        newValues: $newBundleValues,
+                        request: $request
+                    );
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('AuditLog submit presensi ke SIKEU gagal: ' . $e->getMessage());
+                }
+            }
+
             return $batch->fresh(['items', 'unitKas']);
         });
 
@@ -271,6 +293,31 @@ class PengajuanOperasionalService
             'referensi_eksternal' => $data['referensi_eksternal'] ?? $pengajuan->referensi_eksternal,
         ]);
 
+        $bundles = \App\Models\Simpeg\PresensiPeriode::where('bulan_tahun', $pengajuan->sumber_id)
+            ->orWhere('nama_periode', 'like', "%{$pengajuan->sumber_id}%")
+            ->get();
+        foreach ($bundles as $b) {
+            $oldBundleValues = $b->getOriginal();
+            $b->update([
+                'status_pembayaran' => 'paid',
+                'is_locked' => true,
+            ]);
+            $newBundleValues = $b->getChanges();
+            try {
+                AuditLogService::record(
+                    module: 'SIKEU',
+                    action: 'update',
+                    tableName: 'simpeg_presensi_periode',
+                    recordId: $b->id,
+                    oldValues: $oldBundleValues,
+                    newValues: $newBundleValues,
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('AuditLog presensi cair gagal: ' . $e->getMessage());
+            }
+        }
+
         return $pengajuan->fresh(['items.gajiPegawai.pegawai', 'unitKas']);
     }
 
@@ -321,6 +368,27 @@ class PengajuanOperasionalService
                             'status_transfer' => 'draft',
                             'submitted_at' => null,
                         ]);
+                    }
+                    $bundles = \App\Models\Simpeg\PresensiPeriode::where('bulan_tahun', $pengajuan->sumber_id)
+                        ->orWhere('nama_periode', 'like', "%{$pengajuan->sumber_id}%")
+                        ->get();
+                    foreach ($bundles as $b) {
+                        $oldBundleValues = $b->getOriginal();
+                        $b->update(['status_pembayaran' => 'draft']);
+                        $newBundleValues = $b->getChanges();
+                        try {
+                            AuditLogService::record(
+                                module: 'SIKEU',
+                                action: 'update',
+                                tableName: 'simpeg_presensi_periode',
+                                recordId: $b->id,
+                                oldValues: $oldBundleValues,
+                                newValues: $newBundleValues,
+                                request: $request
+                            );
+                        } catch (\Throwable $e) {
+                            \Illuminate\Support\Facades\Log::warning('AuditLog reset presensi reject gagal: ' . $e->getMessage());
+                        }
                     }
                 }
             } else {

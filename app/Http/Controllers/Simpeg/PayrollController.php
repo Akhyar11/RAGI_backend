@@ -103,7 +103,7 @@ class PayrollController extends Controller
 
         $query->orderBy($sortBy, $sortOrder);
 
-        $perPage = min(100, $request->integer('per_page', 15));
+        $perPage = min(100, max(1, $request->integer('per_page', $request->integer('limit', 15))));
         $payroll = $query->paginate($perPage);
 
         // Ambil daftar kolom komponen aktif dari master komponen
@@ -285,9 +285,22 @@ class PayrollController extends Controller
             ], 403);
         }
 
-        $periode = $request->input('periode'); // e.g. '2026-10'
+        $periode = $request->input('periode'); // e.g. '2026-09'
 
-        $query = GajiPegawai::where('status_transfer', 'draft');
+        // 1. Cek apakah ada data yang sedang diajukan ke SIKEU (submitted_to_sikeu)
+        $submittedCount = GajiPegawai::where('status_transfer', 'submitted_to_sikeu')
+            ->when($periode, fn($q) => $q->where('periode_bulan_tahun', $periode))
+            ->count();
+
+        if ($submittedCount > 0) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Terdapat {$submittedCount} data payroll yang sedang dalam antrean pengajuan SIKEU. Data tidak dapat di-reset. Jika ingin membatalkan, minta admin SIKEU untuk menolak (reject) pengajuan terlebih dahulu agar statusnya kembali ke draft.",
+            ], 422);
+        }
+
+        // 2. Ambil data draft dan paid yang ingin dibersihkan dari meja kerja payroll
+        $query = GajiPegawai::whereIn('status_transfer', ['draft', 'paid']);
         if ($periode) {
             $query->where('periode_bulan_tahun', $periode);
         }
@@ -318,7 +331,9 @@ class PayrollController extends Controller
                 }
             }
 
-            // Buka kunci (unlock) bundle presensi periode terkait
+            // 3. Kelola kunci bundle presensi:
+            // Hanya bundle yang BELUM PAID yang dibuka kuncinya agar bisa diproses ulang.
+            // Bundle yang sudah PAID TETAP TERKUNCI dan status pembayarannya tetap 'paid'!
             $bundleQuery = PresensiPeriode::query();
             if ($periode) {
                 $bundleQuery->where(function ($q) use ($periode) {
@@ -331,9 +346,15 @@ class PayrollController extends Controller
 
             $bundles = $bundleQuery->get();
             foreach ($bundles as $bundle) {
+                // Jika sudah paid, biarkan tetap terkunci permanen
+                if ($bundle->status_pembayaran === 'paid') {
+                    continue;
+                }
+
                 $oldValues = $bundle->getOriginal();
                 $bundle->update([
                     'is_locked' => false,
+                    'status_pembayaran' => 'belum_diproses',
                     'locked_at' => null,
                     'locked_by' => null,
                 ]);
@@ -355,9 +376,9 @@ class PayrollController extends Controller
             }
         });
 
-        $msg = $periode
-            ? "Payroll periode {$periode} berhasil di-reset ({$totalDeleted} data draft dihapus). Bundle presensi telah dibuka kuncinya dan dapat diproses ulang."
-            : "Seluruh draft payroll berhasil di-reset ({$totalDeleted} data dihapus). Bundle presensi telah dibuka kuncinya dan dapat diproses ulang.";
+        $msg = $totalDeleted > 0
+            ? "Meja kerja payroll berhasil dibersihkan ({$totalDeleted} data dihapus). Meja kerja siap untuk memproses bundle periode berikutnya."
+            : "Tidak ada data payroll yang perlu dibersihkan.";
 
         return response()->json([
             'status' => 'success',

@@ -87,6 +87,7 @@ class PresensiController extends Controller
             $periodes->getCollection()->transform(function ($p) {
                 $data = $p->toArray();
                 $data['total_pegawai'] = PresensiPegawai::where('presensi_periode_id', $p->id)->distinct('pegawai_id')->count('pegawai_id');
+                $data['status_pembayaran'] = $p->status_pembayaran ?: 'belum_diproses';
                 return $data;
             });
 
@@ -1627,6 +1628,13 @@ class PresensiController extends Controller
 
         $periode = PresensiPeriode::findOrFail($id);
 
+        if ($periode->status_pembayaran === 'paid') {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Bundle presensi '{$periode->nama_periode}' sudah terbayarkan (paid) dan tidak dapat diproses ulang.",
+            ], 422);
+        }
+
         if ($periode->is_locked) {
             return response()->json([
                 'status' => 'error',
@@ -1668,6 +1676,27 @@ class PresensiController extends Controller
         $processedCount = 0;
 
         DB::transaction(function () use ($pegawais, $attendanceLogs, $bulanTahun, $periode, $user, $activeKolomKomponens, $allCustoms, &$processedCount) {
+            // Ketika bundle dikirim ke payroll, gantikan data draft lama di tabel payroll
+            $existingDrafts = GajiPegawai::where('status_transfer', 'draft')->get();
+            if ($existingDrafts->isNotEmpty()) {
+                $oldDraftValues = $existingDrafts->toArray();
+                $existingDraftIds = $existingDrafts->pluck('id')->all();
+                GajiDetail::whereIn('gaji_pegawai_id', $existingDraftIds)->delete();
+                GajiPegawai::whereIn('id', $existingDraftIds)->delete();
+                try {
+                    AuditLogService::record(
+                        module: 'SIMPEG',
+                        action: 'delete',
+                        tableName: 'simpeg_gaji_pegawai',
+                        recordId: null,
+                        oldValues: ['draft_ids' => $existingDraftIds, 'count' => count($existingDraftIds)],
+                        newValues: null
+                    );
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('AuditLog hapus draft payroll gagal: ' . $e->getMessage());
+                }
+            }
+
             foreach ($pegawais as $peg) {
                 $logs = $attendanceLogs->get($peg->id, collect());
 
@@ -1699,17 +1728,20 @@ class PresensiController extends Controller
                         ? (float) $cust->nominal_kustom
                         : (float) $komp->nilai_default;
 
-                    // Jika komponen adalah rumus kehadiran / presensi, nominal rupiah awal dibiarkan 0
-                    // dan jumlah hari disimpan di detail & jumlah_hari_hadir_tepat_waktu
+                    // Komponen kehadiran / presensi
                     $isPresensiKomp = ($komp->tipe_nilai === 'rumus_kehadiran') || str_contains(strtolower($komp->nama), 'presensi') || str_contains(strtolower($komp->kode), 'PRESENSI');
 
                     if ($isPresensiKomp) {
+                        $tarifHarian = $nominal > 0 ? $nominal : 10000;
+                        $nominalPresensi = $validAttendanceDays * $tarifHarian;
+                        $totalTunjangan += $nominalPresensi;
+
                         $detailItems[] = [
                             'komponen_gaji_id' => $komp->id,
                             'nama_komponen' => $komp->nama,
                             'jenis' => $komp->jenis,
-                            'nominal' => 0.0,
-                            'keterangan' => "Presensi: {$validAttendanceDays} Hari",
+                            'nominal' => $nominalPresensi,
+                            'keterangan' => "Kehadiran: {$validAttendanceDays} Hari @ Rp " . number_format($tarifHarian, 0, ',', '.'),
                         ];
                     } else {
                         if ($komp->kode === 'GAJI_POKOK') {
@@ -1771,9 +1803,10 @@ class PresensiController extends Controller
             // Ambil data asli sebelum update untuk audit log
             $oldValues = $periode->getOriginal();
 
-            // Kunci bundle presensi secara permanen
+            // Kunci bundle presensi secara permanen dan set status draft
             $periode->update([
                 'is_locked' => true,
+                'status_pembayaran' => 'draft',
                 'locked_at' => Carbon::now(),
                 'locked_by' => $user->id,
             ]);

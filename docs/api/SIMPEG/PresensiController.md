@@ -58,6 +58,7 @@ Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Py
 | PUT | `/api/simpeg/presensi/pegawai/{id}/office-locations` | Atur lokasi absen tambahan pegawai | ✅ Bearer |
 | POST | `/api/simpeg/presensi/office-assign-bulk` | Tugaskan lokasi tambahan massal (misal semua dosen) | ✅ Bearer |
 | POST | `/api/simpeg/presensi/koreksi` | Koreksi presensi pada matriks bundle oleh Admin dengan audit trail data asal | ✅ Bearer |
+| GET | `/api/simpeg/presensi?type=bundle` | Daftar Rekapan Bundle Periode Presensi (dengan total pegawai & status pembayaran) | ✅ Bearer |
 | GET | `/api/simpeg/presensi/{id}?bundle=1&view=matrix` | Rincian Bundle Matriks Presensi Siklus 26 - 25 | ✅ Bearer |
 | POST | `/api/simpeg/presensi/{id}/process-payroll` | Kunci permanen bundle presensi & hasilkan draft payroll pegawai | ✅ Bearer |
 
@@ -1008,9 +1009,78 @@ Koreksi status/log presensi pada matriks bundle oleh Admin dengan audit trail da
 
 ---
 
+### GET `/api/simpeg/presensi?type=bundle`
+
+> Mengambil daftar rekapan bundle periode presensi (siklus cut-off 26 s/d 25) dilengkapi status penguncian, total pegawai terdaftar, dan status pembayaran ke SIKEU (`belum_diproses`, `draft`, `submitted_to_sikeu`, `paid`).
+
+**Headers:**
+- `Authorization: Bearer {token}`
+- `Accept: application/json`
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `type` | string | ✅ | `bundle` | Tipe data yang diminta (`bundle`) |
+| `search` | string | ❌ | — | Pencarian nama periode atau catatan |
+| `sort_by` | string | ❌ | `created_at` | Kolom pengurutan (`created_at`, `id`, `nama_periode`, `tanggal_awal`, `tanggal_akhir`, `total_record`) |
+| `sort_dir` | string | ❌ | `desc` | Arah urutan (`asc` / `desc`) |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+| `limit` | integer | ❌ | `15` | Alias opsional untuk `per_page` |
+| `page` | integer | ❌ | `1` | Nomor halaman data |
+
+**Response Sukses (200 OK):**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 1,
+      "nama_periode": "Bundle Presensi Siklus September - Oktober 2026",
+      "bulan_tahun": "2026-10",
+      "tanggal_awal": "2026-09-26",
+      "tanggal_akhir": "2026-10-25",
+      "total_record": 150,
+      "is_locked": true,
+      "status_pembayaran": "draft",
+      "total_pegawai": 25,
+      "created_at": "2026-10-10T08:00:00.000000Z"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 1,
+    "per_page": 15,
+    "to": 1,
+    "total": 1
+  }
+}
+```
+
+**Response Error:**
+
+**401 Unauthorized**
+```json
+{
+  "status": "error",
+  "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki hak akses (permission) untuk melihat Presensi."
+}
+```
+
+---
+
 ### POST `/api/simpeg/presensi/{id}/process-payroll`
 
-> Memproses rekapitulasi kehadiran dari bundle periode presensi, mengunci bundle secara permanen (*is_locked = true*), dan menghasilkan draft payroll pegawai di tabel `simpeg_gaji_pegawai` dan `simpeg_gaji_detail`. Kehadiran valid hanya dihitung jika scan masuk & pulang lengkap atau dinas luar yang telah disetujui.
+> Memproses rekapitulasi kehadiran dari bundle periode presensi, menggantikan data draft payroll lama di tabel `simpeg_gaji_pegawai` dan `simpeg_gaji_detail`, mengunci bundle secara permanen (*is_locked = true*), menandai `status_pembayaran = 'draft'`, serta menghitung nominal kehadiran (`validAttendanceDays * tarifHarian`). Kehadiran valid hanya dihitung jika scan masuk & pulang lengkap atau dinas luar yang telah disetujui.
 
 **Headers:**
 - `Authorization: Bearer {token}`
@@ -1030,8 +1100,17 @@ Koreksi status/log presensi pada matriks bundle oleh Admin dengan audit trail da
     "total_pegawai": 25,
     "periode_bulan_tahun": "2026-10",
     "is_locked": true,
+    "status_pembayaran": "draft",
     "status_payroll": "Diproses ke Payroll"
   }
+}
+```
+
+**Response Error (422 Unprocessable Entity - Bundle Sudah Dibayarkan/Paid):**
+```json
+{
+  "status": "error",
+  "message": "Bundle presensi 'Bundle Presensi Siklus September - Oktober 2026' sudah berstatus dibayarkan (Paid) dan tidak dapat diproses ulang ke Payroll."
 }
 ```
 

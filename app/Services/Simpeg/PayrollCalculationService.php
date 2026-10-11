@@ -167,13 +167,13 @@ class PayrollCalculationService
         $kompGapok = $masterKomponens->firstWhere('kode', 'GAJI_POKOK');
         $fallbackGajiPokok = $kompGapok ? (float) $kompGapok->nilai_default : 0.0;
 
-        // Prioritaskan nilai default master komponen yang diatur user
-        if ($fallbackGajiPokok > 0) {
-            $defaultGajiPokok = $fallbackGajiPokok;
-            $gajiPokokKeterangan = $kompGapok->keterangan ?: "Gaji Pokok Master";
-        } elseif ($skalaGaji) {
+        // Prioritaskan matriks skala gaji berdasarkan golongan & masa kerja
+        if ($skalaGaji) {
             $defaultGajiPokok = (float) $skalaGaji->nominal_gaji;
             $gajiPokokKeterangan = "Masa Kerja: {$masaKerjaTahun} Thn ({$skalaGaji->nama_skala})";
+        } elseif ($fallbackGajiPokok > 0) {
+            $defaultGajiPokok = $fallbackGajiPokok;
+            $gajiPokokKeterangan = $kompGapok->keterangan ?: "Gaji Pokok Master";
         } else {
             $defaultGajiPokok = 4500000.0;
             $gajiPokokKeterangan = "Tarif Standar";

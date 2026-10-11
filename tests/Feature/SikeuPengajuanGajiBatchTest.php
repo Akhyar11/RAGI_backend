@@ -38,11 +38,11 @@ class SikeuPengajuanGajiBatchTest extends TestCase
         $this->admin = User::factory()->create();
         $this->admin->roles()->attach($role->id);
 
-        AkunKeuangan::create(['kode_akun' => '501.01', 'nama_akun' => 'Beban Gaji & Honorarium', 'kelompok' => 'beban', 'saldo_normal' => 'debet']);
-        AkunKeuangan::create(['kode_akun' => '501.02', 'nama_akun' => 'Beban Tunjangan & Insentif', 'kelompok' => 'beban', 'saldo_normal' => 'debet']);
-        AkunKeuangan::create(['kode_akun' => '102.01', 'nama_akun' => 'Bank Operasional Kampus', 'kelompok' => 'aset', 'saldo_normal' => 'debet']);
-        AkunKeuangan::create(['kode_akun' => '202.01', 'nama_akun' => 'Utang Pajak PPh 21', 'kelompok' => 'liabilitas', 'saldo_normal' => 'kredit']);
-        AkunKeuangan::create(['kode_akun' => '201.01', 'nama_akun' => 'Utang Potongan BPJS', 'kelompok' => 'liabilitas', 'saldo_normal' => 'kredit']);
+        AkunKeuangan::firstOrCreate(['kode_akun' => '501.01'], ['nama_akun' => 'Beban Gaji & Honorarium', 'kelompok' => 'beban', 'saldo_normal' => 'debet']);
+        AkunKeuangan::firstOrCreate(['kode_akun' => '501.02'], ['nama_akun' => 'Beban Tunjangan & Insentif', 'kelompok' => 'beban', 'saldo_normal' => 'debet']);
+        AkunKeuangan::firstOrCreate(['kode_akun' => '102.01'], ['nama_akun' => 'Bank Operasional Kampus', 'kelompok' => 'aset', 'saldo_normal' => 'debet']);
+        AkunKeuangan::firstOrCreate(['kode_akun' => '202.01'], ['nama_akun' => 'Utang Pajak PPh 21', 'kelompok' => 'liabilitas', 'saldo_normal' => 'kredit']);
+        AkunKeuangan::firstOrCreate(['kode_akun' => '201.01'], ['nama_akun' => 'Utang Potongan BPJS', 'kelompok' => 'liabilitas', 'saldo_normal' => 'kredit']);
 
         $this->unitKas = UnitKas::create([
             'nama_kas' => 'Kas Operasional Rektorat',
