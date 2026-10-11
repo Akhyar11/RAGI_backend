@@ -57,6 +57,7 @@ Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Py
 | GET | `/api/simpeg/presensi/pegawai/{id}/office-locations` | Lokasi absen sah pegawai (utama + tambahan) | ✅ Bearer |
 | PUT | `/api/simpeg/presensi/pegawai/{id}/office-locations` | Atur lokasi absen tambahan pegawai | ✅ Bearer |
 | POST | `/api/simpeg/presensi/office-assign-bulk` | Tugaskan lokasi tambahan massal (misal semua dosen) | ✅ Bearer |
+| POST | `/api/simpeg/presensi/koreksi` | Koreksi presensi pada matriks bundle oleh Admin dengan audit trail data asal | ✅ Bearer |
 | GET | `/api/simpeg/presensi/{id}?bundle=1&view=matrix` | Rincian Bundle Matriks Presensi Siklus 26 - 25 | ✅ Bearer |
 
 ---
@@ -903,6 +904,104 @@ Mengambil data rekap matriks presensi bulanan (siklus tanggal 26 s/d 25) per peg
 {
   "status": "error",
   "message": "Data presensi periode tidak ditemukan."
+}
+```
+
+---
+
+### POST `/api/simpeg/presensi/koreksi`
+Koreksi status/log presensi pada matriks bundle oleh Admin dengan audit trail data asal (merekam status, jam masuk/pulang awal, serta alasan koreksi admin ke catatan/audit logs).
+
+**Headers:**
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+**Request Body:**
+```json
+{
+  "presensi_periode_id": 1,
+  "pegawai_id": 3,
+  "tanggal": "2026-01-27",
+  "status_kehadiran": "hadir",
+  "jam_masuk": "08:00:00",
+  "jam_keluar": "16:00:00",
+  "alasan_koreksi": "Pegawai hadir dinas luar, lupa scan fingerprint di pos utama"
+}
+```
+
+**Response Sukses (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Presensi tanggal 2026-01-27 berhasil dikoreksi dengan audit data asal.",
+  "data": {
+    "presensi": {
+      "id": 142,
+      "presensi_periode_id": 1,
+      "pegawai_id": 3,
+      "tanggal": "2026-01-27",
+      "jam_masuk": "08:00:00",
+      "jam_keluar": "16:00:00",
+      "status_kehadiran": "hadir",
+      "is_approved_by_admin": true,
+      "approved_by": 1,
+      "approved_at": "2026-10-11 10:45:00",
+      "source": "koreksi_admin",
+      "catatan": "[Koreksi Admin] Oleh: Admin (11/10/2026 10:45) | Data Awal: Tidak Absen (Alpa / Belum Tercatat) | Alasan: Pegawai hadir dinas luar, lupa scan fingerprint di pos utama",
+      "updated_at": "2026-10-11T03:45:00.000000Z",
+      "created_at": "2026-10-11T03:45:00.000000Z"
+    },
+    "data_awal_keterangan": "Data Awal: Tidak Absen (Alpa / Belum Tercatat)",
+    "audit_catatan": "[Koreksi Admin] Oleh: Admin (11/10/2026 10:45) | Data Awal: Tidak Absen (Alpa / Belum Tercatat) | Alasan: Pegawai hadir dinas luar, lupa scan fingerprint di pos utama"
+  }
+}
+```
+
+**Response Error (400 Bad Request):**
+```json
+{
+  "status": "error",
+  "message": "Permintaan koreksi presensi tidak dapat diproses."
+}
+```
+
+**Response Error (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "message": "Unauthenticated."
+}
+```
+
+**Response Error (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki izin untuk melakukan koreksi presensi."
+}
+```
+
+**Response Error (404 Not Found):**
+```json
+{
+  "status": "error",
+  "message": "Periode presensi atau data pegawai tidak ditemukan."
+}
+```
+
+**Response Error (422 Unprocessable Entity):**
+```json
+{
+  "status": "error",
+  "message": "Data yang diberikan tidak valid.",
+  "errors": {
+    "alasan_koreksi": [
+      "Alasan koreksi presensi wajib diisi oleh admin sebagai catatan audit."
+    ]
+  }
 }
 ```
 

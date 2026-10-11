@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Simpeg;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Simpeg\KoreksiPresensiBundleRequest;
 use App\Http\Requests\Simpeg\SetKeteranganRequest;
 use App\Http\Requests\Simpeg\UpdatePresensiLogRequest;
 use App\Models\Attendance;
@@ -345,7 +346,10 @@ class PresensiController extends Controller
                                 }
                             }
 
+                            $isCorrected = !empty($rec->is_approved_by_admin) || ($rec->source === 'koreksi_admin') || str_contains((string)$rec->catatan, '[Koreksi Admin]');
+
                             $attendanceMap[$dateStr] = [
+                                'id' => $rec->id,
                                 'date' => $dateStr,
                                 'is_holiday' => $isHoliday,
                                 'status_kehadiran' => $st,
@@ -356,6 +360,8 @@ class PresensiController extends Controller
                                 'out_time' => $jamKeluar,
                                 'out_minutes_early' => $minutesEarly,
                                 'catatan' => $rec->catatan,
+                                'is_corrected' => $isCorrected,
+                                'source' => $rec->source,
                             ];
                         } else {
                             if ($isHoliday) {
@@ -371,6 +377,7 @@ class PresensiController extends Controller
                             }
 
                             $attendanceMap[$dateStr] = [
+                                'id' => null,
                                 'date' => $dateStr,
                                 'is_holiday' => $isHoliday,
                                 'status_kehadiran' => $isHoliday ? 'libur' : ($isFuture ? 'belum' : 'alfa'),
@@ -381,6 +388,8 @@ class PresensiController extends Controller
                                 'out_time' => null,
                                 'out_minutes_early' => 0,
                                 'catatan' => null,
+                                'is_corrected' => false,
+                                'source' => null,
                             ];
                         }
                     }
@@ -1074,6 +1083,105 @@ class PresensiController extends Controller
             'message' => 'Log presensi berhasil diperbarui.',
             'data' => $attendance->fresh(),
         ]);
+    }
+
+    /**
+     * Koreksi presensi pada matriks bundle oleh Admin dengan audit trail data asal.
+     * Merekam status/jam awal sebelum dikoreksi ke catatan/audit logs.
+     */
+    public function koreksiBundle(KoreksiPresensiBundleRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        $validated = $request->validated();
+
+        $periodeId = (int) $validated['presensi_periode_id'];
+        $pegawaiId = (int) $validated['pegawai_id'];
+        $tanggal = $validated['tanggal'];
+        $statusKehadiran = $validated['status_kehadiran'];
+        $jamMasuk = !empty($validated['jam_masuk']) ? $this->normalizeJamInput($validated['jam_masuk']) : null;
+        $jamKeluar = !empty($validated['jam_keluar']) ? $this->normalizeJamInput($validated['jam_keluar']) : null;
+        $alasanKoreksi = trim($validated['alasan_koreksi']);
+
+        // Cari record presensi di simpeg_presensi_pegawai
+        $existing = PresensiPegawai::where('presensi_periode_id', $periodeId)
+            ->where('pegawai_id', $pegawaiId)
+            ->whereDate('tanggal', $tanggal)
+            ->first();
+
+        // Rekam data asal
+        if ($existing) {
+            $statusAwal = $existing->status_kehadiran ?? 'alfa';
+            $jamMasukAwal = $existing->jam_masuk ? substr($existing->jam_masuk, 0, 8) : '-';
+            $jamKeluarAwal = $existing->jam_keluar ? substr($existing->jam_keluar, 0, 8) : '-';
+            $catatanLama = $existing->catatan ? " (Catatan sebelumnya: {$existing->catatan})" : '';
+            $dataAwalStr = "Data Awal: Status '{$statusAwal}', Masuk: {$jamMasukAwal}, Pulang: {$jamKeluarAwal}{$catatanLama}";
+            $oldValues = $existing->getOriginal();
+            $actionAudit = 'update';
+        } else {
+            $dataAwalStr = "Data Awal: Tidak Absen (Alpa / Belum Tercatat)";
+            $oldValues = null;
+            $actionAudit = 'create';
+        }
+
+        $waktuSekarang = Carbon::now()->format('d/m/Y H:i');
+        $namaAdmin = $user->name ?? $user->username ?? 'Admin';
+        $auditKeterangan = "[Koreksi Admin] Oleh: {$namaAdmin} ({$waktuSekarang}) | {$dataAwalStr} | Alasan: {$alasanKoreksi}";
+
+        if ($existing) {
+            $existing->status_kehadiran = $statusKehadiran;
+            $existing->jam_masuk = $jamMasuk;
+            $existing->jam_keluar = $jamKeluar;
+            $existing->is_approved_by_admin = true;
+            $existing->approved_by = $user->id;
+            $existing->approved_at = Carbon::now();
+            $existing->source = 'koreksi_admin';
+            $existing->catatan = $auditKeterangan;
+            $existing->save();
+            $record = $existing;
+        } else {
+            $record = PresensiPegawai::create([
+                'presensi_periode_id' => $periodeId,
+                'pegawai_id'          => $pegawaiId,
+                'tanggal'             => $tanggal,
+                'jam_masuk'           => $jamMasuk,
+                'jam_keluar'          => $jamKeluar,
+                'status_kehadiran'    => $statusKehadiran,
+                'is_approved_by_admin'=> true,
+                'approved_by'         => $user->id,
+                'approved_at'         => Carbon::now(),
+                'source'              => 'koreksi_admin',
+                'catatan'             => $auditKeterangan,
+            ]);
+        }
+
+        // Catat Audit Log ke tabel audit_logs
+        $newValues = $actionAudit === 'create'
+            ? $record->getAttributes()
+            : $record->getChanges();
+
+        try {
+            \App\Services\AuditLogService::record(
+                'SIMPEG',
+                $actionAudit,
+                'simpeg_presensi_pegawai',
+                (int) $record->id,
+                $oldValues,
+                $newValues,
+                $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log koreksi bundle presensi: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Presensi tanggal {$tanggal} berhasil dikoreksi dengan audit data asal.",
+            'data' => [
+                'presensi' => $record,
+                'data_awal_keterangan' => $dataAwalStr,
+                'audit_catatan' => $auditKeterangan,
+            ]
+        ], 200);
     }
 
     protected function normalizeJamInput(string $jam): string
