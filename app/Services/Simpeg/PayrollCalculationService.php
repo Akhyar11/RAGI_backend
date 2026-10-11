@@ -67,31 +67,60 @@ class PayrollCalculationService
             $masaKerjaTahun = (int) Carbon::parse($pegawai->tanggal_masuk)->diffInYears($refDate);
         }
 
-        // 3. Hitung Log Presensi (Tepat Waktu, Terlambat, Alpha)
-        $presensiLogs = PresensiPegawai::where('pegawai_id', $pegawai->id)
-            ->where('tanggal', 'LIKE', "{$periode}%")
-            ->get();
+        // 3. Hitung Log Presensi (Hadir Valid: Scan Masuk & Pulang Lengkap ATAU Dinas Luar Disetujui)
+        // Cek apakah ada bundle periode presensi yang beririsan atau cocok dengan periode ini
+        $periodeModel = \App\Models\Simpeg\PresensiPeriode::where(function ($q) use ($periode) {
+            $q->where('bulan_tahun', $periode)
+              ->orWhere('nama_periode', 'like', "%{$periode}%");
+        })->first();
 
-        $hariTepatWaktu = $presensiLogs->filter(function ($log) {
-            if ($log->status_kehadiran !== 'hadir' || empty($log->jam_masuk)) {
-                return false;
+        // Cari data gaji yang sudah dibuat dari bundle sebelumnya jika ada
+        $existingGaji = GajiPegawai::where('pegawai_id', $pegawai->id)
+            ->where('periode_bulan_tahun', $periode)
+            ->first();
+
+        $presensiQuery = PresensiPegawai::where('pegawai_id', $pegawai->id);
+        if ($periodeModel && $periodeModel->tanggal_awal && $periodeModel->tanggal_akhir) {
+            $presensiQuery->whereBetween('tanggal', [
+                Carbon::parse($periodeModel->tanggal_awal)->toDateString(),
+                Carbon::parse($periodeModel->tanggal_akhir)->toDateString()
+            ]);
+        } else {
+            $presensiQuery->where('tanggal', 'LIKE', "{$periode}%");
+        }
+        $presensiLogs = $presensiQuery->get();
+
+        // Hitung kehadiran valid sesuai aturan:
+        // 1. Lengkap jam masuk dan jam keluar (jam_masuk IS NOT NULL AND jam_keluar IS NOT NULL)
+        // 2. ATAU dinas luar yang disetujui admin (status_kehadiran = 'dinas' AND is_approved_by_admin = 1)
+        // Izin, sakit, alpa, atau absen tidak lengkap TIDAK dihitung.
+        $hariHadirValid = $presensiLogs->filter(function ($log) {
+            if ($log->status_kehadiran === 'dinas' && !empty($log->is_approved_by_admin)) {
+                return true;
             }
-            $jam = substr((string) $log->jam_masuk, 0, 8);
-            return $jam <= '08:15:00';
+            if (!empty($log->jam_masuk) && !empty($log->jam_keluar)) {
+                return true;
+            }
+            return false;
         })->count();
+
+        // Jika data presensi log kosong tapi draft bundle sudah mencatat hari kehadiran sebelumnya, gunakan nilai draft tersebut
+        if ($hariHadirValid === 0 && $existingGaji && $existingGaji->jumlah_hari_hadir_tepat_waktu > 0) {
+            $hariHadirValid = (int) $existingGaji->jumlah_hari_hadir_tepat_waktu;
+        }
 
         $hariTerlambat = $presensiLogs->filter(function ($log) {
             if ($log->status_kehadiran === 'terlambat') {
                 return true;
             }
-            if ($log->status_kehadiran === 'hadir' && !empty($log->jam_masuk)) {
+            if (!empty($log->jam_masuk)) {
                 return substr((string) $log->jam_masuk, 0, 8) > '08:15:00';
             }
             return false;
         })->count();
 
         $hariAlpha = $presensiLogs->filter(function ($log) {
-            return $log->status_kehadiran === 'alpha';
+            return $log->status_kehadiran === 'alfa' || $log->status_kehadiran === 'alpha';
         })->count();
 
         // 4. Hitung Beban Mengajar Dosen dari SIAKAD (jika terdaftar sebagai dosen)
@@ -164,7 +193,22 @@ class PayrollCalculationService
             }
 
             // Hitung nilai dinamis sesuai tipe_nilai dan kode komponen
-            if ($komp->tipe_nilai === 'rumus_kehadiran') {
+            $isPresensiKomponen = ($komp->tipe_nilai === 'rumus_kehadiran')
+                || str_contains(strtolower($komp->nama), 'presensi')
+                || str_contains(strtolower($komp->kode), 'PRESENSI')
+                || str_contains(strtolower($komp->kode), 'TRANSPORT');
+
+            if ($isPresensiKomponen && $komp->kode !== 'POT_KETERLAMBATAN' && $komp->kode !== 'POT_ALPHA') {
+                if (isset($pegawai->terdampak_absensi) && !$pegawai->terdampak_absensi) {
+                    $nominal = 0.0;
+                    $keterangan = "Bebas Presensi / Tidak Terdampak Absensi";
+                } else {
+                    $tarifHarian = $nominal;
+                    $nominal = $hariHadirValid * $tarifHarian;
+                    $totalBiayaTransport = $nominal;
+                    $keterangan = "Kehadiran: {$hariHadirValid} Hari @ Rp " . number_format($tarifHarian, 0, ',', '.');
+                }
+            } elseif ($komp->tipe_nilai === 'rumus_kehadiran') {
                 if (isset($pegawai->terdampak_absensi) && !$pegawai->terdampak_absensi) {
                     $nominal = 0.0;
                     $keterangan = "Bebas Presensi / Tidak Terdampak Absensi";
@@ -177,10 +221,9 @@ class PayrollCalculationService
                         $nominal = $hariAlpha * $tarifHarian;
                         $keterangan = "Potongan Alpha: {$hariAlpha} Hari @ Rp " . number_format($tarifHarian, 0, ',', '.');
                     } else {
-                        // Default insentif/transport hadir tepat waktu
-                        $nominal = $hariTepatWaktu * $tarifHarian;
+                        $nominal = $hariHadirValid * $tarifHarian;
                         $totalBiayaTransport = $nominal;
-                        $keterangan = "Presensi Tepat Waktu: {$hariTepatWaktu} Hari @ Rp " . number_format($tarifHarian, 0, ',', '.');
+                        $keterangan = "Kehadiran: {$hariHadirValid} Hari @ Rp " . number_format($tarifHarian, 0, ',', '.');
                     }
                 }
             } elseif ($komp->tipe_nilai === 'rumus_sks') {
@@ -277,14 +320,14 @@ class PayrollCalculationService
                 'total_honor_sks' => $totalHonorSks,
                 'total_sks_diampu' => $totalSksDiampu,
                 'total_tunjangan_fungsional' => $totalTunjFungsional,
-                'jumlah_hari_hadir_tepat_waktu' => $hariTepatWaktu,
+                'jumlah_hari_hadir_tepat_waktu' => $hariHadirValid,
                 'total_tunjangan' => $totalTunjangan,
                 'total_potongan' => $totalPotongan,
                 'total_pph21' => $totalPph21,
                 'total_bpjs' => $totalBpjs,
                 'gaji_bersih' => $gajiBersih,
                 'status_transfer' => 'draft',
-                'catatan' => "Honor SKS: {$totalSksDiampu} SKS | Presensi Tepat Waktu: {$hariTepatWaktu} Hari | Masa Kerja: {$masaKerjaTahun} Thn | PPh21: Rp " . number_format($totalPph21, 0, ',', '.'),
+                'catatan' => "Honor SKS: {$totalSksDiampu} SKS | Hadir Valid: {$hariHadirValid} Hari | Masa Kerja: {$masaKerjaTahun} Thn | PPh21: Rp " . number_format($totalPph21, 0, ',', '.'),
             ]
         );
 

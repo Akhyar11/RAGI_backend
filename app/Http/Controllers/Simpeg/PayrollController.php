@@ -41,7 +41,13 @@ class PayrollController extends Controller
             ], 403);
         }
 
-        $query = GajiPegawai::with(['pegawai.unitKerja', 'pegawai.dosen.programStudi', 'jurnal', 'pengeluaranKampus']);
+        $query = GajiPegawai::with([
+            'pegawai.unitKerja',
+            'pegawai.dosen.programStudi',
+            'details.komponen',
+            'jurnal',
+            'pengeluaranKampus'
+        ]);
 
         // Scope pegawai jika bukan admin/payroll manager
         if (!$user->isAdmin() && !$user->hasPermission('simpeg.payroll.manage')) {
@@ -51,12 +57,14 @@ class PayrollController extends Controller
             } else {
                 return response()->json([
                     'status' => 'success',
+                    'message' => 'Data payroll berhasil dimuat',
                     'data' => [],
                     'meta' => [
                         'current_page' => 1,
                         'per_page' => 15,
                         'total' => 0,
                         'last_page' => 1,
+                        'active_columns' => [],
                     ],
                 ]);
             }
@@ -94,6 +102,12 @@ class PayrollController extends Controller
         $perPage = min(100, $request->integer('per_page', 15));
         $payroll = $query->paginate($perPage);
 
+        // Ambil daftar kolom komponen aktif dari master komponen
+        $activeColumns = MasterKomponenGaji::where('is_active', true)
+            ->where('is_kolom_aktif', true)
+            ->orderBy('urutan', 'asc')
+            ->get();
+
         return response()->json([
             'status' => 'success',
             'message' => 'Data payroll berhasil dimuat',
@@ -105,6 +119,7 @@ class PayrollController extends Controller
                 'last_page' => $payroll->lastPage(),
                 'from' => $payroll->firstItem(),
                 'to' => $payroll->lastItem(),
+                'active_columns' => $activeColumns,
             ],
             'filters' => [
                 'search' => (string) $request->input('search', ''),

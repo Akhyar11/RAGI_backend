@@ -58,13 +58,26 @@ Modul ini mengelola siklus penggajian fleksibel terintegrasi: Master Komponen Ga
             "periode_bulan_tahun": "2026-09",
             "gaji_pokok": "4500000.00",
             "tunjangan_tetap": "2050000.00",
+            "total_biaya_transport": "0.00",
+            "jumlah_hari_hadir_tepat_waktu": 20,
             "gaji_bersih": "7730000.00",
             "status_transfer": "draft",
             "pegawai": {
                 "id": 1,
                 "nama_lengkap": "Dr. Budi Santoso",
                 "nip": "198001012005011001"
-            }
+            },
+            "details": [
+                {
+                    "id": 1,
+                    "gaji_pegawai_id": 1,
+                    "komponen_gaji_id": 1,
+                    "nama_komponen": "Gaji Pokok",
+                    "jenis": "pendapatan",
+                    "nominal": "4500000.00",
+                    "keterangan": "Masa Kerja: 5 Thn"
+                }
+            ]
         }
     ],
     "meta": {
@@ -73,13 +86,23 @@ Modul ini mengelola siklus penggajian fleksibel terintegrasi: Master Komponen Ga
         "total": 1,
         "last_page": 1,
         "from": 1,
-        "to": 1
+        "to": 1,
+        "active_columns": [
+            {
+                "id": 1,
+                "kode": "GAJI_POKOK",
+                "nama": "Gaji Pokok",
+                "jenis": "pendapatan",
+                "tipe_nilai": "tetap",
+                "is_kolom_aktif": true
+            }
+        ]
     },
     "filters": {
         "search": "",
         "periode": "",
         "status_transfer": "",
-        "sort_by": "periode_bulan_tahun",
+        "sort_by": "created_at",
         "sort_order": "desc"
     }
 }

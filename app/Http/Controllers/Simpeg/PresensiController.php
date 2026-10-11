@@ -1102,6 +1102,14 @@ class PresensiController extends Controller
         $jamKeluar = !empty($validated['jam_keluar']) ? $this->normalizeJamInput($validated['jam_keluar']) : null;
         $alasanKoreksi = trim($validated['alasan_koreksi']);
 
+        $periode = PresensiPeriode::find($periodeId);
+        if ($periode && $periode->is_locked) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Bundle presensi '{$periode->nama_periode}' telah dikunci dan diproses ke Payroll. Data presensi tidak dapat diubah lagi.",
+            ], 400);
+        }
+
         // Cari record presensi di simpeg_presensi_pegawai
         $existing = PresensiPegawai::where('presensi_periode_id', $periodeId)
             ->where('pegawai_id', $pegawaiId)
@@ -1614,14 +1622,187 @@ class PresensiController extends Controller
 
         $periode = PresensiPeriode::findOrFail($id);
 
+        if ($periode->is_locked) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Bundle presensi '{$periode->nama_periode}' sudah pernah diproses ke Payroll dan berstatus terkunci.",
+            ], 400);
+        }
+
+        $bulanTahun = $periode->bulan_tahun ?: Carbon::parse($periode->tanggal_akhir)->format('Y-m');
+
+        // Ambil semua pegawai aktif
+        $pegawais = Pegawai::where('is_active', true)->get();
+
+        // Hitung hari hadir valid per pegawai dalam rentang tanggal bundle:
+        // Syarat kehadiran valid yang ter-record:
+        // 1. Lengkap absen masuk dan keluar (jam_masuk IS NOT NULL AND jam_keluar IS NOT NULL)
+        // 2. ATAU dinas luar yang telah disetujui (status_kehadiran = 'dinas' AND is_approved_by_admin = 1)
+        // Izin dan sakit tidak ter-record.
+        $startDate = $periode->tanggal_awal ? Carbon::parse($periode->tanggal_awal)->toDateString() : null;
+        $endDate = $periode->tanggal_akhir ? Carbon::parse($periode->tanggal_akhir)->toDateString() : null;
+
+        $attendanceQuery = PresensiPegawai::query();
+        if ($startDate && $endDate) {
+            $attendanceQuery->whereBetween('tanggal', [$startDate, $endDate]);
+        } else {
+            $attendanceQuery->where('presensi_periode_id', $periode->id);
+        }
+
+        $attendanceLogs = $attendanceQuery->get()->groupBy('pegawai_id');
+
+        $activeKolomKomponens = MasterKomponenGaji::where('is_active', true)
+            ->where('is_kolom_aktif', true)
+            ->get();
+
+        $allCustoms = PegawaiKomponenGaji::whereIn('pegawai_id', $pegawais->pluck('id'))
+            ->where('is_active', true)
+            ->get()
+            ->groupBy('pegawai_id');
+
+        $processedCount = 0;
+
+        DB::transaction(function () use ($pegawais, $attendanceLogs, $bulanTahun, $periode, $user, $activeKolomKomponens, $allCustoms, &$processedCount) {
+            foreach ($pegawais as $peg) {
+                $logs = $attendanceLogs->get($peg->id, collect());
+
+                // Filter hanya hari yang memenuhi kriteria kehadiran valid
+                $validAttendanceDays = $logs->filter(function ($att) {
+                    // Status dinas luar yang disetujui admin
+                    if ($att->status_kehadiran === 'dinas' && !empty($att->is_approved_by_admin)) {
+                        return true;
+                    }
+                    // Absen masuk dan pulang lengkap
+                    if (!empty($att->jam_masuk) && !empty($att->jam_keluar)) {
+                        return true;
+                    }
+                    // Izin, sakit, alpa, atau absen tidak lengkap tidak dihitung
+                    return false;
+                })->count();
+
+                // Ambil kustom komponen pegawai
+                $pegCustoms = $allCustoms->get($peg->id, collect())->keyBy('komponen_gaji_id');
+
+                $gajiPokok = 0.0;
+                $totalTunjangan = 0.0;
+                $totalPotongan = 0.0;
+                $detailItems = [];
+
+                foreach ($activeKolomKomponens as $komp) {
+                    $cust = $pegCustoms->get($komp->id);
+                    $nominal = $cust && $cust->nominal_kustom !== null
+                        ? (float) $cust->nominal_kustom
+                        : (float) $komp->nilai_default;
+
+                    // Jika komponen adalah rumus kehadiran / presensi, nominal rupiah awal dibiarkan 0
+                    // dan jumlah hari disimpan di detail & jumlah_hari_hadir_tepat_waktu
+                    $isPresensiKomp = ($komp->tipe_nilai === 'rumus_kehadiran') || str_contains(strtolower($komp->nama), 'presensi') || str_contains(strtolower($komp->kode), 'PRESENSI');
+
+                    if ($isPresensiKomp) {
+                        $detailItems[] = [
+                            'komponen_gaji_id' => $komp->id,
+                            'nama_komponen' => $komp->nama,
+                            'jenis' => $komp->jenis,
+                            'nominal' => 0.0,
+                            'keterangan' => "Presensi: {$validAttendanceDays} Hari",
+                        ];
+                    } else {
+                        if ($komp->kode === 'GAJI_POKOK') {
+                            $gajiPokok = $nominal;
+                        } elseif ($komp->jenis === 'pendapatan') {
+                            $totalTunjangan += $nominal;
+                        } elseif ($komp->jenis === 'potongan') {
+                            $totalPotongan += $nominal;
+                        }
+
+                        if ($nominal > 0) {
+                            $detailItems[] = [
+                                'komponen_gaji_id' => $komp->id,
+                                'nama_komponen' => $komp->nama,
+                                'jenis' => $komp->jenis,
+                                'nominal' => $nominal,
+                                'keterangan' => $komp->keterangan ?: $komp->nama,
+                            ];
+                        }
+                    }
+                }
+
+                $gajiBersih = $gajiPokok + $totalTunjangan - $totalPotongan;
+
+                $gajiPegawai = GajiPegawai::updateOrCreate(
+                    [
+                        'pegawai_id' => $peg->id,
+                        'periode_bulan_tahun' => $bulanTahun,
+                    ],
+                    [
+                        'gaji_pokok' => $gajiPokok,
+                        'tunjangan_tetap' => $totalTunjangan,
+                        'total_biaya_transport' => 0.0,
+                        'total_honor_sks' => 0.0,
+                        'total_sks_diampu' => 0.0,
+                        'total_tunjangan_fungsional' => 0.0,
+                        'jumlah_hari_hadir_tepat_waktu' => $validAttendanceDays,
+                        'total_tunjangan' => $totalTunjangan,
+                        'total_potongan' => $totalPotongan,
+                        'total_pph21' => 0.0,
+                        'total_bpjs' => 0.0,
+                        'gaji_bersih' => $gajiBersih,
+                        'status_transfer' => 'draft',
+                        'nomor_rekening' => $peg->nomor_rekening,
+                        'bank_nama' => $peg->nama_bank,
+                        'catatan' => "Draft Payroll dari Bundle {$periode->nama_periode} (Presensi: {$validAttendanceDays} Hari Hadir Valid)",
+                    ]
+                );
+
+                GajiDetail::where('gaji_pegawai_id', $gajiPegawai->id)->delete();
+                foreach ($detailItems as $item) {
+                    $item['gaji_pegawai_id'] = $gajiPegawai->id;
+                    GajiDetail::create($item);
+                }
+
+                $processedCount++;
+            }
+
+            // Ambil data asli sebelum update untuk audit log
+            $oldValues = $periode->getOriginal();
+
+            // Kunci bundle presensi secara permanen
+            $periode->update([
+                'is_locked' => true,
+                'locked_at' => Carbon::now(),
+                'locked_by' => $user->id,
+            ]);
+
+            $newValues = array_merge($periode->getChanges(), [
+                'total_pegawai_processed' => $processedCount,
+                'periode_bulan_tahun' => $bulanTahun,
+            ]);
+
+            try {
+                AuditLogService::record(
+                    'SIMPEG',
+                    'process_payroll',
+                    'simpeg_presensi_periode',
+                    $periode->id,
+                    $oldValues,
+                    $newValues,
+                    $request
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log process payroll: ' . $e->getMessage());
+            }
+        });
+
         return response()->json([
             'status' => 'success',
-            'message' => "Payroll untuk bundle '{$periode->nama_periode}' berhasil diproses dan dikirim ke SIKEU.",
+            'message' => "Payroll untuk bundle '{$periode->nama_periode}' berhasil diproses dan dikunci. Data kehadiran {$processedCount} pegawai berhasil masuk ke halaman Payroll & Slip Gaji.",
             'data' => [
                 'bundle_id' => $periode->id,
                 'nama_periode' => $periode->nama_periode,
-                'total_record' => $periode->total_record,
-                'status_payroll' => 'Diproses',
+                'total_pegawai' => $processedCount,
+                'periode_bulan_tahun' => $bulanTahun,
+                'is_locked' => true,
+                'status_payroll' => 'Diproses ke Payroll',
             ]
         ]);
     }

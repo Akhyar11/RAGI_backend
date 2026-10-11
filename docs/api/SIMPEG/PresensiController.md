@@ -59,6 +59,7 @@ Dokumentasi ini mencakup endpoint presensi karyawan berbasis biometrik wajah (Py
 | POST | `/api/simpeg/presensi/office-assign-bulk` | Tugaskan lokasi tambahan massal (misal semua dosen) | ✅ Bearer |
 | POST | `/api/simpeg/presensi/koreksi` | Koreksi presensi pada matriks bundle oleh Admin dengan audit trail data asal | ✅ Bearer |
 | GET | `/api/simpeg/presensi/{id}?bundle=1&view=matrix` | Rincian Bundle Matriks Presensi Siklus 26 - 25 | ✅ Bearer |
+| POST | `/api/simpeg/presensi/{id}/process-payroll` | Kunci permanen bundle presensi & hasilkan draft payroll pegawai | ✅ Bearer |
 
 ---
 
@@ -1004,6 +1005,68 @@ Koreksi status/log presensi pada matriks bundle oleh Admin dengan audit trail da
   }
 }
 ```
+
+---
+
+### POST `/api/simpeg/presensi/{id}/process-payroll`
+
+> Memproses rekapitulasi kehadiran dari bundle periode presensi, mengunci bundle secara permanen (*is_locked = true*), dan menghasilkan draft payroll pegawai di tabel `simpeg_gaji_pegawai` dan `simpeg_gaji_detail`. Kehadiran valid hanya dihitung jika scan masuk & pulang lengkap atau dinas luar yang telah disetujui.
+
+**Headers:**
+- `Authorization: Bearer {token}`
+- `Accept: application/json`
+
+**URL Parameters:**
+- `id` (integer, required): ID bundle presensi (`simpeg_presensi_periode`).
+
+**Response Sukses (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Payroll untuk bundle 'Bundle Presensi Siklus September - Oktober 2026' berhasil diproses dan dikunci. Data kehadiran 25 pegawai berhasil masuk ke halaman Payroll & Slip Gaji.",
+  "data": {
+    "bundle_id": 1,
+    "nama_periode": "Bundle Presensi Siklus September - Oktober 2026",
+    "total_pegawai": 25,
+    "periode_bulan_tahun": "2026-10",
+    "is_locked": true,
+    "status_payroll": "Diproses ke Payroll"
+  }
+}
+```
+
+**Response Error (400 Bad Request - Bundle Sudah Terkunci):**
+```json
+{
+  "status": "error",
+  "message": "Bundle presensi 'Bundle Presensi Siklus September - Oktober 2026' sudah pernah diproses ke Payroll dan berstatus terkunci."
+}
+```
+
+**Response Error (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "message": "Unauthenticated."
+}
+```
+
+**Response Error (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki hak akses untuk memproses Payroll."
+}
+```
+
+**Response Error (404 Not Found):**
+```json
+{
+  "status": "error",
+  "message": "Bundle presensi tidak ditemukan."
+}
+```
+
 
 
 

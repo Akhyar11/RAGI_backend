@@ -17,6 +17,9 @@ class PresensiPeriode extends Model
         'tanggal_akhir',
         'bulan_tahun',
         'total_record',
+        'is_locked',
+        'locked_at',
+        'locked_by',
         'catatan',
         'created_by',
     ];
@@ -24,6 +27,8 @@ class PresensiPeriode extends Model
     protected $casts = [
         'tanggal_awal' => 'date:Y-m-d',
         'tanggal_akhir' => 'date:Y-m-d',
+        'is_locked' => 'boolean',
+        'locked_at' => 'datetime',
     ];
 
     public function presensiPegawai()
@@ -34,5 +39,10 @@ class PresensiPeriode extends Model
     public function creator()
     {
         return $this->belongsTo(\App\Models\User::class, 'created_by');
+    }
+
+    public function lockedBy()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'locked_by');
     }
 }
