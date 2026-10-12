@@ -10,6 +10,7 @@ use App\Models\Sikeu\TagihanMahasiswa;
 use App\Services\AuditLogService;
 use App\Services\Spmb\SpmbKonversiService;
 use App\Services\Spmb\SpmbPendaftaranService;
+use App\Services\Spmb\SpmbPendaftaranSyncService;
 use App\Services\Storage\FileStorageService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
@@ -351,5 +352,35 @@ class PendaftaranController extends Controller
             'message' => 'SK Tanda Lulus berhasil diterbitkan dan diarsipkan.',
             'data' => $result,
         ]);
+    }
+
+    /**
+     * Sinkronisasi data pendaftaran SPMB dari API eksternal (sistem lama)
+     */
+    public function syncExternal(Request $request, SpmbPendaftaranSyncService $syncService): JsonResponse
+    {
+        $this->authorize('spmb.manage');
+
+        try {
+            $summary = $syncService->sync(
+                queryParams: $request->query(),
+                actorId: (int) $request->user()->id
+            );
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Sinkronisasi data pendaftaran SPMB eksternal selesai.',
+                'data' => $summary,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error syncExternal SPMB: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal melakukan sinkronisasi data SPMB: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

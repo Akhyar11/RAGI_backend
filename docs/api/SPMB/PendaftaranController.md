@@ -1,14 +1,15 @@
 # PendaftaranController
 
-> **Modul**: SPMB / **Base URL**: `/api/spmb/pendaftaran` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat**: 2026-09-30 / **Diperbarui**: 2026-10-01
+> **Modul**: SPMB / **Base URL**: `/api/spmb/pendaftaran` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat**: 2026-09-30 / **Diperbarui**: 2026-10-12
 
-Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan calon mahasiswa: daftar pendaftar, detail pendaftar (termasuk ringkasan pembayaran **daftar ulang**), unduh dokumen PDF **SK Tanda Lulus**, verifikasi berkas, dan penetapan status kelulusan administrasi.
+Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan calon mahasiswa: daftar pendaftar, detail pendaftar (termasuk ringkasan pembayaran **daftar ulang**), unduh dokumen PDF **SK Tanda Lulus**, verifikasi berkas, penetapan status kelulusan administrasi, dan sinkronisasi data dari sistem eksternal.
 
 ## Daftar Endpoint
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
 | GET | `/api/spmb/pendaftaran` | Daftar pendaftar (filter, sorting, paginasi) | ✅ |
+| POST | `/api/spmb/pendaftaran/sync-external` | Sinkronisasi pendaftar dari API sistem eksternal via IAM | ✅ `spmb.manage` |
 | GET | `/api/spmb/pendaftaran/{id}` | Detail pendaftar + ringkasan daftar ulang | ✅ |
 | GET | `/api/spmb/pendaftaran/{id}/sk-lulus` | Unduh dokumen PDF SK Tanda Lulus resmi (memakai berkas terarsip bila sudah diterbitkan) | ✅ |
 | POST | `/api/spmb/pendaftaran/{id}/terbitkan-sk` | Terbitkan nomor SK via modul Arsip + arsipkan berkas PDF SK | ✅ `spmb.manage` |
@@ -89,6 +90,69 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan cal
     "status": "error",
     "message": "Data yang diberikan tidak valid.",
     "errors": { "per_page": ["The per page must be an integer."] }
+}
+```
+
+---
+
+## POST /api/spmb/pendaftaran/sync-external
+
+> Menarik dan menyinkronkan data calon mahasiswa baru dari endpoint API eksternal (sistem lama) yang terkonfigurasi pada modul IAM (`ApiIntegrationService::call('spmb_pendaftaran')`). Proses berjalan secara idempoten berbasis `no_pendaftaran`/`nik`, membuat akun portal (`calon_mhs`), dan memetakan master relasi secara dinamis.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `tahun` / `angkatan` | string | ❌ | — | Filter periode/angkatan pendaftaran di API eksternal |
+| `limit` | integer | ❌ | — | Batas data yang ditarik dari API eksternal |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Sinkronisasi data pendaftaran SPMB eksternal selesai.",
+    "data": {
+        "total_fetched": 30,
+        "inserted": 20,
+        "updated": 10,
+        "skipped": 0,
+        "errors": []
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+**500 Internal Server Error** — kegagalan koneksi API integrasi eksternal
+```json
+{
+    "status": "error",
+    "message": "Gagal melakukan sinkronisasi data SPMB: Integrasi API dengan key 'spmb_pendaftaran' belum terdaftar di sistem."
 }
 ```
 

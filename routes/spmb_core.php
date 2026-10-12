@@ -48,6 +48,7 @@ Route::post('pendaftaran/berkas', [CalonMahasiswaController::class, 'uploadBerka
 Route::post('pendaftaran/finalize', [CalonMahasiswaController::class, 'finalize']);
 Route::post('pendaftaran/reissue-va', [CalonMahasiswaController::class, 'reissueVa']);
 Route::post('pendaftaran/reset', [CalonMahasiswaController::class, 'resetPendaftaran']);
+Route::middleware('can:spmb.manage')->post('pendaftaran/sync-external', [PendaftaranController::class, 'syncExternal']);
 
 Route::get('pendaftaran/{id}', [PendaftaranController::class, 'show']);
 Route::get('pendaftaran/{id}/sk-lulus', [PendaftaranController::class, 'downloadSkLulus']);
