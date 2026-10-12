@@ -1,6 +1,6 @@
 # ObeController
 
-> **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/obe` / **Autentikasi**: Bearer Token (Passport) / **Dibuat/Diperbarui**: 2026-10-09
+> **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/obe` / **Autentikasi**: Bearer Token (Passport) / **Dibuat/Diperbarui**: 2026-10-11
 
 Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, Referensi RPS (Bentuk, Metode, Kriteria, Komponen), komponen & nilai OBE. Seluruh data grup RPS terisolasi per Program Studi (`program_studi_id`).
 
@@ -1166,6 +1166,100 @@ satu jalur dijamin berasal dari program studi yang sama.
 ### Response Error
 
 **401 Unauthorized** / **403 Forbidden** / **404 Not Found**.
+
+---
+
+## [GET] /api/v1/siakad/obe/rps
+
+> Mendapatkan daftar dokumen RPS mata kuliah hasil pemetaan distribusi mengajar prodi aktif beserta status kelengkapan RPS. Mendukung filter pencarian, kurikulum, semester, dosen pengampu, dan server-side pagination.
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `kurikulum_id` | integer | ❌ | Filter ID kurikulum |
+| `mata_kuliah_id` | integer | ❌ | Filter ID mata kuliah |
+| `semester` | integer | ❌ | Filter semester (1-8) |
+| `dosen_id` | integer | ❌ | Filter ID dosen pengampu / koordinator |
+| `search` | string | ❌ | Pencarian kode MK, nama MK, atau nama koordinator |
+| `sort_by` | string | ❌ | `created_at`, `id`, `semester` (default: `semester`) |
+| `sort_order` | string | ❌ | `asc` atau `desc` (default: `asc`) |
+| `page` | integer | ❌ | Halaman data (default: 1) |
+| `per_page` | integer | ❌ | Jumlah data per halaman (default: 15, max 100) |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Daftar dokumen RPS berhasil dimuat",
+    "data": [
+        {
+            "id": 1,
+            "has_rps": true,
+            "distribusi_id": 12,
+            "mata_kuliah_id": 5,
+            "mata_kuliah": {
+                "id": 5,
+                "kode_mk": "PM-IK-1-1-005",
+                "nama": "Teori Fotografi"
+            },
+            "kurikulum": {
+                "id": 2,
+                "nama": "Kurikulum 2023",
+                "program_studi_id": 1
+            },
+            "semester": 1,
+            "tahun_ajaran": "2026/2027",
+            "kode_rps": "RPS-PM-IK-1-1-2026",
+            "status": "draft",
+            "catatan_revisi": null,
+            "disetujui_at": null,
+            "dosen_bisa_edit": true,
+            "dosen_koordinator": {
+                "id": 7,
+                "nama_lengkap": "Budi Pratama, M.Cs."
+            },
+            "dosen_anggotas": [],
+            "kaprodi": {
+                "id": 3,
+                "nama_lengkap": "Dr. Ir. Ahmad Santoso, M.Kom."
+            },
+            "distribusi_kelas_list": ["26A", "26B"],
+            "distribusi_kelas_formatted": "26A,26B",
+            "created_at": "2026-10-09T10:00:00.000000Z",
+            "updated_at": "2026-10-11T12:00:00.000000Z"
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk melihat data RPS."
+}
+```
 
 ---
 
