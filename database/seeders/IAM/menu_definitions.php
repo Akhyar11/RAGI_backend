@@ -114,11 +114,12 @@ return [
                     ['name' => 'Presensi & Absensi', 'url' => '/simpeg/presensi', 'icon' => 'FaClock', 'module' => 'simpeg', 'permission_slug' => 'simpeg.presensi.read', 'order_index' => 1],
                     ['name' => 'Cuti & Izin Kerja', 'url' => '/simpeg/cuti', 'icon' => 'FaCalendar', 'module' => 'simpeg', 'permission_slug' => 'simpeg.cuti.read', 'order_index' => 2],
                     ['name' => 'Payroll & Slip Gaji', 'url' => '/simpeg/payroll', 'icon' => 'FaMoneyBillWave', 'module' => 'simpeg', 'permission_slug' => 'simpeg.payroll.read', 'order_index' => 3],
-                    ['name' => 'Usulan Jafung (KUM)', 'url' => '/simpeg/usulan-jafung', 'icon' => 'FaAward', 'module' => 'simpeg', 'permission_slug' => 'simpeg.usulan_jafung.read', 'order_index' => 4],
+                    ['name' => 'Usulan JAD (KUM)', 'url' => '/simpeg/usulan-jafung', 'icon' => 'FaAward', 'module' => 'simpeg', 'permission_slug' => 'simpeg.usulan_jafung.read', 'order_index' => 4],
                     ['name' => 'Evaluasi Kinerja SKP', 'url' => '/simpeg/kinerja', 'icon' => 'FaChartPie', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kinerja.read', 'order_index' => 5],
                     ['name' => 'Kompetensi & Pelatihan', 'url' => '/simpeg/kompetensi', 'icon' => 'FaGraduationCap', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kompetensi.read', 'order_index' => 6],
                     ['name' => 'Surat Tugas & LPJ', 'url' => '/simpeg/surat-tugas', 'icon' => 'FaBriefcase', 'module' => 'simpeg', 'permission_slug' => 'simpeg.surat_tugas.read', 'order_index' => 7],
-                    ['name' => 'Arsip SK Pegawai', 'url' => '/simpeg/sk-pegawai', 'icon' => 'FaFileSignature', 'module' => 'simpeg', 'permission_slug' => 'simpeg.sk_pegawai.read', 'order_index' => 8],
+                    ['name' => 'Penomoran Surat', 'url' => '/simpeg/nomor-surat', 'icon' => 'FaFileSignature', 'module' => 'simpeg', 'permission_slug' => 'simpeg.dashboard.read', 'order_index' => 8],
+                    ['name' => 'Arsip SK Pegawai', 'url' => '/simpeg/sk-pegawai', 'icon' => 'FaFileSignature', 'module' => 'simpeg', 'permission_slug' => 'simpeg.sk_pegawai.read', 'order_index' => 9],
                 ]
             ],
             [
@@ -129,7 +130,7 @@ return [
                 'order_index' => 4,
                 'children' => [
                     ['name' => 'Unit Kerja', 'url' => '/simpeg/unit-kerja', 'icon' => 'FaSitemap', 'module' => 'simpeg', 'permission_slug' => 'simpeg.unit_kerja.read', 'order_index' => 1],
-                    ['name' => 'Jabatan & Jafung', 'url' => '/simpeg/jabatan', 'icon' => 'FaBriefcase', 'module' => 'simpeg', 'permission_slug' => 'simpeg.jabatan.read', 'order_index' => 2],
+                    ['name' => 'Jabatan & JAD', 'url' => '/simpeg/jabatan', 'icon' => 'FaBriefcase', 'module' => 'simpeg', 'permission_slug' => 'simpeg.jabatan.read', 'order_index' => 2],
                     ['name' => 'Master Jenis Cuti & Izin', 'url' => '/simpeg/master/jenis-cuti', 'icon' => 'FaCalendarCheck', 'module' => 'simpeg', 'permission_slug' => 'simpeg.cuti.read', 'order_index' => 3],
                     ['name' => 'Master Komponen Gaji', 'url' => '/simpeg/payroll/komponen', 'icon' => 'FaMoneyBillWave', 'module' => 'simpeg', 'permission_slug' => 'simpeg.payroll.read', 'order_index' => 4],
                     ['name' => 'Master Pengaturan Presensi', 'url' => '/simpeg/master/presensi', 'icon' => 'FaClock', 'module' => 'simpeg', 'permission_slug' => 'simpeg.presensi.update', 'order_index' => 5],

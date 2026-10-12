@@ -105,6 +105,9 @@ class NomorSuratController extends Controller
 
         $nomor = NomorSurat::with([
             'pembuat:id,name,email,username',
+            'pegawai:id,nama_lengkap,nip,nidn,unit_kerja_id',
+            'pegawai.unitKerja:id,nama',
+            'fileUploader:id,name,email',
             'kopSurat',
             'request.user:id,name,email',
         ])->findOrFail($id);
@@ -132,11 +135,12 @@ class NomorSuratController extends Controller
         $request->validate([
             'perihal' => 'sometimes|required|string|max:255',
             'tujuan' => 'nullable|string|max:200',
+            'pegawai_id' => 'nullable|exists:simpeg_pegawai,id',
             'status' => 'nullable|string|in:terpakai,direservasi,dibatalkan',
             'catatan' => 'nullable|string',
         ]);
 
-        $updated = $this->service->update($id, $request->only(['perihal', 'tujuan', 'status', 'catatan']));
+        $updated = $this->service->update($id, $request->only(['perihal', 'tujuan', 'pegawai_id', 'status', 'catatan']));
 
         return response()->json([
             'status' => 'success',
@@ -144,6 +148,85 @@ class NomorSuratController extends Controller
             'data' => $updated,
         ]);
     }
+
+    /**
+     * Upload berkas scan dokumen fisik surat resmi oleh Admin ARSIP.
+     */
+    public function uploadSurat(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('arsip.nomor_surat.update') && !$user->hasPermission('arsip.nomor_surat.create') && !$user->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk mengunggah berkas scan nomor surat.',
+            ], 403);
+        }
+
+        $request->validate([
+            'file_surat' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
+        ], [
+            'file_surat.required' => 'Berkas scan surat wajib diunggah.',
+            'file_surat.mimes' => 'Format berkas harus berupa PDF atau gambar (JPG, PNG).',
+            'file_surat.max' => 'Ukuran berkas scan surat maksimal 10 MB.',
+        ]);
+
+        $result = $this->service->uploadFileSurat($id, $request->file('file_surat'), $user->id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Berkas scan dokumen surat berhasil diunggah.',
+            'data' => $result,
+        ]);
+    }
+
+    /**
+     * Download / ambil tautan unduh berkas scan dokumen surat resmi.
+     */
+     public function downloadSurat(Request $request, int $id): JsonResponse
+     {
+         $user = $request->user();
+         if (!$user->hasPermission('arsip.nomor_surat.read') && !$user->isAdmin()) {
+             return response()->json([
+                 'status' => 'error',
+                 'message' => 'Anda tidak memiliki hak akses untuk mengunduh dokumen surat.',
+             ], 403);
+         }
+
+         $nomor = NomorSurat::findOrFail($id);
+         if (empty($nomor->file_surat_path)) {
+             return response()->json([
+                 'status' => 'error',
+                 'message' => 'Berkas scan dokumen surat belum diunggah.',
+             ], 404);
+         }
+
+         try {
+             AuditLogService::record(
+                 module: 'ARSIP',
+                 action: 'download_file_surat',
+                 tableName: 'core_arsip_nomor_surat',
+                 recordId: $nomor->id,
+                 oldValues: null,
+                 newValues: ['downloaded_at' => now()->toIso8601String()]
+             );
+         } catch (\Throwable $e) {
+             \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log download file surat: ' . $e->getMessage());
+         }
+
+         /** @var \App\Services\Storage\FileStorageService $fileStorage */
+         $fileStorage = app(\App\Services\Storage\FileStorageService::class);
+         $signedUrl = $fileStorage->signedUrl($nomor->file_surat_path);
+
+         return response()->json([
+             'status' => 'success',
+             'message' => 'Tautan unduh dokumen surat berhasil dibuat.',
+             'data' => [
+                 'nomor_surat' => $nomor->nomor_surat,
+                 'download_url' => $signedUrl,
+                 'expires_in_minutes' => 15,
+             ],
+         ]);
+     }
 
     /**
      * Membatalkan nomor surat.

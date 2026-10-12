@@ -27,9 +27,13 @@ class NomorSurat extends Model
         'status',
         'module_origin',
         'request_id',
+        'pegawai_id',
         'reference_type',
         'reference_id',
         'kop_surat_id',
+        'file_surat_path',
+        'file_surat_uploaded_at',
+        'file_surat_uploaded_by',
         'catatan',
         'created_by',
     ];
@@ -38,11 +42,31 @@ class NomorSurat extends Model
         'nomor_urut' => 'integer',
         'tahun' => 'integer',
         'tanggal_surat' => 'date',
+        'file_surat_uploaded_at' => 'datetime',
     ];
+
+    protected $appends = [
+        'has_file',
+    ];
+
+    public function getHasFileAttribute(): bool
+    {
+        return !empty($this->file_surat_path);
+    }
 
     public function pembuat(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function pegawai(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Simpeg\Pegawai::class, 'pegawai_id');
+    }
+
+    public function fileUploader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'file_surat_uploaded_by');
     }
 
     public function kopSurat(): BelongsTo

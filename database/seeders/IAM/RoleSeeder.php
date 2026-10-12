@@ -40,7 +40,7 @@ class RoleSeeder extends Seeder
             [
                 'name' => 'Dosen Pengajar',
                 'slug' => 'dosen',
-                'description' => 'Tenaga pengajar dengan akses Portal Mandiri Dosen, BKD, & Usulan Jafung',
+                'description' => 'Tenaga pengajar dengan akses Portal Mandiri Dosen, BKD, & Usulan JAD',
             ],
             [
                 'name' => 'Tenaga Kependidikan',

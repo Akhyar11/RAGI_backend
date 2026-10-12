@@ -14,6 +14,9 @@ class RequestNomorSurat extends Model
 {
     use HasFactory, SoftDeletes;
 
+    public const MODULE_ORIGIN_ARSIP = 'arsip';
+    public const MODULE_ORIGIN_SIMPEG = 'simpeg';
+
     protected $table = 'core_arsip_request_nomor';
 
     protected $fillable = [

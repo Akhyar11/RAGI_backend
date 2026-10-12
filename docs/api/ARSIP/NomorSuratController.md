@@ -26,6 +26,8 @@ Modul ini mengelola penerbitan nomor surat resmi kampus baik secara satuan (sing
 | POST | `/api/arsip/nomor-surat` | Terbitkan nomor surat (satuan atau bulk) | ✅ `arsip.nomor_surat.create` |
 | GET | `/api/arsip/nomor-surat/{id}` | Detail nomor surat | ✅ `arsip.nomor_surat.read` |
 | PUT | `/api/arsip/nomor-surat/{id}` | Perbarui data perihal/tujuan nomor surat | ✅ `arsip.nomor_surat.update` |
+| POST | `/api/arsip/nomor-surat/{id}/upload-surat` | Unggah scan berkas surat resmi (PDF/JPG/PNG) | ✅ `arsip.nomor_surat.update` |
+| GET | `/api/arsip/nomor-surat/{id}/download-surat` | Unduh berkas scan surat resmi | ✅ `arsip.nomor_surat.read` |
 | POST | `/api/arsip/nomor-surat/{id}/batalkan` | Batalkan nomor surat | ✅ `arsip.nomor_surat.update` |
 
 ---
@@ -170,5 +172,123 @@ Membatalkan nomor surat resmi yang terlanjur terbit.
 ```json
 {
   "alasan": "Salah perihal surat dan dibatalkan atas permintaan pemohon"
+}
+```
+
+---
+
+## 5. Unggah Scan Berkas Surat Resmi (Fisik)
+
+- **Method**: `POST`
+- **URL**: `/api/arsip/nomor-surat/{id}/upload-surat`
+- **Permission**: `arsip.nomor_surat.update` atau `arsip.nomor_surat.create`
+- **Deskripsi**: Admin ARSIP mengunggah berkas scan surat bertanda-tangan fisik yang telah terbit. Berkas disimpan secara privat di cloud storage aman.
+
+### Headers
+
+| Header | Value | Deskripsi |
+|---|---|---|
+| `Authorization` | `Bearer <token>` | Token otentikasi JWT/Passport |
+| `Content-Type` | `multipart/form-data` | Form data file upload |
+| `Accept` | `application/json` | Format respons yang diharapkan |
+
+### Form Data
+
+| Parameter | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `file_surat` | File (Binary) | Ya | Berkas scan dokumen (PDF, JPG, JPEG, PNG). Maksimal 10 MB. |
+
+### Respon Sukses (200 OK)
+
+```json
+{
+  "status": "success",
+  "message": "Berkas scan dokumen surat berhasil diunggah.",
+  "data": {
+    "id": 12,
+    "nomor_surat": "001/SDM/OT.01/X/2026",
+    "nomor_urut": 1,
+    "status": "terpakai",
+    "file_surat_path": "arsip/dokumen-surat/2026/10/d41d8cd9-8f00-4b24-96cf-c9c1e18cd8b8.pdf",
+    "file_surat_url": "http://127.0.0.1:8000/api/files/view?path=arsip%2Fdokumen-surat%2F2026%2F10%2Fd41d8cd9.pdf&signature=abcdef123456",
+    "has_file": true,
+    "file_surat_uploaded_at": "2026-10-12T14:00:00+07:00",
+    "file_uploader": {
+      "id": 1,
+      "name": "Admin Arsip & Tata Usaha",
+      "email": "arsip@politeknik.ac.id"
+    }
+  }
+}
+```
+
+### Respon Error (422 Unprocessable Entity)
+
+```json
+{
+  "status": "error",
+  "message": "Format berkas harus berupa PDF atau gambar (JPG, PNG).",
+  "errors": {
+    "file_surat": [
+      "Format berkas harus berupa PDF atau gambar (JPG, PNG)."
+    ]
+  }
+}
+```
+
+### Respon Error (403 Forbidden)
+
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki hak akses untuk mengunggah berkas scan nomor surat."
+}
+```
+
+---
+
+## 6. Unduh / Tautan Berkas Scan Dokumen Surat Resmi
+
+- **Method**: `GET`
+- **URL**: `/api/arsip/nomor-surat/{id}/download-surat`
+- **Permission**: `arsip.nomor_surat.read`
+- **Deskripsi**: Menghasilkan tautan bertanda-tangan (Signed URL) sementara yang berlaku selama 15 menit untuk mengunduh dokumen privat fisik scan surat resmi.
+
+### Headers
+
+| Header | Value | Deskripsi |
+|---|---|---|
+| `Authorization` | `Bearer <token>` | Token otentikasi JWT/Passport |
+| `Accept` | `application/json` | Format respons yang diharapkan |
+
+### Respon Sukses (200 OK)
+
+```json
+{
+  "status": "success",
+  "message": "Tautan unduh dokumen surat berhasil dibuat.",
+  "data": {
+    "nomor_surat": "001/SDM/OT.01/X/2026",
+    "download_url": "http://127.0.0.1:8000/api/files/view?path=arsip%2Fdokumen-surat%2F2026%2F10%2Fd41d8cd9.pdf&signature=abcdef123456",
+    "expires_in_minutes": 15
+  }
+}
+```
+
+### Respon Error (404 Not Found)
+
+```json
+{
+  "status": "error",
+  "message": "Berkas scan dokumen surat belum diunggah."
+}
+```
+
+### Respon Error (403 Forbidden)
+
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki hak akses untuk mengunduh dokumen surat."
 }
 ```

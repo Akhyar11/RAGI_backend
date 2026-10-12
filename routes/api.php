@@ -421,6 +421,12 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::put('sk-pegawai/{id}', [App\Http\Controllers\Simpeg\SkPegawaiController::class, 'update']);
     Route::post('sk-pegawai/{id}/verify', [App\Http\Controllers\Simpeg\SkPegawaiController::class, 'verify']);
     Route::delete('sk-pegawai/{id}', [App\Http\Controllers\Simpeg\SkPegawaiController::class, 'destroy']);
+
+    // Penomoran Surat & Berkas Scan Mandiri Pegawai (Integrasi ARSIP)
+    Route::get('nomor-surat/my-letters', [App\Http\Controllers\Simpeg\SimpegNomorSuratController::class, 'myLetters']);
+    Route::post('nomor-surat/request', [App\Http\Controllers\Simpeg\SimpegNomorSuratController::class, 'submitRequest']);
+    Route::post('nomor-surat/{id}/upload-scan', [App\Http\Controllers\Simpeg\SimpegNomorSuratController::class, 'uploadScan']);
+    Route::get('nomor-surat/{id}/download-scan', [App\Http\Controllers\Simpeg\SimpegNomorSuratController::class, 'downloadScan']);
 });
 
 /*
@@ -1066,6 +1072,8 @@ Route::middleware('auth:api')->prefix('arsip')->group(function () {
     Route::apiResource('request-nomor', App\Http\Controllers\Arsip\RequestNomorSuratController::class)->only(['index', 'store', 'show']);
 
     // Nomor Surat Definitif (Satuan / Bulk)
+    Route::post('nomor-surat/{id}/upload-surat', [App\Http\Controllers\Arsip\NomorSuratController::class, 'uploadSurat']);
+    Route::get('nomor-surat/{id}/download-surat', [App\Http\Controllers\Arsip\NomorSuratController::class, 'downloadSurat']);
     Route::post('nomor-surat/{id}/batalkan', [App\Http\Controllers\Arsip\NomorSuratController::class, 'batalkan']);
     Route::apiResource('nomor-surat', App\Http\Controllers\Arsip\NomorSuratController::class);
 });
