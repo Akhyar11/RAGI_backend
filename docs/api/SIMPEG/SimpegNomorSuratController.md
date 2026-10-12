@@ -98,8 +98,8 @@ Mengajukan permohonan nomor surat resmi baru dari modul SIMPEG ke Admin ARSIP.
 
 - `mode` (string, optional: `satuan` atau `bulk`, default: `satuan`)
 - `tanggal_surat` (string date Y-m-d, required)
-- `kode_unit` (string, required)
-- `kode_klasifikasi` (string, required)
+- `kode_unit` (string, optional - jika kosong diisi kode unit kerja pemohon atau 'PENDING' untuk diverifikasi Admin ARSIP)
+- `kode_klasifikasi` (string, optional - jika kosong bernilai 'PENDING' untuk diverifikasi & ditentukan Admin ARSIP)
 - `perihal` (string, required)
 - `tujuan` (string, optional)
 - `jumlah_nomor` (integer, required jika mode=bulk, default: 1)

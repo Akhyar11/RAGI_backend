@@ -233,42 +233,54 @@ class SimpegNomorSuratController extends Controller
             'tujuan' => 'nullable|string|max:200',
             'tanggal_surat' => 'required|date',
             'kode_unit' => 'nullable|string|max:50',
-            'kode_klasifikasi' => 'required|string|max:50',
+            'kode_klasifikasi' => 'nullable|string|max:50',
             'jumlah_nomor' => 'nullable|integer|min:1|max:50',
             'catatan_pemohon' => 'nullable|string',
             'lampiran' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:10240',
         ], [
             'perihal.required' => 'Perihal surat wajib diisi.',
             'tanggal_surat.required' => 'Tanggal surat yang diajukan wajib diisi.',
-            'kode_klasifikasi.required' => 'Kode klasifikasi surat wajib dipilih.',
             'jumlah_nomor.min' => 'Jumlah nomor surat minimal 1.',
             'jumlah_nomor.max' => 'Pengajuan nomor surat mandiri maksimal 50 per permohonan.',
+            'lampiran.file' => 'Berkas lampiran harus berupa dokumen atau gambar yang valid.',
+            'lampiran.mimes' => 'Format berkas lampiran harus berupa PDF, DOC, DOCX, JPG, JPEG, atau PNG.',
+            'lampiran.max' => 'Ukuran berkas lampiran maksimal 10 MB.',
         ]);
 
-        $unitKode = !empty($validated['kode_unit']) ? $validated['kode_unit'] : ($pegawai?->unitKerja?->kode ?? null);
+        $unitKode = !empty($validated['kode_unit'])
+            ? strtoupper(trim($validated['kode_unit']))
+            : ($pegawai?->unitKerja?->kode ?? null);
 
         if (empty($unitKode)) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Kode unit kerja pemohon tidak ditemukan. Silakan tentukan unit kerja tujuan permohonan.',
+                'message' => 'Profil pegawai belum memiliki unit kerja yang terdaftar. Hubungi administrator kepegawaian.',
                 'errors' => [
-                    'kode_unit' => ['Kode unit kerja pemohon tidak ditemukan atau profil pegawai belum memiliki unit kerja.'],
+                    'kode_unit' => ['Unit kerja pemohon tidak ditemukan pada data pegawai aktif.'],
                 ],
             ], 422);
         }
 
+        $klasifikasiKode = !empty($validated['kode_klasifikasi'])
+            ? strtoupper(trim($validated['kode_klasifikasi']))
+            : null;
+
         $payload = array_merge($validated, [
             'module_origin' => \App\Models\Arsip\RequestNomorSurat::MODULE_ORIGIN_SIMPEG,
             'kode_unit' => $unitKode,
-            'kode_klasifikasi' => $validated['kode_klasifikasi'],
+            'kode_klasifikasi' => $klasifikasiKode,
             'reference_type' => Pegawai::class,
             'reference_id' => $pegawai?->id,
         ]);
 
+        $lampiranFile = $request->hasFile('lampiran') && $request->file('lampiran')->isValid()
+            ? $request->file('lampiran')
+            : null;
+
         $created = $this->requestNomorSuratService->createRequest(
             $payload,
             $user->id,
-            $request->file('lampiran')
+            $lampiranFile
         );
 
         try {
