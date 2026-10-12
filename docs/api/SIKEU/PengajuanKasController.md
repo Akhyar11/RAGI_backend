@@ -1,6 +1,8 @@
 # PengajuanKasController
 
-> **Modul**: SIKEU / **Base URL**: /api/v1/sikeu / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-19
+> **Modul**: SIKEU / **Base URL**: /api/v1/sikeu / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-19 / 2026-10-12
+>
+> > Otorisasi `POST pengajuan-kas` memakai permission `sikeu.pengajuan.create` (atau role superadmin/admin) karena slug `sikeu.pengajuan_kas.*` belum ada di master permission. `nominal_disetujui` terisi `0` saat dibuat dan ditetapkan keuangan saat approve.
 
 Modul ini mengelola siklus permohonan pencairan kas unit operasional dan panjar perjalanan dinas luar (SIMPEG), proses verifikasi dan persetujuan oleh bagian keuangan/pimpinan, pencairan saldo kas, pembuatan mutasi pengeluaran kampus, serta penolakan pengajuan.
 
@@ -178,7 +180,7 @@ Modul ini mengelola siklus permohonan pencairan kas unit operasional dan panjar 
         "judul_pengajuan": "Pembelian Perlengkapan Kantor Fakultas",
         "deskripsi": "Kertas, tinta printer, dan ATK bulanan",
         "nominal_diajukan": "2500000.00",
-        "nominal_disetujui": null,
+        "nominal_disetujui": "0.00",
         "status": "pending_keuangan",
         "created_at": "2026-09-19T08:30:00.000000Z",
         "updated_at": "2026-09-19T08:30:00.000000Z"

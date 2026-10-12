@@ -8,8 +8,10 @@ class StorePengajuanKasRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('sikeu.pengajuan_kas.create') ||
-               $this->user()?->hasPermission('sikeu.pengajuan_kas.manage') ||
+        // Slug sikeu.pengajuan_kas.* belum ada di master permission,
+        // pakai slug pengajuan operasional yang sudah ada agar petugas unit bisa mengajukan.
+        return $this->user()?->hasPermission('sikeu.pengajuan.create') ||
+               $this->user()?->hasPermission('sikeu.pengajuan.manage') ||
                $this->user()?->hasRole('superadmin') ||
                $this->user()?->hasRole('admin');
     }

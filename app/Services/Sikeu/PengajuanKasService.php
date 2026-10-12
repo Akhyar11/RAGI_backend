@@ -22,13 +22,14 @@ class PengajuanKasService
             $pengajuan = PengajuanPencairanKas::create([
                 'nomor_pengajuan' => 'PK-' . time(),
                 'unit_kas_id' => $data['unit_kas_id'],
-                'unit_kerja_id' => $data['unit_kerja_id'],
+                'unit_kerja_id' => $data['unit_kerja_id'] ?? null,
                 'pemohon_id' => $pemohonId,
                 'judul_pengajuan' => $data['judul_pengajuan'],
                 'deskripsi' => $data['deskripsi'] ?? null,
                 'nominal_diajukan' => $data['nominal_diajukan'],
-                'nominal_disetujui' => null,
-                'jenis_pengajuan' => $data['jenis_pengajuan'],
+                'nominal_disetujui' => 0,
+                'jenis_pengajuan' => $data['jenis_pengajuan'] ?? 'operasional',
+                'kategori_pengajuan' => 'non_barang',
                 'status' => 'pending_keuangan',
             ]);
 
