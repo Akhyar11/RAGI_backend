@@ -124,6 +124,12 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::post('system-settings/test-smtp', [App\Http\Controllers\IAM\SystemSettingController::class, 'testSmtp']);
     Route::post('system-settings/test-r2', [App\Http\Controllers\IAM\SystemSettingController::class, 'testR2']);
 
+    // API Integrations (SSO/IAM System Registry & Settings)
+    Route::get('api-integrations', [App\Http\Controllers\IAM\IamApiIntegrationController::class, 'index']);
+    Route::get('api-integrations/{id}', [App\Http\Controllers\IAM\IamApiIntegrationController::class, 'show']);
+    Route::put('api-integrations/{id}', [App\Http\Controllers\IAM\IamApiIntegrationController::class, 'update']);
+    Route::post('api-integrations/{id}/test', [App\Http\Controllers\IAM\IamApiIntegrationController::class, 'testConnection']);
+
     // Menus (Admin Management)
     Route::get('menus', [MenuController::class, 'index']);
     Route::post('menus', [MenuController::class, 'store']);

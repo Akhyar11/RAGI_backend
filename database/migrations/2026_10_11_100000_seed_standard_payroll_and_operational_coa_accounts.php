@@ -96,13 +96,17 @@ return new class extends Migration
         ];
 
         foreach ($accounts as $acc) {
-            DB::table('sikeu_akun_keuangan')->updateOrInsert(
-                ['kode_akun' => $acc['kode_akun']],
-                array_merge($acc, [
+            $existing = DB::table('sikeu_akun_keuangan')->where('kode_akun', $acc['kode_akun'])->first();
+            if ($existing) {
+                DB::table('sikeu_akun_keuangan')->where('kode_akun', $acc['kode_akun'])->update(array_merge($acc, [
                     'updated_at' => now(),
-                    'created_at' => DB::raw('COALESCE(created_at, NOW())'),
-                ])
-            );
+                ]));
+            } else {
+                DB::table('sikeu_akun_keuangan')->insert(array_merge($acc, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]));
+            }
         }
     }
 

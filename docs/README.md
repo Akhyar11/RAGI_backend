@@ -19,6 +19,7 @@
 | UserSessionController | Pemantauan & pencabutan sesi pengguna | [docs/api/IAM/UserSessionController.md](api/IAM/UserSessionController.md) |
 | AuditLogController | Rekaman log sistem (Akuntabilitas) | [docs/api/IAM/AuditLogController.md](api/IAM/AuditLogController.md) |
 | SystemSettingController | Pengaturan terpusat sistem (SMTP, R2, Feeder, LMS) | [docs/api/IAM/SystemSettingController.md](api/IAM/SystemSettingController.md) |
+| IamApiIntegrationController | Pengaturan integrasi API sistem (SPMB legacy migration registry & test) | [docs/api/IAM/IamApiIntegrationController.md](api/IAM/IamApiIntegrationController.md) |
 
 ---
 
