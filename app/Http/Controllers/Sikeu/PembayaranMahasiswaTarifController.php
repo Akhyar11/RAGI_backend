@@ -833,7 +833,21 @@ class PembayaranMahasiswaTarifController extends Controller
      */
     public function destroyTagihan($id)
     {
+        $this->authorize('sikeu.approval.approve');
         $tagihan = TagihanMahasiswa::with(['pembayarans', 'potonganTagihan'])->findOrFail($id);
+
+        // Guard periode tutup: hapus tagihan dilarang saat periode berjalan ditutup.
+        $today = now()->toDateString();
+        $periodeTutup = \App\Models\Sikeu\PeriodeAkuntansi::where('status', 'ditutup')
+            ->where('tanggal_mulai', '<=', $today)
+            ->where('tanggal_selesai', '>=', $today)
+            ->first();
+        if ($periodeTutup) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Periode akuntansi \"{$periodeTutup->nama_periode}\" sudah ditutup. Tagihan tidak dapat dihapus.",
+            ], 403);
+        }
 
         if ((float)$tagihan->total_bayar > 0 || $tagihan->status === 'lunas' || $tagihan->pembayarans->where('status', 'success')->isNotEmpty()) {
             return response()->json([
@@ -889,6 +903,7 @@ class PembayaranMahasiswaTarifController extends Controller
      */
     public function batchDestroyTagihan(Request $request)
     {
+        $this->authorize('sikeu.approval.approve');
         $validator = Validator::make($request->all(), [
             'tagihan_ids' => 'required|array|min:1',
             'tagihan_ids.*' => 'integer|exists:sikeu_tagihan_mahasiswa,id',
@@ -905,6 +920,18 @@ class PembayaranMahasiswaTarifController extends Controller
         $tagihans = TagihanMahasiswa::with(['pembayarans', 'potonganTagihan'])
             ->whereIn('id', $request->tagihan_ids)
             ->get();
+
+        $todayBatch = now()->toDateString();
+        $periodeTutupBatch = \App\Models\Sikeu\PeriodeAkuntansi::where('status', 'ditutup')
+            ->where('tanggal_mulai', '<=', $todayBatch)
+            ->where('tanggal_selesai', '>=', $todayBatch)
+            ->first();
+        if ($periodeTutupBatch) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Periode akuntansi \"{$periodeTutupBatch->nama_periode}\" sudah ditutup. Tagihan tidak dapat dihapus massal.",
+            ], 403);
+        }
 
         $paidBills = $tagihans->filter(function ($b) {
             return (float)$b->total_bayar > 0 || $b->status === 'lunas' || $b->pembayarans->where('status', 'success')->isNotEmpty();
@@ -1366,6 +1393,7 @@ class PembayaranMahasiswaTarifController extends Controller
      */
     public function alihkanPembayaran(Request $request)
     {
+        $this->authorize('sikeu.approval.approve');
         $validator = Validator::make($request->all(), [
             'source_tagihan_id' => 'required|integer|exists:sikeu_tagihan_mahasiswa,id',
             'target_tagihan_id' => 'required|integer|exists:sikeu_tagihan_mahasiswa,id|different:source_tagihan_id',
@@ -1386,6 +1414,26 @@ class PembayaranMahasiswaTarifController extends Controller
 
             $source = TagihanMahasiswa::findOrFail($request->source_tagihan_id);
             $target = TagihanMahasiswa::findOrFail($request->target_tagihan_id);
+
+            // Guard periode tutup buku: alihkan dana dilarang saat periode ditutup.
+            $today = now()->toDateString();
+            $periodeTutup = \App\Models\Sikeu\PeriodeAkuntansi::where('status', 'ditutup')
+                ->where('tanggal_mulai', '<=', $today)
+                ->where('tanggal_selesai', '>=', $today)
+                ->first();
+            if ($periodeTutup) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Periode akuntansi \"{$periodeTutup->nama_periode}\" sudah ditutup. Pengalihan pembayaran tidak dapat diproses.",
+                ], 403);
+            }
+
+            if (in_array($source->status, ['batal'], true) || in_array($target->status, ['batal'], true)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tagihan berstatus batal tidak dapat dialihkan.',
+                ], 422);
+            }
 
             // Pastikan kedua tagihan milik mahasiswa/calon mahasiswa yang sama
             $sameStudent = ($source->mahasiswa_id && $source->mahasiswa_id === $target->mahasiswa_id)
@@ -1455,10 +1503,12 @@ class PembayaranMahasiswaTarifController extends Controller
             $newTargetBayar = (float)$target->total_bayar + $nominal;
             $newTargetStatus = ($newTargetBayar >= $targetBersih) ? 'lunas' : 'sebagian';
 
+            $oldValuesTarget = $target->getOriginal();
             $target->update([
                 'total_bayar' => $newTargetBayar,
                 'status' => $newTargetStatus,
             ]);
+            $newValuesTarget = $target->getChanges();
             DetailTagihan::alokasikan($target, $nominal);
 
             $kodeTrx = 'ALIKH-' . date('YmdHis') . '-' . rand(100, 999);
@@ -1476,6 +1526,25 @@ class PembayaranMahasiswaTarifController extends Controller
             ]);
 
             DB::commit();
+
+            try {
+                AuditLogService::record(
+                    module: 'SIKEU',
+                    action: 'update',
+                    tableName: 'sikeu_tagihan_mahasiswa',
+                    recordId: $target->id,
+                    oldValues: $oldValuesTarget,
+                    newValues: array_merge($newValuesTarget, [
+                        'source_tagihan_id' => $source->id,
+                        'nominal_dialihkan' => $nominal,
+                        'alasan' => $request->alasan,
+                        'kode_transaksi' => $pembayaran->kode_transaksi,
+                    ]),
+                    request: $request,
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log alihkan pembayaran: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'status' => 'success',

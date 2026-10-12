@@ -785,6 +785,27 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::post('pembayaran/{id}/approve-manual', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'approveManual']);
     Route::post('pembayaran/{id}/reject-manual', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'rejectManual']);
 
+    // Koreksi Alokasi Pembayaran (redistribusi alokasi antar tagihan same-student)
+    Route::get('koreksi-alokasi', [App\Http\Controllers\Sikeu\KoreksiAlokasiController::class, 'index']);
+    Route::get('koreksi-alokasi/konsolidasi', [App\Http\Controllers\Sikeu\KoreksiAlokasiController::class, 'konsolidasi']);
+    Route::post('koreksi-alokasi/simulate', [App\Http\Controllers\Sikeu\KoreksiAlokasiController::class, 'simulate']);
+    Route::post('koreksi-alokasi/draft', [App\Http\Controllers\Sikeu\KoreksiAlokasiController::class, 'draft']);
+    Route::get('koreksi-alokasi/tagihan/{id}/sisa', [App\Http\Controllers\Sikeu\KoreksiAlokasiController::class, 'sisaTagihan']);
+    Route::get('koreksi-alokasi/{id}', [App\Http\Controllers\Sikeu\KoreksiAlokasiController::class, 'show'])->whereNumber('id');
+    Route::post('koreksi-alokasi/{id}/approve', [App\Http\Controllers\Sikeu\KoreksiAlokasiController::class, 'approve'])->whereNumber('id');
+    Route::post('koreksi-alokasi/{id}/reject', [App\Http\Controllers\Sikeu\KoreksiAlokasiController::class, 'reject'])->whereNumber('id');
+    Route::post('koreksi-alokasi/{id}/apply', [App\Http\Controllers\Sikeu\KoreksiAlokasiController::class, 'apply'])->whereNumber('id');
+    Route::post('koreksi-alokasi/{id}/cancel', [App\Http\Controllers\Sikeu\KoreksiAlokasiController::class, 'cancel'])->whereNumber('id');
+
+    // Perubahan Prodi / Jenis Pendaftaran (efektif TA+semester, histori auditabel)
+    Route::get('perubahan-prodi', [App\Http\Controllers\Sikeu\PerubahanProdiController::class, 'index']);
+    Route::get('perubahan-prodi/dampak', [App\Http\Controllers\Sikeu\PerubahanProdiController::class, 'dampak']);
+    Route::post('perubahan-prodi', [App\Http\Controllers\Sikeu\PerubahanProdiController::class, 'store']);
+    Route::get('perubahan-prodi/{id}', [App\Http\Controllers\Sikeu\PerubahanProdiController::class, 'show'])->whereNumber('id');
+    Route::post('perubahan-prodi/{id}/approve', [App\Http\Controllers\Sikeu\PerubahanProdiController::class, 'approve'])->whereNumber('id');
+    Route::post('perubahan-prodi/{id}/reject', [App\Http\Controllers\Sikeu\PerubahanProdiController::class, 'reject'])->whereNumber('id');
+    Route::post('perubahan-prodi/{id}/apply', [App\Http\Controllers\Sikeu\PerubahanProdiController::class, 'apply'])->whereNumber('id');
+
     // Generate Tagihan Semester Masal
     Route::post('tagihan/generate-mass', [App\Http\Controllers\Sikeu\PembayaranKasirController::class, 'generateMassTagihan']);
 

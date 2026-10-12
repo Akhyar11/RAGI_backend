@@ -68,6 +68,7 @@
 | AkademikController | Master akademik + opsi referensi dropdown (jenjang, akreditasi, tipe MK, mode penilaian) | [docs/api/SIAKAD/AkademikController.md](api/SIAKAD/AkademikController.md) |
 | FeederSyncController | Sinkronisasi Neo Feeder PDDikti (Dosen, Penugasan, Ajar, Mahasiswa, Kelas) | [docs/api/SIAKAD/FeederSyncController.md](api/SIAKAD/FeederSyncController.md) |
 | MahasiswaController | Data mahasiswa, NIM, usulan konversi transfer nilai (detail, edit, status), dan penugasan PA | [docs/api/SIAKAD/MahasiswaController.md](api/SIAKAD/MahasiswaController.md) |
+| PindahProdiController | Pindah program studi: pengajuan, sign-off keuangan, approval akademik, apply + event ke SIKEU | [docs/api/SIAKAD/PindahProdiController.md](api/SIAKAD/PindahProdiController.md) |
 | ObeController | Kurikulum OBE (CPL/CPMK, Sub-CPMK, Profil Lulusan, Bahan Kajian, RPS, Nilai, Bank Soal & Kategori Opsi) | [docs/api/SIAKAD/ObeController.md](api/SIAKAD/ObeController.md) |
 | ObeMasterController | Master OBE (rumpun MK, jenis CPL, profesi/prospek karir, rubrik penilaian) | [docs/api/SIAKAD/ObeMasterController.md](api/SIAKAD/ObeMasterController.md) |
 | PerkuliahanController | Kelas, KRS, nilai, transkrip, pertemuan & absensi | [docs/api/SIAKAD/PerkuliahanController.md](api/SIAKAD/PerkuliahanController.md) |
@@ -109,6 +110,8 @@
 | PembayaranMahasiswaTarifController | Tarif per angkatan & prodi, tagihan individu/massal (guard duplikat semester), & proteksi hapus per angkatan | [docs/api/SIKEU/PembayaranMahasiswaTarifController.md](api/SIKEU/PembayaranMahasiswaTarifController.md) |
 | KasKecilController | Kas Kecil (Petty Cash): unit per fakultas, transaksi keluar, pengajuan/top-up & persetujuan dengan jurnal otomatis | [docs/api/SIKEU/KasKecilController.md](api/SIKEU/KasKecilController.md) |
 | SikeuExtendedMasterController | Master tambahan (jalur kelas, tarif UKT, beasiswa, potongan) & daftar/detail tagihan mahasiswa (filter kelas) | [docs/api/SIKEU/SikeuExtendedMasterController.md](api/SIKEU/SikeuExtendedMasterController.md) |
+| KoreksiAlokasiController | Koreksi alokasi pembayaran antar tagihan + tagihan kekurangan otomatis | [docs/api/SIKEU/KoreksiAlokasiController.md](api/SIKEU/KoreksiAlokasiController.md) |
+| PerubahanProdiController | Perpindahan prodi / jenis pendaftaran efektif TA+semester | [docs/api/SIKEU/PerubahanProdiController.md](api/SIKEU/PerubahanProdiController.md) |
 
 ---
 

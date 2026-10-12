@@ -70,6 +70,49 @@ class PiutangMahasiswaController extends Controller
         $totalMahasiswaTunggakan = $allTagihans->pluck('mahasiswa_id')->filter()->unique()->count() + $allTagihans->pluck('calon_mahasiswa_id')->filter()->unique()->count();
         $totalRecordDispensasi = $allTagihans->where('status', 'dispensasi')->count();
 
+        // Aging piutang (auditor): kelompokkan sisa berdasarkan umur jatuh tempo.
+        $todayAging = now()->startOfDay();
+        $aging = [
+            'belum_jatuh_tempo' => 0,
+            'umur_1_30' => 0,
+            'umur_31_60' => 0,
+            'umur_61_90' => 0,
+            'umur_lebih_90' => 0,
+        ];
+        foreach ($allTagihans as $at) {
+            $bersihAt = (float) ($at->total_tagihan + $at->total_denda - $at->total_potongan);
+            $bayarAt = $cutoffDate
+                ? (float) $at->pembayarans->where('status', 'success')->filter(function ($p) use ($cutoffDate) {
+                    $tgl = $p->waktu_bayar ? $p->waktu_bayar->toDateString() : ($p->created_at ? $p->created_at->toDateString() : null);
+
+                    return $tgl && $tgl <= $cutoffDate;
+                })->sum('jumlah_bayar')
+                : (float) $at->total_bayar;
+            $sisaAt = max(0, $bersihAt - $bayarAt);
+            if ($sisaAt <= 0) {
+                continue;
+            }
+            if (!$at->jatuh_tempo) {
+                $aging['belum_jatuh_tempo'] += $sisaAt;
+                continue;
+            }
+            $jt = \Carbon\Carbon::parse($at->jatuh_tempo->toDateString())->startOfDay();
+            if ($todayAging->lessThanOrEqualTo($jt)) {
+                $aging['belum_jatuh_tempo'] += $sisaAt;
+                continue;
+            }
+            $umurHari = $todayAging->diffInDays($jt);
+            if ($umurHari <= 30) {
+                $aging['umur_1_30'] += $sisaAt;
+            } elseif ($umurHari <= 60) {
+                $aging['umur_31_60'] += $sisaAt;
+            } elseif ($umurHari <= 90) {
+                $aging['umur_61_90'] += $sisaAt;
+            } else {
+                $aging['umur_lebih_90'] += $sisaAt;
+            }
+        }
+
         // Transform data output
         $formattedData = collect($paginated->items())->map(function ($t) use ($cutoffDate) {
             $mhs = $t->mahasiswa;
@@ -92,6 +135,20 @@ class PiutangMahasiswaController extends Controller
             $sisaPiutang = max(0, $totalBersih - $totalBayarRow);
             $statusRow = $cutoffDate ? ($sisaPiutang <= 0 ? 'lunas' : ($totalBayarRow > 0 ? 'sebagian' : 'belum_bayar')) : $t->status;
 
+            // Umur piutang per baris (hari keterlambatan dari jatuh tempo).
+            $umurHariRow = null;
+            $bucketRow = null;
+            if ($sisaPiutang > 0 && $t->jatuh_tempo) {
+                $jtRow = \Carbon\Carbon::parse($t->jatuh_tempo->toDateString())->startOfDay();
+                if (now()->startOfDay()->lessThanOrEqualTo($jtRow)) {
+                    $umurHariRow = 0;
+                    $bucketRow = 'belum_jatuh_tempo';
+                } else {
+                    $umurHariRow = now()->startOfDay()->diffInDays($jtRow);
+                    $bucketRow = $umurHariRow <= 30 ? 'umur_1_30' : ($umurHariRow <= 60 ? 'umur_31_60' : ($umurHariRow <= 90 ? 'umur_61_90' : 'umur_lebih_90'));
+                }
+            }
+
             return [
                 'id' => $t->id,
                 'nomor_tagihan' => $t->nomor_tagihan,
@@ -113,6 +170,8 @@ class PiutangMahasiswaController extends Controller
                 'sisa_piutang' => $sisaPiutang,
                 'status' => $statusRow,
                 'jatuh_tempo' => $t->jatuh_tempo ? $t->jatuh_tempo->format('Y-m-d') : null,
+                'umur_piutang_hari' => $umurHariRow,
+                'bucket_umur' => $bucketRow,
                 'created_at' => $t->created_at ? $t->created_at->format('Y-m-d H:i:s') : null,
                 'has_dispensasi' => $t->dispensasis->isNotEmpty(),
             ];
@@ -138,6 +197,7 @@ class PiutangMahasiswaController extends Controller
                 'total_piutang' => $totalPiutang,
                 'total_mahasiswa_tunggakan' => $totalMahasiswaTunggakan,
                 'total_record_dispensasi' => $totalRecordDispensasi,
+                'aging' => $aging,
             ],
             'filters' => [
                 'search' => $search,

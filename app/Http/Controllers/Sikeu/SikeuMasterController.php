@@ -718,15 +718,34 @@ class SikeuMasterController extends Controller
 
     public function getStudentBillingCategories(Request $request)
     {
-        $categories = [
-            ['id' => 1, 'nama' => 'UKT Reguler', 'kode' => 'UKT_REG'],
-            ['id' => 2, 'nama' => 'UKT Eksekutif / Karyawan', 'kode' => 'UKT_EKS'],
-            ['id' => 3, 'nama' => 'UKT Internasional', 'kode' => 'UKT_INT'],
-        ];
+        $this->authorize('sikeu.tagihan.read');
+        // Dinamis dari master jalur kelas (zero-hardcode): dropdown kategori
+        // mengikuti tabel sikeu_jalur_kelas yang dikelola admin.
+        // Tanpa fallback statis: master kosong berarti belum dikonfigurasi.
+        try {
+            $jalur = \App\Models\Sikeu\JalurKelas::where('is_active', true)
+                ->orderBy('id')
+                ->get(['id', 'kode', 'nama_jalur']);
+        } catch (\Throwable $e) {
+            $jalur = collect();
+        }
+
+        if ($jalur->isEmpty()) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Master jalur kelas belum dikonfigurasi. Hubungi admin untuk mengisi master jalur kelas.',
+                'data' => [],
+            ]);
+        }
 
         return response()->json([
             'status' => 'success',
-            'data' => $categories
+            'message' => 'Kategori billing berhasil dimuat',
+            'data' => $jalur->map(fn ($j) => [
+                'id' => $j->id,
+                'nama' => $j->nama_jalur,
+                'kode' => $j->kode,
+            ])->values()->all(),
         ]);
     }
 

@@ -61,6 +61,18 @@ Route::prefix('mahasiswa')->group(function () {
     Route::delete('/{id}', [MahasiswaController::class, 'destroy']);
 });
 
+// --- Pindah Program Studi (pemilik mutasi: SIAKAD; SIKEU mendengar via event) ---
+Route::prefix('pindah-prodi')->group(function () {
+    Route::get('/', [\App\Http\Controllers\API\Siakad\PindahProdiController::class, 'index']);
+    Route::get('/dampak', [\App\Http\Controllers\API\Siakad\PindahProdiController::class, 'dampak']);
+    Route::post('/', [\App\Http\Controllers\API\Siakad\PindahProdiController::class, 'store']);
+    Route::get('/{id}', [\App\Http\Controllers\API\Siakad\PindahProdiController::class, 'show'])->whereNumber('id');
+    Route::post('/{id}/cek-keuangan', [\App\Http\Controllers\API\Siakad\PindahProdiController::class, 'cekKeuangan'])->whereNumber('id');
+    Route::post('/{id}/approve', [\App\Http\Controllers\API\Siakad\PindahProdiController::class, 'approve'])->whereNumber('id');
+    Route::post('/{id}/reject', [\App\Http\Controllers\API\Siakad\PindahProdiController::class, 'reject'])->whereNumber('id');
+    Route::post('/{id}/apply', [\App\Http\Controllers\API\Siakad\PindahProdiController::class, 'apply'])->whereNumber('id');
+});
+
 // --- Penerima Beasiswa Mahasiswa (Kelolaan BAAK) ---
 Route::prefix('civitas/beasiswa')->group(function () {
     Route::get('/options', [MahasiswaBeasiswaController::class, 'getBeasiswaOptions']);
