@@ -38,6 +38,7 @@ class TagihanMahasiswa extends Model
         'tanggal_approval',
         'catatan_approval',
         'source_system',
+        'koreksi_alokasi_id',
         'jatuh_tempo',
     ];
 

@@ -22,6 +22,12 @@ class AppServiceProvider extends ServiceProvider
             \App\Listeners\Spmb\ProsesKonversiMahasiswa::class
         );
 
+        // Mutasi prodi diterapkan SIAKAD -> SIKEU mencatat konteks penagihan (queued).
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Events\Siakad\MahasiswaPindahProdi::class,
+            \App\Listeners\Sikeu\CatatKonteksPenagihanPindahProdi::class
+        );
+
         \Illuminate\Support\Facades\Event::listen(
             \App\Events\Simpeg\SuratTugasDisetujui::class,
             \App\Listeners\Simpeg\SetPresensiDinasLuar::class
@@ -59,6 +65,7 @@ class AppServiceProvider extends ServiceProvider
 
         // SIAKAD Observers
         \App\Models\Siakad\Mahasiswa::observe(\App\Observers\MahasiswaObserver::class);
+        \App\Models\Siakad\PindahProdi::observe(\App\Observers\Siakad\PindahProdiObserver::class);
         \App\Models\Siakad\KonversiTransfer::observe(\App\Observers\KonversiTransferObserver::class);
         \App\Models\Siakad\TahunAkademik::observe(\App\Observers\Siakad\TahunAkademikObserver::class);
         \App\Models\Siakad\ProgramStudi::observe(\App\Observers\Siakad\ProgramStudiObserver::class);
@@ -68,6 +75,8 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Sikeu\PengeluaranKampus::observe(\App\Observers\Sikeu\PengeluaranKampusObserver::class);
         \App\Models\Sikeu\UnitKas::observe(\App\Observers\Sikeu\UnitKasObserver::class);
         \App\Models\Sikeu\TransaksiKasUnit::observe(\App\Observers\Sikeu\TransaksiKasUnitObserver::class);
+        \App\Models\Sikeu\KoreksiAlokasi::observe(\App\Observers\Sikeu\KoreksiAlokasiObserver::class);
+        \App\Models\Sikeu\PerubahanProdi::observe(\App\Observers\Sikeu\PerubahanProdiObserver::class);
 
         // SIMPEG Observers
         \App\Models\Simpeg\SuratTugas::observe(\App\Observers\Simpeg\SuratTugasObserver::class);
