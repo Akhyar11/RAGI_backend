@@ -37,12 +37,18 @@ class PiutangMahasiswaController extends Controller
         // Apply filters
         $this->applyFilters($query, $status, $tahunAkademikId, $angkatan, $programStudiId, $search, $cutoffDate);
 
-        // Sort
-        $allowedSortColumns = ['id', 'created_at', 'nomor_tagihan', 'total_tagihan', 'total_bayar', 'jatuh_tempo', 'status'];
-        $sortBy = in_array($request->query('sort_by'), $allowedSortColumns) ? $request->query('sort_by') : 'id';
+        // Sort (sisa_piutang dihitung dari kolom tagihan: tagihan + denda - potongan - bayar)
         $sortOrder = strtolower($request->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $sortByRaw = $request->query('sort_by');
 
-        $query->orderBy($sortBy, $sortOrder);
+        if ($sortByRaw === 'sisa_piutang') {
+            $query->orderByRaw('sikeu_tagihan_mahasiswa.total_tagihan + sikeu_tagihan_mahasiswa.total_denda - sikeu_tagihan_mahasiswa.total_potongan - sikeu_tagihan_mahasiswa.total_bayar ' . $sortOrder);
+            $sortBy = 'sisa_piutang';
+        } else {
+            $allowedSortColumns = ['id', 'created_at', 'nomor_tagihan', 'total_tagihan', 'total_bayar', 'jatuh_tempo', 'status'];
+            $sortBy = in_array($sortByRaw, $allowedSortColumns) ? $sortByRaw : 'id';
+            $query->orderBy($sortBy, $sortOrder);
+        }
 
         // Paginate
         $paginated = $query->paginate($perPage);
