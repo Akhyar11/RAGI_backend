@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/sikeu/pengajuan-operasional`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-25  
-> **Diperbarui**: 2026-10-11    
+> **Diperbarui**: 2026-10-12    
 
 ## Daftar Endpoint
 
@@ -108,9 +108,24 @@ Batch gaji: `jenis_pengajuan = lainnya`, `kategori = non_barang`, status awal `p
 
 ---
 
+## POST /api/v1/sikeu/pengajuan-operasional
+
+> Membuat pengajuan operasional baru. Rekening tujuan transfer bersifat opsional: isi untuk pembayaran vendor langsung (mis. VPS) atau panjar ke rekening pegawai SIMPEG (mis. talangan tinta); kosongkan bila tunai dari kas. Kolom tersimpan di `nama_bank_penerima` / `nomor_rekening_penerima` / `nama_rekening_penerima` dan dapat dikoreksi saat pencairan.
+
+### Request Body (Multipart)
+
+| Field | Type | Required | Keterangan |
+|---|---|---|---|
+| `unit_kas_id` | integer | ❌ | Opsional saat pengajuan (keuangan menentukan saat pencairan bila kosong) |
+| `nama_bank_penerima` | string (maks 50) | ❌ | Bank tujuan (mis. BNI, Mandiri) |
+| `nomor_rekening_penerima` | string (maks 50) | ❌ | Nomor rekening tujuan |
+| `nama_rekening_penerima` | string (maks 100) | ❌ | Nama pemilik rekening |
+
+---
+
 ## POST /api/v1/sikeu/pengajuan-operasional/{id}/pencairan
 
-> Mencairkan dana panjar dinas / pengajuan operasional dan menerbitkan bukti pengeluaran kas (Tahap 5). Jika permohonan berasal dari kanal SINAPRA (`kanal = 'sinapra_pengadaan'`), pencairan ini secara otomatis menyelaraskan status usulan pengadaan barang pada SINAPRA menjadi `proses_pengadaan`.
+> Mencairkan dana panjar dinas / pengajuan operasional dan menerbitkan bukti pengeluaran kas (Tahap 5). `unit_kas_id` wajib diisi keuangan bila pengajuan belum punya sumber kas. Jika permohonan berasal dari kanal SINAPRA (`kanal = 'sinapra_pengadaan'`), pencairan ini secara otomatis menyelaraskan status usulan pengadaan barang pada SINAPRA menjadi `proses_pengadaan`.
 
 ### Headers
 
@@ -126,6 +141,9 @@ Batch gaji: `jenis_pengajuan = lainnya`, `kategori = non_barang`, status awal `p
 nominal_cair: 500000
 tanggal_pencairan: 2026-09-25
 unit_kas_id: 1
+nama_bank_penerima: BNI
+nomor_rekening_penerima: 1234567890
+nama_rekening_penerima: Nama Pegawai / Vendor
 bukti_pencairan: [File resi_transfer.pdf / image]
 ```
 
@@ -167,6 +185,9 @@ bukti_pencairan: [File resi_transfer.pdf / image]
 | Field | Type | Required | Keterangan |
 |---|---|---|---|
 | `nominal_diajukan` | numeric | ❌ | Default = selisih kurang, maksimal = selisih kurang |
+| `nama_bank_penerima` | string (maks 50) | ❌ | Default mengikuti pengajuan asal |
+| `nomor_rekening_penerima` | string (maks 50) | ❌ | Default mengikuti pengajuan asal |
+| `nama_rekening_penerima` | string (maks 100) | ❌ | Default mengikuti pengajuan asal |
 | `unit_kas_id` | integer | ❌ | Default mengikuti unit kas pengajuan asal |
 | `deskripsi` | string | ❌ | Keterangan klaim (min 10 karakter bila diisi) |
 | `file_lampiran` | file (pdf/jpg/jpeg/png) | ❌ | Nota pendukung klaim (maks 5MB) |

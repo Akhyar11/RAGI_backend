@@ -56,7 +56,7 @@ class PengajuanOperasionalService
 
             $pengajuan = PengajuanPencairanKas::create([
                 'nomor_pengajuan' => 'PO-' . date('Ymd') . '-' . strtoupper(Str::random(5)),
-                'unit_kas_id' => $data['unit_kas_id'],
+                'unit_kas_id' => $data['unit_kas_id'] ?? null,
                 'fakultas_id' => $data['fakultas_id'],
                 'ruangan_id' => $data['ruangan_id'] ?? null,
                 'pemohon_id' => auth()->id(),
@@ -68,6 +68,9 @@ class PengajuanOperasionalService
                 'referensi_eksternal' => $data['referensi_eksternal'] ?? null,
                 'jenis_pengajuan' => $data['jenis_pengajuan'] ?? 'operasional',
                 'kategori_pengajuan' => $kategori,
+                'nama_bank_penerima' => $data['nama_bank_penerima'] ?? null,
+                'nomor_rekening_penerima' => $data['nomor_rekening_penerima'] ?? null,
+                'nama_rekening_penerima' => $data['nama_rekening_penerima'] ?? null,
                 'file_lampiran' => $lampiranPath,
                 'status' => $this->statusAwal($kategori),
             ]);
@@ -462,41 +465,39 @@ class PengajuanOperasionalService
                 $buktiPath = $this->simpanFile($request->file('bukti_pencairan'), 'sikeu/pencairan_operasional');
             }
 
-            // Keuangan boleh memilih sumber saldo berbeda dari unit kas pengajuan
-            if (!empty($data['unit_kas_id']) && (int)$data['unit_kas_id'] !== (int)$pengajuan->unit_kas_id) {
-                $unitKasBaru = UnitKas::find($data['unit_kas_id']);
-                if (!$unitKasBaru || !$unitKasBaru->status) {
-                    throw new \InvalidArgumentException('Sumber dana pencairan tidak valid / tidak aktif.');
-                }
-                $pengajuan->unit_kas_id = $unitKasBaru->id;
+            // Keuangan wajib menentukan sumber dana saat pencairan
+            // (pengaju boleh kosongkan unit kas; kolom DB sudah nullable).
+            $unitKasId = !empty($data['unit_kas_id']) ? (int) $data['unit_kas_id'] : (int) ($pengajuan->unit_kas_id ?? 0);
+            if ($unitKasId <= 0) {
+                throw new \InvalidArgumentException('Tentukan unit kas sumber dana pencairan.');
             }
-
-            $unitKas = UnitKas::find($pengajuan->unit_kas_id);
-            $saldoSebelum = $unitKas ? (float) $unitKas->saldo_saat_ini : 0;
-            if ($unitKas) {
-                if ($nominal > $saldoSebelum) {
-                    // Pengecekan saldo memakai ValidationException agar client
-                    // menerima 422 dengan pesan pada field, bukan 500.
-                    throw ValidationException::withMessages([
-                        'nominal' => ['Saldo unit kas tidak mencukupi untuk pencairan operasional ini.'],
-                    ]);
-                }
-                $unitKas->decrement('saldo_saat_ini', $nominal);
+            $unitKas = UnitKas::find($unitKasId);
+            if (!$unitKas || !$unitKas->status) {
+                throw new \InvalidArgumentException('Sumber dana pencairan tidak valid / tidak aktif.');
             }
+            $pengajuan->unit_kas_id = $unitKas->id;
 
-            if ($unitKas) {
-                TransaksiKasUnit::create([
-                    'unit_kas_id' => $unitKas->id,
-                    'pengajuan_pencairan_id' => $pengajuan->id,
-                    'kode_transaksi' => 'CAIR-' . date('Ymd') . '-' . strtoupper(Str::random(4)),
-                    'jenis_transaksi' => 'kredit_pengeluaran',
-                    'nominal' => $nominal,
-                    'saldo_sebelum' => $saldoSebelum,
-                    'saldo_sesudah' => $saldoSebelum - $nominal,
-                    'keterangan' => 'Pencairan operasional: ' . $pengajuan->nomor_pengajuan,
-                    'tanggal_transaksi' => $data['tanggal_pencairan'] ?? now()->toDateString(),
+            $saldoSebelum = (float) $unitKas->saldo_saat_ini;
+            if ($nominal > $saldoSebelum) {
+                // Pengecekan saldo memakai ValidationException agar client
+                // menerima 422 dengan pesan pada field, bukan 500.
+                throw ValidationException::withMessages([
+                    'nominal' => ['Saldo unit kas tidak mencukupi untuk pencairan operasional ini.'],
                 ]);
             }
+            $unitKas->decrement('saldo_saat_ini', $nominal);
+
+            TransaksiKasUnit::create([
+                'unit_kas_id' => $unitKas->id,
+                'pengajuan_pencairan_id' => $pengajuan->id,
+                'kode_transaksi' => 'CAIR-' . date('Ymd') . '-' . strtoupper(Str::random(4)),
+                'jenis_transaksi' => 'kredit_pengeluaran',
+                'nominal' => $nominal,
+                'saldo_sebelum' => $saldoSebelum,
+                'saldo_sesudah' => $saldoSebelum - $nominal,
+                'keterangan' => 'Pencairan operasional: ' . $pengajuan->nomor_pengajuan,
+                'tanggal_transaksi' => $data['tanggal_pencairan'] ?? now()->toDateString(),
+            ]);
 
             // Jurnal akrual pencairan: Dr Beban Operasional / Cr Kas kanal unit kas.
             // Reimbursement (RMB-*) memakai jenis_sumber 'reimbursement' (JRN-RMB)
@@ -526,6 +527,9 @@ class PengajuanOperasionalService
 
             $pengajuan->update([
                 'status' => 'dicairkan',
+                'nama_bank_penerima' => $data['nama_bank_penerima'] ?? $pengajuan->nama_bank_penerima,
+                'nomor_rekening_penerima' => $data['nomor_rekening_penerima'] ?? $pengajuan->nomor_rekening_penerima,
+                'nama_rekening_penerima' => $data['nama_rekening_penerima'] ?? $pengajuan->nama_rekening_penerima,
                 'tanggal_pencairan' => $data['tanggal_pencairan'] ?? now()->toDateString(),
                 'bukti_pencairan_path' => $buktiPath,
                 'kanal' => $pengajuan->kanal ?? $unitKas?->kanal,
@@ -609,7 +613,7 @@ class PengajuanOperasionalService
 
             $unitKasId = $data['unit_kas_id'] ?? $asal->unit_kas_id;
             $unitKas = $unitKasId ? UnitKas::find($unitKasId) : null;
-            if (!$unitKas || !$unitKas->status) {
+            if ($unitKasId && (!$unitKas || !$unitKas->status)) {
                 throw new \InvalidArgumentException('Unit kas pembayar reimbursement tidak valid / tidak aktif.');
             }
 
@@ -624,7 +628,7 @@ class PengajuanOperasionalService
 
             $anak = PengajuanPencairanKas::create([
                 'nomor_pengajuan' => 'RMB-' . date('Ymd') . '-' . strtoupper(Str::random(5)),
-                'unit_kas_id' => $unitKas->id,
+                'unit_kas_id' => $unitKas?->id,
                 'fakultas_id' => $asal->fakultas_id,
                 'ruangan_id' => $asal->ruangan_id,
                 'pemohon_id' => auth()->id() ?? $asal->pemohon_id,
@@ -636,6 +640,9 @@ class PengajuanOperasionalService
                 'referensi_eksternal' => 'reimburse:' . $asal->nomor_pengajuan,
                 'jenis_pengajuan' => 'reimbursement',
                 'kategori_pengajuan' => 'non_barang',
+                'nama_bank_penerima' => $data['nama_bank_penerima'] ?? $asal->nama_bank_penerima,
+                'nomor_rekening_penerima' => $data['nomor_rekening_penerima'] ?? $asal->nomor_rekening_penerima,
+                'nama_rekening_penerima' => $data['nama_rekening_penerima'] ?? $asal->nama_rekening_penerima,
                 'kanal' => $asal->kanal,
                 'file_lampiran' => $lampiranPath,
                 'status' => 'pending_keuangan',

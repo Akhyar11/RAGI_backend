@@ -210,11 +210,14 @@ class PengajuanOperasionalController extends Controller
             'bukti_pencairan' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'referensi_eksternal' => 'nullable|string|max:100',
             'unit_kas_id' => 'nullable|integer|exists:sikeu_unit_kas,id',
+            'nama_bank_penerima' => 'nullable|string|max:50',
+            'nomor_rekening_penerima' => 'nullable|string|max:50',
+            'nama_rekening_penerima' => 'nullable|string|max:100',
         ]);
 
         try {
             $pengajuan = PengajuanPencairanKas::findOrFail($id);
-            $result = $this->service->cairkan($pengajuan, $request->only(['nominal_cair', 'tanggal_pencairan', 'referensi_eksternal', 'unit_kas_id']), $request);
+            $result = $this->service->cairkan($pengajuan, $request->only(['nominal_cair', 'tanggal_pencairan', 'referensi_eksternal', 'unit_kas_id', 'nama_bank_penerima', 'nomor_rekening_penerima', 'nama_rekening_penerima']), $request);
 
             return response()->json([
                 'status' => 'success',
@@ -274,13 +277,16 @@ class PengajuanOperasionalController extends Controller
             'unit_kas_id' => 'nullable|integer|exists:sikeu_unit_kas,id',
             'deskripsi' => 'nullable|string|min:10|max:2000',
             'file_lampiran' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'nama_bank_penerima' => 'nullable|string|max:50',
+            'nomor_rekening_penerima' => 'nullable|string|max:50',
+            'nama_rekening_penerima' => 'nullable|string|max:100',
         ]);
 
         try {
             $asal = PengajuanPencairanKas::findOrFail($id);
             $result = $this->service->ajukanReimbursement(
                 $asal,
-                $request->only(['nominal_diajukan', 'unit_kas_id', 'deskripsi']),
+                $request->only(['nominal_diajukan', 'unit_kas_id', 'deskripsi', 'nama_bank_penerima', 'nomor_rekening_penerima', 'nama_rekening_penerima']),
                 $request
             );
 
