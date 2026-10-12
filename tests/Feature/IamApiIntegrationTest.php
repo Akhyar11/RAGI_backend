@@ -53,7 +53,16 @@ class IamApiIntegrationTest extends TestCase
                 'module' => 'spmb',
                 'http_method' => 'GET',
                 'description' => 'Endpoint API migrasi pendaftaran',
-                'expected_schema' => ['type' => 'array'],
+                'expected_schema' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'no_pendaftaran' => ['type' => 'string'],
+                            'nama_lengkap' => ['type' => 'string'],
+                        ],
+                    ],
+                ],
                 'auth_type' => 'bearer',
                 'is_active' => true,
             ]

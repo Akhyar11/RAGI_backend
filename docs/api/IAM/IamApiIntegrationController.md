@@ -54,13 +54,21 @@ Mengambil daftar seluruh integrasi API sistem yang terdaftar di database.
                 "items": {
                     "type": "object",
                     "properties": {
-                        "nomor_pendaftaran": { "type": "string" },
+                        "no_pendaftaran": { "type": "string" },
                         "nama_lengkap": { "type": "string" },
                         "nik": { "type": "string" },
                         "email": { "type": "string" },
-                        "nomor_hp": { "type": "string" }
+                        "no_hp": { "type": "string" },
+                        "tempat_lahir": { "type": "string" },
+                        "tanggal_lahir": { "type": "string" },
+                        "jenis_kelamin": { "type": "string" },
+                        "jalur_pendaftaran": { "type": "string" },
+                        "pilihan_prodi_1": { "type": "string" },
+                        "pilihan_prodi_2": { "type": "string" },
+                        "status": { "type": "string" },
+                        "status_pembayaran": { "type": "string" }
                     },
-                    "required": ["nama_lengkap", "nik", "email", "nomor_hp"]
+                    "required": ["no_pendaftaran", "nama_lengkap", "nik", "email", "no_hp", "tempat_lahir", "tanggal_lahir", "jenis_kelamin", "pilihan_prodi_1"]
                 }
             },
             "url_api": "https://api-lama.kampus.ac.id/api/pendaftar",
