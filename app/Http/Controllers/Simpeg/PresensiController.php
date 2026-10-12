@@ -1729,11 +1729,15 @@ class PresensiController extends Controller
                         : (float) $komp->nilai_default;
 
                     // Komponen kehadiran / presensi
-                    $isPresensiKomp = ($komp->tipe_nilai === 'rumus_kehadiran') || str_contains(strtolower($komp->nama), 'presensi') || str_contains(strtolower($komp->kode), 'PRESENSI');
+                    $isPresensiKomp = ($komp->tipe_nilai === 'rumus_kehadiran')
+                        || str_contains(strtolower($komp->nama), 'presensi')
+                        || str_contains(strtolower($komp->kode), 'PRESENSI')
+                        || str_contains(strtolower($komp->kode), 'TRANSPORT');
 
                     if ($isPresensiKomp) {
+                        $isBebasAbsensi = isset($peg->terdampak_absensi) && !$peg->terdampak_absensi;
                         $tarifHarian = $nominal > 0 ? $nominal : 10000;
-                        $nominalPresensi = $validAttendanceDays * $tarifHarian;
+                        $nominalPresensi = $isBebasAbsensi ? 0.0 : ($validAttendanceDays * $tarifHarian);
                         $totalTunjangan += $nominalPresensi;
 
                         $detailItems[] = [
@@ -1741,7 +1745,9 @@ class PresensiController extends Controller
                             'nama_komponen' => $komp->nama,
                             'jenis' => $komp->jenis,
                             'nominal' => $nominalPresensi,
-                            'keterangan' => "Kehadiran: {$validAttendanceDays} Hari @ Rp " . number_format($tarifHarian, 0, ',', '.'),
+                            'keterangan' => $isBebasAbsensi
+                                ? 'Bebas Presensi / Tidak Terdampak Absensi'
+                                : "Kehadiran: {$validAttendanceDays} Hari @ Rp " . number_format($tarifHarian, 0, ',', '.'),
                         ];
                     } else {
                         if ($komp->kode === 'GAJI_POKOK') {
@@ -1778,7 +1784,7 @@ class PresensiController extends Controller
                         'total_honor_sks' => 0.0,
                         'total_sks_diampu' => 0.0,
                         'total_tunjangan_fungsional' => 0.0,
-                        'jumlah_hari_hadir_tepat_waktu' => $validAttendanceDays,
+                        'jumlah_hari_hadir_tepat_waktu' => (isset($peg->terdampak_absensi) && !$peg->terdampak_absensi) ? 0 : $validAttendanceDays,
                         'total_tunjangan' => $totalTunjangan,
                         'total_potongan' => $totalPotongan,
                         'total_pph21' => 0.0,
@@ -1787,7 +1793,9 @@ class PresensiController extends Controller
                         'status_transfer' => 'draft',
                         'nomor_rekening' => $peg->nomor_rekening,
                         'bank_nama' => $peg->nama_bank,
-                        'catatan' => "Draft Payroll dari Bundle {$periode->nama_periode} (Presensi: {$validAttendanceDays} Hari Hadir Valid)",
+                        'catatan' => (isset($peg->terdampak_absensi) && !$peg->terdampak_absensi)
+                            ? "Draft Payroll dari Bundle {$periode->nama_periode} (Bebas Absensi / 0 Potongan & Insentif)"
+                            : "Draft Payroll dari Bundle {$periode->nama_periode} (Presensi: {$validAttendanceDays} Hari Hadir Valid)",
                     ]
                 );
 

@@ -183,8 +183,12 @@ class JurnalSikeuService
 
     protected static function header(string $prefix, string $jenisSumber, ?int $referensiId, string $keterangan, float $total): JurnalUmum
     {
+        do {
+            $nomorJurnal = $prefix . '-' . date('Ymd') . '-' . strtoupper(Str::random(6)) . ($referensiId ? '-' . $referensiId : '');
+        } while (JurnalUmum::where('nomor_jurnal', $nomorJurnal)->exists());
+
         return JurnalUmum::create([
-            'nomor_jurnal' => $prefix . '-' . date('Ymd') . '-' . strtoupper(Str::random(4)),
+            'nomor_jurnal' => $nomorJurnal,
             'tanggal_jurnal' => now()->toDateString(),
             'jenis_sumber' => $jenisSumber,
             'referensi_id' => $referensiId,
