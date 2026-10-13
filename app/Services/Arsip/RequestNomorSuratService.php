@@ -147,6 +147,15 @@ class RequestNomorSuratService
                 $request->catatan_verifikasi = $catatan;
                 $request->save();
 
+                // Tentukan pegawai_id pemohon (dari reference pegawai atau user pemohon)
+                $pegawaiId = null;
+                if ($request->reference_type === \App\Models\Simpeg\Pegawai::class || str_ends_with((string) $request->reference_type, 'Pegawai')) {
+                    $pegawaiId = !empty($request->reference_id) ? (int) $request->reference_id : null;
+                }
+                if (empty($pegawaiId) && !empty($request->user_id)) {
+                    $pegawaiId = \App\Models\Simpeg\Pegawai::where('user_id', $request->user_id)->value('id');
+                }
+
                 // Otomatis generate nomor surat sejumlah yang diminta
                 $payloadGenerate = [
                     'tanggal_surat' => $request->tanggal_surat,
@@ -157,6 +166,7 @@ class RequestNomorSuratService
                     'status' => 'terpakai',
                     'module_origin' => $request->module_origin,
                     'request_id' => $request->id,
+                    'pegawai_id' => $pegawaiId,
                     'reference_type' => $request->reference_type,
                     'reference_id' => $request->reference_id,
                     'catatan' => "Digenerate dari verifikasi {$request->kode_request}",

@@ -70,7 +70,13 @@ class SimpegNomorSuratController extends Controller
                 if ($pegId) {
                     $q->where('pegawai_id', $pegId);
                 }
-                $q->orWhere('created_by', $userId);
+                $q->orWhere('created_by', $userId)
+                  ->orWhereHas('request', function ($rq) use ($userId, $pegId) {
+                      $rq->where('user_id', $userId);
+                      if ($pegId) {
+                          $rq->orWhere('reference_id', $pegId);
+                      }
+                  });
             });
         } elseif ($request->filled('pegawai_id')) {
             $query->where('pegawai_id', $request->pegawai_id);
@@ -128,7 +134,10 @@ class SimpegNomorSuratController extends Controller
         $pegawai = Pegawai::where('user_id', $user->id)->first();
 
         $canManage = $user->isAdmin() || $user->hasPermission('arsip.nomor_surat.update') || $user->hasPermission('simpeg.pegawai.manage');
-        $isOwner = ($pegawai && $nomor->pegawai_id === $pegawai->id) || ($nomor->created_by === $user->id);
+        $isOwner = ($pegawai && $nomor->pegawai_id === $pegawai->id) 
+            || ($nomor->created_by === $user->id)
+            || ($nomor->request && $nomor->request->user_id === $user->id)
+            || ($pegawai && $nomor->request && $nomor->request->reference_id === $pegawai->id);
 
         if (!$canManage && !$isOwner) {
             return response()->json([
@@ -164,7 +173,10 @@ class SimpegNomorSuratController extends Controller
         $pegawai = Pegawai::where('user_id', $user->id)->first();
 
         $canManage = $user->isAdmin() || $user->hasPermission('arsip.nomor_surat.read') || $user->hasPermission('simpeg.pegawai.manage');
-        $isOwner = ($pegawai && $nomor->pegawai_id === $pegawai->id) || ($nomor->created_by === $user->id);
+        $isOwner = ($pegawai && $nomor->pegawai_id === $pegawai->id) 
+            || ($nomor->created_by === $user->id)
+            || ($nomor->request && $nomor->request->user_id === $user->id)
+            || ($pegawai && $nomor->request && $nomor->request->reference_id === $pegawai->id);
 
         if (!$canManage && !$isOwner) {
             return response()->json([
