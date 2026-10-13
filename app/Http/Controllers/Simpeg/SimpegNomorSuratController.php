@@ -37,7 +37,11 @@ class SimpegNomorSuratController extends Controller
         $perPage = min(100, $request->integer('per_page', 15));
         $filters = $request->only(['search', 'status', 'has_file', 'sort_by', 'sort_order']);
 
-        if (!$pegawai && !$user->isAdmin()) {
+        $canManageAll = $user->hasPermission('simpeg.nomor_surat.update') 
+            || $user->hasPermission('simpeg.nomor_surat.delete')
+            || $user->hasPermission('arsip.nomor_surat.read');
+
+        if (!$pegawai && !$canManageAll) {
             $emptyPaginated = NomorSurat::whereRaw('1 = 0')->paginate($perPage);
             return response()->json([
                 'status' => 'success',
@@ -54,60 +58,161 @@ class SimpegNomorSuratController extends Controller
             ]);
         }
 
-        // Jika bukan admin, kunci filter hanya untuk pegawai tersebut atau nomor surat yang dibuat oleh user
-        $query = NomorSurat::with([
+        // Ambil data pengajuan nomor surat (request) dari user/pegawai
+        $reqQuery = \App\Models\Arsip\RequestNomorSurat::with([
+            'nomorSurat' => function ($q) {
+                $q->with(['kopSurat', 'fileUploader:id,name,email']);
+            },
+            'user:id,name,email,username',
+            'verifikator:id,name,email',
+        ]);
+
+        if (!$canManageAll) {
+            $pegId = $pegawai?->id;
+            $userId = $user->id;
+            $reqQuery->where(function ($q) use ($userId, $pegId) {
+                $q->where('user_id', $userId);
+                if ($pegId) {
+                    $q->orWhere('reference_id', $pegId);
+                }
+            });
+        } elseif ($request->filled('pegawai_id')) {
+            $reqQuery->where('reference_id', $request->pegawai_id);
+        }
+
+        // Ambil juga nomor surat yang diterbitkan langsung tanpa request
+        $directNomorQuery = NomorSurat::with([
             'pembuat:id,name,email,username',
             'pegawai:id,nama_lengkap,nip,nidn,unit_kerja_id',
             'pegawai.unitKerja:id,nama',
             'fileUploader:id,name,email',
             'kopSurat',
-        ]);
+        ])->whereNull('request_id');
 
-        if (!$user->isAdmin()) {
+        if (!$canManageAll) {
             $pegId = $pegawai?->id;
             $userId = $user->id;
-            $query->where(function ($q) use ($pegId, $userId) {
+            $directNomorQuery->where(function ($q) use ($pegId, $userId) {
                 if ($pegId) {
                     $q->where('pegawai_id', $pegId);
                 }
-                $q->orWhere('created_by', $userId)
-                  ->orWhereHas('request', function ($rq) use ($userId, $pegId) {
-                      $rq->where('user_id', $userId);
-                      if ($pegId) {
-                          $rq->orWhere('reference_id', $pegId);
-                      }
-                  });
+                $q->orWhere('created_by', $userId);
             });
         } elseif ($request->filled('pegawai_id')) {
-            $query->where('pegawai_id', $request->pegawai_id);
+            $directNomorQuery->where('pegawai_id', $request->pegawai_id);
         }
 
+        $allRequests = $reqQuery->orderBy('created_at', 'desc')->get();
+        $allDirects = $directNomorQuery->orderBy('created_at', 'desc')->get();
+
+        $combined = collect();
+
+        foreach ($allRequests as $req) {
+            if ($req->nomorSurat && $req->nomorSurat->isNotEmpty()) {
+                foreach ($req->nomorSurat as $ns) {
+                    $nsArr = $ns->toArray();
+                    $nsArr['request'] = [
+                        'id' => $req->id,
+                        'kode_request' => $req->kode_request,
+                        'status' => $req->status,
+                        'catatan_verifikasi' => $req->catatan_verifikasi,
+                        'verified_at' => $req->verified_at?->toIso8601String(),
+                        'catatan_pemohon' => $req->catatan_pemohon,
+                    ];
+                    $nsArr['status_pengajuan'] = $req->status; // 'disetujui'
+                    $nsArr['is_request_only'] = false;
+                    $combined->push($nsArr);
+                }
+            } else {
+                $combined->push([
+                    'id' => null,
+                    'nomor_surat' => '-',
+                    'nomor_urut' => null,
+                    'kode_unit' => $req->kode_unit,
+                    'kode_klasifikasi' => $req->kode_klasifikasi,
+                    'tanggal_surat' => $req->tanggal_surat?->format('Y-m-d'),
+                    'perihal' => $req->perihal,
+                    'tujuan' => $req->tujuan,
+                    'status' => $req->status === 'ditolak' ? 'dibatalkan' : 'menunggu',
+                    'status_pengajuan' => $req->status, // 'menunggu_verifikasi' atau 'ditolak'
+                    'module_origin' => $req->module_origin,
+                    'request_id' => $req->id,
+                    'pegawai_id' => $pegawai?->id,
+                    'kop_surat_id' => null,
+                    'file_surat_path' => null,
+                    'file_surat_url' => null,
+                    'has_file' => false,
+                    'catatan' => $req->catatan_verifikasi ?? $req->catatan_pemohon,
+                    'created_by' => $req->user_id,
+                    'created_at' => $req->created_at?->toIso8601String(),
+                    'updated_at' => $req->updated_at?->toIso8601String(),
+                    'is_request_only' => true,
+                    'request' => [
+                        'id' => $req->id,
+                        'kode_request' => $req->kode_request,
+                        'status' => $req->status,
+                        'catatan_verifikasi' => $req->catatan_verifikasi,
+                        'verified_at' => $req->verified_at?->toIso8601String(),
+                        'catatan_pemohon' => $req->catatan_pemohon,
+                    ],
+                ]);
+            }
+        }
+
+        foreach ($allDirects as $ns) {
+            $nsArr = $ns->toArray();
+            $nsArr['request'] = null;
+            $nsArr['status_pengajuan'] = 'disetujui';
+            $nsArr['is_request_only'] = false;
+            $combined->push($nsArr);
+        }
+
+        // Filter status nomor/status pengajuan
         if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
+            $statusFilter = strtolower($filters['status']);
+            $combined = $combined->filter(function ($item) use ($statusFilter) {
+                return (isset($item['status']) && strtolower($item['status']) === $statusFilter) ||
+                       (isset($item['status_pengajuan']) && strtolower($item['status_pengajuan']) === $statusFilter);
+            });
         }
 
         if (isset($filters['has_file'])) {
             if ($filters['has_file'] === true || $filters['has_file'] === '1' || $filters['has_file'] === 'true') {
-                $query->whereNotNull('file_surat_path');
+                $combined = $combined->filter(fn($item) => !empty($item['has_file']) || !empty($item['file_surat_path']));
             } elseif ($filters['has_file'] === false || $filters['has_file'] === '0' || $filters['has_file'] === 'false') {
-                $query->whereNull('file_surat_path');
+                $combined = $combined->filter(fn($item) => empty($item['has_file']) && empty($item['file_surat_path']));
             }
         }
 
         if (!empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('nomor_surat', 'like', "%{$search}%")
-                  ->orWhere('perihal', 'like', "%{$search}%")
-                  ->orWhere('tujuan', 'like', "%{$search}%");
+            $search = strtolower($filters['search']);
+            $combined = $combined->filter(function ($item) use ($search) {
+                return str_contains(strtolower($item['nomor_surat'] ?? ''), $search)
+                    || str_contains(strtolower($item['perihal'] ?? ''), $search)
+                    || str_contains(strtolower($item['tujuan'] ?? ''), $search)
+                    || str_contains(strtolower($item['kode_unit'] ?? ''), $search)
+                    || str_contains(strtolower($item['kode_klasifikasi'] ?? ''), $search);
             });
         }
 
-        $allowedSort = ['id', 'nomor_urut', 'tanggal_surat', 'created_at'];
-        $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'created_at';
-        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $sortField = in_array($request->sort_by, ['id', 'nomor_urut', 'tanggal_surat', 'created_at'], true) ? $request->sort_by : 'created_at';
+        $isAsc = $request->sort_order === 'asc';
 
-        $paginated = $query->orderBy($sortBy, $sortOrder)->paginate($perPage);
+        $combined = $combined->sortBy(function ($item) use ($sortField) {
+            return $item[$sortField] ?? '';
+        }, SORT_REGULAR, !$isAsc)->values();
+
+        $page = max(1, $request->integer('page', 1));
+        $total = $combined->count();
+        $slice = $combined->slice(($page - 1) * $perPage, $perPage)->values();
+
+        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
+            $slice,
+            $total,
+            $perPage,
+            $page,
+            ['path' => \Illuminate\Pagination\Paginator::resolveCurrentPath()]
+        );
 
         return response()->json([
             'status' => 'success',

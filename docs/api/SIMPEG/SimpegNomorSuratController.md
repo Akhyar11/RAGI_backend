@@ -35,7 +35,7 @@ Mengambil daftar nomor surat resmi kampus yang mengikat profil pegawai login (`p
 ### Query Parameters
 
 - `search` (string, optional) - Pencarian nomor surat, perihal, atau tujuan.
-- `status` (string, optional) - Filter status nomor surat (`terpakai`, `direservasi`, `dibatalkan`).
+- `status` (string, optional) - Filter status nomor surat / permohonan (`menunggu_verifikasi`, `disetujui`, `ditolak`, `terpakai`, `dibatalkan`).
 - `has_file` (string/boolean, optional) - Filter kelengkapan berkas fisik (`1`/`true` = ada berkas, `0`/`false` = belum ada berkas).
 - `sort_by` (string, default: `created_at`) - Pengurutan data (`id`, `nomor_urut`, `tanggal_surat`, `created_at`).
 - `sort_order` (string, default: `desc`) - Arah pengurutan (`asc`, `desc`).
@@ -47,28 +47,68 @@ Mengambil daftar nomor surat resmi kampus yang mengikat profil pegawai login (`p
 ```json
 {
   "status": "success",
-  "message": "Daftar nomor surat pegawai berhasil diambil",
+  "message": "Daftar nomor surat pegawai berhasil dimuat.",
   "data": [
     {
-      "id": 1,
-      "nomor_surat": "001/BAAK/DI/X/2026",
-      "nomor_urut": 1,
-      "kode_unit": "BAAK",
-      "kode_klasifikasi": "DI",
+      "id": null,
+      "nomor_surat": "-",
+      "nomor_urut": null,
+      "kode_unit": "REK-01",
+      "kode_klasifikasi": "DII",
       "tanggal_surat": "2026-10-13",
-      "perihal": "Undangan Rapat Koordinasi",
-      "tujuan": "Dosen Fakultas Teknik",
+      "perihal": "Berita Acara Ujian Mandiri",
+      "tujuan": null,
+      "status": "menunggu",
+      "status_pengajuan": "menunggu_verifikasi",
+      "module_origin": "simpeg",
+      "request_id": 13,
+      "pegawai_id": 1187,
+      "has_file": false,
+      "file_surat_path": null,
+      "is_request_only": true,
+      "request": {
+        "id": 13,
+        "kode_request": "REQ-ARSIP-2026-1791879465-4BSE",
+        "status": "menunggu_verifikasi",
+        "catatan_verifikasi": null,
+        "verified_at": null,
+        "catatan_pemohon": null
+      }
+    },
+    {
+      "id": 9,
+      "nomor_surat": "9/DII/INDO/X/2026",
+      "nomor_urut": 9,
+      "kode_unit": "INDO",
+      "kode_klasifikasi": "DII",
+      "tanggal_surat": "2026-10-13",
+      "perihal": "Surat Tugas Penelitian",
+      "tujuan": null,
       "status": "terpakai",
-      "pegawai_id": 12,
-      "has_file": true,
-      "file_surat_path": "arsip/dokumen-surat/uuid.pdf"
+      "status_pengajuan": "disetujui",
+      "module_origin": "simpeg",
+      "request_id": 12,
+      "pegawai_id": 1187,
+      "has_file": false,
+      "file_surat_path": null,
+      "is_request_only": false,
+      "request": {
+        "id": 12,
+        "kode_request": "REQ-ARSIP-2026-1791872162-RTNB",
+        "status": "disetujui",
+        "catatan_verifikasi": null,
+        "verified_at": "2026-10-13T06:18:58.000000Z",
+        "catatan_pemohon": null
+      }
     }
   ],
   "meta": {
     "current_page": 1,
     "per_page": 15,
-    "total": 1,
-    "last_page": 1
+    "total": 2,
+    "last_page": 1,
+    "from": 1,
+    "to": 2
   }
 }
 ```
