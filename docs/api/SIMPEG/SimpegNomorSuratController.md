@@ -19,12 +19,12 @@ Controller ini mengelola layanan penomoran surat resmi kampus bagi pegawai (dose
 
 ## Daftar Endpoint
 
-| Method | Endpoint | Fungsi | Auth |
+| Method | Endpoint | Fungsi | Auth / Permission |
 |---|---|---|---|
-| GET | `/api/simpeg/nomor-surat/my-letters` | Daftar nomor surat resmi milik pegawai yang login | ✅ User Login |
-| POST | `/api/simpeg/nomor-surat/request` | Pengajuan permohonan nomor surat baru (satuan/bulk) | ✅ User Login |
-| POST | `/api/simpeg/nomor-surat/{id}/upload-scan` | Unggah scan berkas surat resmi oleh pegawai | ✅ User Login (Pemilik / Admin) |
-| GET | `/api/simpeg/nomor-surat/{id}/download-scan` | Unduh berkas scan surat resmi | ✅ User Login (Pemilik / Admin) |
+| GET | `/api/simpeg/nomor-surat/my-letters` | Daftar nomor surat resmi milik pegawai yang login | ✅ `simpeg.nomor_surat.read` |
+| POST | `/api/simpeg/nomor-surat/request` | Pengajuan permohonan nomor surat baru (satuan/bulk) | ✅ `simpeg.nomor_surat.create` |
+| POST | `/api/simpeg/nomor-surat/{id}/upload-scan` | Unggah scan berkas surat resmi oleh pegawai | ✅ `simpeg.nomor_surat.upload` / Pemilik |
+| GET | `/api/simpeg/nomor-surat/{id}/download-scan` | Unduh berkas scan surat resmi | ✅ `simpeg.nomor_surat.read` / Pemilik |
 
 ---
 

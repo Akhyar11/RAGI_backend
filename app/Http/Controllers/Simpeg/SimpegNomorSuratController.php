@@ -25,7 +25,7 @@ class SimpegNomorSuratController extends Controller
     public function myLetters(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('arsip.nomor_surat.read') && !$user->hasPermission('simpeg.pegawai.read') && !$user->isAdmin()) {
+        if (!$user->hasPermission('simpeg.nomor_surat.read') && !$user->hasPermission('arsip.nomor_surat.read') && !$user->hasPermission('simpeg.pegawai.read') && !$user->isAdmin()) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk melihat daftar nomor surat.',
@@ -133,7 +133,10 @@ class SimpegNomorSuratController extends Controller
         $nomor = NomorSurat::findOrFail($id);
         $pegawai = Pegawai::where('user_id', $user->id)->first();
 
-        $canManage = $user->isAdmin() || $user->hasPermission('arsip.nomor_surat.update') || $user->hasPermission('simpeg.pegawai.manage');
+        $canManage = $user->isAdmin() 
+            || $user->hasPermission('simpeg.nomor_surat.upload') 
+            || $user->hasPermission('arsip.nomor_surat.update') 
+            || $user->hasPermission('simpeg.pegawai.manage');
         $isOwner = ($pegawai && $nomor->pegawai_id === $pegawai->id) 
             || ($nomor->created_by === $user->id)
             || ($nomor->request && $nomor->request->user_id === $user->id)
@@ -224,7 +227,7 @@ class SimpegNomorSuratController extends Controller
     public function submitRequest(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('arsip.request.create') && !$user->hasPermission('arsip.nomor_surat.create') && !$user->isAdmin()) {
+        if (!$user->hasPermission('simpeg.nomor_surat.create') && !$user->hasPermission('arsip.request.create') && !$user->hasPermission('arsip.nomor_surat.create') && !$user->isAdmin()) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk mengajukan permohonan nomor surat.',
