@@ -121,6 +121,7 @@ Kartu peserta ujian UTS/UAS: penerbitan bersyarat lunas SIKEU (aturan sama denga
 | `tahun_akademik_id` | integer | ❌ | — | Filter periode |
 | `tipe_ujian` | string | ❌ | — | `UTS` / `UAS` |
 | `search` | string | ❌ | — | Cari NIM / nama |
+| `sort_by` | string | ❌ | `tanggal_cetak` | `tanggal_cetak`, `created_at`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 | `page` | integer | ❌ | `1` | Halaman |

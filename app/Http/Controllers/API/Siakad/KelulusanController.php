@@ -21,8 +21,12 @@ class KelulusanController extends Controller
             $s = $request->search;
             $query->whereHas('mahasiswa', fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nim', 'like', "%{$s}%"));
         }
+        $allowedSort = ['created_at', 'updated_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
         $perPage = min(100, $request->integer('per_page', 15));
-        $data = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        $data = $query->paginate($perPage);
         return response()->json(['status' => 'success', 'data' => $data->items(),
             'meta' => ['current_page' => $data->currentPage(), 'per_page' => $data->perPage(), 'total' => $data->total(), 'last_page' => $data->lastPage()]]);
     }

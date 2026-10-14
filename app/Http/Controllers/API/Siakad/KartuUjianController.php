@@ -140,9 +140,11 @@ class KartuUjianController extends Controller
             $query->whereHas('mahasiswa', fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nim', 'like', "%{$s}%"));
         }
 
-        $perPage = min(100, $request->integer('per_page', 15));
+        $allowedSort = ['tanggal_cetak', 'created_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'tanggal_cetak';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
-        $data = $query->orderBy('tanggal_cetak', $sortOrder)->paginate($perPage);
+        $perPage = min(100, $request->integer('per_page', 15));
+        $data = $query->orderBy($sortBy, $sortOrder)->paginate($perPage);
 
         return response()->json([
             'status' => 'success',

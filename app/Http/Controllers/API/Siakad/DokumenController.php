@@ -118,9 +118,11 @@ class DokumenController extends Controller
             });
         }
 
-        $perPage = min(100, $request->integer('per_page', 15));
+        $allowedSort = ['tanggal_terbit', 'created_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'tanggal_terbit';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
-        $data = $query->orderBy('tanggal_terbit', $sortOrder)->paginate($perPage);
+        $perPage = min(100, $request->integer('per_page', 15));
+        $data = $query->orderBy($sortBy, $sortOrder)->paginate($perPage);
 
         return response()->json([
             'status' => 'success',

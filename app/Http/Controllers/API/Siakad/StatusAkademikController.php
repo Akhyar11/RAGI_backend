@@ -27,8 +27,12 @@ class StatusAkademikController extends Controller
             $s = $request->search;
             $query->whereHas('mahasiswa', fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nim', 'like', "%{$s}%"));
         }
+        $allowedSort = ['created_at', 'updated_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
         $perPage = min(100, $request->integer('per_page', 15));
-        $data = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        $data = $query->paginate($perPage);
         return response()->json([
             'status' => 'success', 'message' => 'Data cuti mahasiswa berhasil dimuat',
             'data' => $data->items(),
@@ -69,8 +73,12 @@ class StatusAkademikController extends Controller
         Gate::authorize('siakad.mahasiswa.read');
         $query = StatusAkademikLog::with('mahasiswa');
         if ($request->filled('mahasiswa_id')) $query->where('mahasiswa_id', $request->mahasiswa_id);
+        $allowedSort = ['created_at', 'updated_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
         $perPage = min(100, $request->integer('per_page', 15));
-        $data = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        $data = $query->paginate($perPage);
         return response()->json([
             'status' => 'success', 'data' => $data->items(),
             'meta' => ['current_page' => $data->currentPage(), 'per_page' => $data->perPage(), 'total' => $data->total(), 'last_page' => $data->lastPage()],
@@ -84,8 +92,20 @@ class StatusAkademikController extends Controller
         $query = Khs::with(['mahasiswa.programStudi', 'tahunAkademik']);
         if ($request->filled('mahasiswa_id')) $query->where('mahasiswa_id', $request->mahasiswa_id);
         if ($request->filled('tahun_akademik_id')) $query->where('tahun_akademik_id', $request->tahun_akademik_id);
+        if ($request->filled('program_studi_id')) {
+            $prodiId = $request->program_studi_id;
+            $query->whereHas('mahasiswa', fn($q) => $q->where('program_studi_id', $prodiId));
+        }
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->whereHas('mahasiswa', fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nim', 'like', "%{$s}%"));
+        }
+        $allowedSort = ['created_at', 'updated_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
         $perPage = min(100, $request->integer('per_page', 15));
-        $data = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        $data = $query->paginate($perPage);
         return response()->json([
             'status' => 'success', 'data' => $data->items(),
             'meta' => ['current_page' => $data->currentPage(), 'per_page' => $data->perPage(), 'total' => $data->total(), 'last_page' => $data->lastPage()],

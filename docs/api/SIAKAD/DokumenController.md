@@ -115,6 +115,7 @@ Monitoring seluruh dokumen resmi yang pernah diterbitkan (BAAK).
 | `jenis` | string | ❌ | — | `KHS` / `TRANSKRIP` |
 | `mahasiswa_id` | integer | ❌ | — | Filter mahasiswa |
 | `search` | string | ❌ | — | Cari nomor dokumen / NIM / nama |
+| `sort_by` | string | ❌ | `tanggal_terbit` | `tanggal_terbit`, `created_at`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 | `page` | integer | ❌ | `1` | Halaman |
