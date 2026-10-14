@@ -209,22 +209,25 @@ class SuratPeringatanService
             $spMap[$sp->pegawai_id][$m] = $sp;
         }
 
-        // 3. Ambil data bundle pada tahun tersebut
-        $bundleList = PresensiPeriode::where('bulan_tahun', 'like', "{$tahun}-%")->get();
-        $bundleMap = [];
-        foreach ($bundleList as $b) {
+        // 3. Ambil data bundle pada tahun tersebut yang SUDAH SELESAI PENGGAJIAN (status_pembayaran = 'paid')
+        $paidBundleList = PresensiPeriode::where('bulan_tahun', 'like', "{$tahun}-%")
+            ->where('status_pembayaran', 'paid')
+            ->get();
+        $paidBundleMap = [];
+        foreach ($paidBundleList as $b) {
             if ($b->bulan_tahun) {
                 $m = substr($b->bulan_tahun, 5, 2);
-                $bundleMap[$m] = true;
+                $paidBundleMap[$m] = true;
             }
         }
 
         // 4. Hitung keterlambatan presensi per pegawai per bulan pada tahun tersebut
+        // Rekap keterlambatan untuk evaluasi SP bulanan HANYA dihitung dari bundle presensi yang proses penggajiannya telah selesai (status_pembayaran = 'paid')
         $lateMap = [];
 
-        // A. Keterlambatan dari log yang terhubung ke Bundle Periode (siklus 26 - 25)
         $bundleLateList = PresensiPegawai::join('simpeg_presensi_periode', 'simpeg_presensi_pegawai.presensi_periode_id', '=', 'simpeg_presensi_periode.id')
             ->where('simpeg_presensi_periode.bulan_tahun', 'like', "{$tahun}-%")
+            ->where('simpeg_presensi_periode.status_pembayaran', 'paid')
             ->where(function ($q) {
                 $q->where('simpeg_presensi_pegawai.late_minutes', '>', 0)
                   ->orWhere('simpeg_presensi_pegawai.status_kehadiran', 'terlambat')
@@ -236,46 +239,6 @@ class SuratPeringatanService
 
         foreach ($bundleLateList as $item) {
             $lateMap[$item->pegawai_id][$item->bulan] = (int) $item->total_late;
-        }
-
-        // B. Keterlambatan dari log realtime harian yang belum masuk bundle
-        $standaloneLateList = PresensiPegawai::whereNull('presensi_periode_id')
-            ->whereYear('tanggal', $tahun)
-            ->where(function ($q) {
-                $q->where('late_minutes', '>', 0)
-                  ->orWhere('status_kehadiran', 'terlambat')
-                  ->orWhere('status', 'terlambat');
-            })
-            ->selectRaw('pegawai_id, substr(tanggal, 6, 2) as bulan, count(*) as total_late')
-            ->groupBy('pegawai_id', 'bulan')
-            ->get();
-
-        foreach ($standaloneLateList as $item) {
-            $current = $lateMap[$item->pegawai_id][$item->bulan] ?? 0;
-            $lateMap[$item->pegawai_id][$item->bulan] = $current + (int) $item->total_late;
-        }
-
-        // 5. Cek record presensi untuk deteksi ketersediaan data bulan berjalan
-        $attendanceDataMap = [];
-
-        $bundleAttendanceList = PresensiPegawai::join('simpeg_presensi_periode', 'simpeg_presensi_pegawai.presensi_periode_id', '=', 'simpeg_presensi_periode.id')
-            ->where('simpeg_presensi_periode.bulan_tahun', 'like', "{$tahun}-%")
-            ->selectRaw('simpeg_presensi_pegawai.pegawai_id, substr(simpeg_presensi_periode.bulan_tahun, 6, 2) as bulan')
-            ->groupBy('simpeg_presensi_pegawai.pegawai_id', 'bulan')
-            ->get();
-
-        foreach ($bundleAttendanceList as $item) {
-            $attendanceDataMap[$item->pegawai_id][$item->bulan] = true;
-        }
-
-        $standaloneAttendanceList = PresensiPegawai::whereNull('presensi_periode_id')
-            ->whereYear('tanggal', $tahun)
-            ->selectRaw('pegawai_id, substr(tanggal, 6, 2) as bulan')
-            ->groupBy('pegawai_id', 'bulan')
-            ->get();
-
-        foreach ($standaloneAttendanceList as $item) {
-            $attendanceDataMap[$item->pegawai_id][$item->bulan] = true;
         }
 
         $monthNames = [
@@ -298,8 +261,8 @@ class SuratPeringatanService
             foreach ($monthNames as $mStr => $mShort) {
                 $monthPeriod = sprintf('%04d-%s', $tahun, $mStr);
                 $sp = $spMap[$pegawai->id][$mStr] ?? null;
-                $lateCount = $lateMap[$pegawai->id][$mStr] ?? 0;
-                $hasAttendance = isset($bundleMap[$mStr]) || isset($attendanceDataMap[$pegawai->id][$mStr]);
+                $isPaidBundle = isset($paidBundleMap[$mStr]);
+                $lateCount = $isPaidBundle ? ($lateMap[$pegawai->id][$mStr] ?? 0) : 0;
                 $isFuture = $monthPeriod > $currentYearMonth;
 
                 $hasSp = false;
@@ -310,12 +273,14 @@ class SuratPeringatanService
                     $totalSpPegawai++;
                     $lateCount = max($lateCount, $sp->total_terlambat);
                     $color = 'danger';
-                } elseif ($lateCount > $maxLateAllowed) {
-                    $color = 'danger';
-                } elseif ($lateCount > 0) {
-                    $color = 'warning';
-                } elseif ($hasAttendance || (!$isFuture && $tahun < (int) Carbon::now()->format('Y'))) {
-                    $color = 'success';
+                } elseif ($isPaidBundle) {
+                    if ($lateCount > $maxLateAllowed) {
+                        $color = 'danger';
+                    } elseif ($lateCount > 0) {
+                        $color = 'warning';
+                    } else {
+                        $color = 'success';
+                    }
                 } else {
                     $color = 'neutral';
                 }
@@ -327,7 +292,7 @@ class SuratPeringatanService
                     'month_code' => $mStr,
                     'month_name' => $mShort,
                     'periode' => $monthPeriod,
-                    'has_data' => $hasAttendance || $sp !== null,
+                    'has_data' => $isPaidBundle || $sp !== null,
                     'is_future' => $isFuture,
                     'total_terlambat' => $lateCount,
                     'batas_maksimal' => $maxLateAllowed,
