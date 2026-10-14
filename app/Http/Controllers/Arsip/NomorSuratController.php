@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Arsip;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Arsip\CheckNomorSuratRequest;
 use App\Http\Requests\Arsip\GenerateNomorSuratRequest;
+use App\Http\Requests\Arsip\UploadDokumenNomorSuratRequest;
 use App\Models\Arsip\NomorSurat;
 use App\Services\Arsip\NomorSuratService;
 use Illuminate\Http\JsonResponse;
@@ -251,6 +253,35 @@ class NomorSuratController extends Controller
             'status' => 'success',
             'message' => 'Nomor surat berhasil dibatalkan.',
             'data' => $result,
+        ]);
+    }
+
+    /**
+     * Memeriksa keabsahan nomor surat/SK di modul Arsip serta mengecek ketersediaan dokumen fisik.
+     */
+    public function check(CheckNomorSuratRequest $request): JsonResponse
+    {
+        $nomor = trim((string) $request->input('nomor_surat', $request->input('nomor_sk', '')));
+        $result = $this->service->checkNomor($nomor);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $result['message'],
+            'data' => $result['data'],
+        ]);
+    }
+
+    /**
+     * Mengunggah berkas dokumen fisik untuk nomor surat.
+     */
+    public function uploadDokumen(UploadDokumenNomorSuratRequest $request, int $id): JsonResponse
+    {
+        $nomorSurat = $this->service->uploadDokumen($id, $request->file('dokumen'));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Dokumen nomor surat berhasil diunggah.',
+            'data' => $nomorSurat,
         ]);
     }
 }

@@ -409,4 +409,140 @@ class NomorSuratService
             return $nomor;
         });
     }
+
+    /**
+     * Memeriksa keabsahan nomor surat/SK di modul Arsip serta mengecek ketersediaan dokumen fisik.
+     */
+    public function checkNomor(string $nomor): array
+    {
+        $nomorSurat = NomorSurat::with(['request', 'pembuat', 'kopSurat'])
+            ->where('nomor_surat', $nomor)
+            ->first();
+
+        if (!$nomorSurat) {
+            return [
+                'is_found' => false,
+                'is_valid' => false,
+                'has_document' => false,
+                'message' => "Nomor SK '{$nomor}' tidak ditemukan di sistem Arsip.",
+                'data' => [
+                    'id' => null,
+                    'nomor_surat' => $nomor,
+                    'is_found' => false,
+                    'is_valid' => false,
+                    'has_document' => false,
+                    'status' => null,
+                    'perihal' => null,
+                    'tujuan' => null,
+                    'kode_unit' => null,
+                    'kode_klasifikasi' => null,
+                    'tanggal_surat' => null,
+                    'dokumen_url' => null,
+                ],
+            ];
+        }
+
+        $hasDoc = (bool) $nomorSurat->has_dokumen;
+        $dokumenUrl = $nomorSurat->dokumen_url;
+
+        if ($nomorSurat->status === 'dibatalkan') {
+            return [
+                'is_found' => true,
+                'is_valid' => false,
+                'has_document' => $hasDoc,
+                'message' => "Nomor SK '{$nomor}' ditemukan, tetapi berstatus DIBATALKAN.",
+                'data' => [
+                    'id' => $nomorSurat->id,
+                    'nomor_surat' => $nomorSurat->nomor_surat,
+                    'is_found' => true,
+                    'is_valid' => false,
+                    'has_document' => $hasDoc,
+                    'status' => $nomorSurat->status,
+                    'perihal' => $nomorSurat->perihal,
+                    'tujuan' => $nomorSurat->tujuan,
+                    'kode_unit' => $nomorSurat->kode_unit,
+                    'kode_klasifikasi' => $nomorSurat->kode_klasifikasi,
+                    'tanggal_surat' => $nomorSurat->tanggal_surat?->format('Y-m-d'),
+                    'dokumen_url' => $dokumenUrl,
+                ],
+            ];
+        }
+
+        if (!$hasDoc) {
+            return [
+                'is_found' => true,
+                'is_valid' => false,
+                'has_document' => false,
+                'message' => "Nomor SK '{$nomor}' terdaftar di sistem Arsip, tetapi dokumen/berkas fisik SK belum diunggah (dokumen masih kosong).",
+                'data' => [
+                    'id' => $nomorSurat->id,
+                    'nomor_surat' => $nomorSurat->nomor_surat,
+                    'is_found' => true,
+                    'is_valid' => false,
+                    'has_document' => false,
+                    'status' => $nomorSurat->status,
+                    'perihal' => $nomorSurat->perihal,
+                    'tujuan' => $nomorSurat->tujuan,
+                    'kode_unit' => $nomorSurat->kode_unit,
+                    'kode_klasifikasi' => $nomorSurat->kode_klasifikasi,
+                    'tanggal_surat' => $nomorSurat->tanggal_surat?->format('Y-m-d'),
+                    'dokumen_url' => null,
+                ],
+            ];
+        }
+
+        return [
+            'is_found' => true,
+            'is_valid' => true,
+            'has_document' => true,
+            'message' => "Nomor SK '{$nomor}' sah dan dokumen fisik telah diverifikasi.",
+            'data' => [
+                'id' => $nomorSurat->id,
+                'nomor_surat' => $nomorSurat->nomor_surat,
+                'is_found' => true,
+                'is_valid' => true,
+                'has_document' => true,
+                'status' => $nomorSurat->status,
+                'perihal' => $nomorSurat->perihal,
+                'tujuan' => $nomorSurat->tujuan,
+                'kode_unit' => $nomorSurat->kode_unit,
+                'kode_klasifikasi' => $nomorSurat->kode_klasifikasi,
+                'tanggal_surat' => $nomorSurat->tanggal_surat?->format('Y-m-d'),
+                'dokumen_url' => $dokumenUrl,
+            ],
+        ];
+    }
+
+    /**
+     * Mengunggah berkas dokumen fisik untuk nomor surat.
+     */
+    public function uploadDokumen(int $id, \Illuminate\Http\UploadedFile $file): NomorSurat
+    {
+        return DB::transaction(function () use ($id, $file) {
+            $nomorSurat = NomorSurat::findOrFail($id);
+            $oldValues = $nomorSurat->getOriginal();
+
+            $fileStorage = app(\App\Services\Storage\FileStorageService::class);
+            $path = $fileStorage->store($file, 'arsip/dokumen', private: true);
+
+            $nomorSurat->update(['file_path' => $path]);
+            $newValues = $nomorSurat->getChanges();
+
+            try {
+                AuditLogService::record(
+                    module: 'arsip',
+                    action: 'upload_dokumen',
+                    targetType: 'core_arsip_nomor_surat',
+                    targetId: $nomorSurat->id,
+                    description: "Mengunggah berkas fisik dokumen nomor surat {$nomorSurat->nomor_surat}",
+                    oldValues: $oldValues,
+                    newValues: $newValues
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log upload dokumen nomor surat: ' . $e->getMessage());
+            }
+
+            return $nomorSurat->fresh();
+        });
+    }
 }

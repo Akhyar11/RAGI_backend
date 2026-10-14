@@ -1,12 +1,6 @@
-# NomorSuratController
+# Dokumentasi API: Arsip Nomor Surat Controller
 
-> **Modul**: ARSIP  
-> **Base URL**: `/api/arsip/nomor-surat`  
-> **Autentikasi**: Bearer Token (Sanctum)  
-> **Dibuat**: 2026-10-02  
-> **Diperbarui**: 2026-10-02  
-
-Modul ini mengelola penerbitan nomor surat resmi kampus baik secara satuan (single) maupun banyak sekaligus (bulk / massal). Format standar nomor surat mengikuti kaidah persuratan universitas: `[Nomor Urut]/[Kode Unit]/[Kode Klasifikasi]/[Bulan Romawi]/[Tahun]` (contoh: `247/DIII/INDO/II/2025`). Setiap nomor surat yang diterbitkan secara otomatis mengikat kop surat yang sesuai dengan periode tahun surat ($\ge 2021$ versi baru, $< 2021$ versi lama).
+Dokumentasi endpoint untuk pengelolaan **Nomor Surat Resmi** (`/api/arsip/nomor-surat`) dalam modul ARSIP.
 
 ---
 
@@ -28,6 +22,8 @@ Modul ini mengelola penerbitan nomor surat resmi kampus baik secara satuan (sing
 | PUT | `/api/arsip/nomor-surat/{id}` | Perbarui data perihal/tujuan nomor surat | ✅ `arsip.nomor_surat.update` |
 | POST | `/api/arsip/nomor-surat/{id}/upload-surat` | Unggah scan berkas surat resmi (PDF/JPG/PNG) | ✅ `arsip.nomor_surat.update` |
 | GET | `/api/arsip/nomor-surat/{id}/download-surat` | Unduh berkas scan surat resmi | ✅ `arsip.nomor_surat.read` |
+| GET | `/api/arsip/nomor-surat/check` | Periksa keabsahan dan dokumen nomor SK/surat | ✅ `arsip.nomor_surat.read` |
+| POST | `/api/arsip/nomor-surat/{id}/upload-dokumen` | Unggah berkas dokumen fisik nomor surat | ✅ `arsip.nomor_surat.update` |
 | POST | `/api/arsip/nomor-surat/{id}/batalkan` | Batalkan nomor surat | ✅ `arsip.nomor_surat.update` |
 
 ---
@@ -177,7 +173,7 @@ Membatalkan nomor surat resmi yang terlanjur terbit.
 
 ---
 
-## 5. Unggah Scan Berkas Surat Resmi (Fisik)
+## 5. POST /api/arsip/nomor-surat/{id}/upload-surat
 
 - **Method**: `POST`
 - **URL**: `/api/arsip/nomor-surat/{id}/upload-surat`
@@ -247,7 +243,7 @@ Membatalkan nomor surat resmi yang terlanjur terbit.
 
 ---
 
-## 6. Unduh / Tautan Berkas Scan Dokumen Surat Resmi
+## 6. GET /api/arsip/nomor-surat/{id}/download-surat
 
 - **Method**: `GET`
 - **URL**: `/api/arsip/nomor-surat/{id}/download-surat`
@@ -290,5 +286,207 @@ Membatalkan nomor surat resmi yang terlanjur terbit.
 {
   "status": "error",
   "message": "Anda tidak memiliki hak akses untuk mengunduh dokumen surat."
+}
+```
+
+---
+
+## 7. GET /api/arsip/nomor-surat/check
+
+Memeriksa keabsahan nomor surat / SK di modul Arsip serta mengecek apakah dokumen fisiknya sudah diunggah atau masih kosong. Digunakan untuk validasi lintas modul (misalnya penetapan Master Biaya SPMB).
+
+### Query Parameters
+
+- `nomor_surat` atau `nomor_sk` (string, required) - String nomor surat/SK yang akan diperiksa (contoh: `15/SK/YAY/X/2026`).
+
+### Response Sukses (200 OK)
+
+Nomor SK terdaftar, status aktif (tidak dibatalkan), dan dokumen fisik SK terverifikasi (tidak kosong).
+
+```json
+{
+  "status": "success",
+  "message": "Nomor SK '15/SK/YAY/X/2026' valid dan dokumen fisik SK terverifikasi di modul Arsip.",
+  "data": {
+    "id": 5,
+    "nomor_surat": "15/SK/YAY/X/2026",
+    "is_found": true,
+    "is_valid": true,
+    "has_document": true,
+    "status": "terpakai",
+    "perihal": "SK Penetapan Biaya Kuliah Mahasiswa Baru",
+    "tujuan": "Yayasan / Pimpinan",
+    "kode_unit": "YAY",
+    "kode_klasifikasi": "SK",
+    "tanggal_surat": "2026-10-01",
+    "dokumen_url": "http://localhost:8000/api/files/view?path=arsip%2Fdokumen%2Fsk.pdf..."
+  }
+}
+```
+
+### Response Hasil Pengecekan
+
+**1. Nomor SK Valid & Dokumen Fisik Terlampir (200 OK)**
+```json
+{
+  "status": "success",
+  "message": "Nomor SK '15/SK/YAY/X/2026' valid dan dokumen fisik SK terverifikasi di modul Arsip.",
+  "data": {
+    "id": 5,
+    "nomor_surat": "15/SK/YAY/X/2026",
+    "is_found": true,
+    "is_valid": true,
+    "has_document": true,
+    "status": "terpakai",
+    "perihal": "SK Penetapan Biaya Kuliah Mahasiswa Baru",
+    "tujuan": "Yayasan / Pimpinan",
+    "kode_unit": "YAY",
+    "kode_klasifikasi": "SK",
+    "tanggal_surat": "2026-10-01",
+    "dokumen_url": "http://localhost:8000/api/files/view?path=arsip%2Fdokumen%2Fsk.pdf..."
+  }
+}
+```
+
+**2. Nomor SK Tidak Ditemukan (200 OK, is_found: false)**
+```json
+{
+  "status": "success",
+  "message": "Nomor SK 'SK-TIDAK-ADA' tidak ditemukan di sistem Arsip.",
+  "data": {
+    "id": null,
+    "nomor_surat": "SK-TIDAK-ADA",
+    "is_found": false,
+    "is_valid": false,
+    "has_document": false,
+    "status": null,
+    "perihal": null,
+    "tujuan": null,
+    "kode_unit": null,
+    "kode_klasifikasi": null,
+    "tanggal_surat": null,
+    "dokumen_url": null
+  }
+}
+```
+
+**3. Dokumen Fisik SK Masih Kosong (200 OK, has_document: false)**
+```json
+{
+  "status": "success",
+  "message": "Nomor SK '10/SK/YAY/X/2026' terdaftar di sistem Arsip, tetapi dokumen/berkas fisik SK belum diunggah (dokumen masih kosong).",
+  "data": {
+    "id": 3,
+    "nomor_surat": "10/SK/YAY/X/2026",
+    "is_found": true,
+    "is_valid": false,
+    "has_document": false,
+    "status": "terpakai",
+    "perihal": "SK Penetapan Biaya Kuliah Mahasiswa Baru",
+    "tujuan": "Yayasan / Pimpinan",
+    "kode_unit": "YAY",
+    "kode_klasifikasi": "SK",
+    "tanggal_surat": "2026-10-01",
+    "dokumen_url": null
+  }
+}
+```
+
+**4. Parameter Kosong (422 Unprocessable Entity)**
+```json
+{
+  "status": "error",
+  "message": "Parameter nomor surat / nomor SK wajib diisi.",
+  "errors": {
+    "nomor_surat": ["Nomor surat / nomor SK wajib diisi."]
+  }
+}
+```
+
+**5. Tidak Terautentikasi (401 Unauthorized)**
+```json
+{
+  "status": "error",
+  "message": "Unauthenticated."
+}
+```
+
+**6. Tidak Memiliki Hak Akses (403 Forbidden)**
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki hak akses untuk memeriksa nomor surat."
+}
+```
+
+---
+
+## 8. POST /api/arsip/nomor-surat/{id}/upload-dokumen
+
+Mengunggah dokumen fisik surat/SK resmi langsung ke entitas nomor surat.
+
+### Headers
+
+- `Authorization: Bearer {token}`
+- `Content-Type: multipart/form-data`
+- `Accept: application/json`
+
+### Body (Form-Data)
+
+- `dokumen` (file, required, max 10MB, mime: pdf/jpg/jpeg/png) - Berkas dokumen fisik surat resmi.
+
+### Response Sukses (200 OK)
+
+```json
+{
+  "status": "success",
+  "message": "Dokumen nomor surat berhasil diunggah.",
+  "data": {
+    "id": 5,
+    "nomor_surat": "15/SK/YAY/X/2026",
+    "file_path": "arsip/dokumen/uuid.pdf",
+    "dokumen_url": "http://localhost:8000/api/files/view?path=arsip%2Fdokumen%2Fuuid.pdf..."
+  }
+}
+```
+
+### Response Error
+
+**1. Validasi Gagal (422 Unprocessable Entity)**
+```json
+{
+  "status": "error",
+  "message": "The dokumen field is required.",
+  "errors": {
+    "dokumen": [
+      "The dokumen field is required.",
+      "The dokumen must be a file of type: pdf, jpg, jpeg, png.",
+      "The dokumen must not be greater than 10240 kilobytes."
+    ]
+  }
+}
+```
+
+**2. Data Tidak Ditemukan (404 Not Found)**
+```json
+{
+  "status": "error",
+  "message": "Data nomor surat tidak ditemukan."
+}
+```
+
+**3. Tidak Terautentikasi (401 Unauthorized)**
+```json
+{
+  "status": "error",
+  "message": "Unauthenticated."
+}
+```
+
+**4. Tidak Memiliki Hak Akses (403 Forbidden)**
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki hak akses untuk mengunggah dokumen nomor surat."
 }
 ```

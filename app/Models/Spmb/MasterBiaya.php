@@ -16,10 +16,16 @@ class MasterBiaya extends Model
     protected $fillable = [
         'master_tipe_jalur_id',
         'program_studi_id',
+        'nomor_sk',
         'total_biaya',
         'is_active',
         'keterangan',
     ];
+
+    public function arsipNomorSurat()
+    {
+        return $this->belongsTo(\App\Models\Arsip\NomorSurat::class, 'nomor_sk', 'nomor_surat');
+    }
 
     protected $casts = [
         'total_biaya' => 'decimal:2',

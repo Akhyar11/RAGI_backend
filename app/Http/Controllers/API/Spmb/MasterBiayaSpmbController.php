@@ -185,14 +185,20 @@ class MasterBiayaSpmbController extends Controller
     {
 
 
-        $query = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'masterTipeJalur']);
+        $query = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat']);
 
         if ($request->filled('search')) {
             $search = $request->input('search');
-            $query->whereHas('programStudi', function ($q) use ($search) {
-                $q->where('nama', 'like', "%{$search}%")
-                  ->orWhere('kode_prodi', 'like', "%{$search}%");
+            $query->where(function ($sub) use ($search) {
+                $sub->whereHas('programStudi', function ($q) use ($search) {
+                    $q->where('nama', 'like', "%{$search}%")
+                      ->orWhere('kode_prodi', 'like', "%{$search}%");
+                })->orWhere('nomor_sk', 'like', "%{$search}%");
             });
+        }
+
+        if ($request->filled('nomor_sk')) {
+            $query->where('nomor_sk', 'like', '%' . $request->input('nomor_sk') . '%');
         }
 
         if ($request->filled('master_tipe_jalur_id')) {
@@ -207,7 +213,7 @@ class MasterBiayaSpmbController extends Controller
             $query->where('is_active', filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN));
         }
 
-        $allowedSorts = ['created_at', 'updated_at', 'total_biaya', 'id'];
+        $allowedSorts = ['created_at', 'updated_at', 'total_biaya', 'nomor_sk', 'id'];
         $sortBy = in_array($request->input('sort_by'), $allowedSorts, true) ? $request->input('sort_by') : 'created_at';
         $sortOrder = strtolower((string) $request->input('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
@@ -229,6 +235,7 @@ class MasterBiayaSpmbController extends Controller
             ],
             'filters' => [
                 'search' => $request->input('search'),
+                'nomor_sk' => $request->input('nomor_sk'),
                 'sort_by' => $sortBy,
                 'sort_order' => $sortOrder,
             ],
@@ -237,7 +244,7 @@ class MasterBiayaSpmbController extends Controller
 
     public function show(Request $request, $id): JsonResponse
     {
-        $biaya = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'masterTipeJalur'])
+        $biaya = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat'])
             ->findOrFail($id);
 
         return response()->json([

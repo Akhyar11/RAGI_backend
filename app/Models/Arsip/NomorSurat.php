@@ -31,6 +31,7 @@ class NomorSurat extends Model
         'reference_type',
         'reference_id',
         'kop_surat_id',
+        'file_path',
         'file_surat_path',
         'file_surat_uploaded_at',
         'file_surat_uploaded_by',
@@ -47,11 +48,28 @@ class NomorSurat extends Model
 
     protected $appends = [
         'has_file',
+        'dokumen_url',
+        'has_dokumen',
     ];
 
     public function getHasFileAttribute(): bool
     {
-        return !empty($this->file_surat_path);
+        return !empty($this->file_surat_path) || !empty($this->file_path);
+    }
+
+    public function getDokumenUrlAttribute(): ?string
+    {
+        $path = $this->file_path ?: ($this->file_surat_path ?: $this->request?->dokumen_lampiran_path);
+        if (!$path) {
+            return null;
+        }
+
+        return app(\App\Services\Storage\FileStorageService::class)->url($path);
+    }
+
+    public function getHasDokumenAttribute(): bool
+    {
+        return !empty($this->file_path) || !empty($this->file_surat_path) || !empty($this->request?->dokumen_lampiran_path);
     }
 
     public function pembuat(): BelongsTo

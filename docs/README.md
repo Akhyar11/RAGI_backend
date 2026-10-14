@@ -188,7 +188,7 @@
 |---|---|---|
 | ArsipDashboardController | Statistik agregat persuratan, antrean permohonan, dan status kop surat | [docs/api/ARSIP/ArsipDashboardController.md](api/ARSIP/ArsipDashboardController.md) |
 | KlasifikasiSuratController | Master referensi kode klasifikasi dan unit persuratan | [docs/api/ARSIP/KlasifikasiSuratController.md](api/ARSIP/KlasifikasiSuratController.md) |
-| NomorSuratController | Penerbitan nomor surat resmi (satuan & bulk berurutan) format Romawi | [docs/api/ARSIP/NomorSuratController.md](api/ARSIP/NomorSuratController.md) |
+| NomorSuratController | Penerbitan nomor surat resmi (satuan & bulk), validasi/cek SK lintas modul, & unggah berkas fisik | [docs/api/ARSIP/NomorSuratController.md](api/ARSIP/NomorSuratController.md) |
 | KopSuratController | Pengelolaan master berkas kop surat 2 versi (Lama < 2021 vs Baru >= 2021) | [docs/api/ARSIP/KopSuratController.md](api/ARSIP/KopSuratController.md) |
 | RequestNomorSuratController | Alur permohonan nomor surat lintas modul & verifikasi admin arsip | [docs/api/ARSIP/RequestNomorSuratController.md](api/ARSIP/RequestNomorSuratController.md) |
 

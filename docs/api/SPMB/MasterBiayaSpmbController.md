@@ -281,11 +281,12 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `search` | string | ❌ | — | Cari nama / kode prodi |
+| `search` | string | ❌ | — | Cari nama / kode prodi / nomor SK |
+| `nomor_sk` | string | ❌ | — | Filter nomor SK |
 | `master_tipe_jalur_id` | integer | ❌ | — | Filter tipe jalur masuk (`core_master_tipe_jalur`) |
 | `program_studi_id` | integer | ❌ | — | Filter program studi |
 | `is_active` | boolean | ❌ | — | Filter status aktif |
-| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `total_biaya`, `id` |
+| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `total_biaya`, `nomor_sk`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 | `page` | integer | ❌ | `1` | Halaman |
@@ -302,11 +303,19 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
             "id": 1,
             "master_tipe_jalur_id": 2,
             "program_studi_id": 7,
+            "nomor_sk": "15/SK/YAY/X/2026",
             "total_biaya": "12000000.00",
             "is_active": true,
             "keterangan": null,
             "master_tipe_jalur": { "id": 2, "kode": "REGULER", "nama": "Reguler" },
             "program_studi": { "id": 7, "nama": "Teknik Informatika", "kode_prodi": "TI01", "jenjang": "S1" },
+            "arsip_nomor_surat": {
+                "id": 5,
+                "nomor_surat": "15/SK/YAY/X/2026",
+                "perihal": "SK Penetapan Biaya Kuliah Mahasiswa Baru",
+                "status": "terpakai",
+                "dokumen_url": "http://localhost:8000/api/files/view?path=arsip%2Fdokumen%2Fsk.pdf..."
+            },
             "items": [
                 { "id": 10, "komponen_biaya_id": 6, "nominal": "250000.00", "dibebankan_saat_pendaftaran": true, "berlaku_diskon": false, "komponen_biaya": { "kode": "REG-AWAL", "nama": "Biaya Pendaftaran" } },
                 { "id": 11, "komponen_biaya_id": 8, "nominal": "2750000.00", "dibebankan_saat_pendaftaran": false, "berlaku_diskon": true, "komponen_biaya": { "kode": "SERAGAM", "nama": "Paket Seragam" } },
@@ -315,7 +324,7 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
         }
     ],
     "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 },
-    "filters": { "search": null, "sort_by": "created_at", "sort_order": "desc" }
+    "filters": { "search": null, "nomor_sk": null, "sort_by": "created_at", "sort_order": "desc" }
 }
 ```
 
@@ -334,8 +343,15 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
         "id": 1,
         "master_tipe_jalur_id": 2,
         "program_studi_id": 7,
+        "nomor_sk": "15/SK/YAY/X/2026",
         "total_biaya": "12000000.00",
         "is_active": true,
+        "arsip_nomor_surat": {
+            "id": 5,
+            "nomor_surat": "15/SK/YAY/X/2026",
+            "perihal": "SK Penetapan Biaya Kuliah Mahasiswa Baru",
+            "dokumen_url": "http://localhost:8000/api/files/view?path=arsip%2Fdokumen%2Fsk.pdf..."
+        },
         "items": [
             { "komponen_biaya_id": 6, "nominal": "250000.00", "dibebankan_saat_pendaftaran": true, "berlaku_diskon": false }
         ]
@@ -360,6 +376,7 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 {
     "master_tipe_jalur_id": 2,
     "program_studi_id": 7,
+    "nomor_sk": "15/SK/YAY/X/2026",
     "is_active": true,
     "keterangan": "Paket biaya awal masuk",
     "items": [

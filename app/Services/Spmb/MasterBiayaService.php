@@ -181,6 +181,7 @@ class MasterBiayaService
                     'program_studi_id' => $data['program_studi_id'],
                 ],
                 [
+                    'nomor_sk' => $data['nomor_sk'] ?? null,
                     'is_active' => $data['is_active'] ?? true,
                     'keterangan' => $data['keterangan'] ?? null,
                 ]
@@ -209,7 +210,7 @@ class MasterBiayaService
 
             $masterBiaya->update(['total_biaya' => $total]);
 
-            return $masterBiaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur']);
+            return $masterBiaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat']);
         });
     }
 
@@ -219,6 +220,7 @@ class MasterBiayaService
             $biaya->update([
                 'master_tipe_jalur_id' => $data['master_tipe_jalur_id'] ?? $biaya->master_tipe_jalur_id,
                 'program_studi_id' => $data['program_studi_id'] ?? $biaya->program_studi_id,
+                'nomor_sk' => array_key_exists('nomor_sk', $data) ? $data['nomor_sk'] : $biaya->nomor_sk,
                 'is_active' => $data['is_active'] ?? $biaya->is_active,
                 'keterangan' => $data['keterangan'] ?? $biaya->keterangan,
             ]);
@@ -257,7 +259,7 @@ class MasterBiayaService
                 $biaya->recalculateTotal();
             }
 
-            return $biaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur']);
+            return $biaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat']);
         });
     }
 

@@ -10,12 +10,12 @@
 # 5. Table Naming Standard (prefix modul baku: iam_, spmb_, siakad_, sikeu_, simpeg_, dll.)
 # ==============================================================================
 
-echo "🤖 [Audit 2/3: Architecture, Standards & Security] Memeriksa kepatuhan arsitektur backend dengan AI (AI Muse Spark 1.3)..."
+echo "🤖 [Audit 2/3: Architecture, Standards & Security] Memeriksa kepatuhan arsitektur backend dengan AI (Gemini 3.8 Flash Low)..."
 
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
 AI_ENGINE="${AI_ENGINE:-agy}"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
-MODEL="${OPENCODE_MODEL:-opencode/muse-spark-1.3-contributor-free}"
+MODEL="${OPENCODE_MODEL:-opencode/ling-3.1-flash-free}"
 
 if [ -n "$DIFF_TARGET" ]; then
     STAGED_DIFF=$(git diff "$DIFF_TARGET" -- "app/**" "routes/**" "database/migrations/**")
@@ -95,13 +95,18 @@ Format Respon:
 EOF
 
 AI_EXIT_CODE=1
-if [ "$AI_ENGINE" != "agy" ] && [ -x "$OPENCODE_BIN" ]; then
-    RESULT=$(timeout 90s "$OPENCODE_BIN" run --pure -m "$MODEL" "$(cat "$PROMPT_FILE")" 2>&1)
+if command -v agy &> /dev/null; then
+    AGY_OUT=$(timeout 180s agy --model gemini-3.8-flash-low --disable-slash-commands --print "$(cat "$PROMPT_FILE")" < /dev/null 2>&1)
     AI_EXIT_CODE=$?
+    RESULT="$AGY_OUT"
+    if [ $AI_EXIT_CODE -ne 0 ]; then
+        echo "⚠️ [AGY Debug] Exit code: $AI_EXIT_CODE"
+        echo "⚠️ [AGY Debug] Output: $AGY_OUT"
+    fi
 fi
 
-if [ $AI_EXIT_CODE -ne 0 ] && command -v agy &> /dev/null; then
-    RESULT=$(timeout 90s agy --model gemini-3.8-flash-low --print "$(cat "$PROMPT_FILE")" 2>&1)
+if [ $AI_EXIT_CODE -ne 0 ] && [ -x "$OPENCODE_BIN" ]; then
+    RESULT=$(timeout 90s "$OPENCODE_BIN" run --pure -m "$MODEL" "$(cat "$PROMPT_FILE")" 2>&1)
     AI_EXIT_CODE=$?
 fi
 
@@ -109,6 +114,7 @@ rm -f "$PROMPT_FILE"
 
 if [ $AI_EXIT_CODE -ne 0 ]; then
     echo "❌ [Audit 2/3: Architecture, Standards & Security] REJECTED: AI Reviewer gagal/timeout (Exit: $AI_EXIT_CODE)!"
+    echo "Detail output: $RESULT"
     exit 1
 fi
 
@@ -127,5 +133,5 @@ elif ! echo "$RESULT" | grep -qi "PASSED"; then
     exit 1
 fi
 
-echo "✅ [Audit 2/3: Architecture, Standards & Security] PASSED (Divalidasi AI Muse Spark 1.3)."
+echo "✅ [Audit 2/3: Architecture, Standards & Security] PASSED (Divalidasi Gemini 3.8 Flash Low)."
 exit 0

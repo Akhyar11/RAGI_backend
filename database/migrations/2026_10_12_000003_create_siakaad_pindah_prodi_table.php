@@ -50,7 +50,7 @@ return new class extends Migration
                 $table->foreign('applied_by')->references('id')->on('core_users')->onDelete('set null');
                 $table->foreign('dicek_keuangan_oleh')->references('id')->on('core_users')->onDelete('set null');
                 $table->index(['mahasiswa_id', 'status']);
-                $table->index(['tahun_akademik_id', 'semester_efektif']);
+                $table->index(['tahun_akademik_id', 'semester_efektif'], 'siakad_pindah_prodi_ta_sem_idx');
             });
         }
     }

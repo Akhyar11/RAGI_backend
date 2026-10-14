@@ -1078,8 +1078,10 @@ Route::middleware('auth:api')->prefix('arsip')->group(function () {
     Route::apiResource('request-nomor', App\Http\Controllers\Arsip\RequestNomorSuratController::class)->only(['index', 'store', 'show']);
 
     // Nomor Surat Definitif (Satuan / Bulk)
+    Route::get('nomor-surat/check', [App\Http\Controllers\Arsip\NomorSuratController::class, 'check']);
     Route::post('nomor-surat/{id}/upload-surat', [App\Http\Controllers\Arsip\NomorSuratController::class, 'uploadSurat']);
     Route::get('nomor-surat/{id}/download-surat', [App\Http\Controllers\Arsip\NomorSuratController::class, 'downloadSurat']);
+    Route::post('nomor-surat/{id}/upload-dokumen', [App\Http\Controllers\Arsip\NomorSuratController::class, 'uploadDokumen']);
     Route::post('nomor-surat/{id}/batalkan', [App\Http\Controllers\Arsip\NomorSuratController::class, 'batalkan']);
     Route::apiResource('nomor-surat', App\Http\Controllers\Arsip\NomorSuratController::class);
 });
