@@ -38,6 +38,134 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
 
 ---
 
+## GET /api/simpeg/presensi/settings
+
+> Mengambil konfigurasi parameter presensi global sistem (ambang biometrik wajah, batas toleransi GPS, batas maksimal terlambat per bulan, dan kebijakan libur nasional).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": {
+        "face_score_threshold": 0.8,
+        "gps_accuracy_threshold_meters": 50,
+        "late_tolerance_minutes": 15,
+        "max_early_clock_in_minutes": 60,
+        "max_late_clock_in_minutes": 240,
+        "max_early_clock_out_minutes": 0,
+        "max_late_clock_out_minutes": 240,
+        "early_leave_tolerance_minutes": 15,
+        "applies_national_holidays": true,
+        "max_late_per_month": 3
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk membaca pengaturan presensi."
+}
+```
+
+---
+
+## PUT /api/simpeg/presensi/settings
+
+> Memperbarui konfigurasi parameter presensi global sistem.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "face_score_threshold": 0.8,
+    "gps_accuracy_threshold_meters": 50,
+    "max_late_per_month": 3,
+    "applies_national_holidays": true,
+    "late_tolerance_minutes": 15,
+    "max_early_clock_in_minutes": 60,
+    "max_late_clock_in_minutes": 240,
+    "max_early_clock_out_minutes": 0,
+    "max_late_clock_out_minutes": 240,
+    "early_leave_tolerance_minutes": 15
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Parameter presensi sistem berhasil diperbarui",
+    "data": {
+        "face_score_threshold": 0.8,
+        "gps_accuracy_threshold_meters": 50,
+        "max_late_per_month": 3,
+        "applies_national_holidays": true
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk mengubah pengaturan presensi."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "max_late_per_month": ["Batas maksimal terlambat per bulan harus diisi."]
+    }
+}
+```
+
+---
+
 ## GET /api/simpeg/presensi/shift-templates
 
 > Bila tabel masih kosong, otomatis membuat template default "Shift Reguler 5 Hari" (Senin–Jumat 08:00–17:00, Sabtu–Minggu libur) beserta 7 baris harinya. Template yang kekurangan baris hari akan di-backfill otomatis.

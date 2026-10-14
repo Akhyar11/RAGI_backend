@@ -31,6 +31,7 @@ class PresensiMasterSettingController extends Controller
             'max_late_clock_out_minutes',
             'early_leave_tolerance_minutes',
             'applies_national_holidays',
+            'max_late_per_month',
         ])->get()->keyBy('key');
 
         return response()->json([
@@ -45,6 +46,7 @@ class PresensiMasterSettingController extends Controller
                 'max_late_clock_out_minutes' => (int) ($settings->get('max_late_clock_out_minutes')?->value ?? 240),
                 'early_leave_tolerance_minutes' => (int) ($settings->get('early_leave_tolerance_minutes')?->value ?? 15),
                 'applies_national_holidays' => filter_var($settings->get('applies_national_holidays')?->value ?? true, FILTER_VALIDATE_BOOLEAN),
+                'max_late_per_month' => (int) ($settings->get('max_late_per_month')?->value ?? 3),
             ],
         ]);
     }
@@ -57,7 +59,9 @@ class PresensiMasterSettingController extends Controller
         $validated = $request->validated();
 
         foreach ($validated as $key => $val) {
-            SystemSetting::set($key, (string) $val);
+            if ($val !== null) {
+                SystemSetting::set($key, (string) $val);
+            }
         }
 
         return response()->json([

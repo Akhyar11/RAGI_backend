@@ -16,6 +16,7 @@ class UpdatePresensiSettingRequest extends FormRequest
         return [
             'face_score_threshold' => 'required|numeric|min:0.1|max:1.0',
             'gps_accuracy_threshold_meters' => 'required|numeric|min:5|max:500',
+            'max_late_per_month' => 'required|integer|min:0|max:31',
             // Toleransi waktu & kebijakan libur kini dikelola per shift template,
             // sehingga opsional di level global (hanya fallback bila pegawai tanpa shift).
             'late_tolerance_minutes' => 'sometimes|nullable|integer|min:0|max:120',
