@@ -21,6 +21,7 @@ class KelulusanController extends Controller
             $s = $request->search;
             $query->whereHas('mahasiswa', fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nim', 'like', "%{$s}%"));
         }
+        if ($request->filled('tahun_akademik_id')) $query->where('tahun_akademik_id', $request->tahun_akademik_id);
         $allowedSort = ['created_at', 'updated_at', 'id'];
         $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';

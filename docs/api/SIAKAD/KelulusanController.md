@@ -33,6 +33,7 @@ Yudisium/kelulusan (syarat min. IPK 2.00 & 144 SKS; penetapan otomatis mengubah 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
 | `search` | string | ❌ | — | Cari NIM / nama |
+| `tahun_akademik_id` | integer | ❌ | — | Filter periode yudisium |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 | `page` | integer | ❌ | `1` | Halaman |
 | `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `id` |

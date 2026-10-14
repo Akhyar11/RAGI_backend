@@ -23,6 +23,7 @@ class StatusAkademikController extends Controller
         $query = CutiMahasiswa::with(['mahasiswa.programStudi']);
         if ($request->filled('status')) $query->where('status', $request->status);
         if ($request->filled('mahasiswa_id')) $query->where('mahasiswa_id', $request->mahasiswa_id);
+        if ($request->filled('tahun_akademik_id')) $query->where('tahun_akademik_id', $request->tahun_akademik_id);
         if ($request->filled('search')) {
             $s = $request->search;
             $query->whereHas('mahasiswa', fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nim', 'like', "%{$s}%"));

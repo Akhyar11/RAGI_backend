@@ -58,6 +58,7 @@ Cuti mahasiswa, riwayat status akademik, daftar & pengesahan (lock) KHS, dan rek
 | `status` | string | ❌ | — | `pending`, `disetujui`, `ditolak` |
 | `mahasiswa_id` | integer | ❌ | — | Filter mahasiswa |
 | `search` | string | ❌ | — | Cari NIM / nama |
+| `tahun_akademik_id` | integer | ❌ | — | Filter periode |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 | `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
