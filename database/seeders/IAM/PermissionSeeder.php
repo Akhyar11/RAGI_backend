@@ -106,6 +106,8 @@ class PermissionSeeder extends Seeder
             ['name' => 'Ajukan Permohonan Nomor Surat SIMPEG', 'slug' => 'simpeg.nomor_surat.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Mengajukan nomor surat resmi baru dari SIMPEG'],
             ['name' => 'Unggah Scan Berkas Surat SIMPEG', 'slug' => 'simpeg.nomor_surat.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengunggah dan memperbarui berkas scan surat resmi pegawai'],
             ['name' => 'Hapus Arsip Nomor Surat SIMPEG', 'slug' => 'simpeg.nomor_surat.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus arsip nomor surat SIMPEG'],
+            ['name' => 'Lihat Surat Peringatan', 'slug' => 'simpeg.surat_peringatan.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat daftar surat peringatan kepegawaian'],
+            ['name' => 'Kelola Surat Peringatan', 'slug' => 'simpeg.surat_peringatan.manage', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengelola dan membatalkan surat peringatan kepegawaian'],
 
             // ── MODUL SIPPM ───────────────────────────────────────
             ['name' => 'Lihat Dashboard SIPPM', 'slug' => 'sippm.dashboard.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat dashboard utama & metrik IKU SIPPM'],

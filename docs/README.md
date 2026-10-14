@@ -140,6 +140,7 @@
 | IzinJamKerjaController | Izin parsial jam kerja (keluar kantor, datang terlambat, pulang awal) & integrasi presensi | [docs/api/SIMPEG/IzinJamKerjaController.md](api/SIMPEG/IzinJamKerjaController.md) |
 | SkPegawaiController | Arsip & pelaporan SK mandiri dosen/tendik serta verifikasi dokumen SDM | [docs/api/SIMPEG/SkPegawaiController.md](api/SIMPEG/SkPegawaiController.md) |
 | TandaTanganController | Master tanda tangan digital pegawai & pejabat approver (Private Storage & Signed URL) | [docs/api/SIMPEG/TandaTanganController.md](api/SIMPEG/TandaTanganController.md) |
+| SuratPeringatanController | Surat Peringatan (SP) keterlambatan presensi pegawai terbit otomatis dari payroll | [docs/api/SIMPEG/SuratPeringatanController.md](api/SIMPEG/SuratPeringatanController.md) |
 | PenilaianKinerjaController | Sasaran Kinerja Pegawai (SKP) butir-per-butir & evaluasi capaian BKD | [docs/api/SIMPEG/PenilaianKinerjaController.md](api/SIMPEG/PenilaianKinerjaController.md) |
 | TridharmaDossierController | Agregasi portofolio Tridharma terpadu (SIAKAD, SIPPM, SIMPEG) | [docs/api/SIMPEG/TridharmaDossierController.md](api/SIMPEG/TridharmaDossierController.md) |
 | PayrollController | Penggajian fleksibel, master komponen insentif, honor SKS, PPh 21, & posting kas SIKEU | [docs/api/SIMPEG/PayrollController.md](api/SIMPEG/PayrollController.md) |

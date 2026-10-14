@@ -260,6 +260,12 @@ class PayrollController extends Controller
             'tanggal_transfer' => now(),
         ]);
 
+        try {
+            app(\App\Services\Simpeg\SuratPeringatanService::class)->checkAndGenerateSpForGaji($gaji);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal memproses surat peringatan keterlambatan: ' . $e->getMessage());
+        }
+
         $sikeuJournal = SikeuIntegrationService::postPayrollJournal($gaji);
 
         return response()->json([

@@ -285,6 +285,12 @@ class PengajuanOperasionalService
                 'tanggal_transfer' => $data['tanggal_pencairan'] ?? now()->toDateString(),
                 'jurnal_id' => $jurnal->id,
             ]);
+
+            try {
+                app(\App\Services\Simpeg\SuratPeringatanService::class)->checkAndGenerateSpForGaji($gaji);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal memproses SP keterlambatan saat pencairan batch: ' . $e->getMessage());
+            }
         }
 
         $pengajuan->update([
