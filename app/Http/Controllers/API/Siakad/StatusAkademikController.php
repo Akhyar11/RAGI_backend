@@ -11,12 +11,15 @@ use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\Pertemuan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 
 class StatusAkademikController extends Controller
 {
     // --- CUTI MAHASISWA (pengajuan -> approve, blokir KRS via status) ---
     public function listCuti(Request $request)
     {
+        Gate::authorize('siakad.mahasiswa.read');
         $query = CutiMahasiswa::with(['mahasiswa.programStudi']);
         if ($request->filled('status')) $query->where('status', $request->status);
         if ($request->filled('mahasiswa_id')) $query->where('mahasiswa_id', $request->mahasiswa_id);
@@ -35,6 +38,7 @@ class StatusAkademikController extends Controller
 
     public function storeCuti(Request $request)
     {
+        Gate::authorize('siakad.mahasiswa.manage');
         $validated = $request->validate([
             'mahasiswa_id' => 'required|exists:siakad_mahasiswa,id',
             'tahun_akademik_id' => 'required|exists:siakad_tahun_akademik,id',
@@ -47,6 +51,7 @@ class StatusAkademikController extends Controller
 
     public function prosesCuti(Request $request, $id)
     {
+        Gate::authorize('siakad.mahasiswa.manage');
         $request->validate(['status' => 'required|in:disetujui,ditolak', 'alasan' => 'nullable|string']);
         return DB::transaction(function () use ($request, $id) {
             $cuti = CutiMahasiswa::with('mahasiswa')->findOrFail($id);
@@ -61,6 +66,7 @@ class StatusAkademikController extends Controller
     // --- RIWAYAT STATUS ---
     public function listStatusLog(Request $request)
     {
+        Gate::authorize('siakad.mahasiswa.read');
         $query = StatusAkademikLog::with('mahasiswa');
         if ($request->filled('mahasiswa_id')) $query->where('mahasiswa_id', $request->mahasiswa_id);
         $perPage = min(100, $request->integer('per_page', 15));
@@ -74,6 +80,7 @@ class StatusAkademikController extends Controller
     // --- KHS (list + kunci/pengesahan) ---
     public function listKhs(Request $request)
     {
+        Gate::authorize('siakad.nilai.read');
         $query = Khs::with(['mahasiswa.programStudi', 'tahunAkademik']);
         if ($request->filled('mahasiswa_id')) $query->where('mahasiswa_id', $request->mahasiswa_id);
         if ($request->filled('tahun_akademik_id')) $query->where('tahun_akademik_id', $request->tahun_akademik_id);
@@ -87,6 +94,7 @@ class StatusAkademikController extends Controller
 
     public function lockKhs(Request $request, $id)
     {
+        Gate::authorize('siakad.nilai.manage');
         $request->validate(['is_locked' => 'required|boolean']);
         $khs = Khs::findOrFail($id);
         $khs->update(['is_locked' => $request->boolean('is_locked')]);
@@ -94,9 +102,53 @@ class StatusAkademikController extends Controller
         return response()->json(['status' => 'success', 'message' => $khs->is_locked ? 'KHS dikunci dan disahkan.' : 'Kunci KHS dibuka.', 'data' => $khs]);
     }
 
+    /**
+     * Pengesahan massal KHS per periode (+prodi opsional), pengganti
+     * pengesahan satu-per-satu ala cetak massal legacy.
+     */
+    public function bulkLockKhs(Request $request)
+    {
+        Gate::authorize('siakad.nilai.manage');
+        $validated = $request->validate([
+            'tahun_akademik_id' => 'required|exists:siakad_tahun_akademik,id',
+            'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
+            'is_locked' => 'required|boolean',
+        ]);
+
+        $query = Khs::where('tahun_akademik_id', $validated['tahun_akademik_id']);
+        if (!empty($validated['program_studi_id'])) {
+            $query->whereHas('mahasiswa', fn($q) => $q->where('program_studi_id', $validated['program_studi_id']));
+        }
+        $oldValues = ['is_locked_sebelum' => (clone $query)->where('is_locked', !$validated['is_locked'])->count()];
+        $count = $query->update(['is_locked' => $validated['is_locked']]);
+
+        try {
+            \App\Services\AuditLogService::record(
+                module: 'SIAKAD',
+                action: $validated['is_locked'] ? 'approve' : 'update',
+                tableName: 'siakad_khs',
+                recordId: null,
+                oldValues: $oldValues,
+                newValues: array_merge($validated, ['affected' => $count]),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log bulkLockKhs: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $validated['is_locked']
+                ? "Pengesahan massal selesai: {$count} KHS dikunci."
+                : "Kunci massal dibuka: {$count} KHS.",
+            'data' => ['affected' => $count],
+        ]);
+    }
+
     // --- REKAP ABSENSI (syarat UAS 75%) ---
     public function rekapAbsensi(Request $request, $kelasId)
     {
+        Gate::authorize('siakad.nilai.read');
         $pertemuanIds = Pertemuan::where('kelas_id', $kelasId)->pluck('id');
         $total = $pertemuanIds->count();
         $rows = AbsensiMahasiswa::with('mahasiswa')

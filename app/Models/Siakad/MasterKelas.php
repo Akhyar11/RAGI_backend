@@ -43,4 +43,9 @@ class MasterKelas extends Model
         return $this->hasMany(Mahasiswa::class, 'kelas', 'nama_kelas')
             ->where('program_studi_id', $this->program_studi_id);
     }
+
+    public function paketMks()
+    {
+        return $this->hasMany(PaketMkRombel::class, 'master_kelas_id');
+    }
 }

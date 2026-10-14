@@ -39,6 +39,14 @@ class SiakadMasterReferensiFlowTest extends TestCase
         parent::setUp();
         $this->setUpPassport();
         $this->admin = User::factory()->create();
+        // Pembukaan kelas kini mensyaratkan permission siakad.kelas.manage (BAAK)
+        $role = \App\Models\Role::create(['name' => 'Admin BAAK', 'slug' => 'admin-baak-test']);
+        $perm = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'siakad.kelas.manage'],
+            ['name' => 'Kelola Buka Kelas & Ruang', 'module' => 'siakad', 'action' => 'update']
+        );
+        $role->permissions()->attach($perm->id);
+        $this->admin->roles()->attach($role->id);
         Passport::actingAs($this->admin);
     }
 

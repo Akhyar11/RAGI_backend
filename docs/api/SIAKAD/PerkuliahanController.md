@@ -92,9 +92,14 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
     "tahun_akademik_id": 1,
     "dosen_id": 3,
     "nama_kelas": "TI-1A",
-    "kapasitas": 40
+    "kapasitas": 40,
+    "tipe_sesi": "gabungan | teori | praktik",
+    "parent_kelas_id": "integer, nullable, exists:siakad_kelas,id — wajib untuk tipe praktik (1 level, satu periode dengan induk; MK boleh beda)",
+    "rombel_ids": "array, nullable — ID siakad_master_kelas peserta (cth. 24A/24B); praktik cukup 1 rombel, teori gabungan bisa banyak"
 }
 ```
+
+> **Aturan induk-anak (teori digabung, praktik per rombel):** kelas `teori` sebagai induk gabungan (1 dosen, 1 ruang besar, rombel 24A+24B); kelas `praktik` sebagai anak per rombel (ruang lab, dosen, jam beda, `parent_kelas_id` ke induk). Teori dan praktik masing-masing MK sendiri (boleh beda `mata_kuliah_id`), syarat hanya satu periode; nilai & absensi mengikuti model OBE per kelas masing-masing (waktu bisa berbeda). KRS: bila teori+praktik satu MK yang sama, diizinkan maksimal 1 induk + 1 anak per semester; dua praktik saudara dari induk yang sama ditolak.
 
 ### Response Sukses
 

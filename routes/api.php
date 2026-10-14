@@ -864,6 +864,12 @@ Route::get('sippm/pengumuman/{id}/html-draft', [App\Http\Controllers\Sippm\Pengu
 // Public Payment Receipt Verification Route (Accessible by scanning QR Code on physical receipt)
 Route::get('v1/sikeu/pembayaran/validasi/{kode_transaksi}', [App\Http\Controllers\Sikeu\ExternalTagihanController::class, 'validasiPembayaranPublik']);
 
+// Public Kartu Ujian Verification Route (Accessible by scanning QR Code on printed card)
+Route::middleware('throttle:30,1')->get('v1/siakad/kartu-ujian/validasi/{token}', [App\Http\Controllers\API\Siakad\KartuUjianController::class, 'validasi']);
+
+// Public Academic Document Verification Route (KHS/Transkrip QR)
+Route::middleware('throttle:30,1')->get('v1/siakad/dokumen/validasi/{token}', [App\Http\Controllers\API\Siakad\DokumenController::class, 'validasi']);
+
 // Public Dispensasi Letter Verification Route (Accessible by scanning QR Code on printed letter)
 Route::get('v1/sikeu/dispensasi/validasi/{signature_hash}', [App\Http\Controllers\Sikeu\DispensasiTagihanController::class, 'validasiDispensasiPublik']);
 

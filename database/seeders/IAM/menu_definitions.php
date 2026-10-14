@@ -210,14 +210,7 @@ return [
             ],
             // Catatan: KRS & Jadwal tidak dibuat top-level agar tidak aktif ganda —
             // sudah ada di grup PERKULIAHAN & OBE di bawah.
-            [
-                'name' => 'Hasil Studi (KHS & Transkrip)',
-                'url' => '/siakad/hasil-studi',
-                'icon' => 'FaAward',
-                'module' => 'siakad',
-                'permission_slug' => 'siakad.nilai.read',
-                'order_index' => 4,
-            ],
+            // Hasil Studi digabung ke grup STATUS AKADEMIK agar satu pintu.
             [
                 'name' => 'PERKULIAHAN (AKADEMIK)',
                 'url' => '#perkuliahan_siakad',
@@ -227,8 +220,24 @@ return [
                 'children' => [
                     ['name' => 'Kelas & Jadwal', 'url' => '/siakad/perkuliahan/kelas', 'icon' => 'FaCalendarCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.kelas.read', 'order_index' => 1],
                     ['name' => 'KRS Mahasiswa', 'url' => '/siakad/krs', 'icon' => 'FaClipboardCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.krs.read', 'order_index' => 2],
-                    ['name' => 'Penilaian Kelas (OBE)', 'url' => '/siakad/nilai', 'icon' => 'FaPen', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 3],
-                    ['name' => 'Bimbingan PA', 'url' => '/siakad/bimbingan', 'icon' => 'FaHandshake', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 4],
+                    ['name' => 'Kartu Ujian UTS/UAS', 'url' => '/siakad/kartu-ujian', 'icon' => 'FaFileCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.krs.read', 'order_index' => 3],
+                    ['name' => 'Penilaian Kelas (OBE)', 'url' => '/siakad/nilai', 'icon' => 'FaPen', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 4],
+                    ['name' => 'Bimbingan PA', 'url' => '/siakad/bimbingan', 'icon' => 'FaHandshake', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 5],
+                ]
+            ],
+            [
+                'name' => 'STATUS AKADEMIK',
+                'url' => '#status_siakad',
+                'icon' => 'FaStamp',
+                'module' => 'siakad',
+                'order_index' => 5,
+                'children' => [
+                    ['name' => 'Hasil Studi (KHS & Transkrip)', 'url' => '/siakad/hasil-studi', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.read', 'order_index' => 1],
+                    ['name' => 'Cuti Mahasiswa', 'url' => '/siakad/cuti', 'icon' => 'FaHourglassHalf', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 2],
+                    ['name' => 'Kelulusan & Yudisium', 'url' => '/siakad/kelulusan', 'icon' => 'FaStamp', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.manage', 'order_index' => 3],
+                    ['name' => 'Pindah Program Studi', 'url' => '/siakad/pindah-prodi', 'icon' => 'FaExchangeAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.manage', 'order_index' => 4],
+                    ['name' => 'Pengesahan KHS', 'url' => '/siakad/khs', 'icon' => 'FaFileCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 5],
+                    ['name' => 'Monitoring Eksekutif', 'url' => '/siakad/eksekutif', 'icon' => 'FaChartBar', 'module' => 'siakad', 'permission_slug' => 'siakad.dashboard.read', 'order_index' => 6],
                 ]
             ],
             [
@@ -331,16 +340,8 @@ return [
                     ['name' => 'Master Tipe Referensi', 'url' => '/siakad/master/tipe-referensi', 'icon' => 'FaTags', 'module' => 'siakad', 'permission_slug' => 'siakad.master.manage', 'order_index' => 6],
                 ]
             ],
-            [
-                'name' => 'INTEGRASI DIKTI (BAAK)',
-                'url' => '#feeder_siakad',
-                'icon' => 'FaSyncAlt',
-                'module' => 'siakad',
-                'order_index' => 8,
-                'children' => [
-                    ['name' => 'Sinkronisasi Neo Feeder', 'url' => '/siakad/feeder-sync', 'icon' => 'FaCloudUploadAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.feeder.manage', 'order_index' => 1],
-                ]
-            ],
+            // Sinkronisasi Neo Feeder digabung ke Panduan SIAKAD
+            // (panduan kategori "OBE & Feeder" menautkan /siakad/feeder-sync).
             [
                 'name' => 'Panduan & Alur SIAKAD',
                 'url' => '/siakad/panduan',

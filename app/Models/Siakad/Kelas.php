@@ -28,6 +28,8 @@ class Kelas extends Model
         'jam_selesai',
         'status',
         'is_gabungan',
+        'parent_kelas_id',
+        'tipe_sesi',
         'id_feeder',
     ];
 
@@ -36,6 +38,8 @@ class Kelas extends Model
         'kuota_krs' => 'integer',
         'is_gabungan' => 'boolean',
     ];
+
+    public const TIPE_SESI = ['gabungan', 'teori', 'praktik'];
 
     public function mataKuliah()
     {
@@ -68,6 +72,35 @@ class Kelas extends Model
     public function ruangan()
     {
         return $this->belongsTo(Ruangan::class, 'ruangan_id');
+    }
+
+    /**
+     * Kelas induk teori gabungan (null untuk kelas biasa / induk).
+     */
+    public function parent()
+    {
+        return $this->belongsTo(self::class, 'parent_kelas_id');
+    }
+
+    /**
+     * Kelas anak praktik pecahan dari induk teori.
+     */
+    public function children()
+    {
+        return $this->hasMany(self::class, 'parent_kelas_id');
+    }
+
+    /**
+     * Rombel administratif peserta (siakad_master_kelas, cth. 24A/24B).
+     */
+    public function rombels()
+    {
+        return $this->belongsToMany(
+            MasterKelas::class,
+            'siakad_kelas_rombel',
+            'kelas_id',
+            'master_kelas_id'
+        );
     }
 
     public function dosenPengampu()

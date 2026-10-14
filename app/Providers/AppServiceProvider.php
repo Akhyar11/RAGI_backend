@@ -28,6 +28,13 @@ class AppServiceProvider extends ServiceProvider
             \App\Listeners\Sikeu\CatatKonteksPenagihanPindahProdi::class
         );
 
+        // Mutasi prodi diterapkan SIAKAD -> SPMB menyelaraskan prodi pendaftaran asal
+        // (sinkron: laporan SPMB harus selaras pada request yang sama).
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Events\Siakad\MahasiswaPindahProdi::class,
+            \App\Listeners\Spmb\SinkronProdiKeSpmb::class
+        );
+
         \Illuminate\Support\Facades\Event::listen(
             \App\Events\Simpeg\SuratTugasDisetujui::class,
             \App\Listeners\Simpeg\SetPresensiDinasLuar::class
@@ -69,6 +76,10 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Siakad\KonversiTransfer::observe(\App\Observers\KonversiTransferObserver::class);
         \App\Models\Siakad\TahunAkademik::observe(\App\Observers\Siakad\TahunAkademikObserver::class);
         \App\Models\Siakad\ProgramStudi::observe(\App\Observers\Siakad\ProgramStudiObserver::class);
+        \App\Models\Siakad\PaketMkRombel::observe(\App\Observers\Siakad\PaketMkRombelObserver::class);
+        \App\Models\Siakad\HakaksesKrs::observe(\App\Observers\Siakad\HakaksesKrsObserver::class);
+        \App\Models\Siakad\KartuUjianToken::observe(\App\Observers\Siakad\KartuUjianTokenObserver::class);
+        \App\Models\Siakad\DokumenToken::observe(\App\Observers\Siakad\DokumenTokenObserver::class);
 
         // SIKEU Observers
         \App\Models\Sikeu\PengajuanPencairanKas::observe(\App\Observers\Sikeu\PengajuanPencairanKasObserver::class);

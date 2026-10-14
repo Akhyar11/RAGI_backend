@@ -3,6 +3,8 @@
 namespace App\Services\Siakad;
 
 use App\Models\Siakad\Kelas;
+use App\Models\Siakad\Dosen;
+use App\Models\Siakad\HakaksesKrs;
 use App\Models\Siakad\Krs;
 use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\Mahasiswa;
@@ -41,6 +43,24 @@ class KrsService
             abort(response()->json([
                 'status' => 'error',
                 'message' => "KRS ditolak. Status akademik mahasiswa saat ini '{$mhs->status}'. Hanya mahasiswa aktif yang dapat mengisi KRS (herregistrasi).",
+            ], 422));
+        }
+    }
+
+    /**
+     * Gate akses KRS ala wsia_hakakses legacy: tanpa baris = terbuka;
+     * baris is_dibuka=false = dikunci BAAK.
+     */
+    public function assertAksesKrsDibuka(Mahasiswa $mhs, int $tahunAkademikId): void
+    {
+        $akses = HakaksesKrs::where('mahasiswa_id', $mhs->id)
+            ->where('tahun_akademik_id', $tahunAkademikId)
+            ->first();
+        if ($akses && !$akses->is_dibuka) {
+            abort(response()->json([
+                'status' => 'error',
+                'message' => 'Akses KRS Anda untuk periode ini belum dibuka/dikunci oleh BAAK. Hubungi bagian akademik.',
+                'errors' => ['hak_akses' => ['Akses KRS periode ini dikunci BAAK.']],
             ], 422));
         }
     }
@@ -122,6 +142,35 @@ class KrsService
         return ((int) $parts[0]) * 60 + ((int) $parts[1]);
     }
 
+    /**
+     * Cegah IDOR/BOLA: data milik sendiri bebas; manajerial BAAK via permission
+     * resmi; PA via permission approve + relasi bimbingan/peserta kelas.
+     * Tanpa string role hardcoded (aturan Zero Hardcode).
+     */
+    public function assertBolehLihatMahasiswa($user, int $mahasiswaId): ?\Illuminate\Http\JsonResponse
+    {
+        if ($user && Mahasiswa::where('id', $mahasiswaId)->where('user_id', $user->id)->exists()) {
+            return null;
+        }
+        if ($user && ($user->isSuperAdmin() || $user->hasPermission('siakad.mahasiswa.manage'))) {
+            return null;
+        }
+        if ($user && $user->hasPermission('siakad.krs.approve')) {
+            $dosen = Dosen::where('user_id', $user->id)->first();
+            if ($dosen) {
+                $mhs = Mahasiswa::find($mahasiswaId);
+                $isAdvisee = $mhs && (int) $mhs->dosen_wali_id === (int) $dosen->id;
+                $isPeserta = KrsDetail::whereHas('krs', fn($q) => $q->where('mahasiswa_id', $mahasiswaId))
+                    ->whereHas('kelas.dosenPengampu', fn($q) => $q->where('dosen_id', $dosen->id))
+                    ->exists();
+                if ($isAdvisee || $isPeserta) {
+                    return null;
+                }
+            }
+        }
+        return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki akses ke data mahasiswa ini.'], 403);
+    }
+
     public function assertTidakBentrok(Krs $krs, Kelas $kelasBaru): void
     {
         if (!$kelasBaru->hari || !$kelasBaru->jam_mulai || !$kelasBaru->jam_selesai) {
@@ -151,21 +200,73 @@ class KrsService
 
     public function assertTidakDuplikatMk(Krs $krs, Kelas $kelasBaru): void
     {
-        $exists = $krs->krsDetails()
-            ->whereHas('kelas', fn($q) => $q->where('mata_kuliah_id', $kelasBaru->mata_kuliah_id)->where('id', '!=', $kelasBaru->id))
-            ->exists();
-        if ($exists) {
-            abort(response()->json([
-                'status' => 'error',
-                'message' => 'Mata kuliah yang sama sudah diambil di kelas lain pada semester ini.',
-            ], 422));
+        $existing = $krs->krsDetails()->with('kelas')->whereHas('kelas', fn($q) => $q->where('mata_kuliah_id', $kelasBaru->mata_kuliah_id)->where('id', '!=', $kelasBaru->id))->get();
+        if ($existing->isEmpty()) {
+            return;
         }
+
+        // Aturan keluarga induk-anak: boleh maksimal 1 induk teori + 1 anak praktik per MK.
+        if ($kelasBaru->parent_kelas_id) {
+            $parentId = (int) $kelasBaru->parent_kelas_id;
+            foreach ($existing as $d) {
+                $k = $d->kelas;
+                if (!$k) {
+                    continue;
+                }
+                // Saudara praktik lain dari induk yang sama -> tolak (cukup 1 praktik)
+                if ($k->parent_kelas_id && (int) $k->parent_kelas_id === $parentId && (int) $k->id !== (int) $kelasBaru->id) {
+                    abort(response()->json([
+                        'status' => 'error',
+                        'message' => 'Anda sudah mengambil kelas praktik lain dari induk yang sama. Cukup 1 teori + 1 praktik per mata kuliah.',
+                        'errors' => ['kelas' => ['Sudah mengambil praktik lain dari induk yang sama.']],
+                    ], 422));
+                }
+            }
+            // Pasangan induknya sendiri -> izinkan
+            $hasParent = $existing->contains(fn($d) => (int) ($d->kelas?->id) === $parentId);
+            if ($hasParent) {
+                return;
+            }
+        } else {
+            // Kelas induk/biasa baru: izinkan jika yang sudah ada hanya anaknya sendiri
+            $childIds = Kelas::where('parent_kelas_id', $kelasBaru->id)->pluck('id')->map(fn($v) => (int) $v)->toArray();
+            if (!empty($childIds)) {
+                $allAreMyChildren = $existing->every(fn($d) => in_array((int) ($d->kelas?->id), $childIds, true));
+                if ($allAreMyChildren && $existing->count() <= 1) {
+                    return;
+                }
+            }
+        }
+
+        abort(response()->json([
+            'status' => 'error',
+            'message' => 'Mata kuliah yang sama sudah diambil di kelas lain pada semester ini.',
+            'errors' => ['kelas' => ['Mata kuliah sudah diambil di kelas lain semester ini.']],
+        ], 422));
+    }
+
+    /**
+     * Dua kelas satu keluarga jika: sama persis induknya, atau salah satunya induk dari lainnya.
+     */
+    protected function isSatuKeluargaIndukAnak(Kelas $a, Kelas $b): bool
+    {
+        if ((int) $a->id === (int) $b->id) {
+            return true;
+        }
+        if ($b->parent_kelas_id && (int) $b->parent_kelas_id === (int) $a->id) {
+            return true;
+        }
+        if ($a->parent_kelas_id && (int) $a->parent_kelas_id === (int) $b->id) {
+            return true;
+        }
+        return false;
     }
 
     public function addClass(Mahasiswa $mhs, int $tahunAkademikId, int $kelasId, float $ipk): array
     {
         return DB::transaction(function () use ($mhs, $tahunAkademikId, $kelasId, $ipk) {
             $this->assertMahasiswaAktif($mhs);
+            $this->assertAksesKrsDibuka($mhs, $tahunAkademikId);
 
             $kelas = Kelas::with('mataKuliah')->where('id', $kelasId)->lockForUpdate()->firstOrFail();
             if ($kelas->status !== 'aktif') {

@@ -9,11 +9,13 @@ use App\Models\Siakad\Krs;
 use App\Http\Requests\Siakad\StoreKelulusanRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 class KelulusanController extends Controller
 {
     public function index(Request $request)
     {
+        Gate::authorize('siakad.mahasiswa.read');
         $query = Kelulusan::with(['mahasiswa.programStudi']);
         if ($request->filled('search')) {
             $s = $request->search;
@@ -27,6 +29,7 @@ class KelulusanController extends Controller
 
     public function cekSyarat($mahasiswaId)
     {
+        Gate::authorize('siakad.mahasiswa.read');
         $mhs = Mahasiswa::with(['programStudi', 'khs'])->findOrFail($mahasiswaId);
         $ipk = (float) ($mhs->ipk ?? 0);
         $totalSks = (int) ($mhs->khs()->sum('sks_kumulatif') ?: 0);
@@ -45,6 +48,7 @@ class KelulusanController extends Controller
 
     public function store(StoreKelulusanRequest $request)
     {
+        Gate::authorize('siakad.mahasiswa.manage');
         $validated = $request->validated();
         return DB::transaction(function () use ($validated, $request) {
             if ((float) $validated['ipk_akhir'] < 2.00 || (int) $validated['total_sks'] < 144) {
@@ -60,6 +64,7 @@ class KelulusanController extends Controller
     // Sensing DO/mangkir sederhana untuk dashboard BAAK
     public function sensing(Request $request)
     {
+        Gate::authorize('siakad.mahasiswa.read');
         $mangkir = Mahasiswa::where('status', 'mangkir')->count();
         $cuti = Mahasiswa::where('status', 'cuti')->count();
         $dropout = Mahasiswa::where('status', 'dropout')->count();

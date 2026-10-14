@@ -10,6 +10,9 @@ use App\Http\Controllers\API\Siakad\PaController;
 use App\Http\Controllers\API\Siakad\MahasiswaBeasiswaController;
 use App\Http\Controllers\API\Siakad\StatusAkademikController;
 use App\Http\Controllers\API\Siakad\KelulusanController;
+use App\Http\Controllers\API\Siakad\PaketKrsController;
+use App\Http\Controllers\API\Siakad\KartuUjianController;
+use App\Http\Controllers\API\Siakad\DokumenController;
 
 /*
 |--------------------------------------------------------------------------
@@ -154,6 +157,11 @@ Route::prefix('perkuliahan')->group(function () {
     Route::get('/krs/active', [PerkuliahanController::class, 'getActiveKrs']);
     Route::get('/krs/available-classes', [PerkuliahanController::class, 'getAvailableClasses']);
     Route::post('/krs/add-class', [PerkuliahanController::class, 'addClassToKrs']);
+    Route::post('/krs/ambil-paket', [PaketKrsController::class, 'ambilPaket']);
+    Route::get('/krs/paket-saya', [PaketKrsController::class, 'paketSaya']);
+    Route::get('/krs/hakakses', [PaketKrsController::class, 'listHakakses']);
+    Route::post('/krs/hakakses', [PaketKrsController::class, 'setHakakses']);
+    Route::post('/krs/hakakses-rombel', [PaketKrsController::class, 'setHakaksesRombel']);
     Route::delete('/krs/drop-class/{detailId}', [PerkuliahanController::class, 'dropClassFromKrs']);
     Route::post('/krs/submit', [PerkuliahanController::class, 'submitKrs']);
     Route::post('/krs/reopen', [PerkuliahanController::class, 'reopenKrs']);
@@ -163,6 +171,14 @@ Route::prefix('perkuliahan')->group(function () {
     Route::get('/nilai', [PerkuliahanController::class, 'listNilai']);
     Route::put('/nilai/{id}', [PerkuliahanController::class, 'updateNilai']);
     Route::get('/transkrip', [PerkuliahanController::class, 'getTranskrip']);
+
+    // Paket MK per rombel (BAAK/Kaprodi menetapkan MK yang disediakan per rombel)
+    Route::get('/paket-mk', [PaketKrsController::class, 'index']);
+    Route::post('/paket-mk', [PaketKrsController::class, 'store']);
+    Route::post('/paket-mk/bulk-sync', [PaketKrsController::class, 'bulkSync']);
+    Route::get('/paket-mk/{id}', [PaketKrsController::class, 'show']);
+    Route::put('/paket-mk/{id}', [PaketKrsController::class, 'update']);
+    Route::delete('/paket-mk/{id}', [PaketKrsController::class, 'destroy']);
     
     // Absensi Mahasiswa
     Route::get('/kelas/{kelasId}/pertemuan', [PerkuliahanController::class, 'listPertemuan']);
@@ -171,7 +187,17 @@ Route::prefix('perkuliahan')->group(function () {
     Route::post('/pertemuan/{pertemuanId}/absensi', [PerkuliahanController::class, 'storeAbsensi']);
     Route::get('/kelas/{kelasId}/rekap-absensi', [StatusAkademikController::class, 'rekapAbsensi']);
     Route::get('/khs', [StatusAkademikController::class, 'listKhs']);
+    Route::post('/khs/bulk-lock', [StatusAkademikController::class, 'bulkLockKhs']);
     Route::patch('/khs/{id}/lock', [StatusAkademikController::class, 'lockKhs']);
+
+    // Dokumen resmi KHS/Transkrip + QR validasi publik
+    Route::post('/dokumen/terbitkan', [DokumenController::class, 'terbitkan']);
+    Route::get('/dokumen', [DokumenController::class, 'index']);
+
+    // Kartu ujian UTS/UAS (syarat lunas SIKEU + QR validasi publik)
+    Route::get('/kartu-ujian', [KartuUjianController::class, 'cetak']);
+    Route::get('/kartu-ujian/monitoring', [KartuUjianController::class, 'monitoring']);
+    Route::patch('/kartu-ujian/{id}/nonaktifkan', [KartuUjianController::class, 'nonaktifkan']);
 });
 
 // --- Bimbingan PA (catatan, rekap, laporan aktivitas SIMPA) ---

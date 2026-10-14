@@ -73,6 +73,9 @@
 | ObeController | Kurikulum OBE (CPL/CPMK, Sub-CPMK, Profil Lulusan, Bahan Kajian, RPS, Nilai, Bank Soal & Kategori Opsi) | [docs/api/SIAKAD/ObeController.md](api/SIAKAD/ObeController.md) |
 | ObeMasterController | Master OBE (rumpun MK, jenis CPL, profesi/prospek karir, rubrik penilaian) | [docs/api/SIAKAD/ObeMasterController.md](api/SIAKAD/ObeMasterController.md) |
 | PerkuliahanController | Kelas, KRS, nilai, transkrip, pertemuan & absensi | [docs/api/SIAKAD/PerkuliahanController.md](api/SIAKAD/PerkuliahanController.md) |
+| PaketKrsController | Paket MK per rombel, ambil paket KRS 1-klik, & hak akses KRS | [docs/api/SIAKAD/PaketKrsController.md](api/SIAKAD/PaketKrsController.md) |
+| StatusAkademikController | Cuti, riwayat status, pengesahan KHS, & rekap absensi | [docs/api/SIAKAD/StatusAkademikController.md](api/SIAKAD/StatusAkademikController.md) |
+| KelulusanController | Yudisium/kelulusan & sensing status bermasalah | [docs/api/SIAKAD/KelulusanController.md](api/SIAKAD/KelulusanController.md) |
 | PaController | Pembimbing Akademik: Rekap bimbingan, filter aktivitas tanggal, catatan jurnal (CRUD), sesi per kelas (SIMPA), my-pa, & cetak PDF | [docs/api/SIAKAD/PaController.md](api/SIAKAD/PaController.md) |
 
 
