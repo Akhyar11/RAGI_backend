@@ -73,14 +73,20 @@ class SuratPeringatanService
     {
         $query = PresensiPegawai::where('pegawai_id', $pegawaiId)
             ->where(function ($q) {
-                $q->where('status_kehadiran', 'terlambat')
+                $q->where('late_minutes', '>', 0)
+                  ->orWhere('status_kehadiran', 'terlambat')
                   ->orWhere('status', 'terlambat');
             });
 
-        if ($bundle && $bundle->tanggal_awal && $bundle->tanggal_akhir) {
-            $start = Carbon::parse($bundle->tanggal_awal)->format('Y-m-d');
-            $end = Carbon::parse($bundle->tanggal_akhir)->format('Y-m-d');
-            $query->whereBetween('tanggal', [$start, $end]);
+        if ($bundle) {
+            $query->where(function ($q) use ($bundle) {
+                $q->where('presensi_periode_id', $bundle->id);
+                if ($bundle->tanggal_awal && $bundle->tanggal_akhir) {
+                    $start = Carbon::parse($bundle->tanggal_awal)->format('Y-m-d');
+                    $end = Carbon::parse($bundle->tanggal_akhir)->format('Y-m-d');
+                    $q->orWhereBetween('tanggal', [$start, $end]);
+                }
+            });
         } else {
             $startOfMonth = Carbon::parse($periode . '-01')->startOfMonth()->format('Y-m-d');
             $endOfMonth = Carbon::parse($periode . '-01')->endOfMonth()->format('Y-m-d');
@@ -214,23 +220,61 @@ class SuratPeringatanService
         }
 
         // 4. Hitung keterlambatan presensi per pegawai per bulan pada tahun tersebut
-        $lateList = PresensiPegawai::where('status_kehadiran', 'terlambat')
-            ->whereYear('tanggal', $tahun)
-            ->selectRaw("pegawai_id, substr(tanggal, 6, 2) as bulan, count(*) as total_late")
-            ->groupBy('pegawai_id', 'bulan')
-            ->get();
         $lateMap = [];
-        foreach ($lateList as $item) {
+
+        // A. Keterlambatan dari log yang terhubung ke Bundle Periode (siklus 26 - 25)
+        $bundleLateList = PresensiPegawai::join('simpeg_presensi_periode', 'simpeg_presensi_pegawai.presensi_periode_id', '=', 'simpeg_presensi_periode.id')
+            ->where('simpeg_presensi_periode.bulan_tahun', 'like', "{$tahun}-%")
+            ->where(function ($q) {
+                $q->where('simpeg_presensi_pegawai.late_minutes', '>', 0)
+                  ->orWhere('simpeg_presensi_pegawai.status_kehadiran', 'terlambat')
+                  ->orWhere('simpeg_presensi_pegawai.status', 'terlambat');
+            })
+            ->selectRaw('simpeg_presensi_pegawai.pegawai_id, substr(simpeg_presensi_periode.bulan_tahun, 6, 2) as bulan, count(*) as total_late')
+            ->groupBy('simpeg_presensi_pegawai.pegawai_id', 'bulan')
+            ->get();
+
+        foreach ($bundleLateList as $item) {
             $lateMap[$item->pegawai_id][$item->bulan] = (int) $item->total_late;
         }
 
-        // 5. Cek record presensi untuk deteksi ketersediaan data bulan berjalan
-        $activeAttendanceList = PresensiPegawai::whereYear('tanggal', $tahun)
-            ->selectRaw("pegawai_id, substr(tanggal, 6, 2) as bulan")
+        // B. Keterlambatan dari log realtime harian yang belum masuk bundle
+        $standaloneLateList = PresensiPegawai::whereNull('presensi_periode_id')
+            ->whereYear('tanggal', $tahun)
+            ->where(function ($q) {
+                $q->where('late_minutes', '>', 0)
+                  ->orWhere('status_kehadiran', 'terlambat')
+                  ->orWhere('status', 'terlambat');
+            })
+            ->selectRaw('pegawai_id, substr(tanggal, 6, 2) as bulan, count(*) as total_late')
             ->groupBy('pegawai_id', 'bulan')
             ->get();
+
+        foreach ($standaloneLateList as $item) {
+            $current = $lateMap[$item->pegawai_id][$item->bulan] ?? 0;
+            $lateMap[$item->pegawai_id][$item->bulan] = $current + (int) $item->total_late;
+        }
+
+        // 5. Cek record presensi untuk deteksi ketersediaan data bulan berjalan
         $attendanceDataMap = [];
-        foreach ($activeAttendanceList as $item) {
+
+        $bundleAttendanceList = PresensiPegawai::join('simpeg_presensi_periode', 'simpeg_presensi_pegawai.presensi_periode_id', '=', 'simpeg_presensi_periode.id')
+            ->where('simpeg_presensi_periode.bulan_tahun', 'like', "{$tahun}-%")
+            ->selectRaw('simpeg_presensi_pegawai.pegawai_id, substr(simpeg_presensi_periode.bulan_tahun, 6, 2) as bulan')
+            ->groupBy('simpeg_presensi_pegawai.pegawai_id', 'bulan')
+            ->get();
+
+        foreach ($bundleAttendanceList as $item) {
+            $attendanceDataMap[$item->pegawai_id][$item->bulan] = true;
+        }
+
+        $standaloneAttendanceList = PresensiPegawai::whereNull('presensi_periode_id')
+            ->whereYear('tanggal', $tahun)
+            ->selectRaw('pegawai_id, substr(tanggal, 6, 2) as bulan')
+            ->groupBy('pegawai_id', 'bulan')
+            ->get();
+
+        foreach ($standaloneAttendanceList as $item) {
             $attendanceDataMap[$item->pegawai_id][$item->bulan] = true;
         }
 
