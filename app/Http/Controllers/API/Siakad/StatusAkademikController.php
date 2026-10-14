@@ -28,10 +28,14 @@ class StatusAkademikController extends Controller
             $s = $request->search;
             $query->whereHas('mahasiswa', fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nim', 'like', "%{$s}%"));
         }
-        $allowedSort = ['created_at', 'updated_at', 'id'];
+        $allowedSort = ['created_at', 'updated_at', 'id', 'mahasiswa'];
         $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
-        $query->orderBy($sortBy, $sortOrder);
+        if ($sortBy === 'mahasiswa') {
+            $query->orderBy(Mahasiswa::select('nama_lengkap')->whereColumn('siakad_mahasiswa.id', 'siakad_cuti_mahasiswa.mahasiswa_id'), $sortOrder);
+        } else {
+            $query->orderBy($sortBy, $sortOrder);
+        }
         $perPage = min(100, $request->integer('per_page', 15));
         $data = $query->paginate($perPage);
         return response()->json([
@@ -74,10 +78,14 @@ class StatusAkademikController extends Controller
         Gate::authorize('siakad.mahasiswa.read');
         $query = StatusAkademikLog::with('mahasiswa');
         if ($request->filled('mahasiswa_id')) $query->where('mahasiswa_id', $request->mahasiswa_id);
-        $allowedSort = ['created_at', 'updated_at', 'id'];
+        $allowedSort = ['created_at', 'updated_at', 'id', 'mahasiswa'];
         $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
-        $query->orderBy($sortBy, $sortOrder);
+        if ($sortBy === 'mahasiswa') {
+            $query->orderBy(Mahasiswa::select('nama_lengkap')->whereColumn('siakad_mahasiswa.id', 'siakad_status_akademik_log.mahasiswa_id'), $sortOrder);
+        } else {
+            $query->orderBy($sortBy, $sortOrder);
+        }
         $perPage = min(100, $request->integer('per_page', 15));
         $data = $query->paginate($perPage);
         return response()->json([
@@ -101,10 +109,14 @@ class StatusAkademikController extends Controller
             $s = $request->search;
             $query->whereHas('mahasiswa', fn($q) => $q->where('nama_lengkap', 'like', "%{$s}%")->orWhere('nim', 'like', "%{$s}%"));
         }
-        $allowedSort = ['created_at', 'updated_at', 'id'];
+        $allowedSort = ['created_at', 'updated_at', 'id', 'mahasiswa'];
         $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
-        $query->orderBy($sortBy, $sortOrder);
+        if ($sortBy === 'mahasiswa') {
+            $query->orderBy(Mahasiswa::select('nama_lengkap')->whereColumn('siakad_mahasiswa.id', 'siakad_khs.mahasiswa_id'), $sortOrder);
+        } else {
+            $query->orderBy($sortBy, $sortOrder);
+        }
         $perPage = min(100, $request->integer('per_page', 15));
         $data = $query->paginate($perPage);
         return response()->json([

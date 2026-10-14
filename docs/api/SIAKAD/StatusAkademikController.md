@@ -60,7 +60,7 @@ Cuti mahasiswa, riwayat status akademik, daftar & pengesahan (lock) KHS, dan rek
 | `search` | string | ❌ | — | Cari NIM / nama |
 | `tahun_akademik_id` | integer | ❌ | — | Filter periode |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
-| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `id` |
+| `sort_by` | string | ❌ | `created_at` | `mahasiswa`, `created_at`, `updated_at`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `page` | integer | ❌ | `1` | Halaman |
 
@@ -174,7 +174,7 @@ Riwayat perubahan status akademik mahasiswa (ditarik otomatis oleh observer saat
 |---|---|---|---|---|
 | `mahasiswa_id` | integer | ❌ | — | Filter mahasiswa |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
-| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `id` |
+| `sort_by` | string | ❌ | `created_at` | `mahasiswa`, `created_at`, `updated_at`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `page` | integer | ❌ | `1` | Halaman |
 
@@ -204,7 +204,7 @@ Riwayat perubahan status akademik mahasiswa (ditarik otomatis oleh observer saat
 | `program_studi_id` | integer | ❌ | — | Filter program studi |
 | `search` | string | ❌ | — | Cari NIM / nama mahasiswa |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
-| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `id` |
+| `sort_by` | string | ❌ | `created_at` | `mahasiswa`, `created_at`, `updated_at`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `page` | integer | ❌ | `1` | Halaman |
 
