@@ -170,4 +170,233 @@ class SuratPeringatanService
 
         return $sp;
     }
+
+    /**
+     * Mengambil matriks monitoring Surat Peringatan (SP) dan keterlambatan tahunan (12 bulan).
+     */
+    public function getAnnualMonitoring(int $tahun, array $filters = []): array
+    {
+        $maxLateAllowed = (int) SystemSetting::get('max_late_per_month', 5);
+
+        // 1. Ambil list pegawai aktif sesuai filter
+        $query = Pegawai::with('unitKerja')->where('is_active', true);
+
+        if (!empty($filters['search'])) {
+            $s = $filters['search'];
+            $query->where(function ($q) use ($s) {
+                $q->where('nama_lengkap', 'like', "%{$s}%")
+                  ->orWhere('nip', 'like', "%{$s}%");
+            });
+        }
+
+        if (!empty($filters['unit_kerja_id'])) {
+            $query->where('unit_kerja_id', (int) $filters['unit_kerja_id']);
+        }
+
+        $pegawaiList = $query->orderBy('nama_lengkap', 'asc')->get();
+
+        // 2. Ambil seluruh data SP pada tahun tersebut
+        $spList = SuratPeringatan::where('periode_bulan_tahun', 'like', "{$tahun}-%")->get();
+        $spMap = [];
+        foreach ($spList as $sp) {
+            $m = substr($sp->periode_bulan_tahun, 5, 2);
+            $spMap[$sp->pegawai_id][$m] = $sp;
+        }
+
+        // 3. Ambil data bundle pada tahun tersebut
+        $bundleList = PresensiPeriode::where('bulan_tahun', 'like', "{$tahun}-%")->get();
+        $bundleMap = [];
+        foreach ($bundleList as $b) {
+            if ($b->bulan_tahun) {
+                $m = substr($b->bulan_tahun, 5, 2);
+                $bundleMap[$m] = true;
+            }
+        }
+
+        // 4. Hitung keterlambatan presensi per pegawai per bulan pada tahun tersebut
+        $lateList = PresensiPegawai::where('status_kehadiran', 'terlambat')
+            ->whereYear('tanggal', $tahun)
+            ->selectRaw("pegawai_id, substr(tanggal, 6, 2) as bulan, count(*) as total_late")
+            ->groupBy('pegawai_id', 'bulan')
+            ->get();
+        $lateMap = [];
+        foreach ($lateList as $item) {
+            $lateMap[$item->pegawai_id][$item->bulan] = (int) $item->total_late;
+        }
+
+        // 5. Cek record presensi untuk deteksi ketersediaan data bulan berjalan
+        $activeAttendanceList = PresensiPegawai::whereYear('tanggal', $tahun)
+            ->selectRaw("pegawai_id, substr(tanggal, 6, 2) as bulan")
+            ->groupBy('pegawai_id', 'bulan')
+            ->get();
+        $attendanceDataMap = [];
+        foreach ($activeAttendanceList as $item) {
+            $attendanceDataMap[$item->pegawai_id][$item->bulan] = true;
+        }
+
+        $monthNames = [
+            '01' => 'Jan', '02' => 'Feb', '03' => 'Mar', '04' => 'Apr',
+            '05' => 'Mei', '06' => 'Jun', '07' => 'Jul', '08' => 'Agu',
+            '09' => 'Sep', '10' => 'Okt', '11' => 'Nov', '12' => 'Des'
+        ];
+
+        $currentYearMonth = Carbon::now()->format('Y-m');
+
+        $rows = [];
+        $totalSpCountInYear = 0;
+        $pegawaiWithSpCount = 0;
+
+        foreach ($pegawaiList as $pegawai) {
+            $monthsData = [];
+            $totalSpPegawai = 0;
+            $totalLatePegawai = 0;
+
+            foreach ($monthNames as $mStr => $mShort) {
+                $monthPeriod = sprintf('%04d-%s', $tahun, $mStr);
+                $sp = $spMap[$pegawai->id][$mStr] ?? null;
+                $lateCount = $lateMap[$pegawai->id][$mStr] ?? 0;
+                $hasAttendance = isset($bundleMap[$mStr]) || isset($attendanceDataMap[$pegawai->id][$mStr]);
+                $isFuture = $monthPeriod > $currentYearMonth;
+
+                $hasSp = false;
+                $color = 'neutral';
+
+                if ($sp) {
+                    $hasSp = true;
+                    $totalSpPegawai++;
+                    $lateCount = max($lateCount, $sp->total_terlambat);
+                    $color = 'danger';
+                } elseif ($lateCount > $maxLateAllowed) {
+                    $color = 'danger';
+                } elseif ($lateCount > 0) {
+                    $color = 'warning';
+                } elseif ($hasAttendance || (!$isFuture && $tahun < (int) Carbon::now()->format('Y'))) {
+                    $color = 'success';
+                } else {
+                    $color = 'neutral';
+                }
+
+                $totalLatePegawai += $lateCount;
+
+                $monthsData[$mStr] = [
+                    'month' => (int) $mStr,
+                    'month_code' => $mStr,
+                    'month_name' => $mShort,
+                    'periode' => $monthPeriod,
+                    'has_data' => $hasAttendance || $sp !== null,
+                    'is_future' => $isFuture,
+                    'total_terlambat' => $lateCount,
+                    'batas_maksimal' => $maxLateAllowed,
+                    'has_sp' => $hasSp,
+                    'sp_id' => $sp?->id,
+                    'nomor_sp' => $sp?->nomor_sp,
+                    'jenis_sp' => $sp?->jenis_sp,
+                    'judul_sp' => $sp?->judul,
+                    'status_sp' => $sp?->status,
+                    'status_color' => $color,
+                ];
+            }
+
+            if ($totalSpPegawai > 0) {
+                $pegawaiWithSpCount++;
+                $totalSpCountInYear += $totalSpPegawai;
+            }
+
+            $riskLevel = 'disiplin';
+            $riskLabel = 'Disiplin (0 SP)';
+            if ($totalSpPegawai >= 2) {
+                $riskLevel = 'rawan';
+                $riskLabel = 'Sering SP (Rawan)';
+            } elseif ($totalSpPegawai === 1) {
+                $riskLevel = 'perhatian';
+                $riskLabel = 'Pernah SP (1x)';
+            } elseif ($totalLatePegawai > 0) {
+                $riskLevel = 'waspada';
+                $riskLabel = 'Ada Keterlambatan';
+            }
+
+            if (!empty($filters['risk_level']) && $filters['risk_level'] !== 'all') {
+                if ($filters['risk_level'] === 'rawan' && $totalSpPegawai < 2) {
+                    continue;
+                }
+                if ($filters['risk_level'] === 'perhatian' && $totalSpPegawai !== 1) {
+                    continue;
+                }
+                if ($filters['risk_level'] === 'has_sp' && $totalSpPegawai < 1) {
+                    continue;
+                }
+                if ($filters['risk_level'] === 'disiplin' && $totalSpPegawai > 0) {
+                    continue;
+                }
+            }
+
+            $rows[] = [
+                'pegawai_id' => $pegawai->id,
+                'nip' => $pegawai->nip ?? '-',
+                'nama_lengkap' => $pegawai->nama_lengkap,
+                'unit_kerja' => $pegawai->unitKerja?->nama ?? 'Tidak Ada Unit',
+                'months' => $monthsData,
+                'summary' => [
+                    'total_sp' => $totalSpPegawai,
+                    'total_terlambat' => $totalLatePegawai,
+                    'risk_level' => $riskLevel,
+                    'risk_label' => $riskLabel,
+                ],
+            ];
+        }
+
+        // Sorting
+        $sortBy = $filters['sort_by'] ?? 'total_sp';
+        $sortOrder = strtolower($filters['sort_order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+
+        usort($rows, function ($a, $b) use ($sortBy, $sortOrder) {
+            $valA = 0;
+            $valB = 0;
+            if ($sortBy === 'total_sp') {
+                $valA = $a['summary']['total_sp'];
+                $valB = $b['summary']['total_sp'];
+            } elseif ($sortBy === 'total_terlambat') {
+                $valA = $a['summary']['total_terlambat'];
+                $valB = $b['summary']['total_terlambat'];
+            } elseif ($sortBy === 'nama_lengkap') {
+                return $sortOrder === 'asc'
+                    ? strcmp($a['nama_lengkap'], $b['nama_lengkap'])
+                    : strcmp($b['nama_lengkap'], $a['nama_lengkap']);
+            } elseif ($sortBy === 'nip') {
+                return $sortOrder === 'asc'
+                    ? strcmp($a['nip'], $b['nip'])
+                    : strcmp($b['nip'], $a['nip']);
+            }
+
+            if ($valA === $valB) {
+                return strcmp($a['nama_lengkap'], $b['nama_lengkap']);
+            }
+
+            return $sortOrder === 'asc' ? ($valA <=> $valB) : ($valB <=> $valA);
+        });
+
+        $totalItems = count($rows);
+        $perPage = min(100, (int) ($filters['per_page'] ?? 15));
+        $page = max(1, (int) ($filters['page'] ?? 1));
+        $offset = ($page - 1) * $perPage;
+        $paginatedRows = array_slice($rows, $offset, $perPage);
+        $lastPage = (int) ceil($totalItems / $perPage);
+
+        return [
+            'data' => $paginatedRows,
+            'meta' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $totalItems,
+                'last_page' => max(1, $lastPage),
+                'tahun' => $tahun,
+                'max_late_per_month' => $maxLateAllowed,
+                'stats' => [
+                    'total_pegawai' => count($pegawaiList),
+                    'pegawai_pernah_sp' => $pegawaiWithSpCount,
+                    'total_sp_terbit' => $totalSpCountInYear,
+                ],
+            ],
+        ];
+    }
 }

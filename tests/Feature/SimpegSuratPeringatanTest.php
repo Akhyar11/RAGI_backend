@@ -161,4 +161,43 @@ class SimpegSuratPeringatanTest extends TestCase
             ->assertJsonPath('data.0.nomor_sp', 'SP/SIMPEG/2026/10/0099')
             ->assertJsonPath('data.0.total_terlambat', 7);
     }
+
+    public function test_admin_can_fetch_annual_sp_monitoring_matrix(): void
+    {
+        $perm = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'simpeg.surat_peringatan.read'],
+            ['name' => 'Lihat Surat Peringatan', 'module' => 'simpeg', 'action' => 'read']
+        );
+        $role = \App\Models\Role::firstOrCreate(
+            ['name' => 'Admin Test'],
+            ['slug' => 'admin_test', 'module' => 'simpeg']
+        );
+        \App\Models\RolePermission::firstOrCreate(['role_id' => $role->id, 'permission_id' => $perm->id]);
+        \App\Models\UserRole::firstOrCreate(['user_id' => $this->user->id, 'role_id' => $role->id]);
+
+        SuratPeringatan::create([
+            'pegawai_id' => $this->pegawai->id,
+            'nomor_sp' => 'SP/SIMPEG/2026/10/0100',
+            'jenis_sp' => 'SP 1',
+            'judul' => 'Surat Peringatan Keterlambatan Presensi Oktober 2026',
+            'periode_bulan_tahun' => '2026-10',
+            'total_terlambat' => 6,
+            'batas_maksimal' => 5,
+            'keterangan' => 'Terlambat 6 kali',
+            'tanggal_terbit' => '2026-10-14',
+            'status' => 'aktif',
+        ]);
+
+        Passport::actingAs($this->user);
+
+        $response = $this->getJson('/api/simpeg/surat-peringatan/monitoring-tahunan?tahun=2026');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('meta.tahun', 2026)
+            ->assertJsonPath('data.0.pegawai_id', $this->pegawai->id)
+            ->assertJsonPath('data.0.months.10.has_sp', true)
+            ->assertJsonPath('data.0.months.10.status_color', 'danger')
+            ->assertJsonPath('data.0.summary.total_sp', 1);
+    }
 }

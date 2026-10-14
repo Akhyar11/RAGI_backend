@@ -430,6 +430,7 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
 
     // Surat Peringatan (SP) Keterlambatan Presensi Pegawai
     Route::get('surat-peringatan/my', [App\Http\Controllers\Simpeg\SuratPeringatanController::class, 'mySuratPeringatan']);
+    Route::get('surat-peringatan/monitoring-tahunan', [App\Http\Controllers\Simpeg\SuratPeringatanController::class, 'annualMonitoring']);
     Route::get('surat-peringatan', [App\Http\Controllers\Simpeg\SuratPeringatanController::class, 'index']);
     Route::get('surat-peringatan/{id}', [App\Http\Controllers\Simpeg\SuratPeringatanController::class, 'show'])->whereNumber('id');
 });

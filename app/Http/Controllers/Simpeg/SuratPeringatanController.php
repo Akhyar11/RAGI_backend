@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Simpeg;
 use App\Http\Controllers\Controller;
 use App\Models\Simpeg\Pegawai;
 use App\Models\Simpeg\SuratPeringatan;
+use App\Services\Simpeg\SuratPeringatanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -161,6 +162,45 @@ class SuratPeringatanController extends Controller
             'status' => 'success',
             'message' => 'Rincian surat peringatan berhasil diambil',
             'data' => $sp,
+        ]);
+    }
+
+    /**
+     * GET /api/simpeg/surat-peringatan/monitoring-tahunan
+     * Matriks monitoring Surat Peringatan & Keterlambatan presensi 12 bulan.
+     */
+    public function annualMonitoring(Request $request, SuratPeringatanService $service): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user || (!$user->hasPermission('simpeg.pegawai.manage') && !$user->hasPermission('simpeg.surat_peringatan.read') && !$user->hasPermission('simpeg.surat_peringatan.manage'))) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk melihat monitoring surat peringatan.',
+            ], 403);
+        }
+
+        $tahun = $request->integer('tahun', (int) date('Y'));
+        if ($tahun < 2000 || $tahun > 2100) {
+            $tahun = (int) date('Y');
+        }
+
+        $filters = [
+            'search' => $request->input('search'),
+            'unit_kerja_id' => $request->filled('unit_kerja_id') ? $request->integer('unit_kerja_id') : null,
+            'risk_level' => $request->input('risk_level'),
+            'sort_by' => $request->input('sort_by', 'total_sp'),
+            'sort_order' => $request->input('sort_order', $request->input('sort_dir', 'desc')),
+            'per_page' => min(100, $request->integer('per_page', 15)),
+            'page' => max(1, $request->integer('page', 1)),
+        ];
+
+        $result = $service->getAnnualMonitoring($tahun, $filters);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Matriks monitoring surat peringatan tahun {$tahun} berhasil diambil",
+            'data' => $result['data'],
+            'meta' => $result['meta'],
         ]);
     }
 }
