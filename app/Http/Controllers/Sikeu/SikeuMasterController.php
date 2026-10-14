@@ -210,12 +210,20 @@ class SikeuMasterController extends Controller
     public function searchMahasiswa(Request $request)
     {
         $search = trim($request->query('q', ''));
+        $prodiId = $request->query('program_studi_id');
+        $angkatan = $request->query('angkatan');
 
         try {
             // 1. Search across Siakad Mahasiswa
             $siakadStudents = collect();
             try {
                 $siakadQuery = \App\Models\Siakad\Mahasiswa::with('programStudi');
+                if ($prodiId) {
+                    $siakadQuery->where('program_studi_id', $prodiId);
+                }
+                if ($angkatan) {
+                    $siakadQuery->where('angkatan', $angkatan);
+                }
                 if (!empty($search)) {
                     $siakadQuery->where(function ($sub) use ($search) {
                         $sub->where('nim', 'like', "%{$search}%")
@@ -237,7 +245,7 @@ class SikeuMasterController extends Controller
             try {
                 $spmbQuery = \App\Models\Spmb\PendaftaranCalonMhs::with([
                     'programStudi',
-                    'gelombangPenerimaan.tahunAkademik'
+                    'gelombangPenerimaan'
                 ]);
                 if (!empty($search)) {
                     $spmbQuery->where(function ($sub) use ($search) {
@@ -398,7 +406,7 @@ class SikeuMasterController extends Controller
             $resultsCalon = $calonIds->map(function ($calonId) {
                 $calon = null;
                 try {
-                    $calon = \App\Models\Spmb\PendaftaranCalonMhs::with(['programStudi', 'gelombangPenerimaan.tahunAkademik'])->find($calonId);
+                    $calon = \App\Models\Spmb\PendaftaranCalonMhs::with(['programStudi', 'gelombangPenerimaan'])->find($calonId);
                 } catch (\Throwable $e) {}
 
                 if (!$calon) return null;
@@ -406,7 +414,7 @@ class SikeuMasterController extends Controller
                 $nim = $calon->nim;
                 $nama = $calon->nama_lengkap ?? ('Calon Mhs #' . $calonId);
                 $prodi = $calon->programStudi?->nama ?? '-';
-                $tahun = $calon->gelombangPenerimaan?->tahunAkademik?->tahun ?? date('Y');
+                $tahun = $calon->gelombangPenerimaan?->tahunPendaftaran() ?? date('Y');
                 $jalur = 'SPMB Baru';
 
                 // Unpaid bills for calon mahasiswa

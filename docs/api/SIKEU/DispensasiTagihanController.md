@@ -19,6 +19,68 @@
 
 ---
 
+## GET /api/v1/sikeu/dispensasi
+
+> List server-side (paginasi 15/halaman). Filter prodi + angkatan dulu ala legacy agar tidak memuat seluruh data.
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `search` | string | ❌ | — | Cari ID / mahasiswa_id / alasan / nomor tagihan |
+| `status` | string | ❌ | — | `pending`, `approved`, `rejected` |
+| `mahasiswa_id` | integer | ❌ | — | Filter satu mahasiswa |
+| `program_studi_id` | integer | ❌ | — | Filter prodi (via relasi mahasiswa) |
+| `angkatan` | integer | ❌ | — | Filter tahun angkatan (via relasi mahasiswa) |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman |
+| `page` | integer | ❌ | `1` | Halaman yang diminta |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": {
+        "current_page": 1,
+        "data": [
+            {
+                "id": 3,
+                "mahasiswa_id": 12,
+                "nama_mahasiswa": "Ahmad Dahlan",
+                "nim": "2401001",
+                "prodi": "Teknik Informatika",
+                "status": "pending",
+                "has_unpaid_previous_dispensation": false
+            }
+        ],
+        "total": 42,
+        "per_page": 15,
+        "last_page": 3
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+}
+```
+
+---
+
 ## POST /api/v1/sikeu/dispensasi
 
 > Mengajukan permohonan penundaan atau cicilan pembayaran tagihan. Memeriksa otomatis tunggakan dispensasi sebelumnya (`has_unpaid_previous_dispensation`).

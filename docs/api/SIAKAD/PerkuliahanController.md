@@ -45,6 +45,9 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 | `search` | string | ❌ | — | Cari nama kelas / mata kuliah / mahasiswa |
 | `program_studi_id` | integer | ❌ | — | Filter program studi |
 | `tahun_akademik_id` | integer | ❌ | tahun akademik aktif | Filter periode (`siakad_tahun_akademik`) |
+| `tipe_sesi` | string | ❌ | — | `gabungan` / `teori` / `praktik` |
+| `parent_kelas_id` | integer | ❌ | — | Filter anak dari induk tertentu |
+| `rombel_id` | integer | ❌ | — | Filter kelas yang menempel rombel (`siakad_master_kelas`) |
 | `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `nama`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
@@ -61,7 +64,14 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 {
     "status": "success",
     "data": [
-        { "id": 5, "nama_kelas": "TI-1A", "mata_kuliah_id": 12, "program_studi_id": 7, "tahun_akademik_id": 1, "kapasitas": 40 }
+        {
+            "id": 5, "nama_kelas": "TI-1A", "mata_kuliah_id": 12, "program_studi_id": 7,
+            "tahun_akademik_id": 1, "kapasitas": 40, "tipe_sesi": "teori",
+            "parent_kelas_id": null,
+            "parent": null,
+            "children": [{ "id": 6, "kode_kelas": "IF101-P-A", "tipe_sesi": "praktik" }],
+            "rombels": [{ "id": 4, "nama_kelas": "24A" }]
+        }
     ],
     "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 },
     "filters": { "search": null, "program_studi_id": null, "tahun_akademik_id": null, "sort_by": "created_at", "sort_order": "desc" }

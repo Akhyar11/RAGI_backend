@@ -67,7 +67,7 @@ class PerkuliahanController extends Controller
         $user = $request->user();
         $taId = $request->input('tahun_akademik_id') ?? TahunAkademik::where('is_active', true)->value('id');
 
-        $query = Kelas::with(['mataKuliah', 'ruangan.gedung', 'programStudi', 'programStudis', 'dosenPengampu.dosen'])
+        $query = Kelas::with(['mataKuliah', 'ruangan.gedung', 'programStudi', 'programStudis', 'dosenPengampu.dosen', 'parent.mataKuliah', 'children', 'rombels.programStudi'])
             ->when($taId, fn($q) => $q->where('tahun_akademik_id', $taId));
 
         // Jika user adalah dosen, filter jadwal mengajar mereka
@@ -112,6 +112,18 @@ class PerkuliahanController extends Controller
             $query->where('is_gabungan', $request->boolean('is_gabungan'));
         }
 
+        if ($request->filled('tipe_sesi')) {
+            $query->where('tipe_sesi', $request->input('tipe_sesi'));
+        }
+
+        if ($request->filled('parent_kelas_id')) {
+            $query->where('parent_kelas_id', $request->input('parent_kelas_id'));
+        }
+
+        if ($request->filled('rombel_id')) {
+            $query->whereHas('rombels', fn($q) => $q->where('siakad_master_kelas.id', $request->input('rombel_id')));
+        }
+
         $data = $query->paginate($request->integer('per_page', 25));
 
         return response()->json([
@@ -129,7 +141,28 @@ class PerkuliahanController extends Controller
     {
         $validated = $request->validated();
 
-        return DB::transaction(function () use ($validated) {
+        // Validasi relasi induk-anak: anak praktik wajib menunjuk induk teori yang valid
+        $parent = null;
+        if (!empty($validated['parent_kelas_id'])) {
+            $parent = Kelas::find($validated['parent_kelas_id']);
+            if (!$parent) {
+                return response()->json(['status' => 'error', 'message' => 'Kelas induk tidak ditemukan.'], 422);
+            }
+            if ($parent->parent_kelas_id) {
+                return response()->json(['status' => 'error', 'message' => 'Kelas induk tidak boleh berupa kelas anak (maksimal 1 level).'], 422);
+            }
+            // Teori dan praktik boleh beda MK (mis. "Basis Data" + "Praktikum Basis Data");
+            // yang wajib sama hanya periode akademik. Nilai & absensi ikut OBE per kelas masing-masing.
+            if ((int) $parent->tahun_akademik_id !== (int) $validated['tahun_akademik_id']) {
+                return response()->json(['status' => 'error', 'message' => 'Kelas anak wajib satu periode dengan kelas induknya.'], 422);
+            }
+        }
+        $tipeSesi = $validated['tipe_sesi'] ?? ($parent ? 'praktik' : 'gabungan');
+        if ($parent && $tipeSesi !== 'praktik') {
+            return response()->json(['status' => 'error', 'message' => 'Kelas anak pecahan praktik wajib bertipe sesi praktik.'], 422);
+        }
+
+        return DB::transaction(function () use ($validated, $parent, $tipeSesi) {
             $mk = MataKuliah::find($validated['mata_kuliah_id']);
 
             $kelas = Kelas::create([
@@ -146,6 +179,8 @@ class PerkuliahanController extends Controller
                 'jam_selesai' => $validated['jam_selesai'],
                 'status' => 'draft',
                 'is_gabungan' => $validated['is_gabungan'] ?? false,
+                'parent_kelas_id' => $validated['parent_kelas_id'] ?? null,
+                'tipe_sesi' => $tipeSesi,
             ]);
 
             // Prodi peserta kelas gabungan (selalu mencakup homebase)
@@ -153,6 +188,11 @@ class PerkuliahanController extends Controller
                 ->push($validated['program_studi_id'])->unique()->values()->toArray();
             if ($kelas->is_gabungan) {
                 $kelas->programStudis()->sync($gabunganIds);
+            }
+
+            // Rombel peserta (cth. 24A/24B): anak praktik biasanya 1 rombel, induk teori bisa banyak rombel
+            if (!empty($validated['rombel_ids']) && is_array($validated['rombel_ids'])) {
+                $kelas->rombels()->sync(array_values(array_unique(array_map('intval', $validated['rombel_ids']))));
             }
 
             // Dosen Pengampu Utama (yang dilaporkan resmi ke Feeder)
@@ -184,7 +224,7 @@ class PerkuliahanController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'Kelas perkuliahan berhasil dibuat dengan tim pengajar terdaftar',
-                'data' => $kelas->load(['mataKuliah', 'ruangan', 'dosenPengampu.dosen', 'programStudis'])
+                'data' => $kelas->load(['mataKuliah', 'ruangan', 'dosenPengampu.dosen', 'programStudis', 'parent', 'children', 'rombels'])
             ], 201);
         });
     }
@@ -198,6 +238,11 @@ class PerkuliahanController extends Controller
             'programStudis',
             'ruangan.gedung',
             'dosenPengampu.dosen.programStudi',
+            'parent.mataKuliah',
+            'children.ruangan',
+            'children.dosenPengampu.dosen',
+            'children.rombels',
+            'rombels.programStudi',
         ])->findOrFail($id);
 
         return response()->json([
@@ -212,7 +257,29 @@ class PerkuliahanController extends Controller
         $kelas = Kelas::findOrFail($id);
         $validated = $request->validated();
 
+        // Validasi relasi induk-anak saat update
+        if (array_key_exists('parent_kelas_id', $validated) && !empty($validated['parent_kelas_id'])) {
+            if ((int) $validated['parent_kelas_id'] === (int) $kelas->id) {
+                return response()->json(['status' => 'error', 'message' => 'Kelas tidak dapat menjadi induk bagi dirinya sendiri.'], 422);
+            }
+            $parent = Kelas::find($validated['parent_kelas_id']);
+            if ($parent && $parent->parent_kelas_id) {
+                return response()->json(['status' => 'error', 'message' => 'Kelas induk tidak boleh berupa kelas anak (maksimal 1 level).'], 422);
+            }
+            if ($parent && (int) $parent->tahun_akademik_id !== (int) $kelas->tahun_akademik_id) {
+                return response()->json(['status' => 'error', 'message' => 'Kelas anak wajib satu periode dengan kelas induknya.'], 422);
+            }
+            if ($kelas->children()->exists()) {
+                return response()->json(['status' => 'error', 'message' => 'Kelas induk yang sudah memiliki anak tidak dapat dijadikan anak.'], 422);
+            }
+        }
+
         return DB::transaction(function () use ($validated, $kelas) {
+            $parentId = array_key_exists('parent_kelas_id', $validated) ? $validated['parent_kelas_id'] : $kelas->parent_kelas_id;
+            $tipeSesi = $validated['tipe_sesi'] ?? $kelas->tipe_sesi ?? 'gabungan';
+            if ($parentId && $tipeSesi === 'gabungan') {
+                $tipeSesi = 'praktik';
+            }
             $kelas->update([
                 'nama_kelas' => $validated['nama_kelas'],
                 'ruangan_id' => $validated['ruangan_id'] ?? null,
@@ -222,7 +289,13 @@ class PerkuliahanController extends Controller
                 'jam_mulai' => $validated['jam_mulai'],
                 'jam_selesai' => $validated['jam_selesai'],
                 'is_gabungan' => $validated['is_gabungan'] ?? $kelas->is_gabungan,
+                'parent_kelas_id' => $parentId,
+                'tipe_sesi' => $tipeSesi,
             ]);
+
+            if (array_key_exists('rombel_ids', $validated)) {
+                $kelas->rombels()->sync(array_values(array_unique(array_map('intval', $validated['rombel_ids'] ?? []))));
+            }
 
             if (array_key_exists('gabungan_program_studi_ids', $validated)) {
                 if ($kelas->is_gabungan) {

@@ -134,7 +134,11 @@ Menerapkan mutasi `program_studi_id` + dispatch
 `Siakad/MahasiswaPindahProdi`. Listener SIKEU mencatat proyeksi
 (`sikeu_mahasiswa_perubahan_prodi`, status `applied`) + versioning
 `sikeu_mahasiswa_tipe_tagihan`. Tagihan lama tidak diubah; redistribusi
-alokasi lewat menu Koreksi Alokasi SIKEU.
+alokasi lewat menu Koreksi Alokasi SIKEU. Listener SPMB menyelaraskan
+`program_studi_id` pada pendaftaran asal (riwayat jalur/gelombang/status
+seleksi utuh; jejak di audit log SPMB) sehingga laporan SPMB selaras
+dengan SIAKAD. Sinkron SPMB berjalan dalam request yang sama; proyeksi
+SIKEU via antrian `sikeu` (pastikan worker berjalan di produksi).
 
 ### Response Error
 

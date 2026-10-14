@@ -385,7 +385,7 @@ class PembayaranMahasiswaTarifController extends Controller
         // Penagihan selalu mengambil tarif berdasarkan tahun angkatan mahasiswa
         // (lihat tarifMahasiswa()), sehingga pemisah angkatan WAJIB ikut dicek:
         // tarif angkatan 2023 hanya terpakai bila ada tagihan milik mahasiswa
-        // angkatan 2023 (atau calon mahasiswa gelombang tahun mulai 2023)
+        // angkatan 2023 (atau calon mahasiswa gelombang dibuka tahun 2023)
         // yang memuat komponen biaya yang sama.
         $isUsed = DetailTagihan::where('master_biaya_id', $item->master_biaya_id)
             ->whereHas('tagihan', function ($q) use ($item) {
@@ -395,8 +395,8 @@ class PembayaranMahasiswaTarifController extends Controller
                         if ($item->program_studi_id) {
                             $m->where('program_studi_id', $item->program_studi_id);
                         }
-                    })->orWhereHas('calonMahasiswa.gelombangPenerimaan.tahunAkademik', function ($t) use ($item) {
-                        $t->where('tahun_mulai', $item->tahun_angkatan);
+                    })->orWhereHas('calonMahasiswa.gelombangPenerimaan', function ($g) use ($item) {
+                        $g->whereYear('tanggal_buka', $item->tahun_angkatan);
                     });
                 });
             })

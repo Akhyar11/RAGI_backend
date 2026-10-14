@@ -41,6 +41,28 @@ class GelombangPenerimaan extends Model
         return $this->belongsTo(JalurMasuk::class, 'jalur_masuk_id');
     }
 
+    /**
+     * Tahun pendaftaran turunan dari tanggal buka gelombang.
+     * Kolom tahun_akademik_id dihapus (migrasi 2026_09_25_000001);
+     * seluruh pembacaan angkatan calon WAJIB lewat helper ini,
+     * bukan relasi `tahunAkademik` yang sudah tidak ada.
+     */
+    public function tahunPendaftaran(): ?int
+    {
+        try {
+            $tgl = $this->tanggal_buka;
+            if (!$tgl) {
+                return null;
+            }
+            $tahun = is_object($tgl) && method_exists($tgl, 'format')
+                ? $tgl->format('Y')
+                : substr((string) $tgl, 0, 4);
+            return is_numeric($tahun) ? (int) $tahun : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     public function pendaftaranCalonMhs()
     {
         return $this->hasMany(PendaftaranCalonMhs::class, 'gelombang_id');

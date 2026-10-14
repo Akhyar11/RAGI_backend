@@ -970,7 +970,7 @@ class PembayaranKasirController extends Controller
 
         if ($type === 'calon') {
             try {
-                $calon = \App\Models\Spmb\PendaftaranCalonMhs::with(['programStudi', 'gelombangPenerimaan.tahunAkademik'])->find($id);
+                $calon = \App\Models\Spmb\PendaftaranCalonMhs::with(['programStudi', 'gelombangPenerimaan'])->find($id);
                 $isCalon = true;
             } catch (\Throwable $e) {}
         } else {
@@ -981,7 +981,7 @@ class PembayaranKasirController extends Controller
             if (!$mhs) {
                 // Fallback check in SPMB Calon Mhs
                 try {
-                    $calon = \App\Models\Spmb\PendaftaranCalonMhs::with(['programStudi', 'gelombangPenerimaan.tahunAkademik'])->find($id);
+                    $calon = \App\Models\Spmb\PendaftaranCalonMhs::with(['programStudi', 'gelombangPenerimaan'])->find($id);
                     if ($calon) {
                         $isCalon = true;
                     }
@@ -1062,7 +1062,7 @@ class PembayaranKasirController extends Controller
             $nim = $calon->nim ?: '-';
             $nama = $calon->nama_lengkap ?? ('Calon Mahasiswa #' . $id);
             $prodi = $calon->programStudi?->nama ?? '-';
-            $angkatan = (int)($calon->gelombangPenerimaan?->tahunAkademik?->tahun ?? date('Y'));
+            $angkatan = (int)($calon->gelombangPenerimaan?->tahunPendaftaran() ?? date('Y'));
             $jalur = 'SPMB Baru';
             $noPendaftaran = $calon->no_pendaftaran;
             $nik = $calon->nik;

@@ -76,6 +76,8 @@
 | PaketKrsController | Paket MK per rombel, ambil paket KRS 1-klik, & hak akses KRS | [docs/api/SIAKAD/PaketKrsController.md](api/SIAKAD/PaketKrsController.md) |
 | StatusAkademikController | Cuti, riwayat status, pengesahan KHS, & rekap absensi | [docs/api/SIAKAD/StatusAkademikController.md](api/SIAKAD/StatusAkademikController.md) |
 | KelulusanController | Yudisium/kelulusan & sensing status bermasalah | [docs/api/SIAKAD/KelulusanController.md](api/SIAKAD/KelulusanController.md) |
+| KartuUjianController | Kartu ujian UTS/UAS + QR validasi publik | [docs/api/SIAKAD/KartuUjianController.md](api/SIAKAD/KartuUjianController.md) |
+| DokumenController | Dokumen resmi KHS/Transkrip + QR validasi publik | [docs/api/SIAKAD/DokumenController.md](api/SIAKAD/DokumenController.md) |
 | PaController | Pembimbing Akademik: Rekap bimbingan, filter aktivitas tanggal, catatan jurnal (CRUD), sesi per kelas (SIMPA), my-pa, & cetak PDF | [docs/api/SIAKAD/PaController.md](api/SIAKAD/PaController.md) |
 
 

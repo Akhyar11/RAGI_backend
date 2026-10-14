@@ -87,6 +87,15 @@ class DispensasiTagihanController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Filter ala legacy: prodi + angkatan dulu agar tidak memuat seluruh data.
+        if ($request->filled('program_studi_id')) {
+            $prodiId = $request->program_studi_id;
+            $query->whereHas('mahasiswa', fn($q) => $q->where('program_studi_id', $prodiId));
+        }
+        if ($request->filled('angkatan')) {
+            $query->whereHas('mahasiswa', fn($q) => $q->where('angkatan', $request->angkatan));
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
