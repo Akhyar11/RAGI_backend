@@ -216,28 +216,42 @@ class PegawaiController extends Controller
     }
 
     /**
-     * Reset data biometrik wajah pegawai (Admin / HR)
+     * Reset data biometrik wajah pegawai (Admin / HR).
+     * Menghapus seluruh vektor wajah (utama + multi-pose) agar pegawai
+     * dapat mendaftarkan ulang dari awal bila verifikasi sering gagal.
      */
     public function resetFace(Request $request, $id)
     {
         $pegawai = Pegawai::findOrFail($id);
 
-        if (!$request->user()->hasPermission('simpeg.pegawai.update') && !$request->user()->hasPermission('simpeg.pegawai.manage') && !$request->user()->isAdmin()) {
+        if (!$request->user()->hasPermission('simpeg.pegawai.update') && !$request->user()->hasPermission('simpeg.pegawai.manage') && !$request->user()->hasPermission('simpeg.presensi.manage') && !$request->user()->isAdmin()) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses (permission) untuk mereset biometrik pegawai ini.'
             ], 403);
         }
 
+        $oldValues = [
+            'nip' => $pegawai->nip,
+            'nama' => $pegawai->nama_lengkap,
+            'is_face_enrolled' => !empty($pegawai->face_embedding),
+            'face_enrolled_at' => $pegawai->face_enrolled_at?->toDateTimeString(),
+        ];
+
         $pegawai->update([
             'face_embedding' => null,
+            'face_embeddings' => null,
             'face_enrolled_at' => null,
         ]);
 
-        AuditLogService::record('SIMPEG', 'reset_face', 'simpeg_pegawai', $pegawai->id, [
-            'nip' => $pegawai->nip,
-            'nama' => $pegawai->nama_lengkap,
-        ]);
+        try {
+            AuditLogService::record('SIMPEG', 'reset_face', 'simpeg_pegawai', $pegawai->id, $oldValues, [
+                'is_face_enrolled' => false,
+                'face_enrolled_at' => null,
+            ], $request);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log reset wajah: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',

@@ -4,7 +4,7 @@
 > **Base URL**: `/api/simpeg/presensi`
 > **Autentikasi**: Bearer Token (Passport) — seluruh endpoint terproteksi `auth:api`
 > **Dibuat**: 2026-09-14
-> **Diperbarui**: 2026-09-18 (tambah `max_late_clock_in_minutes` + override per-hari)
+> **Diperbarui**: 2026-10-14 (parameter global disederhanakan: hanya face + GPS; toleransi waktu & libur dikelola per shift)
 
 Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe shift kerja (multi-tipe dengan jadwal 7 hari), dan kalender libur nasional/tanggal merah.
 
@@ -270,6 +270,7 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
 ### Catatan Tambahan
 
 > - `GET shift-templates` tidak pernah mengembalikan kosong: selalu ada minimal 1 template default (auto-seed).
+> - Parameter global `PUT settings` kini hanya wajib `face_score_threshold` + `gps_accuracy_threshold_meters`; toleransi waktu & `applies_national_holidays` bersifat opsional (fallback bila pegawai tanpa shift) dan dikelola utama per shift template via UI Master Presensi.
 > - Field `applies_national_holidays = false` cocok untuk shift satpam/operasional yang tetap wajib masuk saat tanggal merah.
 > - Penghapusan shift/lokasi yang masih dipakai pegawai ditolak (`422`) demi integritas referensi `simpeg_pegawai.shift_template_id`.
 > - Jendela clock-in: `[start - max_early, start + max_late]`. Keterlambatan dalam jendela tercatat `terlambat` + `late_minutes` + notes audit. `max_late = 0` berarti tanpa batas atas. Override per-hari via `days[].max_late_clock_in_minutes` / `days[].max_early_clock_in_minutes` (PUT).

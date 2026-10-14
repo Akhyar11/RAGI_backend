@@ -725,8 +725,8 @@ Edit / reset sebagian log presensi realtime (misal salah tekan scan pulang: rese
 | `tanggal` | date YYYY-MM-DD | Ubah tanggal dinas |
 | `jam_masuk` | string HH:MM / HH:MM:SS | Koreksi jam masuk (WIB) |
 | `jam_keluar` | string HH:MM / HH:MM:SS | Koreksi jam pulang (WIB) |
-| `reset_clock_in` | boolean | `true` = kosongkan scan masuk saja |
-| `reset_clock_out` | boolean | `true` = kosongkan scan pulang saja |
+| `reset_clock_in` | boolean | `true` = kosongkan scan masuk saja. Bila tidak ada scan tersisa & tanpa status eksplisit, baris log otomatis dihapus agar status kembali kosong |
+| `reset_clock_out` | boolean | `true` = kosongkan scan pulang saja. Bila tidak ada scan tersisa & tanpa status eksplisit, baris log otomatis dihapus agar status kembali kosong |
 | `status` / `status_kehadiran` | enum | `hadir,terlambat,menunggu_approval,ditolak,izin,sakit,dinas,alfa` |
 | `catatan` / `notes` | string | Catatan koreksi |
 
@@ -736,6 +736,15 @@ Edit / reset sebagian log presensi realtime (misal salah tekan scan pulang: rese
   "status": "success",
   "message": "Log presensi berhasil diperbarui.",
   "data": { "id": 101, "tanggal": "2026-10-10", "clock_in": "2026-10-10T00:41:00.000000Z" }
+}
+```
+
+**Response Sukses Reset Hingga Kosong (200 OK, baris terhapus):**
+```json
+{
+  "status": "success",
+  "message": "Scan presensi berhasil direset. Status kehadiran kembali kosong.",
+  "data": null
 }
 ```
 

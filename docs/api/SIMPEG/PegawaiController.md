@@ -509,7 +509,7 @@ Accept: application/json
 
 ## POST /api/simpeg/pegawai/{id}/reset-face
 
-> Mereset data biometrik wajah pegawai (`face_embedding` dan `face_enrolled_at`). Digunakan oleh Admin/HR ketika pegawai berganti perangkat atau gagal mengenali wajah sehingga perlu melakukan enrollment biometrik wajah ulang melalui aplikasi mobile presensi.
+> Mereset data biometrik wajah pegawai (`face_embedding`, `face_embeddings` multi-pose, dan `face_enrolled_at`). Digunakan oleh Admin/HR ketika pegawai berganti perangkat atau gagal mengenali wajah sehingga perlu melakukan enrollment biometrik wajah ulang melalui aplikasi mobile presensi. Dapat dipicu dari halaman Detail Pegawai maupun shortcut "Reset Wajah Terdaftar" di modul Presensi (log realtime & detail log).
 
 ### Headers
 ```http

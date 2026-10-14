@@ -1019,6 +1019,7 @@ class PresensiController extends Controller
             $attendance->clock_in_accuracy = null;
             $attendance->clock_in_face_score = null;
             $attendance->clock_in_is_mock_location = false;
+            $attendance->late_minutes = 0;
         } elseif (array_key_exists('jam_masuk', $validated) && $validated['jam_masuk'] !== null && $validated['jam_masuk'] !== '') {
             $jamMasuk = $this->normalizeJamInput($validated['jam_masuk']);
             $clockInUtc = Carbon::createFromFormat('Y-m-d H:i:s', "{$tanggal} {$jamMasuk}", 'Asia/Jakarta');
@@ -1060,6 +1061,46 @@ class PresensiController extends Controller
         $statusBaru = $validated['status'] ?? $validated['status_kehadiran'] ?? null;
         if ($statusBaru) {
             $attendance->status = $statusBaru;
+        } elseif (!empty($validated['reset_clock_in']) || !empty($validated['reset_clock_out'])) {
+            // Reset tanpa status eksplisit: sinkronkan status agar tidak nyangkut.
+            // Aturan: bila scan masuk direset dan tidak ada scan tersisa,
+            // baris log otomatis dihapus agar kembali kosong (belum_absen).
+            $clockInEmpty = empty($attendance->clock_in) && empty($attendance->jam_masuk);
+            $clockOutEmpty = empty($attendance->clock_out) && empty($attendance->jam_keluar);
+
+            if ($clockInEmpty && $clockOutEmpty) {
+                $currentStatus = strtolower((string) ($attendance->status ?? $attendance->status_kehadiran ?? 'hadir'));
+                if (in_array($currentStatus, ['hadir', 'terlambat', 'menunggu_approval', 'ditolak'], true)) {
+                    try {
+                        \App\Services\AuditLogService::record(
+                            'SIMPEG',
+                            'delete',
+                            'simpeg_presensi_pegawai',
+                            (int) $id,
+                            $oldValues,
+                            null,
+                            $request
+                        );
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log reset presensi: ' . $e->getMessage());
+                    }
+
+                    $attendance->delete();
+
+                    return response()->json([
+                        'status' => 'success',
+                        'message' => 'Scan presensi berhasil direset. Status kehadiran kembali kosong.',
+                        'data' => null,
+                    ]);
+                }
+            } elseif ($clockInEmpty && !$clockOutEmpty) {
+                // Pulang tanpa masuk tetap sah, tapi keterlambatan masuk sudah tidak relevan.
+                $currentStatus = strtolower((string) ($attendance->status ?? $attendance->status_kehadiran ?? 'hadir'));
+                if ($currentStatus === 'terlambat') {
+                    $attendance->status = 'hadir';
+                }
+                $attendance->late_minutes = 0;
+            }
         }
 
         $catatanBaru = $validated['catatan'] ?? $validated['notes'] ?? null;
