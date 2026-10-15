@@ -41,6 +41,21 @@ class StorePotonganCalonRequest extends FormRequest
             if ($this->input('tipe_potongan') === 'persen' && (float) $this->input('nilai_potongan') > 100) {
                 $v->errors()->add('nilai_potongan', 'Potongan persen maksimal 100.');
             }
+
+            $nomorSk = trim((string) $this->input('nomor_sk'));
+            if ($nomorSk !== '') {
+                $surat = \App\Models\Arsip\NomorSurat::with('request')
+                    ->where('nomor_surat', $nomorSk)
+                    ->first();
+
+                if (! $surat) {
+                    $v->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' tidak terdaftar di modul Arsip.");
+                } elseif ($surat->status === 'dibatalkan') {
+                    $v->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' berstatus DIBATALKAN.");
+                } elseif (! $surat->has_dokumen) {
+                    $v->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' terdaftar di Arsip, tetapi dokumen fisik SK belum diunggah/kosong.");
+                }
+            }
         });
     }
 }

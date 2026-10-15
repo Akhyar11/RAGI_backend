@@ -54,7 +54,16 @@ Mengelola **potongan biaya kustom per calon mahasiswa** (bukan per jalur/prodi).
             "berlaku_sampai": null,
             "status": "aktif",
             "komponen_biaya": { "id": 7, "kode": "DPI", "nama": "Dana Pengembangan Institusi" },
-            "pembuat": { "id": 5, "name": "Admin SPMB", "username": "admin.spmb" }
+            "pembuat": { "id": 5, "name": "Admin SPMB", "username": "admin.spmb" },
+            "arsip_nomor_surat": {
+                "id": 12,
+                "nomor_surat": "SK/012/2026",
+                "perihal": "SK Keringanan Biaya Khusus Mahasiswa Baru",
+                "tanggal_surat": "2026-10-01",
+                "status": "terbit",
+                "dokumen_url": "http://localhost:8000/api/files/view?path=private/arsip/sk_012_2026.pdf&signature=...",
+                "has_dokumen": true
+            }
         }
     ],
     "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 },
@@ -75,7 +84,7 @@ Mengelola **potongan biaya kustom per calon mahasiswa** (bukan per jalur/prodi).
     "tipe_potongan": "enum: nominal | persen",
     "nilai_potongan": "numeric, required, min 0 (persen maks 100)",
     "tahap": "enum: pendaftaran | daftar_ulang | keduanya",
-    "nomor_sk": "string, nullable, max 100",
+    "nomor_sk": "string, nullable, max 100 (jika diisi: wajib terdaftar di core_arsip_nomor_surat, tidak dibatalkan, dan dokumen fisik SK sudah terunggah)",
     "keterangan": "string, nullable",
     "berlaku_mulai": "date, nullable (YYYY-MM-DD)",
     "berlaku_sampai": "date, nullable, after_or_equal:berlaku_mulai",
@@ -99,7 +108,15 @@ Mengelola **potongan biaya kustom per calon mahasiswa** (bukan per jalur/prodi).
         "tipe_potongan": "persen",
         "nilai_potongan": "50.00",
         "tahap": "daftar_ulang",
-        "status": "aktif"
+        "nomor_sk": "SK/012/2026",
+        "status": "aktif",
+        "arsip_nomor_surat": {
+            "id": 12,
+            "nomor_surat": "SK/012/2026",
+            "perihal": "SK Keringanan Biaya Khusus Mahasiswa Baru",
+            "dokumen_url": "http://localhost:8000/api/files/view?path=private/arsip/sk_012_2026.pdf&signature=...",
+            "has_dokumen": true
+        }
     }
 }
 ```
@@ -113,7 +130,8 @@ Mengelola **potongan biaya kustom per calon mahasiswa** (bukan per jalur/prodi).
     "message": "Data yang diberikan tidak valid.",
     "errors": {
         "komponen_biaya_id": ["The komponen biaya id has already been taken."],
-        "nilai_potongan": ["Potongan persen maksimal 100."]
+        "nilai_potongan": ["Potongan persen maksimal 100."],
+        "nomor_sk": ["Nomor SK 'SK/012/2026' terdaftar di Arsip, tetapi dokumen fisik SK belum diunggah/kosong."]
     }
 }
 ```

@@ -56,6 +56,11 @@ class PotonganCalon extends Model
         return $this->belongsTo(User::class, 'disetujui_oleh');
     }
 
+    public function arsipNomorSurat()
+    {
+        return $this->belongsTo(\App\Models\Arsip\NomorSurat::class, 'nomor_sk', 'nomor_surat');
+    }
+
     public function scopeAktif($query)
     {
         return $query->where('status', 'aktif');

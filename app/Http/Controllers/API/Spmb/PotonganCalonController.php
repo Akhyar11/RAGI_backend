@@ -24,7 +24,7 @@ class PotonganCalonController extends Controller
     {
         $pendaftaran = PendaftaranCalonMhs::findOrFail($id);
 
-        $query = PotonganCalon::with(['komponenBiaya:id,kode,nama', 'pembuat:id,name,username'])
+        $query = PotonganCalon::with(['komponenBiaya:id,kode,nama', 'pembuat:id,name,username', 'arsipNomorSurat'])
             ->where('pendaftaran_id', $pendaftaran->id);
 
         if ($request->filled('status')) {

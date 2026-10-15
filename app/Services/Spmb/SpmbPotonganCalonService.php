@@ -34,7 +34,7 @@ class SpmbPotonganCalonService
                 'dibuat_oleh' => auth()->id(),
             ]);
 
-            return $potongan->load(['komponenBiaya', 'pembuat:id,name,username']);
+            return $potongan->load(['komponenBiaya', 'pembuat:id,name,username', 'arsipNomorSurat']);
         });
     }
 
@@ -48,7 +48,7 @@ class SpmbPotonganCalonService
 
             $potongan->update($data);
 
-            return $potongan->fresh()->load(['komponenBiaya', 'pembuat:id,name,username']);
+            return $potongan->fresh()->load(['komponenBiaya', 'pembuat:id,name,username', 'arsipNomorSurat']);
         });
     }
 
