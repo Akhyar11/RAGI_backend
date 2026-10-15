@@ -906,8 +906,13 @@ class ObeMasterController extends Controller
     private function attachDistribusiRelations(array $items): array
     {
         $anggotaIds = collect($items)
-            ->pluck('dosen_anggota_ids')
-            ->flatten()
+            ->flatMap(function ($item) {
+                $row = $item instanceof \Illuminate\Database\Eloquent\Model ? $item->toArray() : (array) $item;
+                $ids = $item->dosen_anggota_ids ?? $row['dosen_anggota_ids'] ?? [];
+                $details = $item->dosen_anggota_details ?? $row['dosen_anggota_details'] ?? [];
+                $detailIds = collect(is_array($details) ? $details : [])->pluck('dosen_id')->all();
+                return array_merge(is_array($ids) ? $ids : [], $detailIds);
+            })
             ->map(fn($v) => (int) $v)
             ->filter()
             ->unique()
@@ -918,7 +923,19 @@ class ObeMasterController extends Controller
             : collect();
 
         $mkIds = collect($items)->pluck('mata_kuliah_id')->filter()->unique()->values();
-        $masterKelasIds = collect($items)->pluck('kelas_ids')->flatten()->map(fn($v) => (int) $v)->filter()->unique()->values();
+
+        $masterKelasIds = collect($items)
+            ->flatMap(function ($item) {
+                $row = $item instanceof \Illuminate\Database\Eloquent\Model ? $item->toArray() : (array) $item;
+                $kIds = $item->kelas_ids ?? $row['kelas_ids'] ?? [];
+                $details = $item->dosen_anggota_details ?? $row['dosen_anggota_details'] ?? [];
+                $detailKIds = collect(is_array($details) ? $details : [])->pluck('kelas_ids')->flatten()->all();
+                return array_merge(is_array($kIds) ? $kIds : [], $detailKIds);
+            })
+            ->map(fn($v) => (int) $v)
+            ->filter()
+            ->unique()
+            ->values();
 
         $masterKelasMap = $masterKelasIds->isNotEmpty()
             ? \App\Models\Siakad\MasterKelas::whereIn('id', $masterKelasIds)->get()->keyBy('id')
@@ -931,9 +948,11 @@ class ObeMasterController extends Controller
 
         return array_map(function ($item) use ($anggotaMap, $kelasRows, $masterKelasMap) {
             $row = $item instanceof \Illuminate\Database\Eloquent\Model ? $item->toArray() : (array) $item;
+            $rawDetails = $item->dosen_anggota_details ?? $row['dosen_anggota_details'] ?? null;
             $ids = $item->dosen_anggota_ids ?? $row['dosen_anggota_ids'] ?? [];
             $ids = collect(is_array($ids) ? $ids : [])->map(fn($v) => (int) $v)->filter()->values();
-            $row['dosen_anggotas'] = $ids->map(fn($id) => $anggotaMap->get($id))->filter()->values()->all();
+
+            $mkSks = $item->mataKuliah?->total_sks ?? $row['mata_kuliah']['total_sks'] ?? null;
 
             $kIds = $item->kelas_ids ?? $row['kelas_ids'] ?? [];
             $kIds = collect(is_array($kIds) ? $kIds : [])->map(fn($v) => (int) $v)->filter()->values();
@@ -953,6 +972,45 @@ class ObeMasterController extends Controller
             $row['kelas_list'] = !empty($masterKelasNames) ? $masterKelasNames : $autoKelasList;
             $row['master_kelas_items'] = $kIds->map(fn($kid) => $masterKelasMap->get($kid))->filter()->values()->all();
 
+            // Format dosen_anggota_details
+            if (is_array($rawDetails) && !empty($rawDetails)) {
+                $formattedDetails = collect($rawDetails)->map(function ($det) use ($anggotaMap, $masterKelasMap, $mkSks) {
+                    $dId = (int) ($det['dosen_id'] ?? 0);
+                    $dosen = $anggotaMap->get($dId);
+                    $dkIds = collect($det['kelas_ids'] ?? [])->map(fn($v) => (int) $v)->filter()->values();
+                    $dkNames = $dkIds->map(fn($kid) => $masterKelasMap->get($kid)?->nama_kelas)->filter()->values()->all();
+                    return [
+                        'dosen_id' => $dId,
+                        'id' => $dId,
+                        'nama_lengkap' => $dosen?->nama_lengkap ?? ($det['dosen_nama'] ?? '-'),
+                        'nidn' => $dosen?->nidn ?? ($det['dosen_nidn'] ?? null),
+                        'sks' => isset($det['sks']) && $det['sks'] !== null && $det['sks'] !== '' ? (int) $det['sks'] : $mkSks,
+                        'kelas_ids' => $dkIds->all(),
+                        'kelas_list' => $dkNames,
+                        'master_kelas_items' => $dkIds->map(fn($kid) => $masterKelasMap->get($kid))->filter()->values()->all(),
+                    ];
+                })->values()->all();
+                $row['dosen_anggota_details'] = $formattedDetails;
+                $row['dosen_anggotas'] = $formattedDetails;
+            } else {
+                // Fallback dari dosen_anggota_ids lama
+                $formattedDetails = $ids->map(function ($id) use ($anggotaMap, $mkSks, $kIds, $masterKelasNames, $masterKelasMap) {
+                    $dosen = $anggotaMap->get($id);
+                    return [
+                        'dosen_id' => $id,
+                        'id' => $id,
+                        'nama_lengkap' => $dosen?->nama_lengkap ?? '-',
+                        'nidn' => $dosen?->nidn,
+                        'sks' => $mkSks,
+                        'kelas_ids' => $kIds->all(),
+                        'kelas_list' => $masterKelasNames,
+                        'master_kelas_items' => $kIds->map(fn($kid) => $masterKelasMap->get($kid))->filter()->values()->all(),
+                    ];
+                })->filter()->values()->all();
+                $row['dosen_anggota_details'] = $formattedDetails;
+                $row['dosen_anggotas'] = $formattedDetails;
+            }
+
             return $row;
         }, $items);
     }
@@ -970,9 +1028,43 @@ class ObeMasterController extends Controller
             'semester' => 'required|integer|min:1|max:8',
             'dosen_koordinator_id' => 'nullable|exists:siakad_dosen,id',
             'dosen_anggota_ids' => 'nullable|array',
+            'dosen_anggota_ids.*' => 'integer|exists:siakad_dosen,id',
             'kelas_ids' => 'nullable|array',
+            'kelas_ids.*' => 'integer|exists:siakad_master_kelas,id',
+            'dosen_anggota_details' => 'nullable|array',
+            'dosen_anggota_details.*.dosen_id' => 'required|integer|exists:siakad_dosen,id',
+            'dosen_anggota_details.*.sks' => 'nullable|integer|min:0',
+            'dosen_anggota_details.*.kelas_ids' => 'nullable|array',
+            'dosen_anggota_details.*.kelas_ids.*' => 'integer|exists:siakad_master_kelas,id',
             'is_active' => 'boolean',
         ]);
+
+        if (isset($validated['dosen_anggota_details']) && is_array($validated['dosen_anggota_details'])) {
+            $extractedAnggotaIds = collect($validated['dosen_anggota_details'])
+                ->pluck('dosen_id')
+                ->map(fn($v) => (int) $v)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            if (!empty($extractedAnggotaIds)) {
+                $validated['dosen_anggota_ids'] = $extractedAnggotaIds;
+            }
+            $extractedKelasIds = collect($validated['dosen_anggota_details'])
+                ->pluck('kelas_ids')
+                ->flatten()
+                ->map(fn($v) => (int) $v)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            if (!empty($extractedKelasIds)) {
+                $validated['kelas_ids'] = array_values(array_unique(array_merge(
+                    $validated['kelas_ids'] ?? [],
+                    $extractedKelasIds
+                )));
+            }
+        }
 
         if (empty($validated['program_studi_id'])) {
             $mk = MataKuliah::with('kurikulum')->find($validated['mata_kuliah_id']);
@@ -1027,9 +1119,43 @@ class ObeMasterController extends Controller
             'semester' => 'required|integer|min:1|max:8',
             'dosen_koordinator_id' => 'nullable|exists:siakad_dosen,id',
             'dosen_anggota_ids' => 'nullable|array',
+            'dosen_anggota_ids.*' => 'integer|exists:siakad_dosen,id',
             'kelas_ids' => 'nullable|array',
+            'kelas_ids.*' => 'integer|exists:siakad_master_kelas,id',
+            'dosen_anggota_details' => 'nullable|array',
+            'dosen_anggota_details.*.dosen_id' => 'required|integer|exists:siakad_dosen,id',
+            'dosen_anggota_details.*.sks' => 'nullable|integer|min:0',
+            'dosen_anggota_details.*.kelas_ids' => 'nullable|array',
+            'dosen_anggota_details.*.kelas_ids.*' => 'integer|exists:siakad_master_kelas,id',
             'is_active' => 'boolean',
         ]);
+
+        if (isset($validated['dosen_anggota_details']) && is_array($validated['dosen_anggota_details'])) {
+            $extractedAnggotaIds = collect($validated['dosen_anggota_details'])
+                ->pluck('dosen_id')
+                ->map(fn($v) => (int) $v)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            if (!empty($extractedAnggotaIds)) {
+                $validated['dosen_anggota_ids'] = $extractedAnggotaIds;
+            }
+            $extractedKelasIds = collect($validated['dosen_anggota_details'])
+                ->pluck('kelas_ids')
+                ->flatten()
+                ->map(fn($v) => (int) $v)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            if (!empty($extractedKelasIds)) {
+                $validated['kelas_ids'] = array_values(array_unique(array_merge(
+                    $validated['kelas_ids'] ?? [],
+                    $extractedKelasIds
+                )));
+            }
+        }
 
         $item->update($validated);
         $new = $item->getChanges();

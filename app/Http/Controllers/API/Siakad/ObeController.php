@@ -1565,15 +1565,27 @@ class ObeController extends Controller
             ? \App\Models\Siakad\Rps::with(['dosenPengembang', 'koordinatorRmk', 'kaprodi'])->whereIn('mata_kuliah_id', $mkIds)->get()->keyBy('mata_kuliah_id')
             : collect();
 
-        $allKelasIds = collect($distribusiItems)->pluck('kelas_ids')->flatten()->map(fn($v) => (int) $v)->filter()->unique()->values();
+        $allKelasIds = collect($distribusiItems)->flatMap(function ($item) {
+            $dist = $item instanceof \Illuminate\Database\Eloquent\Model ? $item : (object) $item;
+            $kIds = $dist->kelas_ids ?? [];
+            $details = $dist->dosen_anggota_details ?? [];
+            $detailKIds = collect(is_array($details) ? $details : [])->pluck('kelas_ids')->flatten()->all();
+            return array_merge(is_array($kIds) ? $kIds : [], $detailKIds);
+        })->map(fn($v) => (int) $v)->filter()->unique()->values();
 
         $masterKelasMap = $allKelasIds->isNotEmpty()
             ? \App\Models\Siakad\MasterKelas::whereIn('id', $allKelasIds)->get()->keyBy('id')
             : collect();
 
-        $allAnggotaIds = collect($distribusiItems)->pluck('dosen_anggota_ids')->flatten()
-            ->concat($rpsRows->pluck('dosen_anggota_ids')->flatten())
-            ->map(fn($v) => (int) $v)->filter()->unique()->values();
+        $allAnggotaIds = collect($distribusiItems)->flatMap(function ($item) {
+            $dist = $item instanceof \Illuminate\Database\Eloquent\Model ? $item : (object) $item;
+            $aIds = $dist->dosen_anggota_ids ?? [];
+            $details = $dist->dosen_anggota_details ?? [];
+            $detailIds = collect(is_array($details) ? $details : [])->pluck('dosen_id')->all();
+            return array_merge(is_array($aIds) ? $aIds : [], $detailIds);
+        })
+        ->concat($rpsRows->pluck('dosen_anggota_ids')->flatten())
+        ->map(fn($v) => (int) $v)->filter()->unique()->values();
 
         $dosenMap = $allAnggotaIds->isNotEmpty()
             ? \App\Models\Siakad\Dosen::whereIn('id', $allAnggotaIds)->get()->keyBy('id')
@@ -1586,9 +1598,29 @@ class ObeController extends Controller
             $rps = $rpsRows->get($mkId);
             $hasRps = (bool) $rps;
 
+            $rawDetails = $dist->dosen_anggota_details ?? [];
             $kIds = $dist->kelas_ids ?? [];
+            if (empty($kIds) && !empty($rawDetails)) {
+                $kIds = collect($rawDetails)->pluck('kelas_ids')->flatten()->filter()->unique()->values()->all();
+            }
             $kIds = collect(is_array($kIds) ? $kIds : [])->map(fn($v) => (int) $v)->filter()->values();
             $kelasList = $kIds->map(fn($kid) => $masterKelasMap->get($kid)?->nama_kelas)->filter()->values()->all();
+
+            $formattedDetails = collect(is_array($rawDetails) ? $rawDetails : [])->map(function ($det) use ($dosenMap, $masterKelasMap) {
+                $dId = (int) ($det['dosen_id'] ?? 0);
+                $dosen = $dosenMap->get($dId);
+                $dkIds = collect($det['kelas_ids'] ?? [])->map(fn($v) => (int) $v)->filter()->values();
+                $dkNames = $dkIds->map(fn($kid) => $masterKelasMap->get($kid)?->nama_kelas)->filter()->values()->all();
+                return [
+                    'dosen_id' => $dId,
+                    'id' => $dId,
+                    'nama_lengkap' => $dosen?->nama_lengkap ?? ($det['dosen_nama'] ?? '-'),
+                    'nidn' => $dosen?->nidn ?? ($det['dosen_nidn'] ?? null),
+                    'sks' => $det['sks'] ?? null,
+                    'kelas_ids' => $dkIds->all(),
+                    'kelas_list' => $dkNames,
+                ];
+            })->all();
 
             $rawAnggotaIds = $rps->dosen_anggota_ids ?? $dist->dosen_anggota_ids ?? [];
             $rawAnggotaIds = collect(is_array($rawAnggotaIds) ? $rawAnggotaIds : [])->map(fn($v) => (int) $v)->filter()->values();
@@ -1609,10 +1641,11 @@ class ObeController extends Controller
                 'disetujui_at' => $rps?->disetujui_at ?? null,
                 'dosen_bisa_edit' => $rps?->dosen_bisa_edit ?? true,
                 'dosen_koordinator' => $rps?->koordinatorRmk ?? $dist->dosenKoordinator,
-                'dosen_anggotas' => $anggotas,
+                'dosen_anggotas' => !empty($formattedDetails) ? $formattedDetails : $anggotas,
+                'dosen_anggota_details' => $formattedDetails,
                 'kaprodi' => $rps?->kaprodi ?? null,
                 'distribusi_kelas_list' => $kelasList,
-                'distribusi_kelas_formatted' => !empty($kelasList) ? implode(',', $kelasList) : null,
+                'distribusi_kelas_formatted' => !empty($kelasList) ? implode(', ', $kelasList) : null,
                 'created_at' => $rps?->created_at ?? $dist->created_at,
                 'updated_at' => $rps?->updated_at ?? $dist->updated_at,
             ];

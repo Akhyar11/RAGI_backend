@@ -203,7 +203,41 @@ Menghapus rubrik penilaian.
 ## 5. Distribusi Mengajar
 
 ### [GET] `/api/v1/siakad/obe/distribusi-mengajar`
-Daftar penugasan tim pengajar mata kuliah per semester.
+Daftar penugasan tim pengajar mata kuliah per semester, lengkap dengan data dosen koordinator, dosen anggota, SKS per dosen, dan daftar kelas yang diampu.
+
+**Response Sukses (200 OK)**:
+```json
+{
+  "status": "success",
+  "message": "Daftar distribusi mengajar berhasil diambil",
+  "data": [
+    {
+      "id": 1,
+      "program_studi_id": 1,
+      "tahun_akademik_id": 1,
+      "kurikulum_id": 1,
+      "mata_kuliah_id": 5,
+      "semester": 1,
+      "dosen_koordinator_id": 13,
+      "dosen_anggota_ids": [14, 15],
+      "kelas_ids": [1, 2],
+      "dosen_anggota_details": [
+        {
+          "dosen_id": 14,
+          "id": 14,
+          "nama_lengkap": "Dr. Dosen Anggota, M.T.",
+          "nidn": "0412345601",
+          "sks": 3,
+          "kelas_ids": [1],
+          "kelas_list": ["25A"],
+          "master_kelas_items": [{ "id": 1, "nama_kelas": "25A" }]
+        }
+      ],
+      "is_active": true
+    }
+  ]
+}
+```
 
 ### [POST] `/api/v1/siakad/obe/distribusi-mengajar`
 Menetapkan distribusi mengajar.
@@ -215,12 +249,25 @@ Menetapkan distribusi mengajar.
   "semester": 1,
   "dosen_koordinator_id": 13,
   "dosen_anggota_ids": [14, 15],
+  "kelas_ids": [1, 2],
+  "dosen_anggota_details": [
+    {
+      "dosen_id": 14,
+      "sks": 3,
+      "kelas_ids": [1]
+    },
+    {
+      "dosen_id": 15,
+      "sks": 3,
+      "kelas_ids": [2]
+    }
+  ],
   "is_active": true
 }
 ```
 
 ### [PUT] `/api/v1/siakad/obe/distribusi-mengajar/{id}`
-Update penugasan mengajar.
+Update penugasan mengajar (menerima payload yang sama dengan `POST`).
 
 ### [DELETE] `/api/v1/siakad/obe/distribusi-mengajar/{id}`
 Hapus penugasan mengajar.
