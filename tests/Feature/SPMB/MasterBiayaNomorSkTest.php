@@ -256,4 +256,26 @@ class MasterBiayaNomorSkTest extends TestCase
             'nomor_sk' => '15/SK/YAY/X/2026',
         ]);
     }
+
+    public function test_create_master_biaya_without_sk_rejected(): void
+    {
+        $payload = [
+            'master_tipe_jalur_id' => $this->tipeJalur->id,
+            'program_studi_id' => $this->prodi->id,
+            'is_active' => true,
+            'items' => [
+                [
+                    'komponen_biaya_id' => $this->komponen->id,
+                    'nominal' => 7500000,
+                    'dibebankan_saat_pendaftaran' => false,
+                    'berlaku_diskon' => true,
+                ],
+            ],
+        ];
+
+        $res = $this->postJson('/api/spmb/master/biaya', $payload);
+
+        $res->assertStatus(422)
+            ->assertJsonValidationErrors(['nomor_sk']);
+    }
 }

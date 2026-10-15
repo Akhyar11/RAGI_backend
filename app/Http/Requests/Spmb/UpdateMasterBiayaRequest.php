@@ -16,7 +16,7 @@ class UpdateMasterBiayaRequest extends FormRequest
         return [
             'master_tipe_jalur_id' => 'sometimes|required|exists:core_master_tipe_jalur,id',
             'program_studi_id' => 'sometimes|required|exists:siakad_program_studi,id',
-            'nomor_sk' => 'nullable|string|max:150',
+            'nomor_sk' => 'sometimes|required|string|max:150',
             'is_active' => 'nullable|boolean',
             'keterangan' => 'nullable|string',
             'items' => 'nullable|array',

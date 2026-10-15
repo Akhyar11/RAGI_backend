@@ -376,7 +376,7 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 {
     "master_tipe_jalur_id": 2,
     "program_studi_id": 7,
-    "nomor_sk": "15/SK/YAY/X/2026",
+    "nomor_sk": "15/SK/YAY/X/2026 (string, required, wajib terdaftar di core_arsip_nomor_surat, tidak dibatalkan, dan dokumen fisik SK sudah terunggah)",
     "is_active": true,
     "keterangan": "Paket biaya awal masuk",
     "items": [

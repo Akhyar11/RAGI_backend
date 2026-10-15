@@ -84,7 +84,7 @@ Mengelola **potongan biaya kustom per calon mahasiswa** (bukan per jalur/prodi).
     "tipe_potongan": "enum: nominal | persen",
     "nilai_potongan": "numeric, required, min 0 (persen maks 100)",
     "tahap": "enum: pendaftaran | daftar_ulang | keduanya",
-    "nomor_sk": "string, nullable, max 100 (jika diisi: wajib terdaftar di core_arsip_nomor_surat, tidak dibatalkan, dan dokumen fisik SK sudah terunggah)",
+    "nomor_sk": "string, required, max 100 (wajib terdaftar di core_arsip_nomor_surat, tidak dibatalkan, dan dokumen fisik SK sudah terunggah)",
     "keterangan": "string, nullable",
     "berlaku_mulai": "date, nullable (YYYY-MM-DD)",
     "berlaku_sampai": "date, nullable, after_or_equal:berlaku_mulai",

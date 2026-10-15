@@ -217,7 +217,7 @@ class PotonganCalonNomorSkTest extends TestCase
         $this->assertTrue($res->json('data.arsip_nomor_surat.has_dokumen'));
     }
 
-    public function test_create_potongan_without_sk_succeeds(): void
+    public function test_create_potongan_without_sk_rejected(): void
     {
         $payload = [
             'komponen_biaya_id' => $this->komponen->id,
@@ -231,13 +231,8 @@ class PotonganCalonNomorSkTest extends TestCase
 
         $res = $this->postJson("/api/spmb/pendaftaran/{$this->pendaftaran->id}/potongan", $payload);
 
-        $res->assertStatus(201)
-            ->assertJson([
-                'status' => 'success',
-                'data' => [
-                    'nama_potongan' => 'Potongan Bebas SK',
-                ],
-            ]);
+        $res->assertStatus(422)
+            ->assertJsonValidationErrors(['nomor_sk']);
     }
 
     public function test_update_potongan_with_invalid_sk_rejected(): void

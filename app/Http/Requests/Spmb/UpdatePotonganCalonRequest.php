@@ -30,7 +30,7 @@ class UpdatePotonganCalonRequest extends FormRequest
             'tipe_potongan' => 'sometimes|required|in:nominal,persen',
             'nilai_potongan' => 'sometimes|required|numeric|min:0',
             'tahap' => 'sometimes|required|in:pendaftaran,daftar_ulang,keduanya',
-            'nomor_sk' => 'nullable|string|max:100',
+            'nomor_sk' => 'sometimes|required|string|max:100',
             'keterangan' => 'nullable|string',
             'berlaku_mulai' => 'nullable|date',
             'berlaku_sampai' => 'nullable|date|after_or_equal:berlaku_mulai',

@@ -27,7 +27,7 @@ class StorePotonganCalonRequest extends FormRequest
             'tipe_potongan' => 'required|in:nominal,persen',
             'nilai_potongan' => 'required|numeric|min:0',
             'tahap' => 'required|in:pendaftaran,daftar_ulang,keduanya',
-            'nomor_sk' => 'nullable|string|max:100',
+            'nomor_sk' => 'required|string|max:100',
             'keterangan' => 'nullable|string',
             'berlaku_mulai' => 'nullable|date',
             'berlaku_sampai' => 'nullable|date|after_or_equal:berlaku_mulai',
