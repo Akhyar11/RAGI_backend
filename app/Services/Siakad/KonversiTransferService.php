@@ -22,7 +22,7 @@ class KonversiTransferService
         $konversi = KonversiTransfer::with(['mahasiswa.programStudi', 'diprosesOleh', 'details.mataKuliahDiakui'])
             ->findOrFail($id);
 
-        $isPriv = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+        $isPriv = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->isObeAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'));
         $isDosenMurni = $user && $user->hasRole('dosen') && !$isPriv;
 
         if ($isDosenMurni) {
@@ -44,7 +44,7 @@ class KonversiTransferService
             $konversi = KonversiTransfer::findOrFail($id);
             $mhs = Mahasiswa::findOrFail($konversi->mahasiswa_id);
 
-            $isPrivileged = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
+            $isPrivileged = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->isObeAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'));
             $isPa = false;
             if ($user && !$isPrivileged) {
                 $dosenLogin = Dosen::where('user_id', $user->id)->first();

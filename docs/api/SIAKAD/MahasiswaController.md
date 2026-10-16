@@ -203,6 +203,106 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 ---
 
+## [GET] /api/v1/siakad/mahasiswa/konversi
+
+> Daftar usulan konversi transfer mahasiswa dengan pagination dan filter pencarian/status.
+> Akses: SuperAdmin, Admin SIAKAD, Admin OBE (`isObeAdmin`), atau pemegang permission `siakad.kurikulum.manage` / `siakad.master.manage`. Dosen murni hanya dapat melihat mahasiswa bimbingan PA-nya jika flag `advisees_only` diaktifkan.
+
+#### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+#### Query Parameters
+
+| Parameter | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `page` | `integer` | ❌ | Nomor halaman pagination (default: 1). |
+| `per_page` | `integer` | ❌ | Jumlah item per halaman (min 1, max 100, default: 15). |
+| `search` | `string` | ❌ | Pencarian no transaksi, kampus asal, prodi asal, atau nama/NIM mahasiswa. |
+| `mahasiswa_id` | `integer` | ❌ | Filter ID spesifik mahasiswa transfer. |
+| `status` | `string` | ❌ | Filter status usulan: `all`, `draft`, `diajukan`, `disetujui`, `ditolak`. |
+| `sort_by` | `string` | ❌ | Kolom pengurutan: `created_at`, `no_transaksi`, `status`, `kampus_asal` (default: `created_at`). |
+| `sort_order` | `string` | ❌ | Arah pengurutan: `asc`, `desc` (default: `desc`). |
+| `advisees_only` | `boolean` | ❌ | Jika `true`, membatasi pada mahasiswa bimbingan PA user dosen yang sedang login. |
+
+#### Responses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Data konversi transfer berhasil dimuat",
+    "data": [
+        {
+            "id": 1,
+            "mahasiswa_id": 10,
+            "no_transaksi": "KNV-2026-001",
+            "kampus_asal": "Universitas Gadjah Mada",
+            "prodi_asal": "D3 Teknik Informatika",
+            "diproses_oleh": 1,
+            "status": "disetujui",
+            "catatan": "SK Rektor No. 12/SK-KONV/2026",
+            "created_at": "2026-10-16T10:00:00.000000Z",
+            "mahasiswa": {
+                "id": 10,
+                "nim": "2026007001",
+                "nama_lengkap": "Budi Santoso",
+                "program_studi": {
+                    "id": 1,
+                    "nama": "S1 Teknik Informatika"
+                }
+            },
+            "details": [
+                {
+                    "id": 1,
+                    "konversi_id": 1,
+                    "mata_kuliah_diakui_id": 5,
+                    "kode_mk_asal": "CS101",
+                    "nama_mk_asal": "Dasar Pemrograman",
+                    "sks_asal": 3,
+                    "nilai_huruf_asal": "A",
+                    "status": "diakui",
+                    "catatan_penolakan": null,
+                    "mata_kuliah_diakui": {
+                        "id": 5,
+                        "kode_mk": "IF101",
+                        "nama": "Algoritma & Pemrograman",
+                        "total_sks": 3
+                    }
+                }
+            ]
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1
+    }
+}
+```
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "User does not have the right permissions."
+}
+```
+
+---
+
 ## [GET] /api/v1/siakad/mahasiswa/konversi/{id}
 
 > Detail satu usulan konversi transfer beserta rincian penyetaraan MK (`details.mata_kuliah_diakui`).
