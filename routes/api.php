@@ -613,6 +613,39 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::get('kas-kecil/{id}/pengajuan', [App\Http\Controllers\Sikeu\KasKecilController::class, 'pengajuanIndex']);
     Route::post('kas-kecil/{id}/pengajuan', [App\Http\Controllers\Sikeu\KasKecilController::class, 'pengajuanStore']);
 
+    // Uang Muka Kerja (UMK) — parity legacy transaksi_umk
+    Route::get('umk', [App\Http\Controllers\Sikeu\UmkController::class, 'index']);
+    Route::post('umk', [App\Http\Controllers\Sikeu\UmkController::class, 'store']);
+    Route::get('umk/{id}', [App\Http\Controllers\Sikeu\UmkController::class, 'show'])->whereNumber('id');
+    Route::put('umk/{id}', [App\Http\Controllers\Sikeu\UmkController::class, 'update'])->whereNumber('id');
+    Route::post('umk/{id}/status', [App\Http\Controllers\Sikeu\UmkController::class, 'updateStatus'])->whereNumber('id');
+    Route::delete('umk/{id}', [App\Http\Controllers\Sikeu\UmkController::class, 'destroy'])->whereNumber('id');
+
+    // Tutup Kas per Unit — parity legacy tutup_bukus per divisi
+    Route::get('tutup-kas', [App\Http\Controllers\Sikeu\TutupKasController::class, 'index']);
+    Route::post('tutup-kas', [App\Http\Controllers\Sikeu\TutupKasController::class, 'store']);
+    Route::delete('tutup-kas/{id}', [App\Http\Controllers\Sikeu\TutupKasController::class, 'destroy'])->whereNumber('id');
+
+    // Laporan Bendahara (parity legacy menuLaporan, basis kas)
+    Route::get('laporan-bendahara/saldo-harian', [App\Http\Controllers\Sikeu\LaporanBendaharaController::class, 'saldoHarian']);
+    Route::get('laporan-bendahara/saldo-bulanan', [App\Http\Controllers\Sikeu\LaporanBendaharaController::class, 'saldoBulanan']);
+    Route::get('laporan-bendahara/harian', [App\Http\Controllers\Sikeu\LaporanBendaharaController::class, 'harian']);
+    Route::get('laporan-bendahara/bulanan', [App\Http\Controllers\Sikeu\LaporanBendaharaController::class, 'bulanan']);
+    Route::get('laporan-bendahara/periodik', [App\Http\Controllers\Sikeu\LaporanBendaharaController::class, 'periodik']);
+    Route::get('laporan-bendahara/perakun', [App\Http\Controllers\Sikeu\LaporanBendaharaController::class, 'perAkun']);
+    Route::get('laporan-bendahara/rekap-mahasiswa', [App\Http\Controllers\Sikeu\LaporanBendaharaController::class, 'rekapMahasiswa']);
+    Route::post('laporan-bendahara/rekap-perprodikelas', [App\Http\Controllers\Sikeu\LaporanBendaharaController::class, 'rekapPerprodiKelas']);
+    Route::get('laporan-bendahara/export-excel', [App\Http\Controllers\Sikeu\LaporanBendaharaController::class, 'exportExcel']);
+
+    // Kompatibilitas legacy untuk gate SIAKAD/SPMB (server-to-server)
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('compat/ringkasan-pembayaran', [App\Http\Controllers\Sikeu\SikeuCompatController::class, 'ringkasan']);
+        Route::get('compat/tagihan-aktif', [App\Http\Controllers\Sikeu\SikeuCompatController::class, 'tagihanAktif']);
+        Route::get('compat/eligibilitas-ujian', [App\Http\Controllers\Sikeu\SikeuCompatController::class, 'eligibilitasUjian']);
+        Route::get('compat/biaya-lain', [App\Http\Controllers\Sikeu\SikeuCompatController::class, 'biayaLain']);
+        Route::get('compat/pendaftar/belum-du', [App\Http\Controllers\Sikeu\SikeuCompatController::class, 'belumDaftarUlang']);
+    });
+
 
     // Tagihan Mahasiswa List & Detail
     Route::get('tagihan', [App\Http\Controllers\Sikeu\SikeuExtendedMasterController::class, 'indexTagihan']);

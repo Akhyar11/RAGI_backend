@@ -88,6 +88,8 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Sikeu\TransaksiKasUnit::observe(\App\Observers\Sikeu\TransaksiKasUnitObserver::class);
         \App\Models\Sikeu\KoreksiAlokasi::observe(\App\Observers\Sikeu\KoreksiAlokasiObserver::class);
         \App\Models\Sikeu\PerubahanProdi::observe(\App\Observers\Sikeu\PerubahanProdiObserver::class);
+        \App\Models\Sikeu\UangMukaKerja::observe(\App\Observers\Sikeu\UmkObserver::class);
+        \App\Models\Sikeu\TutupKasUnit::observe(\App\Observers\Sikeu\TutupKasUnitObserver::class);
 
         // SIMPEG Observers
         \App\Models\Simpeg\SuratTugas::observe(\App\Observers\Simpeg\SuratTugasObserver::class);

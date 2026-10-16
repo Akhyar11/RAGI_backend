@@ -234,6 +234,9 @@ class PengajuanOperasionalService
         if (!$unitKas || !$unitKas->status) {
             throw new \InvalidArgumentException('Pilih unit kas sumber dana yang aktif untuk pencairan gaji.');
         }
+        if (\App\Services\Sikeu\TutupKasService::isTerkunci((int) $unitKas->id, (string) ($data['tanggal_pencairan'] ?? now()->toDateString()))) {
+            throw new \RuntimeException('Unit kas sudah tutup buku pada tanggal pencairan. Pencairan gaji tidak diizinkan.');
+        }
 
         $items = PengajuanItem::with('gajiPegawai.pegawai')
             ->where('pengajuan_id', $pengajuan->id)
@@ -480,6 +483,9 @@ class PengajuanOperasionalService
             $unitKas = UnitKas::find($unitKasId);
             if (!$unitKas || !$unitKas->status) {
                 throw new \InvalidArgumentException('Sumber dana pencairan tidak valid / tidak aktif.');
+            }
+            if (\App\Services\Sikeu\TutupKasService::isTerkunci((int) $unitKas->id, (string) ($data['tanggal_pencairan'] ?? now()->toDateString()))) {
+                throw new \RuntimeException('Unit kas sudah tutup buku pada tanggal pencairan. Pencairan tidak diizinkan.');
             }
             $pengajuan->unit_kas_id = $unitKas->id;
 

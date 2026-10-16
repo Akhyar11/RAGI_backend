@@ -127,6 +127,14 @@ class PembayaranKasirController extends Controller
                 );
             }
 
+            if ($unitKasKasir && \App\Services\Sikeu\TutupKasService::isTerkunci((int) $unitKasKasir->id, $today)) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Unit kas ini sudah tutup buku pada tanggal tersebut. Transaksi mundur tidak diizinkan.',
+                ], 403);
+            }
+
             $remainingBayar = (float)$request->jumlah_bayar;
             $remainingPotongan = $potonganTambahanTotal;
             $processedPembayarans = [];
@@ -232,6 +240,13 @@ class PembayaranKasirController extends Controller
                 \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log pembayaran kasir: ' . $e->getMessage());
             }
 
+            \App\Services\Sikeu\KwitansiPembayaranService::kirimBatch(
+                $processedPembayarans,
+                $batchKodeTransaksi,
+                (float) $request->jumlah_bayar,
+                $totalSisaAkhir
+            );
+
             $primaryTagihan = $tagihans->first();
 
             return response()->json([
@@ -296,6 +311,13 @@ class PembayaranKasirController extends Controller
             ], 403);
         }
 
+        if ($pembayaran->unit_kas_id && \App\Services\Sikeu\TutupKasService::isTerkunci((int) $pembayaran->unit_kas_id, $today)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unit kas ini sudah tutup buku pada tanggal tersebut. Validasi tidak diizinkan.',
+            ], 403);
+        }
+
         try {
             DB::beginTransaction();
 
@@ -339,6 +361,11 @@ class PembayaranKasirController extends Controller
             );
 
             DB::commit();
+
+            \App\Services\Sikeu\KwitansiPembayaranService::kirimSatuan(
+                $pembayaran->fresh(['tagihan.mahasiswa', 'tagihan.calonMahasiswa']),
+                max(0, $totalBersih - $newTotalBayar)
+            );
 
             return response()->json([
                 'status' => 'success',
@@ -435,6 +462,13 @@ class PembayaranKasirController extends Controller
                 return response()->json([
                     'status' => 'error',
                     'message' => "Periode akuntansi sudah ditutup. Tidak dapat melakukan koreksi.",
+                ], 403);
+            }
+
+            if ($pembayaran->unit_kas_id && \App\Services\Sikeu\TutupKasService::isTerkunci((int) $pembayaran->unit_kas_id, $today)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Unit kas ini sudah tutup buku pada tanggal tersebut. Koreksi tidak diizinkan.',
                 ], 403);
             }
 
@@ -1134,6 +1168,20 @@ class PembayaranKasirController extends Controller
         try {
             DB::beginTransaction();
 
+            // Direct cashier selalu bertransaksi hari ini: hormati periode global.
+            $todayLoket = now()->toDateString();
+            $periodeTutupLoket = PeriodeAkuntansi::where('status', 'ditutup')
+                ->where('tanggal_mulai', '<=', $todayLoket)
+                ->where('tanggal_selesai', '>=', $todayLoket)
+                ->first();
+            if ($periodeTutupLoket) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Periode akuntansi \"{$periodeTutupLoket->nama_periode}\" sudah ditutup. Tidak dapat memproses transaksi.",
+                ], 403);
+            }
+
             $isCalon = $request->input('tipe_referensi') === 'calon_mahasiswa' || $request->filled('calon_mahasiswa_id') || $request->boolean('is_calon_mahasiswa');
             $mhsId = $request->input('mahasiswa_id');
             $calonId = $request->input('calon_mahasiswa_id');
@@ -1256,6 +1304,13 @@ class PembayaranKasirController extends Controller
                 $request->channel_bayar === 'LOKET_TUNAI' ? 'TUNAI' : 'LOKET_TRANSFER',
                 null
             );
+            if ($unitKasLoket && \App\Services\Sikeu\TutupKasService::isTerkunci((int) $unitKasLoket->id, $todayLoket)) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Unit kas ini sudah tutup buku pada tanggal tersebut. Transaksi tidak diizinkan.',
+                ], 403);
+            }
             $pembayaran = Pembayaran::create([
                 'tagihan_id' => $tagihan->id,
                 'unit_kas_id' => $unitKasLoket?->id,
@@ -1290,6 +1345,11 @@ class PembayaranKasirController extends Controller
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log direct cashier: ' . $e->getMessage());
             }
+
+            \App\Services\Sikeu\KwitansiPembayaranService::kirimSatuan(
+                $pembayaran->loadMissing(['tagihan.mahasiswa', 'tagihan.calonMahasiswa']),
+                max(0, $totalBersih - $jumlahBayar)
+            );
 
             return response()->json([
                 'status' => 'success',

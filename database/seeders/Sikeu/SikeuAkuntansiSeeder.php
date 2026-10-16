@@ -24,6 +24,7 @@ class SikeuAkuntansiSeeder extends Seeder
             ['kode_akun' => '401.02', 'nama_akun' => 'Pendapatan SPMB', 'kelompok' => 'pendapatan', 'saldo_normal' => 'kredit'],
             ['kode_akun' => '502.01', 'nama_akun' => 'Beban Operasional', 'kelompok' => 'beban', 'saldo_normal' => 'debet'],
             ['kode_akun' => '504.01', 'nama_akun' => 'Beban Beasiswa & Potongan', 'kelompok' => 'beban', 'saldo_normal' => 'debet'],
+            ['kode_akun' => '301.02', 'nama_akun' => 'Laba Ditahan', 'kelompok' => 'ekuitas', 'saldo_normal' => 'kredit'],
         ];
 
         foreach ($akun as $row) {

@@ -118,6 +118,10 @@
 | SikeuExtendedMasterController | Master tambahan (jalur kelas, tarif UKT, beasiswa, potongan) & daftar/detail tagihan mahasiswa (filter kelas) | [docs/api/SIKEU/SikeuExtendedMasterController.md](api/SIKEU/SikeuExtendedMasterController.md) |
 | KoreksiAlokasiController | Koreksi alokasi pembayaran antar tagihan + tagihan kekurangan otomatis | [docs/api/SIKEU/KoreksiAlokasiController.md](api/SIKEU/KoreksiAlokasiController.md) |
 | PerubahanProdiController | Perpindahan prodi / jenis pendaftaran efektif TA+semester | [docs/api/SIKEU/PerubahanProdiController.md](api/SIKEU/PerubahanProdiController.md) |
+| UmkController | Uang Muka Kerja (parity legacy transaksi_umk): CRUD + status aktif/selesai | [docs/api/SIKEU/UmkController.md](api/SIKEU/UmkController.md) |
+| TutupKasController | Tutup kas per unit (parity legacy tutup_bukus divisi) + guard kasir/UMK | [docs/api/SIKEU/TutupKasController.md](api/SIKEU/TutupKasController.md) |
+| LaporanBendaharaController | Laporan bendahara basis kas: saldo/harian/bulanan, periodik/perakun, rekap mhs + perprodikelas, export Excel | [docs/api/SIKEU/LaporanBendaharaController.md](api/SIKEU/LaporanBendaharaController.md) |
+| SikeuCompatController | Shim legacy untuk gate SIAKAD/SPMB: ringkasan, tagihan aktif, eligibilitas ujian, biaya lain, belum-DU + email kwitansi | [docs/api/SIKEU/SikeuCompatController.md](api/SIKEU/SikeuCompatController.md) |
 
 ---
 

@@ -232,6 +232,10 @@ class KasKecilService
                 throw new \InvalidArgumentException('Nominal transaksi harus lebih dari nol.');
             }
 
+            if (\App\Services\Sikeu\TutupKasService::isTerkunci((int) $unitKas->id, (string) $data['tanggal_transaksi'])) {
+                throw new \RuntimeException('Unit kas sudah tutup buku pada tanggal tersebut. Transaksi mundur tidak diizinkan.');
+            }
+
             $saldoSaatIni = (float) $unitKas->saldo_saat_ini;
             if ($nominal > $saldoSaatIni) {
                 throw new \InvalidArgumentException('Saldo kas kecil tidak mencukupi untuk transaksi ini.');
@@ -358,6 +362,10 @@ class KasKecilService
             $unitKas = UnitKas::find($pengajuan->unit_kas_id);
             if (!$unitKas || !$unitKas->status) {
                 throw new \InvalidArgumentException('Unit kas kecil tidak valid / tidak aktif.');
+            }
+
+            if (\App\Services\Sikeu\TutupKasService::isTerkunci((int) $unitKas->id, now()->toDateString())) {
+                throw new \RuntimeException('Unit kas sudah tutup buku hari ini. Pengisian kas kecil tidak dapat disetujui.');
             }
 
             $nominalSetujui = (float) ($data['nominal_disetujui'] ?? $pengajuan->nominal_diajukan);
