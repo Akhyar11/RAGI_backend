@@ -12,7 +12,7 @@ class StoreCplRequest extends FormRequest
         $user = $this->user();
         if (!$user) return false;
 
-        if ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('admin_siakad') || $user->hasPermission('siakad.master.manage')) {
+        if ($user->isSuperAdmin()) {
             return true;
         }
 

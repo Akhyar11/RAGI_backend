@@ -45,6 +45,7 @@ Evaluasi HANYA baris baru (+) yang ditambahkan atau diubah. Abaikan baris kontek
 1. STANDAR RBAC & ZERO HARDCODE (KEBIJAKAN KETAT):
    - WAJIB slug permission resmi yang selaras dengan `PermissionSeeder.php` (mis: `spmb.manage`, `spmb.pendaftaran.read`, `spmb.pendaftaran.create`, dll). Dilarang membuat slug karangan (mis: `.view`).
    - WAJIB otorisasi hak akses pada SEMUA aksi controller (via `$this->authorize(...)`, `$request->user()->hasPermission(...)`, FormRequest `authorize()`, atau middleware `can:`). Dilarang membiarkan aksi controller tanpa pemeriksaan otorisasi.
+   - Dilarang keras hardcode role phantom yang tidak terdaftar di `RoleSeeder.php` (misal: role 'admin_obe' yang sebenarnya adalah penugasan akun prodi di `siakad_admin_prodis`, gunakan `$user->isObeAdmin()` atau Gate/penugasan dinamis).
    - Dilarang hardcode string entitas master atau opsi statis yang seharusnya mereferensikan tabel database via ID.
 
 2. STANDAR API CRUD & RESPONSE ENVELOPE:

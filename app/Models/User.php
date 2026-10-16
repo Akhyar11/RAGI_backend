@@ -135,11 +135,11 @@ class User extends Authenticatable
      */
     public function getSiakadProdiIds(): \Illuminate\Support\Collection
     {
-        if ($this->isSuperAdmin() || $this->hasRole('admin') || $this->hasRole('admin_siakad')) {
+        if ($this->isSuperAdmin()) {
             return \App\Models\Siakad\ProgramStudi::where('is_active', true)->pluck('id');
         }
 
-        // 1. Direct assignment di siakad_admin_prodi
+        // 1. Direct assignment di siakad_admin_prodi (akun yang di-plot sebagai Admin OBE)
         $prodiDirect = \Illuminate\Support\Facades\DB::table('siakad_admin_prodi')
             ->where('user_id', $this->id)
             ->where('is_active', true)
@@ -166,11 +166,23 @@ class User extends Authenticatable
     }
 
     /**
+     * Cek apakah akun ini terdaftar aktif sebagai Admin OBE atau Kaprodi di setidaknya 1 prodi.
+     */
+    public function isObeAdmin(): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->getSiakadProdiIds()->isNotEmpty();
+    }
+
+    /**
      * Cek apakah user memiliki hak kelola OBE di program studi tertentu.
      */
     public function canManageObeForProdi(int|string $prodiId): bool
     {
-        if ($this->isSuperAdmin() || $this->hasRole('admin') || $this->hasRole('admin_siakad')) {
+        if ($this->isSuperAdmin()) {
             return true;
         }
 
@@ -182,7 +194,7 @@ class User extends Authenticatable
      */
     public function canApproveRpsForProdi(int|string $prodiId): bool
     {
-        if ($this->isSuperAdmin() || $this->hasRole('admin') || $this->hasRole('admin_siakad')) {
+        if ($this->isSuperAdmin()) {
             return true;
         }
 

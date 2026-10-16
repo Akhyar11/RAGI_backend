@@ -149,5 +149,38 @@ class SiakadMasterKelasTest extends TestCase
         $this->assertEquals('25A', $mhsA1->fresh()->kelas);
         $this->assertEquals($this->dosen->id, $mhsA1->fresh()->dosen_wali_id);
     }
+
+    public function test_unplotted_user_cannot_access_mahasiswa_pemetaan_or_assign(): void
+    {
+        $roleAdminSiakad = Role::where('slug', 'admin_siakad')->first();
+        $unplottedUser = User::factory()->create(['is_active' => true]);
+        if ($roleAdminSiakad) {
+            $unplottedUser->roles()->attach($roleAdminSiakad->id);
+        }
+
+        Passport::actingAs($unplottedUser);
+
+        // Akun belum di-plot ke prodi di siakad_admin_prodi -> tolak 403
+        $listRes = $this->getJson("/api/v1/siakad/obe/master-kelas/mahasiswa-pemetaan?program_studi_id={$this->prodiA->id}");
+        $listRes->assertStatus(403)
+            ->assertJson([
+                'status' => 'error',
+                'message' => 'Akun Anda belum ditugaskan sebagai Admin OBE pada Program Studi mana pun.',
+            ]);
+
+        $kelas = MasterKelas::create([
+            'program_studi_id' => $this->prodiA->id,
+            'nama_kelas' => '25X',
+            'tahun_angkatan' => 2025,
+            'is_active' => true,
+        ]);
+
+        $assignRes = $this->postJson('/api/v1/siakad/obe/master-kelas/assign-mahasiswa', [
+            'master_kelas_id' => $kelas->id,
+            'mahasiswa_ids' => [1],
+            'sync_dosen_pa' => false,
+        ]);
+        $assignRes->assertStatus(403);
+    }
 }
 

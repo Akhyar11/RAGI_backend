@@ -458,6 +458,14 @@ Menetapkan daftar mahasiswa ke dalam suatu master kelas secara massal dan menyin
 }
 ```
 
+**Response Error (403 Forbidden)**:
+```json
+{
+  "status": "error",
+  "message": "Akun Anda belum ditugaskan sebagai Admin OBE pada Program Studi mana pun."
+}
+```
+
 ---
 
 ## 7. Role Menu Plotting Admin OBE

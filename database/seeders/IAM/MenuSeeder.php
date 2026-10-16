@@ -348,7 +348,6 @@ $menus = \App\Support\MenuCatalog::definitions();
                 '#perkuliahan_siakad',
                 '/siakad/perkuliahan/kelas',
                 '/siakad/krs',
-                '/siakad/obe', // Pemantauan OBE Global Institusi
                 '#civitas_siakad',
                 '/siakad/civitas/mahasiswa',
                 '/siakad/civitas/konversi',

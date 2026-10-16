@@ -126,7 +126,7 @@ class MahasiswaController extends Controller
             'angkatan' => 'required|integer',
             'dosen_wali_id' => 'nullable|exists:siakad_dosen,id',
             'status' => 'nullable|in:aktif,cuti,mangkir,dropout,lulus',
-            'kelas' => 'nullable|string|max:10|regex:/^[0-9]{2}[A-Z]{1,3}$/',
+            'kelas' => 'nullable|string|max:50',
         ]);
 
         return DB::transaction(function () use ($request) {
@@ -175,7 +175,7 @@ class MahasiswaController extends Controller
             'alamat' => 'nullable|string',
             'dosen_wali_id' => 'nullable|exists:siakad_dosen,id',
             'status' => 'nullable|in:aktif,cuti,mangkir,dropout,lulus',
-            'kelas' => 'nullable|string|max:10|regex:/^[0-9]{2}[A-Z]{1,3}$/',
+            'kelas' => 'nullable|string|max:50',
             
             // Biodata fields
             'tempat_lahir' => 'nullable|string|max:100',
@@ -320,6 +320,7 @@ class MahasiswaController extends Controller
             'nama_lengkap' => 'required|string',
             'jenis_kelamin' => 'required|in:L,P',
             'id' => 'nullable|exists:siakad_mahasiswa,id',
+            'kelas' => 'nullable|string|max:50',
             'custom_nim' => 'nullable|string|max:50',
             'use_no_pendaftaran' => 'nullable|boolean',
         ]);
@@ -375,6 +376,7 @@ class MahasiswaController extends Controller
                 'nama_lengkap' => $request->nama_lengkap,
                 'jenis_kelamin' => $request->jenis_kelamin,
                 'angkatan' => $request->angkatan,
+                'kelas' => $request->filled('kelas') ? strtoupper(trim((string) $request->kelas)) : null,
                 'tanggal_masuk' => now()->toDateString(),
                 'status' => 'aktif',
             ]);
@@ -992,7 +994,7 @@ class MahasiswaController extends Controller
     public function assignPaKelas(Request $request)
     {
         $validated = $request->validate([
-            'kelas' => 'required|string|max:10|regex:/^[0-9]{2}[A-Z]{1,3}$/',
+            'kelas' => 'required|string|max:50',
             'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'dosen_wali_id' => 'required|exists:siakad_dosen,id',
             'hanya_belum_punya_pa' => 'nullable|boolean',
@@ -1063,7 +1065,7 @@ class MahasiswaController extends Controller
             'dosen_ids.*' => 'exists:siakad_dosen,id',
             'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'angkatan' => 'nullable|integer',
-            'kelas' => 'nullable|string|max:10|regex:/^[0-9]{2}[A-Z]{1,3}$/',
+            'kelas' => 'nullable|string|max:50',
         ]);
 
         // Plotting PA hanya pemegang permission siakad.pa.manage (BAAK/kaprodi)

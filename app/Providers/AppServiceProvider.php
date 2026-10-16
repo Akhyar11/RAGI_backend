@@ -143,8 +143,6 @@ class AppServiceProvider extends ServiceProvider
         // Gate siakad.kurikulum.read untuk melihat daftar kurikulum & mata kuliah & master OBE
         Gate::define('siakad.kurikulum.read', function (User $user) {
             return $user->isSuperAdmin()
-                || $user->hasRole('admin')
-                || $user->hasRole('admin_siakad')
                 || $user->hasPermission('siakad.master.manage')
                 || $user->hasPermission('siakad.matakuliah.manage')
                 || $user->hasPermission('siakad.kelas.read')
@@ -152,17 +150,15 @@ class AppServiceProvider extends ServiceProvider
                 || $user->hasPermission('siakad.krs.read')
                 || $user->hasPermission('siakad.nilai.read')
                 || $user->hasPermission('siakad.nilai.manage')
-                || (method_exists($user, 'getSiakadProdiIds') && $user->getSiakadProdiIds()->isNotEmpty());
+                || (method_exists($user, 'isObeAdmin') && $user->isObeAdmin());
         });
 
         // Gate siakad.kurikulum.manage untuk membuat/mengubah/menghapus master kurikulum & OBE
         Gate::define('siakad.kurikulum.manage', function (User $user) {
             return $user->isSuperAdmin()
-                || $user->hasRole('admin')
-                || $user->hasRole('admin_siakad')
                 || $user->hasPermission('siakad.master.manage')
                 || $user->hasPermission('siakad.matakuliah.manage')
-                || (method_exists($user, 'getSiakadProdiIds') && $user->getSiakadProdiIds()->isNotEmpty());
+                || (method_exists($user, 'isObeAdmin') && $user->isObeAdmin());
         });
 
         // Bimbingan PA — menambah catatan bimbingan.

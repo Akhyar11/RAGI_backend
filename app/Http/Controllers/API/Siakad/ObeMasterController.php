@@ -1270,6 +1270,15 @@ class ObeMasterController extends Controller
         Gate::authorize('siakad.kurikulum.read');
         $user = $request->user();
 
+        if ($user && !$user->isSuperAdmin() && !$user->isObeAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akun Anda belum ditugaskan sebagai Admin OBE pada Program Studi mana pun.',
+                'data' => [],
+                'meta' => null,
+            ], 403);
+        }
+
         $query = \App\Models\Siakad\MasterKelas::with([
             'programStudi',
             'dosenPa',
@@ -1458,6 +1467,15 @@ class ObeMasterController extends Controller
             ? $user->getSiakadProdiIds()
             : collect();
 
+        if ($user && !$user->isSuperAdmin() && (!$user->isObeAdmin() || $scopedProdiIds->isEmpty())) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akun Anda belum ditugaskan sebagai Admin OBE pada Program Studi mana pun.',
+                'data' => [],
+                'meta' => null,
+            ], 403);
+        }
+
         $prodiId = $request->filled('program_studi_id')
             ? (int) $request->program_studi_id
             : ($scopedProdiIds->first() ?: null);
@@ -1518,6 +1536,14 @@ class ObeMasterController extends Controller
     public function assignMahasiswaToKelas(Request $request): JsonResponse
     {
         Gate::authorize('siakad.kurikulum.manage');
+
+        $user = $request->user();
+        if ($user && !$user->isSuperAdmin() && !$user->isObeAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akun Anda belum ditugaskan sebagai Admin OBE pada Program Studi mana pun.',
+            ], 403);
+        }
 
         $validated = $request->validate([
             'master_kelas_id' => 'required|exists:siakad_master_kelas,id',

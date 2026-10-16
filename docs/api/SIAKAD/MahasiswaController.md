@@ -123,6 +123,72 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 ---
 
+## [POST] /api/v1/siakad/mahasiswa/generate-nim
+
+> Generate NIM resmi untuk satu calon/mahasiswa baru berdasarkan format prefix prodi & angkatan, sekaligus menetapkan kelas dan Dosen PA.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+| Field | Type | Required | Deskripsi |
+|---|---|---|---|
+| `program_studi_id` | integer | ✅ | ID Program Studi |
+| `angkatan` | integer | ✅ | Tahun angkatan (contoh `2026`) |
+| `nama_lengkap` | string | ✅ | Nama lengkap mahasiswa |
+| `nik` | string | ❌ | NIK mahasiswa (16 digit) |
+| `jenis_kelamin` | string | ❌ | `L` atau `P` |
+| `tanggal_lahir` | string | ❌ | Format `YYYY-MM-DD` |
+| `kelas` | string | ❌ | Kelas rombel (maks. 50 karakter, contoh `25A`, terhubung ke Master Kelas OBE) |
+| `dosen_wali_id` | integer | ❌ | ID Dosen PA / Wali |
+| `custom_nim` | string | ❌ | NIM kustom opsional jika tidak ingin auto-generate |
+
+```json
+{
+    "program_studi_id": 7,
+    "angkatan": 2026,
+    "nama_lengkap": "Rian Ardiansyah",
+    "kelas": "25A",
+    "dosen_wali_id": 3
+}
+```
+
+### Response Sukses (201 Created)
+```json
+{
+    "status": "success",
+    "message": "NIM berhasil di-generate.",
+    "data": {
+        "id": 15,
+        "nim": "26070001",
+        "nama_lengkap": "Rian Ardiansyah",
+        "program_studi_id": 7,
+        "angkatan": 2026,
+        "kelas": "25A",
+        "dosen_wali_id": 3
+    }
+}
+```
+
+### Response Error (422 Unprocessable Entity)
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "program_studi_id": ["The selected program studi id is invalid."]
+    }
+}
+```
+
+---
+
 ## [GET] /api/v1/siakad/mahasiswa/{id}
 
 **200 OK**
@@ -473,8 +539,9 @@ Format kolom CSV:
 >   - Berlaku untuk `POST /generate-nim`, `POST /generate-missing-nims`, dan konversi otomatis SPMB (`sync-from-spmb` / event daftar-ulang lunas).
 >   - Untuk format bebas sekali pakai tetap bisa via `custom_nim` (satuan) atau kolom `NIM_BARU` pada Export/Import CSV massal.
 > - Perubahan data mahasiswa dicatat oleh observer audit (`MahasiswaObserver`, modul `SIAKAD`).
-> - Field `kelas` (maks. 10, cth `25A`) dinormalisasi uppercase-trim saat simpan
->   (`store`/`update`) dan saat filter (`index` `?kelas=`, `auto-distribute-pa`).
+> - Field `kelas` (maks. 50, cth `25A`) dinormalisasi uppercase-trim saat simpan
+>   (`store`/`update`/`generate-nim`) dan saat filter (`index` `?kelas=`, `assign-pa-kelas`, `auto-distribute-pa`).
+>   Terintegrasi dengan Master Kelas OBE (`siakad_master_kelas`).
 >   Konversi SPMB mengisi `kelas` hanya bila data pendaftaran memiliki info
 >   kelas yang relevan; saat ini skema pendaftaran belum memilikinya sehingga
 >   dibiarkan null (tidak dikarang).
