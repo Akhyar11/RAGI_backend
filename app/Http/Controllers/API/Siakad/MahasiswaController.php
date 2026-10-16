@@ -670,7 +670,7 @@ class MahasiswaController extends Controller
 
     public function listKonversi(Request $request)
     {
-        $query = KonversiTransfer::with(['mahasiswa.programStudi', 'diprosesOleh', 'details.mataKuliahDiakui']);
+        $query = KonversiTransfer::with(['mahasiswa.programStudi', 'diprosesOleh', 'details.mataKuliahDiakui', 'arsipNomorSurat']);
 
         $user = $request->user();
         $isPriv = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->isObeAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'));
@@ -701,6 +701,7 @@ class MahasiswaController extends Controller
                 $q->where('no_transaksi', 'like', "%{$search}%")
                   ->orWhere('kampus_asal', 'like', "%{$search}%")
                   ->orWhere('prodi_asal', 'like', "%{$search}%")
+                  ->orWhere('nomor_sk', 'like', "%{$search}%")
                   ->orWhereHas('mahasiswa', function ($mq) use ($search) {
                       $mq->where('nama_lengkap', 'like', "%{$search}%")
                          ->orWhere('nim', 'like', "%{$search}%");
@@ -708,7 +709,7 @@ class MahasiswaController extends Controller
             });
         }
 
-        $allowedSort = ['created_at', 'no_transaksi', 'status', 'kampus_asal'];
+        $allowedSort = ['created_at', 'no_transaksi', 'status', 'kampus_asal', 'nomor_sk'];
         $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
         $sortOrder = strtolower($request->sort_order) === 'asc' ? 'asc' : 'desc';
 
@@ -752,6 +753,7 @@ class MahasiswaController extends Controller
             'mahasiswa_id' => 'required|exists:siakad_mahasiswa,id',
             'kampus_asal' => 'required|string|max:255',
             'prodi_asal' => 'required|string|max:255',
+            'nomor_sk' => 'nullable|string|max:150',
             'catatan' => 'nullable|string',
             'status' => 'nullable|string|in:draft,diajukan,disetujui,ditolak',
             'details' => 'required|array|min:1',
@@ -761,6 +763,30 @@ class MahasiswaController extends Controller
             'details.*.sks_asal' => 'required|integer|min:1',
             'details.*.nilai_huruf_asal' => 'required|string|max:5',
         ]);
+
+        $nomorSk = trim((string) $request->input('nomor_sk'));
+        if ($nomorSk !== '') {
+            $surat = \App\Models\Arsip\NomorSurat::where('nomor_surat', $nomorSk)->first();
+            if (!$surat) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Nomor SK '{$nomorSk}' tidak terdaftar di modul Arsip.",
+                    'errors' => ['nomor_sk' => ["Nomor SK '{$nomorSk}' tidak terdaftar di modul Arsip."]]
+                ], 422);
+            } elseif ($surat->status === 'dibatalkan') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Nomor SK '{$nomorSk}' berstatus DIBATALKAN.",
+                    'errors' => ['nomor_sk' => ["Nomor SK '{$nomorSk}' berstatus DIBATALKAN."]]
+                ], 422);
+            } elseif (!$surat->has_dokumen) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Nomor SK '{$nomorSk}' terdaftar di Arsip, tetapi dokumen fisik SK belum diunggah/kosong.",
+                    'errors' => ['nomor_sk' => ["Nomor SK '{$nomorSk}' terdaftar di Arsip, tetapi dokumen fisik SK belum diunggah/kosong."]]
+                ], 422);
+            }
+        }
 
         return DB::transaction(function () use ($request) {
             $mhs = Mahasiswa::findOrFail($request->mahasiswa_id);
@@ -803,6 +829,7 @@ class MahasiswaController extends Controller
                 $konversi->update([
                     'kampus_asal' => $request->kampus_asal,
                     'prodi_asal' => $request->prodi_asal,
+                    'nomor_sk' => $request->has('nomor_sk') ? $request->nomor_sk : $konversi->nomor_sk,
                     'diproses_oleh' => $user?->id,
                     'status' => $status,
                     'catatan' => $request->catatan,
@@ -816,6 +843,7 @@ class MahasiswaController extends Controller
                     'no_transaksi' => $noTransaksi,
                     'kampus_asal' => $request->kampus_asal,
                     'prodi_asal' => $request->prodi_asal,
+                    'nomor_sk' => $request->nomor_sk,
                     'diproses_oleh' => $user?->id,
                     'status' => $status,
                     'catatan' => $request->catatan,
@@ -838,7 +866,7 @@ class MahasiswaController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'Konversi transfer nilai mahasiswa berhasil disimpan',
-                'data' => $konversi->load('details.mataKuliahDiakui')
+                'data' => $konversi->load(['details.mataKuliahDiakui', 'arsipNomorSurat'])
             ], 201);
         });
     }
@@ -880,12 +908,37 @@ class MahasiswaController extends Controller
     {
         $request->validate([
             'status' => 'required|in:draft,diajukan,disetujui,ditolak',
+            'nomor_sk' => 'nullable|string|max:150',
             'catatan' => 'nullable|string',
             'details' => 'nullable|array',
             'details.*.id' => 'required|exists:siakad_konversi_transfer_detail,id',
             'details.*.status' => 'required|in:diakui,ditolak',
             'details.*.catatan_penolakan' => 'nullable|string|max:500',
         ]);
+
+        $nomorSk = trim((string) $request->input('nomor_sk'));
+        if ($nomorSk !== '') {
+            $surat = \App\Models\Arsip\NomorSurat::where('nomor_surat', $nomorSk)->first();
+            if (!$surat) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Nomor SK '{$nomorSk}' tidak terdaftar di modul Arsip.",
+                    'errors' => ['nomor_sk' => ["Nomor SK '{$nomorSk}' tidak terdaftar di modul Arsip."]]
+                ], 422);
+            } elseif ($surat->status === 'dibatalkan') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Nomor SK '{$nomorSk}' berstatus DIBATALKAN.",
+                    'errors' => ['nomor_sk' => ["Nomor SK '{$nomorSk}' berstatus DIBATALKAN."]]
+                ], 422);
+            } elseif (!$surat->has_dokumen) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Nomor SK '{$nomorSk}' terdaftar di Arsip, tetapi dokumen fisik SK belum diunggah/kosong.",
+                    'errors' => ['nomor_sk' => ["Nomor SK '{$nomorSk}' terdaftar di Arsip, tetapi dokumen fisik SK belum diunggah/kosong."]]
+                ], 422);
+            }
+        }
 
         $konversi = KonversiTransfer::with(['details', 'mahasiswa'])->findOrFail($id);
 
@@ -923,11 +976,16 @@ class MahasiswaController extends Controller
                 ], 422);
             }
 
-            $konversi->update([
+            $updatePayload = [
                 'status' => $request->status,
                 'diproses_oleh' => $request->user()?->id,
                 'catatan' => $request->catatan ?? $konversi->catatan,
-            ]);
+            ];
+            if ($request->has('nomor_sk')) {
+                $updatePayload['nomor_sk'] = $request->nomor_sk;
+            }
+
+            $konversi->update($updatePayload);
 
             $diakui = $konversi->details()->where('status', 'diakui')->count();
             $ditolak = $konversi->details()->where('status', 'ditolak')->count();
@@ -935,7 +993,7 @@ class MahasiswaController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => "Status konversi menjadi: {$request->status} ({$diakui} diakui, {$ditolak} ditolak).",
-                'data' => $konversi->load('details.mataKuliahDiakui'),
+                'data' => $konversi->load(['details.mataKuliahDiakui', 'arsipNomorSurat']),
             ]);
         });
     }

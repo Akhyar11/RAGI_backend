@@ -242,10 +242,20 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
             "no_transaksi": "KNV-2026-001",
             "kampus_asal": "Universitas Gadjah Mada",
             "prodi_asal": "D3 Teknik Informatika",
+            "nomor_sk": "12/SK-KONV/UTI/2026",
             "diproses_oleh": 1,
             "status": "disetujui",
-            "catatan": "SK Rektor No. 12/SK-KONV/2026",
+            "catatan": "Penyetaraan resmi sesuai SK BAAK",
             "created_at": "2026-10-16T10:00:00.000000Z",
+            "arsip_nomor_surat": {
+                "id": 4,
+                "nomor_surat": "12/SK-KONV/UTI/2026",
+                "perihal": "SK Penyetaraan Nilai Mahasiswa Transfer",
+                "tanggal_surat": "2026-10-01",
+                "status": "terpakai",
+                "has_dokumen": true,
+                "dokumen_url": "https://api.example.com/storage/arsip/dokumen/sk_konversi.pdf"
+            },
             "mahasiswa": {
                 "id": 10,
                 "nim": "2026007001",
@@ -305,7 +315,7 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 ## [GET] /api/v1/siakad/mahasiswa/konversi/{id}
 
-> Detail satu usulan konversi transfer beserta rincian penyetaraan MK (`details.mata_kuliah_diakui`).
+> Detail satu usulan konversi transfer beserta rincian penyetaraan MK (`details.mata_kuliah_diakui`) dan relasi verifikasi SK Arsip (`arsipNomorSurat`).
 > Dosen murni hanya dapat melihat usulan mahasiswa bimbingannya (`dosen_wali_id`); selain itu 403.
 
 #### Headers
@@ -326,8 +336,18 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
         "mahasiswa_id": 5,
         "kampus_asal": "Universitas Nusantara",
         "prodi_asal": "Teknik Komputer",
+        "nomor_sk": "12/SK-KONV/UTI/2026",
         "status": "diajukan",
         "catatan": null,
+        "arsip_nomor_surat": {
+            "id": 4,
+            "nomor_surat": "12/SK-KONV/UTI/2026",
+            "perihal": "SK Penyetaraan Nilai Mahasiswa Transfer",
+            "tanggal_surat": "2026-10-01",
+            "status": "terpakai",
+            "has_dokumen": true,
+            "dokumen_url": "https://api.example.com/storage/arsip/dokumen/sk_konversi.pdf"
+        },
         "mahasiswa": { "id": 5, "nim": "20260001", "nama_lengkap": "Budi Santoso" },
         "details": [
             {
@@ -370,6 +390,68 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 ---
 
+## [POST] /api/v1/siakad/mahasiswa/konversi
+
+> Buat atau perbarui usulan konversi transfer mahasiswa. Bila `nomor_sk` diisi, sistem memvalidasi keabsahan nomor surat di modul Arsip (`core_arsip_nomor_surat`) dan memastikan berkas fisik SK sudah terunggah.
+
+#### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "mahasiswa_id": 5,
+    "kampus_asal": "Universitas Nusantara",
+    "prodi_asal": "Teknik Komputer",
+    "nomor_sk": "12/SK-KONV/UTI/2026",
+    "catatan": "Penyetaraan mahasiswa transfer angkatan 2026",
+    "status": "diajukan",
+    "details": [
+        {
+            "mata_kuliah_diakui_id": 45,
+            "kode_mk_asal": "CS101",
+            "nama_mk_asal": "Dasar Pemrograman",
+            "sks_asal": 3,
+            "nilai_huruf_asal": "A"
+        }
+    ]
+}
+```
+
+**201 Created**
+```json
+{
+    "status": "success",
+    "message": "Konversi transfer nilai mahasiswa berhasil disimpan",
+    "data": {
+        "id": 1,
+        "no_transaksi": "KNV-2026-001",
+        "nomor_sk": "12/SK-KONV/UTI/2026"
+    }
+}
+```
+
+**422 Unprocessable Entity (SK Tidak Sah di Arsip)**
+```json
+{
+    "status": "error",
+    "message": "Nomor SK '12/SK-KONV/UTI/2026' tidak terdaftar di modul Arsip.",
+    "errors": {
+        "nomor_sk": [
+            "Nomor SK '12/SK-KONV/UTI/2026' tidak terdaftar di modul Arsip."
+        ]
+    }
+}
+```
+
+---
+
 ## [PUT] /api/v1/siakad/mahasiswa/konversi/{id}
 
 > Perbarui usulan konversi (dipakai halaman edit). Rincian `details` diganti penuh:
@@ -390,6 +472,7 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 {
     "kampus_asal": "Universitas Nusantara",
     "prodi_asal": "Teknik Komputer",
+    "nomor_sk": "12/SK-KONV/UTI/2026",
     "catatan": "Revisi mapping MK",
     "status": "diajukan",
     "details": [
@@ -410,7 +493,8 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
     "status": "success",
     "message": "Konversi transfer nilai mahasiswa berhasil disimpan",
     "data": {
-        "id": 1
+        "id": 1,
+        "nomor_sk": "12/SK-KONV/UTI/2026"
     }
 }
 ```
@@ -454,6 +538,50 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
         "details.0.mata_kuliah_diakui_id": [
             "Mata kuliah kurikulum lokal wajib dipilih."
         ]
+    }
+}
+```
+
+---
+
+## [PATCH] /api/v1/siakad/mahasiswa/konversi/{id}/status
+
+> Keputusan verifikasi konversi satuan: ubah status usulan (`draft`/`diajukan`/`disetujui`/`ditolak`), opsional mencatat keputusan per-MK diakui/ditolak beserta alasan penolakan dan nomor SK resmi Arsip.
+
+#### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "status": "disetujui",
+    "nomor_sk": "12/SK-KONV/UTI/2026",
+    "catatan": "Disetujui sesuai rapat pleno kurikulum",
+    "details": [
+        {
+            "id": 11,
+            "status": "diakui",
+            "catatan_penolakan": null
+        }
+    ]
+}
+```
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Status konversi menjadi: disetujui (1 diakui, 0 ditolak).",
+    "data": {
+        "id": 1,
+        "status": "disetujui",
+        "nomor_sk": "12/SK-KONV/UTI/2026"
     }
 }
 ```

@@ -19,7 +19,7 @@ class KonversiTransferService
      */
     public function getDetail(int|string $id, ?User $user = null): KonversiTransfer
     {
-        $konversi = KonversiTransfer::with(['mahasiswa.programStudi', 'diprosesOleh', 'details.mataKuliahDiakui'])
+        $konversi = KonversiTransfer::with(['mahasiswa.programStudi', 'diprosesOleh', 'details.mataKuliahDiakui', 'arsipNomorSurat'])
             ->findOrFail($id);
 
         $isPriv = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->isObeAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'));
@@ -69,6 +69,7 @@ class KonversiTransferService
             $konversi->update([
                 'kampus_asal' => $data['kampus_asal'] ?? $konversi->kampus_asal,
                 'prodi_asal' => $data['prodi_asal'] ?? $konversi->prodi_asal,
+                'nomor_sk' => array_key_exists('nomor_sk', $data) ? $data['nomor_sk'] : $konversi->nomor_sk,
                 'diproses_oleh' => $user?->id,
                 'status' => $status,
                 'catatan' => $data['catatan'] ?? $konversi->catatan,
@@ -102,7 +103,7 @@ class KonversiTransferService
                 }
             }
 
-            return $konversi->load('details.mataKuliahDiakui');
+            return $konversi->load(['details.mataKuliahDiakui', 'arsipNomorSurat']);
         });
     }
 }

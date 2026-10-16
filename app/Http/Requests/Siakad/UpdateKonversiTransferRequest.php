@@ -24,6 +24,7 @@ class UpdateKonversiTransferRequest extends FormRequest
         return [
             'kampus_asal' => 'required|string|max:255',
             'prodi_asal' => 'required|string|max:255',
+            'nomor_sk' => 'nullable|string|max:150',
             'catatan' => 'nullable|string',
             'status' => 'nullable|string|in:draft,diajukan,disetujui,ditolak',
             'details' => 'required|array|min:1',
@@ -33,5 +34,22 @@ class UpdateKonversiTransferRequest extends FormRequest
             'details.*.sks_asal' => 'required|integer|min:1',
             'details.*.nilai_huruf_asal' => 'required|string|max:5',
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $nomorSk = trim((string) $this->input('nomor_sk'));
+            if ($nomorSk !== '') {
+                $surat = \App\Models\Arsip\NomorSurat::where('nomor_surat', $nomorSk)->first();
+                if (!$surat) {
+                    $validator->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' tidak terdaftar di modul Arsip.");
+                } elseif ($surat->status === 'dibatalkan') {
+                    $validator->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' berstatus DIBATALKAN.");
+                } elseif (!$surat->has_dokumen) {
+                    $validator->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' terdaftar di Arsip, tetapi dokumen fisik SK belum diunggah/kosong.");
+                }
+            }
+        });
     }
 }

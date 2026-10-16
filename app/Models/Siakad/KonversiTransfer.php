@@ -17,6 +17,7 @@ class KonversiTransfer extends Model
         'no_transaksi',
         'kampus_asal',
         'prodi_asal',
+        'nomor_sk',
         'diproses_oleh',
         'status',
         'catatan',
@@ -35,5 +36,10 @@ class KonversiTransfer extends Model
     public function details()
     {
         return $this->hasMany(KonversiTransferDetail::class, 'konversi_id');
+    }
+
+    public function arsipNomorSurat()
+    {
+        return $this->belongsTo(\App\Models\Arsip\NomorSurat::class, 'nomor_sk', 'nomor_surat');
     }
 }

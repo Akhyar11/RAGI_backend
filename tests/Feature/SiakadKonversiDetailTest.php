@@ -177,4 +177,82 @@ class SiakadKonversiDetailTest extends TestCase
             'kode_mk_asal' => 'CS101',
         ]);
     }
+
+    public function test_store_konversi_with_invalid_sk_rejected(): void
+    {
+        Passport::actingAs($this->admin);
+
+        $res = $this->postJson('/api/v1/siakad/mahasiswa/konversi', [
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'kampus_asal'  => 'Universitas Nusantara',
+            'prodi_asal'   => 'Teknik Komputer',
+            'nomor_sk'     => 'SK-FIKTIF/999',
+            'status'       => 'diajukan',
+            'details'      => [
+                [
+                    'mata_kuliah_diakui_id' => $this->mataKuliah->id,
+                    'kode_mk_asal'          => 'CS101',
+                    'nama_mk_asal'          => 'Dasar Pemrograman',
+                    'sks_asal'              => 3,
+                    'nilai_huruf_asal'      => 'A',
+                ],
+            ],
+        ]);
+
+        $res->assertStatus(422)
+            ->assertJsonValidationErrors(['nomor_sk']);
+    }
+
+    public function test_store_and_detail_konversi_with_valid_sk_from_arsip(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $file = \Illuminate\Http\UploadedFile::fake()->create('sk_konversi.pdf', 100, 'application/pdf');
+        $storedPath = app(\App\Services\Storage\FileStorageService::class)->store($file, 'arsip/dokumen', private: true);
+
+        $surat = \App\Models\Arsip\NomorSurat::create([
+            'nomor_surat'      => '12/SK-KONV/UTI/2026',
+            'nomor_urut'       => 12,
+            'kode_unit'        => 'BAAK',
+            'kode_klasifikasi' => 'SK',
+            'bulan_romawi'     => 'X',
+            'tahun'            => 2026,
+            'tanggal_surat'    => '2026-10-01',
+            'perihal'          => 'SK Penyetaraan Nilai Mahasiswa Transfer',
+            'status'           => 'terpakai',
+            'created_by'       => $this->admin->id,
+            'file_path'        => $storedPath,
+        ]);
+
+        Passport::actingAs($this->admin);
+
+        $res = $this->postJson('/api/v1/siakad/mahasiswa/konversi', [
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'kampus_asal'  => 'Universitas Nusantara',
+            'prodi_asal'   => 'Teknik Komputer',
+            'nomor_sk'     => '12/SK-KONV/UTI/2026',
+            'status'       => 'diajukan',
+            'details'      => [
+                [
+                    'mata_kuliah_diakui_id' => $this->mataKuliah->id,
+                    'kode_mk_asal'          => 'CS101',
+                    'nama_mk_asal'          => 'Dasar Pemrograman',
+                    'sks_asal'              => 3,
+                    'nilai_huruf_asal'      => 'A',
+                ],
+            ],
+        ]);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('data.nomor_sk', '12/SK-KONV/UTI/2026');
+
+        $this->assertDatabaseHas('siakad_konversi_transfer', [
+            'nomor_sk' => '12/SK-KONV/UTI/2026',
+        ]);
+
+        $konversiId = $res->json('data.id');
+        $detailRes = $this->getJson("/api/v1/siakad/mahasiswa/konversi/{$konversiId}");
+        $detailRes->assertStatus(200)
+            ->assertJsonPath('data.nomor_sk', '12/SK-KONV/UTI/2026')
+            ->assertJsonPath('data.arsip_nomor_surat.nomor_surat', '12/SK-KONV/UTI/2026');
+    }
 }
