@@ -179,6 +179,46 @@ class SiakadMasterReferensiFlowTest extends TestCase
         $rejected->assertStatus(422);
     }
 
+    public function test_list_tahun_akademik_mendukung_pagination_filter_dan_sorting()
+    {
+        // Setup 2 data tahun akademik
+        $this->postJson('/api/v1/siakad/akademik/tahun-akademik', [
+            'kode' => '20251',
+            'nama' => '2025/2026 Ganjil',
+            'tahun_mulai' => 2025,
+            'tahun_selesai' => 2026,
+        ])->assertStatus(201);
+
+        $this->postJson('/api/v1/siakad/akademik/tahun-akademik', [
+            'kode' => '20252',
+            'nama' => '2025/2026 Genap',
+            'tahun_mulai' => 2025,
+            'tahun_selesai' => 2026,
+        ])->assertStatus(201);
+
+        // Test pagination response structure & meta
+        $res = $this->getJson('/api/v1/siakad/akademik/tahun-akademik?page=1&per_page=1');
+        $res->assertStatus(200)
+            ->assertJsonStructure([
+                'status',
+                'data',
+                'meta' => ['current_page', 'per_page', 'total', 'last_page', 'from', 'to'],
+            ]);
+        $this->assertCount(1, $res->json('data'));
+        $this->assertGreaterThanOrEqual(2, $res->json('meta.total'));
+
+        // Test search filter
+        $searchRes = $this->getJson('/api/v1/siakad/akademik/tahun-akademik?search=20252&page=1&per_page=10');
+        $searchRes->assertStatus(200);
+        $this->assertEquals('20252', $searchRes->json('data.0.kode'));
+
+        // Test backward compatibility without pagination params
+        $noPageRes = $this->getJson('/api/v1/siakad/akademik/tahun-akademik');
+        $noPageRes->assertStatus(200)
+            ->assertJsonStructure(['status', 'data']);
+        $this->assertIsArray($noPageRes->json('data'));
+    }
+
     public function test_alur_buka_kelas_menyimpan_hari_dari_master()
     {
         $prodiId = DB::table('siakad_program_studi')->insertGetId([

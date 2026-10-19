@@ -55,10 +55,12 @@ Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `search` | string | ❌ | — | Cari `kode` / `nama` |
-| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `kode`, `nama`, `id` |
+| `search` | string | ❌ | — | Cari `kode`, `nama`, `tahun_mulai`, `tahun_selesai` |
+| `status` | string | ❌ | — | `aktif` (hanya periode aktif), `arsip` (non-aktif) |
+| `mode_penilaian` | string | ❌ | — | Filter mode penilaian (`murni_obe`, `semi_obe`, `bebas`) |
+| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `kode`, `nama`, `tahun_mulai`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
-| `per_page` | integer | ❌ | `15` | Maks. 100 |
+| `per_page` | integer | ❌ | `15` | Maks. 100 (alias: `limit`) |
 | `page` | integer | ❌ | `1` | Halaman |
 
 ### Response Sukses

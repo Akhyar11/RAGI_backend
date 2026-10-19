@@ -48,11 +48,14 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `search` | string | ❌ | — | Cari `nim` / `nama_lengkap` |
+| `search` | string | ❌ | — | Cari `nim`, `nama_lengkap`, `nik`, atau `kelas` |
 | `program_studi_id` | integer | ❌ | — | Filter program studi |
-| `angkatan` | integer | ❌ | — | Filter angkatan |
-| `kelas` | string | ❌ | — | Filter/search kelas mahasiswa (format `25A` = 2 digit angkatan + huruf; search memakai LIKE) |
-| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `nama_lengkap`, `nim`, `id`, `kelas` |
+| `angkatan` | integer | ❌ | — | Filter tahun angkatan (cth. `2025`) |
+| `status` | string | ❌ | — | Filter status akademik (`aktif`, `cuti`, `mangkir`, `lulus`) |
+| `kelas` | string | ❌ | — | Filter/search kelas mahasiswa (format uppercase, cth. `IF-A`) |
+| `dosen_wali_id` | mixed | ❌ | — | ID dosen PA, atau `unassigned` untuk mahasiswa tanpa PA |
+| `nim_status` | string | ❌ | — | `unassigned` (belum ada NIM), `assigned` (sudah ada NIM) |
+| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `nama_lengkap`, `nim`, `id`, `kelas`, `angkatan` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 | `page` | integer | ❌ | `1` | Halaman |

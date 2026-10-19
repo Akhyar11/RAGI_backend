@@ -23,6 +23,7 @@ use App\Http\Requests\Siakad\UpdateMataKuliahRequest;
 use App\Http\Requests\Siakad\StorePrasyaratMkRequest;
 use App\Http\Requests\Siakad\StoreProgramStudiRequest;
 use App\Http\Requests\Siakad\UpdateProgramStudiRequest;
+use App\Services\AuditLogService;
 use Illuminate\Validation\Rule;
 
 class AkademikController extends Controller
@@ -98,7 +99,52 @@ class AkademikController extends Controller
             });
         }
 
-        $ta = $query->orderBy('kode', 'desc')->get();
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function($q) use ($s) {
+                $q->where('kode', 'like', "%{$s}%")
+                  ->orWhere('nama', 'like', "%{$s}%")
+                  ->orWhere('tahun_mulai', 'like', "%{$s}%")
+                  ->orWhere('tahun_selesai', 'like', "%{$s}%");
+            });
+        }
+
+        if ($request->filled('status')) {
+            if ($request->status === 'aktif') {
+                $query->where('is_active', true);
+            } elseif ($request->status === 'arsip') {
+                $query->where('is_active', false);
+            }
+        }
+
+        if ($request->filled('mode_penilaian') && $request->mode_penilaian !== 'semua') {
+            $query->where('mode_penilaian', $request->mode_penilaian);
+        }
+
+        $allowedSort = ['kode', 'nama', 'tahun_mulai', 'created_at', 'id'];
+        $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
+            $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
+            $data = $query->paginate($perPage);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Daftar tahun akademik berhasil dimuat',
+                'data' => $data->items(),
+                'meta' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ],
+            ]);
+        }
+
+        $ta = $query->get();
         return response()->json([
             'status' => 'success',
             'data' => $ta

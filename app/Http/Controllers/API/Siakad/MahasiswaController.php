@@ -53,7 +53,21 @@ class MahasiswaController extends Controller
         }
 
         if ($request->filled('dosen_wali_id')) {
-            $query->where('dosen_wali_id', $request->dosen_wali_id);
+            if ($request->dosen_wali_id === 'unassigned') {
+                $query->whereNull('dosen_wali_id');
+            } else {
+                $query->where('dosen_wali_id', $request->dosen_wali_id);
+            }
+        }
+
+        if ($request->filled('nim_status')) {
+            if ($request->nim_status === 'unassigned') {
+                $query->where(function ($q) {
+                    $q->whereNull('nim')->orWhere('nim', '');
+                });
+            } elseif ($request->nim_status === 'assigned') {
+                $query->whereNotNull('nim')->where('nim', '!=', '');
+            }
         }
 
         if ($request->filled('kelas')) {
