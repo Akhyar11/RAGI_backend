@@ -21,7 +21,7 @@ class SpmbKonversiService
         // Karena ada call eksternal (Google API), kita pisahkan dari DB Transaction jika tidak ingin transaction menggantung
         // Namun demi konsistensi data internal, DB Transaction dijalankan terlebih dahulu
         $konversi = DB::transaction(function () use ($pendaftaran, $diprosesOlehId, &$userToUpdateEmail, &$nimGenerate) {
-            $angkatan = (int)date('Y');
+            $angkatan = (int) date('Y');
             $prodiId = $pendaftaran->hasilSeleksi->program_studi_diterima_id ?? $pendaftaran->program_studi_id ?? 1;
 
             // 1. Gunakan NIM eksisting atau generate baru hanya jika belum ada
@@ -117,7 +117,7 @@ class SpmbKonversiService
                     if ($mhsRole && !$user->roles->contains('id', $mhsRole->id)) {
                         $user->roles()->syncWithoutDetaching([$mhsRole->id]);
                     }
-                    
+
                     // Kita oper object user keluar dari closure untuk dikerjakan API external
                     if (empty($user->email_kampus)) {
                         $userToUpdateEmail = $user;
@@ -153,9 +153,9 @@ class SpmbKonversiService
 
         $firstName = strtolower(preg_replace('/[^a-zA-Z]/', '', $firstNameRaw));
         $lastName = preg_replace('/[^a-zA-Z]/', '', $lastNameRaw);
-        
+
         $emailPrefix = $firstName . '.' . strtolower($nim);
-        
+
         $googleService = new GoogleWorkspaceService();
         $emailKampus = null;
 
@@ -215,11 +215,11 @@ class SpmbKonversiService
      */
     public function generateNIM(int $angkatan, int $prodiId): string
     {
-        $yy = substr((string)$angkatan, -2);
+        $yy = substr((string) $angkatan, -2);
         $prefixNim = null;
         try {
             $prodi = \App\Models\Siakad\ProgramStudi::find($prodiId);
-            $raw = trim((string)($prodi?->prefix_nim ?? ''));
+            $raw = trim((string) ($prodi?->kode_prodi ?? ''));
             if ($raw !== '') {
                 $prefixNim = strtoupper($raw);
             }
@@ -231,7 +231,7 @@ class SpmbKonversiService
             $prefix = $prefixNim . $yy;
             $seqLen = 3;
         } else {
-            $prefix = $yy . str_pad((string)$prodiId, 2, '0', STR_PAD_LEFT);
+            $prefix = $yy . str_pad((string) $prodiId, 2, '0', STR_PAD_LEFT);
             $seqLen = 4;
         }
 
@@ -240,10 +240,10 @@ class SpmbKonversiService
             ->first();
 
         $nextSeq = 1;
-        if ($lastMhs && preg_match('/^' . preg_quote($prefix, '/') . '(\d{' . $seqLen . ',})$/', (string)$lastMhs->nim, $matches)) {
-            $nextSeq = ((int)$matches[1]) + 1;
+        if ($lastMhs && preg_match('/^' . preg_quote($prefix, '/') . '(\d{' . $seqLen . ',})$/', (string) $lastMhs->nim, $matches)) {
+            $nextSeq = ((int) $matches[1]) + 1;
         }
 
-        return $prefix . str_pad((string)$nextSeq, $seqLen, '0', STR_PAD_LEFT);
+        return $prefix . str_pad((string) $nextSeq, $seqLen, '0', STR_PAD_LEFT);
     }
 }
