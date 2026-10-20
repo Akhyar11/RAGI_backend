@@ -276,4 +276,68 @@ class SiakadMasterReferensiFlowTest extends TestCase
             'hari' => $hari,
         ]);
     }
+
+    public function test_get_prodi_dapat_diakses_tanpa_siakad_master_manage_dan_mendukung_scoping_obe()
+    {
+        $fakultasId = DB::table('siakad_fakultas')->insertGetId([
+            'kode' => 'FKOM',
+            'nama' => 'Fakultas Komputer',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $prodi1Id = DB::table('siakad_program_studi')->insertGetId([
+            'fakultas_id' => $fakultasId,
+            'kode_prodi' => 'TI',
+            'nama' => 'Teknik Informatika',
+            'jenjang' => 'S1',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $prodi2Id = DB::table('siakad_program_studi')->insertGetId([
+            'fakultas_id' => $fakultasId,
+            'kode_prodi' => 'SI',
+            'nama' => 'Sistem Informasi',
+            'jenjang' => 'S1',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // User biasa tanpa siakad.master.manage (hanya siakad.kelas.manage)
+        $res = $this->getJson('/api/v1/siakad/akademik/prodi');
+        $res->assertStatus(200)
+            ->assertJsonStructure(['status', 'message', 'data']);
+        $this->assertGreaterThanOrEqual(2, count($res->json('data')));
+
+        // User Admin OBE yang hanya ditugaskan pada prodi 1
+        $obeUser = User::factory()->create();
+        DB::table('siakad_admin_prodi')->insert([
+            'user_id' => $obeUser->id,
+            'program_studi_id' => $prodi1Id,
+            'jabatan' => 'admin_obe',
+            'can_approve_rps' => true,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Passport::actingAs($obeUser);
+        $resObe = $this->getJson('/api/v1/siakad/akademik/prodi');
+        $resObe->assertStatus(200);
+        $prodiIds = collect($resObe->json('data'))->pluck('id')->toArray();
+        $this->assertContains($prodi1Id, $prodiIds);
+        $this->assertNotContains($prodi2Id, $prodiIds);
+
+        // Jika parameter ?all=1 dikirim, prodi lain tetap dapat diambil jika dibutuhkan
+        $resObeAll = $this->getJson('/api/v1/siakad/akademik/prodi?all=1');
+        $resObeAll->assertStatus(200);
+        $allProdiIds = collect($resObeAll->json('data'))->pluck('id')->toArray();
+        $this->assertContains($prodi1Id, $allProdiIds);
+        $this->assertContains($prodi2Id, $allProdiIds);
+    }
 }
+

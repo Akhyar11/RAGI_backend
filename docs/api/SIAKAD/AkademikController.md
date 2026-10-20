@@ -30,7 +30,7 @@ Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata
 | POST | `/api/v1/siakad/akademik/fakultas` | Tambah fakultas | ✅ |
 | PUT | `/api/v1/siakad/akademik/fakultas/{id}` | Perbarui fakultas | ✅ |
 | DELETE | `/api/v1/siakad/akademik/fakultas/{id}` | Hapus fakultas | ✅ |
-| GET | `/api/v1/siakad/akademik/prodi` | Daftar program studi | ⚠️ Kondisional |
+| GET | `/api/v1/siakad/akademik/prodi` | Daftar program studi | ✅ |
 | POST | `/api/v1/siakad/akademik/prodi` | Tambah program studi | ✅ |
 | PUT | `/api/v1/siakad/akademik/prodi/{id}` | Perbarui program studi | ✅ |
 | DELETE | `/api/v1/siakad/akademik/prodi/{id}` | Hapus program studi | ✅ |
@@ -371,10 +371,16 @@ Tambah skala nilai mutu baru.
 |---|---|---|---|---|
 | `search` | string | ❌ | — | Cari `nama` / `kode_prodi` |
 | `fakultas_id` | integer | ❌ | — | Filter fakultas |
+| `all` | boolean | ❌ | `false` | Abaikan batas scoping prodi bagi Admin OBE (ambil seluruh prodi aktif) |
 | `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `nama`, `kode_prodi`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 | `page` | integer | ❌ | `1` | Halaman |
+
+> **Catatan Otorisasi & Scoping**:
+> - Terbuka untuk seluruh pengguna terotentikasi (Dosen, Mahasiswa, Staff, Admin) sebagai referensi master program studi.
+> - Khusus pengguna yang bertugas sebagai **Admin OBE** (`isObeAdmin`), sistem secara otomatis membatasi daftar prodi pada prodi binaannya agar pemilih konteks prodi OBE akurat. Kirim `all=true` jika ingin memuat seluruh prodi kampus.
+
 
 ### Response Sukses
 

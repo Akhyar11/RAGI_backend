@@ -394,8 +394,46 @@ class AkademikController extends Controller
     // --- PROGRAM STUDI CRUD ---
     public function listProgramStudi(Request $request)
     {
-        Gate::authorize('siakad.master.manage');
+        $user = $request->user();
+
+        // Otorisasi: terbuka untuk SuperAdmin, pengelola master, Admin OBE, dosen/mahasiswa, serta staf akademik & sarpras
+        $isAuthorized = $user && (
+            $user->isSuperAdmin()
+            || $user->hasPermission('siakad.master.manage')
+            || (method_exists($user, 'isObeAdmin') && $user->isObeAdmin())
+            || $user->hasPermission('siakad.kurikulum.read')
+            || $user->hasPermission('siakad.matakuliah.manage')
+            || $user->hasPermission('siakad.kelas.read')
+            || $user->hasPermission('siakad.kelas.manage')
+            || $user->hasPermission('siakad.dashboard.read')
+            || $user->hasPermission('siakad.krs.read')
+            || $user->hasPermission('siakad.nilai.read')
+            || $user->hasPermission('siakad.nilai.manage')
+            || $user->hasPermission('siakad.mahasiswa.read')
+            || $user->hasPermission('siakad.mahasiswa.manage')
+            || $user->hasPermission('siakad.dosen.manage')
+            || $user->hasPermission('siakad.konversi.manage')
+            || $user->hasPermission('sinapra.master.read')
+            || $user->hasPermission('sinapra.ruangan.manage')
+            || $user->hasPermission('sinapra.aset.manage')
+            || $user->hasPermission('spmb.pendaftaran.read')
+        );
+
+        if (!$isAuthorized) {
+            abort(403, 'Anda tidak memiliki hak akses untuk melihat data program studi.');
+        }
+
         $query = ProgramStudi::with(['fakultas', 'kaprodi.user']);
+
+        // Scoped user (Admin OBE / Kaprodi tanpa wewenang global master manage):
+        // batasi daftar prodi pada prodi binaannya agar switcher & filter konteks prodi akurat.
+        if (!$request->boolean('all') && $user && method_exists($user, 'isObeAdmin') && $user->isObeAdmin() && !$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage')) {
+            $allowedProdiIds = $user->getSiakadProdiIds();
+            if ($allowedProdiIds->isNotEmpty()) {
+                $query->whereIn('id', $allowedProdiIds);
+            }
+        }
+
         if ($request->filled('fakultas_id')) {
             $query->where('fakultas_id', $request->fakultas_id);
         }
