@@ -282,6 +282,8 @@ class PermissionSeeder extends Seeder
             ['name' => 'Kelola Integrasi Neo Feeder', 'slug' => 'siakad.feeder.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Sinkronisasi data ke Neo Feeder PDDIKTI'],
             ['name' => 'Kelola Penerima Beasiswa Mahasiswa', 'slug' => 'siakad.beasiswa.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Menetapkan mahasiswa penerima beasiswa'],
             ['name' => 'Plotting Dosen PA', 'slug' => 'siakad.pa.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Menetapkan dan mendistribusikan Dosen Pembimbing Akademik (BAAK/Kaprodi)'],
+            ['name' => 'Lihat Data Bimbingan PA', 'slug' => 'siakad.pa.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat catatan, laporan, aktivitas & komposisi bimbingan PA'],
+            ['name' => 'Kelola Data Bimbingan PA', 'slug' => 'siakad.pa.write', 'module' => 'siakad', 'action' => 'update', 'description' => 'Menambah, mengubah, dan menghapus catatan, laporan & aktivitas bimbingan PA'],
 
             // ── MODUL ARSIP (TATA PERSURATAN) ─────────────────────
             ['name' => 'Lihat Dashboard Arsip', 'slug' => 'arsip.dashboard.read', 'module' => 'arsip', 'action' => 'read', 'description' => 'Melihat statistik & metrik tata persuratan'],
@@ -332,6 +334,7 @@ class PermissionSeeder extends Seeder
         $adminKeuAkuntansiRole = Role::where('slug', 'admin_keuangan_akuntansi')->first();
         $adminKeuPembayaranRole = Role::where('slug', 'admin_keuangan_pembayaran')->first();
         $petugasKasKecilRole = Role::where('slug', 'petugas_kas_kecil')->first();
+        $auditorKeuanganRole = Role::where('slug', 'auditor_keuangan')->first();
         $adminSpmbRole = Role::whereIn('slug', ['admin-spmb', 'admin_spmb'])->first();
 
         // 1. Super Admin & Admin -> Semua permissions
@@ -354,6 +357,7 @@ class PermissionSeeder extends Seeder
                 'siakad.krs.read',
                 'siakad.krs.create',
                 'siakad.nilai.read',
+                'siakad.pa.read',
                 'lms.forum.read',
                 'lms.forum.create',
                 'sikeu.tagihan.read',
@@ -375,6 +379,8 @@ class PermissionSeeder extends Seeder
                 'siakad.nilai.read',
                 'siakad.kurikulum.read',
                 'siakad.mahasiswa.read',
+                'siakad.pa.read',
+                'siakad.pa.write',
                 'siakad.konversi.manage',
                 'lms.forum.read',
                 'lms.forum.create',
@@ -564,22 +570,19 @@ class PermissionSeeder extends Seeder
             }
         }
 
-        // 13. Admin Keuangan Pembayaran Mahasiswa -> Tagihan, kasir, validasi, gateway
+        // 13. Admin Keuangan Pembayaran Mahasiswa -> tagihan, kasir, & dispensasi (fokus pembayaran)
+        // Catatan: pakai sync() agar permission lama (master.manage, kas.manage,
+        // paymentgateway.manage) ikut terlepas saat seeder dijalankan ulang.
         if ($adminKeuPembayaranRole) {
             $pembayaranSlugs = [
                 'sikeu.dashboard.read',
                 'sikeu.tagihan.read',
                 'sikeu.tagihan.create',
                 'sikeu.dispensasi.read',
-                'sikeu.master.manage',
                 'sikeu.unitkas.read',
-                'sikeu.kas.manage',
-                'sikeu.paymentgateway.manage',
             ];
             $perms = Permission::whereIn('slug', $pembayaranSlugs)->get();
-            foreach ($perms as $p) {
-                RolePermission::firstOrCreate(['role_id' => $adminKeuPembayaranRole->id, 'permission_id' => $p->id]);
-            }
+            $adminKeuPembayaranRole->permissions()->sync($perms->pluck('id'));
         }
 
         // 14. Petugas Kas Kecil -> lihat unit sendiri, input transaksi keluar, ajukan kas langsung
@@ -592,6 +595,29 @@ class PermissionSeeder extends Seeder
             $perms = Permission::whereIn('slug', $petugasKasKecilSlugs)->get();
             foreach ($perms as $p) {
                 RolePermission::firstOrCreate(['role_id' => $petugasKasKecilRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 14b. Auditor Keuangan -> read-only penuh SIKEU + jejak audit (tanpa hak ubah/approve)
+        if ($auditorKeuanganRole) {
+            $auditorKeuanganSlugs = [
+                'sikeu.dashboard.read',
+                'sikeu.tagihan.read',
+                'sikeu.dispensasi.read',
+                'sikeu.pengajuan.read',
+                'sikeu.akuntansi.read',
+                'sikeu.laporan.read',
+                'sikeu.pengeluaran.read',
+                'sikeu.pemasukan.read',
+                'sikeu.pajak.read',
+                'sikeu.unitkas.read',
+                'sikeu.kaskecil.read',
+                'sikeu.approval.read',
+                'iam.audit_logs.read',
+            ];
+            $perms = Permission::whereIn('slug', $auditorKeuanganSlugs)->get();
+            foreach ($perms as $p) {
+                RolePermission::firstOrCreate(['role_id' => $auditorKeuanganRole->id, 'permission_id' => $p->id]);
             }
         }
 

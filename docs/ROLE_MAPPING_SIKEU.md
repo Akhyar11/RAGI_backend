@@ -1,7 +1,7 @@
 # Peta Role, Permission, & Akses Menu — Modul SIKEU
 
-> **Versi**: 1.0  
-> **Terakhir Diperbarui**: 10 September 2026  
+> **Versi**: 1.1  
+> **Terakhir Diperbarui**: 20 Oktober 2026  
 > **Modul**: SIKEU — Sistem Informasi Keuangan Kampus
 
 ---
@@ -14,6 +14,10 @@
 | 2 | `kabag_keuangan` | Kepala Bagian Keuangan | Kepala divisi keuangan: semua akses operator + akuntansi, kas utama, tutup buku, pengeluaran, pajak, konfigurasi |
 | 3 | `pimpinan` | Pimpinan Kampus / WR II | Wakil Rektor Bidang Keuangan: approval tagihan, approval dispensasi, review laporan |
 | 4 | `mahasiswa` | Mahasiswa | Portal mandiri: lihat tagihan, cetak invoice & VA, cek status pembayaran |
+| 5 | `admin_keuangan_pembayaran` | Admin Keuangan Pembayaran Mahasiswa | Fokus pembayaran: tagihan, kasir, dispensasi (read), unit kas (read) |
+| 6 | `admin_keuangan_akuntansi` | Admin Keuangan Akuntansi | Fokus akuntansi: jurnal, COA, buku besar, laporan, kas, pajak, kas kecil |
+| 7 | `auditor_keuangan` | Auditor Keuangan | **Read-only** seluruh data SIKEU + jejak audit (`iam.audit_logs.read`) |
+| 8 | `petugas_kas_kecil` | Petugas Kas Kecil | Pengelola petty cash unit: input transaksi keluar, ajukan kas langsung |
 
 ---
 
@@ -156,14 +160,19 @@ Untuk mengkonfigurasi role SIKEU pada user baru:
 
 ### Langkah via SSO Admin Panel:
 1. Login sebagai **Super Admin** (`superadmin@kampus.ac.id`)
-2. Buka menu **SSO → Manajemen User**
+2. Buka menu **SSO → Plotting User Role** (route `/admin/user-roles`)
 3. Cari user yang akan diberi role
-4. Klik **"Edit Roles"** atau **"Assign Role"**
+4. Klik **⋮ → "Kelola Role"**
 5. Pilih role yang sesuai:
-   - `operator_sikeu` — untuk staf kasir / keuangan operasional
+   - `operator_sikeu` — untuk staf kasir / keuangan operasional (cakupan penuh)
+   - `admin_keuangan_pembayaran` — untuk staf fokus tagihan & pembayaran mahasiswa
+   - `admin_keuangan_akuntansi` — untuk staf fokus jurnal, COA, & laporan akuntansi
+   - `auditor_keuangan` — untuk auditor internal (hanya baca, termasuk audit log)
    - `kabag_keuangan` — untuk Kepala Bagian Keuangan
    - `pimpinan` — untuk WR II / pimpinan bidang keuangan
 6. Simpan perubahan
+
+> Panduan lengkap manajemen user SIKEU (API, tinker, troubleshooting) ada di `docs/PANDUAN_OPERASIONAL_SIKEU.md` §11.
 
 ### Tips:
 - Satu user **boleh memiliki lebih dari satu role** (multi-role)

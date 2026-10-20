@@ -117,6 +117,11 @@ class RoleSeeder extends Seeder
                 'slug' => 'petugas_kas_kecil',
                 'description' => 'Petugas pengelola kas kecil (petty cash) unit: input transaksi keluar, lihat saldo, & mengajukan kas langsung',
             ],
+            [
+                'name' => 'Auditor Keuangan',
+                'slug' => 'auditor_keuangan',
+                'description' => 'Auditor internal keuangan: akses baca-saja (read-only) seluruh data SIKEU & jejak audit untuk audit dan rekonsiliasi, tanpa hak ubah/approve',
+            ],
         ];
 
         foreach ($roles as $role) {

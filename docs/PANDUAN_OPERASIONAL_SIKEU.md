@@ -1,7 +1,7 @@
 # Panduan Operasional SIKEU (Sistem Informasi Keuangan Kampus)
 
-> **Versi**: 1.0  
-> **Terakhir Diperbarui**: 10 September 2026  
+> **Versi**: 1.1  
+> **Terakhir Diperbarui**: 20 Oktober 2026  
 > **Modul**: SIKEU — Sistem Informasi Keuangan, Akuntansi & Pajak  
 > **Proyek**: RAG (Sistem Informasi Terpadu Kampus)
 
@@ -254,7 +254,103 @@ Tutup buku mengunci periode akuntansi sehingga transaksi pada periode tersebut *
 
 ---
 
-## 11. FAQ & Troubleshooting
+## 11. Panduan Mengelola User & Role di Modul SIKEU
+
+Akses ke modul SIKEU dikelola penuh melalui sistem RBAC (Role-Based Access Control) di modul IAM/SSO. Role menentukan menu mana yang muncul di sidebar dan endpoint API mana yang boleh diakses.
+
+### 11.1 Daftar Role Keuangan yang Tersedia
+
+| Role | Slug | Cakupan Utama | Sifat |
+|---|---|---|---|
+| Operator SIKEU | `operator_sikeu` | Seluruh menu operasional: master, tagihan, kasir, akuntansi, kas, pajak | Full akses |
+| Kabag Keuangan | `kabag_keuangan` | Kas utama, verifikasi pengeluaran, tutup buku, dispensasi | Verifikator |
+| Pimpinan / WR II / Direktur Keuangan | `pimpinan` | Approval tagihan, dispensasi, review laporan | Approver |
+| Admin Keuangan Pembayaran | `admin_keuangan_pembayaran` | Tagihan, kasir, dispensasi (read), unit kas (read) | Fokus pembayaran |
+| Admin Keuangan Akuntansi | `admin_keuangan_akuntansi` | Jurnal, COA, buku besar, laporan, kas, pajak, kas kecil | Fokus akuntansi |
+| Auditor Keuangan | `auditor_keuangan` | Seluruh data SIKEU + jejak audit (`iam.audit_logs.read`) | **Read-only** |
+| Petugas Kas Kecil | `petugas_kas_kecil` | Input transaksi & pengajuan kas langsung unit | Terbatas |
+| Mahasiswa | `mahasiswa` | Portal tagihan mandiri, cetak invoice & VA | Mandiri |
+
+> Role `auditor_keuangan`, `admin_keuangan_pembayaran`, dan `admin_keuangan_akuntansi` didaftarkan melalui seeder `Database\Seeders\IAM\RoleSeeder` & `PermissionSeeder`. Jalankan ulang seeder bila role belum muncul (lihat §11.5).
+
+### 11.2 Cara Menugaskan Role ke User (UI — Disarankan)
+
+1. Login sebagai **Super Administrator** (`superadmin@kampus.ac.id`).
+2. Buka menu **SSO → Plotting User Role** (route: **`/admin/user-roles`**).
+3. Gunakan filter/pencarian untuk menemukan user target (username atau email).
+4. Klik tombol **⋮ (3-dots)** di kolom Aksi → pilih **"Kelola Role"**.
+5. Pada modal multi-select, cari dan pilih role keuangan (contoh: `Auditor Keuangan (auditor_keuangan)`). **Multi-role didukung** — boleh memilih lebih dari satu role sekaligus.
+6. Klik **Simpan**. Role langsung tersinkron ke tabel `core_user_roles`, dan bila user berelasi dengan data pegawai, relasi pegawai ikut disinkronkan otomatis.
+
+### 11.3 Cara Alternatif via API
+
+```bash
+# 1. Lihat daftar role & ID-nya
+GET http://localhost:8000/api/roles
+
+# 2. Tugaskan role ke user (ganti {USER_ID} dan {ROLE_ID})
+POST http://localhost:8000/api/admin/users/{USER_ID}/roles
+Authorization: Bearer <token-user-admin>
+Content-Type: application/json
+
+{ "roles": [12, 18] }
+```
+
+> Endpoint dijaga `Gate::authorize('create', Role::class)` — hanya user dengan permission manajemen role (Superadmin/Admin) yang boleh menugaskan role.
+
+### 11.4 Cara Manual via Tinker (Testing Lokal)
+
+```bash
+php artisan tinker
+```
+```php
+$user = App\Models\User::where('username', 'nama_user')->first();
+$role = App\Models\Role::where('slug', 'auditor_keuangan')->first();
+
+// Sync (ganti seluruh role user):
+$user->roles()->sync([$role->id]);
+
+// Atau attach saja tanpa melepas role lama:
+$user->roles()->syncWithoutDetaching([$role->id]);
+```
+
+### 11.5 Mendaftarkan Role Baru (Jika Belum Ada di Database)
+
+Tambahkan definisi role di `database/seeders/IAM/RoleSeeder.php` dan pemetaan permission-nya di `database/seeders/IAM/PermissionSeeder.php`, lalu jalankan:
+
+```bash
+php artisan db:seed --class="Database\\Seeders\\IAM\\PermissionSeeder"
+```
+
+> ⚠️ **Catatan penting**: `RoleSeeder` melakukan **truncate** pada `core_roles` & `core_role_permissions` — jalankan hanya jika database masih kosong. Untuk database berisi data user, daftarkan role baru via `Role::firstOrCreate()` di tinker (idempoten), kemudian jalankan `PermissionSeeder` (aman dijalankan ulang).
+
+### 11.6 Verifikasi Akses Sudah Berhasil
+
+1. **UI**: Buka `/admin/user-roles` → role keuangan tampil sebagai badge di kolom "Role Terpasang".
+2. **Login ulang** sebagai user tersebut → menu SIKEU sesuai peta akses (§10) muncul di sidebar.
+3. **Tinker**:
+   ```php
+   $user->load('roles');
+   $user->hasPermission('sikeu.tagihan.read'); // true jika role-nya punya izin tsb
+   ```
+
+### 11.7 Pertanyaan Umum (Manajemen User)
+
+**Q: Bisa satu user punya dua role keuangan?**
+Bisa. Contoh: `admin_keuangan_pembayaran` + `admin_keuangan_akuntansi` → user mendapat gabungan permission kedua role.
+
+**Q: Apa bedanya Operator SIKEU dengan Admin Keuangan Pembayaran/Akuntansi?**
+`operator_sikeu` mendapat **seluruh** permission `sikeu.*` (cakupan penuh). Dua role admin keuangan bersifat **fungsional/terbatas** — gunakan bila ingin pemisahan tugas (*segregation of duties*).
+
+**Q: Bagaimana membatasi user hanya boleh melihat (tidak boleh mengubah)?**
+Gunakan role `auditor_keuangan` — murni read-only tanpa satu pun permission `create/update/approve/manage`.
+
+**Q: Role sudah ditetapkan tapi menu tidak muncul?**
+Cek tiga hal: (1) user **login ulang** agar token/permission di-refresh; (2) role berstatus `is_active`; (3) permission role benar terpasang (cek via `/admin/roles` → detail role).
+
+---
+
+## 12. FAQ & Troubleshooting
 
 ### Q1: Kenapa tidak bisa input pembayaran di kasir?
 **A**: Pastikan periode akuntansi untuk bulan berjalan berstatus **Terbuka**. Cek di `/sikeu/akuntansi` → Periode. Jika sudah ditutup, hubungi Kabag Keuangan untuk membuka kembali.
