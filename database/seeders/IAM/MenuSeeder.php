@@ -209,6 +209,10 @@ $menus = \App\Support\MenuCatalog::definitions();
                     '/siakad/obe/rps/kriteria',
                     '/siakad/obe/rps/komponen',
                     '/siakad/obe/rps/kelola',
+                    '#krs_obe',
+                    '/siakad/obe/krs/paket',
+                    '/siakad/obe/krs/pemetaan-kelas',
+                    '/siakad/obe/krs/monitoring',
                     '#settings_obe',
                     '/siakad/obe/settings',
                     '/siakad/hasil-studi',
@@ -229,13 +233,12 @@ $menus = \App\Support\MenuCatalog::definitions();
                 ->pluck('id')
                 ->toArray();
             $mahasiswaRole->menus()->syncWithoutDetaching($mhsSikeuMenuIds);
-            // Portal SIAKAD mahasiswa: dashboard, KRS, jadwal, hasil studi, panduan
+            // Portal SIAKAD mahasiswa: dashboard, jadwal, hasil studi, panduan
             $mhsSiakadMenuIds = Menu::where('module', 'siakad')
                 ->whereIn('url', [
                     '/siakad',
                     '#perkuliahan_siakad',
                     '/siakad/perkuliahan/kelas',
-                    '/siakad/krs',
                     '/siakad/hasil-studi',
                     '/siakad/panduan',
                 ])
@@ -360,7 +363,6 @@ $menus = \App\Support\MenuCatalog::definitions();
                 '/siakad',
                 '#perkuliahan_siakad',
                 '/siakad/perkuliahan/kelas',
-                '/siakad/krs',
                 '#civitas_siakad',
                 '/siakad/civitas/mahasiswa',
                 '/siakad/civitas/konversi',

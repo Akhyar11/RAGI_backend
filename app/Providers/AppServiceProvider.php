@@ -161,6 +161,29 @@ class AppServiceProvider extends ServiceProvider
                 || (method_exists($user, 'isObeAdmin') && $user->isObeAdmin());
         });
 
+        // Gate siakad.kelas.manage untuk mengelola kelas dan paket mata kuliah rombel
+        Gate::define('siakad.kelas.manage', function (User $user) {
+            return $user->isSuperAdmin()
+                || $user->hasPermission('siakad.kelas.manage')
+                || $user->hasPermission('siakad.kurikulum.manage')
+                || (method_exists($user, 'isObeAdmin') && $user->isObeAdmin());
+        });
+
+        // Gate siakad.krs.read untuk melihat paket MK dan rencana studi
+        Gate::define('siakad.krs.read', function (User $user) {
+            return $user->isSuperAdmin()
+                || $user->hasPermission('siakad.krs.read')
+                || $user->hasPermission('siakad.kurikulum.read')
+                || (method_exists($user, 'isObeAdmin') && $user->isObeAdmin());
+        });
+
+        // Gate siakad.krs.approve untuk persetujuan KRS dan pengelolaan hak akses rombel
+        Gate::define('siakad.krs.approve', function (User $user) {
+            return $user->isSuperAdmin()
+                || $user->hasPermission('siakad.krs.approve')
+                || (method_exists($user, 'isObeAdmin') && $user->isObeAdmin());
+        });
+
         // Bimbingan PA — menambah catatan bimbingan.
         // Dosen PA/kaprodi/admin lewat `siakad.krs.approve` & `siakad.mahasiswa.manage`,
         // mahasiswa menambah catatan atas dirinya sendiri lewat `siakad.krs.create`.

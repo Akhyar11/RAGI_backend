@@ -220,10 +220,9 @@ return [
         'order_index' => 4,
         'children' => [
             ['name' => 'Jadwal Perkuliahan', 'url' => '/siakad/perkuliahan/kelas', 'icon' => 'FaCalendarCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.kelas.read', 'order_index' => 1],
-            ['name' => 'KRS Mahasiswa', 'url' => '/siakad/krs', 'icon' => 'FaClipboardCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.krs.read', 'order_index' => 2],
-            ['name' => 'Kartu Ujian UTS/UAS', 'url' => '/siakad/kartu-ujian', 'icon' => 'FaFileCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.krs.read', 'order_index' => 3],
-            ['name' => 'Penilaian Kelas (OBE)', 'url' => '/siakad/nilai', 'icon' => 'FaPen', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 4],
-            ['name' => 'Bimbingan PA', 'url' => '/siakad/bimbingan', 'icon' => 'FaHandshake', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 5],
+            ['name' => 'Kartu Ujian UTS/UAS', 'url' => '/siakad/kartu-ujian', 'icon' => 'FaFileCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.krs.read', 'order_index' => 2],
+            ['name' => 'Penilaian Kelas (OBE)', 'url' => '/siakad/nilai', 'icon' => 'FaPen', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 3],
+            ['name' => 'Bimbingan PA', 'url' => '/siakad/bimbingan', 'icon' => 'FaHandshake', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 4],
         ]
     ],
     [
@@ -310,6 +309,18 @@ return [
             ['name' => 'Kriteria', 'url' => '/siakad/obe/rps/kriteria', 'icon' => 'FaCheckSquare', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 4],
             ['name' => 'Komponen', 'url' => '/siakad/obe/rps/komponen', 'icon' => 'FaCubes', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 5],
             ['name' => 'Kelola RPS', 'url' => '/siakad/obe/rps/kelola', 'icon' => 'FaFileContract', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 6],
+        ]
+    ],
+    [
+        'name' => 'KRS',
+        'url' => '#krs_obe',
+        'icon' => 'FaClipboardCheck',
+        'module' => 'siakad',
+        'order_index' => 585,
+        'children' => [
+            ['name' => 'Paket KRS', 'url' => '/siakad/obe/krs/paket', 'icon' => 'FaBoxes', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 1],
+            ['name' => 'Pemetakan KRS-Kelas', 'url' => '/siakad/obe/krs/pemetaan-kelas', 'icon' => 'FaThList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
+            ['name' => 'Monitoring KRS Mahasiswa', 'url' => '/siakad/obe/krs/monitoring', 'icon' => 'FaChartBar', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 3],
         ]
     ],
     [
