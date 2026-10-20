@@ -17,6 +17,8 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, R
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
 | GET | `/api/v1/siakad/obe/dashboard` | Ringkasan OBE | ✅ |
+| GET | `/api/v1/siakad/obe/settings` | Pengaturan Konteks OBE Aktif (Tahun Akademik, Semester, Kurikulum) | ✅ `siakad.kurikulum.read` |
+| POST | `/api/v1/siakad/obe/settings` | Simpan Pengaturan Konteks OBE Aktif | ✅ `siakad.kurikulum.manage` |
 | GET | `/api/v1/siakad/obe/cpl` | Daftar CPL (search, filter prodi/kurikulum/kategori/jenis/status, sort whitelist, pagination) | ✅ |
 | POST | `/api/v1/siakad/obe/cpl` | Tambah CPL | ✅ `StoreCplRequest::authorize()` (per prodi aktif) |
 | PUT | `/api/v1/siakad/obe/cpl/{id}` | Perbarui CPL | ✅ `StoreCplRequest::authorize()` (per prodi aktif) |
@@ -1177,6 +1179,7 @@ satu jalur dijamin berasal dari program studi yang sama.
 
 | Parameter | Type | Required | Deskripsi |
 |---|---|---|---|
+| `tahun_akademik_id` | integer | ❌ | Filter ID tahun akademik periode |
 | `kurikulum_id` | integer | ❌ | Filter ID kurikulum |
 | `mata_kuliah_id` | integer | ❌ | Filter ID mata kuliah |
 | `semester` | integer | ❌ | Filter semester (1-8) |
@@ -2330,5 +2333,100 @@ Menghapus opsi jawaban soal pilihan ganda.
 {
     "status": "error",
     "message": "No query results for model [App\\Models\\Siakad\\BankSoalOpsi] 999"
+}
+```
+
+---
+
+## [GET] /api/v1/siakad/obe/settings
+
+> Mengambil pengaturan konteks OBE aktif (Tahun Akademik, Semester, dan Kurikulum) untuk program studi aktif admin OBE atau konteks global.
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Pengaturan OBE berhasil dimuat",
+    "data": {
+        "tahun_akademik_id": 5,
+        "tahun_akademik_label": "2026/2027",
+        "semester": "Ganjil",
+        "kurikulum_id": 1,
+        "kurikulum_label": "K23 - Kurikulum Merdeka 2023"
+    }
+}
+```
+
+### Response Error (401 Unauthorized)
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+### Response Error (403 Forbidden)
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+---
+
+## [POST] /api/v1/siakad/obe/settings
+
+> Menyimpan pengaturan konteks OBE aktif untuk program studi aktif ke tabel `core_system_settings` dan merekam audit log.
+
+### Request Body
+| Field | Type | Required | Deskripsi |
+|---|---|---|---|
+| `tahun_akademik_id` | integer | ✅ | ID tahun akademik aktif (exists di `siakad_tahun_akademik`) |
+| `semester` | string | ✅ | `Ganjil` atau `Genap` |
+| `kurikulum_id` | integer | ✅ | ID kurikulum aktif (exists di `siakad_kurikulum`) |
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Pengaturan OBE berhasil disimpan",
+    "data": {
+        "tahun_akademik_id": 5,
+        "tahun_akademik_label": "2026/2027",
+        "semester": "Ganjil",
+        "kurikulum_id": 1,
+        "kurikulum_label": "K23 - Kurikulum Merdeka 2023",
+        "updated_at": "2026-10-20T09:30:00+07:00"
+    }
+}
+```
+
+### Response Error (401 Unauthorized)
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+### Response Error (403 Forbidden)
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+### Response Error (422 Unprocessable Content)
+```json
+{
+    "status": "error",
+    "message": "The given data was invalid.",
+    "errors": {
+        "tahun_akademik_id": ["The selected tahun akademik id is invalid."],
+        "semester": ["The selected semester is invalid."],
+        "kurikulum_id": ["The selected kurikulum id is invalid."]
+    }
 }
 ```

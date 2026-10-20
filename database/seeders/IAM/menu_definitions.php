@@ -313,6 +313,16 @@ return [
         ]
     ],
     [
+        'name' => 'SETTINGS',
+        'url' => '#settings_obe',
+        'icon' => 'FaSlidersH',
+        'module' => 'siakad',
+        'order_index' => 59,
+        'children' => [
+            ['name' => 'Pengaturan OBE', 'url' => '/siakad/obe/settings', 'icon' => 'FaSlidersH', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 1],
+        ]
+    ],
+    [
         'name' => 'CIVITAS AKADEMIKA (BAAK)',
         'url' => '#civitas_siakad',
         'icon' => 'FaUsers',

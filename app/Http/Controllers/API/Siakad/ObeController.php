@@ -1494,12 +1494,16 @@ class ObeController extends Controller
             'tahunAkademik'
         ])->whereHas('mataKuliah.kurikulum', fn($q) => $q->whereIn('program_studi_id', $prodiIds));
 
+        if ($request->filled('tahun_akademik_id')) {
+            $distQuery->where('tahun_akademik_id', $request->integer('tahun_akademik_id'));
+        }
+
         if ($request->filled('kurikulum_id')) {
-            $distQuery->where('kurikulum_id', $request->kurikulum_id);
+            $distQuery->where('kurikulum_id', $request->integer('kurikulum_id'));
         }
 
         if ($request->filled('mata_kuliah_id')) {
-            $distQuery->where('mata_kuliah_id', $request->mata_kuliah_id);
+            $distQuery->where('mata_kuliah_id', $request->integer('mata_kuliah_id'));
         }
 
         if ($request->filled('semester')) {
@@ -4057,4 +4061,137 @@ class ObeController extends Controller
 
         return $allowed;
     }
+
+    /**
+     * Ambil pengaturan konteks OBE aktif (Tahun Akademik, Semester, Kurikulum).
+     */
+    public function getObeSettings(Request $request)
+    {
+        Gate::authorize('siakad.kurikulum.read');
+
+        $prodiIds = $this->resolveObeProdiId($request);
+        $primaryProdiId = $prodiIds[0] ?? null;
+
+        $settingKey = $primaryProdiId ? "obe_settings_prodi_{$primaryProdiId}" : "obe_settings_global";
+        $savedJson = DB::table('core_system_settings')
+            ->where('key', $settingKey)
+            ->value('value');
+
+        $data = null;
+        if ($savedJson) {
+            $data = json_decode($savedJson, true);
+        }
+
+        if ($data && is_array($data)) {
+            if (empty($data['tahun_akademik_label']) && !empty($data['tahun_akademik_id'])) {
+                $ta = \App\Models\Siakad\TahunAkademik::find($data['tahun_akademik_id']);
+                $data['tahun_akademik_label'] = $ta ? ($ta->tahun_mulai && $ta->tahun_selesai ? "{$ta->tahun_mulai}/{$ta->tahun_selesai}" : $ta->nama) : '';
+            }
+            if (empty($data['kurikulum_label']) && !empty($data['kurikulum_id'])) {
+                $kur = \App\Models\Siakad\Kurikulum::find($data['kurikulum_id']);
+                $data['kurikulum_label'] = $kur ? ($kur->nama ? "{$kur->kode} - {$kur->nama}" : $kur->kode) : '';
+            }
+        }
+
+        // Fallback default jika belum tersimpan
+        if (!$data || !is_array($data)) {
+            $taAktif = \App\Models\Siakad\TahunAkademik::where('is_active', true)->first()
+                ?? \App\Models\Siakad\TahunAkademik::orderBy('id', 'desc')->first();
+
+            $kurikulumQuery = \App\Models\Siakad\Kurikulum::query();
+            if ($primaryProdiId) {
+                $kurikulumQuery->where('program_studi_id', $primaryProdiId);
+            }
+            $kurikulumAktif = $kurikulumQuery->where('is_active', true)->first()
+                ?? $kurikulumQuery->first();
+
+            $data = [
+                'tahun_akademik_id' => $taAktif?->id,
+                'tahun_akademik_label' => $taAktif ? ($taAktif->tahun_mulai && $taAktif->tahun_selesai ? "{$taAktif->tahun_mulai}/{$taAktif->tahun_selesai}" : $taAktif->nama) : '',
+                'semester' => ($taAktif && str_contains(strtolower($taAktif->nama), 'genap')) ? 'Genap' : 'Ganjil',
+                'kurikulum_id' => $kurikulumAktif?->id,
+                'kurikulum_label' => $kurikulumAktif ? ($kurikulumAktif->nama ? "{$kurikulumAktif->kode} - {$kurikulumAktif->nama}" : $kurikulumAktif->kode) : '',
+            ];
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pengaturan OBE berhasil dimuat',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * Perbarui pengaturan konteks OBE aktif (Tahun Akademik, Semester, Kurikulum).
+     */
+    public function updateObeSettings(Request $request)
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $validated = $request->validate([
+            'tahun_akademik_id' => 'required|integer|exists:siakad_tahun_akademik,id',
+            'semester' => 'required|string|in:Ganjil,Genap',
+            'kurikulum_id' => 'required|integer|exists:siakad_kurikulum,id',
+        ]);
+
+        $prodiIds = $this->resolveObeProdiId($request);
+        $primaryProdiId = $prodiIds[0] ?? null;
+
+        $ta = \App\Models\Siakad\TahunAkademik::findOrFail($validated['tahun_akademik_id']);
+        $taLabel = $ta->tahun_mulai && $ta->tahun_selesai ? "{$ta->tahun_mulai}/{$ta->tahun_selesai}" : $ta->nama;
+
+        $kur = \App\Models\Siakad\Kurikulum::find($validated['kurikulum_id']);
+        $kurLabel = $kur ? ($kur->nama ? "{$kur->kode} - {$kur->nama}" : $kur->kode) : '';
+
+        $payload = [
+            'tahun_akademik_id' => $ta->id,
+            'tahun_akademik_label' => $taLabel,
+            'semester' => $validated['semester'],
+            'kurikulum_id' => (int) $validated['kurikulum_id'],
+            'kurikulum_label' => $kurLabel,
+            'updated_at' => now()->toIso8601String(),
+        ];
+
+        $settingKey = $primaryProdiId ? "obe_settings_prodi_{$primaryProdiId}" : "obe_settings_global";
+        $description = $primaryProdiId ? "Pengaturan aktif OBE untuk Program Studi ID {$primaryProdiId}" : "Pengaturan aktif OBE global";
+
+        $existingSetting = DB::table('core_system_settings')
+            ->where('key', $settingKey)
+            ->first();
+
+        $oldValues = $existingSetting && $existingSetting->value ? json_decode($existingSetting->value, true) : null;
+        $action = $existingSetting ? 'update' : 'create';
+
+        DB::table('core_system_settings')->updateOrInsert(
+            ['key' => $settingKey],
+            [
+                'value' => json_encode($payload),
+                'description' => $description,
+                'updated_at' => now(),
+            ]
+        );
+
+        $currentRecord = DB::table('core_system_settings')->where('key', $settingKey)->first();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: $action,
+                tableName: 'core_system_settings',
+                recordId: $currentRecord?->id ?? 0,
+                oldValues: $oldValues,
+                newValues: $payload,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal audit log: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pengaturan OBE berhasil disimpan',
+            'data' => $payload,
+        ]);
+    }
 }
+

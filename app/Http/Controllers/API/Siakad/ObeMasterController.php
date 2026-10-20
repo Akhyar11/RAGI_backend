@@ -848,12 +848,16 @@ class ObeMasterController extends Controller
             $query->where('program_studi_id', $request->program_studi_id);
         }
 
+        if ($request->filled('tahun_akademik_id')) {
+            $query->where('tahun_akademik_id', $request->integer('tahun_akademik_id'));
+        }
+
         if ($request->filled('kurikulum_id')) {
-            $query->where('kurikulum_id', $request->kurikulum_id);
+            $query->where('kurikulum_id', $request->integer('kurikulum_id'));
         }
 
         if ($request->filled('mata_kuliah_id')) {
-            $query->where('mata_kuliah_id', $request->mata_kuliah_id);
+            $query->where('mata_kuliah_id', $request->integer('mata_kuliah_id'));
         }
 
         if ($request->filled('semester')) {

@@ -238,6 +238,8 @@ Route::prefix('kelulusan')->group(function () {
 // --- OBE (Outcome-Based Education) Endpoints ---
 Route::prefix('obe')->group(function () {
     Route::get('/dashboard', [ObeController::class, 'getObeDashboard']);
+    Route::get('/settings', [ObeController::class, 'getObeSettings']);
+    Route::post('/settings', [ObeController::class, 'updateObeSettings']);
 
     Route::get('/cpl', [ObeController::class, 'getCpl']);
     Route::post('/cpl', [ObeController::class, 'storeCpl']);

@@ -205,6 +205,19 @@ Menghapus rubrik penilaian.
 ### [GET] `/api/v1/siakad/obe/distribusi-mengajar`
 Daftar penugasan tim pengajar mata kuliah per semester, lengkap dengan data dosen koordinator, dosen anggota, SKS per dosen, dan daftar kelas yang diampu.
 
+**Query Parameters**:
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `tahun_akademik_id` | integer | ❌ | Filter ID tahun akademik periode |
+| `kurikulum_id` | integer | ❌ | Filter ID kurikulum |
+| `mata_kuliah_id` | integer | ❌ | Filter ID mata kuliah |
+| `semester` | integer | ❌ | Filter semester (1-8) |
+| `search` | string | ❌ | Pencarian kode MK, nama MK, atau nama dosen koordinator |
+| `sort_by` | string | ❌ | Whitelist: `semester`, `id`, `created_at` (default `semester`) |
+| `sort_order` | string | ❌ | `asc` / `desc` (default `asc`) |
+| `page` | integer | ❌ | Nomor halaman pagination |
+| `per_page` / `limit` | integer | ❌ | Jumlah item per halaman (default 15, max 100) |
+
 **Response Sukses (200 OK)**:
 ```json
 {
