@@ -90,4 +90,64 @@ class SiakadRpsProdiIsolationTest extends TestCase
         // User B coba delete data prodi A
         $this->deleteJson('/api/v1/siakad/obe/rps-referensi/' . $refA->id)->assertStatus(403);
     }
+
+    public function test_show_rps_returns_eager_loaded_relations_for_print(): void
+    {
+        $kurikulum = \App\Models\Siakad\Kurikulum::create([
+            'program_studi_id' => $this->prodiA->id,
+            'kode' => 'K26-TI',
+            'nama' => 'Kurikulum OBE TI 2026',
+            'tahun_berlaku' => 2026,
+            'is_active' => true,
+        ]);
+
+        $rumpun = \App\Models\Siakad\RumpunMataKuliah::create([
+            'program_studi_id' => $this->prodiA->id,
+            'kode_rumpun' => 'RMK-RPL',
+            'nama_rumpun' => 'Rekayasa Perangkat Lunak',
+            'is_active' => true,
+        ]);
+
+        $mk = \App\Models\Siakad\MataKuliah::create([
+            'kurikulum_id' => $kurikulum->id,
+            'rumpun_mk_id' => $rumpun->id,
+            'kode_mk' => 'TI-101',
+            'nama' => 'Pemrograman Web Lanjut',
+            'sks_teori' => 2,
+            'sks_praktik' => 1,
+            'total_sks' => 3,
+            'semester_anjuran' => 3,
+            'jumlah_pertemuan' => 16,
+            'is_active' => true,
+        ]);
+
+        $dosenA = \App\Models\Siakad\Dosen::where('user_id', $this->userA->id)->first();
+
+        $rps = \App\Models\Siakad\Rps::create([
+            'mata_kuliah_id' => $mk->id,
+            'kode_rps' => 'RPS-TI-101-2026',
+            'tahun_ajaran' => '2026/2027',
+            'semester' => 3,
+            'tanggal_penyusunan' => '2026-03-01',
+            'dosen_pengembang_id' => $dosenA->id,
+            'deskripsi_singkat' => 'Mata kuliah pengembangan web modern berbasis API dan Next.js.',
+            'status' => 'disetujui',
+        ]);
+
+        \App\Models\Siakad\RpsMingguan::create([
+            'rps_id' => $rps->id,
+            'minggu_ke' => 1,
+            'kemampuan_akhir' => 'Mampu memahami arsitektur web modern',
+            'bahan_kajian' => 'Arsitektur Web & REST API',
+            'topik_materi' => 'Pengenalan Web Modern',
+            'bobot_penilaian' => 5,
+        ]);
+
+        Passport::actingAs($this->userA);
+        $res = $this->getJson('/api/v1/siakad/obe/rps/' . $rps->id);
+        $res->assertStatus(200);
+        $res->assertJsonPath('data.kode_rps', 'RPS-TI-101-2026');
+        $res->assertJsonPath('data.mata_kuliah.rumpun_mata_kuliah.nama_rumpun', 'Rekayasa Perangkat Lunak');
+        $res->assertJsonPath('data.mingguan.0.minggu_ke', 1);
+    }
 }

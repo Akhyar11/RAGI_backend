@@ -395,6 +395,8 @@ class PermissionSeeder extends Seeder
                 // SIPPM mandiri
                 'sippm.dashboard.read',
                 'sippm.proposal.read', 'sippm.proposal.create', 'sippm.proposal.update', 'sippm.proposal.submit',
+                // ARSIP (kop surat resmi untuk cetak dokumen & surat)
+                'arsip.kop_surat.read',
             ];
             $perms = Permission::whereIn('slug', $dosenSlugs)->get();
             foreach ($perms as $p) {

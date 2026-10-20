@@ -15,7 +15,7 @@ echo "🤖 [Audit 2/3: Architecture, Standards & Security] Memeriksa kepatuhan a
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
 AI_ENGINE="${AI_ENGINE:-agy}"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
-MODEL="${OPENCODE_MODEL:-opencode/ling-3.1-flash-free}"
+MODEL="${OPENCODE_MODEL:-opencode/deepseek-v4.1-flash-free}"
 
 if [ -n "$DIFF_TARGET" ]; then
     STAGED_DIFF=$(git diff "$DIFF_TARGET" -- "app/**" "routes/**" "database/migrations/**")

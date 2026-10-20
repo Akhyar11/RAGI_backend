@@ -1705,16 +1705,31 @@ class ObeController extends Controller
             'mataKuliah.cpls',
             'mataKuliah.cpmkProdis.cpl',
             'mataKuliah.kurikulum.programStudi.fakultas',
+            'mataKuliah.rumpunMataKuliah',
+            'mataKuliah.bahanKajians',
+            'mataKuliah.prasyarats.prasyaratMataKuliah',
             'dosenPengembang',
             'koordinatorRmk',
             'kaprodi',
-            'mingguan.subCpmk'
+            'mingguan.subCpmk',
+            'mingguan.komponenEvaluasi',
+            'mingguan.kriteriaPenilaian',
+            'mingguan.rubrik'
         ])->findOrFail($id);
 
         $prodiId = (int) ($rps->mataKuliah?->kurikulum?->program_studi_id ?? 0);
         $user = request()->user();
         if ($user && !$user->canManageObeForProdi($prodiId)) {
-            abort(403, 'Anda tidak memiliki hak akses melihat dokumen RPS program studi ini.');
+            $userDosenId = \App\Models\Siakad\Dosen::where('user_id', $user->id)->value('id');
+            $isTerkait = $userDosenId && (
+                $rps->dosen_pengembang_id === $userDosenId ||
+                $rps->koordinator_rmk_id === $userDosenId ||
+                $rps->kaprodi_id === $userDosenId ||
+                (is_array($rps->dosen_anggota_ids) && in_array($userDosenId, $rps->dosen_anggota_ids))
+            );
+            if (!$isTerkait && !$user->hasPermission('siakad.kurikulum.read') && !$user->isAdmin()) {
+                abort(403, 'Anda tidak memiliki hak akses melihat dokumen RPS program studi ini.');
+            }
         }
 
         // Kelas yang memakai RPS ini (MK sama) beserta jadwal & pengampu — read-only

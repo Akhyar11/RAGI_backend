@@ -176,7 +176,16 @@ class KopSuratController extends Controller
     public function getByYear(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user || (!$user->hasPermission('arsip.kop_surat.read') && !$user->hasPermission('arsip.kop_surat.manage') && !$user->isAdmin())) {
+        if (!$user) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
+        if (!$user->hasPermission('arsip.kop_surat.read') &&
+            !$user->hasPermission('arsip.kop_surat.manage') &&
+            !$user->isAdmin()) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda tidak memiliki hak akses untuk melihat kop surat.',

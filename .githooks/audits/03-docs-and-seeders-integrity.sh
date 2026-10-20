@@ -12,7 +12,7 @@ echo "📚 [Audit 3/3: Docs & Seeders Integrity] Memeriksa dokumentasi API dan k
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
 AI_ENGINE="${AI_ENGINE:-agy}"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
-MODEL="${OPENCODE_MODEL:-opencode/ling-3.1-flash-free}"
+MODEL="${OPENCODE_MODEL:-opencode/deepseek-v4.1-flash-free}"
 
 if [ -n "$DIFF_TARGET" ]; then
     STAGED_DIFF=$(git diff "$DIFF_TARGET" -M -- "app/Http/Controllers/**" "docs/**" "database/migrations/**" "database/seeders/**")

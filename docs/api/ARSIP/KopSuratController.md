@@ -28,7 +28,7 @@ Berkas gambar/dokumen kop surat disimpan secara privat di disk penyimpanan berka
 |---|---|---|---|
 | GET | `/api/arsip/kop-surat` | Daftar master kop surat | ✅ `arsip.kop_surat.read` |
 | POST | `/api/arsip/kop-surat` | Unggah & simpan berkas kop surat baru | ✅ `arsip.kop_surat.manage` |
-| GET | `/api/arsip/kop-surat/by-year` | Ambil kop surat aktif berdasarkan tahun surat (`?year=YYYY`) | ✅ `arsip.kop_surat.read` |
+| GET | `/api/arsip/kop-surat/by-year` | Ambil kop surat aktif berdasarkan tahun surat (`?year=YYYY`) | ✅ `arsip.kop_surat.read` / `arsip.kop_surat.manage` |
 | GET | `/api/arsip/kop-surat/{id}` | Detail kop surat | ✅ `arsip.kop_surat.read` |
 | POST/PUT | `/api/arsip/kop-surat/{id}` | Perbarui data atau berkas kop surat | ✅ `arsip.kop_surat.manage` |
 | POST | `/api/arsip/kop-surat/{id}/toggle-active` | Aktifkan/nonaktifkan status kop surat | ✅ `arsip.kop_surat.manage` |
