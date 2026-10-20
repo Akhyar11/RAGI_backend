@@ -185,14 +185,54 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // Bimbingan PA — menambah catatan bimbingan.
-        // Dosen PA/kaprodi/admin lewat `siakad.krs.approve` & `siakad.mahasiswa.manage`,
-        // mahasiswa menambah catatan atas dirinya sendiri lewat `siakad.krs.create`.
+        // Dosen PA lewat `siakad.pa.create` (permission granular baru, menambal celah
+        // bahwa dosen tidak punya krs.approve/mahasiswa.manage); kaprodi/admin lewat
+        // `siakad.krs.approve` & `siakad.mahasiswa.manage`; mahasiswa menambah catatan
+        // atas dirinya sendiri lewat `siakad.krs.create`.
         // Definisi dipusatkan di sini agar controller tidak melakukan
         // gabungan pengecekan permission secara ad-hoc.
         Gate::define('siakad.pa.catatan.create', function (User $user) {
-            return $user->hasPermission('siakad.krs.approve')
+            return $user->hasPermission('siakad.pa.create')
+                || $user->hasPermission('siakad.krs.approve')
                 || $user->hasPermission('siakad.mahasiswa.manage')
                 || $user->hasPermission('siakad.krs.create');
+        });
+
+        // Baca data bimbingan PA (catatan, laporan, aktivitas, komposisi, cetak).
+        // Keanggotaan `siakad.pa.read` ditangani Gate::before; fallback di bawah
+        // menjaga kompatibilitas role yang sudah ada (dosen via mahasiswa.read,
+        // mahasiswa via krs.read, BAAK via krs.read/mahasiswa.read).
+        Gate::define('siakad.pa.read', function (User $user) {
+            return $user->hasPermission('siakad.pa.read')
+                || $user->hasPermission('siakad.mahasiswa.read')
+                || $user->hasPermission('siakad.krs.read')
+                || $user->hasPermission('siakad.pa.manage');
+        });
+
+        // Tambah data bimbingan PA (catatan, laporan, aktivitas, booking konsultasi,
+        // PKL & insiden). Fallback krs.create/krs.approve/mahasiswa.manage menjaga
+        // akses mahasiswa, admin & BAAK lama.
+        Gate::define('siakad.pa.create', function (User $user) {
+            return $user->hasPermission('siakad.pa.create')
+                || $user->hasPermission('siakad.krs.create')
+                || $user->hasPermission('siakad.krs.approve')
+                || $user->hasPermission('siakad.mahasiswa.manage');
+        });
+
+        // Ubah data bimbingan PA (catatan, jadwal, proses konsultasi, tindak lanjut).
+        // Fallback krs.approve / mahasiswa.manage menjaga akses admin & BAAK lama.
+        Gate::define('siakad.pa.update', function (User $user) {
+            return $user->hasPermission('siakad.pa.update')
+                || $user->hasPermission('siakad.krs.approve')
+                || $user->hasPermission('siakad.mahasiswa.manage');
+        });
+
+        // Hapus data bimbingan PA (catatan, jadwal, PKL).
+        // Fallback krs.approve / mahasiswa.manage menjaga akses admin & BAAK lama.
+        Gate::define('siakad.pa.delete', function (User $user) {
+            return $user->hasPermission('siakad.pa.delete')
+                || $user->hasPermission('siakad.krs.approve')
+                || $user->hasPermission('siakad.mahasiswa.manage');
         });
 
         // Simulasi pembayaran SPMB (local/testing): admin atau pemilik pendaftaran.

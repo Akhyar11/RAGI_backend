@@ -205,6 +205,32 @@ Route::prefix('bimbingan')->group(function () {
     Route::get('/my-pa', [PaController::class, 'myPa']);
     Route::get('/rekap', [PaController::class, 'rekap']);
     Route::get('/advisees', [PaController::class, 'advisees']);
+    Route::get('/kehadiran', [PaController::class, 'kehadiran']);
+    Route::get('/prestasi', [PaController::class, 'prestasi']);
+    Route::get('/risiko', [PaController::class, 'risiko']);
+    Route::get('/alerts', [PaController::class, 'alerts']);
+    // Fase 2 — Jadwal & Konsultasi
+    Route::get('/jadwal', [PaController::class, 'listJadwal']);
+    Route::post('/jadwal', [PaController::class, 'storeJadwal']);
+    Route::put('/jadwal/{id}', [PaController::class, 'updateJadwal']);
+    Route::delete('/jadwal/{id}', [PaController::class, 'destroyJadwal']);
+    Route::get('/booking', [PaController::class, 'listBooking']);
+    Route::patch('/booking/{id}/proses', [PaController::class, 'prosesBooking']);
+    Route::get('/my-jadwal', [PaController::class, 'myJadwalPa']);
+    Route::post('/jadwal/{jadwalId}/ajukan', [PaController::class, 'ajukanBooking']);
+    // Fase 2 — Status PKL/PL/Magang
+    Route::get('/pkl', [PaController::class, 'listPkl']);
+    Route::post('/pkl', [PaController::class, 'storePkl']);
+    Route::put('/pkl/{id}', [PaController::class, 'updatePkl']);
+    Route::delete('/pkl/{id}', [PaController::class, 'destroyPkl']);
+    // Fase 2 — Insiden (kekerasan/pelecehan) + konseling + eskalasi
+    Route::get('/insiden', [PaController::class, 'listInsiden']);
+    Route::post('/insiden', [PaController::class, 'storeInsiden']);
+    Route::patch('/insiden/{id}/eskalasi', [PaController::class, 'eskalasiInsiden']);
+    Route::patch('/insiden/{id}/konseling', [PaController::class, 'rujukKonseling']);
+    Route::put('/insiden/{id}', [PaController::class, 'updateInsiden']);
+    // Fase 2 — Laporan monitoring bulanan
+    Route::get('/laporan-bulanan', [PaController::class, 'laporanBulanan']);
     Route::get('/catatan', [PaController::class, 'listCatatan']);
     Route::post('/catatan', [PaController::class, 'storeCatatan']);
     Route::put('/catatan/{id}', [PaController::class, 'updateCatatan']);

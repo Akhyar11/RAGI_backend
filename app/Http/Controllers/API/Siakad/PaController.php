@@ -6,11 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Siakad\RekapPaRequest;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\PaBooking;
 use App\Models\Siakad\PaCatatan;
+use App\Models\Siakad\PaInsiden;
+use App\Models\Siakad\PaJadwal;
 use App\Models\Siakad\PaLaporan;
+use App\Models\Siakad\PaPkl;
+use App\Rules\MasterReferensiExists;
 use App\Services\AuditLogService;
+use App\Services\Siakad\PaLanjutanService;
+use App\Services\Siakad\PaMonitoringService;
 use App\Services\Siakad\PaService;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
@@ -32,6 +41,24 @@ class PaController extends Controller
             return Dosen::find($dosenId);
         }
         return Dosen::where('user_id', $request->user()?->id)->first();
+    }
+
+    /**
+     * Resolve dosen yang menjadi cakupan (scope) bimbingan untuk request ini.
+     * Kaprodi/wakil/admin/superadmin boleh memilih dosen lain via `dosen_id`;
+     * dosen murni selalu di-scope ke dirinya sendiri. Kembalikan null bila tidak ada.
+     */
+    private function resolveScopedDosen(Request $request): ?Dosen
+    {
+        $request->validate(['dosen_id' => 'nullable|exists:siakad_dosen,id']);
+
+        $user = $request->user();
+        $dosen = $this->resolveDosen($request, $request->dosen_id ? (int) $request->dosen_id : null);
+        if (!$this->isPrivileged($user)) {
+            $dosen = Dosen::where('user_id', $user->id)->first();
+        }
+
+        return $dosen;
     }
 
     /**
@@ -125,6 +152,8 @@ class PaController extends Controller
                 'id' => $m->id,
                 'nim' => $m->nim,
                 'nama_lengkap' => $m->nama_lengkap,
+                'telepon' => $m->telepon,
+                'email' => $m->email,
                 'angkatan' => $m->angkatan,
                 'status' => $m->status,
                 'ipk' => $m->ipk,
@@ -158,7 +187,7 @@ class PaController extends Controller
      */
     public function myPa(Request $request)
     {
-        Gate::authorize('siakad.krs.read');
+        Gate::authorize('siakad.pa.read');
 
         $user = $request->user();
         $mhs = Mahasiswa::with(['programStudi', 'dosenWali.programStudi', 'krs' => fn($q) => $q->latest('id')->limit(5)])
@@ -212,6 +241,8 @@ class PaController extends Controller
 
     public function listCatatan(Request $request)
     {
+        Gate::authorize('siakad.pa.read');
+
         $request->validate([
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
             'mahasiswa_id' => 'nullable|exists:siakad_mahasiswa,id',
@@ -258,12 +289,12 @@ class PaController extends Controller
         $validated = $request->validate([
             'mahasiswa_id' => 'nullable|exists:siakad_mahasiswa,id',
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
-            'kategori' => 'required|in:akademik,krs,khs,keuangan,pribadi,lainnya',
+            'kategori' => ['required', 'string', new MasterReferensiExists('pa_catatan_kategori')],
             'isi' => 'required|string',
             'kesimpulan' => 'nullable|string',
             'tanggal_bimbingan' => 'nullable|date',
             'butuh_penanganan_khusus' => 'nullable|boolean',
-            'status_tindak_lanjut' => 'nullable|in:dipantau,diproses,selesai',
+            'status_tindak_lanjut' => ['nullable', 'string', new MasterReferensiExists('pa_tindak_lanjut_status')],
             'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
         ]);
 
@@ -370,7 +401,7 @@ class PaController extends Controller
 
     public function updateCatatan(Request $request, $id)
     {
-        Gate::authorize('siakad.krs.approve');
+        Gate::authorize('siakad.pa.update');
 
         $catatan = PaCatatan::findOrFail($id);
         $user = $request->user();
@@ -380,12 +411,12 @@ class PaController extends Controller
         }
 
         $validated = $request->validate([
-            'kategori' => 'sometimes|in:akademik,krs,khs,keuangan,pribadi,lainnya',
+            'kategori' => ['sometimes', 'string', new MasterReferensiExists('pa_catatan_kategori')],
             'isi' => 'sometimes|string',
             'kesimpulan' => 'nullable|string',
             'tanggal_bimbingan' => 'nullable|date',
             'butuh_penanganan_khusus' => 'nullable|boolean',
-            'status_tindak_lanjut' => 'nullable|in:dipantau,diproses,selesai',
+            'status_tindak_lanjut' => ['nullable', 'string', new MasterReferensiExists('pa_tindak_lanjut_status')],
         ]);
         $oldValues = $catatan->getOriginal();
         $catatan->update($validated);
@@ -412,7 +443,7 @@ class PaController extends Controller
 
     public function destroyCatatan($id, Request $request)
     {
-        Gate::authorize('siakad.krs.approve');
+        Gate::authorize('siakad.pa.delete');
 
         $catatan = PaCatatan::findOrFail($id);
         $user = $request->user();
@@ -444,6 +475,8 @@ class PaController extends Controller
 
     public function getLaporan(Request $request)
     {
+        Gate::authorize('siakad.pa.read');
+
         $request->validate([
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
             'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
@@ -466,6 +499,8 @@ class PaController extends Controller
 
     public function storeLaporan(Request $request)
     {
+        Gate::authorize('siakad.pa.create');
+
         $validated = $request->validate([
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
             'tahun_akademik_id' => 'required|exists:siakad_tahun_akademik,id',
@@ -501,6 +536,8 @@ class PaController extends Controller
      */
     public function getLaporanAktivitas(Request $request)
     {
+        Gate::authorize('siakad.pa.read');
+
         $request->validate([
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
             'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
@@ -541,6 +578,8 @@ class PaController extends Controller
      */
     public function hitungKomposisiKelas(Request $request)
     {
+        Gate::authorize('siakad.pa.read');
+
         $request->validate([
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
             'kelas' => 'nullable|string|max:100',
@@ -602,6 +641,8 @@ class PaController extends Controller
      */
     public function storeLaporanAktivitas(Request $request)
     {
+        Gate::authorize('siakad.pa.create');
+
         $validated = $request->validate([
             'id' => 'nullable|exists:siakad_pa_laporan,id',
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
@@ -653,6 +694,8 @@ class PaController extends Controller
      */
     public function destroyLaporanAktivitas($id, Request $request)
     {
+        Gate::authorize('siakad.pa.delete');
+
         $laporan = PaLaporan::findOrFail($id);
         $user = $request->user();
         $own = Dosen::where('user_id', $user?->id)->first();
@@ -661,7 +704,7 @@ class PaController extends Controller
         }
         $laporan->delete();
 
-        return response()->json(['status' => 'success', 'message' => 'Aktivitas bimbingan berhasil dihapus']);
+        return response()->json(['status' => 'success', 'message' => 'Aktivitas bimbingan berhasil dihapus', 'data' => null]);
     }
 
     /**
@@ -669,6 +712,8 @@ class PaController extends Controller
      */
     public function cetakLaporanPdf(Request $request)
     {
+        Gate::authorize('siakad.pa.read');
+
         $request->validate([
             'dosen_id' => 'nullable|exists:siakad_dosen,id',
             'tahun_akademik_id' => 'required|exists:siakad_tahun_akademik,id',
@@ -822,5 +867,820 @@ class PaController extends Controller
 </html>";
 
         return response($html, 200, ['Content-Type' => 'text/html; charset=utf-8']);
+    }
+
+    /**
+     * Monitoring kehadiran bimbingan: persentase hadir, jumlah per status, dan
+     * flag kehadiran kritis per mahasiswa bimbingan.
+     */
+    public function kehadiran(Request $request, PaMonitoringService $monitoring)
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $dosen = $this->resolveScopedDosen($request);
+        if (!$dosen) {
+            return response()->json(['status' => 'error', 'message' => 'Data dosen tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $data = $monitoring->kehadiran($dosen->id);
+
+        return $this->paginateCollection($request, collect($data), 'Monitoring kehadiran bimbingan berhasil dimuat', ['dosen_id' => $dosen->id], ['nama_lengkap', 'nim', 'persentase_hadir', 'flag_kritis'], 'nama_lengkap');
+    }
+
+    /**
+     * Monitoring prestasi: trend IPS per semester + deteksi IPS menurun/rendah.
+     */
+    public function prestasi(Request $request, PaMonitoringService $monitoring)
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $dosen = $this->resolveScopedDosen($request);
+        if (!$dosen) {
+            return response()->json(['status' => 'error', 'message' => 'Data dosen tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $data = $monitoring->prestasi($dosen->id);
+
+        return $this->paginateCollection($request, collect($data), 'Monitoring prestasi bimbingan berhasil dimuat', ['dosen_id' => $dosen->id], ['nama_lengkap', 'nim'], 'nama_lengkap');
+    }
+
+    /**
+     * Skor risiko "cuti/berhenti" per advisee (sinyal + band tinggi/sedang/rendah).
+     */
+    public function risiko(Request $request, PaMonitoringService $monitoring)
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $dosen = $this->resolveScopedDosen($request);
+        if (!$dosen) {
+            return response()->json(['status' => 'error', 'message' => 'Data dosen tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $data = $monitoring->risiko($dosen->id);
+
+        return $this->paginateCollection($request, collect($data), 'Skor risiko bimbingan berhasil dimuat', ['dosen_id' => $dosen->id], ['nama_lengkap', 'nim', 'skor'], 'skor');
+    }
+
+    /**
+     * Ringkasan "Perlu Perhatian": advisees berisiko (skor >= sedang / sinyal lain).
+     */
+    public function alerts(Request $request, PaMonitoringService $monitoring)
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $dosen = $this->resolveScopedDosen($request);
+        if (!$dosen) {
+            return response()->json(['status' => 'error', 'message' => 'Data dosen tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $data = $monitoring->alerts($dosen->id);
+
+        $perPage = min(100, max(1, $request->integer('per_page', 15)));
+        $page = max(1, $request->integer('page', 1));
+        $items = collect($data['items']);
+        $paginator = new LengthAwarePaginator(
+            $items->forPage($page, $perPage)->values(),
+            $items->count(),
+            $perPage,
+            $page,
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Ringkasan perlu perhatian berhasil dimuat',
+            'data' => $paginator->items(),
+            'summary' => $data['summary'],
+            'meta' => [
+                'dosen_id' => $dosen->id,
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+        ]);
+    }
+
+    // =========================================================================
+    // FASE 2 — JADWAL & KONSULTASI PA
+    // =========================================================================
+
+    /** Daftar jadwal pertemuan/konsultasi PA milik dosen (scope). */
+    public function listJadwal(Request $request, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $request->validate([
+            'dosen_id' => 'nullable|exists:siakad_dosen,id',
+            'dari' => 'nullable|date',
+            'sampai' => 'nullable|date',
+        ]);
+
+        $dosen = $this->resolveScopedDosen($request);
+        if (!$dosen) {
+            return response()->json(['status' => 'error', 'message' => 'Data dosen tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $data = $service->listJadwal($dosen->id, $request->dari, $request->sampai);
+
+        return $this->paginateCollection($request, $data, 'Jadwal bimbingan PA berhasil dimuat', ['dosen_id' => $dosen->id], ['tanggal', 'jam_mulai', 'status'], 'tanggal');
+    }
+
+    /** Buat slot jadwal pertemuan/konsultasi PA (dosen pemilik). */
+    public function storeJadwal(Request $request, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.create');
+
+        $validated = $request->validate([
+            'dosen_id' => 'nullable|exists:siakad_dosen,id',
+            'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
+            'tanggal' => 'required|date',
+            'jam_mulai' => 'required|date_format:H:i',
+            'jam_selesai' => 'required|date_format:H:i|after:jam_mulai',
+            'mode' => ['nullable', 'string', new MasterReferensiExists('pa_jadwal_mode')],
+            'lokasi' => 'nullable|string|max:150',
+            'kuota' => 'nullable|integer|min:1|max:100',
+            'catatan' => 'nullable|string',
+            'status' => ['nullable', 'string', new MasterReferensiExists('pa_jadwal_status', 'siakad')],
+        ]);
+
+        $dosen = $this->resolveScopedDosen($request);
+        if (!$dosen) {
+            return response()->json(['status' => 'error', 'message' => 'Data dosen tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $data = $service->createJadwal($dosen->id, $validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_pa_jadwal',
+                recordId: $data->id,
+                newValues: $data->toArray(),
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log jadwal PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Jadwal bimbingan PA berhasil dibuat',
+            'data' => $data,
+        ], 201);
+    }
+
+    /** Perbarui slot jadwal (hanya dosen pemilik / privileged). */
+    public function updateJadwal(Request $request, $id, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.update');
+
+        $jadwal = PaJadwal::findOrFail($id);
+        if (!$this->bolehKelolaJadwal($request, $jadwal->dosen_id)) {
+            return response()->json(['status' => 'error', 'message' => 'Jadwal ini milik PA lain.'], 403);
+        }
+
+        $validated = $request->validate([
+            'tanggal' => 'sometimes|date',
+            'jam_mulai' => 'sometimes|date_format:H:i',
+            'jam_selesai' => 'sometimes|date_format:H:i|after:jam_mulai',
+            'mode' => ['sometimes', 'string', new MasterReferensiExists('pa_jadwal_mode')],
+            'lokasi' => 'nullable|string|max:150',
+            'kuota' => 'nullable|integer|min:1|max:100',
+            'catatan' => 'nullable|string',
+            'status' => ['sometimes', 'string', new MasterReferensiExists('pa_jadwal_status', 'siakad')],
+        ]);
+
+        $data = $service->updateJadwal($jadwal, $validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_pa_jadwal',
+                recordId: $data->id,
+                oldValues: $service->auditOld,
+                newValues: $service->auditChanges,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log jadwal PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Jadwal bimbingan PA berhasil diperbarui',
+            'data' => $data,
+        ]);
+    }
+
+    /** Hapus slot jadwal (hanya dosen pemilik / privileged). */
+    public function destroyJadwal(Request $request, $id, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.delete');
+
+        $jadwal = PaJadwal::findOrFail($id);
+        if (!$this->bolehKelolaJadwal($request, $jadwal->dosen_id)) {
+            return response()->json(['status' => 'error', 'message' => 'Jadwal ini milik PA lain.'], 403);
+        }
+
+        $oldValues = $jadwal->getOriginal();
+        $service->deleteJadwal($jadwal);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_pa_jadwal',
+                recordId: $oldValues['id'] ?? null,
+                oldValues: $oldValues,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log jadwal PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Jadwal bimbingan PA berhasil dihapus',
+            'data' => null,
+        ]);
+    }
+
+    /** Daftar pengajuan janji konsultasi pada jadwal dosen (scope). */
+    public function listBooking(Request $request, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $request->validate([
+            'dosen_id' => 'nullable|exists:siakad_dosen,id',
+            'status' => ['nullable', 'string', new MasterReferensiExists('pa_booking_status')],
+        ]);
+
+        $dosen = $this->resolveScopedDosen($request);
+        if (!$dosen) {
+            return response()->json(['status' => 'error', 'message' => 'Data dosen tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $data = $service->listBookingDosen($dosen->id, $request->status);
+
+        return $this->paginateCollection($request, $data, 'Daftar pengajuan konsultasi berhasil dimuat', ['dosen_id' => $dosen->id], ['status', 'created_at'], 'created_at');
+    }
+
+    /** Dosen memproses pengajuan konsultasi (setujui/tolak/selesai). */
+    public function prosesBooking(Request $request, $id, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.update');
+
+        $booking = PaBooking::with('jadwal')->findOrFail($id);
+        if (!$this->bolehKelolaJadwal($request, $booking->jadwal?->dosen_id)) {
+            return response()->json(['status' => 'error', 'message' => 'Pengajuan ini bukan pada jadwal Anda.'], 403);
+        }
+
+        $validated = $request->validate([
+            'status' => ['required', 'string', new MasterReferensiExists('pa_booking_status')],
+            'catatan_dosen' => 'nullable|string',
+        ]);
+
+        $data = $service->prosesBooking($booking, $validated['status'], $validated['catatan_dosen'] ?? null);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_pa_booking',
+                recordId: $data->id,
+                oldValues: $service->auditOld,
+                newValues: $service->auditChanges,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log booking PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pengajuan konsultasi berhasil diproses',
+            'data' => $data,
+        ]);
+    }
+
+    /** Mahasiswa: daftar jadwal bimbingan PA-nya + riwayat pengajuan. */
+    public function myJadwalPa(Request $request, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $mhs = Mahasiswa::where('user_id', $request->user()?->id)->first();
+        if (!$mhs) {
+            return response()->json(['status' => 'error', 'message' => 'Data mahasiswa tidak ditemukan untuk akun ini.'], 404);
+        }
+        if (!$mhs->dosen_wali_id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda belum memiliki Dosen Wali (PA) yang ditetapkan.',
+            ], 404);
+        }
+
+        $jadwal = $service->listJadwal($mhs->dosen_wali_id);
+        $riwayat = $service->listBookingMahasiswa($mhs->id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Jadwal konsultasi PA berhasil dimuat',
+            'data' => [
+                'jadwal' => $jadwal,
+                'riwayat' => $riwayat,
+            ],
+        ]);
+    }
+
+    /** Mahasiswa: ajukan janji konsultasi pada slot jadwal PA. */
+    public function ajukanBooking(Request $request, $jadwalId, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.create');
+
+        $validated = $request->validate([
+            'topik' => 'nullable|string|max:200',
+            'catatan_mahasiswa' => 'nullable|string',
+        ]);
+
+        $mhs = Mahasiswa::where('user_id', $request->user()?->id)->first();
+        if (!$mhs) {
+            return response()->json(['status' => 'error', 'message' => 'Data mahasiswa tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $jadwal = PaJadwal::findOrFail($jadwalId);
+        if ((int) $jadwal->dosen_id !== (int) $mhs->dosen_wali_id) {
+            return response()->json(['status' => 'error', 'message' => 'Jadwal ini bukan milik Dosen PA Anda.'], 403);
+        }
+
+        $hasil = $service->ajukanBooking($jadwal, $mhs->id, $validated);
+        if (isset($hasil['error'])) {
+            return response()->json(['status' => 'error', 'message' => $hasil['error']], 422);
+        }
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_pa_booking',
+                recordId: $hasil['data']->id,
+                newValues: $hasil['data']->toArray(),
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log pengajuan booking PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pengajuan konsultasi berhasil dikirim',
+            'data' => $hasil['data'],
+        ], 201);
+    }
+
+    // =========================================================================
+    // FASE 2 — STATUS PKL / PL / MAGANG
+    // =========================================================================
+
+    /** Daftar status PKL/PL/Magang mahasiswa bimbingan (scope). */
+    public function listPkl(Request $request, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $request->validate(['dosen_id' => 'nullable|exists:siakad_dosen,id']);
+
+        $dosen = $this->resolveScopedDosen($request);
+        if (!$dosen) {
+            return response()->json(['status' => 'error', 'message' => 'Data dosen tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $data = $service->listPklDosen($dosen->id);
+
+        return $this->paginateCollection($request, $data, 'Status PKL/PL/Magang bimbingan berhasil dimuat', ['dosen_id' => $dosen->id], ['status', 'created_at'], 'created_at');
+    }
+
+    /** Catat/ubah status PKL/PL/Magang seorang advisee. */
+    public function storePkl(Request $request, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.create');
+
+        $validated = $request->validate([
+            'mahasiswa_id' => 'required|exists:siakad_mahasiswa,id',
+            'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
+            'jenis' => ['required', 'string', new MasterReferensiExists('pa_pkl_jenis')],
+            'instansi' => 'required|string|max:200',
+            'lokasi' => 'nullable|string|max:200',
+            'pembimbing_lapangan' => 'nullable|string|max:150',
+            'tanggal_mulai' => 'nullable|date',
+            'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
+            'status' => ['nullable', 'string', new MasterReferensiExists('pa_pkl_status')],
+            'catatan' => 'nullable|string',
+        ]);
+
+        $dosen = $this->resolveScopedDosen($request);
+        if (!$dosen) {
+            return response()->json(['status' => 'error', 'message' => 'Data dosen tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        if (!$this->isPrivileged($request->user())) {
+            $milik = Mahasiswa::where('id', $validated['mahasiswa_id'])->where('dosen_wali_id', $dosen->id)->exists();
+            if (!$milik) {
+                return response()->json(['status' => 'error', 'message' => 'Mahasiswa tersebut bukan bimbingan Anda.'], 403);
+            }
+        }
+
+        $data = $service->createPkl($dosen->id, $validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_pa_pkl',
+                recordId: $data->id,
+                newValues: $data->toArray(),
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log PKL PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Status PKL/PL/Magang berhasil dicatat',
+            'data' => $data,
+        ], 201);
+    }
+
+    /** Perbarui status PKL/PL/Magang. */
+    public function updatePkl(Request $request, $id, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.update');
+
+        $pkl = PaPkl::findOrFail($id);
+        if (!$this->bolehKelolaJadwal($request, $pkl->dosen_id)) {
+            return response()->json(['status' => 'error', 'message' => 'Data PKL ini bukan bimbingan Anda.'], 403);
+        }
+
+        $validated = $request->validate([
+            'jenis' => ['sometimes', 'string', new MasterReferensiExists('pa_pkl_jenis')],
+            'instansi' => 'sometimes|string|max:200',
+            'lokasi' => 'nullable|string|max:200',
+            'pembimbing_lapangan' => 'nullable|string|max:150',
+            'tanggal_mulai' => 'nullable|date',
+            'tanggal_selesai' => 'nullable|date',
+            'status' => ['sometimes', 'string', new MasterReferensiExists('pa_pkl_status')],
+            'catatan' => 'nullable|string',
+        ]);
+
+        $data = $service->updatePkl($pkl, $validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_pa_pkl',
+                recordId: $data->id,
+                oldValues: $service->auditOld,
+                newValues: $service->auditChanges,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log PKL PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Status PKL/PL/Magang berhasil diperbarui',
+            'data' => $data,
+        ]);
+    }
+
+    /** Hapus catatan status PKL/PL/Magang. */
+    public function destroyPkl(Request $request, $id, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.delete');
+
+        $pkl = PaPkl::findOrFail($id);
+        if (!$this->bolehKelolaJadwal($request, $pkl->dosen_id)) {
+            return response()->json(['status' => 'error', 'message' => 'Data PKL ini bukan bimbingan Anda.'], 403);
+        }
+
+        $oldValues = $pkl->getOriginal();
+        $service->deletePkl($pkl);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_pa_pkl',
+                recordId: $oldValues['id'] ?? null,
+                oldValues: $oldValues,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log PKL PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Status PKL/PL/Magang berhasil dihapus',
+            'data' => null,
+        ]);
+    }
+
+    // =========================================================================
+    // FASE 2 — INSIDEN (KEKERASAN/PELECEHAN) + KONSELING + ESKALASI
+    // =========================================================================
+
+    /**
+     * Daftar laporan insiden (kekerasan/pelecehan). Privileged melihat semua;
+     * dosen dibatasi laporan yang ia tangani. Baris anonim disamarkan.
+     */
+    public function listInsiden(Request $request, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $request->validate([
+            'status' => ['nullable', 'string', new MasterReferensiExists('pa_insiden_status')],
+            'jenis' => ['nullable', 'string', new MasterReferensiExists('pa_insiden_jenis')],
+        ]);
+
+        $user = $request->user();
+        $privileged = $this->isPrivileged($user);
+        $own = Dosen::where('user_id', $user?->id)->first();
+        if (!$privileged && !$own) {
+            return response()->json(['status' => 'error', 'message' => 'Hanya Dosen PA yang dapat mengakses laporan insiden.'], 403);
+        }
+
+        $data = $service->listInsiden($own?->id, $privileged, $request->status, $request->jenis);
+
+        return $this->paginateCollection($request, $data, 'Daftar laporan insiden berhasil dimuat', [], ['status', 'created_at'], 'created_at');
+    }
+
+    /**
+     * Kirim laporan insiden kekerasan/pelecehan. Mendukung pelaporan anonim
+     * (identitas pelapor tidak disimpan). Dosen PA/mahasiswa dapat melapor.
+     */
+    public function storeInsiden(Request $request, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.create');
+
+        $validated = $request->validate([
+            'mahasiswa_id' => 'nullable|exists:siakad_mahasiswa,id',
+            'anonim' => 'nullable|boolean',
+            'jenis' => ['required', 'string', new MasterReferensiExists('pa_insiden_jenis')],
+            'tingkat' => 'nullable|string|max:20',
+            'deskripsi' => 'required|string',
+            'tanggal_kejadian' => 'nullable|date',
+            'lokasi' => 'nullable|string|max:200',
+        ]);
+
+        $user = $request->user();
+        $dosen = Dosen::where('user_id', $user?->id)->first();
+        $anonim = (bool) ($validated['anonim'] ?? false);
+
+        // Pelapor mahasiswa: hanya boleh melaporkan untuk dirinya sendiri.
+        if (!$dosen && !$this->isPrivileged($user)) {
+            $mhs = Mahasiswa::where('user_id', $user?->id)->first();
+            if (!$mhs) {
+                return response()->json(['status' => 'error', 'message' => 'Akun tidak dikenali sebagai mahasiswa atau dosen.'], 403);
+            }
+            $validated['mahasiswa_id'] = $mhs->id;
+        }
+
+        if ($anonim) {
+            $validated['mahasiswa_id'] = $validated['mahasiswa_id'] ?? null;
+            $validated['pelapor_user_id'] = null;
+            $validated['dosen_id'] = null;
+        } else {
+            $validated['pelapor_user_id'] = $user?->id;
+            $validated['dosen_id'] = $dosen?->id;
+        }
+        $validated['anonim'] = $anonim;
+
+        $data = $service->createInsiden($validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_pa_insiden',
+                recordId: $data->id,
+                newValues: $anonim ? ['anonim' => true, 'jenis' => $data->jenis] : $data->toArray(),
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log insiden PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Laporan insiden berhasil dikirim',
+            'data' => $service->listInsiden($dosen?->id, $this->isPrivileged($user))->firstWhere('id', $data->id),
+        ], 201);
+    }
+
+    /** Eskalasi laporan insiden ke Kaprodi/Kemahasiswaan/Satgas PPKS. */
+    public function eskalasiInsiden(Request $request, $id, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.update');
+
+        $insiden = PaInsiden::findOrFail($id);
+        if (!$this->bolehKelolaJadwal($request, $insiden->dosen_id)) {
+            return response()->json(['status' => 'error', 'message' => 'Laporan ini bukan dalam penanganan Anda.'], 403);
+        }
+
+        $validated = $request->validate([
+            'eskalasi_tujuan' => ['required', 'string', new MasterReferensiExists('pa_eskalasi_tujuan')],
+            'catatan' => 'nullable|string',
+        ]);
+
+        $data = $service->eskalasiInsiden($insiden, $validated['eskalasi_tujuan'], $validated['catatan'] ?? null);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_pa_insiden',
+                recordId: $data->id,
+                oldValues: $service->auditOld,
+                newValues: $service->auditChanges,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log eskalasi insiden PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Laporan insiden berhasil dieskalasi',
+            'data' => $data,
+        ]);
+    }
+
+    /** Tandai rujukan konseling untuk korban/pelapor. */
+    public function rujukKonseling(Request $request, $id, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.update');
+
+        $insiden = PaInsiden::findOrFail($id);
+        if (!$this->bolehKelolaJadwal($request, $insiden->dosen_id)) {
+            return response()->json(['status' => 'error', 'message' => 'Laporan ini bukan dalam penanganan Anda.'], 403);
+        }
+
+        $validated = $request->validate([
+            'konseling_ke' => 'required|string|max:150',
+            'catatan' => 'nullable|string',
+        ]);
+
+        $data = $service->rujukKonseling($insiden, $validated['konseling_ke'], $validated['catatan'] ?? null);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_pa_insiden',
+                recordId: $data->id,
+                oldValues: $service->auditOld,
+                newValues: $service->auditChanges,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log rujukan konseling PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Rujukan konseling berhasil dicatat',
+            'data' => $data,
+        ]);
+    }
+
+    /** Perbarui status & tindak lanjut laporan insiden. */
+    public function updateInsiden(Request $request, $id, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.update');
+
+        $insiden = PaInsiden::findOrFail($id);
+        if (!$this->bolehKelolaJadwal($request, $insiden->dosen_id)) {
+            return response()->json(['status' => 'error', 'message' => 'Laporan ini bukan dalam penanganan Anda.'], 403);
+        }
+
+        $validated = $request->validate([
+            'status' => ['sometimes', 'string', new MasterReferensiExists('pa_insiden_status')],
+            'tingkat' => 'nullable|string|max:20',
+            'tindak_lanjut' => 'nullable|string',
+        ]);
+
+        $data = $service->updateInsiden($insiden, $validated);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_pa_insiden',
+                recordId: $data->id,
+                oldValues: $service->auditOld,
+                newValues: $service->auditChanges,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Audit log insiden PA gagal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Laporan insiden berhasil diperbarui',
+            'data' => $data,
+        ]);
+    }
+
+    // =========================================================================
+    // FASE 2 — LAPORAN MONITORING BULANAN
+    // =========================================================================
+
+    /** Ringkasan monitoring bulanan PA (komposisi risiko, kehadiran, PKL, insiden). */
+    public function laporanBulanan(Request $request, PaLanjutanService $service)
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $validated = $request->validate([
+            'dosen_id' => 'nullable|exists:siakad_dosen,id',
+            'bulan' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+        ]);
+
+        $dosen = $this->resolveScopedDosen($request);
+        if (!$dosen) {
+            return response()->json(['status' => 'error', 'message' => 'Data dosen tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $data = $service->laporanBulanan($dosen->id, $validated['bulan']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Laporan monitoring bulanan berhasil dimuat',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * Gerbang pengelolaan baris milik seorang dosen: privileged boleh semua,
+     * dosen murni hanya baris dosen_id = dirinya sendiri.
+     */
+    private function bolehKelolaJadwal(Request $request, ?int $pemilikDosenId): bool
+    {
+        if ($this->isPrivileged($request->user())) {
+            return true;
+        }
+        $own = Dosen::where('user_id', $request->user()?->id)->first();
+
+        return $own && (int) $own->id === (int) $pemilikDosenId;
+    }
+
+    /**
+     * Paginasikan koleksi hasil service sesuai standar API (per_page maks. 100)
+     * dengan dukungan pengurutan dinamis `sort_by` + `sort_order` (asc/desc).
+     * Mengembalikan envelope {status, message, data, meta} siap kirim.
+     *
+     * @param  array<int,string>  $sortable  Daftar kolom yang boleh diurutkan.
+     * @param  string|null        $defaultSort  Kolom urut bawaan.
+     */
+    private function paginateCollection(
+        Request $request,
+        Collection $collection,
+        string $message,
+        array $meta = [],
+        array $sortable = [],
+        ?string $defaultSort = null
+    ) {
+        $sortOrder = $request->input('sort_order') === 'asc' ? 'asc' : 'desc';
+        $sortBy = $request->input('sort_by');
+
+        if ($sortBy && in_array($sortBy, $sortable, true)) {
+            $collection = $sortOrder === 'asc'
+                ? $collection->sortBy(fn ($row) => data_get($row, $sortBy))->values()
+                : $collection->sortByDesc(fn ($row) => data_get($row, $sortBy))->values();
+        } elseif ($defaultSort) {
+            $collection = $sortOrder === 'asc'
+                ? $collection->sortBy(fn ($row) => data_get($row, $defaultSort))->values()
+                : $collection->sortByDesc(fn ($row) => data_get($row, $defaultSort))->values();
+        }
+
+        $perPage = min(100, max(1, $request->integer('per_page', 15)));
+        $page = max(1, $request->integer('page', 1));
+
+        $paginator = new LengthAwarePaginator(
+            $collection->forPage($page, $perPage)->values(),
+            $collection->count(),
+            $perPage,
+            $page,
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $message,
+            'data' => $paginator->items(),
+            'meta' => array_merge($meta, [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+                'sort_by' => $sortBy && in_array($sortBy, $sortable, true) ? $sortBy : $defaultSort,
+                'sort_order' => $sortOrder,
+            ]),
+        ]);
     }
 }

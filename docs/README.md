@@ -78,7 +78,7 @@
 | KelulusanController | Yudisium/kelulusan & sensing status bermasalah | [docs/api/SIAKAD/KelulusanController.md](api/SIAKAD/KelulusanController.md) |
 | KartuUjianController | Kartu ujian UTS/UAS + QR validasi publik | [docs/api/SIAKAD/KartuUjianController.md](api/SIAKAD/KartuUjianController.md) |
 | DokumenController | Dokumen resmi KHS/Transkrip + QR validasi publik | [docs/api/SIAKAD/DokumenController.md](api/SIAKAD/DokumenController.md) |
-| PaController | Pembimbing Akademik: Rekap bimbingan, filter aktivitas tanggal, catatan jurnal (CRUD), sesi per kelas (SIMPA), my-pa, & cetak PDF | [docs/api/SIAKAD/PaController.md](api/SIAKAD/PaController.md) |
+| PaController | Pembimbing Akademik: rekap, catatan jurnal (CRUD), SIMPA, my-pa, cetak PDF, monitoring (kehadiran/prestasi/risiko/alerts), jadwal & konsultasi, PKL/PL/Magang, insiden+konseling+eskalasi, laporan bulanan | [docs/api/SIAKAD/PaController.md](api/SIAKAD/PaController.md) |
 
 
 ---
