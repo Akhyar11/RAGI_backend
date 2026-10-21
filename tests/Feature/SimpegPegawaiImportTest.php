@@ -36,18 +36,61 @@ class SimpegPegawaiImportTest extends TestCase
             'is_active' => true,
         ]);
 
+        \App\Models\Simpeg\JabatanFungsionalAkademik::create([
+            'nama' => 'Lektor',
+            'angka_kredit_min' => 200,
+            'angka_kredit_max' => 300,
+        ]);
+
+        \App\Models\ShiftTemplate::create([
+            'name' => 'Shift Reguler',
+            'is_active' => true,
+        ]);
+
+        \App\Models\OfficeLocation::create([
+            'name' => 'Kampus Utama',
+            'latitude' => -6.9,
+            'longitude' => 107.6,
+            'radius_meters' => 100,
+            'is_active' => true,
+        ]);
+
         Role::firstOrCreate(['slug' => 'dosen'], ['name' => 'Dosen']);
         Role::firstOrCreate(['slug' => 'tendik'], ['name' => 'Tenaga Kependidikan']);
     }
 
-    public function test_can_download_pegawai_template_csv()
+    public function test_can_download_pegawai_template_xlsx()
     {
         $response = $this->actingAs($this->admin, 'api')
             ->get('/api/simpeg/pegawai/template');
 
         $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        $temp = tempnam(sys_get_temp_dir(), 'test_dl_') . '.xlsx';
+        file_put_contents($temp, $response->getContent());
+
+        $reader = new \PhpOffice\PhpSpreadsheet\Reader\Xlsx();
+        $spreadsheet = $reader->load($temp);
+
+        $this->assertEquals(2, $spreadsheet->getSheetCount());
+        $this->assertEquals('Template Impor Pegawai', $spreadsheet->getSheet(0)->getTitle());
+        $this->assertEquals('Referensi Data Master', $spreadsheet->getSheet(1)->getTitle());
+
+        $headerA1 = $spreadsheet->getSheet(0)->getCell('A1')->getValue();
+        $this->assertEquals('nidn', $headerA1);
+
+        @unlink($temp);
+    }
+
+    public function test_can_download_pegawai_template_csv()
+    {
+        $response = $this->actingAs($this->admin, 'api')
+            ->get('/api/simpeg/pegawai/template?format=csv');
+
+        $response->assertStatus(200);
         $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
-        $this->assertStringContainsString('nip,nik,nama_lengkap', $response->getContent());
+        $this->assertStringContainsString('nip,nik,gelar_depan,nama_lengkap', $response->getContent());
     }
 
     public function test_can_import_pegawai_from_csv_and_auto_creates_sso_users_with_indonusa_password()
@@ -93,6 +136,101 @@ class SimpegPegawaiImportTest extends TestCase
         $this->assertTrue(Hash::check('indonusa', $userDewi->password));
         $this->assertTrue($userDewi->is_verified);
         $this->assertTrue($userDewi->hasRole('tendik'));
+    }
+
+    public function test_can_import_pegawai_from_xlsx_with_master_dropdown_columns()
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Template Impor Pegawai');
+
+        $headers = \App\Services\Simpeg\PegawaiImportService::COLUMNS;
+        foreach ($headers as $idx => $header) {
+            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($idx + 1);
+            $sheet->setCellValue("{$colLetter}1", $header);
+        }
+
+        $rowDosen = [
+            '0415018599', // nidn
+            '3560763664230099', // nuptk
+            '198501152010121099', // nip
+            '3271011501850099', // nik
+            'Dr. Ir.', // gelar_depan
+            'Fajar Nugraha', // nama_lengkap
+            'M.Kom.', // gelar_belakang
+            'L', // jenis_kelamin
+            'Bandung', // tempat_lahir
+            '1985-01-15', // tanggal_lahir
+            'Islam', // agama
+            'fajar.nugraha@campus.ac.id', // email
+            '081299998888', // telepon
+            'Jl. Sukajadi No. 99', // alamat
+            'dosen', // jenis_pegawai
+            'tetap_yayasan', // status_kepegawaian
+            'Fakultas Ilmu Komputer', // unit_kerja
+            'Dosen', // jabatan
+            'Lektor', // jabatan_fungsional
+            'Shift Reguler', // shift_kerja
+            'Kampus Utama', // lokasi_presensi
+            '2015-08-01', // tanggal_masuk
+            'Bank Mandiri', // nama_bank
+            '1310099999999', // nomor_rekening
+            'Fajar Nugraha', // nama_rekening
+        ];
+
+        foreach ($rowDosen as $idx => $val) {
+            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($idx + 1);
+            $sheet->setCellValueExplicit("{$colLetter}2", $val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        }
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'test_import_') . '.xlsx';
+        (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet))->save($tempFile);
+
+        $uploadedFile = new UploadedFile(
+            $tempFile,
+            'import_pegawai.xlsx',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            null,
+            true
+        );
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/simpeg/pegawai/import', [
+                'file' => $uploadedFile,
+            ]);
+
+        @unlink($tempFile);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'total' => 1,
+                    'success' => 1,
+                    'failed' => 0,
+                ],
+            ]);
+
+        $pegawai = Pegawai::where('nip', '198501152010121099')->first();
+        $this->assertNotNull($pegawai);
+        $this->assertEquals('Fajar Nugraha', $pegawai->nama_lengkap);
+        $this->assertEquals('Dr. Ir.', $pegawai->gelar_depan);
+        $this->assertEquals('M.Kom.', $pegawai->gelar_belakang);
+        $this->assertEquals('Islam', $pegawai->agama);
+        $this->assertEquals($this->unitKerja->id, $pegawai->unit_kerja_id);
+
+        $jad = \App\Models\Simpeg\JabatanFungsionalAkademik::where('nama', 'Lektor')->first();
+        $this->assertEquals($jad->id, $pegawai->jabatan_fungsional_id);
+
+        $shift = \App\Models\ShiftTemplate::where('name', 'Shift Reguler')->first();
+        $this->assertEquals($shift->id, $pegawai->shift_template_id);
+
+        $location = \App\Models\OfficeLocation::where('name', 'Kampus Utama')->first();
+        $this->assertEquals($location->id, $pegawai->office_location_id);
+
+        $this->assertEquals('Bank Mandiri', $pegawai->nama_bank);
+        $this->assertEquals('1310099999999', $pegawai->nomor_rekening);
+        $this->assertEquals('Fajar Nugraha', $pegawai->nama_rekening);
     }
 
     public function test_manual_store_pegawai_auto_creates_sso_user_with_indonusa_password()

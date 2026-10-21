@@ -31,11 +31,23 @@ class PegawaiController extends Controller
             ], 403);
         }
 
-        $csvContent = $this->pegawaiImportService->getTemplateCsv();
+        $format = strtolower((string) $request->query('format', 'xlsx'));
 
-        return response($csvContent, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="template_import_pegawai.csv"',
+        if ($format === 'csv') {
+            $csvContent = $this->pegawaiImportService->getTemplateCsv();
+
+            return response($csvContent, 200, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => 'attachment; filename="template_import_pegawai.csv"',
+            ]);
+        }
+
+        $xlsxBinary = $this->pegawaiImportService->getTemplateXlsx();
+
+        return response($xlsxBinary, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="template_import_pegawai.xlsx"',
+            'Cache-Control' => 'max-age=0',
         ]);
     }
 

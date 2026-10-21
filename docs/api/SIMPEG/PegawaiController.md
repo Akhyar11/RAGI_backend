@@ -72,24 +72,36 @@ Accept: application/json
 
 ## GET /api/simpeg/pegawai/template
 
-> Mengunduh berkas template format CSV (UTF-8 BOM) untuk impor data pegawai secara massal.
+> Mengunduh berkas template impor data pegawai secara massal. Mendukung format Excel XLSX resmi (default) lengkap dengan Data Validation (dropdown) dinamis dari tabel master aktif (Unit Kerja, Jabatan Struktural, JAD Dosen, Shift Kerja Presensi, Lokasi Presensi, Jenis Kelamin, Agama, Jenis Pegawai, Status Kepegawaian) atau format CSV.
 
 ### Headers
 ```http
 Authorization: Bearer <token>
 ```
 
-### Response
+### Query Parameters
+| Parameter | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `format` | string | ❌ | Pilihan format file: `xlsx` (default, dilengkapi dropdown master dinamis) atau `csv`. |
+
+### Response (Default: XLSX)
+- Header: `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+- Header: `Content-Disposition: attachment; filename="template_import_pegawai.xlsx"`
+- Body: Berkas Excel biner (.xlsx) dengan 2 Sheet:
+  1. `Template Impor Pegawai`: Memuat 25 kolom terstandarisasi dengan data validation dropdown.
+  2. `Referensi Data Master`: Memuat daftar pilihan aktif dari entitas database master.
+
+### Response (format=csv)
 - Header: `Content-Type: text/csv; charset=UTF-8`
 - Header: `Content-Disposition: attachment; filename="template_import_pegawai.csv"`
-- Body: Berkas CSV mentah dengan kolom header:
-  `nip,nik,nama_lengkap,email,telepon,jenis_kelamin,tempat_lahir,tanggal_lahir,jenis_pegawai,status_kepegawaian,unit_kerja,jabatan,tanggal_masuk,alamat`
+- Body: Berkas CSV mentah (UTF-8 BOM) dengan kolom:
+  `nidn,nuptk,nip,nik,gelar_depan,nama_lengkap,gelar_belakang,jenis_kelamin,tempat_lahir,tanggal_lahir,agama,email,telepon,alamat,jenis_pegawai,status_kepegawaian,unit_kerja,jabatan,jabatan_fungsional,shift_kerja,lokasi_presensi,tanggal_masuk,nama_bank,nomor_rekening,nama_rekening`
 
 ---
 
 ## POST /api/simpeg/pegawai/import
 
-> Mengunggah dan memproses data pegawai secara massal dari berkas CSV atau XLSX.
+> Mengunggah dan memproses data pegawai secara massal dari berkas XLSX atau CSV, otomatis memetakan ke entitas master dan membuat akun login SSO (`core_users`) ber-password default `indonusa`.
 
 ### Headers
 ```http
@@ -100,7 +112,7 @@ Content-Type: multipart/form-data
 ### Request Body (Form Data)
 | Field | Tipe | Wajib | Keterangan |
 |---|---|---|---|
-| `file` | file | ✅ | Berkas `.csv`, `.txt`, `.xlsx`, atau `.xls` (Maksimal 10 MB) |
+| `file` | file | ✅ | Berkas `.xlsx`, `.xls`, `.csv`, atau `.txt` (Maksimal 10 MB) |
 
 ### Response Success (200 OK)
 ```json
