@@ -22,6 +22,7 @@ use App\Http\Requests\Siakad\StoreKelasRequest;
 use App\Http\Requests\Siakad\UpdateKelasRequest;
 use App\Http\Requests\Siakad\StoreAbsensiRequest;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 class PerkuliahanController extends Controller
 {
@@ -485,16 +486,54 @@ class PerkuliahanController extends Controller
         ]);
     }
 
+    public const STATUS_KRS_LENGKAP = 'lengkap';
+    public const STATUS_KRS_ADA_BELUM = 'ada_belum';
+
+    public const STATUS_KEUANGAN_ADA_TERKUNCI = 'ada_terkunci';
+    public const STATUS_KEUANGAN_LUNAS = 'lunas';
+
+    public const PROGRES_KRS_TINGGI = 'tinggi';
+    public const PROGRES_KRS_SEDANG = 'sedang';
+    public const PROGRES_KRS_RENDAH = 'rendah';
+    public const PROGRES_KRS_TINGGI_MIN = 80;
+    public const PROGRES_KRS_SEDANG_MIN = 50;
+
     /**
      * Monitoring & Rekapitulasi Progres Pengisian KRS BAAK per Program Studi
      */
     public function monitoringKrsProdi(Request $request)
     {
+        Gate::authorize('siakad.krs.read');
+
+        $user = $request->user();
+        abort_unless($user, 401);
+
+        $request->validate([
+            'tahun_akademik_id' => ['nullable', 'integer', 'exists:siakad_tahun_akademik,id'],
+            'program_studi_id' => ['nullable', 'integer', 'exists:spmb_master_program_studi,id'],
+            'status_krs' => ['nullable', 'string', \Illuminate\Validation\Rule::in([self::STATUS_KRS_LENGKAP, self::STATUS_KRS_ADA_BELUM])],
+            'status_keuangan' => ['nullable', 'string', \Illuminate\Validation\Rule::in([self::STATUS_KEUANGAN_ADA_TERKUNCI, self::STATUS_KEUANGAN_LUNAS])],
+            'progres_krs' => ['nullable', 'string', \Illuminate\Validation\Rule::in([self::PROGRES_KRS_TINGGI, self::PROGRES_KRS_SEDANG, self::PROGRES_KRS_RENDAH])],
+            'sort_by' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['nama_prodi', 'kode_prodi', 'total_mahasiswa_aktif', 'sudah_krs', 'disetujui', 'belum_krs', 'terkunci_keuangan', 'persentase_krs'])],
+            'sort_order' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['asc', 'desc'])],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
         $taId = $request->input('tahun_akademik_id') ?? TahunAkademik::where('is_active', true)->value('id');
-        $tahunAkademik = TahunAkademik::find($taId);
+        $tahunAkademik = $taId ? TahunAkademik::find($taId) : null;
+        abort_if(!$tahunAkademik, 404, 'Tahun akademik tidak ditemukan.');
 
         $prodiQuery = \App\Models\Spmb\MasterProgramStudi::with('fakultas')
             ->where('is_active', true);
+
+        // RBAC Scoping: fail-closed jika non-superadmin
+        if (!$user->isSuperAdmin()) {
+            $allowedProdiIds = $user->getSiakadProdiIds();
+            abort_if($allowedProdiIds->isEmpty(), 403, 'Anda tidak memiliki penugasan program studi aktif.');
+            $prodiQuery->whereIn('id', $allowedProdiIds);
+        }
 
         if ($request->filled('program_studi_id')) {
             $prodiQuery->where('id', $request->program_studi_id);
@@ -503,13 +542,6 @@ class PerkuliahanController extends Controller
         $prodis = $prodiQuery->orderBy('nama')->get();
 
         $rekapProdi = [];
-        $totalSemuaMahasiswa = 0;
-        $totalSemuaSudahKrs = 0;
-        $totalSemuaDisetujui = 0;
-        $totalSemuaDiajukan = 0;
-        $totalSemuaDraft = 0;
-        $totalSemuaBelumKrs = 0;
-        $totalSemuaTerkunciKeuangan = 0;
 
         foreach ($prodis as $prodi) {
             $mhsAktifCount = Mahasiswa::where('program_studi_id', $prodi->id)
@@ -532,6 +564,33 @@ class PerkuliahanController extends Controller
             $persentaseKrs = $mhsAktifCount > 0 ? round(($sudahKrsCount / $mhsAktifCount) * 100, 1) : 0;
             $persentaseDisetujui = $mhsAktifCount > 0 ? round(($disetujuiCount / $mhsAktifCount) * 100, 1) : 0;
 
+            // Filter status_krs
+            if ($request->input('status_krs') === self::STATUS_KRS_LENGKAP && $belumKrsCount > 0) {
+                continue;
+            }
+            if ($request->input('status_krs') === self::STATUS_KRS_ADA_BELUM && $belumKrsCount === 0) {
+                continue;
+            }
+
+            // Filter status_keuangan
+            if ($request->input('status_keuangan') === self::STATUS_KEUANGAN_ADA_TERKUNCI && $terkunciKeuanganCount === 0) {
+                continue;
+            }
+            if ($request->input('status_keuangan') === self::STATUS_KEUANGAN_LUNAS && $terkunciKeuanganCount > 0) {
+                continue;
+            }
+
+            // Filter progres_krs
+            if ($request->input('progres_krs') === self::PROGRES_KRS_TINGGI && $persentaseKrs < self::PROGRES_KRS_TINGGI_MIN) {
+                continue;
+            }
+            if ($request->input('progres_krs') === self::PROGRES_KRS_SEDANG && ($persentaseKrs < self::PROGRES_KRS_SEDANG_MIN || $persentaseKrs >= self::PROGRES_KRS_TINGGI_MIN)) {
+                continue;
+            }
+            if ($request->input('progres_krs') === self::PROGRES_KRS_RENDAH && $persentaseKrs >= self::PROGRES_KRS_SEDANG_MIN) {
+                continue;
+            }
+
             $rekapProdi[] = [
                 'prodi_id' => $prodi->id,
                 'kode_prodi' => $prodi->kode_prodi,
@@ -548,18 +607,35 @@ class PerkuliahanController extends Controller
                 'persentase_krs' => $persentaseKrs,
                 'persentase_disetujui' => $persentaseDisetujui,
             ];
-
-            $totalSemuaMahasiswa += $mhsAktifCount;
-            $totalSemuaSudahKrs += $sudahKrsCount;
-            $totalSemuaDisetujui += $disetujuiCount;
-            $totalSemuaDiajukan += $diajukanCount;
-            $totalSemuaDraft += $draftCount;
-            $totalSemuaBelumKrs += $belumKrsCount;
-            $totalSemuaTerkunciKeuangan += $terkunciKeuanganCount;
         }
+
+        // Summary konsisten dihitung dari data hasil filter
+        $totalSemuaMahasiswa = (int) collect($rekapProdi)->sum('total_mahasiswa_aktif');
+        $totalSemuaSudahKrs = (int) collect($rekapProdi)->sum('sudah_krs');
+        $totalSemuaDisetujui = (int) collect($rekapProdi)->sum('disetujui');
+        $totalSemuaDiajukan = (int) collect($rekapProdi)->sum('diajukan');
+        $totalSemuaDraft = (int) collect($rekapProdi)->sum('draft');
+        $totalSemuaBelumKrs = (int) collect($rekapProdi)->sum('belum_krs');
+        $totalSemuaTerkunciKeuangan = (int) collect($rekapProdi)->sum('terkunci_keuangan');
 
         $overallPersentaseKrs = $totalSemuaMahasiswa > 0 ? round(($totalSemuaSudahKrs / $totalSemuaMahasiswa) * 100, 1) : 0;
         $overallPersentaseDisetujui = $totalSemuaMahasiswa > 0 ? round(($totalSemuaDisetujui / $totalSemuaMahasiswa) * 100, 1) : 0;
+
+        // Sorting sebelum array_slice
+        $sortOrder = $request->input('sort_order') === 'desc' ? 'desc' : 'asc';
+        $sortBy = $request->input('sort_by', 'nama_prodi');
+        $rekapProdi = collect($rekapProdi)
+            ->sortBy($sortBy, SORT_REGULAR, $sortOrder === 'desc')
+            ->values()
+            ->all();
+
+        // Safe pagination
+        $totalFiltered = count($rekapProdi);
+        $perPage = max(1, min(100, $request->integer('per_page', $request->integer('limit', 15))));
+        $page = max(1, $request->integer('page', 1));
+        $offset = ($page - 1) * $perPage;
+        $paginatedProdi = array_slice($rekapProdi, $offset, $perPage);
+        $lastPage = max(1, (int) ceil($totalFiltered / $perPage));
 
         return response()->json([
             'status' => 'success',
@@ -577,8 +653,20 @@ class PerkuliahanController extends Controller
                     'persentase_krs' => $overallPersentaseKrs,
                     'persentase_disetujui' => $overallPersentaseDisetujui,
                 ],
-                'prodi' => $rekapProdi,
-            ]
+                'prodi' => $paginatedProdi,
+                'meta' => [
+                    'current_page' => $page,
+                    'per_page' => $perPage,
+                    'total' => $totalFiltered,
+                    'last_page' => $lastPage,
+                ],
+            ],
+            'meta' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $totalFiltered,
+                'last_page' => $lastPage,
+            ],
         ]);
     }
 

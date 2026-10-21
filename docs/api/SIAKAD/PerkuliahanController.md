@@ -24,6 +24,7 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 | GET | `/api/v1/siakad/perkuliahan/krs` | Daftar KRS | ✅ |
 | GET | `/api/v1/siakad/perkuliahan/krs/active` | KRS aktif | ✅ |
 | GET | `/api/v1/siakad/perkuliahan/krs/available-classes` | Kelas tersedia | ✅ |
+| GET | `/api/v1/siakad/perkuliahan/krs/monitoring` | Monitoring & rekapitulasi progres KRS per prodi | ✅ |
 | POST | `/api/v1/siakad/perkuliahan/krs/add-class` | Tambah kelas ke KRS | ✅ |
 | DELETE | `/api/v1/siakad/perkuliahan/krs/drop-class/{detailId}` | Drop kelas dari KRS | ✅ |
 | POST | `/api/v1/siakad/perkuliahan/krs/submit` | Submit KRS | ✅ |
@@ -301,6 +302,132 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 **403 Forbidden**
 ```json
 { "status": "error", "message": "This action is unauthorized." }
+```
+
+---
+
+## [GET] /api/v1/siakad/perkuliahan/krs/monitoring
+
+Monitoring dan rekapitulasi progres pengisian KRS mahasiswa per program studi dengan dukungan filter terintegrasi dan server-side pagination. Nilai `summary` dihitung dari hasil data yang telah difilter dan `prodi` dipaginasi.
+
+### Request Headers
+
+| Header | Wajib | Nilai |
+|---|---|---|
+| `Authorization` | ✅ | `Bearer <token>` |
+| `Accept` | ✅ | `application/json` |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `tahun_akademik_id` | integer | ❌ | TA aktif | Filter tahun akademik |
+| `program_studi_id` | integer | ❌ | — | Filter spesifik program studi (scoped jika non-superadmin) |
+| `status_krs` | string | ❌ | — | `lengkap` (100% mengisi) / `ada_belum` (ada belum mengisi) |
+| `status_keuangan` | string | ❌ | — | `ada_terkunci` (tunggakan SIKEU) / `lunas` (bebas tunggakan) |
+| `progres_krs` | string | ❌ | — | `tinggi` (≥ 80%) / `sedang` (50% - 79%) / `rendah` (< 50%) |
+| `sort_by` | string | ❌ | `nama_prodi` | Urutkan berdasarkan: `nama_prodi`, `kode_prodi`, `total_mahasiswa_aktif`, `sudah_krs`, `disetujui`, `belum_krs`, `terkunci_keuangan`, `persentase_krs` |
+| `sort_order` | string | ❌ | `asc` | Arah urutan: `asc` / `desc` |
+| `page` | integer | ❌ | `1` | Halaman |
+| `limit` / `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Data monitoring KRS berhasil dimuat",
+    "data": {
+        "tahun_akademik": {
+            "id": 1,
+            "kode": "20261",
+            "nama": "Semester Gasal 2026/2027",
+            "is_active": true
+        },
+        "summary": {
+            "total_mahasiswa_aktif": 120,
+            "total_sudah_krs": 105,
+            "total_disetujui": 90,
+            "total_diajukan": 10,
+            "total_draft": 5,
+            "total_belum_krs": 15,
+            "total_terkunci_keuangan": 8,
+            "persentase_krs": 87.5,
+            "persentase_disetujui": 75.0
+        },
+        "prodi": [
+            {
+                "prodi_id": 1,
+                "kode_prodi": "TI",
+                "nama_prodi": "Teknik Informatika",
+                "jenjang": "S1",
+                "fakultas": "Fakultas Teknik",
+                "total_mahasiswa_aktif": 60,
+                "sudah_krs": 55,
+                "draft": 2,
+                "diajukan": 5,
+                "disetujui": 48,
+                "belum_krs": 5,
+                "terkunci_keuangan": 3,
+                "persentase_krs": 91.7,
+                "persentase_disetujui": 80.0
+            }
+        ],
+        "meta": {
+            "current_page": 1,
+            "per_page": 15,
+            "total": 1,
+            "last_page": 1
+        }
+    },
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1
+    }
+}
+```
+
+### Response Error
+
+**400 Bad Request**
+```json
+{
+    "status": "error",
+    "message": "Permintaan tidak valid."
+}
+```
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Tahun akademik tidak ditemukan."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "The given data was invalid.",
+    "errors": {
+        "sort_by": ["The selected sort by is invalid."],
+        "sort_order": ["The selected sort order is invalid."]
+    }
+}
 ```
 
 ---
