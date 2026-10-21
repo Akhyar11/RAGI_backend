@@ -200,8 +200,10 @@ Route::middleware('signed:relative')->get('files/view', [App\Http\Controllers\Fi
     ->name('files.view');
 
 Route::middleware('auth:api')->prefix('simpeg')->group(function () {
-    // Dashboard Stats
+    // Dashboard Stats & Analytics
     Route::get('dashboard-stats', [App\Http\Controllers\Simpeg\SimpegDashboardController::class, 'stats']);
+    Route::get('analytics/presensi', [App\Http\Controllers\Simpeg\SimpegDashboardController::class, 'presensiAnalytics']);
+    Route::get('analytics/demografi', [App\Http\Controllers\Simpeg\SimpegDashboardController::class, 'demografiAnalytics']);
 
     // Unit Kerja
     Route::apiResource('unit-kerja', App\Http\Controllers\Simpeg\UnitKerjaController::class);

@@ -134,6 +134,7 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
+| SimpegDashboardController | Statistik real-time KPI kepegawaian & analitik 2 tab (presensi & demografi) | [docs/api/SIMPEG/SimpegDashboardController.md](api/SIMPEG/SimpegDashboardController.md) |
 | UnitKerjaController | Manajemen struktur organisasi, SOTK kampus, dan unit kerja induk-anak | [docs/api/SIMPEG/UnitKerjaController.md](api/SIMPEG/UnitKerjaController.md) |
 | JabatanController | Formasi jabatan struktural, fungsional, dan teknis pada unit kerja | [docs/api/SIMPEG/JabatanController.md](api/SIMPEG/JabatanController.md) |
 | JabatanFungsionalController | Master jenjang jabatan fungsional akademik dosen (termasuk Tenaga Pengajar) dan angka kredit | [docs/api/SIMPEG/JabatanFungsionalController.md](api/SIMPEG/JabatanFungsionalController.md) |
