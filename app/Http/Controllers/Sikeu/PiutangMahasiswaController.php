@@ -37,13 +37,20 @@ class PiutangMahasiswaController extends Controller
         // Apply filters
         $this->applyFilters($query, $status, $tahunAkademikId, $angkatan, $programStudiId, $search, $cutoffDate);
 
-        // Sort (sisa_piutang dihitung dari kolom tagihan: tagihan + denda - potongan - bayar)
+        // Sort (sisa_piutang dihitung dari kolom tagihan: tagihan + denda - potongan - bayar;
+        // nama/nim diurut lewat join mahasiswa, baris calon tanpa mahasiswa ikut terbawa via left join)
         $sortOrder = strtolower($request->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
         $sortByRaw = $request->query('sort_by');
 
         if ($sortByRaw === 'sisa_piutang') {
             $query->orderByRaw('sikeu_tagihan_mahasiswa.total_tagihan + sikeu_tagihan_mahasiswa.total_denda - sikeu_tagihan_mahasiswa.total_potongan - sikeu_tagihan_mahasiswa.total_bayar ' . $sortOrder);
             $sortBy = 'sisa_piutang';
+        } elseif (in_array($sortByRaw, ['nama_mahasiswa', 'nim'], true)) {
+            $kolom = $sortByRaw === 'nim' ? 'siakad_mahasiswa.nim' : 'siakad_mahasiswa.nama_lengkap';
+            $query->leftJoin('siakad_mahasiswa', 'siakad_mahasiswa.id', '=', 'sikeu_tagihan_mahasiswa.mahasiswa_id')
+                ->orderBy($kolom, $sortOrder)
+                ->select('sikeu_tagihan_mahasiswa.*');
+            $sortBy = $sortByRaw;
         } else {
             $allowedSortColumns = ['id', 'created_at', 'nomor_tagihan', 'total_tagihan', 'total_bayar', 'jatuh_tempo', 'status'];
             $sortBy = in_array($sortByRaw, $allowedSortColumns) ? $sortByRaw : 'id';

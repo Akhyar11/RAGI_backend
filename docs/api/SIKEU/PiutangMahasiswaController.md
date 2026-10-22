@@ -27,7 +27,7 @@
 | `tahun_akademik_id` | integer | ❌ | — | Filter ID Tahun Akademik / Periode |
 | `program_studi_id` | integer | ❌ | — | Filter ID Program Studi |
 | `status` | string | ❌ | `piutang` | `piutang` (belum lunas), `belum_bayar`, `sebagian`, `dispensasi`, `lunas`, `all` |
-| `sort_by` | string | ❌ | `id` | Kolom pengurutan (`id`, `created_at`, `nomor_tagihan`, `total_tagihan`, `total_bayar`, `jatuh_tempo`, `status`, `sisa_piutang` = tagihan + denda − potongan − bayar) |
+| `sort_by` | string | ❌ | `id` | Kolom pengurutan (`id`, `created_at`, `nomor_tagihan`, `total_tagihan`, `total_bayar`, `jatuh_tempo`, `status`, `sisa_piutang` = tagihan + denda − potongan − bayar, `nama_mahasiswa` / `nim` via relasi mahasiswa) |
 | `sort_order` | string | ❌ | `desc` | `asc` atau `desc` |
 | `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
 | `page` | integer | ❌ | `1` | Halaman data yang diminta |
