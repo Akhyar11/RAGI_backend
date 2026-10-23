@@ -69,6 +69,7 @@ class PerkuliahanController extends Controller
         $taId = $request->input('tahun_akademik_id') ?? TahunAkademik::where('is_active', true)->value('id');
 
         $query = Kelas::with(['mataKuliah', 'ruangan.gedung', 'programStudi', 'programStudis', 'dosenPengampu.dosen', 'parent.mataKuliah', 'children', 'rombels.programStudi'])
+            ->withCount(['krsDetails', 'krsDetails as krs_details_aktif_count' => fn($q) => $q->where('status', 'aktif')])
             ->when($taId, fn($q) => $q->where('tahun_akademik_id', $taId));
 
         // Jika user adalah dosen, filter jadwal mengajar mereka

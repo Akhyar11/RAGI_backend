@@ -54,8 +54,6 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
 | `page` | integer | ❌ | `1` | Halaman |
 
----
-
 ## [GET] /api/v1/siakad/perkuliahan/kelas
 
 ### Response Sukses
@@ -69,6 +67,8 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
             "id": 5, "nama_kelas": "TI-1A", "mata_kuliah_id": 12, "program_studi_id": 7,
             "tahun_akademik_id": 1, "kapasitas": 40, "tipe_sesi": "teori",
             "parent_kelas_id": null,
+            "krs_details_count": 30,
+            "krs_details_aktif_count": 28,
             "parent": null,
             "children": [{ "id": 6, "kode_kelas": "IF101-P-A", "tipe_sesi": "praktik" }],
             "rombels": [{ "id": 4, "nama_kelas": "24A" }]
