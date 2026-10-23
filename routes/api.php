@@ -173,6 +173,7 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
 */
 Route::middleware('auth:api')->group(function () {
     Route::get('menus/my-menus', [MenuController::class, 'getMyMenus']);
+    Route::get('modules/my-modules', [ModuleController::class, 'myModules']);
 });
 
 /*

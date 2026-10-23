@@ -21,6 +21,7 @@
 | SystemSettingController | Pengaturan terpusat sistem (SMTP, R2, Feeder, LMS) | [docs/api/IAM/SystemSettingController.md](api/IAM/SystemSettingController.md) |
 | IamApiIntegrationController | Pengaturan integrasi API sistem (SPMB legacy migration registry & test) | [docs/api/IAM/IamApiIntegrationController.md](api/IAM/IamApiIntegrationController.md) |
 | MenuController | Menu dinamis per modul, grouping `parent_id`/`#section`, aturan ikon rail, dan Master Menu | [docs/api/IAM/MenuController.md](api/IAM/MenuController.md) |
+| ModuleController | Master modul sistem & endpoint modul dinamis pengguna (my-modules) | [docs/api/IAM/ModuleController.md](api/IAM/ModuleController.md) |
 
 ---
 

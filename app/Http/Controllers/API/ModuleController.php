@@ -4,12 +4,62 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Module;
+use App\Services\MenuService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
 
 class ModuleController extends Controller
 {
+    protected MenuService $menuService;
+
+    public function __construct(MenuService $menuService)
+    {
+        $this->menuService = $menuService;
+    }
+
+    /**
+     * Get accessible active modules for the currently authenticated user.
+     */
+    public function myModules(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthenticated'
+            ], 401);
+        }
+
+        // Jika superadmin, seluruh modul aktif dapat diakses
+        if ($user->isSuperAdmin()) {
+            $modules = Module::where('is_active', true)
+                ->orderBy('name')
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Berhasil mengambil daftar modul pengguna',
+                'data' => $modules,
+            ]);
+        }
+
+        // Ambil daftar modul yang memiliki setidaknya satu menu berizin untuk user dari MenuService
+        $myMenus = $this->menuService->getMyMenus('all');
+        $allowedModuleCodes = $myMenus->pluck('module')->filter()->unique()->values()->toArray();
+
+        $modules = Module::where('is_active', true)
+            ->whereIn('code', $allowedModuleCodes)
+            ->orderBy('name')
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Berhasil mengambil daftar modul pengguna',
+            'data' => $modules,
+        ]);
+    }
+
     /**
      * Get all modules.
      */
