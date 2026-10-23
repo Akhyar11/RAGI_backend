@@ -221,8 +221,6 @@ return [
         'children' => [
             ['name' => 'Jadwal Perkuliahan', 'url' => '/siakad/perkuliahan/kelas', 'icon' => 'FaCalendarCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.kelas.read', 'order_index' => 1],
             ['name' => 'Kartu Ujian UTS/UAS', 'url' => '/siakad/kartu-ujian', 'icon' => 'FaFileCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.krs.read', 'order_index' => 2],
-            ['name' => 'Penilaian Kelas (OBE)', 'url' => '/siakad/nilai', 'icon' => 'FaPen', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 3],
-            ['name' => 'Bimbingan PA', 'url' => '/siakad/bimbingan', 'icon' => 'FaHandshake', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 4],
         ]
     ],
     [
@@ -232,12 +230,11 @@ return [
         'module' => 'siakad',
         'order_index' => 5,
         'children' => [
-            ['name' => 'Hasil Studi (KHS & Transkrip)', 'url' => '/siakad/hasil-studi', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.read', 'order_index' => 1],
-            ['name' => 'Cuti Mahasiswa', 'url' => '/siakad/cuti', 'icon' => 'FaHourglassHalf', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 2],
-            ['name' => 'Kelulusan & Yudisium', 'url' => '/siakad/kelulusan', 'icon' => 'FaStamp', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.manage', 'order_index' => 3],
-            ['name' => 'Pindah Program Studi', 'url' => '/siakad/pindah-prodi', 'icon' => 'FaExchangeAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.manage', 'order_index' => 4],
-            ['name' => 'Pengesahan KHS', 'url' => '/siakad/khs', 'icon' => 'FaFileCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 5],
-            ['name' => 'Monitoring Eksekutif', 'url' => '/siakad/eksekutif', 'icon' => 'FaChartBar', 'module' => 'siakad', 'permission_slug' => 'siakad.dashboard.read', 'order_index' => 6],
+            ['name' => 'Cuti Mahasiswa', 'url' => '/siakad/cuti', 'icon' => 'FaHourglassHalf', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.read', 'order_index' => 1],
+            ['name' => 'Kelulusan & Yudisium', 'url' => '/siakad/kelulusan', 'icon' => 'FaStamp', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.manage', 'order_index' => 2],
+            ['name' => 'Pindah Program Studi', 'url' => '/siakad/pindah-prodi', 'icon' => 'FaExchangeAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.manage', 'order_index' => 3],
+            ['name' => 'Pengesahan KHS', 'url' => '/siakad/khs', 'icon' => 'FaFileCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 4],
+            ['name' => 'Monitoring Eksekutif', 'url' => '/siakad/eksekutif', 'icon' => 'FaChartBar', 'module' => 'siakad', 'permission_slug' => 'siakad.dashboard.read', 'order_index' => 5],
         ]
     ],
     [

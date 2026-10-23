@@ -203,8 +203,6 @@ $menus = \App\Support\MenuCatalog::definitions();
                 ->whereIn('url', [
                     '/siakad',
                     '#perkuliahan_siakad',
-                    '/siakad/nilai',
-                    '/siakad/bimbingan',
                     '#obe_siakad',
                     '/siakad/obe/tahun-kurikulum',
                     '/siakad/obe/kelas',
@@ -240,7 +238,6 @@ $menus = \App\Support\MenuCatalog::definitions();
                     '/siakad/obe/krs/monitoring',
                     '#settings_obe',
                     '/siakad/obe/settings',
-                    '/siakad/hasil-studi',
                     '/siakad/civitas/mahasiswa',
                     '/siakad/panduan',
                 ])
@@ -258,13 +255,12 @@ $menus = \App\Support\MenuCatalog::definitions();
                 ->pluck('id')
                 ->toArray();
             $mahasiswaRole->menus()->syncWithoutDetaching($mhsSikeuMenuIds);
-            // Portal SIAKAD mahasiswa: dashboard, jadwal, hasil studi, panduan
+            // Portal SIAKAD mahasiswa: dashboard, jadwal, panduan
             $mhsSiakadMenuIds = Menu::where('module', 'siakad')
                 ->whereIn('url', [
                     '/siakad',
                     '#perkuliahan_siakad',
                     '/siakad/perkuliahan/kelas',
-                    '/siakad/hasil-studi',
                     '/siakad/panduan',
                 ])
                 ->pluck('id')
