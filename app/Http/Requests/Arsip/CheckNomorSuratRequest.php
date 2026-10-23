@@ -18,7 +18,21 @@ class CheckNomorSuratRequest extends FormRequest
 
         return $user->isAdmin()
             || $user->hasPermission('arsip.nomor_surat.read')
-            || $user->hasPermission('spmb.manage');
+            || $user->hasPermission('spmb.manage')
+            || (method_exists($user, 'isObeAdmin') && $user->isObeAdmin())
+            || $user->hasPermission('siakad.kelas.manage')
+            || $user->hasPermission('siakad.kurikulum.read')
+            || $user->hasPermission('siakad.kurikulum.manage')
+            || $user->hasPermission('siakad.krs.read')
+            || $user->hasPermission('siakad.krs.approve')
+            || $user->hasPermission('siakad.master.manage')
+            || $user->hasPermission('siakad.konversi.manage')
+            || $user->hasPermission('siakad.beasiswa.manage')
+            || $user->hasPermission('siakad.dashboard.read')
+            || $user->hasPermission('siakad.kelas.read')
+            || $user->hasPermission('siakad.dosen.manage')
+            || $user->hasPermission('siakad.mahasiswa.read')
+            || $user->hasPermission('siakad.mahasiswa.manage');
     }
 
     /**

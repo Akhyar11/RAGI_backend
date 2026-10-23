@@ -1283,9 +1283,16 @@ class ObeMasterController extends Controller
             ], 403);
         }
 
+        $taId = $request->input('tahun_akademik_id');
         $query = \App\Models\Siakad\MasterKelas::with([
             'programStudi',
             'dosenPa',
+            'paketMks' => function ($q) use ($taId) {
+                if ($taId) {
+                    $q->where(fn($sub) => $sub->where('tahun_akademik_id', $taId)->orWhereNull('tahun_akademik_id'));
+                }
+                $q->with('mataKuliah');
+            },
         ])->withCount(['mahasiswas']);
 
         if ($request->filled('program_studi_id')) {

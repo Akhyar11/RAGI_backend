@@ -690,6 +690,10 @@ class AkademikController extends Controller
 
         $query = MataKuliah::with(['kurikulum.programStudi', 'prasyarats.prasyarat']);
 
+        if ($request->filled('id')) {
+            $query->where('id', $request->id);
+        }
+
         // Scoped user: batasi pada MK dari kurikulum prodinya (cermin listKurikulum).
         $user = $request->user();
         if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {

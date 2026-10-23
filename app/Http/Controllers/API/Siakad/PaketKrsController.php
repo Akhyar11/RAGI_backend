@@ -12,6 +12,10 @@ use App\Models\Siakad\TahunAkademik;
 use App\Services\Siakad\KrsService;
 use App\Services\Siakad\PaketKrsService;
 use Illuminate\Http\Request;
+use App\Models\Siakad\KrsDetail;
+use App\Models\Siakad\Kurikulum;
+use App\Models\Siakad\MasterKelas;
+use App\Models\Siakad\MataKuliah;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
@@ -22,6 +26,143 @@ class PaketKrsController extends Controller
         protected PaketKrsService $paketService,
         protected KrsService $krsService
     ) {}
+
+    /**
+     * Mengambil 2 list mata kuliah untuk rombel terpilih:
+     * 1. Mata kuliah yang SUDAH PERNAH diambil / dipaketkan oleh kelas tersebut.
+     * 2. Mata kuliah yang BELUM PERNAH diambil oleh kelas tersebut dari kurikulum prodi.
+     */
+    public function getMataKuliahByRombelHistory(Request $request)
+    {
+        Gate::authorize('siakad.krs.read');
+
+        $request->validate([
+            'master_kelas_id' => 'required|exists:siakad_master_kelas,id',
+            'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
+        ]);
+
+        $rombel = MasterKelas::with('programStudi')->findOrFail($request->master_kelas_id);
+        $taId = $request->filled('tahun_akademik_id') ? (int) $request->tahun_akademik_id : null;
+
+        // 1. Ambil data paket yang tersimpan pada rombel ini
+        $paketRecords = PaketMkRombel::with(['tahunAkademik', 'mataKuliah.kurikulum', 'nomorSurat'])
+            ->where('master_kelas_id', $rombel->id)
+            ->get();
+        $paketMkIds = $paketRecords->pluck('mata_kuliah_id')->unique()->toArray();
+
+        // Cari nomor SK aktif untuk rombel pada periode/tahun akademik ini
+        $currentPaketItems = $paketRecords->filter(fn($p) => $taId ? ($p->tahun_akademik_id === $taId || is_null($p->tahun_akademik_id)) : true);
+        $activeNomorSk = $currentPaketItems->pluck('nomor_sk')->filter()->first();
+        $skInfo = null;
+        if ($activeNomorSk) {
+            $surat = \App\Models\Arsip\NomorSurat::where('nomor_surat', $activeNomorSk)->first();
+            if ($surat) {
+                $tglSurat = $surat->tanggal_surat ? (is_string($surat->tanggal_surat) ? $surat->tanggal_surat : (string) $surat->tanggal_surat) : null;
+                $dokumenPath = $surat->file_path ?: ($surat->file_surat_path ?: $surat->request?->dokumen_lampiran_path);
+                $dokumenUrl = $dokumenPath ? app(\App\Services\Storage\FileStorageService::class)->url($dokumenPath) : null;
+                $skInfo = [
+                    'id' => $surat->id,
+                    'nomor_surat' => $surat->nomor_surat,
+                    'status' => $surat->status,
+                    'is_valid' => $surat->status !== 'dibatalkan' && (bool) $surat->has_dokumen,
+                    'has_document' => (bool) $surat->has_dokumen,
+                    'perihal' => $surat->perihal,
+                    'tujuan' => $surat->tujuan,
+                    'kode_unit' => $surat->kode_unit,
+                    'tanggal_surat' => $tglSurat,
+                    'dokumen_url' => $dokumenUrl,
+                ];
+            }
+        }
+
+        // 2. Ambil MK yang sudah pernah diambil mahasiswa rombel ini di KRS
+        $mhsIds = Mahasiswa::where('program_studi_id', $rombel->program_studi_id)
+            ->where('kelas', $rombel->nama_kelas)
+            ->pluck('id');
+
+        $krsMkIds = KrsDetail::whereHas('krs', fn($q) => $q->whereIn('mahasiswa_id', $mhsIds))
+            ->whereHas('kelas', fn($q) => $q->select('id', 'mata_kuliah_id'))
+            ->with('kelas:id,mata_kuliah_id')
+            ->get()
+            ->pluck('kelas.mata_kuliah_id')
+            ->filter()
+            ->unique()
+            ->toArray();
+
+        // Gabungan seluruh ID mata kuliah yang sudah pernah tersentuh oleh kelas ini
+        $allTakenMkIds = array_values(array_unique(array_merge($paketMkIds, $krsMkIds)));
+
+        // 3. Ambil seluruh kurikulum mata kuliah prodi rombel ini
+        $kurikulumIds = Kurikulum::where('program_studi_id', $rombel->program_studi_id)
+            ->pluck('id');
+
+        $allCourses = MataKuliah::with(['kurikulum.programStudi'])
+            ->whereIn('kurikulum_id', $kurikulumIds)
+            ->where('is_active', true)
+            ->orderBy('semester_anjuran')
+            ->orderBy('kode_mk')
+            ->get();
+
+        $paketByMk = $paketRecords->keyBy('mata_kuliah_id');
+
+        $sudahDiambil = [];
+        $belumDiambil = [];
+
+        foreach ($allCourses as $mk) {
+            $isTaken = in_array($mk->id, $allTakenMkIds);
+            if ($isTaken) {
+                $pInfo = $paketByMk->get($mk->id);
+                $isCurrent = false;
+                if ($pInfo) {
+                    $isCurrent = $taId ? ($pInfo->tahun_akademik_id === $taId || is_null($pInfo->tahun_akademik_id)) : true;
+                }
+
+                $sudahDiambil[] = [
+                    'id' => $mk->id,
+                    'kode_mk' => $mk->kode_mk,
+                    'nama' => $mk->nama,
+                    'total_sks' => $mk->total_sks ?? ($mk->sks_teori + $mk->sks_praktik),
+                    'sks_teori' => $mk->sks_teori,
+                    'sks_praktik' => $mk->sks_praktik,
+                    'semester_anjuran' => $pInfo?->semester_anjuran ?? $mk->semester_anjuran,
+                    'kurikulum' => $mk->kurikulum,
+                    'is_wajib' => $pInfo ? (bool) $pInfo->is_wajib : true,
+                    'is_current_paket' => $isCurrent,
+                    'paket_id' => $pInfo?->id,
+                    'nomor_sk' => $pInfo?->nomor_sk,
+                    'tahun_akademik' => $pInfo?->tahunAkademik,
+                    'sumber' => $pInfo ? 'paket_rombel' : 'krs_mahasiswa',
+                ];
+            } else {
+                $belumDiambil[] = [
+                    'id' => $mk->id,
+                    'kode_mk' => $mk->kode_mk,
+                    'nama' => $mk->nama,
+                    'total_sks' => $mk->total_sks ?? ($mk->sks_teori + $mk->sks_praktik),
+                    'sks_teori' => $mk->sks_teori,
+                    'sks_praktik' => $mk->sks_praktik,
+                    'semester_anjuran' => $mk->semester_anjuran,
+                    'kategori' => $mk->kategori ?? 'Wajib',
+                    'kurikulum' => $mk->kurikulum,
+                    'is_wajib' => true,
+                ];
+            }
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar riwayat mata kuliah rombel berhasil dimuat',
+            'data' => [
+                'rombel' => $rombel,
+                'nomor_sk' => $activeNomorSk,
+                'sk_info' => $skInfo,
+                'sudah_diambil' => $sudahDiambil,
+                'belum_diambil' => $belumDiambil,
+                'total_sudah_diambil' => count($sudahDiambil),
+                'total_belum_diambil' => count($belumDiambil),
+            ],
+        ]);
+    }
 
     // --- PAKET MK PER ROMBEL ---
     public function index(Request $request)
@@ -87,7 +228,18 @@ class PaketKrsController extends Controller
             ], 200);
         }
 
+        $nomorSuratId = $request->input('nomor_surat_id');
+        $nomorSk = $request->input('nomor_sk');
+        if (!$nomorSuratId && $nomorSk) {
+            $suratRef = \App\Models\Arsip\NomorSurat::where('nomor_surat', $nomorSk)->first();
+            if ($suratRef) {
+                $nomorSuratId = $suratRef->id;
+            }
+        }
+
         $item = PaketMkRombel::create(array_merge($kunci, [
+            'nomor_surat_id' => $nomorSuratId,
+            'nomor_sk' => $nomorSk,
             'semester_anjuran' => $request->semester_anjuran,
             'is_wajib' => $request->boolean('is_wajib', true),
         ]));
@@ -193,14 +345,43 @@ class PaketKrsController extends Controller
         $validated = $request->validate([
             'master_kelas_id' => 'required|exists:siakad_master_kelas,id',
             'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
+            'nomor_sk' => 'required|string|max:150',
             'items' => 'required|array|min:1',
             'items.*.mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
             'items.*.semester_anjuran' => 'nullable|integer|min:1|max:14',
             'items.*.is_wajib' => 'nullable|boolean',
+        ], [
+            'nomor_sk.required' => 'Nomor SK wajib dilampirkan untuk menyimpan paket rombel.',
         ]);
 
+        $nomorSk = trim((string) $validated['nomor_sk']);
+        $surat = \App\Models\Arsip\NomorSurat::where('nomor_surat', $nomorSk)->first();
+        if (!$surat) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Nomor SK '{$nomorSk}' tidak terdaftar di modul Arsip.",
+                'errors' => ['nomor_sk' => ["Nomor SK '{$nomorSk}' tidak terdaftar di modul Arsip."]],
+            ], 422);
+        }
+
+        if ($surat->status === 'dibatalkan') {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Nomor SK '{$nomorSk}' berstatus DIBATALKAN di modul Arsip.",
+                'errors' => ['nomor_sk' => ["Nomor SK '{$nomorSk}' berstatus DIBATALKAN."]],
+            ], 422);
+        }
+
+        if (!$surat->has_dokumen) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Nomor SK '{$nomorSk}' terdaftar di Arsip, tetapi berkas fisik dokumen SK belum diunggah (dokumen masih kosong).",
+                'errors' => ['nomor_sk' => ["Nomor SK '{$nomorSk}' terdaftar di Arsip, tetapi berkas fisik dokumen SK belum diunggah."]],
+            ], 422);
+        }
+
         $taId = $validated['tahun_akademik_id'] ?? null;
-        return DB::transaction(function () use ($validated, $taId, $request) {
+        return DB::transaction(function () use ($validated, $taId, $nomorSk, $surat, $request) {
             $keepIds = [];
             foreach ($validated['items'] as $row) {
                 $item = PaketMkRombel::updateOrCreate(
@@ -210,6 +391,8 @@ class PaketKrsController extends Controller
                         'tahun_akademik_id' => $taId,
                     ],
                     [
+                        'nomor_surat_id' => $surat->id,
+                        'nomor_sk' => $surat->nomor_surat,
                         'semester_anjuran' => $row['semester_anjuran'] ?? null,
                         'is_wajib' => array_key_exists('is_wajib', $row) ? (bool) $row['is_wajib'] : true,
                     ]
@@ -226,7 +409,7 @@ class PaketKrsController extends Controller
             }
             $deleted = $toDelete->count();
 
-            $data = PaketMkRombel::with('mataKuliah')
+            $data = PaketMkRombel::with(['mataKuliah', 'nomorSurat'])
                 ->where('master_kelas_id', $validated['master_kelas_id'])
                 ->where('tahun_akademik_id', $taId)
                 ->orderBy('semester_anjuran')
@@ -239,7 +422,11 @@ class PaketKrsController extends Controller
                     tableName: 'siakad_paket_mk_rombel',
                     recordId: null,
                     oldValues: ['dihapus' => $deleted],
-                    newValues: ['master_kelas_id' => $validated['master_kelas_id'], 'total_item' => $data->count()],
+                    newValues: [
+                        'master_kelas_id' => $validated['master_kelas_id'],
+                        'nomor_sk' => $nomorSk,
+                        'total_item' => $data->count(),
+                    ],
                     request: $request
                 );
             } catch (\Throwable $e) {
@@ -248,7 +435,7 @@ class PaketKrsController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'message' => "Paket rombel disinkronkan ({$data->count()} MK, {$deleted} dihapus)",
+                'message' => "Paket rombel disinkronkan ({$data->count()} MK, {$deleted} dihapus) dengan SK '{$nomorSk}'",
                 'data' => $data,
             ]);
         });
@@ -329,7 +516,7 @@ class PaketKrsController extends Controller
             'status' => 'success',
             'message' => 'Pengambilan paket selesai: ' . count($hasil['berhasil']) . ' berhasil, ' . count($hasil['gagal']) . ' gagal, ' . count($hasil['dilewati']) . ' dilewati',
             'data' => [
-                'rombel' => $rombel->load('programStudi'),
+                'rombel' => $rombel instanceof \Illuminate\Database\Eloquent\Model ? $rombel->load('programStudi') : $rombel,
                 'hasil' => $hasil,
             ],
         ]);

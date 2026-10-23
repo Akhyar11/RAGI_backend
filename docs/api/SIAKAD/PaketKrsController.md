@@ -13,6 +13,7 @@ Paket MK per rombel (pengganti kecocokan nama `nm_kls` legacy): BAAK/Kaprodi men
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
 | GET | `/api/v1/siakad/perkuliahan/paket-mk` | Daftar paket MK rombel | ✅ `siakad.krs.read` |
+| GET | `/api/v1/siakad/perkuliahan/paket-mk/riwayat-rombel` | Riwayat MK rombel (sudah & belum diambil) | ✅ `siakad.krs.read` |
 | POST | `/api/v1/siakad/perkuliahan/paket-mk` | Tambah MK ke paket rombel | ✅ `siakad.kelas.manage` |
 | POST | `/api/v1/siakad/perkuliahan/paket-mk/bulk-sync` | Sinkronisasi massal isi paket satu rombel | ✅ `siakad.kelas.manage` |
 | GET | `/api/v1/siakad/perkuliahan/paket-mk/{id}` | Detail paket | ✅ `siakad.krs.read` |
@@ -121,6 +122,105 @@ Paket MK per rombel (pengganti kecocokan nama `nm_kls` legacy): BAAK/Kaprodi men
 
 ---
 
+## [GET] /api/v1/siakad/perkuliahan/paket-mk/riwayat-rombel
+
+Memuat daftar mata kuliah kurikulum yang dipisah menjadi dua kelompok:
+1. `sudah_diambil`: MK yang sudah pernah diambil oleh rombel (baik pada paket periode terpilih maupun riwayat KRS mahasiswa rombel). Menyertakan info nomor SK dan berkas dokumen dari modul Arsip.
+2. `belum_diambil`: MK kurikulum yang belum pernah diambil sama sekali oleh rombel tersebut (siap dipilih/ditetapkan ke paket).
+
+### Query Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `master_kelas_id` | integer | ✅ | ID Rombel (`siakad_master_kelas`) |
+| `tahun_akademik_id` | integer | ❌ | ID Tahun Akademik aktif/terpilih |
+| `kurikulum_id` | integer | ❌ | ID Kurikulum spesifik (opsional) |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Data riwayat mata kuliah rombel berhasil dimuat",
+    "data": {
+        "rombel": { "id": 1, "nama_kelas": "24A", "tahun_angkatan": 2024, "program_studi_id": 2 },
+        "tahun_akademik": { "id": 1, "nama": "2026/2027 Ganjil" },
+        "nomor_sk": "15/SK/YAY/X/2026",
+        "sk_info": {
+            "id": 12,
+            "nomor_surat": "15/SK/YAY/X/2026",
+            "is_valid": true,
+            "has_document": true,
+            "status": "terpakai",
+            "perihal": "SK Penetapan Paket KRS Rombel Angkatan 2024",
+            "tujuan": "Fakultas Teknik",
+            "kode_unit": "TI",
+            "tanggal_surat": "2026-10-01",
+            "dokumen_url": "http://localhost:8000/api/files/view?path=arsip%2Fsk%2Fsk-paket.pdf"
+        },
+        "sudah_diambil": [
+            {
+                "id": 101,
+                "kode_mk": "IF201",
+                "nama": "Basis Data",
+                "total_sks": 3,
+                "sks_teori": 2,
+                "sks_praktik": 1,
+                "semester_anjuran": 3,
+                "kurikulum": { "id": 5, "nama": "Kurikulum OBE 2024" },
+                "is_wajib": true,
+                "is_current_paket": true,
+                "paket_id": 14,
+                "nomor_sk": "15/SK/YAY/X/2026",
+                "sumber": "paket_rombel"
+            }
+        ],
+        "belum_diambil": [
+            {
+                "id": 102,
+                "kode_mk": "IF202",
+                "nama": "Jaringan Komputer",
+                "total_sks": 3,
+                "sks_teori": 3,
+                "sks_praktik": 0,
+                "semester_anjuran": 3,
+                "kategori": "Wajib",
+                "kurikulum": { "id": 5, "nama": "Kurikulum OBE 2024" },
+                "is_wajib": true
+            }
+        ]
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk melihat data paket rombel ini."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "The master kelas id field is required."
+}
+```
+
+---
+
 ## [POST] /api/v1/siakad/perkuliahan/paket-mk
 
 ### Request Body
@@ -131,7 +231,8 @@ Paket MK per rombel (pengganti kecocokan nama `nm_kls` legacy): BAAK/Kaprodi men
     "mata_kuliah_id": "integer, required, exists:siakad_mata_kuliah,id",
     "tahun_akademik_id": "integer, nullable, exists:siakad_tahun_akademik,id (null = berlaku semua periode)",
     "semester_anjuran": "integer, nullable, 1-14",
-    "is_wajib": "boolean, nullable, default true"
+    "is_wajib": "boolean, nullable, default true",
+    "nomor_sk": "string, nullable, max 150"
 }
 ```
 
@@ -142,7 +243,7 @@ Paket MK per rombel (pengganti kecocokan nama `nm_kls` legacy): BAAK/Kaprodi men
 {
     "status": "success",
     "message": "Mata kuliah berhasil ditambahkan ke paket rombel",
-    "data": { "id": 1, "master_kelas_id": 4, "mata_kuliah_id": 12 }
+    "data": { "id": 1, "master_kelas_id": 4, "mata_kuliah_id": 12, "nomor_sk": "15/SK/YAY/X/2026" }
 }
 ```
 
@@ -151,6 +252,10 @@ Paket MK per rombel (pengganti kecocokan nama `nm_kls` legacy): BAAK/Kaprodi men
 ## [POST] /api/v1/siakad/perkuliahan/paket-mk/bulk-sync
 
 Mengganti seluruh isi paket satu rombel (+periode opsional) dengan daftar dari UI centang. Baris yang tidak ada di daftar akan dihapus.
+Memvalidasi parameter `nomor_sk` terhadap modul Arsip (`core_arsip_nomor_surat`):
+- Wajib terdaftar di Arsip.
+- Status tidak boleh `dibatalkan`.
+- Wajib memiliki berkas fisik dokumen scan (`has_dokumen = true`).
 
 ### Request Body
 
@@ -158,6 +263,7 @@ Mengganti seluruh isi paket satu rombel (+periode opsional) dengan daftar dari U
 {
     "master_kelas_id": "integer, required, exists:siakad_master_kelas,id",
     "tahun_akademik_id": "integer, nullable, exists:siakad_tahun_akademik,id",
+    "nomor_sk": "string, required, max:150 (Nomor SK valid dan memiliki dokumen di modul Arsip)",
     "items": [
         { "mata_kuliah_id": 12, "semester_anjuran": 3, "is_wajib": true }
     ]
@@ -170,8 +276,57 @@ Mengganti seluruh isi paket satu rombel (+periode opsional) dengan daftar dari U
 ```json
 {
     "status": "success",
-    "message": "Paket rombel disinkronkan (6 MK, 1 dihapus)",
-    "data": [...]
+    "message": "Paket rombel disinkronkan (1 MK disimpan)",
+    "data": [
+        {
+            "id": 1,
+            "master_kelas_id": 4,
+            "mata_kuliah_id": 12,
+            "semester_anjuran": 3,
+            "is_wajib": true,
+            "nomor_sk": "15/SK/YAY/X/2026"
+        }
+    ]
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk mengelola paket rombel program studi ini."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Nomor SK '15/SK/INVALID/2026' tidak terdaftar di sistem Arsip."
+}
+```
+
+```json
+{
+    "status": "error",
+    "message": "Nomor SK '15/SK/BATAL/2026' berstatus DIBATALKAN pada sistem Arsip."
+}
+```
+
+```json
+{
+    "status": "error",
+    "message": "Nomor SK '15/SK/NODOC/2026' belum memiliki berkas fisik scan dokumen di modul Arsip. Harap unggah dokumen fisik SK terlebih dahulu."
 }
 ```
 

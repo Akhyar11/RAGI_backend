@@ -88,4 +88,10 @@ class MataKuliah extends Model
             'cpmk_prodi_id'
         )->withTimestamps();
     }
+
+    public function rps()
+    {
+        return $this->hasOne(Rps::class, 'mata_kuliah_id')->latestOfMany();
+    }
 }
+

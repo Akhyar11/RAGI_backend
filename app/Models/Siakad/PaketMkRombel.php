@@ -12,6 +12,8 @@ class PaketMkRombel extends Model
         'master_kelas_id',
         'mata_kuliah_id',
         'tahun_akademik_id',
+        'nomor_surat_id',
+        'nomor_sk',
         'semester_anjuran',
         'is_wajib',
     ];
@@ -20,6 +22,8 @@ class PaketMkRombel extends Model
         'master_kelas_id' => 'integer',
         'mata_kuliah_id' => 'integer',
         'tahun_akademik_id' => 'integer',
+        'nomor_surat_id' => 'integer',
+        'nomor_sk' => 'string',
         'semester_anjuran' => 'integer',
         'is_wajib' => 'boolean',
     ];
@@ -37,5 +41,10 @@ class PaketMkRombel extends Model
     public function tahunAkademik()
     {
         return $this->belongsTo(TahunAkademik::class, 'tahun_akademik_id');
+    }
+
+    public function nomorSurat()
+    {
+        return $this->belongsTo(\App\Models\Arsip\NomorSurat::class, 'nomor_surat_id');
     }
 }

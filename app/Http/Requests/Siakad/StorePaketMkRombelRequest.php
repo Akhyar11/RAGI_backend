@@ -17,6 +17,8 @@ class StorePaketMkRombelRequest extends FormRequest
             'master_kelas_id' => 'required|exists:siakad_master_kelas,id',
             'mata_kuliah_id' => 'required|exists:siakad_mata_kuliah,id',
             'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
+            'nomor_surat_id' => 'nullable|exists:core_arsip_nomor_surat,id',
+            'nomor_sk' => 'nullable|string|max:150',
             'semester_anjuran' => 'nullable|integer|min:1|max:14',
             'is_wajib' => 'nullable|boolean',
         ];

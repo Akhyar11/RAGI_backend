@@ -173,6 +173,7 @@ Route::prefix('perkuliahan')->group(function () {
     Route::get('/transkrip', [PerkuliahanController::class, 'getTranskrip']);
 
     // Paket MK per rombel (BAAK/Kaprodi menetapkan MK yang disediakan per rombel)
+    Route::get('/paket-mk/riwayat-rombel', [PaketKrsController::class, 'getMataKuliahByRombelHistory']);
     Route::get('/paket-mk', [PaketKrsController::class, 'index']);
     Route::post('/paket-mk', [PaketKrsController::class, 'store']);
     Route::post('/paket-mk/bulk-sync', [PaketKrsController::class, 'bulkSync']);

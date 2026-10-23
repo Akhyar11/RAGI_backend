@@ -96,15 +96,122 @@ class SiakadPaketKrsTest extends TestCase
 
     public function test_bulk_sync_mengganti_isi_paket(): void
     {
-        PaketMkRombel::create(['master_kelas_id' => $this->rombel->id, 'mata_kuliah_id' => $this->mk1->id, 'semester_anjuran' => 3]);
+        $sk = \App\Models\Arsip\NomorSurat::create([
+            'nomor_surat' => '12/SK/TI/X/2026',
+            'nomor_urut' => 12,
+            'kode_unit' => 'TI',
+            'kode_klasifikasi' => 'SK',
+            'bulan_romawi' => 'X',
+            'tahun' => 2026,
+            'tanggal_surat' => '2026-10-01',
+            'perihal' => 'SK Penetapan Paket Rombel 24A',
+            'tujuan' => 'Rombel 24A TI',
+            'status' => 'terpakai',
+            'file_path' => 'arsip/dokumen-surat/sk-paket-24a.pdf',
+            'created_by' => $this->user->id,
+        ]);
+
+        PaketMkRombel::create(['master_kelas_id' => $this->rombel->id, 'mata_kuliah_id' => $this->mk1->id, 'nomor_sk' => $sk->nomor_surat, 'semester_anjuran' => 3]);
 
         $res = $this->postJson('/api/v1/siakad/perkuliahan/paket-mk/bulk-sync', [
             'master_kelas_id' => $this->rombel->id,
+            'nomor_sk' => $sk->nomor_surat,
             'items' => [['mata_kuliah_id' => $this->mk2->id, 'semester_anjuran' => 3]],
         ]);
         $res->assertStatus(200);
         $this->assertDatabaseMissing('siakad_paket_mk_rombel', ['master_kelas_id' => $this->rombel->id, 'mata_kuliah_id' => $this->mk1->id]);
-        $this->assertDatabaseHas('siakad_paket_mk_rombel', ['master_kelas_id' => $this->rombel->id, 'mata_kuliah_id' => $this->mk2->id]);
+        $this->assertDatabaseHas('siakad_paket_mk_rombel', ['master_kelas_id' => $this->rombel->id, 'mata_kuliah_id' => $this->mk2->id, 'nomor_sk' => $sk->nomor_surat]);
+    }
+
+    public function test_bulk_sync_validasi_sk_arsip_dan_berkas_fisik(): void
+    {
+        // 1. Gagal jika nomor_sk tidak diisi
+        $resNoSk = $this->postJson('/api/v1/siakad/perkuliahan/paket-mk/bulk-sync', [
+            'master_kelas_id' => $this->rombel->id,
+            'items' => [['mata_kuliah_id' => $this->mk1->id, 'semester_anjuran' => 3]],
+        ]);
+        $resNoSk->assertStatus(422);
+        $resNoSk->assertJsonValidationErrors('nomor_sk');
+
+        // 2. Gagal jika nomor_sk tidak ada di Arsip
+        $resNotFound = $this->postJson('/api/v1/siakad/perkuliahan/paket-mk/bulk-sync', [
+            'master_kelas_id' => $this->rombel->id,
+            'nomor_sk' => 'SK-PALSU-TIDAK-ADA',
+            'items' => [['mata_kuliah_id' => $this->mk1->id, 'semester_anjuran' => 3]],
+        ]);
+        $resNotFound->assertStatus(422);
+        $this->assertStringContainsString('tidak terdaftar di modul Arsip', $resNotFound->json('message'));
+
+        // 3. Gagal jika nomor_sk diarsipkan tetapi dibatalkan
+        $skDibatalkan = \App\Models\Arsip\NomorSurat::create([
+            'nomor_surat' => '99/SK/BATAL/X/2026',
+            'nomor_urut' => 99,
+            'kode_unit' => 'TI',
+            'kode_klasifikasi' => 'SK',
+            'bulan_romawi' => 'X',
+            'tahun' => 2026,
+            'tanggal_surat' => '2026-10-01',
+            'perihal' => 'SK Paket Dibatalkan',
+            'status' => 'dibatalkan',
+            'file_path' => 'arsip/dokumen-surat/sk-batal.pdf',
+            'created_by' => $this->user->id,
+        ]);
+        $resBatal = $this->postJson('/api/v1/siakad/perkuliahan/paket-mk/bulk-sync', [
+            'master_kelas_id' => $this->rombel->id,
+            'nomor_sk' => $skDibatalkan->nomor_surat,
+            'items' => [['mata_kuliah_id' => $this->mk1->id, 'semester_anjuran' => 3]],
+        ]);
+        $resBatal->assertStatus(422);
+        $this->assertStringContainsString('DIBATALKAN', $resBatal->json('message'));
+
+        // 4. Gagal jika nomor_sk ada di Arsip tetapi belum diunggah berkas fisiknya (has_dokumen = false)
+        $skTanpaBerkas = \App\Models\Arsip\NomorSurat::create([
+            'nomor_surat' => '100/SK/NOFILE/X/2026',
+            'nomor_urut' => 100,
+            'kode_unit' => 'TI',
+            'kode_klasifikasi' => 'SK',
+            'bulan_romawi' => 'X',
+            'tahun' => 2026,
+            'tanggal_surat' => '2026-10-01',
+            'perihal' => 'SK Paket Belum Upload',
+            'status' => 'terpakai',
+            'file_path' => null,
+            'file_surat_path' => null,
+            'created_by' => $this->user->id,
+        ]);
+        $resTanpaBerkas = $this->postJson('/api/v1/siakad/perkuliahan/paket-mk/bulk-sync', [
+            'master_kelas_id' => $this->rombel->id,
+            'nomor_sk' => $skTanpaBerkas->nomor_surat,
+            'items' => [['mata_kuliah_id' => $this->mk1->id, 'semester_anjuran' => 3]],
+        ]);
+        $resTanpaBerkas->assertStatus(422);
+        $this->assertStringContainsString('berkas fisik dokumen SK belum diunggah', $resTanpaBerkas->json('message'));
+
+        // 5. Berhasil jika nomor_sk ada di Arsip dan berkas fisiknya ada
+        $skValid = \App\Models\Arsip\NomorSurat::create([
+            'nomor_surat' => '101/SK/OK/X/2026',
+            'nomor_urut' => 101,
+            'kode_unit' => 'TI',
+            'kode_klasifikasi' => 'SK',
+            'bulan_romawi' => 'X',
+            'tahun' => 2026,
+            'tanggal_surat' => '2026-10-01',
+            'perihal' => 'SK Paket Rombel Sah',
+            'status' => 'terpakai',
+            'file_path' => 'arsip/dokumen-surat/sk-ok.pdf',
+            'created_by' => $this->user->id,
+        ]);
+        $resOk = $this->postJson('/api/v1/siakad/perkuliahan/paket-mk/bulk-sync', [
+            'master_kelas_id' => $this->rombel->id,
+            'nomor_sk' => $skValid->nomor_surat,
+            'items' => [['mata_kuliah_id' => $this->mk1->id, 'semester_anjuran' => 3]],
+        ]);
+        $resOk->assertStatus(200);
+        $this->assertDatabaseHas('siakad_paket_mk_rombel', [
+            'master_kelas_id' => $this->rombel->id,
+            'mata_kuliah_id' => $this->mk1->id,
+            'nomor_sk' => $skValid->nomor_surat,
+        ]);
     }
 
     public function test_hakakses_terkunci_menolak_ambil_paket(): void
@@ -206,4 +313,40 @@ class SiakadPaketKrsTest extends TestCase
         $ng = $this->getJson("/api/v1/siakad/perkuliahan/krs/paket-saya?mahasiswa_id={$mhsB->id}");
         $ng->assertStatus(403);
     }
+
+    public function test_obe_admin_dosen_dapat_mengecek_nomor_sk_di_arsip(): void
+    {
+        $dosenRole = Role::where('slug', 'dosen')->first();
+        $userObe = User::factory()->create(['is_active' => true]);
+        if ($dosenRole) {
+            $userObe->roles()->attach($dosenRole->id);
+        }
+
+        // Plot sebagai admin OBE di prodi
+        \Illuminate\Support\Facades\DB::table('siakad_admin_prodi')->insert([
+            'user_id' => $userObe->id,
+            'program_studi_id' => $this->prodi->id,
+            'jabatan' => 'Admin OBE Prodi',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertTrue($userObe->isObeAdmin());
+        $this->assertFalse($userObe->isAdmin());
+
+        Passport::actingAs($userObe);
+
+        // Pengecekan nomor SK tidak boleh 403 Forbidden
+        $res = $this->getJson('/api/arsip/nomor-surat/check?nomor_surat=SK-OBE-TEST/2026');
+        $res->assertStatus(200);
+        $res->assertJson([
+            'status' => 'success',
+            'data' => [
+                'is_found' => false,
+                'is_valid' => false,
+            ],
+        ]);
+    }
 }
+
