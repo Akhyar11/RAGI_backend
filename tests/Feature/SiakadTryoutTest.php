@@ -247,4 +247,108 @@ class SiakadTryoutTest extends TestCase
             ->assertStatus(200)
             ->assertJsonCount(0, 'data');
     }
+
+    public function test_passing_score_menentukan_status_lulus_attempt(): void
+    {
+        $quizId = $this->buatTryoutPublished(['passing_score' => 60]);
+
+        // Nilai tersimpan pada detail kelola.
+        $this->getJson("/api/v1/lms/quiz/{$quizId}/manage")
+            ->assertStatus(200)
+            ->assertJsonPath('data.quiz.passing_score', '60.00');
+
+        // Mahasiswa mengerjakan: 1 dari 2 soal benar → 50 (< 60) → tidak lulus.
+        Passport::actingAs($this->userMhs);
+        $attemptId = $this->postJson("/api/v1/lms/quiz/{$quizId}/start")->json('data.id');
+        $batch = $this->getJson("/api/v1/lms/quiz/{$quizId}/soal?page=1");
+        $qsIds = collect($batch->json('data.data'))->pluck('quiz_soal_id', 'pertanyaan')->all();
+
+        $this->postJson("/api/v1/lms/attempt/{$attemptId}/autosave", ['answers' => [
+            ['quiz_soal_id' => $qsIds['Ibukota Indonesia?'], 'bank_opsi_id' => $this->opsiBenarId],
+            ['quiz_soal_id' => $qsIds['2 + 2?'], 'bank_opsi_id' => $this->opsiSalahId],
+        ]])->assertStatus(200);
+
+        $this->postJson("/api/v1/lms/attempt/{$attemptId}/submit")
+            ->assertStatus(200)
+            ->assertJsonPath('data.nilai_akhir', '50.00')
+            ->assertJsonPath('data.is_lulus', false);
+
+        Passport::actingAs($this->userDosen);
+        $this->getJson("/api/v1/lms/quiz/{$quizId}/attempts")
+            ->assertStatus(200)
+            ->assertJsonPath('data.0.is_lulus', false);
+
+        // Ambang diturunkan → attempt yang sama menjadi lulus.
+        $this->putJson("/api/v1/lms/quiz/{$quizId}", ['passing_score' => 40])->assertStatus(200);
+        $this->getJson("/api/v1/lms/quiz/{$quizId}/attempts")
+            ->assertStatus(200)
+            ->assertJsonPath('data.0.is_lulus', true);
+
+        // Ambang dilepas → status tidak ditentukan (null).
+        $this->putJson("/api/v1/lms/quiz/{$quizId}", ['passing_score' => null])->assertStatus(200);
+        $this->getJson("/api/v1/lms/quiz/{$quizId}/attempts")
+            ->assertStatus(200)
+            ->assertJsonPath('data.0.is_lulus', null);
+    }
+
+    public function test_salin_peserta_bulk_lepas_soal_dan_cari_mahasiswa(): void
+    {
+        Passport::actingAs($this->userDosen);
+
+        $quizA = $this->buatTryoutPublished(['judul' => 'Tryout A']);
+        $quizB = $this->buatTryoutPublished(['judul' => 'Tryout B']);
+
+        // Peserta eksplisit pada tryout A disalin ke B.
+        $this->postJson("/api/v1/lms/quiz/{$quizA}/peserta", ['mahasiswa_id' => $this->mahasiswaLuar->id])
+            ->assertStatus(201);
+
+        $this->postJson("/api/v1/lms/quiz/{$quizB}/peserta-copy", ['source_quiz_id' => $quizA])
+            ->assertStatus(201)
+            ->assertJsonPath('data.added', 1)
+            ->assertJsonPath('data.skipped', 0);
+
+        $this->assertDatabaseHas('lms_tryout_peserta', [
+            'quiz_id' => $quizB,
+            'mahasiswa_id' => $this->mahasiswaLuar->id,
+        ]);
+
+        // Idempoten.
+        $this->postJson("/api/v1/lms/quiz/{$quizB}/peserta-copy", ['source_quiz_id' => $quizA])
+            ->assertStatus(201)
+            ->assertJsonPath('data.added', 0)
+            ->assertJsonPath('data.skipped', 1);
+
+        // Tidak boleh menyalin dari dirinya sendiri.
+        $this->postJson("/api/v1/lms/quiz/{$quizB}/peserta-copy", ['source_quiz_id' => $quizB])
+            ->assertStatus(422);
+
+        // Pencarian mahasiswa untuk pemilih peserta.
+        $this->getJson('/api/v1/lms/mahasiswa/search?q=' . $this->mahasiswaLuar->nim)
+            ->assertStatus(200)
+            ->assertJsonPath('data.0.nim', $this->mahasiswaLuar->nim);
+
+        // Bulk lepas soal tryout B.
+        $ids = QuizSoal::where('quiz_id', $quizB)->pluck('id')->all();
+        $this->assertCount(2, $ids);
+
+        $this->postJson("/api/v1/lms/quiz/{$quizB}/soal/bulk-delete", ['quiz_soal_ids' => $ids])
+            ->assertStatus(200)
+            ->assertJsonPath('data.deleted', 2);
+
+        $this->assertDatabaseMissing('lms_quiz_soal', ['quiz_id' => $quizB]);
+        $this->assertDatabaseHas('core_audit_logs', [
+            'module' => 'LMS',
+            'action' => 'delete',
+            'table_name' => 'lms_quiz_soal',
+        ]);
+
+        // Struktur terkunci setelah ada attempt → bulk lepas ditolak.
+        Passport::actingAs($this->userMhs);
+        $this->postJson("/api/v1/lms/quiz/{$quizA}/start")->assertStatus(201);
+
+        Passport::actingAs($this->userDosen);
+        $idsA = QuizSoal::where('quiz_id', $quizA)->pluck('id')->all();
+        $this->postJson("/api/v1/lms/quiz/{$quizA}/soal/bulk-delete", ['quiz_soal_ids' => $idsA])
+            ->assertStatus(422);
+    }
 }

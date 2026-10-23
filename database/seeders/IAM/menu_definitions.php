@@ -372,6 +372,18 @@ return [
         'order_index' => 9,
     ],
     // ── MODUL LMS (STANDALONE, PISAH DARI SIAKAD) ─────
+    // `role_slugs` bersifat opsional: bila diisi, menu hanya dipetakan ke role
+    // tersebut. Tanpa key ini, pemetaan role mengikuti aturan generik
+    // MenuSeeder (menu tanpa permission_id pada modul role tersebut).
+    [
+        'name' => 'Ringkasan LMS',
+        'url' => '/lms/dashboard',
+        'icon' => 'FaChartPie',
+        'module' => 'lms',
+        'permission_slug' => 'siakad.kelas.read',
+        'order_index' => 0,
+        'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+    ],
     [
         'name' => 'Dashboard LMS',
         'url' => '/lms',
@@ -379,6 +391,95 @@ return [
         'module' => 'lms',
         'permission_slug' => 'siakad.kelas.read',
         'order_index' => 1,
+        'role_slugs' => ['dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+    ],
+    // Menu di bawah ini sebelumnya hanya dibuat lewat migrasi. Karena
+    // MenuSeeder melakukan `Menu::truncate()`, setiap seeding menghapus menu
+    // yang hanya hidup di migrasi — menu LMS ikut hilang. Definisi dipindah
+    // ke sini supaya `Menu::truncate()` + recreate tetap memunculkannya.
+    // `is_active` dipakai untuk menu yang sengaja dinonaktifkan (lihat
+    // migration 2026_10_06_090000_lms_alur_baru: halaman Pertemuan lama
+    // digantikan navigasi per-kelas dari /lms).
+    [
+        'name' => 'Pertemuan',
+        'url' => '/lms/pertemuan',
+        'icon' => 'FaCalendarCheck',
+        'module' => 'lms',
+        'permission_slug' => 'siakad.kelas.read',
+        'order_index' => 2,
+        'is_active' => false,
+        'role_slugs' => ['dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+    ],
+    [
+        'name' => 'Tryout',
+        'url' => '/lms/tryout',
+        'icon' => 'FaClipboardCheck',
+        'module' => 'lms',
+        'permission_slug' => 'siakad.kelas.read',
+        'order_index' => 3,
+        'role_slugs' => ['dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+    ],
+    [
+        'name' => 'Forum Diskusi',
+        'url' => '/lms/forum',
+        'icon' => 'FaUsers',
+        'module' => 'lms',
+        'permission_slug' => 'siakad.kelas.read',
+        'order_index' => 4,
+        'role_slugs' => ['dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+    ],
+    [
+        'name' => 'Pengaturan LMS',
+        'url' => '/lms/pengaturan',
+        'icon' => 'FaCogs',
+        'module' => 'lms',
+        'permission_slug' => 'siakad.kelas.manage',
+        'order_index' => 5,
+        // Mahasiswa sengaja tidak diberi: tidak memegang siakad.kelas.manage.
+        'role_slugs' => ['dosen', 'kaprodi', 'wakil_prodi'],
+    ],
+    [
+        'name' => 'Bank Soal',
+        'url' => '/lms/bank-soal',
+        'icon' => 'FaDatabase',
+        'module' => 'lms',
+        'permission_slug' => 'siakad.nilai.manage',
+        'order_index' => 6,
+        // Mahasiswa sengaja tidak diberi: tidak memegang siakad.nilai.manage.
+        'role_slugs' => ['dosen', 'kaprodi', 'wakil_prodi'],
+    ],
+    [
+        // Panel administrasi integrasi presensi LMS <-> PresensiV2.
+        // Hanya admin/superadmin: monitor seluruh kampus + memicu sinkron.
+        'name' => 'Presensi & Integrasi',
+        'url' => '/lms/presensi',
+        'icon' => 'FaFingerprint',
+        'module' => 'lms',
+        'permission_slug' => 'lms.presensi.read',
+        'order_index' => 7,
+        'role_slugs' => ['superadmin', 'admin'],
+    ],
+    [
+        // Inbox notifikasi in-app LMS (LMS-04). Tersedia untuk seluruh
+        // pengguna yang punya akses LMS, bukan hanya admin.
+        'name' => 'Notifikasi',
+        'url' => '/lms/notifikasi',
+        'icon' => 'FaBell',
+        'module' => 'lms',
+        'permission_slug' => 'siakad.kelas.read',
+        'order_index' => 8,
+        'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+    ],
+    [
+        // Pengaturan global modul LMS (`lms_*` pada core_system_settings).
+        // Berbeda dari "Pengaturan LMS" (/lms/pengaturan) yang per kelas.
+        'name' => 'Pengaturan Modul LMS',
+        'url' => '/lms/pengaturan/modul',
+        'icon' => 'FaCogs',
+        'module' => 'lms',
+        'permission_slug' => 'lms.pengaturan.read',
+        'order_index' => 9,
+        'role_slugs' => ['superadmin', 'admin'],
     ],
 
     // ── MODUL SPMB (PENERIMAAN MAHASISWA BARU) ─────────────

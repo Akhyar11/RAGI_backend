@@ -523,4 +523,115 @@ class SiakadLmsTest extends TestCase
                 ],
             ]);
     }
+
+    public function test_pengaturan_kelas_bisa_dibaca_dan_terbatas_pada_anggota_kelas(): void
+    {
+        // Mahasiswa anggota kelas boleh membaca pengaturan kelas.
+        Passport::actingAs($this->userMhs);
+        $response = $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/setting");
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'status',
+                'message',
+                'data' => [
+                    'kelas_id',
+                    'total_pertemuan',
+                    'metode_absensi',
+                    'batas_min_hadir_persen',
+                    'can_submit_late',
+                    'show_nilai_to_mahasiswa',
+                ],
+            ]);
+        $this->assertSame($this->kelas->id, $response->json('data.kelas_id'));
+
+        // Mahasiswa luar kelas tidak boleh membaca pengaturan kelas tersebut.
+        $userLuar = \App\Models\User::factory()->create([
+            'username' => 'mhs.lms.luar',
+            'email'    => 'mhs.lms.luar@test.ac.id',
+        ]);
+        $mhsLuar = \App\Models\Siakad\Mahasiswa::create([
+            'user_id' => $userLuar->id,
+            'program_studi_id' => $this->kelas->program_studi_id,
+            'nim' => '2026009999',
+            'nama_lengkap' => 'Mahasiswa Luar LMS',
+            'angkatan' => 2026,
+            'status_akademik' => 'aktif',
+        ]);
+        $roleMhs = \App\Models\Role::where('slug', 'mahasiswa')->first();
+        $userLuar->roles()->attach($roleMhs->id);
+
+        Passport::actingAs($userLuar);
+        $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/setting")->assertStatus(422);
+        $this->assertNotNull($mhsLuar->id);
+    }
+
+    public function test_mahasiswa_bisa_perbarui_dan_menarik_pengumpulan_tugas(): void
+    {
+        // Dosen membuat tugas.
+        Passport::actingAs($this->userDosen);
+        $tugasId = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/tugas", [
+            'judul'        => 'Tugas Revisi',
+            'deskripsi'    => 'Revisi tugas sebelumnya.',
+            'deadline_at'  => now()->addDays(3)->toDateTimeString(),
+            'is_published' => true,
+        ])->assertStatus(201)->json('data.id');
+
+        // Mahasiswa mengumpulkan tugas pertama.
+        Passport::actingAs($this->userMhs);
+        $kumpul = $this->postJson("/api/v1/lms/tugas/{$tugasId}/kumpul", [
+            'catatan_mahasiswa' => 'Versi pertama.',
+            'file'              => UploadedFile::fake()->create('revisi_awal.pdf', 128, 'application/pdf'),
+        ])->assertStatus(200);
+
+        $pengumpulanId = $kumpul->json('data.id');
+        $this->assertDatabaseHas('lms_pengumpulan_tugas', [
+            'id'                => $pengumpulanId,
+            'mahasiswa_id'      => $this->mahasiswa->id,
+            'catatan_mahasiswa' => 'Versi pertama.',
+        ]);
+
+        // Mahasiswa memperbarui pengumpulan (catatan + berkas baru).
+        $perbarui = $this->putJson("/api/v1/lms/tugas/{$tugasId}/kumpulan", [
+            'catatan_mahasiswa' => 'Versi kedua, sudah diperbaiki.',
+            'file'              => UploadedFile::fake()->create('revisi_akhir.pdf', 256, 'application/pdf'),
+        ]);
+        $perbarui->assertStatus(200);
+        $this->assertSame('Versi kedua, sudah diperbaiki.', $perbarui->json('data.catatan_mahasiswa'));
+        $this->assertDatabaseHas('lms_pengumpulan_tugas', [
+            'id'                => $pengumpulanId,
+            'catatan_mahasiswa' => 'Versi kedua, sudah diperbaiki.',
+        ]);
+
+        // Dosen menilai → pengumpulan terkunci.
+        Passport::actingAs($this->userDosen);
+        $this->putJson("/api/v1/lms/pengumpulan/{$pengumpulanId}/nilai", ['nilai' => 90])
+            ->assertStatus(200);
+
+        // Mahasiswa tidak boleh mengubah maupun menarik kembali pengumpulan yang dinilai.
+        Passport::actingAs($this->userMhs);
+        $this->putJson("/api/v1/lms/tugas/{$tugasId}/kumpulan", [
+            'catatan_mahasiswa' => 'Mencoba menimpa nilai.',
+        ])->assertStatus(422);
+        $this->deleteJson("/api/v1/lms/tugas/{$tugasId}/kumpulan")->assertStatus(422);
+        $this->assertDatabaseHas('lms_pengumpulan_tugas', [
+            'id'                => $pengumpulanId,
+            'catatan_mahasiswa' => 'Versi kedua, sudah diperbaiki.',
+        ]);
+
+        // Tugas kedua (belum dinilai) bisa ditarik kembali.
+        Passport::actingAs($this->userDosen);
+        $tugasLain = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/tugas", [
+            'judul'        => 'Tugas Tarik Kembali',
+            'deadline_at'  => now()->addDays(2)->toDateTimeString(),
+            'is_published' => true,
+        ])->assertStatus(201)->json('data.id');
+
+        Passport::actingAs($this->userMhs);
+        $idLain = $this->postJson("/api/v1/lms/tugas/{$tugasLain}/kumpul", [
+            'catatan_mahasiswa' => 'Akan ditarik kembali.',
+        ])->assertStatus(200)->json('data.id');
+
+        $this->deleteJson("/api/v1/lms/tugas/{$tugasLain}/kumpulan")->assertStatus(200);
+        $this->assertDatabaseMissing('lms_pengumpulan_tugas', ['id' => $idLain]);
+    }
 }

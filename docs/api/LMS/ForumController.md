@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-10-05  
-> **Diperbarui**: 2026-10-05
+> **Diperbarui**: 2026-10-23 (ubah/rename topik + edit pesan; penanda `is_edited`)
 
 Forum diskusi per kelas (opsional dikaitkan ke satu pertemuan). Balasan **satu level**.
 Nama penulis di-snapshot ke baris pesan agar riwayat tetap bermakna bila akun
@@ -28,7 +28,7 @@ agar aksi baca dan aksi tulis tidak tercampur dalam satu izin.
 |---|---|---|
 | `lms.forum.read` | mahasiswa, dosen, kaprodi, wakil_prodi, admin | GET topik & pesan |
 | `lms.forum.create` | mahasiswa, dosen, kaprodi, wakil_prodi, admin | POST pesan/balasan, hapus pesan **milik sendiri** |
-| `lms.forum.manage` | dosen, kaprodi, wakil_prodi, admin | Buat/hapus topik, moderasi (hapus) pesan **siapa pun** |
+| `lms.forum.manage` | dosen, kaprodi, wakil_prodi, admin | Buat/ubah/hapus topik, moderasi (ubah/hapus) pesan **siapa pun** |
 
 Otorisasi ditulis sebagai Policy, bukan pengecekan ad-hoc di controller:
 
@@ -36,9 +36,12 @@ Otorisasi ditulis sebagai Policy, bukan pengecekan ad-hoc di controller:
 |---|---|
 | `viewAny` | `ForumTopikPolicy` / `ForumPostPolicy` → `lms.forum.read` |
 | `create` (topik) | `ForumTopikPolicy` → `lms.forum.manage` |
+| `ensureDefault` (topik default) | `ForumTopikPolicy` → `lms.forum.create` |
 | `create` (pesan) | `ForumPostPolicy` → `lms.forum.create` |
 | `delete` (topik) | `ForumTopikPolicy` → `lms.forum.manage` |
+| `update` (topik) | `ForumTopikPolicy` → `lms.forum.manage` |
 | `delete` (pesan) | `ForumPostPolicy` → `lms.forum.manage` **atau** penulis pesan itu sendiri |
+| `update` (pesan) | `ForumPostPolicy` → `lms.forum.manage` **atau** penulis pesan itu sendiri |
 
 Pemeriksaan kepemilikan baris (`$post->user_id`) hanya ada di dalam Policy — satu
 tempat, tidak tersebar di controller/service.
@@ -61,11 +64,14 @@ memang punya permission tetapi bukan anggota kelas.
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
 | GET | `/api/v1/lms/forum` | Daftar topik agregat seluruh kelas yang diakses (halaman `/lms/forum`) | ✅ `lms.forum.read` |
-| GET | `/api/v1/lms/kelas/{kelasId}/forum` | Daftar topik satu kelas (auto-buat "Diskusi Umum" bila kosong) | ✅ `lms.forum.read` |
+| GET | `/api/v1/lms/kelas/{kelasId}/forum` | Daftar topik satu kelas (**read-only**, tidak membuat topik) | ✅ `lms.forum.read` |
 | POST | `/api/v1/lms/kelas/{kelasId}/forum` | Buat topik (pin opsional) | ✅ `lms.forum.manage` |
+| POST | `/api/v1/lms/kelas/{kelasId}/forum/umum` | Pastikan topik default "Diskusi Umum" ada (idempoten) | ✅ `lms.forum.create` |
+| PUT | `/api/v1/lms/forum/{topikId}` | Ubah judul / sematan topik | ✅ `lms.forum.manage` |
 | DELETE | `/api/v1/lms/forum/{topikId}` | Hapus topik + seluruh pesannya | ✅ `lms.forum.manage` |
 | GET | `/api/v1/lms/forum/{topikId}/post` | Daftar pesan + balasan (paginated) | ✅ `lms.forum.read` |
 | POST | `/api/v1/lms/forum/{topikId}/post` | Kirim pesan / balasan (`parent_id`) | ✅ `lms.forum.create` |
+| PUT | `/api/v1/lms/forum-post/{postId}` | Edit isi pesan (penulis sendiri atau pengelola kelas) | ✅ `lms.forum.create` (pemilik) / `lms.forum.manage` |
 | DELETE | `/api/v1/lms/forum-post/{postId}` | Hapus pesan (penulis sendiri atau pengelola kelas) | ✅ `lms.forum.create` (pemilik) / `lms.forum.manage` |
 
 ---
@@ -77,10 +83,11 @@ memang punya permission tetapi bukan anggota kelas.
 Daftar topik forum **agregat level modul** — menggabungkan seluruh kelas yang boleh diakses
 user tanpa parameter `kelasId`, untuk halaman `/lms/forum` di sidebar.
 
-> **Endpoint ini read-only.** Berbeda dengan `GET /kelas/{kelasId}/forum`, endpoint
-> agregat **tidak** membuat topik "Diskusi Umum" otomatis. Endpoint `GET` tidak boleh
-> menulis data, dan pembuatan otomatis tersebut membuat pemanggil berulang kali
-> (*page refresh*) terus-menulis. Kelas yang belum punya topik tidak muncul di daftar.
+> **Endpoint ini read-only.** Seluruh endpoint `GET` pada forum bersifat read-only —
+> tidak ada satu pun yang menulis data. Endpoint agregat maupun
+> `GET /kelas/{kelasId}/forum` **tidak** membuat topik "Diskusi Umum" otomatis.
+> Topik default dibuat lewat aksi eksplisit `POST /kelas/{kelasId}/forum/umum`
+> (idempoten). Kelas yang belum punya topik tidak muncul di daftar.
 
 ### Query Parameters
 
@@ -206,10 +213,12 @@ memotong hasil tanpa disadari pengguna.
 
 ## [GET] /api/v1/lms/kelas/{kelasId}/forum
 
-Daftar topik satu kelas. Bila kelas **belum memiliki topik sama sekali**, endpoint ini
-membuat satu topik otomatis bernama `Diskusi Umum Kelas {nama mata kuliah}` agar
-mahasiswa selalu punya tempat berdiskusi — itulah perbedaan perilaku terhadap endpoint
-agregat yang read-only.
+Daftar topik satu kelas.
+
+> **Endpoint ini read-only — TIDAK membuat topik.** Bila kelas belum memiliki
+> topik, response `data` berisi array kosong. Topik default "Diskusi Umum"
+> dibuat melalui aksi eksplisit `POST /kelas/{kelasId}/forum/umum` (idempoten).
+> Pemisahan ini menjaga prinsip HTTP: `GET` tidak pernah menulis data.
 
 ### Path Parameters
 
@@ -244,6 +253,7 @@ halaman), bukan mengambil seluruh baris topik lalu memotongnya di memori.
         {
             "id": 1,
             "judul": "Diskusi Umum Kelas Basis Data Relasional",
+            "slug": "diskusi-umum",
             "pertemuan_id": null,
             "is_pinned": false,
             "total_post": 2,
@@ -256,6 +266,7 @@ halaman), bukan mengambil seluruh baris topik lalu memotongnya di memori.
         {
             "id": 2,
             "judul": "Tanya Jawab UAS",
+            "slug": null,
             "pertemuan_id": null,
             "is_pinned": true,
             "total_post": 0,
@@ -393,6 +404,151 @@ dari kelas lain menghasilkan:
 }
 ```
 
+## [POST] /api/v1/lms/kelas/{kelasId}/forum/umum
+
+Memastikan kelas punya topik default **"Diskusi Umum"**. Endpoint ini
+**idempoten** — memanggilnya berkali-kali tetap menghasilkan satu topik yang sama.
+
+Endpoint ini menggantikan perilaku lama wherein `GET /kelas/{kelasId}/forum`
+membuat topik default secara otomatis. Pemisahan tersebut memastikan `GET`
+tidak pernah menulis data (prinsip HTTP), sekaligus tetap menjamin mahasiswa
+selalu punya tempat berdiskusi.
+
+> **Otorisasi**: memakai ability `ensureDefault` pada `ForumTopikPolicy`, yaitu
+> permission `lms.forum.create`. Berbeda dengan pembuatan topik biasa
+> (`lms.forum.manage`), topik default adalah artefak sistem — semua anggota
+> kelas yang boleh berdiskusi boleh memastikannya ada.
+
+> **Race condition**: pembuatan memakai `firstOrCreate` dengan kunci alami
+> `slug` = `diskusi-umum` dan batasan unique `lms_forum_topik_kelas_slug_unique`
+> pada `(kelas_id, slug)`, sehingga dua request bersamaan tidak menghasilkan
+> topik default ganda.
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `kelasId` | integer | ✅ | ID kelas |
+
+### Request Body
+
+Tidak ada body. Endpoint ini idempoten dan aman dipanggil ulang.
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Topik diskusi umum siap digunakan.",
+    "data": {
+        "id": 1,
+        "kelas_id": 14,
+        "pertemuan_id": null,
+        "judul": "Diskusi Umum Kelas Basis Data Relasional",
+        "slug": "diskusi-umum",
+        "is_pinned": false,
+        "created_at": "2026-10-22T07:30:00.000000Z"
+    }
+}
+```
+
+| Field | Tipe | Deskripsi |
+|---|---|---|
+| `id` | integer | ID topik default |
+| `kelas_id` | integer | ID kelas |
+| `pertemuan_id` | integer\|null | Selalu `null` (topik default tingkat kelas) |
+| `judul` | string | `Diskusi Umum Kelas {nama mata kuliah}` |
+| `slug` | string | `diskusi-umum` (penanda topik default) |
+| `is_pinned` | boolean | Selalu `false` |
+| `created_at` | datetime | Waktu pembuatan topik |
+
+### Response Error
+
+**403 Forbidden** — tidak memegang `lms.forum.create`.
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found** — kelas tidak ada.
+
+```json
+{ "message": "No query results for model [App\\Models\\Siakad\\Kelas] 999" }
+```
+
+**422 Unprocessable Entity** — user bukan anggota kelas.
+
+```json
+{
+    "status": "error",
+    "message": "Anda tidak terdaftar pada kelas perkuliahan ini.",
+    "errors": { "kelas": ["Anda tidak terdaftar pada kelas perkuliahan ini."] }
+}
+```
+
+## [PUT] /api/v1/lms/forum/{topikId}
+
+Ubah **judul** dan/atau **status sematan** topik. Hanya pengelola kelas
+(`lms.forum.manage`) yang boleh; mahasiswa mendapat 403.
+
+Perubahan dicatat ke `core_audit_logs` (`module=LMS`, `action=update`,
+`table_name=lms_forum_topik`) dengan `old_values` snapshot sebelum update.
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `topikId` | integer | ✅ | ID topik |
+
+### Request Body
+
+```json
+{
+    "judul": "Tanya Jawab UAS (Revisi)",
+    "is_pinned": true
+}
+```
+
+| Field | Tipe | Required | Validasi |
+|---|---|---|---|
+| `judul` | string | ✅ | `max:255` |
+| `is_pinned` | boolean | ❌ | Bila tidak dikirim, nilai lama dipertahankan |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Topik forum berhasil diperbarui.",
+    "data": {
+        "id": 2,
+        "kelas_id": 14,
+        "pertemuan_id": null,
+        "judul": "Tanya Jawab UAS (Revisi)",
+        "dibuat_oleh": 41,
+        "is_pinned": true,
+        "created_at": "2026-10-05T07:30:00.000000Z",
+        "updated_at": "2026-10-23T03:10:00.000000Z"
+    }
+}
+```
+
+### Response Error
+
+**403 Forbidden** — tidak memegang `lms.forum.manage`.
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found** — topik tidak ada.
+
+```json
+{ "message": "No query results for model [App\\Models\\Lms\\ForumTopik] 999999" }
+```
+
+**422 Unprocessable Entity** — `judul` kosong / melebihi 255 karakter, atau user bukan anggota kelas.
+
 ## [DELETE] /api/v1/lms/forum/{topikId}
 
 Hapus topik beserta seluruh pesan dan balasannya (cascade di database). Audit log
@@ -471,7 +627,8 @@ ikut diambil dalam satu query.
             "nama_penulis": "Citra Ayu",
             "isi": "Apakah UTS open book?",
             "created_at": "2026-10-05T08:50:38.000000Z",
-            "updated_at": "2026-10-05T08:50:38.000000Z",
+            "updated_at": "2026-10-05T08:51:12.000000Z",
+            "is_edited": true,
             "balasan": [
                 {
                     "id": 2,
@@ -481,7 +638,8 @@ ikut diambil dalam satu query.
                     "nama_penulis": "Dosen Pengampu",
                     "isi": "Ya, open book.",
                     "created_at": "2026-10-05T08:52:10.000000Z",
-                    "updated_at": "2026-10-05T08:52:10.000000Z"
+                    "updated_at": "2026-10-05T08:52:10.000000Z",
+                    "is_edited": false
                 }
             ]
         }
@@ -574,6 +732,7 @@ diperoleh dari payload.
         "isi": "Apakah UTS open book?",
         "created_at": "2026-10-05T08:50:38.000000Z",
         "updated_at": "2026-10-05T08:50:38.000000Z",
+        "is_edited": false,
         "balasan": []
     }
 }
@@ -608,6 +767,73 @@ diperoleh dari payload.
     "errors": { "parent_id": ["Balasan hanya satu level dan harus dalam topik yang sama."] }
 }
 ```
+
+## [PUT] /api/v1/lms/forum-post/{postId}
+
+Edit **isi** pesan. Otorisasi tingkat resource ditangani `ForumPostPolicy::update()`:
+**penulis pesan itu sendiri** (dengan `lms.forum.create`) atau **pengelola kelas**
+(dengan `lms.forum.manage`). Mahasiswa yang mencoba mengedit pesan orang lain
+mendapat 403.
+
+Perubahan dicatat ke `core_audit_logs` (`module=LMS`, `action=update`,
+`table_name=lms_forum_post`) dengan `old_values` snapshot sebelum update.
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `postId` | integer | ✅ | ID pesan (`lms_forum_post`) |
+
+### Request Body
+
+```json
+{ "isi": "Apakah UTS open book? (sudah dikoreksi)" }
+```
+
+| Field | Tipe | Required | Validasi |
+|---|---|---|---|
+| `isi` | string | ✅ | `max:5000` |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Pesan forum berhasil diperbarui.",
+    "data": {
+        "id": 1,
+        "topik_id": 1,
+        "parent_id": null,
+        "user_id": 57,
+        "nama_penulis": "Citra Ayu",
+        "isi": "Apakah UTS open book? (sudah dikoreksi)",
+        "created_at": "2026-10-05T08:50:38.000000Z",
+        "updated_at": "2026-10-23T03:15:00.000000Z",
+        "is_edited": true
+    }
+}
+```
+
+`is_edited` adalah atribut terhitung (bukan kolom): `true` bila `updated_at`
+lebih besar dari `created_at`. Frontend memakainya untuk menampilkan penanda
+"diedit" beserta waktu `updated_at`. Nilai ini juga muncul pada response
+`GET /forum/{topikId}/post` dan `POST /forum/{topikId}/post`.
+
+### Response Error
+
+**403 Forbidden** — bukan penulis pesan dan tidak memegang `lms.forum.manage`.
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found**
+
+```json
+{ "message": "No query results for model [App\\Models\\Lms\\ForumPost] 999999" }
+```
+
+**422 Unprocessable Entity** — `isi` kosong / melebihi 5000 karakter, atau user bukan anggota kelas.
 
 ## [DELETE] /api/v1/lms/forum-post/{postId}
 
@@ -658,15 +884,22 @@ memiliki balasan ikut menghapus balasannya (cascade).
 > - `is_pinned` pada `GET /kelas/{kelasId}/forum` dapat bernilai `null` untuk topik
 >   yang dibuat otomatis, karena kolom tersebut belum di-set saat baris dibuat —
 >   perlakukan `null` sebagai `false` di frontend.
-> - Hanya `POST /kelas/{kelasId}/forum`, `POST /forum/{topikId}/post`,
->   `DELETE /forum/{topikId}`, dan `DELETE /forum-post/{postId}` yang menulis audit
->   log. Pesan yang dihapus tercatat lengkap di `core_audit_logs` sehingga diskusi
->   bermasalah tetap dapat ditelusuri.
+> - Hanya `POST /kelas/{kelasId}/forum`, `POST /kelas/{kelasId}/forum/umum`,
+>   `POST /forum/{topikId}/post`, `DELETE /forum/{topikId}`, dan
+>   `DELETE /forum-post/{postId}` yang menulis audit log. Pesan yang dihapus
+>   tercatat lengkap di `core_audit_logs` sehingga diskusi bermasalah tetap dapat
+>   ditelusuri.
 > - Permission forum (`lms.forum.*`) didefinisikan di `PermissionSeeder` dan
 >   disinkronkan ke database oleh migrasi `2026_10_05_073000_add_lms_forum_permissions`
 >   agar database lama tanpa seeding ulang tetap konsisten.
-> - `GET /kelas/{kelasId}/forum` menulis (membuat topik otomatis), jadi tidak
->   aman dipanggil bersamaan dari banyak tab; endpoint agregat justru disediakan
->   untuk kebutuhan list-only seperti sidebar.
-> - Update/rename topik dan pesan **belum** tersedia; forum pada fase ini
->   create-read-delete saja.
+> - Topik default ditandai lewat kolom `slug` (`diskusi-umum`) dengan batasan
+>   unique `(kelas_id, slug)`. Topik buatan pengguna bernilai `slug = NULL` —
+>   MySQL & SQLite mengizinkan banyak NULL pada unique index. Frontend dapat
+>   mengenali topik default lewat `slug` tersebut.
+> - `POST /kelas/{kelasId}/forum/umum` aman dipanggil berulang kali (idempoten)
+>   maupun secara bersamaan, karena pembuatan memakai `firstOrCreate` pada kunci
+>   alami `(kelas_id, slug)`.
+> - Ubah/rename topik (`PUT /forum/{topikId}`) dan edit pesan
+>   (`PUT /forum-post/{postId}`) tersedia sejak Fase 3B. Keduanya menulis audit
+>   log `update`; penanda `is_edited` pada pesan dihitung dari `updated_at`
+>   sehingga tidak perlu kolom tambahan.

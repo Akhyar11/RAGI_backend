@@ -33,6 +33,15 @@ class ForumService
     public const SORT_POST = ['id', 'created_at'];
 
     /**
+     * Slug topik default ("Diskusi Umum") per kelas.
+     *
+     * Nilai domain tetap — disimpan pada kolom `lms_forum_topik.slug` yang
+     * punya unique constraint bersama `kelas_id`, sehingga dua request
+     * bersamaan tidak dapat membuat topik default ganda.
+     */
+    public const SLUG_TOPIK_DEFAULT = 'diskusi-umum';
+
+    /**
      * Normalisasi parameter sorting terhadap whitelist kolom.
      *
      * Dipakai controller juga, supaya nilai yang echoed pada `meta.filters`
@@ -90,7 +99,11 @@ class ForumService
     }
 
     /**
-     * Daftar topik satu kelas; buat otomatis "Diskusi Umum" bila masih kosong.
+     * Daftar topik satu kelas.
+     *
+     * Endpoint ini read-only: TIDAK membuat topik "Diskusi Umum" otomatis.
+     * Topik default dibuat lewat aksi eksplisit `ensureTopikUmum()` yang
+     * dipanggil dari `POST /kelas/{kelasId}/forum/umum`.
      *
      * Paginasi dijalankan di level query builder (satu COUNT + satu SELECT per
      * halaman), bukan dengan mengambil seluruh baris lalu di-slice.
@@ -107,8 +120,6 @@ class ForumService
         $this->assertAnggotaKelas($kelasId, $userId);
         $perPage = min(100, max(1, $perPage));
         [$sortField, $direction] = $this->normalisasiSort($sortBy, $sortOrder, self::SORT_TOPIK);
-
-        $this->pastikanTopikDefault($kelas, $userId);
 
         // `is_pinned` selalu jadi kunci pertama supaya topik terkunci tidak
         // tenggelam; `id` jadi kunci terakhir sebagai penentu stabil (tie-break).
@@ -135,6 +146,7 @@ class ForumService
                 return [
                     'id' => $t->id,
                     'judul' => $t->judul,
+                    'slug' => $t->slug,
                     'pertemuan_id' => $t->pertemuan_id,
                     'is_pinned' => $t->is_pinned,
                     'total_post' => $t->posts_count ?? 0,
@@ -151,37 +163,47 @@ class ForumService
     }
 
     /**
-     * Pastikan kelas punya minimal satu topik; buat "Diskusi Umum" bila belum ada.
+     * Pastikan kelas punya topik default "Diskusi Umum" — idempoten.
      *
-     * Dipisah dari listTopik() agar paginasi tetap berjalan di level query builder
-     * (satu COUNT + satu SELECT per halaman, bukan satu COUNT + SELECT semua baris).
+     * Dipakai oleh aksi eksplisit `POST /kelas/{kelasId}/forum/umum`, bukan
+     * dari endpoint baca. Pembuatan memakai `firstOrCreate` dengan kunci alami
+     * `slug` (unique per kelas) sehingga dua request bersamaan tidak
+     * menghasilkan topik default ganda.
      */
-    protected function pastikanTopikDefault(Kelas $kelas, int $userId): void
+    public function ensureTopikUmum(int $kelasId, int $userId): ForumTopik
     {
-        $ada = ForumTopik::where('kelas_id', $kelas->id)->exists();
+        $kelas = Kelas::with('mataKuliah')->findOrFail($kelasId);
+        $this->assertAnggotaKelas($kelasId, $userId);
 
-        if ($ada) {
-            return;
+        $topik = ForumTopik::firstOrCreate(
+            [
+                'kelas_id' => $kelas->id,
+                'slug' => self::SLUG_TOPIK_DEFAULT,
+            ],
+            [
+                'judul' => 'Diskusi Umum Kelas ' . ($kelas->mataKuliah?->nama ?? $kelas->nama_kelas),
+                'dibuat_oleh' => $userId,
+            ]
+        );
+
+        // `firstOrCreate` sudah idempoten; audit hanya dicatat saat benar-benar
+        // membuat (t Newly created), bukan saat topik sudah ada.
+        if ($topik->wasRecentlyCreated) {
+            try {
+                AuditLogService::record(
+                    module: 'LMS',
+                    action: 'create',
+                    tableName: 'lms_forum_topik',
+                    recordId: $topik->id,
+                    oldValues: null,
+                    newValues: $topik->getAttributes()
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log buat topik forum default: ' . $e->getMessage());
+            }
         }
 
-        $topik = ForumTopik::create([
-            'kelas_id' => $kelas->id,
-            'judul' => 'Diskusi Umum Kelas ' . ($kelas->mataKuliah?->nama ?? $kelas->nama_kelas),
-            'dibuat_oleh' => $userId,
-        ]);
-
-        try {
-            AuditLogService::record(
-                module: 'LMS',
-                action: 'create',
-                tableName: 'lms_forum_topik',
-                recordId: $topik->id,
-                oldValues: null,
-                newValues: $topik->getAttributes()
-            );
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log buat topik forum default: ' . $e->getMessage());
-        }
+        return $topik;
     }
 
     /**
@@ -269,6 +291,26 @@ class ForumService
         return (bool) ForumTopik::findOrFail($topikId)->delete();
     }
 
+    /**
+     * Ubah judul / status pin topik.
+     *
+     * Hak pengelolaan sudah diperiksa `ForumTopikPolicy::update()` di
+     * controller; service tetap memastikan pengguna adalah anggota kelas.
+     */
+    public function updateTopik(int $topikId, array $data, int $userId): ForumTopik
+    {
+        $topik = ForumTopik::findOrFail($topikId);
+        $this->assertAnggotaKelas($topik->kelas_id, $userId);
+
+        $topik->fill([
+            'judul' => $data['judul'],
+            'is_pinned' => $data['is_pinned'] ?? $topik->is_pinned,
+        ]);
+        $topik->save();
+
+        return $topik;
+    }
+
     public function listPost(
         int $topikId,
         int $userId,
@@ -322,5 +364,23 @@ class ForumService
     public function deletePost(int $postId): bool
     {
         return (bool) ForumPost::findOrFail($postId)->delete();
+    }
+
+    /**
+     * Edit isi pesan forum.
+     *
+     * Hak mengedit (pemilik pesan / pengelola kelas) diperiksa
+     * `ForumPostPolicy::update()` di controller; service tetap memastikan
+     * pengguna adalah anggota kelas dari topik terkait.
+     */
+    public function updatePost(int $postId, array $data, int $userId): ForumPost
+    {
+        $post = ForumPost::findOrFail($postId);
+        $topik = ForumTopik::findOrFail($post->topik_id);
+        $this->assertAnggotaKelas($topik->kelas_id, $userId);
+
+        $post->update(['isi' => $data['isi']]);
+
+        return $post;
     }
 }

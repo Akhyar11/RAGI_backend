@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\Siakad\Lms;
 
+use App\Http\Requests\Siakad\Lms\Concerns\ResolvesMateriUploadLimit;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreMateriRequest extends FormRequest
 {
+    use ResolvesMateriUploadLimit;
+
     public function authorize(): bool
     {
         return (bool) $this->user()?->hasPermission('siakad.kelas.manage');
@@ -20,7 +23,14 @@ class StoreMateriRequest extends FormRequest
             'link_eksternal' => 'nullable|string|max:500',
             'urutan'         => 'nullable|integer|min:1',
             'is_published'   => 'nullable|boolean',
-            'file'           => 'nullable|file|max:512000', // max 500MB
+            'file'           => 'nullable|file|max:'.$this->materiMaxSizeKb(),
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'file.max' => $this->materiMaxSizeMessage(),
         ];
     }
 }

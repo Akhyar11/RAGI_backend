@@ -10,6 +10,7 @@ use App\Http\Requests\Siakad\Lms\StoreTugasRequest;
 use App\Http\Requests\Siakad\Lms\UpdateTugasRequest;
 use App\Http\Requests\Siakad\Lms\BeriNilaiTugasRequest;
 use App\Http\Requests\Siakad\Lms\KumpulkanTugasRequest;
+use App\Http\Requests\Siakad\Lms\UpdateKumpulkanTugasRequest;
 use App\Http\Requests\Siakad\Lms\InputTokenAbsensiRequest;
 use App\Http\Requests\Siakad\Lms\BulkAbsensiRequest;
 use App\Http\Requests\Siakad\Lms\GenerateTokenRequest;
@@ -17,20 +18,27 @@ use App\Http\Requests\Siakad\Lms\AjukanIzinRequest;
 use App\Http\Requests\Siakad\Lms\ProsesIzinRequest;
 use App\Http\Requests\Siakad\Lms\UpdateKelasLmsSettingRequest;
 use App\Http\Requests\Siakad\Lms\UpdatePertemuanRequest;
+use App\Http\Requests\Siakad\Lms\UpdatePengaturanLmsRequest;
+use App\Http\Requests\Siakad\Lms\ExportLmsRequest;
 use App\Models\Lms\KelasLmsSetting;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\Pertemuan;
 use App\Services\AuditLogService;
+use App\Services\Siakad\LmsExportService;
+use App\Services\Siakad\LmsModuleSettingService;
 use App\Services\Siakad\LmsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LmsController extends Controller
 {
     public function __construct(
-        protected LmsService $lmsService
+        protected LmsService $lmsService,
+        protected LmsExportService $lmsExportService,
+        protected LmsModuleSettingService $lmsModuleSettingService
     ) {}
 
     /**
@@ -415,6 +423,7 @@ class LmsController extends Controller
     public function generateToken(GenerateTokenRequest $request, int $pertemuanId): JsonResponse
     {
         Gate::authorize('siakad.kelas.manage');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
 
         // Nilai lama diambil sebelum token digenerate supaya audit trail membandingkan
         // state sebelum dan sesudah perubahan.
@@ -448,6 +457,7 @@ class LmsController extends Controller
     public function rotateToken(int $pertemuanId): JsonResponse
     {
         Gate::authorize('siakad.kelas.manage');
+        $this->lmsService->assertPresensiFiturAktif(request()->user());
 
         $existing = \App\Models\Siakad\Pertemuan::find($pertemuanId);
         $oldValues = $existing ? $existing->getOriginal() : null;
@@ -480,6 +490,7 @@ class LmsController extends Controller
     public function tutupPresensi(int $pertemuanId): JsonResponse
     {
         Gate::authorize('siakad.kelas.manage');
+        $this->lmsService->assertPresensiFiturAktif(request()->user());
 
         $existing = \App\Models\Siakad\Pertemuan::findOrFail($pertemuanId);
         $oldValues = $existing->getOriginal();
@@ -512,6 +523,7 @@ class LmsController extends Controller
     public function bulkAbsensi(BulkAbsensiRequest $request, int $pertemuanId): JsonResponse
     {
         Gate::authorize('siakad.kelas.manage');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
 
         $this->lmsService->bulkInputAbsensi($pertemuanId, $request->validated('absensi'));
 
@@ -553,6 +565,7 @@ class LmsController extends Controller
     public function getRekapAbsensi(Request $request, int $kelasId): JsonResponse
     {
         Gate::authorize('siakad.kelas.read');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
 
         $user = $request->user();
         $onlyMahasiswaId = null;
@@ -608,11 +621,68 @@ class LmsController extends Controller
     }
 
     /**
+     * Mahasiswa memperbarui pengumpulan tugasnya (berkas &/atau catatan).
+     *
+     * Hanya bisa dilakukan bila pengumpulan belum dinilai.
+     */
+    public function updatePengumpulan(UpdateKumpulkanTugasRequest $request, int $tugasId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        $file = $request->file('file');
+        $pengumpulan = $this->lmsService->updatePengumpulan(
+            $tugasId,
+            (int) $request->user()->id,
+            $request->validated(),
+            $file
+        );
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Pengumpulan tugas berhasil diperbarui.',
+            'data'    => $pengumpulan,
+        ]);
+    }
+
+    /**
+     * Mahasiswa menarik kembali / menghapus pengumpulan tugasnya.
+     */
+    public function hapusPengumpulan(Request $request, int $tugasId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        $this->lmsService->hapusPengumpulan($tugasId, (int) $request->user()->id);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Pengumpulan tugas berhasil dihapus.',
+            'data'    => null,
+        ]);
+    }
+
+    /**
+     * Ambil pengaturan LMS satu kelas (read-only).
+     */
+    public function getSetting(Request $request, int $kelasId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        $setting = $this->lmsService->getKelasSetting($kelasId, (int) $request->user()->id);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Pengaturan LMS kelas berhasil diambil.',
+            'data'    => $setting,
+        ]);
+    }
+
+    /**
      * Mahasiswa menginputkan 6-digit token absensi.
      */
     public function inputToken(InputTokenAbsensiRequest $request, int $pertemuanId): JsonResponse
     {
         Gate::authorize('siakad.kelas.read');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
 
         $this->lmsService->inputTokenAbsensi(
             $pertemuanId,
@@ -842,6 +912,181 @@ class LmsController extends Controller
             'status'  => 'success',
             'message' => 'Ketercapaian mata kuliah berhasil diambil.',
             'data'    => $capaian,
+        ]);
+    }
+
+    /* ---------------------------------------------------------------------
+     |  Export Laporan
+     | ------------------------------------------------------------------ */
+
+    /**
+     * Export rekap nilai (tugas + quiz) kelas dalam format CSV/XLSX.
+     */
+    public function exportNilai(ExportLmsRequest $request, int $kelasId): StreamedResponse
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $userId = (int) $request->user()->id;
+        $this->lmsExportService->assertKelasAccess($kelasId, $userId);
+
+        $data = $this->lmsExportService->rekapNilaiKelas($kelasId);
+        $format = $request->exportFormat();
+
+        $this->catatExport($request, 'siakad_kelas', $kelasId, 'rekap_nilai', $format, count($data['rows']));
+
+        return $this->lmsExportService->download($data['filename'], $data['headers'], $data['rows'], $format);
+    }
+
+    /**
+     * Export rekap absensi kelas dalam format CSV/XLSX.
+     */
+    public function exportPresensi(ExportLmsRequest $request, int $kelasId): StreamedResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $userId = (int) $request->user()->id;
+        $this->lmsExportService->assertKelasAccess($kelasId, $userId);
+
+        $data = $this->lmsExportService->rekapPresensiKelas($kelasId);
+        $format = $request->exportFormat();
+
+        $this->catatExport($request, 'siakad_kelas', $kelasId, 'rekap_absensi', $format, count($data['rows']));
+
+        return $this->lmsExportService->download($data['filename'], $data['headers'], $data['rows'], $format);
+    }
+
+    /**
+     * Export rekap pengajuan izin absensi kelas dalam format CSV/XLSX.
+     */
+    public function exportIzin(ExportLmsRequest $request, int $kelasId): StreamedResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $userId = (int) $request->user()->id;
+        $this->lmsExportService->assertKelasAccess($kelasId, $userId);
+
+        $data = $this->lmsExportService->rekapIzinKelas($kelasId);
+        $format = $request->exportFormat();
+
+        $this->catatExport($request, 'siakad_kelas', $kelasId, 'rekap_izin_absensi', $format, count($data['rows']));
+
+        return $this->lmsExportService->download($data['filename'], $data['headers'], $data['rows'], $format);
+    }
+
+    /**
+     * Export status & nilai pengumpulan tugas dalam format CSV/XLSX.
+     */
+    public function exportPengumpulan(ExportLmsRequest $request, int $tugasId): StreamedResponse
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $userId = (int) $request->user()->id;
+        $this->lmsExportService->assertTugasAccess($tugasId, $userId);
+
+        $data = $this->lmsExportService->pengumpulanTugas($tugasId);
+        $format = $request->exportFormat();
+
+        $this->catatExport($request, 'lms_tugas', $tugasId, 'pengumpulan_tugas', $format, count($data['rows']));
+
+        return $this->lmsExportService->download($data['filename'], $data['headers'], $data['rows'], $format);
+    }
+
+    /**
+     * Catat jejak audit untuk setiap aksi export laporan LMS.
+     */
+    protected function catatExport(
+        ExportLmsRequest $request,
+        string $tableName,
+        int $recordId,
+        string $jenisLaporan,
+        string $format,
+        int $jumlahBaris
+    ): void {
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'export',
+                tableName: $tableName,
+                recordId: $recordId,
+                newValues: [
+                    'jenis_laporan' => $jenisLaporan,
+                    'format'        => $format,
+                    'jumlah_baris'  => $jumlahBaris,
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log export LMS: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Ringkasan dashboard LMS (statistik split role + tren 7 hari, cache 5 menit).
+     */
+    public function dashboardOverview(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Ringkasan dashboard LMS berhasil diambil.',
+            'data'    => $this->lmsService->dashboardOverview((int) $request->user()->id),
+        ]);
+    }
+
+    /**
+     * Pengaturan level modul LMS (`lms_*` pada `core_system_settings`).
+     */
+    public function showPengaturanModul(): JsonResponse
+    {
+        Gate::authorize('lms.pengaturan.read');
+
+        $definitions = collect(LmsModuleSettingService::definitions())
+            ->map(fn (array $definition, string $key) => ['key' => $key] + $definition)
+            ->values()
+            ->all();
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Pengaturan modul LMS berhasil diambil.',
+            'data'    => [
+                'values'      => $this->lmsModuleSettingService->all(),
+                'definitions' => $definitions,
+            ],
+        ]);
+    }
+
+    /**
+     * Simpan pengaturan level modul LMS. Perubahan dicatat ke audit log LMS.
+     */
+    public function updatePengaturanModul(UpdatePengaturanLmsRequest $request): JsonResponse
+    {
+        Gate::authorize('lms.pengaturan.manage');
+
+        $values = $this->lmsModuleSettingService->update(
+            $request->validated(),
+            (int) $request->user()->id
+        );
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Pengaturan modul LMS berhasil disimpan.',
+            'data'    => $values,
+        ]);
+    }
+
+    /**
+     * Pengaturan publik LMS (tanpa autentikasi, cache 24 jam).
+     *
+     * Hanya key yang ditandai `public` pada definisi yang dikembalikan —
+     * tidak ada data sensitif.
+     */
+    public function publicSettings(): JsonResponse
+    {
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Pengaturan publik LMS berhasil diambil.',
+            'data'    => $this->lmsModuleSettingService->publicSettings(),
         ]);
     }
 }

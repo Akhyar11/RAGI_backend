@@ -14,6 +14,7 @@ class ForumTopik extends Model
         'kelas_id',
         'pertemuan_id',
         'judul',
+        'slug',
         'dibuat_oleh',
         'is_pinned',
     ];

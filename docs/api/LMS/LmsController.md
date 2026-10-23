@@ -5,7 +5,7 @@
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-25
-> **Diperbarui**: 2026-10-06 (import materi antar-kelas, matriks rekap, ketercapaian MK)
+> **Diperbarui**: 2026-10-23 (dashboard ringkasan split role, pengaturan level modul `lms_*`, pengaturan publik)
 
 Controller untuk menangani seluruh aktivitas Learning Management System (LMS) dan Absensi Terintegrasi Perkuliahan. Meliputi manajemen materi perkuliahan multi-file, penugasan mahasiswa dengan auto-sync ke sistem penilaian OBE (`siakad_nilai_komponen_mhs`), absensi token 6-digit dengan masa aktif dinamis, rekapitulasi kehadiran kelas, pengajuan dan persetujuan izin/sakit mahasiswa, serta pengaturan media penyimpanan (Cloudflare R2 atau storage lokal).
 
@@ -28,11 +28,16 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | POST | `/api/v1/lms/kelas/{kelasId}/import-materi` | Salin materi dari kelas sumber (pasangan `pertemuan_ke` sama) | ✅ kelola |
 | GET | `/api/v1/lms/kelas/{kelasId}/rekap-matrix` | Matriks kehadiran + peta status per pertemuan | ✅ |
 | GET | `/api/v1/lms/kelas/{kelasId}/ketercapaian` | Ketercapaian MK per komponen OBE (mahasiswa: miliknya saja) | ✅ |
-| PUT | `/api/v1/lms/kelas/{kelasId}/setting` | Perbarui konfigurasi LMS kelas (storage, bobot, izin token) | ✅ |
+| GET | `/api/v1/lms/kelas/{kelasId}/setting` | Baca konfigurasi LMS kelas (read-only; default bila belum dikonfigurasi) | ✅ |
+| PUT | `/api/v1/lms/kelas/{kelasId}/setting` | Perbarui konfigurasi LMS kelas (storage, bobot, izin token) | ✅ kelola |
 | GET | `/api/v1/lms/pertemuan` | Daftar pertemuan agregat seluruh kelas yang diakses (halaman `/lms/pertemuan`) | ✅ |
 | PUT | `/api/v1/lms/pertemuan/{pertemuanId}` | Perbarui data pertemuan | ✅ kelola |
 | DELETE | `/api/v1/lms/pertemuan/{pertemuanId}` | Hapus pertemuan (diblokir bila sudah ada data turunan) | ✅ kelola |
 | GET | `/api/v1/lms/pengaturan` | Rekap pengaturan LMS seluruh kelas yang diakses (halaman `/lms/pengaturan`) | ✅ |
+| GET | `/api/v1/lms/dashboard/overview` | Ringkasan dashboard LMS split role + tren 7 hari (cache 5 menit) | ✅ |
+| GET | `/api/v1/lms/pengaturan/modul` | Baca pengaturan global modul (`lms_*` + definisi field) | ✅ `lms.pengaturan.read` |
+| PUT | `/api/v1/lms/pengaturan/modul` | Simpan pengaturan global modul (audit log LMS) | ✅ `lms.pengaturan.manage` |
+| GET | `/api/v1/lms/public/settings` | Pengaturan publik non-sensitif untuk UI (tanpa autentikasi, cache 24 jam) | ❌ |
 | GET | `/api/v1/lms/pertemuan/{id}` | Detail pertemuan, materi, tugas, kehadiran, dan pengajuan izin | ✅ |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/materi` | Tambah materi pembelajaran baru (teks/link/file) | ✅ |
 | PUT | `/api/v1/lms/materi/{materiId}` | Perbarui data materi pembelajaran | ✅ |
@@ -43,6 +48,8 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | PUT | `/api/v1/lms/tugas/{tugasId}` | Perbarui penugasan perkuliahan | ✅ |
 | DELETE | `/api/v1/lms/tugas/{tugasId}` | Hapus penugasan perkuliahan | ✅ |
 | POST | `/api/v1/lms/tugas/{tugasId}/kumpul` | Mahasiswa mengunggah berkas pengumpulan tugas | ✅ |
+| PUT | `/api/v1/lms/tugas/{tugasId}/kumpulan` | Mahasiswa memperbarui pengumpulan tugasnya (berkas &/atau catatan) | ✅ |
+| DELETE | `/api/v1/lms/tugas/{tugasId}/kumpulan` | Mahasiswa menarik kembali / menghapus pengumpulan tugasnya | ✅ |
 | PUT | `/api/v1/lms/pengumpulan/{pengumpulanId}/nilai` | Dosen memberikan nilai tugas dan auto-sync ke nilai OBE | ✅ |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/token` | Generate 6-digit token absensi realtime (masa aktif berbatas) | ✅ |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/token/rotate` | Putar ulang token umur pendek (anti titip-hadir) | ✅ |
@@ -52,6 +59,16 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/izin` | Mahasiswa mengajukan permohonan izin/sakit dengan bukti surat | ✅ |
 | PATCH | `/api/v1/lms/izin/{izinId}/proses` | Dosen menyetujui (disetujui) atau menolak (ditolak) surat izin | ✅ |
 | GET | `/api/v1/lms/download/{type}/{id}` | Dapatkan tautan unduh aman (signed URL / streaming berkas) | ✅ |
+| GET | `/api/v1/lms/kelas/{kelasId}/export/presensi` | Export rekap absensi kelas (CSV/XLSX) | ✅ kelola |
+| GET | `/api/v1/lms/kelas/{kelasId}/export/absensi-izin` | Export rekap pengajuan izin absensi kelas (CSV/XLSX) | ✅ kelola |
+| GET | `/api/v1/lms/kelas/{kelasId}/export/nilai` | Export rekap nilai (tugas + quiz) kelas (CSV/XLSX) | ✅ nilai |
+| GET | `/api/v1/lms/tugas/{tugasId}/export/pengumpulan` | Export status & nilai pengumpulan tugas (CSV/XLSX) | ✅ nilai |
+
+> **Feature flag `lms_fitur_presensi`**: seluruh endpoint presensi (rekap absensi, token absensi,
+> input token, bulk absensi, tutup presensi) menolak permintaan dengan `403` bila flag dimatikan
+> oleh admin. Role yang memegang permission `lms.presensi.manage` (admin/superadmin) tetap dapat
+> mengakses untuk keperluan support. Detail flag & panel administrasi integrasi PresensiV2
+> ada di [LmsPresensiController.md](LmsPresensiController.md).
 
 ## Query Parameters (berlaku untuk endpoint list)
 
@@ -393,6 +410,72 @@ dari halaman daftar tanpa perlu membuka tiap kelas satu per satu.
 { "message": "This action is unauthorized." }
 ```
 
+### [GET] `/api/v1/lms/kelas/{kelasId}/setting`
+
+Membaca konfigurasi LMS satu kelas. Endpoint **read-only** — tidak mengubah data.
+
+Bila kelas belum pernah dikonfigurasi, backend mengembalikan **setting bawaan**
+(`total_pertemuan` 16, `metode_absensi` `keduanya`, `batas_min_hadir_persen` 75,
+`can_submit_late` true, `show_nilai_to_mahasiswa` true) sehingga frontend tidak
+perlu menangani kasus `null`.
+
+> **Scoping**: hanya anggota kelas yang boleh mengakses. Mahasiswa harus punya
+> KRS disetujui pada kelas tersebut; dosen harus mengampu kelas tersebut;
+> role privileged (superadmin/admin/kaprodi/wakil_prodi) dapat membaca seluruh kelas.
+> Mahasiwa luar kelas menerima **422** dengan pesan pada field `kelas`.
+
+#### Path Parameters
+
+| Parameter | Type | Wajib | Deskripsi |
+|---|---|---|---|
+| `kelasId` | integer | ✅ | ID kelas pada `siakad_kelas` |
+
+#### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Pengaturan LMS kelas berhasil diambil.",
+    "data": {
+        "kelas_id": 12,
+        "total_pertemuan": 16,
+        "metode_absensi": "keduanya",
+        "batas_min_hadir_persen": 75,
+        "can_submit_late": true,
+        "show_nilai_to_mahasiswa": true,
+        "storage_disk": "r2-private",
+        "is_default": false
+    }
+}
+```
+
+| Field | Type | Deskripsi |
+|---|---|---|
+| `kelas_id` | integer | ID kelas |
+| `total_pertemuan` | integer | Jumlah pertemuan rencana |
+| `metode_absensi` | string | `manual_dosen` / `token_mahasiswa` / `keduanya` |
+| `batas_min_hadir_persen` | integer | Batas minimum hadir (0–100) |
+| `can_submit_late` | boolean | Apakah pengumpulan terlambat diizinkan |
+| `show_nilai_to_mahasiswa` | boolean | Apakah nilai ditampilkan ke mahasiswa |
+| `storage_disk` | string\|null | Disk penyimpanan kelas (null = default sistem) |
+| `is_default` | boolean | `true` bila kelas belum pernah dikonfigurasi (setting bawaan) |
+
+#### Response Error
+
+**422 Unprocessable Entity** — user bukan anggota kelas:
+
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "kelas": ["Anda tidak terdaftar pada kelas perkuliahan ini."]
+    }
+}
+```
+
+---
+
 ### [PUT] `/api/v1/lms/kelas/{kelasId}/setting` (validasi `metode_absensi`)
 
 Memperbarui konfigurasi LMS satu kelas. Wajib permission `siakad.kelas.manage`.
@@ -567,7 +650,7 @@ Dosen mengunggah materi perkuliahan baru. Format dapat berupa dokumen teks, berk
     "link_eksternal": null,
     "urutan": 1,
     "is_published": true,
-    "file": "(binary file PDF/PPT/ZIP maks 50MB)"
+    "file": "(binary berkas materi; maks mengikuti pengaturan modul: default 100MB non-video, 500MB video)"
 }
 ```
 
@@ -664,6 +747,111 @@ Dosen memberikan penilaian pada tugas yang dikumpulkan mahasiswa.
         "feedback_dosen": "Struktur database sangat baik dan ternormalisasi dengan benar.",
         "dinilai_at": "2026-10-13T10:15:00.000000Z",
         "dinilai_by": 8
+    }
+}
+```
+
+---
+
+### [PUT] `/api/v1/lms/tugas/{tugasId}/kumpulan`
+
+Memperbarui pengumpulan tugas yang sudah ada. Hanya **pemilik pengumpulan**
+(mahasiswa yang mengunggah) yang boleh memanggil endpoint ini.
+
+Berkas bersifat opsional — mahasiswa boleh memperbarui catatan saja tanpa
+mengunggah ulang berkas. Bila berkas baru dikirim, berkas lama otomatis dihapus
+dan digantikan.
+
+> **Pengumpulan yang sudah dinilai terkunci**: bila `nilai` sudah terisi, endpoint
+> mengembalikan **422** dan pengumpulan tidak boleh diubah lagi.
+> Aturan `deadline_at` / `can_submit_late` mengikuti endpoint pengiriman pertama.
+
+#### Path Parameters
+
+| Parameter | Type | Wajib | Deskripsi |
+|---|---|---|---|
+| `tugasId` | integer | ✅ | ID tugas pada `lms_tugas` |
+
+#### Request Body (`multipart/form-data`)
+
+| Field | Type | Wajib | Validasi |
+|---|---|---|---|
+| `catatan_mahasiswa` | string | ❌ | Teks |
+| `file` | file | ❌ | Maks. 50MB |
+
+#### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Pengumpulan tugas berhasil diperbarui.",
+    "data": {
+        "id": 402,
+        "tugas_id": 88,
+        "mahasiswa_id": 312,
+        "catatan_mahasiswa": "Versi kedua, sudah diperbaiki.",
+        "file_path": "siakad/lms/pengumpulan/2026/10/2f1c....pdf",
+        "disk": "r2-private",
+        "nama_file_asli": "revisi_akhir.pdf",
+        "ukuran_bytes": 51200,
+        "mime_type": "application/pdf",
+        "is_late": false,
+        "nilai": null,
+        "created_at": "2026-10-22T08:00:00.000000Z",
+        "updated_at": "2026-10-22T09:30:00.000000Z"
+    }
+}
+```
+
+#### Response Error
+
+**422 Unprocessable Entity**:
+
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "pengumpulan": ["Pengumpulan tugas ini sudah dinilai dan tidak dapat diubah."]
+    }
+}
+```
+
+---
+
+### [DELETE] `/api/v1/lms/tugas/{tugasId}/kumpulan`
+
+Menarik kembali / menghapus pengumpulan tugas milik sendiri. Berkas fisik ikut
+dihapus dari storage.
+
+Sama seperti pembaruan, pengumpulan yang sudah dinilai tidak dapat dihapus.
+
+#### Path Parameters
+
+| Parameter | Type | Wajib | Deskripsi |
+|---|---|---|---|
+| `tugasId` | integer | ✅ | ID tugas pada `lms_tugas` |
+
+#### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Pengumpulan tugas berhasil dihapus.",
+    "data": null
+}
+```
+
+#### Response Error
+
+**422 Unprocessable Entity**:
+
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "pengumpulan": ["Tidak ada pengumpulan tugas ini untuk dihapus."]
     }
 }
 ```
@@ -1043,6 +1231,242 @@ Mahasiswa hanya melihat miliknya sendiri; dosen/pengelola melihat semua.
                 "persen_capaian": 88.5
             }
         ]
+    }
+}
+```
+
+---
+
+## 7. Export Laporan (CSV / XLSX)
+
+Empat endpoint di bawah menghasilkan **berkas unduhan** (bukan JSON). Semua
+memakai query parameter `format`:
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `format` | string | ❌ | `csv` | Format berkas: `csv` atau `xlsx` |
+
+> **Catatan umum**
+> - Format `csv` selalu diawali **BOM UTF-8** (`EF BB BF`) dan memakai line ending `\r\n`,
+>   sehingga karakter Indonesia tampil benar di Excel Windows.
+> - Format `xlsx` menghasilkan spreadsheet dengan baris pertama bold; kolom angka
+>   ditulis sebagai angka (bukan teks) agar bisa dihitung/diurutkan.
+> - Setiap aksi export dicatat pada tabel `core_audit_logs` (`module = LMS`, `action = export`).
+> - Otorisasi memakai Gate: `siakad.kelas.manage` (absensi & izin) atau `siakad.nilai.manage` (nilai & pengumpulan).
+> - Dosen hanya dapat mengekspor kelas yang ia ampu; pengguna di luar kelas mendapat `422`.
+
+### [GET] `/api/v1/lms/kelas/{kelasId}/export/presensi`
+
+Rekap absensi kelas dalam format panjang: satu baris per kombinasi
+**pertemuan × mahasiswa**.
+
+#### Response Sukses (200 OK)
+
+```
+Content-Type: text/csv; charset=UTF-8
+Content-Disposition: attachment; filename=Rekap_Absensi_IF-LMS-A_20261022_101112.csv
+```
+
+```csv
+Kode Kelas,Nama Kelas,Mata Kuliah,Pertemuan Ke,Tanggal,Topik Pertemuan,NIM,Nama Mahasiswa,Status Kehadiran,Catatan
+IF-LMS-A,Kelas LMS A,Pemrograman Web LMS,1,2026-10-01,Pengenalan LMS Perkuliahan,2026001001,Mahasiswa LMS Testing,Hadir,-
+```
+
+### [GET] `/api/v1/lms/kelas/{kelasId}/export/absensi-izin`
+
+Rekap pengajuan izin/sakit pada kelas (status izin memakai referensi master
+`spmb_master_referensi`).
+
+```csv
+Kode Kelas,Nama Kelas,Pertemuan Ke,Tanggal,NIM,Nama Mahasiswa,Tipe Izin,Alasan,Status,Catatan Dosen,Diajukan Pada,Diproses Pada
+IF-LMS-A,Kelas LMS A,1,2026-10-01,2026001001,Mahasiswa LMS Testing,Sakit,Sakit tifus rawat inap di RS.,Disetujui,Semoga lekas pulih.,2026-10-01 08:12:00,2026-10-01 09:02:00
+```
+
+### [GET] `/api/v1/lms/kelas/{kelasId}/export/nilai`
+
+Rekap nilai kelas. Struktur kolom **dinamis**: satu kolom per tugas dan per
+quiz yang ada pada kelas tersebut, diikuti rata-rata dan jumlah penilaian.
+
+```csv
+No,NIM,Nama Mahasiswa,Program Studi,Tugas: Tugas 1: Framework MVC,Quiz: Kuis 1,Rata-rata,Tugas Dinilai,Quiz Dinilai
+1,2026001001,Mahasiswa LMS Testing,Informatika LMS,88.5,92,90.25,1,1
+```
+
+### [GET] `/api/v1/lms/tugas/{tugasId}/export/pengumpulan`
+
+Status & nilai pengumpulan tugas. Mahasiswa yang belum mengumpulkan tetap
+muncul dengan status `Belum Mengumpulkan`.
+
+```csv
+Judul Tugas,NIM,Nama Mahasiswa,Status Pengumpulan,Catatan Mahasiswa,Nama Berkas,Terlambat,Nilai,Feedback Dosen,Waktu Kumpul,Waktu Dinilai
+Tugas 1: Framework MVC,2026001001,Mahasiswa LMS Testing,Terkumpul,-,tugas_mvc_2026001001.zip,Tidak,88.5,Bagus sekali, kode rapi dan modular.,2026-10-05 10:00:00,2026-10-06 08:00:00
+```
+
+### Response Error
+
+**422 Unprocessable Entity** (format tidak valid / tidak berhak mengakses kelas)
+
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "format": ["Format export harus salah satu dari: csv, xlsx."]
+    }
+}
+```
+
+**403 Forbidden** (role tidak memegang `siakad.kelas.manage` / `siakad.nilai.manage`)
+
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+}
+```
+
+---
+
+## 8. Dashboard & Pengaturan Level Modul
+
+### [GET] `/api/v1/lms/dashboard/overview`
+
+Ringkasan statistik untuk halaman `/lms/dashboard`. Scope kelas mengikuti
+`resolveAccessibleKelasIds` (dosen → kelas yang diampu, mahasiswa → kelas di KRS,
+pengelola/admin & kaprodi → seluruh kelas). Hasil di-cache **5 menit** per user.
+
+**Response Sukses (200 OK)**
+
+```json
+{
+    "status": "success",
+    "message": "Ringkasan dashboard LMS berhasil diambil.",
+    "data": {
+        "role": "mahasiswa",
+        "ringkasan": {
+            "kelas": 4,
+            "tugas_aktif": 3,
+            "tryout_aktif": 1,
+            "forum_topik": 6,
+            "notifikasi_belum_dibaca": 2
+        },
+        "tambahan": {
+            "tugas_belum_dikumpul": 1,
+            "tryout_selesai": 2
+        },
+        "tren": [
+            { "tanggal": "2026-10-17", "pengumpulan": 0, "attempt": 1 }
+        ]
+    }
+}
+```
+
+| Field | Keterangan |
+|---|---|
+| `role` | `mahasiswa` (punya profil mahasiswa), `dosen` (punya profil dosen), atau `pengelola` |
+| `ringkasan.tugas_aktif` | Tugas terbit dengan `deadline_at >= now()` |
+| `ringkasan.tryout_aktif` | Tryout terbit, tidak diarsipkan |
+| `tambahan` | Mahasiswa: `tugas_belum_dikumpul`, `tryout_selesai`. Dosen/pengelola: `pengumpulan_belum_dinilai`, `attempt_belum_dinilai` |
+| `tren` | Selalu 7 entri (6 hari lalu s.d. hari ini), dihitung di PHP (portabel SQLite/MySQL) |
+
+### [GET] `/api/v1/lms/pengaturan/modul`
+
+Membaca pengaturan global modul LMS (`lms_*` pada `core_system_settings`).
+Hanya `admin`/`superadmin` (`lms.pengaturan.read`).
+
+**Response Sukses (200 OK)**
+
+```json
+{
+    "status": "success",
+    "message": "Pengaturan modul LMS berhasil diambil.",
+    "data": {
+        "values": {
+            "lms_fitur_presensi": true,
+            "lms_max_soal_import": 500,
+            "lms_upload_max_size_mb": 100,
+            "lms_video_max_size_mb": 500
+        },
+        "definitions": [
+            {
+                "key": "lms_fitur_presensi",
+                "label": "Fitur Presensi",
+                "group": "fitur",
+                "type": "boolean",
+                "default": true,
+                "public": true,
+                "description": "Mengaktifkan presensi & integrasi PresensiV2 ..."
+            }
+        ]
+    }
+}
+```
+
+`definitions` adalah sumber kebenaran untuk label, tipe, batas, dan default —
+UI tidak perlu menduplikasi daftar field.
+
+> Nilai pengaturan **berlaku efektif** di backend: `lms_max_soal_import`
+> membatasi jumlah baris per import bank soal, sedangkan
+> `lms_upload_max_size_mb` dan `lms_video_max_size_mb` menjadi batas `max:`
+> unggahan berkas materi (video dideteksi dari MIME `video/*`).
+
+### [PUT] `/api/v1/lms/pengaturan/modul`
+
+Menyimpan sebagian/seluruh pengaturan (partial update; key yang tidak dikirim
+tidak berubah). Perubahan dicatat ke `core_audit_logs` (`module=LMS`,
+`action=update`, `table_name=core_system_settings`).
+
+**Request Body**
+
+```json
+{
+    "lms_max_soal_import": 50,
+    "lms_upload_max_size_mb": 10,
+    "lms_video_max_size_mb": 500,
+    "lms_fitur_presensi": false
+}
+```
+
+| Field | Tipe | Validasi |
+|---|---|---|
+| `lms_max_soal_import` | integer | `min:1`, `max:1000` |
+| `lms_upload_max_size_mb` | integer | `min:1`, `max:200` |
+| `lms_video_max_size_mb` | integer | `min:1`, `max:2048` |
+| `lms_fitur_presensi` | boolean | — |
+
+**Response Sukses (200 OK)** — mengembalikan seluruh nilai terbaru pada `data`
+(bentuk sama dengan `values` di endpoint GET).
+
+**Response Error**
+
+**403 Forbidden** — bukan admin/superadmin.
+
+**422 Unprocessable Entity**
+
+```json
+{
+    "status": "error",
+    "message": "Nilai pengaturan di bawah batas minimum.",
+    "errors": { "lms_upload_max_size_mb": ["Nilai pengaturan di bawah batas minimum."] }
+}
+```
+
+### [GET] `/api/v1/lms/public/settings`
+
+Endpoint **publik** (tanpa `Authorization`) untuk kebutuhan UI: batas upload dan
+feature flag. Hanya key dengan `public: true` pada definisi yang dikembalikan;
+cache **24 jam**, di-invalidate saat pengaturan disimpan.
+
+**Response Sukses (200 OK)**
+
+```json
+{
+    "status": "success",
+    "message": "Pengaturan publik LMS berhasil diambil.",
+    "data": {
+        "lms_fitur_presensi": true,
+        "lms_upload_max_size_mb": 100,
+        "lms_video_max_size_mb": 500
     }
 }
 ```

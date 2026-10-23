@@ -7,6 +7,8 @@ use App\Models\Lms\ForumPost;
 use App\Models\Lms\ForumTopik;
 use App\Http\Requests\Siakad\Lms\StoreForumPostRequest;
 use App\Http\Requests\Siakad\Lms\StoreForumTopikRequest;
+use App\Http\Requests\Siakad\Lms\UpdateForumPostRequest;
+use App\Http\Requests\Siakad\Lms\UpdateForumTopikRequest;
 use App\Services\AuditLogService;
 use App\Services\Siakad\ForumService;
 use App\Services\Siakad\LmsService;
@@ -85,7 +87,7 @@ class ForumController extends Controller
     }
 
     /**
-     * Daftar topik forum satu kelas (otomatis buat "Diskusi Umum" bila kosong).
+     * Daftar topik forum satu kelas (read-only, tidak membuat topik otomatis).
      */
     public function listTopik(Request $request, int $kelasId): JsonResponse
     {
@@ -123,6 +125,34 @@ class ForumController extends Controller
     }
 
     /**
+     * Pastikan kelas punya topik default "Diskusi Umum" (idempoten).
+     *
+     * Dipisah dari endpoint baca agar GET tidak pernah menulis data.
+     * Dipanggil frontend saat daftar topik kosong sehingga mahasiswa tetap
+     * bisa berdiskusi tanpa perlu dosen membuat topik lebih dulu.
+     */
+    public function ensureTopikUmum(Request $request, int $kelasId): JsonResponse
+    {
+        Gate::authorize('ensureDefault', ForumTopik::class);
+
+        $topik = $this->forumService->ensureTopikUmum($kelasId, (int) $request->user()->id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Topik diskusi umum siap digunakan.',
+            'data' => [
+                'id' => $topik->id,
+                'kelas_id' => $topik->kelas_id,
+                'pertemuan_id' => $topik->pertemuan_id,
+                'judul' => $topik->judul,
+                'slug' => $topik->slug,
+                'is_pinned' => $topik->is_pinned,
+                'created_at' => $topik->created_at?->toIso8601String(),
+            ],
+        ]);
+    }
+
+    /**
      * Buat topik forum baru (dosen/pengelola kelas).
      */
     public function storeTopik(StoreForumTopikRequest $request, int $kelasId): JsonResponse
@@ -149,6 +179,37 @@ class ForumController extends Controller
             'message' => 'Topik forum berhasil dibuat.',
             'data' => $topik,
         ], 201);
+    }
+
+    /**
+     * Ubah judul / pin topik forum (pengelola kelas).
+     */
+    public function updateTopik(UpdateForumTopikRequest $request, int $topikId): JsonResponse
+    {
+        $topik = ForumTopik::findOrFail($topikId);
+        Gate::authorize('update', $topik);
+
+        $oldValues = $topik->getOriginal();
+        $topik = $this->forumService->updateTopik($topikId, $request->validated(), (int) $request->user()->id);
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'update',
+                tableName: 'lms_forum_topik',
+                recordId: $topik->id,
+                oldValues: $oldValues,
+                newValues: $topik->toArray()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log ubah topik forum: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Topik forum berhasil diperbarui.',
+            'data' => $topik,
+        ]);
     }
 
     /**
@@ -254,6 +315,39 @@ class ForumController extends Controller
             'message' => 'Pesan forum berhasil dikirim.',
             'data' => $post->load('balasan'),
         ], 201);
+    }
+
+    /**
+     * Edit isi pesan forum (pemilik pesan atau pengelola kelas).
+     */
+    public function updatePost(UpdateForumPostRequest $request, int $postId): JsonResponse
+    {
+        $post = ForumPost::findOrFail($postId);
+
+        // Otorisasi tingkat resource: pemilik pesan atau pengelola kelas.
+        Gate::authorize('update', $post);
+
+        $oldValues = $post->getOriginal();
+        $post = $this->forumService->updatePost($postId, $request->validated(), (int) $request->user()->id);
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'update',
+                tableName: 'lms_forum_post',
+                recordId: $post->id,
+                oldValues: $oldValues,
+                newValues: $post->toArray()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log edit post forum: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pesan forum berhasil diperbarui.',
+            'data' => $post,
+        ]);
     }
 
     /**

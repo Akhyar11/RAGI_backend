@@ -38,4 +38,20 @@ class ForumPostPolicy
         return $user->hasPermission('lms.forum.create')
             && (int) $post->user_id === (int) $user->id;
     }
+
+    /**
+     * Edit pesan: pemilik pesan atau pengelola kelas.
+     *
+     * Pengelola kelas (`lms.forum.manage`) boleh mengedit pesan siapa pun
+     * sebagai bagian moderasi, sama seperti hak hapus.
+     */
+    public function update(User $user, ForumPost $post): bool
+    {
+        if ($user->hasPermission('lms.forum.manage')) {
+            return true;
+        }
+
+        return $user->hasPermission('lms.forum.create')
+            && (int) $post->user_id === (int) $user->id;
+    }
 }

@@ -3,11 +3,16 @@
 namespace App\Services\Siakad;
 
 use App\Models\Lms\KelasLmsSetting;
+use App\Models\Lms\LmsSetting;
 use App\Models\Lms\MateriPertemuan;
 use App\Models\Lms\MateriFile;
 use App\Models\Lms\Tugas;
 use App\Models\Lms\PengumpulanTugas;
+use App\Models\Lms\ForumTopik;
 use App\Models\Lms\IzinAbsensi;
+use App\Models\Lms\LmsNotifikasi;
+use App\Models\Lms\Quiz;
+use App\Models\Lms\QuizAttempt;
 use App\Models\Siakad\Kelas;
 use App\Models\Siakad\KomponenPenilaian;
 use App\Models\Siakad\Pertemuan;
@@ -20,11 +25,13 @@ use App\Models\Siakad\NilaiKomponenMahasiswa;
 use App\Models\Siakad\TahunAkademik;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\Storage\FileStorageService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 
 class LmsService
@@ -38,6 +45,86 @@ class LmsService
         self::STATUS_PENGATURAN_SUDAH,
         self::STATUS_PENGATURAN_BELUM,
     ];
+
+    public function __construct(
+        protected FileStorageService $files,
+        protected PresensiV2SyncService $presensiSync
+    ) {}
+
+    /**
+     * Pastikan fitur presensi sedang aktif.
+     *
+     * Feature flag `lms_fitur_presensi` (disimpan pada `core_system_settings`)
+     * memungkinkan admin mematikan tampilan presensi untuk dosen & mahasiswa.
+     * Admin tetap boleh mengakses (untuk keperluan support) — dibedakan lewat
+     * permission `lms.presensi.manage`, bukan berdasarkan role statis.
+     *
+     * @throws \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException
+     */
+    public function assertPresensiFiturAktif(?User $user = null): void
+    {
+        if (LmsSetting::fiturPresensiAktif()) {
+            return;
+        }
+
+        $user = $user ?? auth()->user();
+
+        if ($user instanceof User && $user->hasPermission('lms.presensi.manage')) {
+            return;
+        }
+
+        abort(403, 'Fitur presensi sedang dinonaktifkan oleh administrator.');
+    }
+
+    /**
+     * Sinkronkan data presensi lokal ke aplikasi PresensiV2.
+     *
+     * Integrasi eksternal bersifat opsional: bila PresensiV2 belum
+     * dikonfigurasi atau sedang bermasalah, proses lokal TETAP berhasil dan
+     * kegagalan hanya dicatat pada log sinkronisasi.
+     */
+    public function sinkronKePresensiV2(Pertemuan $pertemuan): void
+    {
+        try {
+            $this->presensiSync->syncKehadiran($pertemuan);
+        } catch (\Throwable $e) {
+            Log::warning('Sinkronisasi PresensiV2 gagal: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Sinkronkan satu baris kehadiran ke aplikasi PresensiV2.
+     *
+     * @see sinkronKePresensiV2() untuk catatan fail-safe.
+     */
+    public function sinkronAbsensiKePresensiV2(AbsensiMahasiswa $absensi): void
+    {
+        try {
+            $this->presensiSync->syncAbsensi($absensi);
+        } catch (\Throwable $e) {
+            Log::warning('Sinkronisasi PresensiV2 (absensi) gagal: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Simpan berkas unggahan lewat `FileStorageService`.
+     *
+     * Penolakan ekstensi executable oleh FileStorageService diubah menjadi
+     * pesan validasi agar pengguna mendapat umpan balik yang jelas, bukan
+     * kesalahan server 500.
+     *
+     * @throws ValidationException
+     */
+    protected function storeUploadedFile(UploadedFile $file, string $baseDir, string $disk): string
+    {
+        try {
+            return $this->files->store($file, $baseDir, $disk);
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages([
+                'file' => [$e->getMessage()],
+            ]);
+        }
+    }
 
     /**
      * Dapatkan disk storage yang aktif (prioritas: kelas -> system setting -> default disk).
@@ -388,15 +475,16 @@ class LmsService
 
     /**
      * Upload lampiran berkas materi tambahan.
+     *
+     * Penyimpanan WAJIB lewat `FileStorageService` agar nama berkas selalu
+     * UUID + ekstensi asli, path DB relatif, dan ekstensi executable ditolak.
      */
     public function uploadMateriFile(int $materiId, UploadedFile $file): MateriFile
     {
         $materi = MateriPertemuan::with('pertemuan.kelas')->findOrFail($materiId);
         $disk = $this->resolveDisk($materi->pertemuan?->kelas);
 
-        $safeName = Str::uuid() . '.' . $file->getClientOriginalExtension();
-        $directory = 'siakad/lms/materi/' . date('Y/m');
-        $storedPath = $file->storeAs($directory, $safeName, $disk);
+        $storedPath = $this->storeUploadedFile($file, 'siakad/lms/materi', $disk);
 
         return MateriFile::create([
             'materi_id'      => $materiId,
@@ -415,9 +503,7 @@ class LmsService
     {
         $file = MateriFile::findOrFail($fileId);
 
-        if ($file->file_path && Storage::disk($file->disk)->exists($file->file_path)) {
-            Storage::disk($file->disk)->delete($file->file_path);
-        }
+        $this->files->delete($file->file_path, $file->disk);
 
         return $file->delete();
     }
@@ -483,30 +569,22 @@ class LmsService
             $tugas = Tugas::with('pertemuan.kelas')->findOrFail($tugasId);
             $disk = $this->resolveDisk($tugas->pertemuan?->kelas);
 
-            $isLate = false;
-            if ($tugas->deadline_at && now()->gt($tugas->deadline_at)) {
-                if (!$tugas->can_submit_late) {
-                    throw ValidationException::withMessages([
-                        'deadline_at' => ['Batas waktu pengumpulan tugas ini telah berakhir dan tidak menerima pengumpulan terlambat.'],
-                    ]);
-                }
-                $isLate = true;
-            }
+            $isLate = $this->hitungTerlambat($tugas);
 
             $pengumpulan = PengumpulanTugas::firstOrNew([
                 'tugas_id'     => $tugasId,
                 'mahasiswa_id' => $mahasiswaId,
             ]);
 
+            // Pengumpulan yang sudah dinilai dikunci — mahasiswa tidak boleh
+            // menimpa berkas yang sudah dinilai dosen.
+            $this->assertBelumDinilai($pengumpulan);
+
             // Jika ada file lama dan di-upload file baru, hapus berkas lama
             if ($file) {
-                if ($pengumpulan->file_path && Storage::disk($pengumpulan->disk)->exists($pengumpulan->file_path)) {
-                    Storage::disk($pengumpulan->disk)->delete($pengumpulan->file_path);
-                }
+                $this->files->delete($pengumpulan->file_path, $pengumpulan->disk);
 
-                $safeName = Str::uuid() . '.' . $file->getClientOriginalExtension();
-                $directory = 'siakad/lms/pengumpulan/' . date('Y/m');
-                $storedPath = $file->storeAs($directory, $safeName, $disk);
+                $storedPath = $this->storeUploadedFile($file, 'siakad/lms/pengumpulan', $disk);
 
                 $pengumpulan->file_path = $storedPath;
                 $pengumpulan->disk = $disk;
@@ -521,6 +599,118 @@ class LmsService
 
             return $pengumpulan->fresh();
         });
+    }
+
+    /**
+     * Perbarui pengumpulan tugas yang sudah ada (file &/atau catatan mahasiswa).
+     *
+     * Hanya pemilik pengumpulan (mahasiswaConcerned) yang boleh mengubah, dan
+     * hanya bila belum dinilai. Batas waktu & izin pengumpulan terlambat
+     * mengikuti aturan yang sama dengan pengiriman pertama.
+     */
+    public function updatePengumpulan(int $tugasId, int $userId, array $data, ?UploadedFile $file = null): PengumpulanTugas
+    {
+        return DB::transaction(function () use ($tugasId, $userId, $data, $file) {
+            $mahasiswa = Mahasiswa::where('user_id', $userId)->firstOrFail();
+
+            $tugas = Tugas::with('pertemuan.kelas')->findOrFail($tugasId);
+            $pengumpulan = PengumpulanTugas::where('tugas_id', $tugasId)
+                ->where('mahasiswa_id', $mahasiswa->id)
+                ->first();
+
+            if (!$pengumpulan) {
+                throw ValidationException::withMessages([
+                    'pengumpulan' => ['Belum ada pengumpulan tugas ini. Gunakan endpoint kirim pengumpulan terlebih dahulu.'],
+                ]);
+            }
+
+            $this->assertBelumDinilai($pengumpulan);
+
+            $isLate = $this->hitungTerlambat($tugas);
+            $disk = $this->resolveDisk($tugas->pertemuan?->kelas);
+
+            if ($file) {
+                $this->files->delete($pengumpulan->file_path, $pengumpulan->disk);
+
+                $storedPath = $this->storeUploadedFile($file, 'siakad/lms/pengumpulan', $disk);
+
+                $pengumpulan->file_path = $storedPath;
+                $pengumpulan->disk = $disk;
+                $pengumpulan->nama_file_asli = $file->getClientOriginalName();
+                $pengumpulan->ukuran_bytes = $file->getSize();
+                $pengumpulan->mime_type = $file->getClientMimeType();
+            }
+
+            if (array_key_exists('catatan_mahasiswa', $data)) {
+                $pengumpulan->catatan_mahasiswa = $data['catatan_mahasiswa'];
+            }
+
+            $pengumpulan->is_late = $isLate;
+            $pengumpulan->save();
+
+            return $pengumpulan->fresh();
+        });
+    }
+
+    /**
+     * Tarik kembali / hapus pengumpulan tugas oleh pemiliknya.
+     *
+     * Hanya boleh sebelum dinilai. Berkas fisik ikut dihapus.
+     */
+    public function hapusPengumpulan(int $tugasId, int $userId): bool
+    {
+        return DB::transaction(function () use ($tugasId, $userId) {
+            $mahasiswa = Mahasiswa::where('user_id', $userId)->firstOrFail();
+
+            $pengumpulan = PengumpulanTugas::where('tugas_id', $tugasId)
+                ->where('mahasiswa_id', $mahasiswa->id)
+                ->first();
+
+            if (!$pengumpulan) {
+                throw ValidationException::withMessages([
+                    'pengumpulan' => ['Tidak ada pengumpulan tugas ini untuk dihapus.'],
+                ]);
+            }
+
+            $this->assertBelumDinilai($pengumpulan);
+
+            $this->files->delete($pengumpulan->file_path, $pengumpulan->disk);
+
+            return (bool) $pengumpulan->delete();
+        });
+    }
+
+    /**
+     * True bila pengumpulan mengirim lewat deadline (dan tugas mengizinkan).
+     *
+     * Melempar ValidationException bila deadline lewat DAN tugas tidak
+     * mengizinkan pengumpulan terlambat.
+     */
+    protected function hitungTerlambat(Tugas $tugas): bool
+    {
+        if (!$tugas->deadline_at || !now()->gt($tugas->deadline_at)) {
+            return false;
+        }
+
+        if (!$tugas->can_submit_late) {
+            throw ValidationException::withMessages([
+                'deadline_at' => ['Batas waktu pengumpulan tugas ini telah berakhir dan tidak menerima pengumpulan terlambat.'],
+            ]);
+        }
+
+        return true;
+    }
+
+    /**
+     * Pengumpulan yang sudah dinilai tidak boleh diubah/diubah oleh mahasiswa.
+     */
+    protected function assertBelumDinilai(PengumpulanTugas $pengumpulan): void
+    {
+        if ($pengumpulan->nilai !== null) {
+            throw ValidationException::withMessages([
+                'pengumpulan' => ['Pengumpulan tugas ini sudah dinilai dan tidak dapat diubah.'],
+            ]);
+        }
     }
 
     /**
@@ -723,7 +913,7 @@ class LmsService
             ]);
         }
 
-        AbsensiMahasiswa::updateOrCreate(
+        $absensi = AbsensiMahasiswa::updateOrCreate(
             [
                 'pertemuan_id' => $pertemuanId,
                 'mahasiswa_id' => $mahasiswaId,
@@ -733,6 +923,9 @@ class LmsService
                 'catatan' => 'Presensi mandiri via token LMS',
             ]
         );
+
+        // Cerminkan kehadiran ke PresensiV2 (opsional & tidak menggagalkan lokal).
+        $this->sinkronAbsensiKePresensiV2($absensi);
     }
 
     /**
@@ -770,6 +963,9 @@ class LmsService
                 );
             }
         });
+
+        // Cerminkan rekap kehadiran ke PresensiV2 (opsional & tidak menggagalkan lokal).
+        $this->sinkronKePresensiV2(Pertemuan::findOrFail($pertemuanId));
     }
 
     /**
@@ -786,9 +982,7 @@ class LmsService
 
             $suratPath = null;
             if ($suratFile) {
-                $safeName = Str::uuid() . '.' . $suratFile->getClientOriginalExtension();
-                $directory = 'siakad/lms/izin/' . date('Y/m');
-                $suratPath = $suratFile->storeAs($directory, $safeName, $disk);
+                $suratPath = $this->storeUploadedFile($suratFile, 'siakad/lms/izin', $disk);
             }
 
             $tipeIzinId = $data['tipe_izin_id'] ?? null;
@@ -981,6 +1175,136 @@ class LmsService
      *
      * @return array<int>|null
      */
+    /**
+     * Ringkasan dashboard LMS (split role, cache 5 menit).
+     *
+     * Statistik dasar memakai scoping kelas yang sama dengan endpoint LMS lain
+     * (`resolveAccessibleKelasIds`): dosen → kelas yang diampu, mahasiswa →
+     * kelas dari KRS, pengelola (admin/kaprodi/wakil prodi) → seluruh kelas.
+     * Role ditentukan dari profil yang dimiliki user, bukan atribut statis.
+     *
+     * @return array{role: string, ringkasan: array<string, int>, tambahan: array<string, int>, tren: array<int, array<string, mixed>>}
+     */
+    public function dashboardOverview(int $userId): array
+    {
+        return Cache::remember("lms:dashboard:overview:{$userId}", 300, function () use ($userId) {
+            $kelasIds = $this->resolveAccessibleKelasIds($userId);
+            $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
+            $dosen = Dosen::where('user_id', $userId)->first();
+
+            $role = $mahasiswa ? 'mahasiswa' : ($dosen ? 'dosen' : 'pengelola');
+
+            $kelasTotal = Kelas::query()
+                ->when($kelasIds !== null, fn ($query) => $query->whereIn('id', $kelasIds))
+                ->count();
+
+            $tugasAktif = Tugas::query()
+                ->where('is_published', true)
+                ->where('deadline_at', '>=', now())
+                ->when($kelasIds !== null, function ($query) use ($kelasIds) {
+                    $query->whereHas('pertemuan', fn ($pertemuan) => $pertemuan->whereIn('kelas_id', $kelasIds));
+                })
+                ->count();
+
+            $tryoutAktif = Quiz::query()
+                ->where('tipe', Quiz::TIPE_TRYOUT)
+                ->where('is_published', true)
+                ->where('is_archived', false)
+                ->when($kelasIds !== null, fn ($query) => $query->whereIn('kelas_id', $kelasIds))
+                ->count();
+
+            $forumTopik = ForumTopik::query()
+                ->when($kelasIds !== null, fn ($query) => $query->whereIn('kelas_id', $kelasIds))
+                ->count();
+
+            $ringkasan = [
+                'kelas' => $kelasTotal,
+                'tugas_aktif' => $tugasAktif,
+                'tryout_aktif' => $tryoutAktif,
+                'forum_topik' => $forumTopik,
+                'notifikasi_belum_dibaca' => LmsNotifikasi::query()
+                    ->where('user_id', $userId)
+                    ->where('is_read', false)
+                    ->count(),
+            ];
+
+            $tambahan = [];
+
+            if ($mahasiswa) {
+                $tambahan['tugas_belum_dikumpul'] = Tugas::query()
+                    ->where('is_published', true)
+                    ->when($kelasIds !== null, function ($query) use ($kelasIds) {
+                        $query->whereHas('pertemuan', fn ($pertemuan) => $pertemuan->whereIn('kelas_id', $kelasIds));
+                    })
+                    ->whereDoesntHave('pengumpulan', fn ($query) => $query->where('mahasiswa_id', $mahasiswa->id))
+                    ->count();
+
+                $tambahan['tryout_selesai'] = QuizAttempt::query()
+                    ->where('mahasiswa_id', $mahasiswa->id)
+                    ->where('status', 'selesai')
+                    ->whereHas('quiz', fn ($query) => $query->where('is_published', true)->where('is_archived', false))
+                    ->count();
+            } else {
+                $tambahan['pengumpulan_belum_dinilai'] = PengumpulanTugas::query()
+                    ->whereNull('nilai')
+                    ->when($kelasIds !== null, function ($query) use ($kelasIds) {
+                        $query->whereHas('tugas.pertemuan', fn ($pertemuan) => $pertemuan->whereIn('kelas_id', $kelasIds));
+                    })
+                    ->count();
+
+                $tambahan['attempt_belum_dinilai'] = QuizAttempt::query()
+                    ->where('butuh_penilaian_manual', true)
+                    ->when($kelasIds !== null, function ($query) use ($kelasIds) {
+                        $query->whereHas('quiz', fn ($quiz) => $quiz->whereIn('kelas_id', $kelasIds));
+                    })
+                    ->count();
+            }
+
+            $start = now()->subDays(6)->startOfDay();
+
+            $pengumpulanQuery = PengumpulanTugas::query()->where('created_at', '>=', $start);
+            if ($mahasiswa) {
+                $pengumpulanQuery->where('mahasiswa_id', $mahasiswa->id);
+            } elseif ($kelasIds !== null) {
+                $pengumpulanQuery->whereHas('tugas.pertemuan', fn ($pertemuan) => $pertemuan->whereIn('kelas_id', $kelasIds));
+            }
+
+            $attemptQuery = QuizAttempt::query()->where('created_at', '>=', $start);
+            if ($mahasiswa) {
+                $attemptQuery->where('mahasiswa_id', $mahasiswa->id);
+            } elseif ($kelasIds !== null) {
+                $attemptQuery->whereHas('quiz', fn ($quiz) => $quiz->whereIn('kelas_id', $kelasIds));
+            }
+
+            $pengumpulanPerHari = $pengumpulanQuery->pluck('created_at')
+                ->groupBy(fn ($date) => $date->format('Y-m-d'))
+                ->map->count();
+
+            $attemptPerHari = $attemptQuery->pluck('created_at')
+                ->groupBy(fn ($date) => $date->format('Y-m-d'))
+                ->map->count();
+
+            $tren = collect(range(0, 6))
+                ->map(function (int $offset) use ($start, $pengumpulanPerHari, $attemptPerHari) {
+                    $tanggal = $start->copy()->addDays($offset)->format('Y-m-d');
+
+                    return [
+                        'tanggal' => $tanggal,
+                        'pengumpulan' => (int) ($pengumpulanPerHari[$tanggal] ?? 0),
+                        'attempt' => (int) ($attemptPerHari[$tanggal] ?? 0),
+                    ];
+                })
+                ->all();
+
+            return [
+                'role' => $role,
+                'ringkasan' => $ringkasan,
+                'tambahan' => $tambahan,
+                'tren' => $tren,
+            ];
+        });
+    }
+
     public function resolveAccessibleKelasIds(int $userId): ?array
     {
         $dosen = Dosen::where('user_id', $userId)->first();
@@ -1269,6 +1593,10 @@ class LmsService
 
     /**
      * Dapatkan URL unduh aman untuk materi atau pengumpulan tugas.
+     *
+     * URL dihasilkan oleh `FileStorageService::temporaryUrl()` sehingga berkas
+     * yang tersimpan pada disk privat otomatis memakai Signed URL, bukan URL
+     * storage langsung.
      */
     public function getDownloadUrl(string $type, int $id, int $userId): array
     {
@@ -1288,22 +1616,58 @@ class LmsService
             ]);
         }
 
-        if (!$path || !Storage::disk($disk)->exists($path)) {
+        if (!$path || !$this->files->exists($path, $disk)) {
             throw new ModelNotFoundException('Berkas tidak ditemukan pada storage server.');
         }
 
-        // Jika disk mendukung temporaryUrl (seperti S3 / Cloudflare R2)
-        try {
-            $url = Storage::disk($disk)->temporaryUrl($path, now()->addMinutes(30));
-        } catch (\Throwable $e) {
-            // Fallback untuk storage lokal
-            $url = Storage::disk($disk)->url($path);
+        $url = $this->files->temporaryUrl($path, now()->addMinutes(30), $disk);
+
+        if (!$url) {
+            throw new ModelNotFoundException('URL unduh tidak dapat disiapkan untuk berkas ini.');
         }
 
         return [
             'nama_file'    => $filename,
             'download_url' => $url,
             'disk'         => $disk,
+        ];
+    }
+
+    /**
+     * Ambil pengaturan LMS satu kelas (read-only).
+     *
+     * Bila kelas belum pernah dikonfigurasi, mengembalikan setting bawaan
+     * supaya frontend tidak perlu menangani kasus null.
+     *
+     * Akses dibatasi pada kelas yang boleh diakses user (KRS untuk mahasiswa,
+     * kelas yang diampu untuk dosen, seluruh kelas untuk role privileged).
+     */
+    public function getKelasSetting(int $kelasId, int $userId): array
+    {
+        $kelas = Kelas::with('lmsSetting')->findOrFail($kelasId);
+
+        $kelasIds = $this->resolveAccessibleKelasIds($userId);
+        if ($kelasIds !== null && !in_array($kelas->id, $kelasIds, true)) {
+            throw ValidationException::withMessages([
+                'kelas' => ['Anda tidak terdaftar pada kelas perkuliahan ini.'],
+            ]);
+        }
+
+        $setting = $kelas->lmsSetting;
+
+        if (!$setting) {
+            return KelasLmsSetting::defaultSetting($kelas->id);
+        }
+
+        return [
+            'kelas_id'                => $setting->kelas_id,
+            'total_pertemuan'         => $setting->total_pertemuan,
+            'metode_absensi'          => $setting->metode_absensi,
+            'batas_min_hadir_persen'  => $setting->batas_min_hadir_persen,
+            'can_submit_late'         => $setting->can_submit_late,
+            'show_nilai_to_mahasiswa' => $setting->show_nilai_to_mahasiswa,
+            'storage_disk'            => $setting->storage_disk,
+            'is_default'              => false,
         ];
     }
 

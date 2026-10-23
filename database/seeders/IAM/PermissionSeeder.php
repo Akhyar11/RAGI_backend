@@ -304,6 +304,14 @@ class PermissionSeeder extends Seeder
             ['name' => 'Lihat Forum Diskusi', 'slug' => 'lms.forum.read', 'module' => 'lms', 'action' => 'read', 'description' => 'Membaca topik & pesan forum kelas'],
             ['name' => 'Kirim Pesan Forum', 'slug' => 'lms.forum.create', 'module' => 'lms', 'action' => 'create', 'description' => 'Mengirim pesan & balasan pada forum kelas'],
             ['name' => 'Kelola Forum Diskusi', 'slug' => 'lms.forum.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Membuat/hapus topik & moderasi pesan forum kelas'],
+
+            // ── MODUL LMS (INTEGRASI PRESENSI / PRESENSIV2) ─────
+            ['name' => 'Lihat Rekap Presensi LMS', 'slug' => 'lms.presensi.read', 'module' => 'lms', 'action' => 'read', 'description' => 'Memantau rekap kehadiran & log sinkronisasi integrasi PresensiV2'],
+            ['name' => 'Kelola Integrasi Presensi LMS', 'slug' => 'lms.presensi.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Menjalankan sinkron ulang, tarik riwayat, & export data presensi PresensiV2'],
+
+            // ── MODUL LMS (PENGATURAN LEVEL MODUL) ───────────────
+            ['name' => 'Lihat Pengaturan Modul LMS', 'slug' => 'lms.pengaturan.read', 'module' => 'lms', 'action' => 'read', 'description' => 'Melihat konfigurasi global modul LMS (batas import, batas upload, feature flag)'],
+            ['name' => 'Kelola Pengaturan Modul LMS', 'slug' => 'lms.pengaturan.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Mengubah konfigurasi global modul LMS'],
         ];
 
         foreach ($permissions as $perm) {
@@ -412,6 +420,29 @@ class PermissionSeeder extends Seeder
             $perms = Permission::whereIn('slug', $dosenSlugs)->get();
             foreach ($perms as $p) {
                 RolePermission::firstOrCreate(['role_id' => $dosenRole->id, 'permission_id' => $p->id]);
+            }
+        }
+
+        // 3c. Kaprodi & Wakil Prodi -> oversees kelas LMS & bank soal.
+        // Permission yang sama juga diberikan lewat migrasi LMS, namun seeding
+        // ulang sering dijalankan pada database yang belum pernah dimigrasikan
+        // penuh. firstOrCreate di sini menjaga status akses tetap konsisten.
+        $akademikRoles = Role::whereIn('slug', ['kaprodi', 'wakil_prodi'])->get();
+        if ($akademikRoles->isNotEmpty()) {
+            $akademikSlugs = [
+                'siakad.kelas.read',
+                'siakad.kelas.manage',
+                'siakad.nilai.read',
+                'siakad.nilai.manage',
+                'lms.forum.read',
+                'lms.forum.create',
+                'lms.forum.manage',
+            ];
+            $perms = Permission::whereIn('slug', $akademikSlugs)->get();
+            foreach ($akademikRoles as $role) {
+                foreach ($perms as $p) {
+                    RolePermission::firstOrCreate(['role_id' => $role->id, 'permission_id' => $p->id]);
+                }
             }
         }
 

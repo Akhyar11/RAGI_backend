@@ -23,10 +23,17 @@ use App\Models\Siakad\BankSoalOpsi;
 use App\Http\Requests\Siakad\Obe\StoreBankSoalRequest;
 use App\Http\Requests\Siakad\Obe\StoreBankSoalKategoriRequest;
 use App\Http\Requests\Siakad\Obe\StoreBankSoalOpsiRequest;
+use App\Http\Requests\Siakad\Obe\ImportBankSoalRequest;
+use App\Http\Requests\Siakad\Obe\BulkSoalRequest;
+use App\Http\Requests\Siakad\Obe\BulkMoveSoalRequest;
+use App\Http\Requests\Siakad\Obe\UpdateBankSoalRequest;
+use App\Models\Lms\LmsSetting;
 use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\MataKuliah;
+use App\Services\Siakad\LmsModuleSettingService;
 use App\Services\Siakad\SiakadAkademikService;
+use App\Services\Siakad\SoalImportService;
 use App\Http\Requests\Siakad\StoreCplRequest;
 use App\Http\Requests\Siakad\StoreBahanKajianRequest;
 use App\Http\Requests\Siakad\StoreCpmkProdiRequest;
@@ -2541,6 +2548,13 @@ class ObeController extends Controller
         $validated = $request->validated();
         $validated['dibuat_oleh'] = $request->user()?->id;
 
+        // Kolom `tipe_soal` & `tingkat_kesulitan` NOT NULL di DB — abaikan null agar default DB dipakai.
+        foreach (['tipe_soal', 'tingkat_kesulitan'] as $notNullable) {
+            if (array_key_exists($notNullable, $validated) && $validated[$notNullable] === null) {
+                unset($validated[$notNullable]);
+            }
+        }
+
         if (trim(strip_tags($validated['pertanyaan'] ?? '')) === '') {
             return response()->json(['status' => 'error', 'message' => 'Pertanyaan tidak boleh kosong.'], 422);
         }
@@ -2614,6 +2628,277 @@ class ObeController extends Controller
             'status' => 'success',
             'message' => 'Soal berhasil dihapus.',
             'data' => null,
+        ]);
+    }
+
+    /**
+     * Detail bank soal beserta opsi jawabannya.
+     */
+    public function showSoal($id)
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $soal = BankSoal::with(['mingguan', 'subCpmk.cpmk', 'rps.mataKuliah', 'kategori', 'opsi'])->findOrFail($id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Detail bank soal berhasil diambil.',
+            'data' => $soal,
+        ]);
+    }
+
+    /**
+     * Update bank soal (RESTful — id diambil dari route, bukan payload).
+     */
+    public function updateSoal(UpdateBankSoalRequest $request, $id)
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $soal = BankSoal::findOrFail($id);
+        $validated = $request->validated();
+
+        // Kolom `tipe_soal` & `tingkat_kesulitan` NOT NULL di DB — abaikan null agar default DB dipakai.
+        foreach (['tipe_soal', 'tingkat_kesulitan'] as $notNullable) {
+            if (array_key_exists($notNullable, $validated) && $validated[$notNullable] === null) {
+                unset($validated[$notNullable]);
+            }
+        }
+
+        if (trim(strip_tags($validated['pertanyaan'] ?? '')) === '') {
+            return response()->json(['status' => 'error', 'message' => 'Pertanyaan tidak boleh kosong.'], 422);
+        }
+
+        $oldValues = $soal->getOriginal();
+        $soal->update($validated);
+        $newValues = $soal->getChanges();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_bank_soal',
+                recordId: $soal->id,
+                oldValues: $oldValues,
+                newValues: $newValues
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log update bank soal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Soal berhasil diperbarui.',
+            'data' => $soal->fresh()->load(['mingguan', 'subCpmk.cpmk', 'kategori', 'opsi']),
+        ]);
+    }
+
+    /**
+     * Import bank soal dari file XLSX/CSV (template: GET /soal/import/template).
+     */
+    public function importSoal(
+        ImportBankSoalRequest $request,
+        SoalImportService $soalImportService,
+        LmsModuleSettingService $lmsSettings
+    ) {
+        Gate::authorize('siakad.nilai.manage');
+
+        // Batas baris mengikuti pengaturan modul (default 200), dibatasi batas
+        // keras service agar file besar tidak menghabiskan memori.
+        $maxRows = (int) ($lmsSettings->all()[LmsSetting::KEY_MAX_SOAL_IMPORT] ?? SoalImportService::MAX_ROWS);
+
+        $file = $request->file('file');
+        $parsed = SoalImportService::parseFile(
+            (string) $file->getRealPath(),
+            min($maxRows, SoalImportService::MAX_ROWS)
+        );
+
+        if (empty($parsed['rows'])) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tidak ada soal valid yang dapat diimport.',
+                'errors' => $parsed['errors'] ?: ['Tidak ada baris soal pada file.'],
+                'data' => null,
+            ], 422);
+        }
+
+        $result = $soalImportService->importRows($parsed['rows'], [
+            'rps_id' => $request->integer('rps_id'),
+            'rps_mingguan_id' => $request->filled('rps_mingguan_id') ? $request->integer('rps_mingguan_id') : null,
+            'sub_cpmk_id' => $request->filled('sub_cpmk_id') ? $request->integer('sub_cpmk_id') : null,
+            'kategori_id' => $request->filled('kategori_id') ? $request->integer('kategori_id') : null,
+            'tingkat_kesulitan' => $request->input('tingkat_kesulitan'),
+            'dibuat_oleh' => $request->user()?->id,
+        ]);
+
+        $errors = array_merge($parsed['errors'], $result['errors']);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_bank_soal',
+                recordId: $result['ids'][0] ?? null,
+                oldValues: null,
+                newValues: [
+                    'total_imported' => $result['imported'],
+                    'rps_id' => $request->integer('rps_id'),
+                    'kategori_id' => $request->filled('kategori_id') ? $request->integer('kategori_id') : null,
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log import bank soal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $result['imported'].' soal berhasil diimport.',
+            'data' => [
+                'total_imported' => $result['imported'],
+                'total_rows' => count($parsed['rows']),
+                'total_skipped' => count($parsed['errors']),
+                'ids' => $result['ids'],
+                'errors' => $errors,
+            ],
+        ], 201);
+    }
+
+    /**
+     * Unduh template import bank soal (XLSX).
+     */
+    public function downloadTemplateSoal()
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $filename = 'template-import-bank-soal.xlsx';
+        $path = tempnam(sys_get_temp_dir(), 'soal-template-');
+        SoalImportService::saveTemplate($path);
+
+        return response()->stream(function () use ($path): void {
+            $handle = fopen($path, 'rb');
+            if ($handle === false) {
+                return;
+            }
+            while (! feof($handle)) {
+                echo fread($handle, 8192);
+            }
+            fclose($handle);
+            @unlink($path);
+        }, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename='.$filename,
+        ]);
+    }
+
+    /**
+     * Hapus banyak bank soal sekaligus.
+     * Soal yang sudah dipakai quiz LMS dilewati (tidak dihapus) dan dikembalikan pada `skipped`.
+     */
+    public function bulkDeleteSoal(BulkSoalRequest $request)
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $ids = array_map('intval', $request->validated()['ids']);
+        $soalList = BankSoal::whereIn('id', $ids)->get();
+
+        $terpakai = \App\Models\Lms\QuizSoal::whereIn('bank_soal_id', $ids)
+            ->pluck('bank_soal_id')
+            ->unique()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $deleted = [];
+        $skipped = [];
+
+        foreach ($soalList as $soal) {
+            if (in_array($soal->id, $terpakai, true)) {
+                $skipped[] = [
+                    'id' => $soal->id,
+                    'pertanyaan' => $soal->pertanyaan,
+                    'reason' => 'Soal sudah dipakai pada quiz LMS.',
+                ];
+                continue;
+            }
+
+            $oldValues = $soal->getOriginal();
+            $recordId = $soal->id;
+
+            // Hapus opsi jawaban lebih dulu (FK cascade tetap menjadi jaring pengaman).
+            BankSoalOpsi::where('bank_soal_id', $soal->id)->delete();
+            $soal->delete();
+            $deleted[] = $recordId;
+
+            try {
+                AuditLogService::record(
+                    module: 'SIAKAD',
+                    action: 'delete',
+                    tableName: 'siakad_bank_soal',
+                    recordId: $recordId,
+                    oldValues: $oldValues,
+                    newValues: null,
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log bulk delete bank soal: ' . $e->getMessage());
+            }
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => count($deleted).' soal berhasil dihapus.',
+            'data' => [
+                'total_deleted' => count($deleted),
+                'total_skipped' => count($skipped),
+                'deleted_ids' => $deleted,
+                'skipped' => $skipped,
+            ],
+        ]);
+    }
+
+    /**
+     * Pindahkan banyak bank soal ke kategori / RPS mingguan / Sub-CPMK lain.
+     */
+    public function bulkMoveSoal(BulkMoveSoalRequest $request)
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $ids = array_map('intval', $request->validated()['ids']);
+
+        $updates = [];
+        foreach (['kategori_id', 'rps_mingguan_id', 'sub_cpmk_id'] as $field) {
+            if ($request->has($field)) {
+                $updates[$field] = $request->filled($field) ? $request->integer($field) : null;
+            }
+        }
+
+        $before = BankSoal::whereIn('id', $ids)
+            ->get(['id', 'kategori_id', 'rps_mingguan_id', 'sub_cpmk_id'])
+            ->keyBy('id');
+
+        $affected = BankSoal::whereIn('id', $ids)->update($updates);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_bank_soal',
+                recordId: $ids[0] ?? null,
+                oldValues: ['ids' => $ids, 'before' => $before->toArray()],
+                newValues: ['ids' => $ids, 'after' => $updates],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log bulk move bank soal: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $affected.' soal berhasil dipindahkan.',
+            'data' => [
+                'total_updated' => $affected,
+                'ids' => $ids,
+                'updates' => $updates,
+            ],
         ]);
     }
 

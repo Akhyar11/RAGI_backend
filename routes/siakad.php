@@ -363,6 +363,12 @@ Route::prefix('obe')->group(function () {
     Route::post('/rps/{id}/duplicate', [ObeController::class, 'duplicateRps']);
     Route::get('/soal', [ObeController::class, 'listSoal']);
     Route::post('/soal', [ObeController::class, 'storeSoal']);
+    Route::get('/soal/import/template', [ObeController::class, 'downloadTemplateSoal']);
+    Route::post('/soal/import', [ObeController::class, 'importSoal']);
+    Route::post('/soal/bulk-delete', [ObeController::class, 'bulkDeleteSoal']);
+    Route::post('/soal/bulk-move', [ObeController::class, 'bulkMoveSoal']);
+    Route::get('/soal/{id}', [ObeController::class, 'showSoal']);
+    Route::put('/soal/{id}', [ObeController::class, 'updateSoal']);
     Route::delete('/soal/{id}', [ObeController::class, 'deleteSoal']);
     Route::get('/soal-kategori', [ObeController::class, 'listKategoriSoal']);
     Route::post('/soal-kategori', [ObeController::class, 'storeKategoriSoal']);

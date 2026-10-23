@@ -2,10 +2,13 @@
 
 namespace App\Models\Siakad;
 
+use App\Models\Concerns\HasPresensiSyncStatus;
 use Illuminate\Database\Eloquent\Model;
 
 class Pertemuan extends Model
 {
+    use HasPresensiSyncStatus;
+
     protected $table = 'siakad_pertemuan';
 
     /**
@@ -42,12 +45,17 @@ class Pertemuan extends Model
         'presensi_closed_at',
         'jam_mulai',
         'jam_selesai',
+        'id_jurnal_presensiv2',
+        'sync_status',
+        'sync_error',
+        'synced_at',
     ];
 
     protected $casts = [
         'token_expired_at' => 'datetime',
         'token_rotated_at' => 'datetime',
         'presensi_closed_at' => 'datetime',
+        'synced_at' => 'datetime',
     ];
 
     /**

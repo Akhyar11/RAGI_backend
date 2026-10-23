@@ -31,6 +31,23 @@ class QuizAttempt extends Model
         'dinilai_at' => 'datetime',
     ];
 
+    /**
+     * Status kelulusan dihitung dari `passing_score` quiz induk.
+     * `null` = ambang belum ditetapkan atau attempt belum memiliki nilai.
+     *
+     * @var array<int, string>
+     */
+    protected $appends = ['is_lulus'];
+
+    public function getIsLulusAttribute(): ?bool
+    {
+        if ($this->nilai_akhir === null) {
+            return null;
+        }
+
+        return $this->quiz?->isLulus((float) $this->nilai_akhir);
+    }
+
     public function quiz()
     {
         return $this->belongsTo(Quiz::class, 'quiz_id');

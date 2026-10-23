@@ -19,6 +19,10 @@ class MenuSeeder extends Seeder
 
 $menus = \App\Support\MenuCatalog::definitions();
 
+        // Menu yang definisinya menyebut role tujuan (key `role_slugs`).
+        // Kumpulan ini dipetakan setelah seluruh menu dibuat.
+        $roleScopedMenus = [];
+
         foreach ($menus as $menuData) {
             $permissionId = null;
             if (isset($menuData['permission_slug'])) {
@@ -33,8 +37,15 @@ $menus = \App\Support\MenuCatalog::definitions();
                 'module' => $menuData['module'],
                 'permission_id' => $permissionId,
                 'order_index' => $menuData['order_index'],
-                'is_active' => true,
+                // `is_active` opsional pada definisi menu. Default true, tapi
+                // menu yang sengaja dinonaktifkan (mis. halaman lama yang
+                // digantikan alur baru) tetap bisa didefinisikan di katalog.
+                'is_active' => (bool) ($menuData['is_active'] ?? true),
             ]);
+
+            if (!empty($menuData['role_slugs'])) {
+                $roleScopedMenus[] = ['menu' => $parent, 'role_slugs' => $menuData['role_slugs']];
+            }
 
             if (isset($menuData['children'])) {
                 foreach ($menuData['children'] as $childData) {
@@ -44,7 +55,7 @@ $menus = \App\Support\MenuCatalog::definitions();
                         $childPermissionId = $childPermission ? $childPermission->id : null;
                     }
 
-                    Menu::create([
+                    $child = Menu::create([
                         'parent_id' => $parent->id,
                         'name' => $childData['name'],
                         'url' => $childData['url'],
@@ -52,9 +63,24 @@ $menus = \App\Support\MenuCatalog::definitions();
                         'module' => $childData['module'],
                         'permission_id' => $childPermissionId,
                         'order_index' => $childData['order_index'],
-                        'is_active' => true,
+                        'is_active' => (bool) ($childData['is_active'] ?? true),
                     ]);
+
+                    if (!empty($childData['role_slugs'])) {
+                        $roleScopedMenus[] = ['menu' => $child, 'role_slugs' => $childData['role_slugs']];
+                    }
                 }
+            }
+        }
+
+        // Pemetaan menu → role sesuai key `role_slugs` pada definisi.
+        // Dipakai menu yang haknya berbeda antar role (mis. modul LMS:
+        // mahasiswa boleh baca Tryout/Forum, namun tidak Pengaturan/Bank Soal).
+        foreach ($roleScopedMenus as $scope) {
+            $roleIds = \App\Models\Role::whereIn('slug', $scope['role_slugs'])->pluck('id')->all();
+
+            if ($roleIds !== []) {
+                $scope['menu']->roles()->syncWithoutDetaching($roleIds);
             }
         }
 
@@ -247,16 +273,10 @@ $menus = \App\Support\MenuCatalog::definitions();
             $mahasiswaRole->menus()->syncWithoutDetaching($mhsSiakadMenuIds);
         }
 
-        // LMS standalone: dosen + mahasiswa wajib punya menu /lms
-        $lmsMenuIds = Menu::where('module', 'lms')->pluck('id')->toArray();
-        if (!empty($lmsMenuIds)) {
-            if (isset($dosenRole) && $dosenRole) {
-                $dosenRole->menus()->syncWithoutDetaching($lmsMenuIds);
-            }
-            if (isset($mahasiswaRole) && $mahasiswaRole) {
-                $mahasiswaRole->menus()->syncWithoutDetaching($lmsMenuIds);
-            }
-        }
+        // LMS standalone: pemetaan role per menu diatur lewat key `role_slugs`
+        // pada `menu_definitions.php` (dibaca di blok di atas).
+        // Mahasiswa hanya menerima menu baca (Dashboard/Tryout/Forum),
+        // sedangkan Pengaturan LMS & Bank Soal khusus pengelola kelas.
 
         // Pimpinan: dashboard + approval direktur + laporan & pantauan (read-only eksekutif).
         // Tahap sarpras/keuangan disembunyikan; akuntansi hanya laporan; plus piutang.

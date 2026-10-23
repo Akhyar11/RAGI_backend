@@ -85,6 +85,7 @@ class QuizService
             'deskripsi' => $data['deskripsi'] ?? null,
             'durasi_menit' => $data['durasi_menit'] ?? null,
             'max_attempt' => $data['max_attempt'] ?? 1,
+            'passing_score' => $data['passing_score'] ?? null,
             'acak_soal' => $data['acak_soal'] ?? true,
             'acak_jawaban' => $data['acak_jawaban'] ?? true,
             'batch_size' => $data['batch_size'] ?? null,
@@ -113,6 +114,7 @@ class QuizService
             'deskripsi' => $data['deskripsi'] ?? null,
             'durasi_menit' => $data['durasi_menit'] ?? null,
             'max_attempt' => $data['max_attempt'] ?? 1,
+            'passing_score' => $data['passing_score'] ?? null,
             'acak_soal' => $data['acak_soal'] ?? true,
             'acak_jawaban' => $data['acak_jawaban'] ?? true,
             'batch_size' => $data['batch_size'] ?? null,
@@ -312,6 +314,59 @@ class QuizService
         return (bool) TryoutPeserta::findOrFail($pesertaId)->delete();
     }
 
+    /**
+     * Salin peserta eksplisit dari tryout lain pada KELAS YANG SAMA.
+     *
+     * Idempoten: peserta yang sudah terdaftar di tryout tujuan dilewati.
+     * Pembatasan kelas mencegah peserta lintas kelas ikut tersalin tanpa
+     * konteks yang benar.
+     *
+     * @return array{added: int, skipped: int, source_quiz_id: int}
+     */
+    public function copyTryoutPeserta(int $quizId, int $sourceQuizId, int $olehUserId): array
+    {
+        return DB::transaction(function () use ($quizId, $sourceQuizId, $olehUserId) {
+            $target = Quiz::findOrFail($quizId);
+            $source = Quiz::findOrFail($sourceQuizId);
+
+            if ($target->tipe !== Quiz::TIPE_TRYOUT || $source->tipe !== Quiz::TIPE_TRYOUT) {
+                throw ValidationException::withMessages([
+                    'source_quiz_id' => ['Salin peserta hanya berlaku antar-tryout.'],
+                ]);
+            }
+
+            if ((int) $target->id === (int) $source->id) {
+                throw ValidationException::withMessages([
+                    'source_quiz_id' => ['Tryout sumber tidak boleh sama dengan tryout tujuan.'],
+                ]);
+            }
+
+            if (!$target->kelas_id || (int) $target->kelas_id !== (int) $source->kelas_id) {
+                throw ValidationException::withMessages([
+                    'source_quiz_id' => ['Tryout sumber harus berada pada kelas yang sama.'],
+                ]);
+            }
+
+            $added = 0;
+            $skipped = 0;
+
+            foreach ($source->tryoutPeserta()->pluck('mahasiswa_id') as $mahasiswaId) {
+                $peserta = TryoutPeserta::firstOrCreate(
+                    ['quiz_id' => $quizId, 'mahasiswa_id' => $mahasiswaId],
+                    ['ditambah_oleh' => $olehUserId]
+                );
+
+                if ($peserta->wasRecentlyCreated) {
+                    $added++;
+                } else {
+                    $skipped++;
+                }
+            }
+
+            return ['added' => $added, 'skipped' => $skipped, 'source_quiz_id' => (int) $source->id];
+        });
+    }
+
     public function updateQuiz(int $quizId, array $data): Quiz
     {
         $quiz = Quiz::findOrFail($quizId);
@@ -366,6 +421,68 @@ class QuizService
     }
 
     /**
+     * Lepas beberapa soal sekaligus dari satu quiz.
+     *
+     * Semua ID wajib milik quiz tersebut; struktur tetap terkunci bila sudah
+     * ada attempt. Mengembalikan snapshot baris yang dihapus agar controller
+     * dapat mencatat audit log.
+     *
+     * @param  array<int, int|string>  $quizSoalIds
+     * @return array{deleted: int, ids: array<int, int>, old_values: array<int, array<string, mixed>>}
+     */
+    public function bulkDeleteSoal(int $quizId, array $quizSoalIds): array
+    {
+        return DB::transaction(function () use ($quizId, $quizSoalIds) {
+            $quiz = Quiz::findOrFail($quizId);
+            $this->assertStrukturFleksibel($quiz);
+
+            $ids = array_values(array_unique(array_map('intval', $quizSoalIds)));
+            $rows = QuizSoal::where('quiz_id', $quizId)->whereIn('id', $ids)->get();
+
+            if ($rows->count() !== count($ids)) {
+                throw ValidationException::withMessages([
+                    'quiz_soal_ids' => ['Salah satu soal tidak ditemukan pada tryout ini.'],
+                ]);
+            }
+
+            $oldValues = $rows
+                ->map(fn (QuizSoal $row) => $row->only(['id', 'quiz_id', 'bank_soal_id', 'urutan', 'poin']))
+                ->all();
+
+            QuizSoal::whereIn('id', $rows->pluck('id'))->delete();
+
+            return [
+                'deleted' => $rows->count(),
+                'ids' => $rows->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                'old_values' => $oldValues,
+            ];
+        });
+    }
+
+    /**
+     * Pencarian mahasiswa untuk pemilih peserta tryout.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, Mahasiswa>
+     */
+    public function searchMahasiswa(string $keyword, int $limit = 20): \Illuminate\Database\Eloquent\Collection
+    {
+        $keyword = trim($keyword);
+        $limit = max(1, min(50, $limit));
+
+        return Mahasiswa::query()
+            ->with('programStudi:id,kode_prodi,nama,jenjang')
+            ->when($keyword !== '', function ($query) use ($keyword) {
+                $query->where(function ($q) use ($keyword) {
+                    $q->where('nim', 'like', "%{$keyword}%")
+                        ->orWhere('nama_lengkap', 'like', "%{$keyword}%");
+                });
+            })
+            ->orderBy('nama_lengkap')
+            ->limit($limit)
+            ->get(['id', 'nim', 'nama_lengkap', 'program_studi_id', 'kelas', 'status']);
+    }
+
+    /**
      * Detail quiz untuk dosen: soal lengkap BESERTA kunci (otorisasi manage).
      */
     public function getQuizDetailForManage(int $quizId): array
@@ -415,7 +532,7 @@ class QuizService
 
         $myAttempts = QuizAttempt::where('quiz_id', $quizId)
             ->where('mahasiswa_id', $mahasiswa->id)
-            ->with('jawaban')
+            ->with(['jawaban', 'quiz:id,passing_score'])
             ->orderBy('attempt_ke')
             ->get();
 
@@ -436,7 +553,7 @@ class QuizService
         Quiz::findOrFail($quizId);
 
         return QuizAttempt::where('quiz_id', $quizId)
-            ->with(['mahasiswa', 'jawaban'])
+            ->with(['mahasiswa', 'jawaban', 'quiz:id,passing_score'])
             ->orderByDesc('id')
             ->paginate($perPage);
     }

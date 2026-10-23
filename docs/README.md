@@ -70,7 +70,7 @@
 | FeederSyncController | Sinkronisasi Neo Feeder PDDikti (Dosen, Penugasan, Ajar, Mahasiswa, Kelas) | [docs/api/SIAKAD/FeederSyncController.md](api/SIAKAD/FeederSyncController.md) |
 | MahasiswaController | Data mahasiswa, NIM, usulan konversi transfer nilai (detail, edit, status), dan penugasan PA | [docs/api/SIAKAD/MahasiswaController.md](api/SIAKAD/MahasiswaController.md) |
 | PindahProdiController | Pindah program studi: pengajuan, sign-off keuangan, approval akademik, apply + event ke SIKEU | [docs/api/SIAKAD/PindahProdiController.md](api/SIAKAD/PindahProdiController.md) |
-| ObeController | Kurikulum OBE (CPL/CPMK, Sub-CPMK, Profil Lulusan, Bahan Kajian, RPS, Nilai, Bank Soal & Kategori Opsi) | [docs/api/SIAKAD/ObeController.md](api/SIAKAD/ObeController.md) |
+| ObeController | Kurikulum OBE (CPL/CPMK, Sub-CPMK, Profil Lulusan, Bahan Kajian, RPS, Nilai, Bank Soal & Kategori Opsi) + **import bank soal (XLSX), template import, bulk delete & bulk move** | [docs/api/SIAKAD/ObeController.md](api/SIAKAD/ObeController.md) |
 | ObeMasterController | Master OBE (rumpun MK, jenis CPL, profesi/prospek karir, rubrik penilaian) | [docs/api/SIAKAD/ObeMasterController.md](api/SIAKAD/ObeMasterController.md) |
 | PerkuliahanController | Kelas, KRS & monitoring prodi, nilai, transkrip, pertemuan & absensi | [docs/api/SIAKAD/PerkuliahanController.md](api/SIAKAD/PerkuliahanController.md) |
 | PaketKrsController | Paket MK per rombel, riwayat MK rombel, lampiran nomor SK Arsip, ambil paket KRS 1-klik, & hak akses KRS | [docs/api/SIAKAD/PaketKrsController.md](api/SIAKAD/PaketKrsController.md) |
@@ -87,9 +87,11 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
-| QuizController | Quiz per pertemuan + tryout level kelas & **agregat level modul** (batch-loading tanpa kunci, autosave, auto-grade, OBE sync) | [docs/api/LMS/QuizController.md](api/LMS/QuizController.md) |
-| ForumController | Forum diskusi per kelas (topik + pesan/balasan 1 level) & **daftar topik agregat level modul** (read-only). Otorisasi memakai permission khusus `lms.forum.*` + Policy, bukan pinjam permission SIAKAD | [docs/api/LMS/ForumController.md](api/LMS/ForumController.md) |
-| LmsController | LMS standalone (`/api/v1/lms`, UI `/lms`): kelas/my per periode, materi, tugas + OBE sync, absensi token & izin. Otorisasi tetap Gate `siakad.kelas.*` | [docs/api/LMS/LmsController.md](api/LMS/LmsController.md) |
+| QuizController | Quiz per pertemuan + tryout level kelas & **agregat level modul** (batch-loading tanpa kunci, autosave, auto-grade, OBE sync) + **export hasil quiz/tryout (CSV/XLSX)** | [docs/api/LMS/QuizController.md](api/LMS/QuizController.md) |
+| ForumController | Forum diskusi per kelas (topik + pesan/balasan 1 level), **topik default "Diskusi Umum" via aksi eksplisit** (idempoten) & daftar topik agregat level modul (read-only). Otorisasi memakai permission khusus `lms.forum.*` + Policy, bukan pinjam permission SIAKAD | [docs/api/LMS/ForumController.md](api/LMS/ForumController.md) |
+| LmsController | LMS standalone (`/api/v1/lms`, UI `/lms`): kelas/my per periode, materi, tugas + OBE sync, pengumpulan tugas (kirim/perbarui/tarik kembali), pengaturan kelas, absensi token & izin, **export laporan (nilai/absensi/izin/pengumpulan) CSV/XLSX**, **dashboard ringkasan split role**, **pengaturan level modul (`lms_*`) + pengaturan publik**. Otorisasi tetap Gate `siakad.kelas.*` + `lms.pengaturan.*` | [docs/api/LMS/LmsController.md](api/LMS/LmsController.md) |
+| LmsPresensiController | Panel administrasi integrasi presensi LMS ↔ **PresensiV2** (LMS-03): status integrasi, rekap kehadiran lintas kelas, log sinkronisasi, sinkron ulang, tarik riwayat, export CSV/XLSX. Permission khusus `lms.presensi.read` / `lms.presensi.manage` | [docs/api/LMS/LmsPresensiController.md](api/LMS/LmsPresensiController.md) |
+| LmsNotifikasiController | Notifikasi in-app LMS (LMS-04): daftar notifikasi personal, tandai sudah dibaca (satu/semua), jumlah belum dibaca. Notifikasi disimpan (idempoten via `dedup_key`) & diisi oleh command terjadwal `lms:notifikasi-deadline` | [docs/api/LMS/LmsNotifikasiController.md](api/LMS/LmsNotifikasiController.md) |
 ---
 
 ## 💰 Modul SIKEU

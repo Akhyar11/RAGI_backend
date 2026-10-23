@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Siakad\Lms\AttachQuizSoalRequest;
 use App\Http\Requests\Siakad\Lms\AutosaveQuizRequest;
 use App\Http\Requests\Siakad\Lms\AddTryoutPesertaRequest;
+use App\Http\Requests\Siakad\Lms\BulkDeleteQuizSoalRequest;
+use App\Http\Requests\Siakad\Lms\CopyTryoutPesertaRequest;
 use App\Http\Requests\Siakad\Lms\ManualQuizGradeRequest;
 use App\Http\Requests\Siakad\Lms\StartAttemptRequest;
 use App\Http\Requests\Siakad\Lms\StoreQuizRequest;
 use App\Http\Requests\Siakad\Lms\UpdateQuizRequest;
+use App\Http\Requests\Siakad\Lms\ExportLmsRequest;
 use App\Models\Lms\Quiz;
 use App\Models\Lms\QuizAttempt;
 use App\Models\Lms\QuizAttemptJawaban;
@@ -17,18 +20,22 @@ use App\Models\Lms\QuizKolaborator;
 use App\Models\Lms\QuizSoal;
 use App\Models\Lms\TryoutPeserta;
 use App\Services\AuditLogService;
+use App\Services\Siakad\LmsExportService;
 use App\Services\Siakad\LmsService;
 use App\Services\Siakad\QuizService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class QuizController extends Controller
 {
     public function __construct(
         protected QuizService $quizService,
-        protected LmsService $lmsService
+        protected LmsService $lmsService,
+        protected LmsExportService $lmsExportService
     ) {}
 
     /**
@@ -202,6 +209,38 @@ class QuizController extends Controller
             'status' => 'success',
             'message' => 'Soal berhasil dilepas dari quiz.',
             'data' => null,
+        ]);
+    }
+
+    /**
+     * Lepas beberapa soal sekaligus dari satu tryout/kuis.
+     */
+    public function bulkDeleteSoal(BulkDeleteQuizSoalRequest $request, int $quizId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $result = $this->quizService->bulkDeleteSoal($quizId, $request->validated('quiz_soal_ids'));
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'delete',
+                tableName: 'lms_quiz_soal',
+                recordId: $quizId,
+                oldValues: $result['old_values'],
+                newValues: null
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log bulk lepas soal quiz: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "{$result['deleted']} soal berhasil dilepas dari tryout.",
+            'data' => [
+                'deleted' => $result['deleted'],
+                'ids' => $result['ids'],
+            ],
         ]);
     }
 
@@ -501,6 +540,58 @@ class QuizController extends Controller
     }
 
     /**
+     * Salin peserta eksplisit dari tryout lain pada kelas yang sama.
+     */
+    public function copyPeserta(CopyTryoutPesertaRequest $request, int $quizId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $result = $this->quizService->copyTryoutPeserta(
+            $quizId,
+            (int) $request->validated('source_quiz_id'),
+            (int) $request->user()->id
+        );
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'create',
+                tableName: 'lms_tryout_peserta',
+                recordId: $quizId,
+                oldValues: null,
+                newValues: $result
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log salin peserta tryout: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Berhasil menyalin {$result['added']} peserta."
+                . ($result['skipped'] > 0 ? " ({$result['skipped']} dilewati karena sudah terdaftar)" : ''),
+            'data' => $result,
+        ], 201);
+    }
+
+    /**
+     * Pencarian mahasiswa untuk pemilih peserta tryout (NIM / nama).
+     */
+    public function searchMahasiswa(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $keyword = trim((string) $request->input('q', ''));
+        $limit = max(1, min(50, $request->integer('limit', 20)));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pencarian mahasiswa berhasil diambil.',
+            'data' => $this->quizService->searchMahasiswa($keyword, $limit),
+            'filters' => ['q' => $keyword, 'limit' => $limit],
+        ]);
+    }
+
+    /**
      * Detail quiz untuk mahasiswa (tanpa kunci) + attempt miliknya.
      */
     public function showMahasiswa(Request $request, int $quizId): JsonResponse
@@ -726,5 +817,92 @@ class QuizController extends Controller
             'message' => 'Preview quiz berhasil diambil.',
             'data' => $this->quizService->getPreview($quizId),
         ]);
+    }
+
+    /* ---------------------------------------------------------------------
+     |  Export Laporan
+     | ------------------------------------------------------------------ */
+
+    /**
+     * Export hasil pengerjaan quiz per mahasiswa (CSV/XLSX).
+     */
+    public function exportHasil(ExportLmsRequest $request, int $quizId): StreamedResponse
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $quiz = Quiz::findOrFail($quizId);
+        $this->assertKelasAccess($quiz, (int) $request->user()->id);
+
+        $data = $this->lmsExportService->hasilQuiz($quizId);
+        $format = $request->exportFormat();
+
+        $this->catatExport($request, 'lms_quiz', $quizId, 'hasil_quiz', $format, count($data['rows']));
+
+        return $this->lmsExportService->download($data['filename'], $data['headers'], $data['rows'], $format);
+    }
+
+    /**
+     * Export hasil pengerjaan tryout per mahasiswa (CSV/XLSX).
+     *
+     * Berbeda dengan `exportHasil`, endpoint ini hanya berlaku untuk quiz
+     * bertipe tryout.
+     */
+    public function exportHasilTryout(ExportLmsRequest $request, int $quizId): StreamedResponse
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $quiz = Quiz::findOrFail($quizId);
+
+        if ($quiz->tipe !== Quiz::TIPE_TRYOUT) {
+            throw ValidationException::withMessages([
+                'quiz' => ['Quiz yang dimaksud bukan tryout.'],
+            ]);
+        }
+
+        $this->assertKelasAccess($quiz, (int) $request->user()->id);
+
+        $data = $this->lmsExportService->hasilQuiz($quizId);
+        $format = $request->exportFormat();
+
+        $this->catatExport($request, 'lms_quiz', $quizId, 'hasil_tryout', $format, count($data['rows']));
+
+        return $this->lmsExportService->download($data['filename'], $data['headers'], $data['rows'], $format);
+    }
+
+    /**
+     * Pastikan user berhak mengakses kelas yang memiliki quiz tersebut.
+     */
+    protected function assertKelasAccess(Quiz $quiz, int $userId): void
+    {
+        if (!$quiz->kelas_id) {
+            return;
+        }
+
+        $this->lmsExportService->assertKelasAccess((int) $quiz->kelas_id, $userId);
+    }
+
+    /**
+     * Catat jejak audit untuk setiap aksi export laporan LMS.
+     */
+    protected function catatExport(
+        ExportLmsRequest $request,
+        string $tableName,
+        int $recordId,
+        string $jenisLaporan,
+        string $format,
+        int $jumlahBaris
+    ): void {
+        AuditLogService::record(
+            module: 'LMS',
+            action: 'export',
+            tableName: $tableName,
+            recordId: $recordId,
+            newValues: [
+                'jenis_laporan' => $jenisLaporan,
+                'format'        => $format,
+                'jumlah_baris'  => $jumlahBaris,
+            ],
+            request: $request
+        );
     }
 }

@@ -19,6 +19,7 @@ class StoreQuizRequest extends FormRequest
             'deskripsi' => 'nullable|string',
             'durasi_menit' => 'nullable|integer|min:1|max:1440',
             'max_attempt' => 'nullable|integer|min:1|max:10',
+            'passing_score' => 'nullable|numeric|min:0|max:100',
             'acak_soal' => 'nullable|boolean',
             'acak_jawaban' => 'nullable|boolean',
             'batch_size' => 'nullable|integer|min:1|max:200',

@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-10-05  
-> **Diperbarui**: 2026-10-07 (respon manual dosen `feedback_dosen` pada penilaian jawaban isian/uraian)
+> **Diperbarui**: 2026-10-23 (passing score & status kelulusan, salin peserta, bulk lepas soal, cari mahasiswa)
 
 Quiz per pertemuan dan tryout level kelas dengan mesin pengerjaan yang sama:
 batch-loading soal (kunci tidak pernah ke client), autosave bulk, auto-grade
@@ -28,9 +28,9 @@ pilihan ganda/isian, penilaian manual uraian, dan auto-sync nilai ke OBE
 
 | Permission | Dipakai untuk |
 |---|---|
-| `siakad.kelas.manage` | Semua endpoint pengelolaan: buat quiz/tryout, update, hapus, lampir/lepas soal, daftar attempt, reset attempt, detail attempt, preview quiz, tambah/hapus peserta tryout (perorangan maupun per kelas) |
+| `siakad.kelas.manage` | Semua endpoint pengelolaan: buat quiz/tryout, update, hapus, lampir/lepas soal (termasuk bulk), daftar attempt, reset attempt, detail attempt, preview quiz, tambah/hapus/salin peserta tryout (perorangan, per kelas, antar-tryout), pencarian mahasiswa |
 | `siakad.kelas.read` | Endpoint baca & pengerjaan mahasiswa: agregat tryout, daftar tryout kelas, detail quiz, start, batch soal, autosave, submit |
-| `siakad.nilai.manage` | Penilaian manual jawaban uraian (`PUT /attempt-jawaban/{id}/nilai`) |
+| `siakad.nilai.manage` | Penilaian manual jawaban uraian (`PUT /attempt-jawaban/{id}/nilai`) & export hasil quiz/tryout (`GET /quiz/{quizId}/export/hasil`, `GET /tryout/{quizId}/export/hasil`) |
 
 Super admin (sesuai `system_settings.superadmin_role`) melewati seluruh gate.
 
@@ -54,10 +54,15 @@ Super admin (sesuai `system_settings.superadmin_role`) melewati seluruh gate.
 | PUT | `/api/v1/lms/attempt-jawaban/{id}/nilai` | Nilai manual + recompute + OBE resync | ✅ `siakad.nilai.manage` |
 | POST | `/api/v1/lms/quiz/{quizId}/peserta` | Tambah peserta eksplisit tryout | ✅ `siakad.kelas.manage` |
 | POST | `/api/v1/lms/quiz/{quizId}/peserta-kelas` | Tambah peserta tryout per kelas (cth `25A`) + filter prodi opsional | ✅ `siakad.kelas.manage` |
+| POST | `/api/v1/lms/quiz/{quizId}/peserta-copy` | Salin peserta eksplisit dari tryout lain pada kelas yang sama | ✅ `siakad.kelas.manage` |
+| POST | `/api/v1/lms/quiz/{quizId}/soal/bulk-delete` | Lepas beberapa soal sekaligus (ditolak bila attempt ada) | ✅ `siakad.kelas.manage` |
+| GET | `/api/v1/lms/mahasiswa/search` | Cari mahasiswa (NIM/nama) untuk pemilih peserta | ✅ `siakad.kelas.manage` |
 | DELETE | `/api/v1/lms/tryout-peserta/{id}` | Hapus peserta eksplisit | ✅ `siakad.kelas.manage` |
 | GET | `/api/v1/lms/quiz/{quizId}/kolaborator` | Daftar kolaborator dosen quiz | ✅ `siakad.kelas.manage` |
 | POST | `/api/v1/lms/quiz/{quizId}/kolaborator` | Tambah/perbarui peran kolaborator dosen | ✅ `siakad.kelas.manage` |
 | DELETE | `/api/v1/lms/quiz-kolaborator/{id}` | Hapus kolaborator dosen quiz | ✅ `siakad.kelas.manage` |
+| GET | `/api/v1/lms/quiz/{quizId}/export/hasil` | Export hasil pengerjaan quiz per mahasiswa (CSV/XLSX) | ✅ `siakad.nilai.manage` |
+| GET | `/api/v1/lms/tryout/{quizId}/export/hasil` | Export hasil pengerjaan tryout per mahasiswa (CSV/XLSX) | ✅ `siakad.nilai.manage` |
 | GET | `/api/v1/lms/quiz/{quizId}` | Detail quiz mahasiswa (tanpa kunci) + attempt miliknya | ✅ `siakad.kelas.read` |
 | POST | `/api/v1/lms/quiz/{quizId}/start` | Mulai/lanjutkan attempt (`kode_akses` bila tryout berkode) | ✅ `siakad.kelas.read` |
 | GET | `/api/v1/lms/quiz/{quizId}/soal?page=` | Batch soal tanpa kunci (`batch_size` per quiz / global `lms_quiz_batch_size`) | ✅ `siakad.kelas.read` |
@@ -201,6 +206,7 @@ tryout berkode hanya bisa dimulai bila mahasiswa mengirim kode yang cocok.
     "deskripsi": "Latihan UTS",
     "durasi_menit": 60,
     "max_attempt": 2,
+    "passing_score": 60,
     "batch_size": 10,
     "komponen_penilaian_id": 12,
     "kode_akses": "TO123",
@@ -214,6 +220,7 @@ tryout berkode hanya bisa dimulai bila mahasiswa mengirim kode yang cocok.
 | `deskripsi` | string | ❌ | — |
 | `durasi_menit` | integer | ❌ | `min:1`, `max:1440` |
 | `max_attempt` | integer | ❌ | `min:1`, `max:10` |
+| `passing_score` | number \| null | ❌ | `min:0`, `max:100` — ambang kelulusan; `null` = tanpa ambang |
 | `acak_soal` | boolean | ❌ | — |
 | `acak_jawaban` | boolean | ❌ | — |
 | `batch_size` | integer | ❌ | `min:1`, `max:200` |
@@ -239,6 +246,7 @@ tryout berkode hanya bisa dimulai bila mahasiswa mengirim kode yang cocok.
         "deskripsi": "Latihan UTS",
         "durasi_menit": 60,
         "max_attempt": 2,
+        "passing_score": "60.00",
         "acak_soal": true,
         "acak_jawaban": true,
         "batch_size": 10,
@@ -581,11 +589,16 @@ Perbarui metadata quiz. Perubahan tercatat pada audit log `LMS` tabel `lms_quiz`
 
 Semua field opsional (partial update). `judul` dan `max_attempt` wajib diisi bila dikirim.
 
+| Field | Tipe | Keterangan |
+|---|---|---|
+| `passing_score` | number \| null | Ambang kelulusan skala 0–100. `null` (default) = tanpa ambang, status kelulusan tidak ditampilkan. Dapat diubah kapan pun; status attempt dihitung ulang saat dibaca (tidak mengubah `nilai_akhir`). |
+
 ```json
 {
     "judul": "Tryout UTS (revisi)",
     "durasi_menit": 90,
     "max_attempt": 2,
+    "passing_score": 60,
     "is_published": true,
     "is_archived": false
 }
@@ -605,6 +618,7 @@ Semua field opsional (partial update). `judul` dan `max_attempt` wajib diisi bil
         "deskripsi": "Latihan UTS",
         "durasi_menit": 90,
         "max_attempt": 2,
+        "passing_score": "60.00",
         "acak_soal": true,
         "acak_jawaban": true,
         "batch_size": 10,
@@ -817,6 +831,59 @@ soal tidak berubah di tengah pengerjaan.
 }
 ```
 
+## [POST] /api/v1/lms/quiz/{quizId}/soal/bulk-delete
+
+Lepas beberapa soal sekaligus dari satu quiz/tryout. Semua ID harus milik quiz pada
+path; bila ada yang bukan miliknya → **422** dan tidak ada yang dihapus (atomik).
+
+Aturan kunci struktur sama dengan lepas soal tunggal: **422** bila sudah ada attempt
+mahasiswa. Setiap baris yang terhapus dicatat ke audit log `LMS` (`action=delete`,
+`table_name=lms_quiz_soal`, `old_values` = snapshot baris).
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `quizId` | integer | ✅ | ID quiz |
+
+### Request Body
+
+```json
+{ "quiz_soal_ids": [31, 32, 35] }
+```
+
+| Field | Tipe | Required | Keterangan |
+|---|---|---|---|
+| `quiz_soal_ids` | array\<integer\> | ✅ | Min. 1, unik, masing-masing harus ada di `lms_quiz_soal` dan milik quiz ini |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "3 soal berhasil dilepas dari tryout.",
+    "data": { "deleted": 3, "ids": [31, 32, 35] }
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**422 Unprocessable Entity** — struktur terkunci atau ID bukan milik quiz.
+
+```json
+{
+    "status": "error",
+    "message": "Salah satu soal tidak ditemukan pada tryout ini.",
+    "errors": { "quiz_soal_ids": ["Salah satu soal tidak ditemukan pada tryout ini."] }
+}
+```
+
 ## [GET] /api/v1/lms/quiz/{quizId}/attempts
 
 Daftar attempt (mahasiswa yang sudah mengerjakan) beserta jawaban dan nilainya.
@@ -850,6 +917,7 @@ Daftar attempt (mahasiswa yang sudah mengerjakan) beserta jawaban dan nilainya.
             "dimulai_at": "2026-10-05T08:44:08.000000Z",
             "disubmit_at": "2026-10-05T09:12:44.000000Z",
             "nilai_akhir": "50.00",
+            "is_lulus": false,
             "butuh_penilaian_manual": false,
             "dinilai_oleh": null,
             "dinilai_at": null,
@@ -902,6 +970,10 @@ Daftar attempt (mahasiswa yang sudah mengerjakan) beserta jawaban dan nilainya.
 
 `butuh_penilaian_manual: true` menandai attempt yang masih menunggu penilaian dosen
 untuk soal uraian.
+
+`is_lulus` dihitung dari `passing_score` quiz: `true`/`false` bila ambang ditetapkan
+dan attempt sudah punya `nilai_akhir`, atau `null` bila ambang belum ditetapkan /
+attempt belum dinilai.
 
 ### Response Error
 
@@ -984,6 +1056,7 @@ mahasiswa berisi `bank_opsi_id`, `jawaban_teks`, `is_benar`, `poin_didapat`,
             "dimulai_at": "2026-10-05T08:44:08.000000Z",
             "disubmit_at": "2026-10-05T09:12:44.000000Z",
             "nilai_akhir": "50.00",
+            "is_lulus": false,
             "butuh_penilaian_manual": false,
             "dinilai_oleh": null,
             "dinilai_at": null
@@ -1363,6 +1436,103 @@ Hapus peserta eksplisit. Mahasiswa lose akses ke tryout bila tidak lagi terdafta
 { "message": "No query results for model [App\\Models\\Lms\\TryoutPeserta] 999." }
 ```
 
+## [POST] /api/v1/lms/quiz/{quizId}/peserta-copy
+
+Salin **peserta eksplisit** dari tryout lain ke tryout pada path. Berguna saat
+menyusun beberapa tryout untuk kelas yang sama.
+
+Aturan:
+- Kedua quiz harus bertipe `tryout`, berbeda, dan berada pada **kelas yang sama** (422 bila tidak).
+- Idempoten: mahasiswa yang sudah terdaftar di tryout tujuan dilewati (`skipped`).
+- Peserta yang tersalin tercatat `ditambah_oleh` = user pemanggil, dan aksi dicatat
+  ke audit log `LMS` (`table_name=lms_tryout_peserta`).
+
+### Path Parameters
+
+| Parameter | Tipe | Required | Deskripsi |
+|---|---|---|---|
+| `quizId` | integer | ✅ | ID tryout **tujuan** |
+
+### Request Body
+
+```json
+{ "source_quiz_id": 12 }
+```
+
+### Response Sukses (201 Created)
+
+```json
+{
+    "status": "success",
+    "message": "Berhasil menyalin 2 peserta. (1 dilewati karena sudah terdaftar)",
+    "data": { "added": 2, "skipped": 1, "source_quiz_id": 12 }
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**422 Unprocessable Entity** — sumber sama / beda kelas / bukan tryout.
+
+```json
+{
+    "status": "error",
+    "message": "Tryout sumber harus berada pada kelas yang sama.",
+    "errors": { "source_quiz_id": ["Tryout sumber harus berada pada kelas yang sama."] }
+}
+```
+
+## [GET] /api/v1/lms/mahasiswa/search
+
+Pencarian mahasiswa untuk pemilih peserta tryout. Tanpa `q` akan mengembalikan
+daftar mahasiswa teratas (maksimal `limit`).
+
+### Query Parameters
+
+| Parameter | Tipe | Required | Default | Keterangan |
+|---|---|---|---|---|
+| `q` | string | ❌ | `''` | Kata kunci parsial pada `nim` atau `nama_lengkap` |
+| `limit` | integer | ❌ | `20` | Jumlah hasil (1–50) |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Pencarian mahasiswa berhasil diambil.",
+    "data": [
+        {
+            "id": 312,
+            "nim": "2026010123",
+            "nama_lengkap": "Budi Santoso",
+            "program_studi_id": 1,
+            "kelas": "25A",
+            "status": "aktif",
+            "program_studi": {
+                "id": 1,
+                "kode_prodi": "IF",
+                "nama": "Informatika",
+                "jenjang": "S1"
+            }
+        }
+    ],
+    "filters": { "q": "2026010123", "limit": 20 }
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
 ---
 
 ## E. Pengerjaan Quiz (Mahasiswa)
@@ -1699,6 +1869,7 @@ Bila quiz punya `komponen_penilaian_id`, nilai otomatis tersinkron ke OBE
         "dimulai_at": "2026-10-05T08:44:08.000000Z",
         "disubmit_at": "2026-10-05T09:12:44.000000Z",
         "nilai_akhir": "50.00",
+        "is_lulus": false,
         "butuh_penilaian_manual": false,
         "dinilai_oleh": null,
         "dinilai_at": null,
@@ -1912,6 +2083,89 @@ memperbarui peran. Seluruh aksi tercatat pada audit log modul `LMS` tabel
 
 ```json
 { "message": "No query results for model [App\\Models\\Lms\\QuizKolaborator] 999." }
+```
+
+---
+
+## G. Export Hasil Quiz & Tryout (CSV / XLSX)
+
+Dua endpoint di bawah menghasilkan **berkas unduhan** (bukan JSON). Keduanya
+memakai query parameter `format`:
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `format` | string | ❌ | `csv` | Format berkas: `csv` atau `xlsx` |
+
+> **Catatan umum**
+> - Format `csv` selalu diawali **BOM UTF-8** (`EF BB BF`) dan memakai line ending `\r\n`,
+>   sehingga karakter Indonesia tampil benar di Excel Windows.
+> - Format `xlsx` menghasilkan spreadsheet dengan baris pertama bold; kolom angka
+>   ditulis sebagai angka (bukan teks) agar bisa dihitung/diurutkan.
+> - Setiap aksi export dicatat pada tabel `core_audit_logs` (`module = LMS`, `action = export`).
+> - Otorisasi memakai Gate `siakad.nilai.manage`; dosen hanya dapat mengekspor kelas yang ia ampu.
+> - Untuk tryout, peserta yang **belum pernah mengerjakan** tetap muncul dengan status `belum_mengerjakan`.
+
+### [GET] /api/v1/lms/quiz/{quizId}/export/hasil
+
+Hasil pengerjaan quiz per mahasiswa.
+
+#### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `quizId` | integer | ✅ | ID quiz yang diekspor |
+
+#### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `format` | string | ❌ | `csv` | `csv` atau `xlsx` |
+
+#### Response Sukses (200 OK)
+
+```
+Content-Type: text/csv; charset=UTF-8
+Content-Disposition: attachment; filename=Hasil_Quiz_IF-LMS-A_20261022_101112.csv
+```
+
+```csv
+Judul Quiz,Kode Kelas,Nama Kelas,Mata Kuliah,NIM,Nama Mahasiswa,Percobaan Ke,Status,Nilai Akhir,Mulai,Submit,Durasi (menit),Perlu Penilaian Manual
+Kuis 1,IF-LMS-A,Kelas LMS A,Pemrograman Web LMS,2026001001,Mahasiswa LMS Testing,1,selesai,92,2026-10-05 09:00:00,2026-10-05 09:38:00,38,Ya
+```
+
+### [GET] /api/v1/lms/tryout/{quizId}/export/hasil
+
+Hasil pengerjaan tryout per mahasiswa. Endpoint ini **hanya berlaku untuk quiz
+bertipe tryout**; quiz biasa akan ditolak dengan `422`.
+
+#### Response Sukses (200 OK)
+
+```csv
+Judul Quiz,Kode Kelas,Nama Kelas,Mata Kuliah,NIM,Nama Mahasiswa,Percobaan Ke,Status,Nilai Akhir,Mulai,Submit,Durasi (menit),Perlu Penilaian Manual
+Tryout Paket A,IF-LMS-A,Kelas LMS A,Pemrograman Web LMS,2026001001,Mahasiswa LMS Testing,0,belum_mengerjakan,-,-,-,-,Tidak
+```
+
+### Response Error
+
+**422 Unprocessable Entity** (quiz bukan tryout / format tidak valid)
+
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "quiz": ["Quiz yang dimaksud bukan tryout."]
+    }
+}
+```
+
+**403 Forbidden** (role tidak memegang `siakad.nilai.manage`)
+
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+}
 ```
 
 ---

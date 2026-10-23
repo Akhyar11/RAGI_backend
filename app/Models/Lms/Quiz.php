@@ -22,6 +22,7 @@ class Quiz extends Model
         'deskripsi',
         'durasi_menit',
         'max_attempt',
+        'passing_score',
         'acak_soal',
         'acak_jawaban',
         'batch_size',
@@ -35,6 +36,7 @@ class Quiz extends Model
 
     protected $casts = [
         'max_attempt' => 'integer',
+        'passing_score' => 'decimal:2',
         'durasi_menit' => 'integer',
         'batch_size' => 'integer',
         'acak_soal' => 'boolean',
@@ -43,6 +45,24 @@ class Quiz extends Model
         'is_archived' => 'boolean',
         'dibuka_at' => 'datetime',
         'ditutup_at' => 'datetime',
+    ];
+
+    /**
+     * Jenis quiz (closed-set domain, bukan entitas master).
+     *
+     * Dideklarasikan sebagai konstanta terpusat agar tidak ada string literal
+     * yang disalin di service/controller.
+     */
+    public const TIPE_KUIS = 'kuis';
+
+    public const TIPE_TRYOUT = 'tryout';
+
+    /**
+     * @var array<int, string>
+     */
+    public const TIPE = [
+        self::TIPE_KUIS,
+        self::TIPE_TRYOUT,
     ];
 
     public function pertemuan()
@@ -92,6 +112,21 @@ class Quiz extends Model
         $global = (int) \App\Models\SystemSetting::get('lms_quiz_batch_size', 10);
 
         return $global > 0 ? $global : 10;
+    }
+
+    /**
+     * Status kelulusan untuk sebuah nilai akhir.
+     *
+     * Mengembalikan `null` bila quiz tidak menetapkan ambang kelulusan,
+     * sehingga pemanggil dapat membedakan "tidak lulus" dari "tidak dinilai".
+     */
+    public function isLulus(?float $nilai): ?bool
+    {
+        if ($nilai === null || $this->passing_score === null) {
+            return null;
+        }
+
+        return $nilai >= (float) $this->passing_score;
     }
 
     /**

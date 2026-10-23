@@ -16,6 +16,7 @@ use App\Models\Siakad\MataKuliah;
 use App\Models\Siakad\ProgramStudi;
 use App\Models\Siakad\TahunAkademik;
 use App\Models\User;
+use App\Services\Siakad\ForumService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
@@ -112,21 +113,41 @@ class SiakadForumTest extends TestCase
         $this->userLuar->roles()->attach($roleMhs->id);
     }
 
-    public function test_forum_topik_otomatis_post_balasan_dan_hak_akses(): void
+    public function test_endpoint_baca_tidak_membuat_topik_dan_topik_umum_ada_via_aksi_eksplisit(): void
     {
-        // 1. Mahasiswa buka forum → Diskusi Umum otomatis dibuat
+        // 1. Endpoint baca bersifat read-only: TIDAK membuat topik otomatis.
         Passport::actingAs($this->userMhs);
         $list = $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/forum");
-        $list->assertStatus(200)->assertJsonCount(1, 'data');
-        $topikId = $list->json('data.0.id');
-        $this->assertStringContainsString('Diskusi Umum', $list->json('data.0.judul'));
+        $list->assertStatus(200)->assertJsonCount(0, 'data');
+        $this->assertDatabaseMissing('lms_forum_topik', ['kelas_id' => $this->kelas->id]);
 
-        // 2. Mahasiswa kirim pesan
+        // 2. Topik default dibuat lewat aksi eksplisit (idempoten).
+        $ensure = $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum/umum");
+        $ensure->assertStatus(200)->assertJsonPath('status', 'success');
+        $topikId = $ensure->json('data.id');
+        $this->assertStringContainsString('Diskusi Umum', $ensure->json('data.judul'));
+        $this->assertSame(
+            ForumService::SLUG_TOPIK_DEFAULT,
+            $ensure->json('data.slug')
+        );
+
+        // 3. Panggil kedua kali tetap menghasilkan topik yang sama (tidak ganda).
+        $ensureUlang = $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum/umum");
+        $ensureUlang->assertStatus(200);
+        $this->assertSame($topikId, $ensureUlang->json('data.id'));
+        $this->assertDatabaseCount('lms_forum_topik', 1);
+
+        // 4. Sekarang daftar topik memuat satu topik.
+        $list = $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/forum");
+        $list->assertStatus(200)->assertJsonCount(1, 'data');
+        $this->assertSame($topikId, $list->json('data.0.id'));
+
+        // 5. Mahasiswa kirim pesan
         $post = $this->postJson("/api/v1/lms/forum/{$topikId}/post", ['isi' => 'Apakah UTS open book?']);
         $post->assertStatus(201)->assertJsonPath('data.nama_penulis', 'Mahasiswa Forum');
         $postId = $post->json('data.id');
 
-        // 3. Dosen balas (1 level)
+        // 6. Dosen balas (1 level)
         Passport::actingAs($this->userDosen);
         $this->postJson("/api/v1/lms/forum/{$topikId}/post", ['isi' => 'Ya, open book.', 'parent_id' => $postId])
             ->assertStatus(201);
@@ -136,18 +157,19 @@ class SiakadForumTest extends TestCase
         $this->postJson("/api/v1/lms/forum/{$topikId}/post", ['isi' => 'Level 3?', 'parent_id' => $replyId])
             ->assertStatus(422);
 
-        // 4. List pesan tampil nested
+        // 7. List pesan tampil nested
         $posts = $this->getJson("/api/v1/lms/forum/{$topikId}/post");
         $posts->assertStatus(200)
             ->assertJsonCount(1, 'data')
             ->assertJsonCount(1, 'data.0.balasan');
 
-        // 5. Mahasiswa luar kelas ditolak
+        // 8. Mahasiswa luar kelas ditolak
         Passport::actingAs($this->userLuar);
         $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/forum")->assertStatus(422);
+        $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum/umum")->assertStatus(422);
         $this->postJson("/api/v1/lms/forum/{$topikId}/post", ['isi' => 'Spam'])->assertStatus(422);
 
-        // 6. Mahasiswa tidak bisa hapus pesan dosen; dosen bisa hapus pesan siapa pun
+        // 9. Mahasiswa tidak bisa hapus pesan dosen; dosen bisa hapus pesan siapa pun
         Passport::actingAs($this->userMhs);
         // Mahasiswa tidak boleh menghapus pesan orang lain -> 403 (Forbidden)
         $this->deleteJson("/api/v1/lms/forum-post/{$replyId}")->assertStatus(403);
@@ -160,8 +182,8 @@ class SiakadForumTest extends TestCase
     {
         Passport::actingAs($this->userDosen);
 
-        // List dulu memicu auto-create Diskusi Umum
-        $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/forum")->assertStatus(200);
+        // Topik default dibuat lewat aksi eksplisit, bukan oleh endpoint baca.
+        $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum/umum")->assertStatus(200);
 
         $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum", ['judul' => 'Tanya Jawab UAS', 'is_pinned' => true])
             ->assertStatus(201);
@@ -173,6 +195,7 @@ class SiakadForumTest extends TestCase
 
         $topikId = $list->json('data.0.id');
         $this->deleteJson("/api/v1/lms/forum/{$topikId}")->assertStatus(200);
+        $this->assertDatabaseMissing('lms_forum_topik', ['id' => $topikId]);
 
         // Mahasiswa tidak boleh buat topik (butuh lms.forum.manage)
         Passport::actingAs($this->userMhs);
@@ -189,8 +212,9 @@ class SiakadForumTest extends TestCase
 
         // Mahasiswa tetap boleh menghapus pesan miliknya sendiri.
         Passport::actingAs($this->userMhs);
-        $list = $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/forum");
-        $topikId = $list->json('data.0.id');
+        $topikId = $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum/umum")
+            ->assertStatus(200)
+            ->json('data.id');
         $postId = $this->postJson("/api/v1/lms/forum/{$topikId}/post", ['isi' => 'Catatan saya'])
             ->json('data.id');
 
@@ -236,11 +260,19 @@ class SiakadForumTest extends TestCase
 
         Passport::actingAs($userBaca);
 
-        $topikId = $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/forum")
+        // Topik default dibuat oleh dosen (role pembaca tidak boleh membuatnya).
+        Passport::actingAs($this->userDosen);
+        $topikId = $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum/umum")
             ->assertStatus(200)
-            ->json('data.0.id');
+            ->json('data.id');
 
+        // Role pembaca tetap tidak boleh menulis pesan.
+        Passport::actingAs($userBaca);
         $this->postJson("/api/v1/lms/forum/{$topikId}/post", ['isi' => 'Harus ditolak'])
+            ->assertStatus(403);
+
+        // Role pembaca juga tidak boleh membuat topik default.
+        $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum/umum")
             ->assertStatus(403);
     }
 
@@ -248,6 +280,7 @@ class SiakadForumTest extends TestCase
     {
         Passport::actingAs($this->userDosen);
 
+        $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum/umum")->assertStatus(200);
         $list = $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/forum");
         $topikId = $list->json('data.0.id');
 
@@ -292,7 +325,7 @@ class SiakadForumTest extends TestCase
         Passport::actingAs($this->userDosen);
 
         // Topik pada kelas yang diampu dosen ini.
-        $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/forum")->assertStatus(200);
+        $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum/umum")->assertStatus(200);
 
         // Kelas kedua yang TIDAK diampu dosen ini (dibuat tanpa DosenPengampu).
         $kelasLain = Kelas::create([
@@ -370,5 +403,89 @@ class SiakadForumTest extends TestCase
         $ngawur->assertStatus(200)
             ->assertJsonPath('meta.filters.is_pinned', null)
             ->assertJsonPath('meta.total', 2);
+    }
+
+    public function test_dosen_dapat_mengubah_topik_dan_dicatat_audit_log(): void
+    {
+        Passport::actingAs($this->userDosen);
+
+        $topikId = $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum", [
+            'judul' => 'Judul Lama',
+        ])->assertStatus(201)->json('data.id');
+
+        // Ubah judul + sematkan.
+        $this->putJson("/api/v1/lms/forum/{$topikId}", [
+            'judul' => 'Judul Baru',
+            'is_pinned' => true,
+        ])->assertStatus(200)
+            ->assertJsonPath('data.judul', 'Judul Baru')
+            ->assertJsonPath('data.is_pinned', true);
+
+        $this->assertDatabaseHas('lms_forum_topik', [
+            'id' => $topikId,
+            'judul' => 'Judul Baru',
+            'is_pinned' => true,
+        ]);
+        $this->assertDatabaseHas('core_audit_logs', [
+            'module' => 'LMS',
+            'action' => 'update',
+            'table_name' => 'lms_forum_topik',
+            'record_id' => $topikId,
+        ]);
+
+        // Mahasiswa tidak boleh mengubah topik.
+        Passport::actingAs($this->userMhs);
+        $this->putJson("/api/v1/lms/forum/{$topikId}", ['judul' => 'Hacked'])
+            ->assertStatus(403);
+
+        // Judul wajib diisi.
+        Passport::actingAs($this->userDosen);
+        $this->putJson("/api/v1/lms/forum/{$topikId}", ['judul' => ''])
+            ->assertStatus(422);
+    }
+
+    public function test_pemilik_dapat_mengedit_pesan_dan_ditandai_diedit(): void
+    {
+        Passport::actingAs($this->userMhs);
+        $this->postJson("/api/v1/lms/kelas/{$this->kelas->id}/forum/umum")->assertStatus(200);
+        $topikId = ForumTopik::where('kelas_id', $this->kelas->id)->firstOrFail()->id;
+
+        $postId = $this->postJson("/api/v1/lms/forum/{$topikId}/post", ['isi' => 'Isi awal'])
+            ->assertStatus(201)
+            ->assertJsonPath('data.is_edited', false)
+            ->json('data.id');
+
+        // Beri jeda agar timestamp edit berbeda dari timestamp buat.
+        $this->travel(2)->seconds();
+
+        $this->putJson("/api/v1/lms/forum-post/{$postId}", ['isi' => 'Isi sudah diperbaiki'])
+            ->assertStatus(200)
+            ->assertJsonPath('data.isi', 'Isi sudah diperbaiki')
+            ->assertJsonPath('data.is_edited', true);
+
+        $this->assertDatabaseHas('lms_forum_post', [
+            'id' => $postId,
+            'isi' => 'Isi sudah diperbaiki',
+        ]);
+        $this->assertDatabaseHas('core_audit_logs', [
+            'module' => 'LMS',
+            'action' => 'update',
+            'table_name' => 'lms_forum_post',
+            'record_id' => $postId,
+        ]);
+
+        // Isi wajib diisi.
+        $this->putJson("/api/v1/lms/forum-post/{$postId}", ['isi' => ''])->assertStatus(422);
+
+        // Mahasiswa lain tidak boleh mengedit pesan ini.
+        Passport::actingAs($this->userLuar);
+        $this->putJson("/api/v1/lms/forum-post/{$postId}", ['isi' => 'Bukan punyaku'])
+            ->assertStatus(403);
+
+        // Dosen (pengelola kelas) boleh mengedit pesan siapa pun.
+        Passport::actingAs($this->userDosen);
+        $this->putJson("/api/v1/lms/forum-post/{$postId}", ['isi' => 'Diedit oleh dosen'])
+            ->assertStatus(200)
+            ->assertJsonPath('data.isi', 'Diedit oleh dosen');
     }
 }

@@ -74,7 +74,13 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, R
 | GET | `/api/v1/siakad/obe/mahasiswa/{mahasiswaId}/portofolio` | Portofolio OBE per mahasiswa | ✅ |
 | GET | `/api/v1/siakad/obe/soal` | Daftar bank soal (filter + pagination) | ✅ |
 | POST | `/api/v1/siakad/obe/soal` | Simpan bank soal (create/update via `id`) | ✅ |
+| GET | `/api/v1/siakad/obe/soal/{id}` | Detail bank soal (+ opsi jawaban) | ✅ |
+| PUT | `/api/v1/siakad/obe/soal/{id}` | Update bank soal (RESTful) | ✅ |
 | DELETE | `/api/v1/siakad/obe/soal/{id}` | Hapus bank soal | ✅ |
+| GET | `/api/v1/siakad/obe/soal/import/template` | Unduh template import bank soal (XLSX) | ✅ |
+| POST | `/api/v1/siakad/obe/soal/import` | Import bank soal dari XLSX/CSV (parsial + laporan error) | ✅ |
+| POST | `/api/v1/siakad/obe/soal/bulk-delete` | Hapus banyak bank soal (skip yang dipakai quiz) | ✅ |
+| POST | `/api/v1/siakad/obe/soal/bulk-move` | Pindahkan banyak bank soal (kategori/RPS/Sub-CPMK) | ✅ |
 | GET | `/api/v1/siakad/obe/soal-kategori` | Daftar kategori bank soal | ✅ |
 | POST | `/api/v1/siakad/obe/soal-kategori` | Buat kategori bank soal | ✅ |
 | DELETE | `/api/v1/siakad/obe/soal-kategori/{id}` | Hapus kategori (soal dilepas, tidak ikut terhapus) | ✅ |
@@ -1923,6 +1929,255 @@ Menyimpan atau memperbarui bank soal. Kirim `id` untuk update, tanpa `id` untuk 
     "message": "Pertanyaan tidak boleh kosong.",
     "errors": {
         "pertanyaan": ["The pertanyaan field is required."]
+    }
+}
+```
+
+---
+
+### [GET] `/api/v1/siakad/obe/soal/{id}`
+
+Mengambil detail satu bank soal beserta relasi mingguan, sub-CPMK, kategori, dan opsi jawabannya. Validasi via `Gate::authorize('siakad.nilai.manage')`.
+
+#### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Detail bank soal berhasil diambil.",
+    "data": {
+        "id": 1,
+        "rps_id": 5,
+        "kategori_id": 2,
+        "tipe_soal": "pilihan_ganda",
+        "tingkat_kesulitan": "sedang",
+        "pertanyaan": "Apa kepanjangan dari OOP?",
+        "bobot": "10.00",
+        "kunci_jawaban": null,
+        "pembahasan": "Object-Oriented Programming.",
+        "opsi": [
+            { "id": 11, "bank_soal_id": 1, "teks": "Object-Oriented Programming", "is_benar": true, "urutan": 1 }
+        ]
+    }
+}
+```
+
+#### Response Error (401 / 403 / 404)
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+}
+```
+
+---
+
+### [PUT] `/api/v1/siakad/obe/soal/{id}`
+
+Memperbarui bank soal secara RESTful (`id` diambil dari route, bukan payload). Validasi via `UpdateBankSoalRequest` (otorisasi `siakad.nilai.manage`).
+
+> Catatan: `tipe_soal` & `tingkat_kesulitan` bernilai `null` akan diabaikan (kolom `NOT NULL` di database — nilai default DB dipakai).
+
+#### Request Body
+```json
+{
+    "rps_id": 5,
+    "rps_mingguan_id": 12,
+    "sub_cpmk_id": 30,
+    "kategori_id": 2,
+    "tipe_soal": "pilihan_ganda",
+    "tingkat_kesulitan": "sedang",
+    "pertanyaan": "Apa kepanjangan dari OOP?",
+    "bobot": 10,
+    "kunci_jawaban": null,
+    "pembahasan": "Object-Oriented Programming."
+}
+```
+
+#### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Soal berhasil diperbarui.",
+    "data": {
+        "id": 1,
+        "pertanyaan": "Apa kepanjangan dari OOP?",
+        "kategori": { "id": 2, "nama": "Kuis Tengah Semester" },
+        "opsi": []
+    }
+}
+```
+
+#### Response Error (401 / 403 / 404 / 422)
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "pertanyaan": ["Pertanyaan wajib diisi."]
+    }
+}
+```
+
+---
+
+### [GET] `/api/v1/siakad/obe/soal/import/template`
+
+Mengunduh template import bank soal berformat XLSX (2 sheet: `Soal` + `Panduan`). Otorisasi `siakad.nilai.manage`.
+
+#### Response Sukses (200 OK)
+```
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+Content-Disposition: attachment; filename=template-import-bank-soal.xlsx
+```
+
+#### Response Error (401 / 403)
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+}
+```
+
+---
+
+### [POST] `/api/v1/siakad/obe/soal/import`
+
+Mengimport bank soal dari file XLSX/XLS/CSV. Baris valid di-import; baris bermasalah **dilewati** dan dilaporkan pada `data.errors` (import bersifat parsial, tidak dibatalkan). Validasi via `ImportBankSoalRequest` (otorisasi `siakad.nilai.manage`).
+
+#### Format Kolom File (baris 1 = header, case-insensitive)
+
+| Kolom | Wajib | Keterangan |
+|---|---|---|
+| `tipe` | Tidak | `pg` / `pilihan_ganda`, `isian` / `isian_singkat`, `uraian` / `essay`. Default `pg`. |
+| `pertanyaan` | ✅ | Teks soal. |
+| `opsi_a` … `opsi_e` | Pilihan ganda | Teks pilihan (minimal 2 opsi). |
+| `kunci` | Tergantung | Pilihan ganda: huruf `A`–`E`. Isian: teks jawaban benar (wajib). Uraian: opsional. |
+| `poin` | Tidak | Bobot nilai (angka ≥ 1, maks. 100, default 10). |
+| `tingkat_kesulitan` | Tidak | `mudah` / `sedang` / `sukar`. |
+| `pembahasan` | Tidak | Pembahasan / kunci diskusi. |
+
+Batas maksimal **500 baris data** per file.
+
+#### Request Body (`multipart/form-data`)
+```
+file            (file, wajib)  — XLSX / XLS / CSV, maks. 10 MB
+rps_id          (int, wajib)   — RPS tujuan
+rps_mingguan_id (int, opsional)
+sub_cpmk_id     (int, opsional)
+kategori_id     (int, opsional)
+tingkat_kesulitan (string, opsional) — default bila file tidak memuat kolom tsb
+```
+
+#### Response Sukses (201 Created)
+```json
+{
+    "status": "success",
+    "message": "12 soal berhasil diimport.",
+    "data": {
+        "total_imported": 12,
+        "total_rows": 14,
+        "total_skipped": 2,
+        "ids": [21, 22, 23],
+        "errors": [
+            "Baris 6: kunci 'C' tidak cocok dengan opsi yang terisi (A,B).",
+            "Baris 9: tipe 'ngawur' tidak dikenal (gunakan pg/isian/uraian)."
+        ]
+    }
+}
+```
+
+#### Response Error (401 / 403 / 422)
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "rps_id": ["RPS tujuan tidak valid."],
+        "file": ["Format file harus XLSX, XLS, atau CSV."]
+    }
+}
+```
+
+---
+
+### [POST] `/api/v1/siakad/obe/soal/bulk-delete`
+
+Menghapus banyak bank soal sekaligus. Soal yang sudah dipakai pada quiz LMS **dilewati** (tidak dihapus) dan dilaporkan pada `data.skipped`. Opsi jawaban ikut terhapus. Validasi via `BulkSoalRequest` (maks. 500 id).
+
+#### Request Body
+```json
+{
+    "ids": [21, 22, 23]
+}
+```
+
+#### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "2 soal berhasil dihapus.",
+    "data": {
+        "total_deleted": 2,
+        "total_skipped": 1,
+        "deleted_ids": [21, 22],
+        "skipped": [
+            {
+                "id": 23,
+                "pertanyaan": "Apa kepanjangan dari OOP?",
+                "reason": "Soal sudah dipakai pada quiz LMS."
+            }
+        ]
+    }
+}
+```
+
+#### Response Error (401 / 403 / 422)
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "ids": ["Pilih minimal satu soal untuk diproses."]
+    }
+}
+```
+
+---
+
+### [POST] `/api/v1/siakad/obe/soal/bulk-move`
+
+Memindahkan banyak bank soal ke kategori / RPS mingguan / Sub-CPMK lain. Minimal satu tujuan wajib diisi. Validasi via `BulkMoveSoalRequest`.
+
+#### Request Body
+```json
+{
+    "ids": [21, 22, 23],
+    "kategori_id": 2,
+    "rps_mingguan_id": null,
+    "sub_cpmk_id": null
+}
+```
+
+#### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "3 soal berhasil dipindahkan.",
+    "data": {
+        "total_updated": 3,
+        "ids": [21, 22, 23],
+        "updates": { "kategori_id": 2 }
+    }
+}
+```
+
+#### Response Error (401 / 403 / 422)
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "ids": ["Pilih minimal satu tujuan: kategori, RPS mingguan, atau Sub-CPMK."]
     }
 }
 ```
