@@ -13,6 +13,8 @@ use App\Http\Controllers\API\Siakad\KelulusanController;
 use App\Http\Controllers\API\Siakad\PaketKrsController;
 use App\Http\Controllers\API\Siakad\KartuUjianController;
 use App\Http\Controllers\API\Siakad\DokumenController;
+use App\Http\Controllers\API\Siakad\PklController;
+use App\Http\Controllers\API\Siakad\TugasAkhirController;
 
 /*
 |--------------------------------------------------------------------------
@@ -404,3 +406,27 @@ Route::prefix('obe')->group(function () {
 
 // --- LMS dipisah ke modul standalone: lihat routes/lms.php (prefix /api/v1/lms) ---
 // Grup lama Route::prefix('lms') dihapus dari file ini agar menu & API SIAKAD tidak menumpuk.
+
+// --- Praktek Kerja Lapangan (PKL) / Magang ---
+Route::prefix('pkl')->group(function () {
+    Route::get('/', [PklController::class, 'index']);
+    Route::post('/', [PklController::class, 'store']);
+    Route::get('/{id}', [PklController::class, 'show']);
+    Route::patch('/{id}/verify', [PklController::class, 'verify']);
+    Route::post('/{id}/bimbingan', [PklController::class, 'storeBimbingan']);
+    Route::patch('/{id}/bimbingan/{bimbinganId}/verify', [PklController::class, 'verifyBimbingan']);
+    Route::post('/{id}/nilai', [PklController::class, 'storeNilai']);
+});
+
+// --- Tugas Akhir / Skripsi ---
+Route::prefix('ta')->group(function () {
+    Route::get('/', [TugasAkhirController::class, 'index']);
+    Route::post('/', [TugasAkhirController::class, 'store']);
+    Route::get('/{id}', [TugasAkhirController::class, 'show']);
+    Route::patch('/{id}/approve-proposal', [TugasAkhirController::class, 'approveProposal']);
+    Route::post('/{id}/bimbingan', [TugasAkhirController::class, 'storeBimbingan']);
+    Route::patch('/{id}/bimbingan/{bimbinganId}/verify', [TugasAkhirController::class, 'verifyBimbingan']);
+    Route::post('/{id}/sidang', [TugasAkhirController::class, 'storeSidang']);
+    Route::post('/sidang/{sidangId}/nilai', [TugasAkhirController::class, 'storeNilaiSidang']);
+    Route::post('/sidang/{sidangId}/finalize', [TugasAkhirController::class, 'finalizeSidang']);
+});

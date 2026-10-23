@@ -287,6 +287,17 @@ class PermissionSeeder extends Seeder
             ['name' => 'Ubah Data Bimbingan PA', 'slug' => 'siakad.pa.update', 'module' => 'siakad', 'action' => 'update', 'description' => 'Mengubah catatan, laporan, jadwal, proses konsultasi & tindak lanjut insiden PA'],
             ['name' => 'Hapus Data Bimbingan PA', 'slug' => 'siakad.pa.delete', 'module' => 'siakad', 'action' => 'delete', 'description' => 'Menghapus catatan, jadwal & data PKL bimbingan PA'],
 
+            // Subsistem PKL / Praktek Industri / Magang
+            ['name' => 'Lihat Data PKL', 'slug' => 'siakad.pkl.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat data dan progres PKL/Magang'],
+            ['name' => 'Daftar PKL Mahasiswa', 'slug' => 'siakad.pkl.create', 'module' => 'siakad', 'action' => 'create', 'description' => 'Mendaftar PKL dan mengisi logbook harian'],
+            ['name' => 'Kelola & Nilai PKL', 'slug' => 'siakad.pkl.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Verifikasi usulan, bimbingan, dan penilaian PKL'],
+
+            // Subsistem Tugas Akhir / Skripsi
+            ['name' => 'Lihat Data Tugas Akhir', 'slug' => 'siakad.ta.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat direktori dan progres skripsi/TA'],
+            ['name' => 'Ajukan Proposal TA', 'slug' => 'siakad.ta.create', 'module' => 'siakad', 'action' => 'create', 'description' => 'Mengajukan judul proposal dan logbook asistensi TA'],
+            ['name' => 'Kelola Sidang & Plotting TA', 'slug' => 'siakad.ta.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Approval proposal, penetapan pembimbing, dan penjadwalan sidang TA'],
+            ['name' => 'Input Nilai Sidang TA', 'slug' => 'siakad.ta.nilai', 'module' => 'siakad', 'action' => 'update', 'description' => 'Input rubrik lembar penilaian sidang TA'],
+
             // ── MODUL ARSIP (TATA PERSURATAN) ─────────────────────
             ['name' => 'Lihat Dashboard Arsip', 'slug' => 'arsip.dashboard.read', 'module' => 'arsip', 'action' => 'read', 'description' => 'Melihat statistik & metrik tata persuratan'],
             ['name' => 'Lihat Nomor Surat', 'slug' => 'arsip.nomor_surat.read', 'module' => 'arsip', 'action' => 'read', 'description' => 'Melihat daftar nomor surat resmi kampus'],
@@ -376,6 +387,10 @@ class PermissionSeeder extends Seeder
                 'sikeu.dispensasi.create',
                 'sinapra.bebas_tanggungan.read',
                 'sinapra.bebas_tanggungan.create',
+                'siakad.pkl.read',
+                'siakad.pkl.create',
+                'siakad.ta.read',
+                'siakad.ta.create',
             ];
             $perms = Permission::whereIn('slug', $mhsSlugs)->get();
             foreach ($perms as $p) {
@@ -395,6 +410,13 @@ class PermissionSeeder extends Seeder
                 'siakad.pa.update',
                 'siakad.pa.delete',
                 'siakad.konversi.manage',
+                'siakad.pkl.read',
+                'siakad.pkl.create',
+                'siakad.pkl.manage',
+                'siakad.ta.read',
+                'siakad.ta.create',
+                'siakad.ta.manage',
+                'siakad.ta.nilai',
                 'lms.forum.read',
                 'lms.forum.create',
                 'lms.forum.manage',
@@ -434,6 +456,11 @@ class PermissionSeeder extends Seeder
                 'siakad.kelas.manage',
                 'siakad.nilai.read',
                 'siakad.nilai.manage',
+                'siakad.pkl.read',
+                'siakad.pkl.manage',
+                'siakad.ta.read',
+                'siakad.ta.manage',
+                'siakad.ta.nilai',
                 'lms.forum.read',
                 'lms.forum.create',
                 'lms.forum.manage',

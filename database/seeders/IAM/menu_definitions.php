@@ -242,6 +242,28 @@ return [
         ]
     ],
     [
+        'name' => 'PRAKTEK KERJA LAPANGAN (PKL)',
+        'url' => '#pkl_siakad',
+        'icon' => 'FaBriefcase',
+        'module' => 'siakad',
+        'order_index' => 52,
+        'children' => [
+            ['name' => 'Daftar PKL & Magang', 'url' => '/siakad/pkl', 'icon' => 'FaBriefcase', 'module' => 'siakad', 'permission_slug' => 'siakad.pkl.read', 'order_index' => 1],
+            ['name' => 'Pendaftaran PKL Baru', 'url' => '/siakad/pkl/daftar', 'icon' => 'FaClipboardCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.pkl.create', 'order_index' => 2],
+        ]
+    ],
+    [
+        'name' => 'TUGAS AKHIR / SKRIPSI',
+        'url' => '#ta_siakad',
+        'icon' => 'FaGraduationCap',
+        'module' => 'siakad',
+        'order_index' => 53,
+        'children' => [
+            ['name' => 'Direktori Tugas Akhir', 'url' => '/siakad/tugas-akhir', 'icon' => 'FaGraduationCap', 'module' => 'siakad', 'permission_slug' => 'siakad.ta.read', 'order_index' => 1],
+            ['name' => 'Pengajuan Proposal Judul', 'url' => '/siakad/tugas-akhir/pengajuan', 'icon' => 'FaFileSignature', 'module' => 'siakad', 'permission_slug' => 'siakad.ta.create', 'order_index' => 2],
+        ]
+    ],
+    [
         'name' => 'MASTER',
         'url' => '#obe_siakad',
         'icon' => 'FaDatabase',

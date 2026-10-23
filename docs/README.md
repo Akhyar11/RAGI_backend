@@ -80,6 +80,8 @@
 | KartuUjianController | Kartu ujian UTS/UAS + QR validasi publik | [docs/api/SIAKAD/KartuUjianController.md](api/SIAKAD/KartuUjianController.md) |
 | DokumenController | Dokumen resmi KHS/Transkrip + QR validasi publik | [docs/api/SIAKAD/DokumenController.md](api/SIAKAD/DokumenController.md) |
 | PaController | Pembimbing Akademik: rekap, catatan jurnal (CRUD), SIMPA, my-pa, cetak PDF, monitoring (kehadiran/prestasi/risiko/alerts), jadwal & konsultasi, PKL/PL/Magang, insiden+konseling+eskalasi, laporan bulanan | [docs/api/SIAKAD/PaController.md](api/SIAKAD/PaController.md) |
+| PklController | Praktek Kerja Lapangan (PKL) / Magang: pendaftaran usulan, verifikasi kaprodi/admin, logbook asistensi harian, dan penilaian komprehensif dua arah (lapangan & dosen) | [docs/api/SIAKAD/PklController.md](api/SIAKAD/PklController.md) |
+| TugasAkhirController | Siklus Tugas Akhir / Skripsi: pengajuan proposal judul, verifikasi kaprodi & pembimbing 1 & 2, logbook asistensi bimbingan, penjadwalan sidang, input nilai penguji & konversi nilai akhir | [docs/api/SIAKAD/TugasAkhirController.md](api/SIAKAD/TugasAkhirController.md) |
 
 
 ---
