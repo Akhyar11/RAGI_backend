@@ -202,12 +202,16 @@ return [
 
     // ── MODUL SIAKAD (MENU DENGAN PEMBATASAN LEVEL ROLE & PERMISSION) ─────
     [
-        'name' => 'Dashboard Akademik',
-        'url' => '/siakad',
+        'name' => 'DASHBOARD AKADEMIK',
+        'url' => '#dashboard_siakad',
         'icon' => 'FaGraduationCap',
         'module' => 'siakad',
-        'permission_slug' => 'siakad.dashboard.read',
         'order_index' => 1,
+        'children' => [
+            ['name' => 'Dashboard', 'url' => '/siakad', 'icon' => 'FaGraduationCap', 'module' => 'siakad', 'permission_slug' => 'siakad.dashboard.read', 'order_index' => 1],
+            ['name' => 'RPS', 'url' => '/siakad/rps', 'icon' => 'FaFileSignature', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
+            ['name' => 'Nilai', 'url' => '/siakad/nilai', 'icon' => 'FaAward', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.read', 'order_index' => 3],
+        ]
     ],
     // Catatan: KRS & Jadwal tidak dibuat top-level agar tidak aktif ganda —
     // sudah ada di grup PERKULIAHAN & OBE di bawah.

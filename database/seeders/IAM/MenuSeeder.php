@@ -201,7 +201,10 @@ $menus = \App\Support\MenuCatalog::definitions();
         if ($dosenRole) {
             $dosenSiakadMenuIds = Menu::where('module', 'siakad')
                 ->whereIn('url', [
+                    '#dashboard_siakad',
                     '/siakad',
+                    '/siakad/rps',
+                    '/siakad/nilai',
                     '#perkuliahan_siakad',
                     '#obe_siakad',
                     '/siakad/obe/tahun-kurikulum',
@@ -255,10 +258,12 @@ $menus = \App\Support\MenuCatalog::definitions();
                 ->pluck('id')
                 ->toArray();
             $mahasiswaRole->menus()->syncWithoutDetaching($mhsSikeuMenuIds);
-            // Portal SIAKAD mahasiswa: dashboard, jadwal, panduan
+            // Portal SIAKAD mahasiswa: dashboard, jadwal, nilai, panduan
             $mhsSiakadMenuIds = Menu::where('module', 'siakad')
                 ->whereIn('url', [
+                    '#dashboard_siakad',
                     '/siakad',
+                    '/siakad/nilai',
                     '#perkuliahan_siakad',
                     '/siakad/perkuliahan/kelas',
                     '/siakad/panduan',
