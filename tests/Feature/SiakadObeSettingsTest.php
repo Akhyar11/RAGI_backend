@@ -141,6 +141,36 @@ class SiakadObeSettingsTest extends TestCase
         $resGetAfter = $this->getJson('/api/v1/siakad/obe/settings');
         $resGetAfter->assertStatus(200);
         $this->assertEquals($this->ta1->id, $resGetAfter->json('data.tahun_akademik_id'));
+
+        // 4. Verifikasi user lain (User B) tidak terpengaruh oleh setting User A
+        $userB = User::factory()->create(['is_active' => true]);
+        $role = Role::where('slug', 'admin_obe')->first();
+        $userB->roles()->attach($role->id);
+        \Illuminate\Support\Facades\DB::table('siakad_admin_prodi')->insert([
+            'user_id' => $userB->id,
+            'program_studi_id' => $this->prodi->id,
+            'jabatan' => 'Admin OBE',
+            'is_active' => true,
+        ]);
+        Passport::actingAs($userB);
+
+        $resUserB = $this->getJson('/api/v1/siakad/obe/settings');
+        $resUserB->assertStatus(200);
+        // User B yang belum pernah set preferensi mendapat default TA aktif (ta2 = 2026/2027)
+        $this->assertEquals($this->ta2->id, $resUserB->json('data.tahun_akademik_id'));
+
+        // User B mengubah ke TA2 (Genap)
+        $this->postJson('/api/v1/siakad/obe/settings', [
+            'tahun_akademik_id' => $this->ta2->id,
+            'semester' => 'Genap',
+            'kurikulum_id' => $this->kurikulum->id,
+        ])->assertStatus(200);
+
+        // Verifikasi kembali ke User A: tetap TA1
+        Passport::actingAs($this->user);
+        $resUserAAfter = $this->getJson('/api/v1/siakad/obe/settings');
+        $this->assertEquals($this->ta1->id, $resUserAAfter->json('data.tahun_akademik_id'));
+        $this->assertEquals('Ganjil', $resUserAAfter->json('data.semester'));
     }
 
     public function test_filter_tahun_akademik_pada_distribusi_mengajar_dan_kelola_rps(): void

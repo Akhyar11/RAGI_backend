@@ -983,11 +983,16 @@ class ObeMasterController extends Controller
                     $dosen = $anggotaMap->get($dId);
                     $dkIds = collect($det['kelas_ids'] ?? [])->map(fn($v) => (int) $v)->filter()->values();
                     $dkNames = $dkIds->map(fn($kid) => $masterKelasMap->get($kid)?->nama_kelas)->filter()->values()->all();
+                    $namaLengkap = $dosen?->nama_lengkap ?? ($det['dosen_nama'] ?? ($det['nama_lengkap'] ?? '-'));
+                    $nidn = $dosen?->nidn ?? ($det['dosen_nidn'] ?? ($det['nidn'] ?? null));
                     return [
                         'dosen_id' => $dId,
                         'id' => $dId,
-                        'nama_lengkap' => $dosen?->nama_lengkap ?? ($det['dosen_nama'] ?? '-'),
-                        'nidn' => $dosen?->nidn ?? ($det['dosen_nidn'] ?? null),
+                        'dosen_nama' => $namaLengkap,
+                        'nama_lengkap' => $namaLengkap,
+                        'dosen_nidn' => $nidn,
+                        'nidn' => $nidn,
+                        'dosen' => $dosen,
                         'sks' => isset($det['sks']) && $det['sks'] !== null && $det['sks'] !== '' ? (int) $det['sks'] : $mkSks,
                         'kelas_ids' => $dkIds->all(),
                         'kelas_list' => $dkNames,
@@ -1000,11 +1005,16 @@ class ObeMasterController extends Controller
                 // Fallback dari dosen_anggota_ids lama
                 $formattedDetails = $ids->map(function ($id) use ($anggotaMap, $mkSks, $kIds, $masterKelasNames, $masterKelasMap) {
                     $dosen = $anggotaMap->get($id);
+                    $namaLengkap = $dosen?->nama_lengkap ?? '-';
+                    $nidn = $dosen?->nidn;
                     return [
                         'dosen_id' => $id,
                         'id' => $id,
-                        'nama_lengkap' => $dosen?->nama_lengkap ?? '-',
-                        'nidn' => $dosen?->nidn,
+                        'dosen_nama' => $namaLengkap,
+                        'nama_lengkap' => $namaLengkap,
+                        'dosen_nidn' => $nidn,
+                        'nidn' => $nidn,
+                        'dosen' => $dosen,
                         'sks' => $mkSks,
                         'kelas_ids' => $kIds->all(),
                         'kelas_list' => $masterKelasNames,

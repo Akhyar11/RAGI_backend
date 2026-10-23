@@ -1499,7 +1499,27 @@ class ObeController extends Controller
             'dosenKoordinator',
             'kurikulum',
             'tahunAkademik'
-        ])->whereHas('mataKuliah.kurikulum', fn($q) => $q->whereIn('program_studi_id', $prodiIds));
+        ]);
+
+        if (!empty($prodiIds)) {
+            $distQuery->whereHas('mataKuliah.kurikulum', fn($q) => $q->whereIn('program_studi_id', $prodiIds));
+        } else {
+            // Jika akun login bukan Admin OBE prodi tertentu (misal Dosen murni),
+            // batasi ke RPS di mana user terdaftar sebagai dosen koordinator atau anggota
+            $user = $request->user();
+            if ($user) {
+                $userDosenId = \App\Models\Siakad\Dosen::where('user_id', $user->id)->value('id');
+                $userId = $user->id;
+                $distQuery->where(function ($q) use ($userId, $userDosenId) {
+                    if ($userDosenId) {
+                        $q->where('dosen_koordinator_id', $userDosenId)
+                          ->orWhereJsonContains('dosen_anggota_ids', $userDosenId);
+                    }
+                    $q->orWhere('dosen_koordinator_id', $userId)
+                      ->orWhereJsonContains('dosen_anggota_ids', $userId);
+                });
+            }
+        }
 
         if ($request->filled('tahun_akademik_id')) {
             $distQuery->where('tahun_akademik_id', $request->integer('tahun_akademik_id'));
@@ -1573,7 +1593,7 @@ class ObeController extends Controller
         $mkIds = collect($distribusiItems)->map(fn($r) => $r->mata_kuliah_id ?? $r['mata_kuliah_id'] ?? null)->filter()->unique()->values();
 
         $rpsRows = $mkIds->isNotEmpty()
-            ? \App\Models\Siakad\Rps::with(['dosenPengembang', 'koordinatorRmk', 'kaprodi'])->whereIn('mata_kuliah_id', $mkIds)->get()->keyBy('mata_kuliah_id')
+            ? \App\Models\Siakad\Rps::with(['dosenPengembang', 'koordinatorRmk', 'kaprodi', 'mingguan'])->whereIn('mata_kuliah_id', $mkIds)->get()->keyBy('mata_kuliah_id')
             : collect();
 
         $allKelasIds = collect($distribusiItems)->flatMap(function ($item) {
@@ -1609,6 +1629,9 @@ class ObeController extends Controller
             $rps = $rpsRows->get($mkId);
             $hasRps = (bool) $rps;
 
+            $totalBobot = $rps ? (int) $rps->mingguan->sum('bobot_penilaian') : 0;
+            $sesiCount = $rps ? $rps->mingguan->count() : 0;
+
             $rawDetails = $dist->dosen_anggota_details ?? [];
             $kIds = $dist->kelas_ids ?? [];
             if (empty($kIds) && !empty($rawDetails)) {
@@ -1625,6 +1648,7 @@ class ObeController extends Controller
                 return [
                     'dosen_id' => $dId,
                     'id' => $dId,
+                    'user_id' => $dosen?->user_id,
                     'nama_lengkap' => $dosen?->nama_lengkap ?? ($det['dosen_nama'] ?? '-'),
                     'nidn' => $dosen?->nidn ?? ($det['dosen_nidn'] ?? null),
                     'sks' => $det['sks'] ?? null,
@@ -1641,6 +1665,9 @@ class ObeController extends Controller
                 'id' => $rps?->id ?? null,
                 'has_rps' => $hasRps,
                 'distribusi_id' => $dist->id,
+                'tahun_akademik_id' => $dist->tahun_akademik_id,
+                'program_studi_id' => $dist->program_studi_id ?? $dist->mataKuliah?->kurikulum?->program_studi_id,
+                'program_studi_nama' => $dist->programStudi?->nama ?? $dist->mataKuliah?->kurikulum?->programStudi?->nama ?? 'Program Studi',
                 'mata_kuliah_id' => $mkId,
                 'mata_kuliah' => $dist->mataKuliah,
                 'kurikulum' => $dist->kurikulum ?? $dist->mataKuliah?->kurikulum,
@@ -1651,12 +1678,18 @@ class ObeController extends Controller
                 'catatan_revisi' => $rps?->catatan_revisi ?? null,
                 'disetujui_at' => $rps?->disetujui_at ?? null,
                 'dosen_bisa_edit' => $rps?->dosen_bisa_edit ?? true,
+                'dosen_koordinator_id' => $dist->dosen_koordinator_id,
                 'dosen_koordinator' => $rps?->koordinatorRmk ?? $dist->dosenKoordinator,
+                'dosen_anggota_ids' => $rawAnggotaIds->all(),
                 'dosen_anggotas' => !empty($formattedDetails) ? $formattedDetails : $anggotas,
                 'dosen_anggota_details' => $formattedDetails,
                 'kaprodi' => $rps?->kaprodi ?? null,
                 'distribusi_kelas_list' => $kelasList,
                 'distribusi_kelas_formatted' => !empty($kelasList) ? implode(', ', $kelasList) : null,
+                'total_bobot' => $totalBobot,
+                'revisi_count' => ($rps && $rps->status === 'revisi') ? 1 : 0,
+                'kerjakan_count' => $rps ? max(0, 16 - $sesiCount) : 16,
+                'selesai_count' => $sesiCount,
                 'created_at' => $rps?->created_at ?? $dist->created_at,
                 'updated_at' => $rps?->updated_at ?? $dist->updated_at,
             ];
@@ -4364,18 +4397,33 @@ class ObeController extends Controller
 
     /**
      * Ambil pengaturan konteks OBE aktif (Tahun Akademik, Semester, Kurikulum).
+     * Menerapkan pengaturan per user yang sedang login, dengan fallback ke prodi/global.
      */
     public function getObeSettings(Request $request)
     {
         Gate::authorize('siakad.kurikulum.read');
 
+        $user = $request->user();
+        $userId = $user?->id;
+        $userSettingKey = $userId ? "obe_settings_user_{$userId}" : null;
+
         $prodiIds = $this->resolveObeProdiId($request);
         $primaryProdiId = $prodiIds[0] ?? null;
 
-        $settingKey = $primaryProdiId ? "obe_settings_prodi_{$primaryProdiId}" : "obe_settings_global";
-        $savedJson = DB::table('core_system_settings')
-            ->where('key', $settingKey)
-            ->value('value');
+        $savedJson = null;
+        if ($userSettingKey) {
+            $savedJson = DB::table('core_system_settings')
+                ->where('key', $userSettingKey)
+                ->value('value');
+        }
+
+        // Fallback ke setting prodi atau global jika user belum pernah menyimpan konfigurasi khusus
+        if (!$savedJson) {
+            $prodiSettingKey = $primaryProdiId ? "obe_settings_prodi_{$primaryProdiId}" : "obe_settings_global";
+            $savedJson = DB::table('core_system_settings')
+                ->where('key', $prodiSettingKey)
+                ->value('value');
+        }
 
         $data = null;
         if ($savedJson) {
@@ -4423,6 +4471,7 @@ class ObeController extends Controller
 
     /**
      * Perbarui pengaturan konteks OBE aktif (Tahun Akademik, Semester, Kurikulum).
+     * Diterapkan per user yang sedang login, bukan global setting.
      */
     public function updateObeSettings(Request $request)
     {
@@ -4434,6 +4483,8 @@ class ObeController extends Controller
             'kurikulum_id' => 'required|integer|exists:siakad_kurikulum,id',
         ]);
 
+        $user = $request->user();
+        $userId = $user?->id;
         $prodiIds = $this->resolveObeProdiId($request);
         $primaryProdiId = $prodiIds[0] ?? null;
 
@@ -4452,8 +4503,9 @@ class ObeController extends Controller
             'updated_at' => now()->toIso8601String(),
         ];
 
-        $settingKey = $primaryProdiId ? "obe_settings_prodi_{$primaryProdiId}" : "obe_settings_global";
-        $description = $primaryProdiId ? "Pengaturan aktif OBE untuk Program Studi ID {$primaryProdiId}" : "Pengaturan aktif OBE global";
+        // Terapkan per user yang sedang login
+        $settingKey = $userId ? "obe_settings_user_{$userId}" : ($primaryProdiId ? "obe_settings_prodi_{$primaryProdiId}" : "obe_settings_global");
+        $description = $userId ? "Pengaturan aktif OBE untuk User ID {$userId}" : ($primaryProdiId ? "Pengaturan aktif OBE untuk Program Studi ID {$primaryProdiId}" : "Pengaturan aktif OBE global");
 
         $existingSetting = DB::table('core_system_settings')
             ->where('key', $settingKey)

@@ -238,8 +238,15 @@ Daftar penugasan tim pengajar mata kuliah per semester, lengkap dengan data dose
         {
           "dosen_id": 14,
           "id": 14,
+          "dosen_nama": "Dr. Dosen Anggota, M.T.",
           "nama_lengkap": "Dr. Dosen Anggota, M.T.",
+          "dosen_nidn": "0412345601",
           "nidn": "0412345601",
+          "dosen": {
+            "id": 14,
+            "nama_lengkap": "Dr. Dosen Anggota, M.T.",
+            "nidn": "0412345601"
+          },
           "sks": 3,
           "kelas_ids": [1],
           "kelas_list": ["25A"],

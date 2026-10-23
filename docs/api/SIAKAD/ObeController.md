@@ -1208,6 +1208,9 @@ satu jalur dijamin berasal dari program studi yang sama.
             "id": 1,
             "has_rps": true,
             "distribusi_id": 12,
+            "tahun_akademik_id": 5,
+            "program_studi_id": 1,
+            "program_studi_nama": "Teknik Informatika",
             "mata_kuliah_id": 5,
             "mata_kuliah": {
                 "id": 5,
@@ -1226,6 +1229,10 @@ satu jalur dijamin berasal dari program studi yang sama.
             "catatan_revisi": null,
             "disetujui_at": null,
             "dosen_bisa_edit": true,
+            "total_bobot": 100,
+            "revisi_count": 0,
+            "kerjakan_count": 0,
+            "selesai_count": 16,
             "dosen_koordinator": {
                 "id": 7,
                 "nama_lengkap": "Budi Pratama, M.Cs."
@@ -2595,7 +2602,7 @@ Menghapus opsi jawaban soal pilihan ganda.
 
 ## [GET] /api/v1/siakad/obe/settings
 
-> Mengambil pengaturan konteks OBE aktif (Tahun Akademik, Semester, dan Kurikulum) untuk program studi aktif admin OBE atau konteks global.
+> Mengambil pengaturan konteks OBE aktif (Tahun Akademik, Semester, dan Kurikulum) per user yang sedang login, dengan fallback ke program studi atau pengaturan global. Wajib permission `siakad.kurikulum.read`.
 
 ### Response Sukses (200 OK)
 ```json
@@ -2632,7 +2639,7 @@ Menghapus opsi jawaban soal pilihan ganda.
 
 ## [POST] /api/v1/siakad/obe/settings
 
-> Menyimpan pengaturan konteks OBE aktif untuk program studi aktif ke tabel `core_system_settings` dan merekam audit log.
+> Menyimpan pengaturan konteks OBE aktif per user yang sedang login ke tabel `core_system_settings` (`obe_settings_user_{id}`) dan merekam audit log. Wajib permission `siakad.kurikulum.manage`.
 
 ### Request Body
 | Field | Type | Required | Deskripsi |
