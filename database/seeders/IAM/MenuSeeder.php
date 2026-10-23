@@ -237,7 +237,6 @@ $menus = \App\Support\MenuCatalog::definitions();
                     '/siakad/obe/rps/kelola',
                     '#krs_obe',
                     '/siakad/obe/krs/paket',
-                    '/siakad/obe/krs/pemetaan-kelas',
                     '/siakad/obe/krs/monitoring',
                     '#settings_obe',
                     '/siakad/obe/settings',

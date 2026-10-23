@@ -319,8 +319,7 @@ return [
         'order_index' => 585,
         'children' => [
             ['name' => 'Paket KRS', 'url' => '/siakad/obe/krs/paket', 'icon' => 'FaBoxes', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 1],
-            ['name' => 'Pemetakan KRS-Kelas', 'url' => '/siakad/obe/krs/pemetaan-kelas', 'icon' => 'FaThList', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
-            ['name' => 'Monitoring KRS Mahasiswa', 'url' => '/siakad/obe/krs/monitoring', 'icon' => 'FaChartBar', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 3],
+            ['name' => 'Monitoring KRS Mahasiswa', 'url' => '/siakad/obe/krs/monitoring', 'icon' => 'FaChartBar', 'module' => 'siakad', 'permission_slug' => 'siakad.kurikulum.read', 'order_index' => 2],
         ]
     ],
     [
