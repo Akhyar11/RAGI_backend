@@ -14,6 +14,7 @@ Mengelola data master kurikulum OBE untuk Admin OBE Homebase Program Studi dan B
 6. Master Kelas & Pemetaan Mahasiswa Kelas (`siakad_master_kelas`)
 7. Distribusi Mata Kuliah visual (`siakad_distribusi_matakuliah`)
 8. Plotting Role-Menu Admin OBE (`siakad_admin_obe_role_menus`)
+9. Aturan Beban SKS Berdasarkan IPK (`siakad_aturan_sks`)
 
 ---
 
@@ -37,6 +38,10 @@ Mengelola data master kurikulum OBE untuk Admin OBE Homebase Program Studi dan B
 | POST | `/api/v1/siakad/obe/rubrik` | Tambah Rubrik Penilaian | ✅ |
 | PUT | `/api/v1/siakad/obe/rubrik/{id}` | Perbarui Rubrik Penilaian | ✅ |
 | DELETE | `/api/v1/siakad/obe/rubrik/{id}` | Hapus Rubrik Penilaian | ✅ |
+| GET | `/api/v1/siakad/obe/aturan-sks` | Daftar Aturan Beban SKS (paginated / all=true) | ✅ |
+| POST | `/api/v1/siakad/obe/aturan-sks` | Tambah / Batch Replace Aturan Beban SKS | ✅ |
+| PUT | `/api/v1/siakad/obe/aturan-sks/{id}` | Perbarui Aturan Beban SKS | ✅ |
+| DELETE | `/api/v1/siakad/obe/aturan-sks/{id}` | Hapus Aturan Beban SKS | ✅ |
 | GET | `/api/v1/siakad/obe/distribusi-mengajar` | Daftar Distribusi Mengajar | ✅ |
 | POST | `/api/v1/siakad/obe/distribusi-mengajar` | Simpan Distribusi Mengajar | ✅ |
 | PUT | `/api/v1/siakad/obe/distribusi-mengajar/{id}` | Perbarui Distribusi Mengajar | ✅ |
@@ -502,5 +507,192 @@ Menyimpan konfigurasi menu khusus Admin OBE untuk role terpilih.
 ```json
 {
   "menu_ids": [1, 20, 21, 72, 73, 74, 75, 76, 77, 78, 79]
+}
+```
+
+---
+
+## 8. Aturan Beban SKS Berdasarkan IPK
+
+Mengelola batas SKS maksimal mahasiswa saat pengisian KRS berdasarkan perolehan IPK semester sebelumnya (per prodi atau default institusi global).
+
+### [GET] `/api/v1/siakad/obe/aturan-sks`
+Mengambil daftar aturan beban SKS (paginated / scoped by homebase prodi).
+
+**Query Parameters**:
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `program_studi_id` | integer | ❌ | Filter aturan prodi spesifik |
+| `is_active` | boolean | ❌ | Filter status aktif |
+| `all` | boolean | ❌ | `true` untuk mengambil seluruh data tanpa paginasi |
+| `sort_by` | string | ❌ | `ipk_min`, `ipk_max`, `max_sks`, `id`, `created_at` (default `ipk_min`) |
+| `sort_order` | string | ❌ | `asc` / `desc` (default `desc`) |
+| `per_page` | integer | ❌ | Limit pagination (default 15, max 100) |
+| `page` | integer | ❌ | Nomor halaman (default 1) |
+
+**Response Sukses (200 OK — Paginated)**:
+```json
+{
+  "status": "success",
+  "message": "Daftar aturan SKS berhasil dimuat",
+  "data": [
+    {
+      "id": 1,
+      "program_studi_id": null,
+      "ipk_min": "3.00",
+      "ipk_max": "4.00",
+      "max_sks": 24,
+      "keterangan": "Sangat Baik (Beban Maksimal)",
+      "is_active": true,
+      "program_studi": null
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 1,
+    "per_page": 15,
+    "total": 1
+  }
+}
+```
+
+### [POST] `/api/v1/siakad/obe/aturan-sks`
+Menambah aturan baru atau melakukan batch replace semua aturan prodi/global.
+
+**Opsi Batch Replace Body**:
+```json
+{
+  "program_studi_id": 1,
+  "batch": [
+    {
+      "ipk_min": 3.00,
+      "ipk_max": 4.00,
+      "max_sks": 24,
+      "keterangan": "Sangat Baik",
+      "is_active": true
+    },
+    {
+      "ipk_min": 0.00,
+      "ipk_max": 2.99,
+      "max_sks": 20,
+      "keterangan": "Standar",
+      "is_active": true
+    }
+  ]
+}
+```
+
+**Opsi Single Create Body**:
+```json
+{
+  "program_studi_id": 1,
+  "ipk_min": 3.50,
+  "ipk_max": 4.00,
+  "max_sks": 24,
+  "keterangan": "Cumlaude",
+  "is_active": true
+}
+```
+
+**Response Sukses (201 Created)**:
+```json
+{
+  "status": "success",
+  "message": "Aturan beban SKS berhasil ditambahkan",
+  "data": {
+    "id": 5,
+    "program_studi_id": 1,
+    "ipk_min": 3.5,
+    "ipk_max": 4.0,
+    "max_sks": 24,
+    "keterangan": "Cumlaude",
+    "is_active": true
+  }
+}
+```
+
+### [PUT] `/api/v1/siakad/obe/aturan-sks/{id}`
+Memperbarui rentang IPK dan batas SKS.
+
+**Request Body**:
+```json
+{
+  "ipk_min": 3.25,
+  "ipk_max": 4.00,
+  "max_sks": 24,
+  "keterangan": "Unggul",
+  "is_active": true
+}
+```
+
+**Response Sukses (200 OK)**:
+```json
+{
+  "status": "success",
+  "message": "Aturan beban SKS berhasil diperbarui",
+  "data": {
+    "id": 5,
+    "program_studi_id": 1,
+    "ipk_min": 3.25,
+    "ipk_max": 4.0,
+    "max_sks": 24,
+    "keterangan": "Unggul",
+    "is_active": true
+  }
+}
+```
+
+### [DELETE] `/api/v1/siakad/obe/aturan-sks/{id}`
+Menghapus aturan beban SKS.
+
+**Response Sukses (200 OK)**:
+```json
+{
+  "status": "success",
+  "message": "Aturan beban SKS berhasil dihapus",
+  "data": null
+}
+```
+
+**Response Error (422 Unprocessable Entity)**:
+```json
+{
+  "message": "Nilai ipk_max harus lebih besar atau sama dengan batas IPK minimal (3.50).",
+  "errors": {
+    "ipk_max": [
+      "Nilai ipk_max harus lebih besar atau sama dengan batas IPK minimal (3.50)."
+    ]
+  }
+}
+```
+
+**Response Error (401 Unauthorized)**:
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+**Response Error (403 Forbidden)**:
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki hak akses untuk program studi ini."
+}
+```
+
+**Response Error (404 Not Found)**:
+```json
+{
+  "status": "error",
+  "message": "Data aturan beban SKS tidak ditemukan."
+}
+```
+
+**Response Error (400 Bad Request)**:
+```json
+{
+  "status": "error",
+  "message": "Permintaan tidak valid atau parameter tidak sesuai ketentuan."
 }
 ```

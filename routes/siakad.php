@@ -270,6 +270,12 @@ Route::prefix('obe')->group(function () {
     Route::get('/settings', [ObeController::class, 'getObeSettings']);
     Route::post('/settings', [ObeController::class, 'updateObeSettings']);
 
+    // Aturan Beban SKS per IPK
+    Route::get('/aturan-sks', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'listAturanSks']);
+    Route::post('/aturan-sks', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'storeAturanSks']);
+    Route::put('/aturan-sks/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'updateAturanSks']);
+    Route::delete('/aturan-sks/{id}', [\App\Http\Controllers\API\Siakad\ObeMasterController::class, 'destroyAturanSks']);
+
     Route::get('/cpl', [ObeController::class, 'getCpl']);
     Route::post('/cpl', [ObeController::class, 'storeCpl']);
     Route::put('/cpl/{id}', [ObeController::class, 'updateCpl']);

@@ -1663,4 +1663,314 @@ class ObeMasterController extends Controller
 
         abort(422, 'Program studi tidak dapat ditentukan: akun Anda terhubung ke lebih dari satu program studi aktif. Kirimkan parameter program_studi_id secara eksplisit.');
     }
+
+    // ==========================================
+    // ATURAN BEBAN SKS BERDASARKAN IPK
+    // ==========================================
+    public function listAturanSks(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kurikulum.read');
+
+        $user = $request->user();
+        $query = \App\Models\Siakad\AturanSks::with('programStudi');
+
+        if ($user && method_exists($user, 'getSiakadProdiIds') && !$user->isSuperAdmin()) {
+            $allowedProdiIds = $user->getSiakadProdiIds()->map(fn($id) => (int) $id)->all();
+            $query->where(function ($q) use ($allowedProdiIds) {
+                $q->whereIn('program_studi_id', $allowedProdiIds)
+                  ->orWhereNull('program_studi_id');
+            });
+        } elseif ($request->filled('program_studi_id')) {
+            $prodiId = (int) $request->program_studi_id;
+            $query->where(function ($q) use ($prodiId) {
+                $q->where('program_studi_id', $prodiId)
+                  ->orWhereNull('program_studi_id');
+            });
+        }
+
+        if ($request->has('is_active')) {
+            $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
+        }
+
+        $allowedSort = ['ipk_min', 'ipk_max', 'max_sks', 'id', 'created_at'];
+        $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'ipk_min';
+        $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
+
+        $query->orderByRaw('program_studi_id IS NULL ASC')
+            ->orderBy('program_studi_id')
+            ->orderBy($sortBy, $sortOrder);
+
+        if ($request->boolean('all')) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Daftar aturan SKS berhasil dimuat',
+                'data' => $query->get(),
+            ]);
+        }
+
+        $perPage = min(100, $request->integer('per_page', 15));
+        $paginator = $query->paginate($perPage);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar aturan SKS berhasil dimuat',
+            'data' => $paginator->items(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ]);
+    }
+
+    public function storeAturanSks(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $user = $request->user();
+        $allowedProdiIds = ($user && method_exists($user, 'getSiakadProdiIds'))
+            ? $user->getSiakadProdiIds()->map(fn($id) => (int) $id)->all()
+            : [];
+
+        // Support single create atau batch replace
+        if ($request->has('batch') && is_array($request->batch)) {
+            $validated = $request->validate([
+                'program_studi_id' => 'nullable|integer|exists:siakad_program_studi,id',
+                'batch' => 'required|array|min:1',
+                'batch.*.ipk_min' => 'required|numeric|min:0|max:4',
+                'batch.*.ipk_max' => 'required|numeric|min:0|max:4|gte:batch.*.ipk_min',
+                'batch.*.max_sks' => 'required|integer|min:1|max:30',
+                'batch.*.keterangan' => 'nullable|string|max:255',
+                'batch.*.is_active' => 'nullable|boolean',
+            ]);
+
+            $targetProdiId = isset($validated['program_studi_id']) ? (int) $validated['program_studi_id'] : null;
+
+            if ($targetProdiId !== null && !$user?->isSuperAdmin() && !in_array($targetProdiId, $allowedProdiIds, true)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda tidak memiliki hak akses untuk program studi ini.',
+                ], 403);
+            }
+
+            if ($targetProdiId === null && !$user?->isSuperAdmin() && empty($allowedProdiIds)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya Super Admin atau Admin Kurikulum yang dapat mengubah aturan institusi global.',
+                ], 403);
+            }
+
+            $results = [];
+            \Illuminate\Support\Facades\DB::transaction(function () use ($targetProdiId, $validated, &$results, $request) {
+                // Hapus aturan lama pada scope ini jika batch update
+                $existingQuery = \App\Models\Siakad\AturanSks::where(function ($q) use ($targetProdiId) {
+                    if ($targetProdiId === null) {
+                        $q->whereNull('program_studi_id');
+                    } else {
+                        $q->where('program_studi_id', $targetProdiId);
+                    }
+                });
+
+                $oldRecords = $existingQuery->get()->toArray();
+                $existingQuery->delete();
+
+                foreach ($validated['batch'] as $row) {
+                    $item = \App\Models\Siakad\AturanSks::create([
+                        'program_studi_id' => $targetProdiId,
+                        'ipk_min' => $row['ipk_min'],
+                        'ipk_max' => $row['ipk_max'],
+                        'max_sks' => $row['max_sks'],
+                        'keterangan' => $row['keterangan'] ?? null,
+                        'is_active' => $row['is_active'] ?? true,
+                    ]);
+                    $results[] = $item;
+                }
+
+                try {
+                    AuditLogService::record(
+                        module: 'SIAKAD',
+                        action: 'batch_save',
+                        tableName: 'siakad_aturan_sks',
+                        recordId: $targetProdiId ?? 0,
+                        oldValues: $oldRecords,
+                        newValues: collect($results)->toArray(),
+                        request: $request
+                    );
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Gagal audit log aturan SKS: ' . $e->getMessage());
+                }
+            });
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Aturan beban SKS berhasil disimpan',
+                'data' => $results,
+            ], 201);
+        }
+
+        $validated = $request->validate([
+            'program_studi_id' => 'nullable|integer|exists:siakad_program_studi,id',
+            'ipk_min' => 'required|numeric|min:0|max:4',
+            'ipk_max' => 'required|numeric|min:0|max:4|gte:ipk_min',
+            'max_sks' => 'required|integer|min:1|max:30',
+            'keterangan' => 'nullable|string|max:255',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        $targetProdiId = isset($validated['program_studi_id']) ? (int) $validated['program_studi_id'] : null;
+
+        if ($targetProdiId !== null && !$user?->isSuperAdmin() && !in_array($targetProdiId, $allowedProdiIds, true)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk program studi ini.',
+            ], 403);
+        }
+
+        $item = \App\Models\Siakad\AturanSks::create([
+            'program_studi_id' => $targetProdiId,
+            'ipk_min' => $validated['ipk_min'],
+            'ipk_max' => $validated['ipk_max'],
+            'max_sks' => $validated['max_sks'],
+            'keterangan' => $validated['keterangan'] ?? null,
+            'is_active' => $validated['is_active'] ?? true,
+        ]);
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'create',
+                tableName: 'siakad_aturan_sks',
+                recordId: $item->id,
+                oldValues: null,
+                newValues: $item->toArray(),
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal audit log aturan SKS: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Aturan beban SKS berhasil ditambahkan',
+            'data' => $item,
+        ], 201);
+    }
+
+    public function updateAturanSks(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $item = \App\Models\Siakad\AturanSks::findOrFail($id);
+        $user = $request->user();
+        $allowedProdiIds = ($user && method_exists($user, 'getSiakadProdiIds'))
+            ? $user->getSiakadProdiIds()->map(fn($val) => (int) $val)->all()
+            : [];
+
+        if ($item->program_studi_id !== null && !$user?->isSuperAdmin() && !in_array((int) $item->program_studi_id, $allowedProdiIds, true)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk mengubah aturan program studi ini.',
+            ], 403);
+        }
+
+        if ($item->program_studi_id === null && !$user?->isSuperAdmin() && empty($allowedProdiIds)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Hanya Super Admin atau Admin Kurikulum yang dapat mengubah aturan institusi global.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'ipk_min' => 'sometimes|required|numeric|min:0|max:4',
+            'ipk_max' => [
+                'sometimes',
+                'required',
+                'numeric',
+                'min:0',
+                'max:4',
+                function ($attribute, $value, $fail) use ($request, $item) {
+                    $min = $request->input('ipk_min', $item->ipk_min);
+                    if ($value < $min) {
+                        $fail("Nilai {$attribute} harus lebih besar atau sama dengan batas IPK minimal ({$min}).");
+                    }
+                },
+            ],
+            'max_sks' => 'sometimes|required|integer|min:1|max:30',
+            'keterangan' => 'nullable|string|max:255',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        $old = $item->getOriginal();
+        $item->update($validated);
+        $new = $item->getChanges();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'update',
+                tableName: 'siakad_aturan_sks',
+                recordId: $item->id,
+                oldValues: $old,
+                newValues: $new,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal audit log aturan SKS: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Aturan beban SKS berhasil diperbarui',
+            'data' => $item,
+        ]);
+    }
+
+    public function destroyAturanSks(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('siakad.kurikulum.manage');
+
+        $item = \App\Models\Siakad\AturanSks::findOrFail($id);
+        $user = $request->user();
+        $allowedProdiIds = ($user && method_exists($user, 'getSiakadProdiIds'))
+            ? $user->getSiakadProdiIds()->map(fn($val) => (int) $val)->all()
+            : [];
+
+        if ($item->program_studi_id !== null && !$user?->isSuperAdmin() && !in_array((int) $item->program_studi_id, $allowedProdiIds, true)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk menghapus aturan program studi ini.',
+            ], 403);
+        }
+
+        if ($item->program_studi_id === null && !$user?->isSuperAdmin() && empty($allowedProdiIds)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Hanya Super Admin atau Admin Kurikulum yang dapat menghapus aturan institusi global.',
+            ], 403);
+        }
+
+        $old = $item->getOriginal();
+        $item->delete();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_aturan_sks',
+                recordId: $id,
+                oldValues: $old,
+                newValues: null,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal audit log aturan SKS: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Aturan beban SKS berhasil dihapus',
+            'data' => null,
+        ]);
+    }
 }

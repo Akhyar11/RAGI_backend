@@ -197,7 +197,7 @@ $menus = \App\Support\MenuCatalog::definitions();
             $tendikRole->menus()->syncWithoutDetaching($tendikSimpegMenuIds);
         }
 
-        // Dosen & Admin OBE Homebase Prodi: portal SIAKAD
+        // Dosen Pengajar biasa: portal SIAKAD hanya operasional pengajaran dan panduan
         if ($dosenRole) {
             $dosenSiakadMenuIds = Menu::where('module', 'siakad')
                 ->whereIn('url', [
@@ -206,47 +206,72 @@ $menus = \App\Support\MenuCatalog::definitions();
                     '/siakad/rps',
                     '/siakad/nilai',
                     '#perkuliahan_siakad',
-                    '#obe_siakad',
-                    '/siakad/obe/tahun-kurikulum',
-                    '/siakad/obe/kelas',
-                    '/siakad/obe/pemetaan-mahasiswa-kelas',
-                    '/siakad/obe/rumpun-mk',
-                    '/siakad/obe/jenis-cpl',
-                    '/siakad/obe/matakuliah',
-                    '/siakad/obe/distribusi-mk',
-                    '/siakad/obe/rubrik',
-                    '/siakad/obe/cpmk',
-                    '#bahan_kajian_siakad',
-                    '/siakad/obe/bahan-kajian',
-                    '/siakad/obe/pemetaan-cpl-bk',
-                    '/siakad/obe/pemetaan-bk-mk',
-                    '#skl_siakad',
-                    '/siakad/obe/profil-lulusan',
-                    '/siakad/obe/profesi',
-                    '/siakad/obe/cpl',
-                    '#mata_kuliah_sks_siakad',
-                    '/siakad/obe/pemetaan-cpl-mk',
-                    '/siakad/obe/pemetaan-cpl-bk-mk',
-                    '/siakad/obe/rumusan-cpmk',
-                    '/siakad/obe/pemetaan-cpl-cpmk-mk',
-                    '#rps_siakad',
-                    '/siakad/obe/rps/jenis-pembelajaran',
-                    '/siakad/obe/rps/bentuk',
-                    '/siakad/obe/rps/metode',
-                    '/siakad/obe/rps/kriteria',
-                    '/siakad/obe/rps/komponen',
-                    '/siakad/obe/rps/kelola',
-                    '#krs_obe',
-                    '/siakad/obe/krs/paket',
-                    '/siakad/obe/krs/monitoring',
-                    '#settings_obe',
-                    '/siakad/obe/settings',
-                    '/siakad/civitas/mahasiswa',
+                    '/siakad/perkuliahan/kelas',
                     '/siakad/panduan',
                 ])
                 ->pluck('id')
                 ->toArray();
             $dosenRole->menus()->syncWithoutDetaching($dosenSiakadMenuIds);
+
+            // Default plotting menu OBE untuk role 'dosen' jika ditugaskan sebagai Admin Prodi oleh Admin SIAKAD
+            if (Schema::hasTable('siakad_admin_obe_role_menus')) {
+                $obeAdminMenuIds = Menu::where('module', 'siakad')
+                    ->whereIn('url', [
+                        '#dashboard_siakad',
+                        '/siakad',
+                        '/siakad/rps',
+                        '/siakad/nilai',
+                        '#perkuliahan_siakad',
+                        '/siakad/perkuliahan/kelas',
+                        '#obe_siakad',
+                        '/siakad/obe/tahun-kurikulum',
+                        '/siakad/obe/kelas',
+                        '/siakad/obe/pemetaan-mahasiswa-kelas',
+                        '/siakad/obe/rumpun-mk',
+                        '/siakad/obe/jenis-cpl',
+                        '/siakad/obe/matakuliah',
+                        '/siakad/obe/distribusi-mk',
+                        '/siakad/obe/rubrik',
+                        '/siakad/obe/cpmk',
+                        '#bahan_kajian_siakad',
+                        '/siakad/obe/bahan-kajian',
+                        '/siakad/obe/pemetaan-cpl-bk',
+                        '/siakad/obe/pemetaan-bk-mk',
+                        '#skl_siakad',
+                        '/siakad/obe/profil-lulusan',
+                        '/siakad/obe/profesi',
+                        '/siakad/obe/cpl',
+                        '#mata_kuliah_sks_siakad',
+                        '/siakad/obe/pemetaan-cpl-mk',
+                        '/siakad/obe/pemetaan-cpl-bk-mk',
+                        '/siakad/obe/rumusan-cpmk',
+                        '/siakad/obe/pemetaan-cpl-cpmk-mk',
+                        '#rps_siakad',
+                        '/siakad/obe/rps/jenis-pembelajaran',
+                        '/siakad/obe/rps/bentuk',
+                        '/siakad/obe/rps/metode',
+                        '/siakad/obe/rps/kriteria',
+                        '/siakad/obe/rps/komponen',
+                        '/siakad/obe/rps/kelola',
+                        '#krs_obe',
+                        '/siakad/obe/krs/paket',
+                        '/siakad/obe/krs/monitoring',
+                        '#settings_obe',
+                        '/siakad/obe/settings',
+                        '/siakad/civitas/mahasiswa',
+                        '/siakad/panduan',
+                    ])
+                    ->pluck('id')
+                    ->toArray();
+
+                $now = now();
+                foreach ($obeAdminMenuIds as $menuId) {
+                    DB::table('siakad_admin_obe_role_menus')->updateOrInsert(
+                        ['role_id' => $dosenRole->id, 'menu_id' => $menuId],
+                        ['updated_at' => $now, 'created_at' => $now]
+                    );
+                }
+            }
         }
 
         // Portal mandiri mahasiswa: dashboard + tagihan via baseAllowed,

@@ -2,6 +2,7 @@
 
 namespace App\Services\Siakad;
 
+use App\Models\Siakad\AturanSks;
 use App\Models\Siakad\Kelas;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\HakaksesKrs;
@@ -14,8 +15,35 @@ use Illuminate\Support\Facades\DB;
 
 class KrsService
 {
-    public function maxSksByIpk(float $ipk): int
+    public function maxSksByIpk(float $ipk, ?int $programStudiId = null): int
     {
+        // 1. Coba cari aturan khusus program studi yang aktif
+        if ($programStudiId) {
+            $aturanProdi = AturanSks::where('program_studi_id', $programStudiId)
+                ->where('is_active', true)
+                ->where('ipk_min', '<=', $ipk)
+                ->where('ipk_max', '>=', $ipk)
+                ->orderByDesc('max_sks')
+                ->first();
+
+            if ($aturanProdi) {
+                return (int) $aturanProdi->max_sks;
+            }
+        }
+
+        // 2. Coba cari aturan global institusi (program_studi_id is null) yang aktif
+        $aturanGlobal = AturanSks::whereNull('program_studi_id')
+            ->where('is_active', true)
+            ->where('ipk_min', '<=', $ipk)
+            ->where('ipk_max', '>=', $ipk)
+            ->orderByDesc('max_sks')
+            ->first();
+
+        if ($aturanGlobal) {
+            return (int) $aturanGlobal->max_sks;
+        }
+
+        // 3. Fallback hardcoded jika tabel kosong atau tidak ada rentang yang cocok
         if ($ipk >= 3.00) return 24;
         if ($ipk >= 2.50) return 22;
         if ($ipk >= 2.00) return 20;
@@ -303,7 +331,7 @@ class KrsService
 
             $totalSks = $krs->krsDetails()->with('kelas.mataKuliah')->get()
                 ->sum(fn($d) => $d->kelas?->mataKuliah?->total_sks ?? 0);
-            $maxSks = $this->maxSksByIpk($ipk);
+            $maxSks = $this->maxSksByIpk($ipk, $mhs->program_studi_id ? (int) $mhs->program_studi_id : null);
             if ($totalSks > $maxSks) {
                 abort(response()->json([
                     'status' => 'error',
