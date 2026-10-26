@@ -91,6 +91,7 @@ class ArsipNomorSuratTest extends TestCase
                 'perihal' => 'Peminjaman Ruang Praktikum',
                 'tujuan' => 'Kepala Lab TRPL',
                 'module_origin' => 'sinapra',
+                'alasan_backdate' => 'Surat permohonan kegiatan tahun lalu',
             ]);
 
         $response->assertStatus(201);
@@ -101,6 +102,8 @@ class ArsipNomorSuratTest extends TestCase
         $this->assertEquals(1, $data['nomor_urut']);
         $this->assertEquals('II', $data['bulan_romawi']);
         $this->assertEquals(2025, $data['tahun']);
+        $this->assertTrue($data['is_backdate']);
+        $this->assertEquals('Surat permohonan kegiatan tahun lalu', $data['alasan_backdate']);
         $this->assertEquals($this->kopBaru->id, $data['kop_surat_id']);
     }
 
@@ -115,6 +118,7 @@ class ArsipNomorSuratTest extends TestCase
                 'kode_klasifikasi' => 'DII',
                 'perihal' => 'Sertifikat Kompetensi Mahasiswa',
                 'module_origin' => 'siakad',
+                'alasan_backdate' => 'Penerbitan nomor massal sertifikat lulusan 2025',
             ]);
 
         $response->assertStatus(201);
@@ -124,6 +128,101 @@ class ArsipNomorSuratTest extends TestCase
         $this->assertEquals('1/DII/REK/V/2025', $data[0]['nomor_surat']);
         $this->assertEquals('2/DII/REK/V/2025', $data[1]['nomor_surat']);
         $this->assertEquals('3/DII/REK/V/2025', $data[2]['nomor_surat']);
+        $this->assertTrue($data[0]['is_backdate']);
+    }
+
+    public function test_nomor_surat_otomatis_reset_per_1_januari(): void
+    {
+        // Set waktu simulasi ke tanggal 1 Januari 2026
+        \Carbon\Carbon::setTestNow('2026-01-01 09:00:00');
+
+        try {
+            // 1. Surat tanggal 31 Desember 2025 (Backdate dari sudut pandang 1 Jan 2026)
+            $res2025 = $this->actingAs($this->admin, 'api')
+                ->postJson('/api/arsip/nomor-surat', [
+                    'tanggal_surat' => '2025-12-31',
+                    'kode_unit' => 'REK',
+                    'kode_klasifikasi' => 'DI',
+                    'perihal' => 'Surat Akhir Tahun 2025',
+                    'alasan_backdate' => 'Arsip akhir tahun 2025',
+                ]);
+            $res2025->assertStatus(201);
+            $this->assertEquals('1/DI/REK/XII/2025', $res2025->json('data.nomor_surat'));
+            $this->assertEquals(1, $res2025->json('data.nomor_urut'));
+            $this->assertTrue($res2025->json('data.is_backdate'));
+
+            // 2. Surat tanggal 1 Januari 2026 (Hari ini: Otomatis Reset ke nomor 1 untuk tahun 2026)
+            $res2026 = $this->actingAs($this->admin, 'api')
+                ->postJson('/api/arsip/nomor-surat', [
+                    'tanggal_surat' => '2026-01-01',
+                    'kode_unit' => 'REK',
+                    'kode_klasifikasi' => 'DI',
+                    'perihal' => 'Surat Awal Tahun Baru 2026',
+                ]);
+            $res2026->assertStatus(201);
+            $this->assertEquals('1/DI/REK/I/2026', $res2026->json('data.nomor_surat'));
+            $this->assertEquals(1, $res2026->json('data.nomor_urut'));
+            $this->assertFalse($res2026->json('data.is_backdate'));
+
+            // 3. Pastikan data tahun 2025 tidak terhapus di database
+            $this->assertDatabaseHas('core_arsip_nomor_surat', [
+                'tahun' => 2025,
+                'nomor_urut' => 1,
+                'nomor_surat' => '1/DI/REK/XII/2025',
+            ]);
+            $this->assertDatabaseHas('core_arsip_nomor_surat', [
+                'tahun' => 2026,
+                'nomor_urut' => 1,
+                'nomor_surat' => '1/DI/REK/I/2026',
+            ]);
+        } finally {
+            \Carbon\Carbon::setTestNow();
+        }
+    }
+
+    public function test_backdate_nomor_surat_melanjutkan_nomor_terakhir_tahun_lalu(): void
+    {
+        // 1. Buat nomor urut 1 di tahun 2024
+        $res1 = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/arsip/nomor-surat', [
+                'tanggal_surat' => '2024-06-15',
+                'kode_unit' => 'REK',
+                'kode_klasifikasi' => 'DI',
+                'perihal' => 'Surat Pertama 2024',
+                'alasan_backdate' => 'Dokumen 2024 lampau',
+            ]);
+        $res1->assertStatus(201);
+        $this->assertEquals(1, $res1->json('data.nomor_urut'));
+
+        // 2. Lakukan backdate susulan di tahun 2024
+        $resBackdate = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/arsip/nomor-surat', [
+                'tanggal_surat' => '2024-11-20',
+                'kode_unit' => 'REK',
+                'kode_klasifikasi' => 'DI',
+                'perihal' => 'Surat Susulan Akreditasi 2024',
+                'alasan_backdate' => 'Surat susulan akreditasi prodi tahun 2024',
+            ]);
+        $resBackdate->assertStatus(201);
+        $this->assertEquals(2, $resBackdate->json('data.nomor_urut'));
+        $this->assertEquals('2/DI/REK/XI/2024', $resBackdate->json('data.nomor_surat'));
+        $this->assertTrue($resBackdate->json('data.is_backdate'));
+        $this->assertEquals('Surat susulan akreditasi prodi tahun 2024', $resBackdate->json('data.alasan_backdate'));
+    }
+
+    public function test_backdate_gagal_jika_tidak_ada_alasan(): void
+    {
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/arsip/nomor-surat', [
+                'tanggal_surat' => '2020-01-10',
+                'kode_unit' => 'REK',
+                'kode_klasifikasi' => 'DI',
+                'perihal' => 'Surat Masa Lalu Tanpa Alasan',
+                // sengaja tidak mengirim alasan_backdate
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['alasan_backdate']);
     }
 
     public function test_resolusi_kop_surat_berdasarkan_tahun(): void
@@ -207,37 +306,43 @@ class ArsipNomorSuratTest extends TestCase
 
     public function test_nomor_surat_list_detail_and_cancellation(): void
     {
-        // 1. Buat nomor surat
-        $postRes = $this->actingAs($this->admin, 'api')
-            ->postJson('/api/arsip/nomor-surat', [
-                'mode' => 'satuan',
-                'tanggal_surat' => '2026-03-01',
-                'kode_unit' => 'REK',
-                'kode_klasifikasi' => 'DIV',
-                'perihal' => 'Panggilan Rekrutmen Dosen',
-            ]);
-        $postRes->assertStatus(201);
-        $nomorId = $postRes->json('data.id');
+        \Carbon\Carbon::setTestNow('2026-03-01 10:00:00');
 
-        // 2. List nomor surat
-        $listRes = $this->actingAs($this->admin, 'api')
-            ->getJson('/api/arsip/nomor-surat');
-        $listRes->assertStatus(200);
-        $this->assertNotEmpty($listRes->json('data'));
+        try {
+            // 1. Buat nomor surat
+            $postRes = $this->actingAs($this->admin, 'api')
+                ->postJson('/api/arsip/nomor-surat', [
+                    'mode' => 'satuan',
+                    'tanggal_surat' => '2026-03-01',
+                    'kode_unit' => 'REK',
+                    'kode_klasifikasi' => 'DIV',
+                    'perihal' => 'Panggilan Rekrutmen Dosen',
+                ]);
+            $postRes->assertStatus(201);
+            $nomorId = $postRes->json('data.id');
 
-        // 3. Detail nomor surat
-        $detailRes = $this->actingAs($this->admin, 'api')
-            ->getJson("/api/arsip/nomor-surat/{$nomorId}");
-        $detailRes->assertStatus(200);
-        $detailRes->assertJsonPath('data.nomor_surat', '1/DIV/REK/III/2026');
+            // 2. List nomor surat
+            $listRes = $this->actingAs($this->admin, 'api')
+                ->getJson('/api/arsip/nomor-surat');
+            $listRes->assertStatus(200);
+            $this->assertNotEmpty($listRes->json('data'));
 
-        // 4. Batalkan nomor surat
-        $batalRes = $this->actingAs($this->admin, 'api')
-            ->postJson("/api/arsip/nomor-surat/{$nomorId}/batalkan", [
-                'alasan' => 'Ada kekeliruan perihal agenda rapat',
-            ]);
-        $batalRes->assertStatus(200);
-        $batalRes->assertJsonPath('data.status', 'dibatalkan');
+            // 3. Detail nomor surat
+            $detailRes = $this->actingAs($this->admin, 'api')
+                ->getJson("/api/arsip/nomor-surat/{$nomorId}");
+            $detailRes->assertStatus(200);
+            $detailRes->assertJsonPath('data.nomor_surat', '1/DIV/REK/III/2026');
+
+            // 4. Batalkan nomor surat
+            $batalRes = $this->actingAs($this->admin, 'api')
+                ->postJson("/api/arsip/nomor-surat/{$nomorId}/batalkan", [
+                    'alasan' => 'Ada kekeliruan perihal agenda rapat',
+                ]);
+            $batalRes->assertStatus(200);
+            $batalRes->assertJsonPath('data.status', 'dibatalkan');
+        } finally {
+            \Carbon\Carbon::setTestNow();
+        }
     }
 
     public function test_master_klasifikasi_crud_and_dropdown_query(): void

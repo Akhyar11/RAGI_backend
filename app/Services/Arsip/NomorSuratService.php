@@ -110,6 +110,13 @@ class NomorSuratService
             }
         }
 
+        if (isset($filters['is_backdate']) && $filters['is_backdate'] !== '') {
+            $isBackdateFilter = filter_var($filters['is_backdate'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($isBackdateFilter !== null) {
+                $query->where('is_backdate', $isBackdateFilter);
+            }
+        }
+
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
@@ -138,6 +145,14 @@ class NomorSuratService
     {
         return DB::transaction(function () use ($data, $userId) {
             $tanggal = Carbon::parse($data['tanggal_surat'] ?? now());
+            $today = Carbon::today();
+            $isBackdate = $tanggal->startOfDay()->lessThan($today);
+            $alasanBackdate = !empty($data['alasan_backdate']) ? trim($data['alasan_backdate']) : null;
+
+            if ($isBackdate && empty($alasanBackdate)) {
+                throw new InvalidArgumentException('Penerbitan surat bertanggal mundur (backdate) wajib menyertakan alasan atau justifikasi.');
+            }
+
             $tahun = (int) $tanggal->year;
             $bulanRomawi = self::formatBulanRomawi((int) $tanggal->month);
 
@@ -169,6 +184,8 @@ class NomorSuratService
                 'bulan_romawi' => $bulanRomawi,
                 'tahun' => $tahun,
                 'tanggal_surat' => $tanggal->toDateString(),
+                'is_backdate' => $isBackdate,
+                'alasan_backdate' => $alasanBackdate,
                 'perihal' => $data['perihal'],
                 'tujuan' => $data['tujuan'] ?? null,
                 'status' => $data['status'] ?? 'terpakai',
@@ -188,7 +205,7 @@ class NomorSuratService
             try {
                 AuditLogService::record(
                     module: 'ARSIP',
-                    action: 'generate_nomor_surat_satuan',
+                    action: $isBackdate ? 'generate_nomor_surat_backdate' : 'generate_nomor_surat_satuan',
                     tableName: 'core_arsip_nomor_surat',
                     recordId: $nomorSurat->id,
                     oldValues: [],
@@ -216,6 +233,14 @@ class NomorSuratService
 
         return DB::transaction(function () use ($data, $userId, $jumlah) {
             $tanggal = Carbon::parse($data['tanggal_surat'] ?? now());
+            $today = Carbon::today();
+            $isBackdate = $tanggal->startOfDay()->lessThan($today);
+            $alasanBackdate = !empty($data['alasan_backdate']) ? trim($data['alasan_backdate']) : null;
+
+            if ($isBackdate && empty($alasanBackdate)) {
+                throw new InvalidArgumentException('Penerbitan surat bertanggal mundur (backdate) wajib menyertakan alasan atau justifikasi.');
+            }
+
             $tahun = (int) $tanggal->year;
             $bulanRomawi = self::formatBulanRomawi((int) $tanggal->month);
 
@@ -261,6 +286,8 @@ class NomorSuratService
                     'bulan_romawi' => $bulanRomawi,
                     'tahun' => $tahun,
                     'tanggal_surat' => $tanggal->toDateString(),
+                    'is_backdate' => $isBackdate,
+                    'alasan_backdate' => $alasanBackdate,
                     'perihal' => $perihalItem,
                     'tujuan' => $tujuanItem,
                     'status' => $data['status'] ?? 'terpakai',

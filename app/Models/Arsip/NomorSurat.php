@@ -22,6 +22,8 @@ class NomorSurat extends Model
         'bulan_romawi',
         'tahun',
         'tanggal_surat',
+        'is_backdate',
+        'alasan_backdate',
         'perihal',
         'tujuan',
         'status',
@@ -43,6 +45,7 @@ class NomorSurat extends Model
         'nomor_urut' => 'integer',
         'tahun' => 'integer',
         'tanggal_surat' => 'date',
+        'is_backdate' => 'boolean',
         'file_surat_uploaded_at' => 'datetime',
     ];
 

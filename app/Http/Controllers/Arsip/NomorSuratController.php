@@ -31,7 +31,7 @@ class NomorSuratController extends Controller
         }
 
         $perPage = min(100, $request->integer('per_page', 15));
-        $filters = $request->only(['search', 'tahun', 'kode_unit', 'kode_klasifikasi', 'status', 'module_origin', 'sort_by', 'sort_order']);
+        $filters = $request->only(['search', 'tahun', 'kode_unit', 'kode_klasifikasi', 'status', 'module_origin', 'is_backdate', 'sort_by', 'sort_order']);
         $paginated = $this->service->getPaginated($filters, $perPage);
 
         return response()->json([
@@ -53,6 +53,7 @@ class NomorSuratController extends Controller
                 'kode_klasifikasi' => $request->kode_klasifikasi,
                 'status' => $request->status,
                 'module_origin' => $request->module_origin,
+                'is_backdate' => $request->is_backdate,
                 'sort_by' => $filters['sort_by'] ?? 'created_at',
                 'sort_order' => $filters['sort_order'] ?? 'desc',
             ],

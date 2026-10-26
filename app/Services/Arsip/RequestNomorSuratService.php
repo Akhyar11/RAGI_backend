@@ -170,6 +170,7 @@ class RequestNomorSuratService
                     'reference_type' => $request->reference_type,
                     'reference_id' => $request->reference_id,
                     'catatan' => "Digenerate dari verifikasi {$request->kode_request}",
+                    'alasan_backdate' => $request->catatan_pemohon ?: ($catatan ?: "Penerbitan via verifikasi permohonan {$request->kode_request}"),
                     'jumlah_nomor' => $request->jumlah_nomor,
                 ];
 

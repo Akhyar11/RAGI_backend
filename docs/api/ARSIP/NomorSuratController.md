@@ -40,6 +40,7 @@ Mengambil daftar nomor surat resmi dengan filter tahun, unit, klasifikasi, statu
 - `kode_klasifikasi` (string, optional) - Filter kode klasifikasi (misal: `INDO`, `AKD`, `SARPRAS`).
 - `status` (string, optional) - Filter status (`terpakai`, `direservasi`, `dibatalkan`).
 - `module_origin` (string, optional) - Filter asal modul (misal: `arsip`, `sinapra`, `simpeg`).
+- `is_backdate` (boolean, optional) - Filter status surat tanggal mundur / backdate (`1`/`0`/`true`/`false`).
 - `sort_by` (string, default: `created_at`) - Kolom pengurutan (`id`, `nomor_urut`, `tanggal_surat`, `created_at`).
 - `sort_order` (string, default: `desc`) - Arah pengurutan (`asc`, `desc`).
 - `per_page` (integer, default: 15, max: 100) - Jumlah data per halaman.
@@ -61,6 +62,8 @@ Mengambil daftar nomor surat resmi dengan filter tahun, unit, klasifikasi, statu
       "bulan_romawi": "II",
       "tahun": 2025,
       "tanggal_surat": "2025-02-14",
+      "is_backdate": false,
+      "alasan_backdate": null,
       "perihal": "Peminjaman Laboratorium Praktikum",
       "tujuan": "Kepala Laboratorium Komputer",
       "status": "terpakai",
@@ -97,7 +100,7 @@ Mengambil daftar nomor surat resmi dengan filter tahun, unit, klasifikasi, statu
 
 ## 2. POST /api/arsip/nomor-surat
 
-Menerbitkan nomor surat resmi secara langsung (satuan atau bulk berurutan).
+Menerbitkan nomor surat resmi secara langsung (satuan atau bulk berurutan). Nomor surat otomatis ter-reset mulai 1 pada setiap pergantian tahun (1 Januari) tanpa menghapus data tahun lalu. Jika menerbitkan surat bertanggal mundur (backdate sebelum hari ini), wajib menyertakan alasan/justifikasi.
 
 ### Payload Satuan (Single)
 
@@ -111,6 +114,7 @@ Menerbitkan nomor surat resmi secara langsung (satuan atau bulk berurutan).
   "tujuan": "Instansi Terkait",
   "status": "terpakai",
   "module_origin": "arsip",
+  "alasan_backdate": "Penerbitan surat susulan keperluan akreditasi",
   "catatan": "Keterangan opsional"
 }
 ```
@@ -127,7 +131,8 @@ Menerbitkan nomor surat resmi secara langsung (satuan atau bulk berurutan).
   "perihal": "Sertifikat Pelatihan Mahasiswa",
   "tujuan": "Peserta Pelatihan",
   "status": "terpakai",
-  "module_origin": "arsip"
+  "module_origin": "arsip",
+  "alasan_backdate": "Penerbitan batch sertifikat pelatihan tahun lalu"
 }
 ```
 
@@ -146,6 +151,8 @@ Menerbitkan nomor surat resmi secara langsung (satuan atau bulk berurutan).
     "bulan_romawi": "II",
     "tahun": 2025,
     "tanggal_surat": "2025-02-14",
+    "is_backdate": true,
+    "alasan_backdate": "Penerbitan surat susulan keperluan akreditasi",
     "perihal": "Surat Keterangan Aktif Kuliah"
   }
 }
