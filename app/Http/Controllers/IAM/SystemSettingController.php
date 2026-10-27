@@ -114,6 +114,23 @@ class SystemSettingController extends Controller
             }
         }
 
+        $defaultBranding = [
+            'login_banner_url'      => (string) SystemSetting::get('login_banner_url', ''),
+            'login_banner_title'    => (string) SystemSetting::get('login_banner_title', 'SSO Campus'),
+            'login_banner_subtitle' => (string) SystemSetting::get('login_banner_subtitle', 'Enterprise Identity Platform'),
+        ];
+
+        foreach ($defaultBranding as $key => $val) {
+            if (!isset($settings[$key])) {
+                $settings[$key] = [
+                    'id'          => null,
+                    'key'         => $key,
+                    'value'       => (string) $val,
+                    'description' => 'Konfigurasi visual & banner foto halaman autentikasi/login',
+                ];
+            }
+        }
+
         return response()->json([
             'status' => 'success',
             'data'   => $settings,
@@ -259,6 +276,77 @@ class SystemSettingController extends Controller
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Gagal terhubung ke Cloudflare R2: ' . $th->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Mengambil konfigurasi publik branding login (banner, judul, slogan) tanpa autentikasi.
+     */
+    public function getPublicBranding()
+    {
+        return response()->json([
+            'status' => 'success',
+            'data'   => [
+                'login_banner_url'      => (string) SystemSetting::get('login_banner_url', ''),
+                'login_banner_title'    => (string) SystemSetting::get('login_banner_title', 'SSO Campus'),
+                'login_banner_subtitle' => (string) SystemSetting::get('login_banner_subtitle', 'Enterprise Identity Platform'),
+            ],
+        ]);
+    }
+
+    /**
+     * Upload berkas gambar banner login ke public disk (local / Cloudflare R2).
+     */
+    public function uploadBanner(Request $request, \App\Services\Storage\FileStorageService $fileStorage)
+    {
+        $user = $request->user();
+        if (!$user || (!$user->isSuperAdmin() && !$user->isAdmin() && !$user->hasPermission('iam.settings.update'))) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk mengunggah banner sistem.',
+            ], 403);
+        }
+
+        $request->validate([
+            'banner' => 'required|file|image|mimes:jpeg,png,jpg,webp,gif,svg|max:5120',
+        ], [
+            'banner.required' => 'Berkas gambar banner wajib diunggah.',
+            'banner.image'    => 'Berkas yang diunggah harus berupa gambar.',
+            'banner.mimes'    => 'Format gambar yang didukung: JPEG, PNG, JPG, WEBP, GIF, SVG.',
+            'banner.max'      => 'Ukuran gambar banner maksimal 5MB.',
+        ]);
+
+        try {
+            $path = $fileStorage->store($request->file('banner'), 'branding/banners', null, false);
+            $url = $fileStorage->url($path);
+
+            try {
+                \App\Services\AuditLogService::record(
+                    module: 'IAM',
+                    action: 'upload',
+                    tableName: 'core_system_settings',
+                    recordId: null,
+                    oldValues: null,
+                    newValues: ['banner_url' => $url, 'banner_path' => $path],
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log upload banner: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Foto banner login berhasil diunggah.',
+                'data'    => [
+                    'path' => $path,
+                    'url'  => $url,
+                ],
+            ]);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Gagal mengunggah gambar banner: ' . $th->getMessage(),
             ], 500);
         }
     }

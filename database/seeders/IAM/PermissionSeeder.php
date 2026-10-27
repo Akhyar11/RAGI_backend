@@ -38,6 +38,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'Lihat Audit Logs', 'slug' => 'iam.audit_logs.read', 'module' => 'iam', 'action' => 'read', 'description' => 'Melihat log rekam jejak aktivitas sistem'],
             ['name' => 'Lihat Pengaturan API', 'slug' => 'iam.api_integration.read', 'module' => 'iam', 'action' => 'read', 'description' => 'Melihat daftar dan status integrasi API eksternal'],
             ['name' => 'Kelola Pengaturan API', 'slug' => 'iam.api_integration.manage', 'module' => 'iam', 'action' => 'update', 'description' => 'Mengubah URL, token, dan menguji koneksi API integrasi'],
+            ['name' => 'Kelola Pengaturan Sistem', 'slug' => 'iam.settings.update', 'module' => 'iam', 'action' => 'update', 'description' => 'Mengatur konfigurasi global sistem, mailer, storage, dan visual branding'],
             ['name' => 'Lihat Laporan SPMB', 'slug' => 'spmb.laporan.read', 'module' => 'spmb', 'action' => 'read', 'description' => 'Melihat statistik dan laporan SPMB'],
             ['name' => 'Export Laporan SPMB', 'slug' => 'spmb.laporan.export', 'module' => 'spmb', 'action' => 'read', 'description' => 'Mengekspor laporan SPMB'],
 

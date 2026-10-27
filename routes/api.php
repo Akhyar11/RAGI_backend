@@ -34,6 +34,7 @@ Route::prefix('auth')->group(function () {
         ->middleware(['throttle:forgot-password', 'turnstile:forgot_password']);
     Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']);
     Route::post('/refresh', [AuthController::class, 'refresh']);
+    Route::get('/branding', [App\Http\Controllers\IAM\SystemSettingController::class, 'getPublicBranding']);
 
     // Endpoint terproteksi (Passport atau Sanctum)
     Route::middleware('auth:api')->group(function () {
@@ -123,6 +124,7 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::post('system-settings', [App\Http\Controllers\IAM\SystemSettingController::class, 'update']);
     Route::post('system-settings/test-smtp', [App\Http\Controllers\IAM\SystemSettingController::class, 'testSmtp']);
     Route::post('system-settings/test-r2', [App\Http\Controllers\IAM\SystemSettingController::class, 'testR2']);
+    Route::post('system-settings/upload-banner', [App\Http\Controllers\IAM\SystemSettingController::class, 'uploadBanner']);
 
     // API Integrations (SSO/IAM System Registry & Settings)
     Route::get('api-integrations', [App\Http\Controllers\IAM\IamApiIntegrationController::class, 'index']);

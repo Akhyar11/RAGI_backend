@@ -67,7 +67,7 @@ return [
         'children' => [
             ['name' => 'Sesi Login Aktif', 'url' => '/admin/sessions', 'icon' => 'FaDesktop', 'module' => 'sso', 'permission_slug' => 'iam.sessions.read', 'order_index' => 1],
             ['name' => 'Audit Log Aktivitas', 'url' => '/admin/audit-logs', 'icon' => 'FaHistory', 'module' => 'sso', 'permission_slug' => 'iam.audit_logs.read', 'order_index' => 2],
-            ['name' => 'Pengaturan Sistem', 'url' => '/admin/settings', 'icon' => 'FaCogs', 'module' => 'sso', 'permission_slug' => 'iam.roles.update', 'order_index' => 3],
+            ['name' => 'Pengaturan Sistem', 'url' => '/admin/settings', 'icon' => 'FaCogs', 'module' => 'sso', 'permission_slug' => 'iam.settings.update', 'order_index' => 3],
             ['name' => 'Pengaturan API', 'url' => '/admin/api-settings', 'icon' => 'FaSlidersH', 'module' => 'sso', 'permission_slug' => 'iam.api_integration.read', 'order_index' => 4],
         ]
     ],

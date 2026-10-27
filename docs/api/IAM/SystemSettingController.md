@@ -17,6 +17,8 @@ Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings),
 | POST | `/api/admin/system-settings` | Menyimpan atau memperbarui pengaturan sistem secara massal | ✅ Super Admin |
 | POST | `/api/admin/system-settings/test-smtp` | Mengirim email uji coba untuk verifikasi konfigurasi SMTP | ✅ Super Admin |
 | POST | `/api/admin/system-settings/test-r2` | Menguji konektivitas baca-tulis ke bucket Cloudflare R2 | ✅ Super Admin |
+| GET | `/api/auth/branding` | Mengambil data publik visual login (banner, judul, slogan) | ❌ Publik (Tanpa Auth) |
+| POST | `/api/admin/system-settings/upload-banner` | Mengunggah foto banner login ke storage publik | ✅ Admin (`iam.settings.update`) |
 
 ---
 
@@ -271,3 +273,92 @@ Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings),
     "message": "Koneksi ke Cloudflare R2 berhasil! Bucket 'kampus-public' dapat diakses dan ditulis dengan baik."
 }
 ```
+
+---
+
+## 5. [GET] /api/auth/branding
+
+> Mengambil data konfigurasi publik branding login (URL foto banner, judul lencana, dan subjudul/slogan). Endpoint ini dapat diakses oleh siapa saja tanpa autentikasi (publik) agar halaman login dapat merender banner visual yang dikonfigurasi.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": {
+        "login_banner_url": "http://localhost:8000/storage/branding/banners/2026/10/banner-uuid.jpg",
+        "login_banner_title": "SSO Campus",
+        "login_banner_subtitle": "Enterprise Identity Platform"
+    }
+}
+```
+
+---
+
+## 6. [POST] /api/admin/system-settings/upload-banner
+
+> Mengunggah berkas foto banner visual halaman login ke storage publik (local/Cloudflare R2 via `FileStorageService`). Aksi ini otomatis mencatat aktivitas ke audit log IAM.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Content-Type` | `multipart/form-data` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Hak Akses / Permission
+Wajib memiliki salah satu:
+- Role `superadmin`
+- Role `admin`
+- Permission `iam.settings.update`
+
+### Request Body (multipart/form-data)
+
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `banner` | File (image) | ✅ | Berkas gambar (JPG, PNG, JPEG, WEBP, GIF, SVG), maks. 5120 KB (5 MB). |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Foto banner login berhasil diunggah.",
+    "data": {
+        "path": "branding/banners/2026/10/7c4f1c9d-8b01-443b-a912-192a014a09e1.jpg",
+        "url": "http://localhost:8000/storage/branding/banners/2026/10/7c4f1c9d-8b01-443b-a912-192a014a09e1.jpg"
+    }
+}
+```
+
+### Response Error
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk mengunggah banner sistem."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "message": "Ukuran gambar banner maksimal 5MB.",
+    "errors": {
+        "banner": [
+            "Ukuran gambar banner maksimal 5MB."
+        ]
+    }
+}
+```
+
