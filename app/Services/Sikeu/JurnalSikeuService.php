@@ -54,6 +54,7 @@ class JurnalSikeuService
         'reimbursement' => 'JRN-RMB',
         'penggajian' => 'JRN-GAJI',
         'penyusutan' => 'JRN-DEP',
+        'saldo_awal' => 'JRN-OPEN',
         'manual' => 'JRN-',
     ];
 

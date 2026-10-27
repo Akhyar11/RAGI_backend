@@ -20,7 +20,7 @@
 | PUT | `/api/v1/sikeu/akuntansi/jurnal/{id}` | Edit jurnal MANUAL (kunci: otomatis, penutup, periode tutup) | ✅ Staf Keuangan |
 | DELETE | `/api/v1/sikeu/akuntansi/jurnal/{id}` | Hapus jurnal MANUAL (kunci sama) | ✅ Staf Keuangan |
 | GET | `/api/v1/sikeu/akuntansi/buku-besar` | Laporan Buku Besar per Akun (envelope `data` + `meta`) | ✅ Staf Keuangan |
-| GET | `/api/v1/sikeu/akuntansi/laporan?dari=&sampai=` | 4 laporan dari buku (neto, posted only) | ✅ Staf Keuangan |
+| GET | `/api/v1/sikeu/akuntansi/laporan?dari=&sampai=` | 4 laporan dari buku (neto, posted only) + rincian neraca & ekuitas | ✅ Staf Keuangan |
 | GET | `/api/v1/sikeu/periode` | Daftar periode akuntansi | ✅ Staf Keuangan |
 | POST | `/api/v1/sikeu/periode` | Buat periode (tolak rentang bertabrakan) | ✅ Staf Keuangan |
 | POST | `/api/v1/sikeu/periode/{id}/tutup` | Tutup buku: kunci + jurnal `JRN-TUTUP` ke 301.02 | ✅ Staf Keuangan |
@@ -58,3 +58,18 @@
 ## Basis akrual & konvensi akun
 
 > Penerbitan tagihan `Dr 103.01 / Cr 401.01 (UKT) atau 401.02 (SPMB)`; pembayaran `Dr Kas/Bank / Cr 103.01`; koreksi sebaliknya; hapus tagihan membalik penerbitan; potongan `Dr 504.01 / Cr 103.01` (+ sebaliknya saat batal); dispensasi ACC = memo `JRN-DSP` nol. Bucket laporan: pendapatan `401/402/403`, beban operasional `502.01+505.01`, pemeliharaan `502.02`, lab `502.03`, honorarium `501`, lainnya `503+504`; kas-bank `101+102`, piutang `103`, utang pajak `202`. Filter `dari/sampai` membatasi arus; posisi kumulatif.
+
+### Field laporan keuangan (`GET /akuntansi/laporan`)
+
+| Grup | Field | Keterangan |
+|---|---|---|
+| `laba_rugi` | `pendapatan.*`, `beban.*`, `surplus_defisit` | Laba rugi periode filter |
+| `neraca.aset` | `kas_bank`, `piutang_mahasiswa`, `aset_tetap`, `aset_lainnya`, `total_aset` | Seluruh akun aset (`1xx`), termasuk aset tetap dan aset lainnya |
+| `neraca.liabilitas` | `utang_pajak`, `utang_lainnya`, `total_liabilitas` | Seluruh akun liabilitas (`2xx`) |
+| `neraca.ekuitas` | `ekuitas_awal`, `laba_ditahan_301`, `surplus_tahun_berjalan`, `total_ekuitas` | Akun ekuitas `301.01`/`301.02`/`301.03` + surplus kumulatif |
+| `neraca.total_pasiva` | `total_liabilitas + total_ekuitas` | Harus sama dengan `total_aset` bila buku seimbang |
+| `arus_kas` | `arus_kas_operasional`, `saldo_akhir_kas` | Basis kas dari mutasi `101`/`102` |
+| `perubahan_ekuitas` | `saldo_awal`, `surplus_defisit`, `saldo_akhir` | Rekonsiliasi perubahan ekuitas |
+
+> Saldo awal yang diposting lewat `SaldoAwalController` akan tampil pada `neraca.ekuitas.ekuitas_awal`
+> (akun penyeimbang `301.03`) dan menambah aset/liabilitas terkait.

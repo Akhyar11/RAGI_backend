@@ -336,6 +336,7 @@ $menus = \App\Support\MenuCatalog::definitions();
                     '/sikeu/akuntansi/jurnal',
                     '/sikeu/akuntansi/buku-besar',
                     '/sikeu/akuntansi/coa',
+                    '/sikeu/akuntansi/saldo-awal',
                     '/sikeu/akuntansi/laporan',
                     '/sikeu/unit-kas',
                     '/sikeu/pengeluaran',

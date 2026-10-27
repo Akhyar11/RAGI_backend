@@ -821,21 +821,32 @@ class AkuntansiController extends Controller
                 ->get();
         }
 
-        $kasBank = $mulaiDengan($posisi->where('kelompok', 'aset'), ['101', '102'])->sum($netDebet);
-        $piutangMahasiswa = $mulaiDengan($posisi->where('kelompok', 'aset'), ['103'])->sum($netDebet);
-        $asetTetapBuku = $mulaiDengan($posisi->where('kelompok', 'aset'), ['150'])->sum($netDebet);
-        // Saldo awal aset tetap manual (belum ada jurnal mutasi aset tetap)
-        $asetTetapManual = (float) (\App\Models\SystemSetting::get('sikeu.aset_tetap', 0));
-        $asetTetap = $asetTetapBuku + $asetTetapManual;
-        $totalAset = $kasBank + $piutangMahasiswa + $asetTetap;
+        $aset = $posisi->where('kelompok', 'aset');
+        $kasBank = $mulaiDengan($aset, ['101', '102'])->sum($netDebet);
+        $piutangMahasiswa = $mulaiDengan($aset, ['103'])->sum($netDebet);
+        $asetTetap = $mulaiDengan($aset, ['150'])->sum($netDebet);
+        $totalAset = $aset->sum($netDebet);
+        $asetLainnya = $totalAset - $kasBank - $piutangMahasiswa - $asetTetap;
 
-        // 4. Liabilitas (utang pajak 202.x dari buku; tanpa jurnal pajak => 0)
-        $utangPajak = $mulaiDengan($posisi->where('kelompok', 'liabilitas'), ['202'])->sum($netKredit);
+        // 4. Liabilitas (semua akun liabilitas dari buku, termasuk saldo awal)
+        $liabilitas = $posisi->where('kelompok', 'liabilitas');
+        $utangPajak = $mulaiDengan($liabilitas, ['202'])->sum($netKredit);
+        $totalLiabilitas = $liabilitas->sum($netKredit);
+        $utangLainnya = $totalLiabilitas - $utangPajak;
 
-        // 5. Ekuitas: laba ditahan buku + plug penyeimbang
-        $labaDitahan = $mulaiDengan($posisi->where('kelompok', 'ekuitas'), ['301'])->sum($netKredit);
-        $ekuitasAwal = $totalAset - $utangPajak - $surplusDefisit;
-        $totalLiabilitasEkuitas = $utangPajak + $ekuitasAwal + $surplusDefisit;
+        // 5. Ekuitas dari buku. 301.02 = laba ditahan hasil tutup buku;
+        // sisanya (301.01/301.03/dll.) = ekuitas awal institusi.
+        $ekuitas = $posisi->where('kelompok', 'ekuitas');
+        $labaDitahan = $mulaiDengan($ekuitas, ['301.02'])->sum($netKredit);
+        $ekuitasAwal = $ekuitas->sum($netKredit) - $labaDitahan;
+
+        // Surplus kumulatif s.d. tanggal laporan (untuk neraca). Bila periode
+        // belum ditutup, pendapatan/beban berjalan belum masuk akun ekuitas.
+        $surplusKumulatif = $posisi->where('kelompok', 'pendapatan')->sum($netKredit)
+            - $posisi->where('kelompok', 'beban')->sum($netDebet);
+
+        $totalEkuitas = $ekuitasAwal + $labaDitahan + $surplusKumulatif;
+        $totalLiabilitasEkuitas = $totalLiabilitas + $totalEkuitas;
 
         // 6. Arus kas dari mutasi kas/bank buku
         $kasFlow = $mulaiDengan($arus->where('kelompok', 'aset'), ['101', '102']);
@@ -874,17 +885,19 @@ class AkuntansiController extends Controller
                         'kas_bank' => $kasBank,
                         'piutang_mahasiswa' => $piutangMahasiswa,
                         'aset_tetap' => $asetTetap,
+                        'aset_lainnya' => $asetLainnya,
                         'total_aset' => $totalAset,
                     ],
                     'liabilitas' => [
                         'utang_pajak' => $utangPajak,
-                        'total_liabilitas' => $utangPajak,
+                        'utang_lainnya' => $utangLainnya,
+                        'total_liabilitas' => $totalLiabilitas,
                     ],
                     'ekuitas' => [
                         'ekuitas_awal' => $ekuitasAwal,
                         'laba_ditahan_301' => $labaDitahan,
-                        'surplus_tahun_berjalan' => $surplusDefisit,
-                        'total_ekuitas' => $ekuitasAwal + $surplusDefisit,
+                        'surplus_tahun_berjalan' => $surplusKumulatif,
+                        'total_ekuitas' => $totalEkuitas,
                     ],
                     'total_pasiva' => $totalLiabilitasEkuitas,
                 ],
@@ -895,9 +908,9 @@ class AkuntansiController extends Controller
                     'saldo_akhir_kas' => $kasBank,
                 ],
                 'perubahan_ekuitas' => [
-                    'saldo_awal' => $ekuitasAwal,
-                    'surplus_defisit' => $surplusDefisit,
-                    'saldo_akhir' => $ekuitasAwal + $surplusDefisit,
+                    'saldo_awal' => $ekuitasAwal + $labaDitahan,
+                    'surplus_defisit' => $surplusKumulatif,
+                    'saldo_akhir' => $totalEkuitas,
                 ]
             ]
         ]);

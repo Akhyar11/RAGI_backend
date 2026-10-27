@@ -774,6 +774,13 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::delete('akuntansi/jurnal/{id}', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'destroyJurnal']);
     Route::get('akuntansi/buku-besar', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'bukuBesar']);
     Route::get('akuntansi/laporan', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'laporanKeuangan']);
+
+    // Saldo awal akuntansi (opening balance): satu URL untuk semua aksi agar
+    // CheckMenuAccess dapat memetakan menu -> role secara konsisten.
+    Route::get('akuntansi/saldo-awal', [App\Http\Controllers\Sikeu\SaldoAwalController::class, 'index']);
+    Route::put('akuntansi/saldo-awal', [App\Http\Controllers\Sikeu\SaldoAwalController::class, 'saveDraft']);
+    Route::post('akuntansi/saldo-awal', [App\Http\Controllers\Sikeu\SaldoAwalController::class, 'post']);
+    Route::delete('akuntansi/saldo-awal', [App\Http\Controllers\Sikeu\SaldoAwalController::class, 'destroy']);
     Route::get('periode', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'indexPeriode']);
     Route::post('periode', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'storePeriode']);
     Route::post('periode/{id}/tutup', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'tutupPeriode']);

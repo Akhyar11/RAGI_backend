@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands\Migration;
 
+use App\Services\Sikeu\SaldoAwalService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -291,6 +292,7 @@ class MigrateLegacySqlDump extends Command
         $this->info('Migrating Kas (' . count($rows) . ' records)...');
         $bar = $this->output->createProgressBar(count($rows));
         $unitKasId = null;
+        $kasId = null;
         if (!$this->isDryRun()) {
             try {
                 $unitKasId = DB::table('sikeu_unit_kas')->value('id');
@@ -299,6 +301,7 @@ class MigrateLegacySqlDump extends Command
                         'nama_kas' => 'Kas Utama STMIK', 'saldo_awal' => 0, 'saldo_saat_ini' => 0, 'status' => true, 'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
+                $kasId = DB::table('sikeu_akun_keuangan')->where('kode_akun', '101.01')->value('id');
             } catch (\Exception $e) {}
         }
         foreach ($rows as $row) {
@@ -307,18 +310,65 @@ class MigrateLegacySqlDump extends Command
             if ($jumlah == 0) { $this->skipped++; $bar->advance(); continue; }
             if (!$this->isDryRun()) {
                 try {
-                    $akunMapping = DB::table('sikeu_mig_akun_mapping')->where('kd_perkiraan_lama', $kdPerkiraan)->first();
-                    if (!$akunMapping) {
+                    $akunMapping = DB::table(config('sikeu.migration.akun_mapping_table'))->where('kd_perkiraan_lama', $kdPerkiraan)->first();
+                    if (!$akunMapping || !$akunMapping->akun_id_baru) {
                         $this->recordUnresolved('trkas', $noTran, $row, 'akun_not_mapped');
                         $this->failed++; $bar->advance(); continue;
                     }
+                    if (!$kasId) {
+                        $this->recordUnresolved('trkas', $noTran, $row, 'akun_kas_101_01_not_found');
+                        $this->failed++; $bar->advance(); continue;
+                    }
+                    if (DB::table('sikeu_jurnal_umum')->where('legacy_id', $noTran)->exists()) {
+                        $this->skipped++; $bar->advance(); continue;
+                    }
                     $tgl = $this->parseDate($tglTran);
-                    DB::table('sikeu_jurnal_umum')->insert([
-                        'unit_kas_id' => $unitKasId, 'kode_transaksi' => $noTran, 'tanggal_jurnal' => $tgl ?: now(),
-                        'jenis_sumber' => $jenis == 1 ? 'pemasukan' : 'pengeluaran',
-                        'total_debet' => $jenis == 1 ? $jumlah : 0, 'total_kredit' => $jenis == 2 ? $jumlah : 0,
-                        'keterangan' => 'Migrasi dari trkas lama: ' . substr(trim($row[4] ?? ''),0,200),
-                        'legacy_id' => $noTran, 'legacy_source' => 'LEGACY_STMIK_2016', 'created_at' => now(), 'updated_at' => now(),
+                    try {
+                        app(SaldoAwalService::class)->assertTanggalBolehDicatat($tgl ?: now()->toDateString());
+                    } catch (\DomainException $e) {
+                        $this->recordUnresolved('trkas', $noTran, $row, $e->getMessage());
+                        $this->skipped++;
+                        $bar->advance();
+                        continue;
+                    }
+
+                    $keterangan = 'Migrasi dari trkas lama: ' . substr(trim($row[4] ?? ''), 0, 200);
+                    $jurnalId = DB::table('sikeu_jurnal_umum')->insertGetId([
+                        'nomor_jurnal' => 'JRN-LEGACY-' . substr($noTran, 0, 80),
+                        'tanggal_jurnal' => $tgl ?: now(),
+                        'jenis_sumber' => $jenis == 1 ? 'pemasukan_hibah' : 'pengeluaran_manual',
+                        'status_posting' => 'posted',
+                        'total_debet' => $jumlah,
+                        'total_kredit' => $jumlah,
+                        'keterangan' => $keterangan,
+                        'legacy_id' => $noTran,
+                        'legacy_source' => 'LEGACY_STMIK_2016',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    $debetAkun = $jenis == 1 ? $kasId : $akunMapping->akun_id_baru;
+                    $kreditAkun = $jenis == 1 ? $akunMapping->akun_id_baru : $kasId;
+
+                    DB::table('sikeu_detail_jurnal_umum')->insert([
+                        [
+                            'jurnal_id' => $jurnalId,
+                            'akun_id' => $debetAkun,
+                            'debet' => $jumlah,
+                            'kredit' => 0,
+                            'keterangan' => $keterangan,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ],
+                        [
+                            'jurnal_id' => $jurnalId,
+                            'akun_id' => $kreditAkun,
+                            'debet' => 0,
+                            'kredit' => $jumlah,
+                            'keterangan' => $keterangan,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ],
                     ]);
                     $this->success++;
                 } catch (\Exception $e) {

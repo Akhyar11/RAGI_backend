@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\SpmbMenuCalonMahasiswaSeeder::class,
             \Database\Seeders\SpmbMenuAdminSeeder::class,
             \Database\Seeders\IAM\AdminUserSeeder::class,
+            \Database\Seeders\IAM\SuperAdminSeeder::class,
             \Database\Seeders\SpmbBerkasRequirementSeeder::class,
             \Database\Seeders\SpmbTemplateSuratSeeder::class,
             \Database\Seeders\ArsipUnitSeeder::class,
@@ -28,6 +29,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\IAM\IamApiIntegrationSeeder::class,
             \Database\Seeders\Sikeu\SikeuAkuntansiSeeder::class,
             \Database\Seeders\SiakadAturanSksSeeder::class,
+            \Database\Seeders\Sikeu\SikeuAdminSeeder::class,
         ]);
     }
 }

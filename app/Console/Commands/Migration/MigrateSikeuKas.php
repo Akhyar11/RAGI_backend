@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands\Migration;
 
+use App\Services\Sikeu\SaldoAwalService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -43,45 +45,86 @@ class MigrateSikeuKas extends Command
 
                     // Cari atau buat Unit Kas
                     $unitKasName = $item['divisi'] ?? 'Default';
-                    $unitKas = $db->table('sikeu_unit_kas')->where('nama', $unitKasName)->first();
+                    $unitKas = $db->table('sikeu_unit_kas')->where('nama_kas', $unitKasName)->first();
                     $unitKasId = $unitKas ? $unitKas->id : null;
-                    if (!$unitKasId && !$dryRun) {
+                    if (! $unitKasId && ! $dryRun) {
                         $unitKasId = $db->table('sikeu_unit_kas')->insertGetId([
-                            'nama' => $unitKasName,
+                            'nama_kas' => $unitKasName,
+                            'saldo_awal' => 0,
+                            'saldo_saat_ini' => 0,
+                            'status' => true,
                             'created_at' => now(),
+                            'updated_at' => now(),
                         ]);
                     }
 
                     $jenisSumber = ($item['jenis_kas'] ?? 1) == 2 ? 'pengeluaran_manual' : 'pemasukan_hibah';
                     $tanggal = $item['tanggal'] ?? now();
+                    $nominal = (float) ($item['nominal'] ?? 0);
 
-                    if (!$dryRun) {
+                    if (! $dryRun) {
+                        try {
+                            // Jangan masukkan jurnal legacy yang sudah tercakup
+                            // dalam saldo awal (tanggal <= cut-off).
+                            app(SaldoAwalService::class)->assertTanggalBolehDicatat(
+                                Carbon::parse($tanggal)->toDateString()
+                            );
+                        } catch (\DomainException $e) {
+                            $this->warn('[SKIP] ' . ($item['kode'] ?? $item['id'] ?? '-') . ' — ' . $e->getMessage());
+                            $bar->advance();
+                            continue;
+                        }
+
+                        $kasId = $db->table('sikeu_akun_keuangan')->where('kode_akun', '101.01')->value('id');
+                        $akunMapping = $db->table(config('sikeu.migration.akun_mapping_table'))
+                            ->where('kd_perkiraan_lama', $item['kd_perkiraan'] ?? '')
+                            ->first();
+                        $akunId = $akunMapping?->akun_id_baru;
+
+                        if (! $akunId || ! $kasId) {
+                            $this->warn('[SKIP] ' . ($item['kode'] ?? $item['id'] ?? '-') . ' — akun kas/legacy belum dipetakan.');
+                            $bar->advance();
+                            continue;
+                        }
+
                         $jurnalId = $db->table('sikeu_jurnal_umum')->insertGetId([
-                            'nomor_jurnal' => 'JU-LEGACY-' . ($item['kode'] ?? uniqid()),
+                            'nomor_jurnal' => 'JRN-LEGACY-' . ($item['kode'] ?? $item['id'] ?? uniqid()),
                             'tanggal_jurnal' => $tanggal,
                             'jenis_sumber' => $jenisSumber,
                             'keterangan' => $item['keterangan'] ?? '-',
-                            'unit_kas_id' => $unitKasId,
+                            'status_posting' => 'posted',
+                            'total_debet' => $nominal,
+                            'total_kredit' => $nominal,
                             'legacy_id' => $item['id'],
                             'created_at' => $tanggal,
                             'updated_at' => $tanggal,
                         ]);
 
-                        // dummy balanced journal entry mapping based on _mig_akun_mapping
-                        $akunMapping = $db->table('_mig_akun_mapping')->where('kd_perkiraan', $item['kd_perkiraan'] ?? '')->first();
-                        $akunId = $akunMapping ? $akunMapping->akun_id : 1; 
+                        // Debet/kredit mengikuti arus kas: pemasukan menambah kas,
+                        // pengeluaran mengurangi kas.
+                        $debetAkun = $jenisSumber === 'pemasukan_hibah' ? $kasId : $akunId;
+                        $kreditAkun = $jenisSumber === 'pemasukan_hibah' ? $akunId : $kasId;
 
-                        if ($jenisSumber === 'pemasukan_hibah') {
-                            $db->table('sikeu_detail_jurnal_umum')->insert([
-                                ['jurnal_id' => $jurnalId, 'akun_id' => 1, 'posisi' => 'debet', 'nominal' => $item['nominal'] ?? 0, 'created_at' => $tanggal],
-                                ['jurnal_id' => $jurnalId, 'akun_id' => $akunId, 'posisi' => 'kredit', 'nominal' => $item['nominal'] ?? 0, 'created_at' => $tanggal],
-                            ]);
-                        } else {
-                            $db->table('sikeu_detail_jurnal_umum')->insert([
-                                ['jurnal_id' => $jurnalId, 'akun_id' => $akunId, 'posisi' => 'debet', 'nominal' => $item['nominal'] ?? 0, 'created_at' => $tanggal],
-                                ['jurnal_id' => $jurnalId, 'akun_id' => 1, 'posisi' => 'kredit', 'nominal' => $item['nominal'] ?? 0, 'created_at' => $tanggal],
-                            ]);
-                        }
+                        $db->table('sikeu_detail_jurnal_umum')->insert([
+                            [
+                                'jurnal_id' => $jurnalId,
+                                'akun_id' => $debetAkun,
+                                'debet' => $nominal,
+                                'kredit' => 0,
+                                'keterangan' => $item['keterangan'] ?? null,
+                                'created_at' => $tanggal,
+                                'updated_at' => $tanggal,
+                            ],
+                            [
+                                'jurnal_id' => $jurnalId,
+                                'akun_id' => $kreditAkun,
+                                'debet' => 0,
+                                'kredit' => $nominal,
+                                'keterangan' => $item['keterangan'] ?? null,
+                                'created_at' => $tanggal,
+                                'updated_at' => $tanggal,
+                            ],
+                        ]);
                     }
                     $bar->advance();
                 }

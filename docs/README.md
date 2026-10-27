@@ -114,6 +114,7 @@
 | PengajuanOperasionalController | Pengajuan operasional & reimbursement (PO/RMB), LPJ defisit, pencairan & jurnal otomatis | [docs/api/SIKEU/PengajuanOperasionalController.md](api/SIKEU/PengajuanOperasionalController.md) |
 | PemasukanKampusController | Pencatatan Pemasukan Hibah, Donatur, & Kerjasama | [docs/api/SIKEU/PemasukanKampusController.md](api/SIKEU/PemasukanKampusController.md) |
 | AkuntansiController | Chart of Accounts (COA), Jurnal Umum, & Buku Besar | [docs/api/SIKEU/AkuntansiController.md](api/SIKEU/AkuntansiController.md) |
+| SaldoAwalController | Saldo awal (opening balance): draft, posting ke jurnal, pembatalan, guard cut-off & audit migrasi | [docs/api/SIKEU/SaldoAwalController.md](api/SIKEU/SaldoAwalController.md) |
 | ReferralPencairanController | Invoice payout reward referral SPMB (tab SPMB Pengajuan Operasional): approval keuangan → direktur, cairkan (pengeluaran + jurnal otomatis), tolak | [docs/api/SIKEU/ReferralPencairanController.md](api/SIKEU/ReferralPencairanController.md) |
 | PaymentGatewayConfigController | Pengaturan Provider Payment Gateway (Midtrans/Xendit) | [docs/api/SIKEU/PaymentGatewayConfigController.md](api/SIKEU/PaymentGatewayConfigController.md) |
 | SettingTarifController | Konfigurasi Tarif Biaya per Angkatan, Prodi, & Semester | [docs/api/SIKEU/SettingTarifController.md](api/SIKEU/SettingTarifController.md) |

@@ -674,7 +674,8 @@ return [
             // Visibilitas via role-menu (tanpa permission) agar tidak bocor
             // ke role yang hanya memegang permission read umum.
             ['name' => 'Chart of Accounts (COA)', 'url' => '/sikeu/akuntansi/coa', 'icon' => 'FaList', 'module' => 'sikeu', 'order_index' => 3],
-            ['name' => 'Laporan Keuangan', 'url' => '/sikeu/akuntansi/laporan', 'icon' => 'FaChartPie', 'module' => 'sikeu', 'permission_slug' => 'sikeu.akuntansi.read', 'order_index' => 4],
+            ['name' => 'Saldo Awal Akuntansi', 'url' => '/sikeu/akuntansi/saldo-awal', 'icon' => 'FaBalanceScale', 'module' => 'sikeu', 'permission_slug' => 'sikeu.akuntansi.manage', 'order_index' => 4],
+            ['name' => 'Laporan Keuangan', 'url' => '/sikeu/akuntansi/laporan', 'icon' => 'FaChartPie', 'module' => 'sikeu', 'permission_slug' => 'sikeu.akuntansi.read', 'order_index' => 5],
         ]
     ],
     [

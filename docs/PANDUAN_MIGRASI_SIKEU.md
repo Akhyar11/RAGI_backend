@@ -4,6 +4,11 @@
 > **Tanggal**: 14 September 2026  
 > **Estimasi Waktu**: 7–9 hari kerja
 
+> ⚠️ **Cut-over & saldo awal**: sebelum menjalankan migrasi jurnal kas (`trkas`) atau
+> memulai transaksi baru, baca [Panduan Migrasi & Setup Saldo Awal SIKEU](panduan-migrasi-saldo-awal-sikeu.md).
+> Saldo awal adalah jurnal paling awal di buku; jangan mencampurnya dengan impor jurnal historis
+> pada periode yang sama.
+
 ---
 
 ## Gambaran Umum

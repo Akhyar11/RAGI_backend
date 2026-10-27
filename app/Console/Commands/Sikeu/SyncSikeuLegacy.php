@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands\Sikeu;
 
+use App\Services\Sikeu\SaldoAwalService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -367,7 +368,8 @@ class SyncSikeuLegacy extends Command
         if ($limit > 0) $q->limit($limit);
         $rows = $q->get();
         $bar = $this->output->createProgressBar($rows->count());
-        $unitKasId = !$dryRun ? (DB::table('sikeu_unit_kas')->value('id') ?: DB::table('sikeu_unit_kas')->insertGetId(['nama_kas'=>'Kas Utama STMIK','saldo_awal'=>0,'saldo_saat_ini'=>0,'status'=>true,'created_at'=>now(),'updated_at'=>now()])) : null;
+        $kasId = ! $dryRun ? DB::table('sikeu_akun_keuangan')->where('kode_akun', '101.01')->value('id') : null;
+
         foreach ($rows as $r) {
             try {
                 $noTran = trim($r->no_tran ?? ''); $jenis = (int)($r->jenis ?? 0); $jml = (float)($r->jumlah ?? 0); $kd = trim($r->kd_perkiraan ?? '');
@@ -375,14 +377,54 @@ class SyncSikeuLegacy extends Command
                 if (!$dryRun) {
                     $map = DB::table('_mig_akun_mapping')->where('kd_perkiraan_lama',$kd)->first();
                     if (!$map || !$map->akun_id_baru) { $this->recordUnresolved('trkas',$noTran,(array)$r,'akun_not_mapped_or_unassigned'); $this->failed++; $bar->advance(); continue; }
-                    if (DB::table('sikeu_jurnal_umum')->where('kode_transaksi',$noTran)->exists()) { $this->skipped++; $bar->advance(); continue; }
+                    if (!$kasId) { $this->recordUnresolved('trkas',$noTran,(array)$r,'akun_kas_101_01_not_found'); $this->failed++; $bar->advance(); continue; }
+                    if (DB::table('sikeu_jurnal_umum')->where('legacy_id',$noTran)->exists()) { $this->skipped++; $bar->advance(); continue; }
                     $tgl = $this->parseDate($r->tgl_tran);
-                    DB::table('sikeu_jurnal_umum')->insert([
-                        'unit_kas_id'=>$unitKasId,'kode_transaksi'=>$noTran,'tanggal_jurnal'=>$tgl?:now(),
-                        'jenis_sumber'=>$jenis==1?'pemasukan':'pengeluaran',
-                        'total_debet'=>$jenis==1?$jml:0,'total_kredit'=>$jenis==2?$jml:0,
-                        'keterangan'=>substr('Migrasi trkas: '.trim($r->ket??''),0,500),
-                        'legacy_id'=>$noTran,'legacy_source'=>'LEGACY_STMIK_2016','created_at'=>now(),'updated_at'=>now()
+                    try {
+                        app(SaldoAwalService::class)->assertTanggalBolehDicatat($tgl ?: now()->toDateString());
+                    } catch (\DomainException $e) {
+                        $this->recordUnresolved('trkas', $noTran, (array) $r, $e->getMessage());
+                        $this->skipped++;
+                        $bar->advance();
+                        continue;
+                    }
+
+                    $jurnalId = DB::table('sikeu_jurnal_umum')->insertGetId([
+                        'nomor_jurnal' => 'JRN-LEGACY-' . substr($noTran, 0, 80),
+                        'tanggal_jurnal' => $tgl ?: now(),
+                        'jenis_sumber' => $jenis == 1 ? 'pemasukan_hibah' : 'pengeluaran_manual',
+                        'status_posting' => 'posted',
+                        'total_debet' => $jml,
+                        'total_kredit' => $jml,
+                        'keterangan' => substr('Migrasi trkas: ' . trim($r->ket ?? ''), 0, 500),
+                        'legacy_id' => $noTran,
+                        'legacy_source' => 'LEGACY_STMIK_2016',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    $debetAkun = $jenis == 1 ? $kasId : $map->akun_id_baru;
+                    $kreditAkun = $jenis == 1 ? $map->akun_id_baru : $kasId;
+
+                    DB::table('sikeu_detail_jurnal_umum')->insert([
+                        [
+                            'jurnal_id' => $jurnalId,
+                            'akun_id' => $debetAkun,
+                            'debet' => $jml,
+                            'kredit' => 0,
+                            'keterangan' => substr('Migrasi trkas: ' . trim($r->ket ?? ''), 0, 500),
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ],
+                        [
+                            'jurnal_id' => $jurnalId,
+                            'akun_id' => $kreditAkun,
+                            'debet' => 0,
+                            'kredit' => $jml,
+                            'keterangan' => substr('Migrasi trkas: ' . trim($r->ket ?? ''), 0, 500),
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ],
                     ]);
                 }
                 $this->success++;
