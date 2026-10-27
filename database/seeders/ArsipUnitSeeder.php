@@ -23,15 +23,13 @@ class ArsipUnitSeeder extends Seeder
         ];
 
         foreach ($units as $unit) {
-            KlasifikasiSurat::updateOrCreate(
-                ['kode' => $unit['kode']],
-                [
-                    'nama' => $unit['nama'],
-                    'kategori' => 'unit',
-                    'keterangan' => 'Kode unit pengolah Arsip',
-                    'is_active' => true,
-                ]
-            );
+            $record = KlasifikasiSurat::withTrashed()->firstOrNew(['kode' => $unit['kode']]);
+            $record->nama = $unit['nama'];
+            $record->kategori = 'unit';
+            $record->keterangan = 'Kode unit pengolah Arsip';
+            $record->is_active = true;
+            $record->deleted_at = null;
+            $record->save();
         }
     }
 }
