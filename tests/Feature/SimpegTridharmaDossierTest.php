@@ -11,6 +11,9 @@ use App\Models\Siakad\Dosen;
 use App\Models\Siakad\DosenPengampu;
 use App\Models\Siakad\Kelas;
 use App\Models\Siakad\MataKuliah;
+use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\TugasAkhir;
+use App\Models\Siakad\Pkl;
 use App\Models\Sippm\PeriodeHibah;
 use App\Models\Sippm\ProposalKegiatan;
 use App\Models\Sippm\PublikasiIlmiah;
@@ -134,6 +137,39 @@ class SimpegTridharmaDossierTest extends TestCase
             'peran' => 'pengampu_utama',
         ]);
 
+        $mhs = Mahasiswa::create([
+            'nim' => '230101001',
+            'nama_lengkap' => 'Siti Aminah',
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'dosen_wali_id' => $this->dosen->id,
+            'angkatan' => 2023,
+            'status' => 'aktif',
+        ]);
+
+        TugasAkhir::create([
+            'mahasiswa_id' => $mhs->id,
+            'tahun_akademik_id' => $ta->id,
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'judul_utama' => 'Rancang Bangun Sistem AI',
+            'dosen_pembimbing_1_id' => $this->dosen->id,
+            'tahap' => 'sidang_skripsi',
+            'status' => 'siap_sidang',
+            'nilai_huruf_akhir' => 'A',
+        ]);
+
+        Pkl::create([
+            'mahasiswa_id' => $mhs->id,
+            'tahun_akademik_id' => $ta->id,
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'dosen_pembimbing_id' => $this->dosen->id,
+            'jenis' => 'magang_industri',
+            'instansi_nama' => 'PT Telkom Indonesia',
+            'judul_laporan' => 'Laporan Magang Web Service',
+            'status' => 'sedang_berjalan',
+            'tanggal_mulai' => '2026-02-01',
+            'tanggal_selesai' => '2026-06-30',
+        ]);
+
         // 2. Mock Penelitian SIPPM
         $periode = PeriodeHibah::create([
             'tahun_anggaran' => '2026',
@@ -196,11 +232,17 @@ class SimpegTridharmaDossierTest extends TestCase
             ->assertJsonPath('data.pegawai.nidn', '0412058801')
             ->assertJsonPath('data.metrics.total_kelas_ajar', 1)
             ->assertJsonPath('data.metrics.total_sks_ajar', 3)
+            ->assertJsonPath('data.metrics.total_mhs_wali', 1)
+            ->assertJsonPath('data.metrics.total_bimbingan_ta', 1)
+            ->assertJsonPath('data.metrics.total_bimbingan_pkl', 1)
             ->assertJsonPath('data.metrics.total_penelitian', 1)
             ->assertJsonPath('data.metrics.total_publikasi', 1)
             ->assertJsonPath('data.metrics.total_publikasi_scopus', 1)
             ->assertJsonPath('data.metrics.rerata_nilai_skp', 92.5)
             ->assertJsonPath('data.pengajaran.kelas.0.kode_mk', 'IF301')
+            ->assertJsonPath('data.pengajaran.mahasiswa_wali.0.nama_lengkap', 'Siti Aminah')
+            ->assertJsonPath('data.pengajaran.bimbingan_ta.0.judul', 'Rancang Bangun Sistem AI')
+            ->assertJsonPath('data.pengajaran.bimbingan_pkl.0.instansi', 'PT Telkom Indonesia')
             ->assertJsonPath('data.penelitian.hibah_ketua.0.judul', 'Penerapan AI untuk Rekomendasi Akademik');
     }
 

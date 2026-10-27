@@ -30,6 +30,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\Sikeu\SikeuAkuntansiSeeder::class,
             \Database\Seeders\SiakadAturanSksSeeder::class,
             \Database\Seeders\Sikeu\SikeuAdminSeeder::class,
+            \Database\Seeders\SiakadSamplePerkuliahanSeeder::class,
         ]);
     }
 }

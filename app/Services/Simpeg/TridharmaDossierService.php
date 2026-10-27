@@ -11,6 +11,8 @@ use App\Models\Simpeg\RiwayatPelatihan;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\DosenPengampu;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\TugasAkhir;
+use App\Models\Siakad\Pkl;
 use App\Models\Sippm\ProposalKegiatan;
 use App\Models\Sippm\AnggotaKegiatan;
 use App\Models\Sippm\PublikasiIlmiah;
@@ -33,6 +35,8 @@ class TridharmaDossierService
         $dosen = $pegawai->dosen;
         $pengajaran = [];
         $mahasiswaWali = [];
+        $bimbinganTa = [];
+        $bimbinganPkl = [];
         $totalSksAjar = 0;
 
         if ($dosen) {
@@ -58,7 +62,7 @@ class TridharmaDossierService
                     'kode_kelas' => $p->kelas?->kode_kelas ?? '-',
                     'nama_kelas' => $p->kelas?->nama_kelas ?? '-',
                     'tahun_akademik' => $ta?->nama ?? ($ta?->nama_tahun ?? '-'),
-                    'semester' => $ta?->semester ?? '-',
+                    'semester' => $ta?->semester ?? (str_contains(strtolower($ta?->nama ?? ''), 'ganjil') ? 'ganjil' : (str_contains(strtolower($ta?->nama ?? ''), 'genap') ? 'genap' : '-')),
                     'peran' => $p->peran ?? 'pengampu_utama',
                 ];
             }
@@ -73,10 +77,59 @@ class TridharmaDossierService
                         'nama_lengkap' => $m->nama_lengkap,
                         'program_studi' => $m->programStudi?->nama,
                         'angkatan' => $m->angkatan,
-                        'status' => $m->status_mahasiswa ?? 'aktif',
+                        'status' => $m->status ?? 'aktif',
                     ];
                 })
                 ->toArray();
+
+            $bimbinganTa = TugasAkhir::with([
+                'mahasiswa.programStudi',
+                'tahunAkademik',
+            ])
+            ->where(function ($q) use ($dosen) {
+                $q->where('dosen_pembimbing_1_id', $dosen->id)
+                  ->orWhere('dosen_pembimbing_2_id', $dosen->id);
+            })
+            ->latest()
+            ->get()
+            ->map(function ($ta) use ($dosen) {
+                $peran = $ta->dosen_pembimbing_1_id === $dosen->id ? 'Pembimbing Utama (1)' : 'Pembimbing Pendamping (2)';
+                return [
+                    'id' => $ta->id,
+                    'nim' => $ta->mahasiswa?->nim ?? '-',
+                    'nama_mahasiswa' => $ta->mahasiswa?->nama_lengkap ?? '-',
+                    'program_studi' => $ta->mahasiswa?->programStudi?->nama ?? $ta->programStudi?->nama ?? '-',
+                    'judul' => $ta->judul_utama,
+                    'tahun_akademik' => $ta->tahunAkademik?->nama ?? ($ta->tahunAkademik?->nama_tahun ?? '-'),
+                    'peran' => $peran,
+                    'tahap' => $ta->tahap ?? 'proposal',
+                    'status' => $ta->status ?? 'diajukan',
+                    'nilai_huruf' => $ta->nilai_huruf_akhir,
+                ];
+            })
+            ->toArray();
+
+            $bimbinganPkl = Pkl::with([
+                'mahasiswa.programStudi',
+                'tahunAkademik',
+            ])
+            ->where('dosen_pembimbing_id', $dosen->id)
+            ->latest()
+            ->get()
+            ->map(function ($pkl) {
+                return [
+                    'id' => $pkl->id,
+                    'nim' => $pkl->mahasiswa?->nim ?? '-',
+                    'nama_mahasiswa' => $pkl->mahasiswa?->nama_lengkap ?? '-',
+                    'program_studi' => $pkl->mahasiswa?->programStudi?->nama ?? $pkl->programStudi?->nama ?? '-',
+                    'instansi' => $pkl->instansi_nama ?? '-',
+                    'judul_laporan' => $pkl->judul_laporan ?? '-',
+                    'tahun_akademik' => $pkl->tahunAkademik?->nama ?? ($pkl->tahunAkademik?->nama_tahun ?? '-'),
+                    'status' => $pkl->status ?? 'sedang_berjalan',
+                    'jenis' => $pkl->jenis ?? 'pkl_reguler',
+                ];
+            })
+            ->toArray();
         }
 
         // 2. Penelitian (SIPPM)
@@ -179,6 +232,8 @@ class TridharmaDossierService
                 'total_kelas_ajar' => count($pengajaran),
                 'total_sks_ajar' => (int) $totalSksAjar,
                 'total_mhs_wali' => count($mahasiswaWali),
+                'total_bimbingan_ta' => count($bimbinganTa),
+                'total_bimbingan_pkl' => count($bimbinganPkl),
                 'total_penelitian' => $penelitianKetua->count() + $penelitianAnggota->count(),
                 'total_dana_penelitian' => (float) $totalDanaPenelitian,
                 'total_pengabdian' => $pengabdianKetua->count() + $pengabdianAnggota->count(),
@@ -197,6 +252,8 @@ class TridharmaDossierService
             'pengajaran' => [
                 'kelas' => $pengajaran,
                 'mahasiswa_wali' => $mahasiswaWali,
+                'bimbingan_ta' => $bimbinganTa,
+                'bimbingan_pkl' => $bimbinganPkl,
             ],
             'penelitian' => [
                 'hibah_ketua' => $penelitianKetua,

@@ -47,6 +47,8 @@ Mengambil portofolio akademik lengkap dosen beserta metrik ringkasan untuk keper
       "total_kelas_ajar": 12,
       "total_sks_ajar": 36,
       "total_mhs_wali": 45,
+      "total_bimbingan_ta": 3,
+      "total_bimbingan_pkl": 4,
       "total_penelitian": 6,
       "total_dana_penelitian": 150000000.00,
       "total_pengabdian": 4,
@@ -85,6 +87,33 @@ Mengambil portofolio akademik lengkap dosen beserta metrik ringkasan untuk keper
           "program_studi": "Teknik Informatika",
           "angkatan": "2023",
           "status": "aktif"
+        }
+      ],
+      "bimbingan_ta": [
+        {
+          "id": 1,
+          "nim": "220101045",
+          "nama_mahasiswa": "Budi Prasetyo",
+          "program_studi": "Teknik Informatika",
+          "judul": "Rancang Bangun Sistem Informasi Akademik Berbasis Cloud",
+          "tahun_akademik": "2025/2026 Ganjil",
+          "peran": "Pembimbing Utama (1)",
+          "tahap": "sidang_skripsi",
+          "status": "siap_sidang",
+          "nilai_huruf": "A"
+        }
+      ],
+      "bimbingan_pkl": [
+        {
+          "id": 1,
+          "nim": "230101012",
+          "nama_mahasiswa": "Ahmad Rian",
+          "program_studi": "Teknik Informatika",
+          "instansi": "PT Telkom Indonesia",
+          "judul_laporan": "Implementasi Microservices Arsitektur pada Layanan Kampus",
+          "tahun_akademik": "2025/2026 Ganjil",
+          "status": "sedang_berjalan",
+          "jenis": "magang_industri"
         }
       ]
     },
