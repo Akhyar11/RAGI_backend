@@ -33,11 +33,11 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `search` | string | ❌ | — | Cari nama pegawai, NIP, NIDN, catatan reviewer |
+| `search` | string | ❌ | — | Cari nomor SK, nama pegawai, NIP, NIDN, catatan reviewer |
 | `status_usulan` | string | ❌ | — | Filter status: `disetujui`, `submitted`, `ditolak` |
 | `jafung_tujuan_id` | integer | ❌ | — | Filter ID jabatan fungsional tujuan |
 | `pegawai_id` | integer | ❌ | — | Filter ID pegawai tertentu |
-| `sort_by` | string | ❌ | `created_at` | Kolom urutan (`created_at`, `angka_kredit_usulan`, `status_usulan`, `id`) |
+| `sort_by` | string | ❌ | `created_at` | Kolom urutan (`created_at`, `tanggal_mulai_berlaku`, `nomor_sk`, `angka_kredit_usulan`, `status_usulan`, `id`) |
 | `sort_order` | string | ❌ | `desc` | Arah urutan: `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
 | `page` | integer | ❌ | `1` | Halaman yang diminta |
@@ -54,9 +54,11 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
             "pegawai_id": 10,
             "jafung_asal_id": 2,
             "jafung_tujuan_id": 3,
+            "nomor_sk": "SK LLDIKTI No. 123/LL6/AK/2026",
+            "tanggal_mulai_berlaku": "2026-01-15",
             "angka_kredit_usulan": 300,
             "status_usulan": "disetujui",
-            "catatan_reviewer": "SK LLDIKTI No. 123/LL6/AK/2026",
+            "catatan_reviewer": "Penetapan Lektor",
             "file_sk_hasil": "simpeg/usulan_jafung/sk_dosen.pdf",
             "file_sk_hasil_url": "https://api.domain.ac.id/api/files/view?path=simpeg%2Fusulan_jafung%2Fsk_dosen.pdf&signature=...",
             "created_at": "2026-10-29T08:00:00.000000Z",
@@ -211,11 +213,13 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
 ```json
 {
     "pegawai_id": 10,
-    "jafung_asal_id": 2,
     "jafung_tujuan_id": 3,
+    "nomor_sk": "SK LLDIKTI No. 123/LL6/AK/2026",
+    "tanggal_mulai_berlaku": "2026-01-15",
+    "jafung_asal_id": 2,
     "angka_kredit_usulan": 300,
-    "status_usulan": "submitted",
-    "catatan_reviewer": "Kelengkapan berkas jurnal nasional terakreditasi Sinta 2",
+    "status_usulan": "disetujui",
+    "catatan_reviewer": "Penetapan jenjang Lektor",
     "file_sk_hasil": "(binary PDF file)"
 }
 ```
@@ -224,11 +228,13 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
 |---|---|---|---|
 | `pegawai_id` | integer | ✅ | Exists di `pegawai,id` |
 | `jafung_tujuan_id` | integer | ✅ | Exists di `master_jabatan_fungsional,id` |
+| `nomor_sk` | string | ✅ | Max: 150 |
+| `tanggal_mulai_berlaku` | date | ✅ | Format: `YYYY-MM-DD` |
 | `jafung_asal_id` | integer | ❌ | Exists di `master_jabatan_fungsional,id` |
 | `angka_kredit_usulan` | numeric | ❌ | Min: 0 |
-| `status_usulan` | string | ❌ | In: `draft,submitted,in_review,disetujui,ditolak` |
+| `status_usulan` | string | ❌ | In: `disetujui,submitted,ditolak` |
 | `catatan_reviewer` | string | ❌ | Teks catatan |
-| `file_sk_hasil` | file | ❌ | PDF, max 5MB |
+| `file_sk_hasil` | file | ❌ | PDF, max 10MB |
 
 ### Response Sukses (201 Created)
 
@@ -241,10 +247,12 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
         "pegawai_id": 10,
         "jafung_asal_id": 2,
         "jafung_tujuan_id": 3,
+        "nomor_sk": "SK LLDIKTI No. 123/LL6/AK/2026",
+        "tanggal_mulai_berlaku": "2026-01-15",
         "angka_kredit_usulan": 300,
         "status_usulan": "disetujui",
-        "created_at": "2026-09-19T08:10:00.000000Z",
-        "updated_at": "2026-09-19T08:10:00.000000Z"
+        "created_at": "2026-10-29T08:10:00.000000Z",
+        "updated_at": "2026-10-29T08:10:00.000000Z"
     }
 }
 ```

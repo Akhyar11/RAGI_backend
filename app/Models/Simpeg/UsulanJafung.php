@@ -16,10 +16,17 @@ class UsulanJafung extends Model
         'pegawai_id',
         'jafung_asal_id',
         'jafung_tujuan_id',
+        'nomor_sk',
+        'tanggal_mulai_berlaku',
         'angka_kredit_usulan',
         'status_usulan',
         'file_sk_hasil',
         'catatan_reviewer',
+    ];
+
+    protected $casts = [
+        'tanggal_mulai_berlaku' => 'date:Y-m-d',
+        'angka_kredit_usulan' => 'integer',
     ];
 
     protected $appends = [

@@ -53,7 +53,8 @@ class UsulanJafungController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('catatan_reviewer', 'like', "%{$search}%")
+                $q->where('nomor_sk', 'like', "%{$search}%")
+                    ->orWhere('catatan_reviewer', 'like', "%{$search}%")
                     ->orWhereHas('pegawai', function ($qp) use ($search) {
                         $qp->where('nama_lengkap', 'like', "%{$search}%")
                             ->orWhere('nip', 'like', "%{$search}%")
@@ -77,7 +78,7 @@ class UsulanJafungController extends Controller
         }
 
         // Sorting
-        $allowedSort = ['created_at', 'angka_kredit_usulan', 'status_usulan', 'id'];
+        $allowedSort = ['created_at', 'tanggal_mulai_berlaku', 'nomor_sk', 'angka_kredit_usulan', 'status_usulan', 'id'];
         $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'created_at';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);

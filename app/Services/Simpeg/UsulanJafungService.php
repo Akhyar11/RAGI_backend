@@ -33,6 +33,11 @@ class UsulanJafungService
                 }
             }
 
+            if (!isset($data['angka_kredit_usulan']) || $data['angka_kredit_usulan'] === null) {
+                $jafung = \App\Models\Simpeg\JabatanFungsionalAkademik::find($data['jafung_tujuan_id']);
+                $data['angka_kredit_usulan'] = $jafung?->angka_kredit_min ?? 0;
+            }
+
             // Penetapan SK yang diunggah otomatis berstatus disetujui jika tidak ditentukan lain
             if (empty($data['status_usulan'])) {
                 $data['status_usulan'] = 'disetujui';
