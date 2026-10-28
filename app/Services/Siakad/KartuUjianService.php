@@ -22,9 +22,8 @@ class KartuUjianService
         if (!$hasUnpaidBills) {
             return;
         }
-        $hasApprovedDispensasi = DispensasiTagihan::where('mahasiswa_id', $mhs->id)
-            ->where('status', 'approved')
-            ->where('allow_krs', true)
+        $hasApprovedDispensasi = DispensasiTagihan::berlakuUntukKrs()
+            ->where('mahasiswa_id', $mhs->id)
             ->whereHas('tagihan', fn($q) => $q->whereIn('status', ['belum_bayar', 'sebagian', 'dispensasi']))
             ->exists();
         if (!$hasApprovedDispensasi) {

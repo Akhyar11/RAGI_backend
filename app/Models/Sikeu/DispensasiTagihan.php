@@ -2,6 +2,7 @@
 
 namespace App\Models\Sikeu;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -86,6 +87,29 @@ class DispensasiTagihan extends Model
      * Bangun hash tanda tangan digital surat dispensasi.
      * Dipakai saat approval, cetak bukti, dan verifikasi publik QR.
      */
+    /**
+     * Hanya dispensasi yang disetujui dan masih dalam masa berlaku.
+     */
+    public function scopeBerlaku(Builder $query, $tanggal = null): Builder
+    {
+        $tanggal = $tanggal ? \Illuminate\Support\Carbon::parse($tanggal)->toDateString() : now()->toDateString();
+
+        return $query->where('status', 'approved')
+            ->whereDate('jatuh_tempo_baru', '>=', $tanggal);
+    }
+
+    /**
+     * Hanya dispensasi yang disetujui dan masih dalam masa berlaku dengan izin KRS/ujian.
+     */
+    public function scopeBerlakuUntukKrs(Builder $query, $tanggal = null): Builder
+    {
+        $tanggal = $tanggal ? \Illuminate\Support\Carbon::parse($tanggal)->toDateString() : now()->toDateString();
+
+        return $query->where('status', 'approved')
+            ->where('allow_krs', true)
+            ->whereDate('jatuh_tempo_baru', '>=', $tanggal);
+    }
+
     public static function makeSignatureHash(int $id, $mahasiswaId, $jatuhTempoBaru): string
     {
         if ($jatuhTempoBaru instanceof \DateTimeInterface) {

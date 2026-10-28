@@ -114,9 +114,8 @@ class SikeuCompatService
         $tagihans = $tagihanQ->get();
         $sisa = max(0, (float) $tagihans->sum(fn ($t) => (float) $t->total_tagihan + (float) $t->total_denda - (float) $t->total_potongan - (float) $t->total_bayar));
 
-        $bypass = DispensasiTagihan::where('mahasiswa_id', $mahasiswaId)
-            ->where('status', 'approved')
-            ->where('allow_krs', true)
+        $bypass = DispensasiTagihan::berlakuUntukKrs()
+            ->where('mahasiswa_id', $mahasiswaId)
             ->exists();
 
         $eligible = $sisa <= 0 || $bypass;

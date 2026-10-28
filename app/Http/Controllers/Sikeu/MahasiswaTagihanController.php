@@ -175,7 +175,18 @@ class MahasiswaTagihanController extends Controller
                         'nominal_bersih' => (float)$d->nominal_bersih,
                     ];
                 }),
-                'dispensasi_aktif' => $t->dispensasis->where('status', 'approved')->first(),
+                'dispensasi_aktif' => $t->dispensasis
+                    ->filter(function ($d) {
+                        if ($d->status !== 'approved') {
+                            return false;
+                        }
+                        if (!$d->jatuh_tempo_baru) {
+                            return true;
+                        }
+
+                        return $d->jatuh_tempo_baru->toDateString() >= now()->toDateString();
+                    })
+                    ->first(),
             ];
         });
 
