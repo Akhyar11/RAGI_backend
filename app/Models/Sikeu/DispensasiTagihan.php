@@ -22,6 +22,8 @@ class DispensasiTagihan extends Model
         'alasan',
         'allow_krs',
         'dokumen_pendukung',
+        'nomor_surat_arsip_id',
+        'nomor_surat_arsip',
         'status',
         'diajukan_oleh',
         'disetujui_oleh',

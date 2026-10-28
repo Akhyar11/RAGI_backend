@@ -29,6 +29,8 @@ class PotonganMahasiswa extends Model
         'berlaku_mulai',
         'berlaku_sampai',
         'nomor_sk',
+        'nomor_surat_arsip_id',
+        'nomor_surat_arsip',
         'keterangan',
         'status',
         'diinput_oleh',

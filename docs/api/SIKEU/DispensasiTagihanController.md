@@ -95,7 +95,9 @@
     "jatuh_tempo_baru": "2026-10-15",
     "jumlah_cicilan": 1,
     "nominal_per_cicilan": 3000000,
-    "alasan": "Menunggu bantuan dana orang tua akhir bulan"
+    "alasan": "Menunggu bantuan dana orang tua akhir bulan",
+    "nomor_surat_arsip_id": 123,
+    "nomor_surat_arsip": "B/123/UNIV/X/2026"
 }
 ```
 

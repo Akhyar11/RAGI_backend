@@ -129,12 +129,23 @@ class SettingTarifController extends Controller
         }
 
         // Check unique combination
-        $exists = SettingTarif::where('master_biaya_id', $request->master_biaya_id)
+        $query = SettingTarif::where('master_biaya_id', $request->master_biaya_id)
             ->where('tahun_angkatan', $request->tahun_angkatan)
-            ->where('program_studi_id', $request->program_studi_id)
-            ->where('semester', $request->semester)
-            ->where('jalur_kelas', $request->jalur_kelas)
-            ->exists();
+            ->where('jalur_kelas', $request->jalur_kelas);
+
+        if ($request->has('program_studi_id') && $request->program_studi_id !== null) {
+            $query->where('program_studi_id', $request->program_studi_id);
+        } else {
+            $query->whereNull('program_studi_id');
+        }
+
+        if ($request->has('semester') && $request->semester !== null) {
+            $query->where('semester', $request->semester);
+        } else {
+            $query->whereNull('semester');
+        }
+
+        $exists = $query->exists();
 
         if ($exists) {
             return response()->json([
@@ -189,10 +200,54 @@ class SettingTarifController extends Controller
             ], 422);
         }
 
-        $setting->update($request->only([
+        $data = $request->only([
             'master_biaya_id', 'tahun_angkatan', 'program_studi_id',
             'semester', 'jalur_kelas', 'nominal', 'is_active', 'keterangan',
-        ]));
+        ]);
+
+        // Normalize null for uniqueness fields
+        if (array_key_exists('program_studi_id', $data) && $data['program_studi_id'] === '') {
+            $data['program_studi_id'] = null;
+        }
+        if (array_key_exists('semester', $data) && $data['semester'] === '') {
+            $data['semester'] = null;
+        }
+        if (array_key_exists('is_active', $data)) {
+            $data['is_active'] = filter_var($data['is_active'], FILTER_VALIDATE_BOOLEAN);
+        }
+
+        // Check unique combination excluding current record
+        $masterBiayaId = $data['master_biaya_id'] ?? $setting->master_biaya_id;
+        $tahunAngkatan = $data['tahun_angkatan'] ?? $setting->tahun_angkatan;
+        $programStudiId = array_key_exists('program_studi_id', $data) ? $data['program_studi_id'] : $setting->program_studi_id;
+        $semester = array_key_exists('semester', $data) ? $data['semester'] : $setting->semester;
+        $jalurKelas = $data['jalur_kelas'] ?? $setting->jalur_kelas;
+
+        $query = SettingTarif::where('master_biaya_id', $masterBiayaId)
+            ->where('tahun_angkatan', $tahunAngkatan)
+            ->where('jalur_kelas', $jalurKelas)
+            ->where('id', '!=', $setting->id);
+
+        if ($programStudiId === null || $programStudiId === '') {
+            $query->whereNull('program_studi_id');
+        } else {
+            $query->where('program_studi_id', $programStudiId);
+        }
+
+        if ($semester === null || $semester === '') {
+            $query->whereNull('semester');
+        } else {
+            $query->where('semester', $semester);
+        }
+
+        if ($query->exists()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Kombinasi tarif (Jenis Biaya + Angkatan + Prodi + Semester + Jalur Kelas) sudah ada.',
+            ], 422);
+        }
+
+        $setting->update($data);
 
         return response()->json([
             'status' => 'success',

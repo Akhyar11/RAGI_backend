@@ -177,7 +177,12 @@ class DispensasiTagihanController extends Controller
             'alasan' => 'required|string',
             'allow_krs' => 'nullable|boolean',
             'dokumen_pendukung' => 'nullable|string',
+            'nomor_surat_arsip_id' => 'required|integer|exists:core_arsip_nomor_surat,id',
+            'nomor_surat_arsip' => 'nullable|string|max:150',
             'selected_detail_ids' => 'nullable|array',
+        ], [
+            'nomor_surat_arsip_id.required' => 'Nomor surat dari Modul Arsip wajib diisi untuk permohonan dispensasi.',
+            'nomor_surat_arsip_id.exists' => 'Nomor surat arsip yang dipilih tidak valid atau tidak ditemukan.',
         ]);
 
         if ($validator->fails()) {
@@ -198,6 +203,17 @@ class DispensasiTagihanController extends Controller
             })
             ->exists();
 
+        $nomorSuratArsip = null;
+        if ($request->filled('nomor_surat_arsip_id')) {
+            $nomorSuratArsip = \App\Models\Arsip\NomorSurat::find($request->nomor_surat_arsip_id);
+            if (!$nomorSuratArsip) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Nomor surat arsip yang dipilih tidak valid.',
+                ], 422);
+            }
+        }
+
         $dispensasi = DispensasiTagihan::create([
             'tagihan_id' => $tagihan->id,
             'mahasiswa_id' => $tagihan->mahasiswa_id,
@@ -208,6 +224,8 @@ class DispensasiTagihanController extends Controller
             'alasan' => $request->alasan,
             'allow_krs' => $request->has('allow_krs') ? (bool)$request->allow_krs : true,
             'dokumen_pendukung' => $request->dokumen_pendukung,
+            'nomor_surat_arsip_id' => $request->nomor_surat_arsip_id,
+            'nomor_surat_arsip' => $request->nomor_surat_arsip ?? ($nomorSuratArsip?->nomor_surat),
             'status' => 'pending',
             'diajukan_oleh' => auth()->id() ?? $tagihan->mahasiswa_id,
         ]);

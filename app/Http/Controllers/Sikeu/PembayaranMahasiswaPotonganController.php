@@ -201,7 +201,9 @@ class PembayaranMahasiswaPotonganController extends Controller
             'is_calon_mahasiswa' => 'nullable|boolean',
             'tipe_referensi' => 'nullable|string|in:mahasiswa,calon_mahasiswa',
             'nama_potongan' => 'required|string|max:150',
-            'nomor_sk' => 'required|string|max:100',
+            'nomor_sk' => 'nullable|string|max:100',
+            'nomor_surat_arsip_id' => 'required|integer|exists:core_arsip_nomor_surat,id',
+            'nomor_surat_arsip' => 'nullable|string|max:150',
             'keterangan' => 'nullable|string|max:500',
             'status' => 'nullable|in:aktif,nonaktif',
             'target_bills' => 'required|array|min:1',
@@ -209,7 +211,8 @@ class PembayaranMahasiswaPotonganController extends Controller
             'target_bills.*.nominal_potongan' => 'required|numeric|min:1',
             'target_bills.*.mode_potongan' => 'nullable|string|in:seluruhnya,nominal',
         ], [
-            'nomor_sk.required' => 'Nomor SK / Dasar Keputusan wajib diisi sebagai bukti persetujuan pemberian potongan.',
+            'nomor_surat_arsip_id.required' => 'Nomor surat dari Modul Arsip wajib diisi untuk potongan wajib.',
+            'nomor_surat_arsip_id.exists' => 'Nomor surat arsip yang dipilih tidak valid atau tidak ditemukan.',
         ]);
 
         if ($validator->fails()) {
@@ -318,6 +321,15 @@ class PembayaranMahasiswaPotonganController extends Controller
             DB::beginTransaction();
 
             // 1. Simpan Master Record Potongan Mahasiswa
+            $nomorSuratArsipPotong = null;
+            if ($request->filled('nomor_surat_arsip_id')) {
+                $nomorSuratArsipPotong = \App\Models\Arsip\NomorSurat::find($request->nomor_surat_arsip_id);
+                if (!$nomorSuratArsipPotong) {
+                    DB::rollBack();
+                    return response()->json(['status' => 'error', 'message' => 'Nomor surat arsip yang dipilih tidak valid.'], 422);
+                }
+            }
+
             $potongan = PotonganMahasiswa::create([
                 'mahasiswa_id' => $isCalon ? null : $mhsId,
                 'calon_mahasiswa_id' => $isCalon ? $calonId : null,
@@ -328,6 +340,8 @@ class PembayaranMahasiswaPotonganController extends Controller
                 'tipe_potongan' => 'nominal',
                 'nilai_potongan' => $totalNominalSemuaPotongan,
                 'nomor_sk' => $request->nomor_sk,
+                'nomor_surat_arsip_id' => $request->nomor_surat_arsip_id,
+                'nomor_surat_arsip' => $request->nomor_surat_arsip ?? ($nomorSuratArsipPotong?->nomor_surat),
                 'keterangan' => $request->keterangan,
                 'status' => $request->input('status', 'aktif'),
                 'diinput_oleh' => auth()->id(),

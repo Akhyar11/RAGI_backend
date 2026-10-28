@@ -119,6 +119,7 @@
 | PaymentGatewayConfigController | Pengaturan Provider Payment Gateway (Midtrans/Xendit) | [docs/api/SIKEU/PaymentGatewayConfigController.md](api/SIKEU/PaymentGatewayConfigController.md) |
 | SettingTarifController | Konfigurasi Tarif Biaya per Angkatan, Prodi, & Semester | [docs/api/SIKEU/SettingTarifController.md](api/SIKEU/SettingTarifController.md) |
 | PembayaranKasirController | Pembayaran Kasir/Loket Tunai & Non-Tunai, Koreksi Transaksi, & Tagihan Masal | [docs/api/SIKEU/PembayaranKasirController.md](api/SIKEU/PembayaranKasirController.md) |
+| PembayaranMahasiswaPotonganController | Potongan wajib mahasiswa terintegrasi arsip nomor surat | [docs/api/SIKEU/PembayaranMahasiswaPotonganController.md](api/SIKEU/PembayaranMahasiswaPotonganController.md) |
 | PembayaranMahasiswaTarifController | Tarif per angkatan & prodi, tagihan individu/massal (guard duplikat semester), & proteksi hapus per angkatan | [docs/api/SIKEU/PembayaranMahasiswaTarifController.md](api/SIKEU/PembayaranMahasiswaTarifController.md) |
 | KasKecilController | Kas Kecil (Petty Cash): unit per fakultas, transaksi keluar, pengajuan/top-up & persetujuan dengan jurnal otomatis | [docs/api/SIKEU/KasKecilController.md](api/SIKEU/KasKecilController.md) |
 | SikeuExtendedMasterController | Master tambahan (jalur kelas, tarif UKT, beasiswa, potongan) & daftar/detail tagihan mahasiswa (filter kelas) | [docs/api/SIKEU/SikeuExtendedMasterController.md](api/SIKEU/SikeuExtendedMasterController.md) |
