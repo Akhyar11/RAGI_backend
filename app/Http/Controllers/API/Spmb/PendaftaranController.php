@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Spmb;
 
 use App\Http\Controllers\Controller;
+use App\Models\Arsip\RequestNomorSurat;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\DokumenPendaftaran;
 use App\Models\Spmb\HasilSeleksi;
@@ -98,6 +99,7 @@ class PendaftaranController extends Controller
             'dokumenPendaftaran',
             'user',
             'hasilSeleksi',
+            'skArsipRequest:id,kode_request,status',
             'referrer:id,username,name,referral_code',
         ])->findOrFail($id);
 
@@ -289,6 +291,20 @@ class PendaftaranController extends Controller
             Log::warning('Gagal mencatat audit log: ' . $e->getMessage());
         }
 
+        $arsipRequest = $pendaftaran->skArsipRequest()->with('nomorSurat')->first();
+        $nomorArsip = $arsipRequest?->nomorSurat?->first(
+            fn ($nomor) => $nomor->status !== 'dibatalkan'
+                && strtoupper(trim((string) $nomor->kode_unit)) === strtoupper(trim((string) $arsipRequest->kode_unit))
+                && $nomor->nomor_surat === $pendaftaran->nomor_sk
+        );
+
+        if (! $arsipRequest || $arsipRequest->status !== 'disetujui' || ! $nomorArsip) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'SK belum dapat diunduh karena nomor resminya masih menunggu persetujuan Arsip.',
+            ], 409);
+        }
+
         // Bila SK sudah pernah diterbitkan & diarsipkan, sajikan berkas tersimpan (privat).
         if ($pendaftaran->sk_file_path && $this->fileStorage->exists($pendaftaran->sk_file_path, private: true)) {
             return $this->fileStorage->download($pendaftaran->sk_file_path, $filename, private: true);
@@ -303,8 +319,7 @@ class PendaftaranController extends Controller
     }
 
     /**
-     * Terbitkan & arsipkan SK Tanda Lulus: ajukan nomor ke modul Arsip,
-     * setujui otomatis, lalu simpan PDF secara privat pada pendaftaran.
+     * Ajukan nomor SK ke Arsip atau simpan PDF setelah nomor disetujui Arsip.
      */
     public function terbitkanSk(Request $request, $id): JsonResponse
     {
@@ -328,6 +343,14 @@ class PendaftaranController extends Controller
 
         $result = $this->pendaftaranService->terbitkanDanArsipkanSk($pendaftaran, (int) $request->user()->id);
 
+        if ($result['status'] === 'menunggu_verifikasi') {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Permohonan nomor SK dikirim ke Arsip dan sedang menunggu persetujuan.',
+                'data' => $result,
+            ], 200);
+        }
+
         try {
             AuditLogService::record(
                 module: 'SPMB',
@@ -349,7 +372,7 @@ class PendaftaranController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'SK Tanda Lulus berhasil diterbitkan dan diarsipkan.',
+            'message' => 'Nomor resmi Arsip telah disetujui dan SK berhasil diterbitkan serta diarsipkan.',
             'data' => $result,
         ]);
     }

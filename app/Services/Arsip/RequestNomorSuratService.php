@@ -10,6 +10,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class RequestNomorSuratService
@@ -122,6 +123,17 @@ class RequestNomorSuratService
 
             if ($request->status !== 'menunggu_verifikasi') {
                 throw new InvalidArgumentException("Request nomor surat ini sudah diverifikasi sebelumnya ({$request->status}).");
+            }
+
+            $isApproval = in_array($action, ['setujui', 'approve'], true);
+            $isSpmbRequest = strtolower(trim((string) $request->module_origin)) === RequestNomorSurat::MODULE_ORIGIN_SPMB;
+            $requestedUnit = strtoupper(trim((string) $request->kode_unit));
+            $unitForIssue = strtoupper(trim((string) (! empty($kodeUnit) ? $kodeUnit : $request->kode_unit)));
+
+            if ($isApproval && $isSpmbRequest && $unitForIssue !== $requestedUnit) {
+                throw ValidationException::withMessages([
+                    'kode_unit' => 'Unit penerbit pada permohonan SPMB tidak dapat diubah saat verifikasi Arsip.',
+                ]);
             }
 
             $oldValues = $request->toArray();

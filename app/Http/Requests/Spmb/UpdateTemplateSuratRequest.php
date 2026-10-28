@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Spmb;
 
+use App\Models\Arsip\RequestNomorSurat;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -16,6 +17,8 @@ class UpdateTemplateSuratRequest extends FormRequest
     {
         $template = $this->route('templateSurat');
         $id = is_object($template) ? $template->id : $template;
+        $activeTemplate = filter_var($this->input('is_active', true), FILTER_VALIDATE_BOOLEAN);
+        $issuanceRequirement = $activeTemplate ? 'required' : 'nullable';
 
         return [
             'kode' => [
@@ -32,9 +35,21 @@ class UpdateTemplateSuratRequest extends FormRequest
             'teks_prodi' => 'nullable|string|max:255',
             'teks_penutup' => 'nullable|string',
             'judul_petunjuk' => 'nullable|string|max:150',
-            'module_id' => 'nullable|integer|exists:core_modules,id',
-            'klasifikasi_surat_id' => 'nullable|integer|exists:core_arsip_klasifikasi,id',
-            'unit_surat_id' => 'nullable|integer|exists:core_arsip_klasifikasi,id',
+            'module_id' => [
+                $issuanceRequirement,
+                'integer',
+                Rule::exists('core_modules', 'id')->where('code', RequestNomorSurat::MODULE_ORIGIN_SPMB),
+            ],
+            'klasifikasi_surat_id' => [
+                $issuanceRequirement,
+                'integer',
+                Rule::exists('core_arsip_klasifikasi', 'id')->where('kategori', 'klasifikasi'),
+            ],
+            'unit_surat_id' => [
+                $issuanceRequirement,
+                'integer',
+                Rule::exists('core_arsip_klasifikasi', 'id')->where('kategori', 'unit')->where('is_active', true),
+            ],
             'jalur_masuk_id' => 'nullable|integer|exists:spmb_jalur_masuk,id',
             'gelombang_id' => 'nullable|integer|exists:spmb_gelombang_penerimaan,id',
             'is_active' => 'nullable|boolean',
@@ -51,6 +66,18 @@ class UpdateTemplateSuratRequest extends FormRequest
             'jabatan_penandatangan' => 'nullable|string|max:255',
             'nip_penandatangan' => 'nullable|string|max:100',
             'catatan_kaki' => 'nullable|string',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'module_id.required' => 'Pilih modul pemohon untuk template yang aktif.',
+            'module_id.exists' => 'Asal permohonan template SK harus menggunakan modul SPMB.',
+            'klasifikasi_surat_id.required' => 'Pilih klasifikasi surat dari master Arsip.',
+            'klasifikasi_surat_id.exists' => 'Klasifikasi surat harus berasal dari master klasifikasi Arsip.',
+            'unit_surat_id.required' => 'Pilih unit penerbit dari master Arsip.',
+            'unit_surat_id.exists' => 'Unit penerbit harus berasal dari master unit Arsip yang aktif.',
         ];
     }
 }

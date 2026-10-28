@@ -16,6 +16,7 @@ class RequestNomorSurat extends Model
 
     public const MODULE_ORIGIN_ARSIP = 'arsip';
     public const MODULE_ORIGIN_SIMPEG = 'simpeg';
+    public const MODULE_ORIGIN_SPMB = 'spmb';
 
     protected $table = 'core_arsip_request_nomor';
 

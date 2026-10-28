@@ -37,7 +37,7 @@ Mengambil daftar nomor surat resmi dengan filter tahun, unit, klasifikasi, statu
 - `search` (string, optional) - Pencarian nomor surat, perihal, tujuan, atau catatan.
 - `tahun` (integer, optional) - Filter tahun surat.
 - `kode_unit` (string, optional) - Filter kode unit (misal: `DIII`, `S1`, `REK`).
-- `kode_klasifikasi` (string, optional) - Filter kode klasifikasi (misal: `INDO`, `AKD`, `SARPRAS`).
+- `kode_klasifikasi` (string, optional) - Filter kode klasifikasi (misal: `DIII`, `AKD`, `SARPRAS`).
 - `status` (string, optional) - Filter status (`terpakai`, `direservasi`, `dibatalkan`).
 - `module_origin` (string, optional) - Filter asal modul (misal: `arsip`, `sinapra`, `simpeg`).
 - `is_backdate` (boolean, optional) - Filter status surat tanggal mundur / backdate (`1`/`0`/`true`/`false`).
@@ -57,8 +57,8 @@ Mengambil daftar nomor surat resmi dengan filter tahun, unit, klasifikasi, statu
       "id": 1,
       "nomor_surat": "247/DIII/INDO/II/2025",
       "nomor_urut": 247,
-      "kode_unit": "DIII",
-      "kode_klasifikasi": "INDO",
+      "kode_unit": "INDO",
+      "kode_klasifikasi": "DIII",
       "bulan_romawi": "II",
       "tahun": 2025,
       "tanggal_surat": "2025-02-14",
@@ -108,8 +108,8 @@ Menerbitkan nomor surat resmi secara langsung (satuan atau bulk berurutan). Nomo
 {
   "mode": "satuan",
   "tanggal_surat": "2025-02-14",
-  "kode_unit": "DIII",
-  "kode_klasifikasi": "INDO",
+  "kode_unit": "INDO",
+  "kode_klasifikasi": "DIII",
   "perihal": "Surat Keterangan Aktif Kuliah",
   "tujuan": "Instansi Terkait",
   "status": "terpakai",
@@ -126,8 +126,8 @@ Menerbitkan nomor surat resmi secara langsung (satuan atau bulk berurutan). Nomo
   "mode": "bulk",
   "jumlah_nomor": 5,
   "tanggal_surat": "2025-02-14",
-  "kode_unit": "DIII",
-  "kode_klasifikasi": "INDO",
+  "kode_unit": "INDO",
+  "kode_klasifikasi": "DIII",
   "perihal": "Sertifikat Pelatihan Mahasiswa",
   "tujuan": "Peserta Pelatihan",
   "status": "terpakai",
@@ -146,8 +146,8 @@ Menerbitkan nomor surat resmi secara langsung (satuan atau bulk berurutan). Nomo
     "id": 1,
     "nomor_surat": "247/DIII/INDO/II/2025",
     "nomor_urut": 247,
-    "kode_unit": "DIII",
-    "kode_klasifikasi": "INDO",
+    "kode_unit": "INDO",
+    "kode_klasifikasi": "DIII",
     "bulan_romawi": "II",
     "tahun": 2025,
     "tanggal_surat": "2025-02-14",

@@ -502,9 +502,12 @@ class SpmbPendaftaranService
             'kota' => $template?->kota_penetapan ?? 'Surakarta',
         ];
 
-        // Format nomor surat: utamakan nomor definitif dari modul Arsip bila sudah terbit.
-        $nomorSuratFormat = $template?->format_nomor_surat ?: 'SKL/SPMB/{tahun}/{romawi_bulan}/{no_pendaftaran}';
-        $nomorSurat = $pendaftaran->nomor_sk ?: $this->replacePlaceholders($nomorSuratFormat, $placeholders);
+        $nomorSurat = trim((string) $pendaftaran->nomor_sk);
+        if ($nomorSurat === '') {
+            throw ValidationException::withMessages([
+                'nomor_sk' => 'Nomor SK resmi dari Arsip belum tersedia.',
+            ]);
+        }
 
         // Kop: utamakan master Kop Surat Arsip (per tahun), fallback ke kop template SPMB.
         $kopArsip = $this->kopSuratService->getKopSuratByTahun((int) date('Y'));
@@ -609,24 +612,33 @@ class SpmbPendaftaranService
      * Mengajukan nomor surat SK Tanda Lulus ke modul Arsip.
      * Klasifikasi & unit diambil dinamis dari master KlasifikasiSurat melalui konfigurasi template.
      */
-    public function requestNomorSkArsip(PendaftaranCalonMhs $pendaftaran, ?TemplateSuratSpmb $template, int $userId): ?RequestNomorSurat
+    public function requestNomorSkArsip(PendaftaranCalonMhs $pendaftaran, ?TemplateSuratSpmb $template, int $userId): RequestNomorSurat
     {
         if (! $template) {
-            return null;
+            throw ValidationException::withMessages([
+                'template' => 'Template SK aktif belum tersedia untuk penerbitan nomor melalui Arsip.',
+            ]);
         }
 
         $template->loadMissing(['module', 'klasifikasiSurat', 'unitSurat']);
 
+        if (strtolower(trim((string) $template->module?->code)) !== RequestNomorSurat::MODULE_ORIGIN_SPMB) {
+            throw ValidationException::withMessages([
+                'module_id' => 'Asal permohonan template SK harus menggunakan modul SPMB.',
+            ]);
+        }
+
         $kodeKlasifikasi = $template->klasifikasiSurat?->kode;
         $kodeUnit = $template->unitSurat?->kode;
 
-        // Belum dikonfigurasi di template → biarkan SK memakai format nomor internal SPMB.
         if (! $kodeKlasifikasi || ! $kodeUnit) {
-            return null;
+            throw ValidationException::withMessages([
+                'template' => 'Template SK harus dikonfigurasi dengan klasifikasi dan unit penerbit dari master Arsip.',
+            ]);
         }
 
         return $this->requestNomorService->createRequest([
-            'module_origin' => $template->module?->code,
+            'module_origin' => RequestNomorSurat::MODULE_ORIGIN_SPMB,
             'reference_type' => PendaftaranCalonMhs::class,
             'reference_id' => $pendaftaran->id,
             'perihal' => 'SK Tanda Lulus Seleksi '.($pendaftaran->nama_lengkap ?? '-'),
@@ -640,10 +652,9 @@ class SpmbPendaftaranService
     }
 
     /**
-     * Terbitkan & arsipkan SK Tanda Lulus: minta nomor ke Arsip, setujui, generate PDF,
-     * lalu simpan berkas secara privat dan catat pathnya pada pendaftaran.
+     * Minta nomor ke Arsip, tunggu persetujuan, lalu generate PDF dengan nomor resmi.
      *
-     * @return array{nomor_sk: ?string, sk_file_path: string, sk_file_url: ?string}
+     * @return array{status: string, arsip_request_id: int, nomor_sk: ?string, sk_file_path: ?string, sk_file_url: ?string}
      */
     public function terbitkanDanArsipkanSk(PendaftaranCalonMhs $pendaftaran, int $userId): array
     {
@@ -652,29 +663,61 @@ class SpmbPendaftaranService
         $jalurId = $pendaftaran->gelombangPenerimaan?->jalur_masuk_id;
         $template = $this->resolveTemplateSurat($jalurId, $pendaftaran->gelombang_id, 'sk_lulus');
 
-        // 1. Ajukan nomor ke modul Arsip (sekali saja).
-        if (! $pendaftaran->sk_arsip_request_id) {
+        $arsipRequest = $pendaftaran->skArsipRequest()->with('nomorSurat')->first();
+        $arsipNumbers = $arsipRequest?->nomorSurat;
+        $arsipNumber = $arsipNumbers?->first(
+            fn ($nomor) => $nomor->status !== 'dibatalkan'
+                && strtoupper(trim((string) $nomor->kode_unit)) === strtoupper(trim((string) $arsipRequest->kode_unit))
+        );
+
+        // Permohonan baru atau permohonan yang ditolak dapat diajukan kembali.
+        if (! $arsipRequest || $arsipRequest->status === 'ditolak') {
             $request = $this->requestNomorSkArsip($pendaftaran, $template, $userId);
-            if ($request) {
-                $pendaftaran->sk_arsip_request_id = $request->id;
-                $pendaftaran->save();
-            }
+            $pendaftaran->forceFill([
+                'sk_arsip_request_id' => $request->id,
+                'nomor_sk' => null,
+                'sk_file_path' => null,
+                'sk_generated_at' => null,
+            ])->save();
+            $arsipRequest = $request->load('nomorSurat');
+            $arsipNumber = null;
         }
 
-        // 2. Setujui otomatis agar nomor definitif terbit & tersinkron ke pendaftaran.
-        if ($pendaftaran->sk_arsip_request_id) {
-            $arsipRequest = $pendaftaran->skArsipRequest()->first();
-            if ($arsipRequest && $arsipRequest->status === 'menunggu_verifikasi') {
-                $this->requestNomorService->verifyRequest(
-                    $arsipRequest->id,
-                    'setujui',
-                    'Penerbitan SK Tanda Lulus SPMB.',
-                    $userId
-                );
-            }
+        // Jangan membuat permohonan baru otomatis jika Arsip sudah menyetujui
+        // tetapi nomor yang diterbitkan tidak sesuai unit INDO atau tidak ditemukan.
+        if ($arsipRequest->status === 'disetujui' && ! $arsipNumber) {
+            throw ValidationException::withMessages([
+                'nomor_sk' => sprintf('Arsip telah menyetujui permohonan, tetapi nomor untuk unit %s tidak ditemukan. Minta Arsip memeriksa atau membatalkan nomor tersebut sebelum mengajukan ulang.', $arsipRequest->kode_unit),
+            ]);
         }
 
-        // 3. Generate PDF (memakai nomor definitif bila ada) lalu simpan privat.
+        if ($arsipRequest->status === 'menunggu_verifikasi') {
+            if ($pendaftaran->nomor_sk || $pendaftaran->sk_file_path) {
+                $pendaftaran->forceFill([
+                    'nomor_sk' => null,
+                    'sk_file_path' => null,
+                    'sk_generated_at' => null,
+                ])->save();
+            }
+
+            return [
+                'status' => 'menunggu_verifikasi',
+                'arsip_request_id' => $arsipRequest->id,
+                'nomor_sk' => null,
+                'sk_file_path' => null,
+                'sk_file_url' => null,
+            ];
+        }
+
+        if ($arsipRequest->status !== 'disetujui' || ! $arsipNumber) {
+            throw ValidationException::withMessages([
+                'nomor_sk' => 'Nomor SK resmi belum diterbitkan oleh Arsip.',
+            ]);
+        }
+
+        // Gunakan hanya nomor definitif yang terbit pada modul Arsip.
+        $pendaftaran->nomor_sk = $arsipNumber->nomor_surat;
+        $pendaftaran->save();
         $pendaftaran->refresh();
         $pdf = $this->generateSkLulusPdf($pendaftaran, $template);
         $path = $this->fileStorage->storeContents($pdf, 'spmb/sk-tanda-lulus', 'pdf', private: true);
@@ -684,6 +727,8 @@ class SpmbPendaftaranService
         $pendaftaran->save();
 
         return [
+            'status' => 'diterbitkan',
+            'arsip_request_id' => $arsipRequest->id,
             'nomor_sk' => $pendaftaran->nomor_sk,
             'sk_file_path' => $path,
             'sk_file_url' => $this->fileStorage->url($path),
@@ -698,6 +743,7 @@ class SpmbPendaftaranService
         $mock = new PendaftaranCalonMhs();
         $mock->id = 9999;
         $mock->no_pendaftaran = 'SPMB-' . date('Y') . '-0001';
+        $mock->nomor_sk = 'PREVIEW-ARSIP';
         $mock->nama_lengkap = 'AHMAD FAUZI PRATAMA';
         $mock->nik = '3371012345670001';
         $mock->tempat_lahir = 'Surakarta';

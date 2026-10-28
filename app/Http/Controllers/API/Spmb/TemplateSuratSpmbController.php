@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Spmb\TemplateSuratSpmb;
 use App\Http\Requests\Spmb\StoreTemplateSuratRequest;
 use App\Http\Requests\Spmb\UpdateTemplateSuratRequest;
+use App\Models\Arsip\RequestNomorSurat;
+use App\Models\Module;
 use App\Services\Spmb\SpmbPendaftaranService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -146,6 +148,12 @@ class TemplateSuratSpmbController extends Controller
             ->orderBy('kode')
             ->get(['id', 'kode', 'nama', 'kategori']);
 
+        $modules = Module::query()
+            ->where('code', RequestNomorSurat::MODULE_ORIGIN_SPMB)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'code']);
+
         $kopSurat = app(\App\Services\Arsip\KopSuratService::class)
             ->getKopSuratByTahun((int) date('Y'));
 
@@ -153,6 +161,7 @@ class TemplateSuratSpmbController extends Controller
             'status' => 'success',
             'message' => 'Opsi master Arsip berhasil diambil.',
             'data' => [
+                'modules' => $modules,
                 'klasifikasi' => $klasifikasi,
                 'unit' => $unit,
                 'kop_surat' => $kopSurat,

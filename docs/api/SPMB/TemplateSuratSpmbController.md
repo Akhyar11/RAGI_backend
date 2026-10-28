@@ -22,7 +22,7 @@ Mengelola **Template Surat Keputusan (SK) dan Surat Resmi SPMB** secara dinamis.
 | PUT | `/api/spmb/template-surat/{id}` | Perbarui template surat | ✅ |
 | DELETE | `/api/spmb/template-surat/{id}` | Hapus template surat (soft delete) | ✅ |
 | GET | `/api/spmb/template-surat/{id}/preview` | Pratinjau cetak PDF template surat (dummy data) | ✅ |
-| GET | `/api/spmb/template-surat-arsip-opsi` | Opsi master Arsip (klasifikasi & unit pengolah) untuk konfigurasi penomoran SK | ✅ `spmb.manage` |
+| GET | `/api/spmb/template-surat-arsip-opsi` | Opsi master modul, klasifikasi, dan unit penerbit untuk konfigurasi penomoran SK | ✅ `spmb.manage` |
 
 > Semua endpoint dilindungi middleware `auth:sanctum` dan izin `can:spmb.manage`. Pengguna tanpa otorisasi akan menerima response `401 Unauthorized` atau `403 Forbidden`.
 
@@ -103,7 +103,7 @@ Mengambil daftar template surat SPMB yang tersedia dengan filter dan paginasi se
             "kop_nama_institusi": "UNIVERSITAS INDONUSA",
             "kop_nama_sub": "PANITIA PENERIMAAN MAHASISWA BARU (SPMB)",
             "kop_alamat_kontak": "Sekretariat SPMB Kampus Terpadu • Email: spmb@kampus.ac.id • Website: spmb.kampus.ac.id\nTahun Akademik {tahun_akademik}",
-            "format_nomor_surat": "SKL/SPMB/{tahun}/{romawi_bulan}/{no_pendaftaran}",
+            "format_nomor_surat": null,
             "judul_surat": "SURAT KETERANGAN TANDA LULUS SELEKSI",
             "teks_pembuka": "Berdasarkan hasil evaluasi verifikasi kelengkapan berkas administrasi dan pemenuhan syarat seleksi penerimaan mahasiswa baru Tahun Akademik {tahun_akademik}, Panitia Penerimaan Mahasiswa Baru menyatakan bahwa:",
             "teks_keputusan": "DINYATAKAN LULUS / DITERIMA",
@@ -158,7 +158,7 @@ Membuat template surat baru di database.
     "kop_nama_institusi": "UNIVERSITAS INDONUSA",
     "kop_nama_sub": "PANITIA PENERIMAAN MAHASISWA BARU (SPMB)",
     "kop_alamat_kontak": "Sekretariat SPMB Kampus Terpadu • Email: spmb@kampus.ac.id",
-    "format_nomor_surat": "SKL-PRS/{tahun}/{romawi_bulan}/{no_pendaftaran}",
+    "format_nomor_surat": null,
     "judul_surat": "SURAT KEPUTUSAN KELULUSAN JALUR PRESTASI",
     "teks_pembuka": "Berdasarkan verifikasi portofolio prestasi dan seleksi administrasi penerimaan mahasiswa baru Tahun Akademik {tahun_akademik}, Panitia menetapkan bahwa:",
     "teks_keputusan": "DINYATAKAN LULUS / DITERIMA (BEASISWA PRESTASI)",
@@ -171,7 +171,7 @@ Membuat template surat baru di database.
 }
 ```
 
-> **Integrasi Arsip (opsional):** `module_id` merujuk ke Master Modul (`core_modules.id`), `klasifikasi_surat_id` & `unit_surat_id` merujuk ke Master Klasifikasi/Unit Arsip (`core_arsip_klasifikasi.id`). Bila ketiganya diisi, penerbitan SK (`POST /api/spmb/pendaftaran/{id}/terbitkan-sk`) akan memakai penomoran resmi modul Arsip. Bila kosong, SK memakai format nomor internal SPMB (`format_nomor_surat`).
+> **Penerbitan Arsip wajib:** Template aktif harus merujuk ke modul `spmb`, `klasifikasi_surat_id`, dan `unit_surat_id` dari master. Unit penerbit harus berkode `INDO`. SPMB membuat permohonan; nomor final dan urutannya diterbitkan setelah permohonan disetujui Arsip. Formatnya mengikuti `{nomor_urut}/{kode_klasifikasi}/{kode_unit}/{bulan_romawi}/{tahun}`. `format_nomor_surat` hanya dipertahankan untuk kompatibilitas data lama dan tidak digunakan untuk menerbitkan nomor.
 
 ### Response Sukses
 
@@ -191,7 +191,7 @@ Membuat template surat baru di database.
         "kop_nama_institusi": "UNIVERSITAS INDONUSA",
         "kop_nama_sub": "PANITIA PENERIMAAN MAHASISWA BARU (SPMB)",
         "kop_alamat_kontak": "Sekretariat SPMB Kampus Terpadu • Email: spmb@kampus.ac.id",
-        "format_nomor_surat": "SKL-PRS/{tahun}/{romawi_bulan}/{no_pendaftaran}",
+        "format_nomor_surat": null,
         "judul_surat": "SURAT KEPUTUSAN KELULUSAN JALUR PRESTASI",
         "teks_pembuka": "Berdasarkan verifikasi portofolio prestasi dan seleksi administrasi penerimaan mahasiswa baru Tahun Akademik {tahun_akademik}, Panitia menetapkan bahwa:",
         "teks_keputusan": "DINYATAKAN LULUS / DITERIMA (BEASISWA PRESTASI)",
@@ -231,7 +231,7 @@ Mendapatkan rincian data template surat beserta relasi jalur masuk dan gelombang
         "kop_nama_institusi": "UNIVERSITAS INDONUSA",
         "kop_nama_sub": "PANITIA PENERIMAAN MAHASISWA BARU (SPMB)",
         "kop_alamat_kontak": "Sekretariat SPMB Kampus Terpadu • Email: spmb@kampus.ac.id • Website: spmb.kampus.ac.id\nTahun Akademik {tahun_akademik}",
-        "format_nomor_surat": "SKL/SPMB/{tahun}/{romawi_bulan}/{no_pendaftaran}",
+        "format_nomor_surat": null,
         "judul_surat": "SURAT KETERANGAN TANDA LULUS SELEKSI",
         "teks_pembuka": "Berdasarkan hasil evaluasi verifikasi kelengkapan berkas administrasi dan pemenuhan syarat seleksi penerimaan mahasiswa baru Tahun Akademik {tahun_akademik}, Panitia Penerimaan Mahasiswa Baru menyatakan bahwa:",
         "teks_keputusan": "DINYATAKAN LULUS / DITERIMA",
@@ -272,7 +272,7 @@ Memperbarui data konfigurasi template surat yang sudah ada.
     "kop_nama_institusi": "UNIVERSITAS INDONUSA SURAKARTA",
     "kop_nama_sub": "PANITIA PENERIMAAN MAHASISWA BARU (SPMB)",
     "kop_alamat_kontak": "Sekretariat SPMB • Gedung Rektorat Lt. 1 • Email: admisi@indonusa.ac.id",
-    "format_nomor_surat": "SKL/SPMB/{tahun}/{romawi_bulan}/{no_pendaftaran}",
+    "format_nomor_surat": null,
     "judul_surat": "SURAT KETERANGAN TANDA LULUS SELEKSI MAHASISWA BARU",
     "teks_pembuka": "Berdasarkan hasil evaluasi verifikasi kelengkapan berkas administrasi dan pemenuhan syarat seleksi penerimaan mahasiswa baru Tahun Akademik {tahun_akademik}, Panitia SPMB menyatakan bahwa:",
     "teks_keputusan": "DINYATAKAN LULUS / DITERIMA",
@@ -303,7 +303,7 @@ Memperbarui data konfigurasi template surat yang sudah ada.
         "kop_nama_institusi": "UNIVERSITAS INDONUSA SURAKARTA",
         "kop_nama_sub": "PANITIA PENERIMAAN MAHASISWA BARU (SPMB)",
         "kop_alamat_kontak": "Sekretariat SPMB • Gedung Rektorat Lt. 1 • Email: admisi@indonusa.ac.id",
-        "format_nomor_surat": "SKL/SPMB/{tahun}/{romawi_bulan}/{no_pendaftaran}",
+        "format_nomor_surat": null,
         "judul_surat": "SURAT KETERANGAN TANDA LULUS SELEKSI MAHASISWA BARU",
         "teks_pembuka": "Berdasarkan hasil evaluasi verifikasi kelengkapan berkas administrasi dan pemenuhan syarat seleksi penerimaan mahasiswa baru Tahun Akademik {tahun_akademik}, Panitia SPMB menyatakan bahwa:",
         "teks_keputusan": "DINYATAKAN LULUS / DITERIMA",
@@ -353,7 +353,7 @@ Melakukan rendering dan pratinjau langsung template surat ke dalam stream dokume
 
 ## [GET] /api/spmb/template-surat-arsip-opsi
 
-> Mengambil opsi master modul **Arsip** yang diperlukan untuk mengonfigurasi penomoran SK: daftar **Klasifikasi Surat** dan **Kode Unit Pengolah** (hanya yang aktif). Endpoint ini disediakan agar admin SPMB (permission `spmb.manage`) dapat mengisi referensi penomoran tanpa memerlukan permission master Arsip.
+> Mengambil opsi referensi untuk konfigurasi penomoran SK: modul pemohon yang sesuai konteks SPMB, klasifikasi aktif, dan daftar unit aktif dari master Arsip. Saat mengonfigurasi template penerbitan SK SPMB, admin memilih record unit `INDO`. Endpoint ini disediakan agar admin SPMB (permission `spmb.manage`) dapat mengisi referensi tanpa memerlukan permission pengelolaan master Arsip.
 
 ### Response Sukses
 
@@ -363,12 +363,16 @@ Melakukan rendering dan pratinjau langsung template surat ke dalam stream dokume
     "status": "success",
     "message": "Opsi master Arsip berhasil diambil.",
     "data": {
+        "modules": [
+            { "id": 7, "name": "SPMB (Penerimaan Mahasiswa)", "code": "spmb" }
+        ],
         "klasifikasi": [
             { "id": 8, "kode": "DVIII", "nama": "Surat Keterangan", "kategori": "klasifikasi" }
         ],
         "unit": [
-            { "id": 14, "kode": "SPMB", "nama": "Panitia Penerimaan Mahasiswa Baru", "kategori": "unit" }
-        ]
+            { "id": 14, "kode": "INDO", "nama": "Universitas Indonusa", "kategori": "unit" }
+        ],
+        "kop_surat": null
     }
 }
 ```

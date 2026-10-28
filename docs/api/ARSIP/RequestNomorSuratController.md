@@ -73,7 +73,7 @@ Mengajukan permohonan nomor surat dari modul eksternal.
 
 ## 2. POST /api/arsip/request-nomor/{id}/verify
 
-Admin Arsip menyetujui (`setujui`) atau menolak (`tolak`) permohonan. Ketika disetujui, sistem secara otomatis menerbitkan nomor surat resmi dan mengaitkannya ke request tersebut. Admin Arsip memiliki otoritas penuh untuk memvalidasi atau mengoreksi `kode_klasifikasi` (DI - DIX), `kode_unit`, `perihal`, dan `tujuan` sebelum nomor diterbitkan.
+Admin Arsip menyetujui (`setujui`) atau menolak (`tolak`) permohonan. Ketika disetujui, sistem secara otomatis menerbitkan nomor surat resmi dan mengaitkannya ke request tersebut. Admin Arsip dapat memvalidasi atau mengoreksi `kode_klasifikasi` (DI - DIX), `kode_unit`, `perihal`, dan `tujuan` sebelum nomor diterbitkan. Untuk permohonan dengan `module_origin: "spmb"`, unit pada request menjadi sumber resmi; override unit ke nilai lain ditolak dengan `422`.
 
 ### Payload Setujui (Dengan Otoritas Override Klasifikasi Admin Arsip)
 
