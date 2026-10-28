@@ -8,6 +8,8 @@ use App\Models\Simpeg\SkPegawai;
 use App\Models\Simpeg\SuratTugas;
 use App\Models\Simpeg\SertifikasiDosen;
 use App\Models\Simpeg\RiwayatPelatihan;
+use App\Models\Simpeg\RiwayatJabatan;
+use App\Models\Simpeg\JabatanFungsionalAkademik;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\DosenPengampu;
 use App\Models\Siakad\Mahasiswa;
@@ -29,6 +31,7 @@ class TridharmaDossierService
             'unitKerja',
             'user',
             'dosen.programStudi',
+            'jabatanFungsional',
         ])->findOrFail($pegawaiId);
 
         // 1. Pengajaran (SIAKAD)
@@ -182,12 +185,31 @@ class TridharmaDossierService
 
         $sertifikasiList = SertifikasiDosen::with(['jenisSertifikasi'])
             ->where('pegawai_id', $pegawai->id)
-            ->latest()
+            ->latest('tahun_sertifikasi')
             ->get();
 
-        $pelatihanList = RiwayatPelatihan::with(['peran'])
+        $sertifikasiPendidik = $sertifikasiList->filter(function ($s) {
+            $nama = strtolower($s->nama_sertifikat ?? '');
+            $jenis = strtolower($s->jenisSertifikasi?->nama ?? '');
+            $kode = strtoupper($s->jenisSertifikasi?->kode ?? '');
+            return str_contains($nama, 'pendidik') || str_contains($nama, 'serdos')
+                || str_contains($jenis, 'pendidik') || str_contains($jenis, 'serdos')
+                || $kode === 'SERT-PENDIDIK';
+        })->values();
+
+        $sertifikasiKompetensi = $sertifikasiList->filter(function ($s) use ($sertifikasiPendidik) {
+            return !$sertifikasiPendidik->contains('id', $s->id);
+        })->values();
+
+        $pelatihanList = RiwayatPelatihan::with(['jenisPelatihan', 'peran', 'tingkat'])
             ->where('pegawai_id', $pegawai->id)
-            ->latest()
+            ->latest('tanggal_mulai')
+            ->get();
+
+        $riwayatJad = RiwayatJabatan::with(['jabatanFungsional'])
+            ->where('pegawai_id', $pegawai->id)
+            ->whereNotNull('jabatan_fungsional_id')
+            ->orderByDesc('mulai_jabatan')
             ->get();
 
         $kinerjaList = PenilaianKinerja::with(['pejabatPenilai', 'evaluator'])
@@ -221,7 +243,7 @@ class TridharmaDossierService
                 'nuptk' => $pegawai->nuptk ?: $dosen?->nuptk,
                 'unit_kerja' => $pegawai->unitKerja?->nama,
                 'program_studi' => $dosen?->programStudi?->nama,
-                'jabatan_fungsional' => $dosen?->jabatan_akademik ?? $pegawai->jabatan_terakhir ?? '-',
+                'jabatan_fungsional' => $pegawai->jabatanFungsional?->nama ?? $dosen?->jabatan_akademik ?? $pegawai->jabatan_terakhir ?? '-',
                 'status_kepegawaian' => $pegawai->status_kepegawaian,
                 'sinta_id' => $pegawai->sinta_id,
                 'scopus_id' => $pegawai->scopus_id,
@@ -245,7 +267,10 @@ class TridharmaDossierService
                 'total_surat_tugas' => $suratTugasList->count(),
                 'total_sk_penugasan' => $skList->count(),
                 'total_sertifikasi' => $sertifikasiList->count(),
+                'total_sertifikasi_pendidik' => $sertifikasiPendidik->count(),
+                'total_sertifikasi_kompetensi' => $sertifikasiKompetensi->count(),
                 'total_pelatihan' => $pelatihanList->count(),
+                'total_jad' => $riwayatJad->count() ?: ($pegawai->jabatan_fungsional_id ? 1 : 0),
                 'rerata_nilai_skp' => round((float) $rerataSkp, 2),
                 'rerata_nilai_bkd' => round((float) $rerataBkd, 2),
             ],
@@ -269,7 +294,11 @@ class TridharmaDossierService
                 'surat_tugas' => $suratTugasList,
                 'sk_pegawai' => $skList,
                 'sertifikasi' => $sertifikasiList,
+                'sertifikasi_pendidik' => $sertifikasiPendidik,
+                'sertifikasi_kompetensi' => $sertifikasiKompetensi,
                 'pelatihan' => $pelatihanList,
+                'riwayat_jad' => $riwayatJad,
+                'jabatan_fungsional_aktif' => $pegawai->jabatanFungsional,
                 'kinerja_skp' => $kinerjaList,
             ],
         ];

@@ -131,7 +131,11 @@ Mengambil portofolio akademik lengkap dosen beserta metrik ringkasan untuk keper
       "surat_tugas": [],
       "sk_pegawai": [],
       "sertifikasi": [],
+      "sertifikasi_pendidik": [],
+      "sertifikasi_kompetensi": [],
       "pelatihan": [],
+      "riwayat_jad": [],
+      "jabatan_fungsional_aktif": null,
       "kinerja_skp": []
     }
   }
