@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Simpeg;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Simpeg\StorePengajuanCutiRequest;
 use App\Models\Simpeg\MasterJenisCuti;
+use App\Models\Simpeg\Pegawai;
 use App\Models\Simpeg\PengajuanCuti;
 use App\Services\Storage\FileStorageService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class CutiController extends Controller
 {
@@ -29,9 +31,13 @@ class CutiController extends Controller
 
         $query = PengajuanCuti::with(['pegawai.unitKerja', 'pegawai.dosen.programStudi', 'approver', 'masterJenisCuti']);
 
-        $isCutiManager = $user->isAdmin() || $user->hasPermission('simpeg.cuti.manage') || $user->hasPermission('simpeg.cuti.approve');
+        $isCutiManager = $user->hasPermission('simpeg.cuti.manage') || $user->hasPermission('simpeg.cuti.approve');
+
         if (!$isCutiManager) {
             $pegId = $user->pegawai?->id;
+            if (!$pegId) {
+                $pegId = Pegawai::where('user_id', $user->id)->value('id');
+            }
             if ($pegId) {
                 $query->where('pegawai_id', $pegId);
             } else {
@@ -110,78 +116,151 @@ class CutiController extends Controller
             ], 403);
         }
 
-        $validated = $request->validated();
+        try {
+            $validated = $request->validated();
 
-        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.cuti.manage');
-        if (!$isManager) {
-            $userPegawai = Pegawai::where('user_id', $user->id)->first();
-            if (!$userPegawai) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Akun Anda belum terhubung dengan data Pegawai.',
-                ], 403);
+            $isManager = $user->hasPermission('simpeg.cuti.manage');
+
+            if (!$isManager) {
+                $userPegawai = Pegawai::where('user_id', $user->id)->first();
+                if (!$userPegawai && !empty($user->email)) {
+                    $userPegawai = Pegawai::where('email', $user->email)->first();
+                    if ($userPegawai) {
+                        $userPegawai->update(['user_id' => $user->id]);
+                    }
+                }
+                // Jika belum ada record pegawai, buatkan profil dasar untuk user ini
+                if (!$userPegawai) {
+                    $nipAuto = 'PEG-' . str_pad((string)$user->id, 5, '0', STR_PAD_LEFT);
+                    $userPegawai = Pegawai::create([
+                        'user_id' => $user->id,
+                        'nip' => $nipAuto,
+                        'nama_lengkap' => $user->name,
+                        'status' => 'aktif',
+                        'is_active' => true,
+                        'terdampak_absensi' => true,
+                    ]);
+
+                    try {
+                        \App\Services\AuditLogService::record(
+                            'simpeg',
+                            'simpeg.pegawai.create',
+                            'simpeg_pegawai',
+                            $userPegawai->id,
+                            null,
+                            $userPegawai->toArray()
+                        );
+                    } catch (\Throwable $eLog) {
+                        Log::warning('Gagal mencatat audit log auto create pegawai: ' . $eLog->getMessage());
+                    }
+                }
+                $validated['pegawai_id'] = $userPegawai->id;
+            } else {
+                if (empty($validated['pegawai_id'])) {
+                    $userPegawai = Pegawai::where('user_id', $user->id)->first();
+                    if ($userPegawai) {
+                        $validated['pegawai_id'] = $userPegawai->id;
+                    }
+                }
             }
-            $validated['pegawai_id'] = $userPegawai->id;
-        }
 
-        $master = MasterJenisCuti::findOrFail($validated['master_jenis_cuti_id']);
-
-        if ($master->lampiran_wajib && !$request->hasFile('file') && empty($validated['file_pendukung'])) {
-            return response()->json([
-                'status' => 'error',
-                'message' => "Surat / berkas lampiran pendukung wajib diunggah untuk jenis izin: {$master->nama}.",
-                'errors' => [
-                    'file' => ["Surat / berkas lampiran pendukung wajib diunggah untuk jenis izin: {$master->nama}."],
-                ],
-            ], 422);
-        }
-
-        // Handle auto calculation for fixed duration leave
-        if ($master->tipe_durasi === 'ditetapkan') {
-            $durasi = max(1, (int) $master->durasi_hari);
-            $start = Carbon::parse($validated['tanggal_mulai']);
-            $end = (clone $start)->addDays($durasi - 1);
-            $validated['tanggal_selesai'] = $end->toDateString();
-            $validated['jumlah_hari'] = $durasi;
-        } else {
-            if (empty($validated['tanggal_selesai'])) {
+            if (empty($validated['pegawai_id'])) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Tanggal selesai cuti wajib diisi untuk jenis cuti fleksibel.',
-                    'errors' => ['tanggal_selesai' => ['Tanggal selesai wajib diisi.']],
+                    'message' => 'Data pegawai pemohon tidak valid atau belum ditentukan.',
                 ], 422);
             }
-            if (empty($validated['jumlah_hari'])) {
-                $start = Carbon::parse($validated['tanggal_mulai']);
-                $end = Carbon::parse($validated['tanggal_selesai']);
-                $validated['jumlah_hari'] = $start->diffInDays($end) + 1;
+
+            $master = MasterJenisCuti::findOrFail($validated['master_jenis_cuti_id']);
+
+            if ($master->lampiran_wajib && !$request->hasFile('file') && empty($validated['file_pendukung'])) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Surat / berkas lampiran pendukung wajib diunggah untuk jenis izin: {$master->nama}.",
+                    'errors' => [
+                        'file' => ["Surat / berkas lampiran pendukung wajib diunggah untuk jenis izin: {$master->nama}."],
+                    ],
+                ], 422);
             }
+
+            // Handle auto calculation for fixed duration leave
+            if ($master->tipe_durasi === 'ditetapkan') {
+                $durasi = max(1, (int) $master->durasi_hari);
+                $start = Carbon::parse($validated['tanggal_mulai']);
+                $end = (clone $start)->addDays($durasi - 1);
+                $validated['tanggal_selesai'] = $end->toDateString();
+                $validated['jumlah_hari'] = $durasi;
+            } else {
+                if (empty($validated['tanggal_selesai'])) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Tanggal selesai cuti wajib diisi untuk jenis cuti fleksibel.',
+                        'errors' => ['tanggal_selesai' => ['Tanggal selesai wajib diisi.']],
+                    ], 422);
+                }
+                if (empty($validated['jumlah_hari'])) {
+                    $start = Carbon::parse($validated['tanggal_mulai']);
+                    $end = Carbon::parse($validated['tanggal_selesai']);
+                    $validated['jumlah_hari'] = $start->diffInDays($end) + 1;
+                }
+            }
+
+            // Set safe fallback for legacy column jenis_cuti
+            $normalizedKode = strtoupper(str_replace('-', '_', (string) ($master->kode ?? '')));
+            $enumFallbacks = [
+                'CUTI_TAHUNAN' => 'tahunan',
+                'IZIN_SAKIT' => 'sakit',
+                'CUTI_MELAHIRKAN' => 'melahirkan',
+                'CUTI_ALASAN_PENTING' => 'alasan_penting',
+                'CUTI_BESAR' => 'besar',
+                'CUTI_BERSAMA' => 'lainnya',
+                'CUTI_DILUAR_TANGGUNGAN' => 'besar',
+            ];
+            $validated['jenis_cuti'] = $enumFallbacks[$normalizedKode] ?? 'alasan_penting';
+            $validated['status_approval'] = $validated['status_approval'] ?? 'pending';
+
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                $validated['file_pendukung'] = $this->files->store($file, 'simpeg/cuti_lampiran', private: true);
+            }
+
+            unset($validated['file']);
+            $cuti = PengajuanCuti::create($validated);
+            $cuti->load(['pegawai', 'masterJenisCuti']);
+
+            try {
+                \App\Services\AuditLogService::record(
+                    'simpeg',
+                    'simpeg.cuti.create',
+                    'simpeg_pengajuan_cuti',
+                    $cuti->id,
+                    null,
+                    $cuti->toArray()
+                );
+            } catch (\Throwable $eLog) {
+                Log::warning('Gagal mencatat audit log pengajuan cuti: ' . $eLog->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Pengajuan cuti berhasil dibuat',
+                'data' => $cuti,
+            ], 201);
+        } catch (\Throwable $e) {
+            try {
+                Log::error('SIMPEG Cuti store error: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString(),
+                    'user_id' => $user->id,
+                ]);
+            } catch (\Throwable $logEx) {
+                // Ignore logger filesystem exception
+            }
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan pada server saat memproses pengajuan cuti.',
+            ], 500);
         }
-
-        // Set safe fallback for legacy column jenis_cuti
-        $enumFallbacks = [
-            'CUTI_TAHUNAN' => 'tahunan',
-            'IZIN_SAKIT' => 'sakit',
-            'CUTI_MELAHIRKAN' => 'melahirkan',
-            'CUTI_ALASAN_PENTING' => 'alasan_penting',
-            'CUTI_BESAR' => 'besar',
-        ];
-        $validated['jenis_cuti'] = $enumFallbacks[$master->kode] ?? 'alasan_penting';
-
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $validated['file_pendukung'] = $this->files->store($file, 'simpeg/cuti_lampiran', private: true);
-        }
-
-        unset($validated['file']);
-        $cuti = PengajuanCuti::create($validated);
-        $cuti->load(['pegawai', 'masterJenisCuti']);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Pengajuan cuti berhasil dibuat',
-            'data' => $cuti,
-        ], 201);
     }
 
     /**

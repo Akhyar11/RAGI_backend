@@ -73,9 +73,13 @@ class SuratTugasService
             'pencairanKas',
         ]);
 
-        $canManageAll = $user->isAdmin() || $user->hasPermission('simpeg.surat_tugas.approve');
+        $canManageAll = $user->hasPermission('simpeg.surat_tugas.manage') || $user->hasPermission('simpeg.surat_tugas.approve');
+
         if (!$canManageAll) {
             $pegawaiId = $user->pegawai?->id;
+            if (!$pegawaiId) {
+                $pegawaiId = \App\Models\Simpeg\Pegawai::where('user_id', $user->id)->value('id');
+            }
             if ($pegawaiId) {
                 $query->where(function ($q) use ($pegawaiId) {
                     $q->where('pegawai_id', $pegawaiId)

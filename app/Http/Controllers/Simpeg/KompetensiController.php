@@ -22,6 +22,11 @@ class KompetensiController extends Controller
         protected KompetensiService $service
     ) {}
 
+    private function isManager($user): bool
+    {
+        return $user->hasPermission('simpeg.kompetensi.manage');
+    }
+
     /**
      * Dapatkan master referensi kompetensi
      */
@@ -70,7 +75,7 @@ class KompetensiController extends Controller
     public function storeSertifikasi(StoreSertifikasiDosenRequest $request): JsonResponse
     {
         $user = $request->user();
-        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        $isManager = $this->isManager($user);
         if (!$user->hasPermission('simpeg.kompetensi.create') && !$isManager) {
             return response()->json([
                 'status' => 'error',
@@ -102,7 +107,7 @@ class KompetensiController extends Controller
     public function updateSertifikasi(UpdateSertifikasiDosenRequest $request, int $id): JsonResponse
     {
         $user = $request->user();
-        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        $isManager = $this->isManager($user);
         if (!$user->hasPermission('simpeg.kompetensi.update') && !$isManager) {
             return response()->json([
                 'status' => 'error',
@@ -137,7 +142,7 @@ class KompetensiController extends Controller
     public function destroySertifikasi(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        $isManager = $this->isManager($user);
         if (!$user->hasPermission('simpeg.kompetensi.delete') && !$isManager) {
             return response()->json([
                 'status' => 'error',
@@ -195,7 +200,7 @@ class KompetensiController extends Controller
     public function storeTes(StoreRiwayatTesRequest $request): JsonResponse
     {
         $user = $request->user();
-        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        $isManager = $this->isManager($user);
         if (!$user->hasPermission('simpeg.kompetensi.create') && !$isManager) {
             return response()->json([
                 'status' => 'error',
@@ -227,7 +232,7 @@ class KompetensiController extends Controller
     public function updateTes(UpdateRiwayatTesRequest $request, int $id): JsonResponse
     {
         $user = $request->user();
-        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        $isManager = $this->isManager($user);
         if (!$user->hasPermission('simpeg.kompetensi.update') && !$isManager) {
             return response()->json([
                 'status' => 'error',
@@ -262,7 +267,7 @@ class KompetensiController extends Controller
     public function destroyTes(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        $isManager = $this->isManager($user);
         if (!$user->hasPermission('simpeg.kompetensi.delete') && !$isManager) {
             return response()->json([
                 'status' => 'error',
@@ -320,7 +325,7 @@ class KompetensiController extends Controller
     public function storePelatihan(StoreRiwayatPelatihanRequest $request): JsonResponse
     {
         $user = $request->user();
-        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        $isManager = $this->isManager($user);
         if (!$user->hasPermission('simpeg.kompetensi.create') && !$isManager) {
             return response()->json([
                 'status' => 'error',
@@ -352,7 +357,7 @@ class KompetensiController extends Controller
     public function updatePelatihan(UpdateRiwayatPelatihanRequest $request, int $id): JsonResponse
     {
         $user = $request->user();
-        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        $isManager = $this->isManager($user);
         if (!$user->hasPermission('simpeg.kompetensi.update') && !$isManager) {
             return response()->json([
                 'status' => 'error',
@@ -387,7 +392,7 @@ class KompetensiController extends Controller
     public function destroyPelatihan(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        $isManager = $user->hasPermission('simpeg.kompetensi.manage') || $user->isAdmin();
+        $isManager = $this->isManager($user);
         if (!$user->hasPermission('simpeg.kompetensi.delete') && !$isManager) {
             return response()->json([
                 'status' => 'error',

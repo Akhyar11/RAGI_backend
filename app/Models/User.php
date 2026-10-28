@@ -345,17 +345,24 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        if (!\Illuminate\Support\Facades\Schema::hasTable('core_system_settings')) {
+        if ($this->hasRole('superadmin')) {
+            return true;
+        }
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('core_system_settings')) {
+            $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value');
+            if ($superAdminRole && $this->hasRole($superAdminRole)) {
+                return true;
+            }
+        }
+
+        // Jika user sudah memiliki role apapun dan tidak memiliki superadmin di atas,
+        // maka dia pasti BUKAN superadmin (walaupun ID-nya 1)
+        if ($this->roles()->exists()) {
             return false;
         }
 
-        $superAdminRole = \App\Models\SystemSetting::where('key', 'superadmin_role')->value('value');
-        
-        if ($superAdminRole) {
-            return $this->hasRole($superAdminRole);
-        }
-
-        // Fallback for bootstrap / missing settings
+        // Fallback bootstrap HANYA untuk pengguna awal saat database baru diinstall dan belum ada role
         return $this->id === 1;
     }
 

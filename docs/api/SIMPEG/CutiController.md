@@ -147,7 +147,7 @@ Modul ini mengelola permohonan cuti pegawai (tahunan, sakit, melahirkan, alasan 
 
 | Field | Type | Required | Validasi | Deskripsi |
 |---|---|---|---|---|
-| `pegawai_id` | integer | ✅ | `required|exists:pegawai,id` | ID Pegawai yang mengajukan |
+| `pegawai_id` | integer | ❌ | `nullable|exists:simpeg_pegawai,id` | ID Pegawai pemohon (otomatis terisi untuk Dosen/Tendik pemohon) |
 | `master_jenis_cuti_id` | integer | ✅ | `required|exists:master_jenis_cuti,id` | ID Referensi Jenis Cuti |
 | `tanggal_mulai` | date | ✅ | `required|date` | Tanggal mulai cuti (`YYYY-MM-DD`) |
 | `tanggal_selesai` | date | ✅ | `required|date|after_or_equal:tanggal_mulai` | Tanggal selesai cuti (`YYYY-MM-DD`) |

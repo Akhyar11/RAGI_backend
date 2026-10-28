@@ -47,6 +47,11 @@ class KompetensiService
         return 'storage/' . $path;
     }
 
+    protected function resolvePegawaiId($user): ?int
+    {
+        return $user->pegawai?->id ?: Pegawai::where('user_id', $user->id)->value('id');
+    }
+
     // =========================================================================
     // 1. SERTIFIKASI DOSEN
     // =========================================================================
@@ -56,9 +61,10 @@ class KompetensiService
         $query = SertifikasiDosen::with(['pegawai.unitKerja', 'jenisSertifikasi']);
 
         // Otorisasi Scoping
-        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.kompetensi.manage');
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage');
+
         if (!$isManager) {
-            $pegawaiId = $user->pegawai?->id;
+            $pegawaiId = $this->resolvePegawaiId($user);
             if ($pegawaiId) {
                 $query->where('pegawai_id', $pegawaiId);
             } else {
@@ -140,9 +146,10 @@ class KompetensiService
     {
         $query = RiwayatTes::with(['pegawai.unitKerja', 'jenisTes']);
 
-        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.kompetensi.manage');
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage');
+
         if (!$isManager) {
-            $pegawaiId = $user->pegawai?->id;
+            $pegawaiId = $this->resolvePegawaiId($user);
             if ($pegawaiId) {
                 $query->where('pegawai_id', $pegawaiId);
             } else {
@@ -221,9 +228,10 @@ class KompetensiService
     {
         $query = RiwayatPelatihan::with(['pegawai.unitKerja', 'jenisPelatihan', 'peran', 'tingkat']);
 
-        $isManager = $user->isAdmin() || $user->hasPermission('simpeg.kompetensi.manage');
+        $isManager = $user->hasPermission('simpeg.kompetensi.manage');
+
         if (!$isManager) {
-            $pegawaiId = $user->pegawai?->id;
+            $pegawaiId = $this->resolvePegawaiId($user);
             if ($pegawaiId) {
                 $query->where('pegawai_id', $pegawaiId);
             } else {

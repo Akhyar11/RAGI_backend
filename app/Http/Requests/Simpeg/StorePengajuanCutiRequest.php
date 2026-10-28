@@ -14,7 +14,7 @@ class StorePengajuanCutiRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'pegawai_id' => 'required|exists:simpeg_pegawai,id',
+            'pegawai_id' => 'nullable|exists:simpeg_pegawai,id',
             'master_jenis_cuti_id' => 'required|exists:simpeg_master_jenis_cuti,id',
             'tanggal_mulai' => 'required|date',
             'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
