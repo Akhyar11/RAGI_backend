@@ -1,8 +1,8 @@
 # UsulanJafungController
 
-> **Modul**: SIMPEG / **Base URL**: /api/simpeg/usulan-jafung / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-28
+> **Modul**: SIMPEG / **Base URL**: /api/simpeg/usulan-jafung / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-10-29
 
-Modul ini mengelola proses usulan kenaikan Jabatan Fungsional (Jafung) dosen, validasi angka kredit, verifikasi dokumen SK hasil, catatan reviewer/tim penilai, serta soft delete usulan.
+Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional Akademik Dosen (JAD & KUM), angka kredit, berkas fisik SK hasil penetapan, catatan/nomor SK, serta penghapusan data.
 
 ---
 
@@ -10,17 +10,17 @@ Modul ini mengelola proses usulan kenaikan Jabatan Fungsional (Jafung) dosen, va
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
-| GET | `/api/simpeg/usulan-jafung` | Daftar usulan jafung dosen | ✅ Bearer |
-| GET | `/api/simpeg/usulan-jafung/{id}` | Detail usulan jafung | ✅ Bearer |
-| POST | `/api/simpeg/usulan-jafung` | Buat usulan jafung baru | ✅ Bearer |
-| PUT | `/api/simpeg/usulan-jafung/{id}` | Perbarui usulan jafung | ✅ Bearer |
-| DELETE | `/api/simpeg/usulan-jafung/{id}` | Hapus usulan jafung (soft delete) | ✅ Bearer |
+| GET | `/api/simpeg/usulan-jafung` | Daftar data penetapan JAD dosen | ✅ Bearer |
+| GET | `/api/simpeg/usulan-jafung/{id}` | Detail data penetapan JAD | ✅ Bearer |
+| POST | `/api/simpeg/usulan-jafung` | Unggah & simpan data penetapan JAD dan SK baru | ✅ Bearer |
+| PUT | `/api/simpeg/usulan-jafung/{id}` | Perbarui data penetapan JAD | ✅ Bearer |
+| DELETE | `/api/simpeg/usulan-jafung/{id}` | Hapus data penetapan JAD (soft delete) | ✅ Bearer |
 
 ---
 
 ## 1. GET /api/simpeg/usulan-jafung
 
-> Mengambil daftar usulan kenaikan jafung dengan filtering dan pagination.
+> Mengambil daftar data penetapan JAD dengan filtering dan pagination.
 
 ### Headers
 
@@ -34,7 +34,7 @@ Modul ini mengelola proses usulan kenaikan Jabatan Fungsional (Jafung) dosen, va
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
 | `search` | string | ❌ | — | Cari nama pegawai, NIP, NIDN, catatan reviewer |
-| `status_usulan` | string | ❌ | — | Filter status: `submitted`, `in_review`, `disetujui`, `ditolak` |
+| `status_usulan` | string | ❌ | — | Filter status: `disetujui`, `submitted`, `ditolak` |
 | `jafung_tujuan_id` | integer | ❌ | — | Filter ID jabatan fungsional tujuan |
 | `pegawai_id` | integer | ❌ | — | Filter ID pegawai tertentu |
 | `sort_by` | string | ❌ | `created_at` | Kolom urutan (`created_at`, `angka_kredit_usulan`, `status_usulan`, `id`) |
@@ -47,7 +47,7 @@ Modul ini mengelola proses usulan kenaikan Jabatan Fungsional (Jafung) dosen, va
 ```json
 {
     "status": "success",
-    "message": "Data usulan jafung berhasil diambil",
+    "message": "Data jabatan akademik dosen (JAD) berhasil diambil",
     "data": [
         {
             "id": 1,
@@ -55,11 +55,12 @@ Modul ini mengelola proses usulan kenaikan Jabatan Fungsional (Jafung) dosen, va
             "jafung_asal_id": 2,
             "jafung_tujuan_id": 3,
             "angka_kredit_usulan": 300,
-            "status_usulan": "submitted",
-            "catatan_reviewer": null,
-            "file_sk_hasil": null,
-            "created_at": "2026-09-19T08:00:00.000000Z",
-            "updated_at": "2026-09-19T08:00:00.000000Z",
+            "status_usulan": "disetujui",
+            "catatan_reviewer": "SK LLDIKTI No. 123/LL6/AK/2026",
+            "file_sk_hasil": "simpeg/usulan_jafung/sk_dosen.pdf",
+            "file_sk_hasil_url": "https://api.domain.ac.id/api/files/view?path=simpeg%2Fusulan_jafung%2Fsk_dosen.pdf&signature=...",
+            "created_at": "2026-10-29T08:00:00.000000Z",
+            "updated_at": "2026-10-29T08:00:00.000000Z",
             "pegawai": {
                 "id": 10,
                 "nama_lengkap": "Dr. Siti Aminah, M.Kom",
@@ -234,14 +235,14 @@ Modul ini mengelola proses usulan kenaikan Jabatan Fungsional (Jafung) dosen, va
 ```json
 {
     "status": "success",
-    "message": "Usulan kenaikan Jafung berhasil diajukan",
+    "message": "Data penetapan JAD dan SK berhasil disimpan",
     "data": {
         "id": 2,
         "pegawai_id": 10,
         "jafung_asal_id": 2,
         "jafung_tujuan_id": 3,
         "angka_kredit_usulan": 300,
-        "status_usulan": "submitted",
+        "status_usulan": "disetujui",
         "created_at": "2026-09-19T08:10:00.000000Z",
         "updated_at": "2026-09-19T08:10:00.000000Z"
     }
@@ -388,10 +389,10 @@ Modul ini mengelola proses usulan kenaikan Jabatan Fungsional (Jafung) dosen, va
 ```json
 {
     "status": "success",
-    "message": "Usulan jafung berhasil dihapus (soft delete)",
+    "message": "Data penetapan JAD berhasil dihapus",
     "data": {
         "id": 1,
-        "deleted_at": "2026-09-19T08:15:00.000000Z"
+        "deleted_at": "2026-10-29T08:15:00.000000Z"
     }
 }
 ```

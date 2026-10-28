@@ -22,6 +22,25 @@ class UsulanJafung extends Model
         'catatan_reviewer',
     ];
 
+    protected $appends = [
+        'file_sk_hasil_url',
+    ];
+
+    public function getFileSkHasilUrlAttribute(): ?string
+    {
+        if (empty($this->file_sk_hasil)) {
+            return null;
+        }
+
+        if (str_starts_with($this->file_sk_hasil, 'http://') || str_starts_with($this->file_sk_hasil, 'https://')) {
+            return $this->file_sk_hasil;
+        }
+
+        $files = app(\App\Services\Storage\FileStorageService::class);
+        return $files->signedUrl($this->file_sk_hasil)
+            ?? $files->url($this->file_sk_hasil, private: true);
+    }
+
     public function pegawai(): BelongsTo
     {
         return $this->belongsTo(Pegawai::class, 'pegawai_id');

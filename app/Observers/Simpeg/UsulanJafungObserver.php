@@ -29,6 +29,12 @@ class UsulanJafungObserver
                 newValues: $cleanValues,
                 request: request()
             );
+
+            if ($model->status_usulan === 'disetujui' && $model->jafung_tujuan_id && $model->pegawai_id) {
+                \App\Models\Simpeg\Pegawai::where('id', $model->pegawai_id)->update([
+                    'jabatan_fungsional_id' => $model->jafung_tujuan_id,
+                ]);
+            }
         } catch (\Throwable $e) {
             Log::error('Audit log failed on UsulanJafung created: ' . $e->getMessage());
         }

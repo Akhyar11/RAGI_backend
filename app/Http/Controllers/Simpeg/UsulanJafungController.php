@@ -87,7 +87,7 @@ class UsulanJafungController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Data usulan jafung berhasil diambil',
+            'message' => 'Data jabatan akademik dosen (JAD) berhasil diambil',
             'data' => $paginated->items(),
             'meta' => [
                 'current_page' => $paginated->currentPage(),
@@ -122,13 +122,13 @@ class UsulanJafungController extends Controller
         if (!$isVerifier) {
             $pegId = $user->pegawai?->id;
             if (!$pegId || $usulan->pegawai_id !== $pegId) {
-                throw new AuthorizationException('Akses Ditolak: Anda hanya berhak melihat usulan jafung milik sendiri.');
+                throw new AuthorizationException('Akses Ditolak: Anda hanya berhak melihat data penetapan JAD milik sendiri.');
             }
         }
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Detail usulan jafung berhasil diambil',
+            'message' => 'Detail data penetapan JAD berhasil diambil',
             'data' => $usulan,
         ]);
     }
@@ -156,7 +156,7 @@ class UsulanJafungController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Usulan kenaikan Jafung berhasil diajukan',
+            'message' => 'Data penetapan JAD dan SK berhasil disimpan',
             'data' => $usulan,
         ], 201);
     }
@@ -173,13 +173,7 @@ class UsulanJafungController extends Controller
         if (!$isVerifier) {
             $pegId = $user->pegawai?->id;
             if (!$pegId || $usulan->pegawai_id !== $pegId) {
-                throw new AuthorizationException('Akses Ditolak: Anda tidak dapat mengubah usulan ini.');
-            }
-            if (!in_array($usulan->status_usulan, ['draft', 'perbaikan', 'submitted'], true)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Usulan jafung yang sudah diproses atau disetujui tidak dapat diubah.',
-                ], 422);
+                throw new AuthorizationException('Akses Ditolak: Anda tidak dapat mengubah data ini.');
             }
         }
 
@@ -187,7 +181,7 @@ class UsulanJafungController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Usulan kenaikan Jafung berhasil diperbarui',
+            'message' => 'Data penetapan JAD dan SK berhasil diperbarui',
             'data' => $updated,
         ], 200);
     }
@@ -200,7 +194,7 @@ class UsulanJafungController extends Controller
                       $user->hasRole('admin');
 
         if (!$user->hasPermission('simpeg.usulan_jafung.delete') && !$isVerifier) {
-            throw new AuthorizationException('Anda tidak memiliki izin menghapus usulan jafung.');
+            throw new AuthorizationException('Anda tidak memiliki izin menghapus data penetapan JAD.');
         }
 
         $usulan = UsulanJafung::findOrFail($id);
@@ -208,13 +202,7 @@ class UsulanJafungController extends Controller
         if (!$isVerifier) {
             $pegId = $user->pegawai?->id;
             if (!$pegId || $usulan->pegawai_id !== $pegId) {
-                throw new AuthorizationException('Akses Ditolak: Anda tidak dapat menghapus usulan ini.');
-            }
-            if (!in_array($usulan->status_usulan, ['draft', 'perbaikan'], true)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Hanya usulan jafung berstatus draft atau perbaikan yang dapat dibatalkan/dihapus.',
-                ], 422);
+                throw new AuthorizationException('Akses Ditolak: Anda tidak dapat menghapus data ini.');
             }
         }
 
@@ -223,7 +211,7 @@ class UsulanJafungController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Usulan jafung berhasil dihapus (soft delete)',
+            'message' => 'Data penetapan JAD berhasil dihapus',
             'data' => [
                 'id' => $deletedId,
                 'deleted_at' => now()->toIso8601String(),
