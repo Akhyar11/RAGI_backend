@@ -20,6 +20,20 @@ class PegawaiService
     {
         $query = Pegawai::with(['user', 'user.roles', 'unitKerja', 'jabatanFungsional', 'shiftTemplate', 'officeLocation', 'riwayatJabatan.jabatan', 'riwayatPendidikan', 'dosen', 'dosen.programStudi', 'roles']);
 
+        // Sembunyikan akun ber-role Superadmin atau role terestriksi dari daftar pegawai SIMPEG
+        $restrictedRoleIds = app(\App\Services\IAM\RestrictedRoleService::class)->getRestrictedRoleIds();
+        $query->whereDoesntHave('user.roles', function ($q) use ($restrictedRoleIds) {
+            $q->where('core_roles.slug', 'superadmin');
+            if (!empty($restrictedRoleIds)) {
+                $q->orWhereIn('core_roles.id', $restrictedRoleIds);
+            }
+        })->whereDoesntHave('roles', function ($q) use ($restrictedRoleIds) {
+            $q->where('core_roles.slug', 'superadmin');
+            if (!empty($restrictedRoleIds)) {
+                $q->orWhereIn('core_roles.id', $restrictedRoleIds);
+            }
+        });
+
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {

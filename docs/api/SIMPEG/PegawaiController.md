@@ -4,7 +4,7 @@
 > **Base URL**: `/api/simpeg/pegawai`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-14  
-> **Diperbarui**: 2026-09-29  
+> **Diperbarui**: 2026-10-29  
 
 Controller ini mengelola master data pegawai di lingkungan universitas/institusi, mencakup pendaftaran pegawai baru, penetapan multi-role jenis pegawai (`core_roles`), pembuatan akun login SSO otomatis (`core_users`), pengunduhan template import berkas, import pegawai massal via CSV/Excel, manajemen biometrik presensi, serta clearance inventaris aset dinas (SINAPRA).
 
@@ -164,6 +164,7 @@ Accept: application/json
 ```json
 {
   "status": "success",
+  "message": "Profil pegawai berhasil diambil",
   "data": {
     "id": 1,
     "user_id": 2,
@@ -609,4 +610,5 @@ Accept: application/json
 1. **Penerapan Soft-Delete**: Model `Pegawai` menggunakan trait `Illuminate\Database\Eloquent\SoftDeletes`. Menghapus data pegawai melalui endpoint `DELETE` hanya akan mengisi kolom `deleted_at` untuk menjamin integritas riwayat presensi, gaji, dan riwayat jabatan.
 2. **Proteksi Password Akun SSO**: Password default (`indonusa`) yang di-generate untuk akun login SSO (`core_users`) disimpan dalam bentuk hash terenkripsi Bcrypt dan **TIDAK PERNAH dikembalikan** pada respons JSON endpoint API manapun demi privasi dan keamanan sistem.
 3. **Validasi Clearance Aset SINAPRA**: Setiap percobaan mengubah status kepegawaian menjadi `keluar`, `pensiun`, atau `berhenti`, serta tindakan penghapusan data pegawai (`DELETE`), secara otomatis divalidasi oleh sistem. Jika pegawai masih memegang aset dinas aktif atau memiliki pinjaman fasilitas yang belum dikembalikan, sistem akan memblokir aksi tersebut dengan HTTP 422 Unprocessable Entity.
+4. **Restriksi Role & Akun Khusus**: Akun dengan peran Super Administrator (`superadmin`) atau role yang masuk dalam konfigurasi Restriksi Role SSO (`restricted_role_ids`) secara otomatis dikecualikan dari daftar pegawai (`GET /api/simpeg/pegawai`), daftar pilihan role SIMPEG (`GET /api/simpeg/pegawai/roles`), dan dicegah pembuatan otomatis record kepegawaian pada `GET /api/simpeg/pegawai/me`.
 

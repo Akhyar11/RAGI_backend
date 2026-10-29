@@ -94,6 +94,18 @@ class PegawaiController extends Controller
             ->first();
 
         if (!$pegawai) {
+            $isSuperadmin = $user->hasRole('superadmin');
+            $restrictedIds = app(\App\Services\IAM\RestrictedRoleService::class)->getRestrictedRoleIds();
+            $hasRestrictedRole = !empty($restrictedIds) && $user->roles()->whereIn('core_roles.id', $restrictedIds)->exists();
+
+            if ($isSuperadmin || $hasRestrictedRole) {
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Data profil pegawai tidak ditemukan untuk akun terestriksi.',
+                    'data' => null
+                ]);
+            }
+
             $unitKerja = \App\Models\Simpeg\UnitKerja::first();
             $nama = $user->name ?: ucfirst($user->username);
             $isTendik = $user->hasRole('tendik');
@@ -116,6 +128,7 @@ class PegawaiController extends Controller
 
         return response()->json([
             'status' => 'success',
+            'message' => 'Profil pegawai berhasil diambil',
             'data' => $pegawai
         ]);
     }
@@ -138,10 +151,12 @@ class PegawaiController extends Controller
         ]);
     }
 
-    public function getRoles(Request $request)
+    public function getRoles(Request $request, \App\Services\IAM\RestrictedRoleService $restrictedRoleService)
     {
-        $roles = \App\Models\Role::where('is_active', true)
-            ->orderBy('name')
+        $query = \App\Models\Role::where('is_active', true);
+        $restrictedRoleService->applyVisibilityScope($query, $request->user());
+
+        $roles = $query->orderBy('name')
             ->get(['id', 'name', 'slug', 'description']);
 
         return response()->json([
