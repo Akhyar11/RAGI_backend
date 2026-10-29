@@ -360,6 +360,11 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::post('usulan-jafung/{id}', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'update']);
     Route::delete('usulan-jafung/{id}', [App\Http\Controllers\Simpeg\UsulanJafungController::class, 'destroy']);
 
+    // Analitik Kepegawaian & Ekspor Excel JAD
+    Route::get('analitik/ringkasan', [App\Http\Controllers\Simpeg\AnalitikPegawaiController::class, 'ringkasan']);
+    Route::get('analitik/pegawai', [App\Http\Controllers\Simpeg\AnalitikPegawaiController::class, 'index']);
+    Route::get('analitik/export-excel', [App\Http\Controllers\Simpeg\AnalitikPegawaiController::class, 'exportExcel']);
+
     // Penilaian Kinerja & SKP Butir-per-Butir
     Route::get('penilaian-kinerja/masters', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'masters']);
     Route::get('penilaian-kinerja', [App\Http\Controllers\Simpeg\PenilaianKinerjaController::class, 'index']);

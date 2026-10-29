@@ -170,6 +170,7 @@
 | MasterGolonganPangkatController | Master referensi jenjang golongan & pangkat kepegawaian (I/a s.d. IV/e) | [docs/api/SIMPEG/MasterGolonganPangkatController.md](api/SIMPEG/MasterGolonganPangkatController.md) |
 | MasterJenisTransportasiController | Master moda dan jenis transportasi penugasan dinas luar (armada kampus vs umum/pribadi) | [docs/api/SIMPEG/MasterJenisTransportasiController.md](api/SIMPEG/MasterJenisTransportasiController.md) |
 | SimpegNomorSuratController | Portal mandiri penomoran surat SIMPEG: riwayat nomor surat, permohonan, & unggah scan | [docs/api/SIMPEG/SimpegNomorSuratController.md](api/SIMPEG/SimpegNomorSuratController.md) |
+| AnalitikPegawaiController | Analitik kepegawaian, sebaran TMT Jabatan Akademik Dosen (JAD), & export rekapitulasi Excel | [docs/api/SIMPEG/AnalitikPegawaiController.md](api/SIMPEG/AnalitikPegawaiController.md) |
 
 
 ## 🏢 Modul SINAPRA (Sarana, Prasarana, & Aset)
