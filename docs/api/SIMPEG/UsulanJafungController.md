@@ -226,11 +226,11 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
 
 | Field | Type | Required | Validasi |
 |---|---|---|---|
-| `pegawai_id` | integer | ✅ | Exists di `pegawai,id` |
-| `jafung_tujuan_id` | integer | ✅ | Exists di `master_jabatan_fungsional,id` |
+| `pegawai_id` | integer | ✅ | Exists di `simpeg_pegawai,id` |
+| `jafung_tujuan_id` | integer | ✅ | Exists di `simpeg_jabatan_fungsional_akademik,id`, unik per dosen |
 | `nomor_sk` | string | ✅ | Max: 150 |
 | `tanggal_mulai_berlaku` | date | ✅ | Format: `YYYY-MM-DD` |
-| `jafung_asal_id` | integer | ❌ | Exists di `master_jabatan_fungsional,id` |
+| `jafung_asal_id` | integer | ❌ | Exists di `simpeg_jabatan_fungsional_akademik,id` |
 | `angka_kredit_usulan` | numeric | ❌ | Min: 0 |
 | `status_usulan` | string | ❌ | In: `disetujui,submitted,ditolak` |
 | `catatan_reviewer` | string | ❌ | Teks catatan |

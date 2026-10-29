@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Simpeg;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreUsulanJafungRequest extends FormRequest
 {
@@ -17,7 +18,12 @@ class StoreUsulanJafungRequest extends FormRequest
         return [
             'pegawai_id' => 'required|exists:simpeg_pegawai,id',
             'jafung_asal_id' => 'nullable|exists:simpeg_jabatan_fungsional_akademik,id',
-            'jafung_tujuan_id' => 'required|exists:simpeg_jabatan_fungsional_akademik,id',
+            'jafung_tujuan_id' => [
+                'required',
+                'exists:simpeg_jabatan_fungsional_akademik,id',
+                Rule::unique('simpeg_usulan_jafung', 'jafung_tujuan_id')
+                    ->where(fn ($query) => $query->where('pegawai_id', $this->pegawai_id)),
+            ],
             'nomor_sk' => 'required|string|max:150',
             'tanggal_mulai_berlaku' => 'required|date',
             'angka_kredit_usulan' => 'nullable|integer|min:0',
@@ -33,6 +39,7 @@ class StoreUsulanJafungRequest extends FormRequest
             'pegawai_id.exists' => 'Pegawai tidak valid.',
             'jafung_tujuan_id.required' => 'Jabatan Akademik (JAD) wajib dipilih.',
             'jafung_tujuan_id.exists' => 'Jabatan Akademik tidak valid.',
+            'jafung_tujuan_id.unique' => 'Jabatan Akademik ini sudah pernah tercatat untuk dosen yang bersangkutan.',
             'nomor_sk.required' => 'Nomor SK penetapan wajib diisi.',
             'tanggal_mulai_berlaku.required' => 'Tanggal mulai berlaku (TMT) wajib diisi.',
             'tanggal_mulai_berlaku.date' => 'Format tanggal mulai berlaku tidak valid.',

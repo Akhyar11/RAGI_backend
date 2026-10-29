@@ -9,6 +9,7 @@ use App\Models\Simpeg\SuratTugas;
 use App\Models\Simpeg\SertifikasiDosen;
 use App\Models\Simpeg\RiwayatPelatihan;
 use App\Models\Simpeg\RiwayatJabatan;
+use App\Models\Simpeg\UsulanJafung;
 use App\Models\Simpeg\JabatanFungsionalAkademik;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\DosenPengampu;
@@ -211,6 +212,38 @@ class TridharmaDossierService
             ->whereNotNull('jabatan_fungsional_id')
             ->orderByDesc('mulai_jabatan')
             ->get();
+
+        // Pastikan entri penetapan SK JAD dari simpeg_usulan_jafung juga tercakup & tersinkron
+        $usulanJadList = UsulanJafung::with(['jafungTujuan', 'jafungAsal'])
+            ->where('pegawai_id', $pegawai->id)
+            ->where('status_usulan', 'disetujui')
+            ->orderByDesc('tanggal_mulai_berlaku')
+            ->orderByDesc('created_at')
+            ->get();
+
+        if ($usulanJadList->isNotEmpty()) {
+            foreach ($usulanJadList as $uj) {
+                if (!$riwayatJad->contains('jabatan_fungsional_id', $uj->jafung_tujuan_id)) {
+                    $tmt = $uj->tanggal_mulai_berlaku ?: ($uj->created_at ? $uj->created_at->format('Y-m-d') : now()->toDateString());
+                    $newRj = RiwayatJabatan::updateOrCreate(
+                        [
+                            'pegawai_id' => $uj->pegawai_id,
+                            'jabatan_fungsional_id' => $uj->jafung_tujuan_id,
+                        ],
+                        [
+                            'mulai_jabatan' => $tmt,
+                            'sk_nomor' => $uj->nomor_sk,
+                            'sk_tanggal' => $tmt,
+                            'file_sk' => $uj->file_sk_hasil,
+                            'is_active' => ($pegawai->jabatan_fungsional_id == $uj->jafung_tujuan_id),
+                        ]
+                    );
+                    $newRj->setRelation('jabatanFungsional', $uj->jafungTujuan);
+                    $riwayatJad->push($newRj);
+                }
+            }
+            $riwayatJad = $riwayatJad->sortByDesc('mulai_jabatan')->values();
+        }
 
         $kinerjaList = PenilaianKinerja::with(['pejabatPenilai', 'evaluator'])
             ->where('pegawai_id', $pegawai->id)

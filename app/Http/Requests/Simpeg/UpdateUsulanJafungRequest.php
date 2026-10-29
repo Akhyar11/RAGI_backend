@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Simpeg;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateUsulanJafungRequest extends FormRequest
 {
@@ -15,10 +16,20 @@ class UpdateUsulanJafungRequest extends FormRequest
 
     public function rules(): array
     {
+        $usulanId = $this->route('usulan_jafung')?->id ?? $this->route('usulan_jafung');
+        $pegawaiId = $this->pegawai_id ?? $this->route('usulan_jafung')?->pegawai_id;
+
         return [
             'pegawai_id' => 'sometimes|required|exists:simpeg_pegawai,id',
             'jafung_asal_id' => 'nullable|exists:simpeg_jabatan_fungsional_akademik,id',
-            'jafung_tujuan_id' => 'sometimes|required|exists:simpeg_jabatan_fungsional_akademik,id',
+            'jafung_tujuan_id' => [
+                'sometimes',
+                'required',
+                'exists:simpeg_jabatan_fungsional_akademik,id',
+                Rule::unique('simpeg_usulan_jafung', 'jafung_tujuan_id')
+                    ->where(fn ($query) => $query->where('pegawai_id', $pegawaiId))
+                    ->ignore($usulanId),
+            ],
             'nomor_sk' => 'sometimes|required|string|max:150',
             'tanggal_mulai_berlaku' => 'sometimes|required|date',
             'angka_kredit_usulan' => 'sometimes|nullable|integer|min:0',
@@ -33,6 +44,7 @@ class UpdateUsulanJafungRequest extends FormRequest
         return [
             'pegawai_id.exists' => 'Pegawai tidak valid.',
             'jafung_tujuan_id.exists' => 'Jabatan fungsional tujuan tidak valid.',
+            'jafung_tujuan_id.unique' => 'Jabatan Akademik ini sudah pernah tercatat untuk dosen yang bersangkutan.',
             'file_sk_hasil.max' => 'Ukuran file SK maksimal 10MB.',
         ];
     }

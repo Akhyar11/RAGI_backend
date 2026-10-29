@@ -3,10 +3,12 @@
 namespace App\Services\Simpeg;
 
 use App\Models\Simpeg\Pegawai;
+use App\Models\Simpeg\RiwayatJabatan;
 use App\Models\Simpeg\UsulanJafung;
 use App\Services\Storage\FileStorageService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class UsulanJafungService
 {
@@ -20,6 +22,16 @@ class UsulanJafungService
     public function create(array $data): UsulanJafung
     {
         return DB::transaction(function () use ($data) {
+            // Cegah duplikasi: dosen yang sama tidak boleh menginput JAD yang sama
+            $exists = UsulanJafung::where('pegawai_id', $data['pegawai_id'])
+                ->where('jafung_tujuan_id', $data['jafung_tujuan_id'])
+                ->exists();
+            if ($exists) {
+                throw ValidationException::withMessages([
+                    'jafung_tujuan_id' => 'Jabatan Akademik ini sudah pernah tercatat untuk dosen yang bersangkutan.',
+                ]);
+            }
+
             $file = $data['file_sk_hasil'] ?? null;
             if ($file instanceof UploadedFile) {
                 $path = $this->files->store($file, 'simpeg/usulan_jafung', private: true);
@@ -45,11 +57,31 @@ class UsulanJafungService
 
             $usulan = UsulanJafung::create($data);
 
-            // Sinkronkan JAD ke biodata pegawai jika status disetujui
+            // Sinkronkan JAD ke biodata pegawai dan tabel RiwayatJabatan jika status disetujui
             if ($usulan->status_usulan === 'disetujui' && $usulan->jafung_tujuan_id && $usulan->pegawai_id) {
                 Pegawai::where('id', $usulan->pegawai_id)->update([
                     'jabatan_fungsional_id' => $usulan->jafung_tujuan_id,
                 ]);
+
+                $tmt = $usulan->tanggal_mulai_berlaku ?: ($usulan->created_at ? $usulan->created_at->format('Y-m-d') : now()->toDateString());
+                RiwayatJabatan::updateOrCreate(
+                    [
+                        'pegawai_id' => $usulan->pegawai_id,
+                        'jabatan_fungsional_id' => $usulan->jafung_tujuan_id,
+                    ],
+                    [
+                        'mulai_jabatan' => $tmt,
+                        'sk_nomor' => $usulan->nomor_sk,
+                        'sk_tanggal' => $tmt,
+                        'file_sk' => $usulan->file_sk_hasil,
+                        'is_active' => true,
+                    ]
+                );
+
+                RiwayatJabatan::where('pegawai_id', $usulan->pegawai_id)
+                    ->whereNotNull('jabatan_fungsional_id')
+                    ->where('jabatan_fungsional_id', '!=', $usulan->jafung_tujuan_id)
+                    ->update(['is_active' => false]);
             }
 
             $usulan->load([
@@ -69,6 +101,22 @@ class UsulanJafungService
     public function update(UsulanJafung $usulan, array $data): UsulanJafung
     {
         return DB::transaction(function () use ($usulan, $data) {
+            $pegawaiId = $data['pegawai_id'] ?? $usulan->pegawai_id;
+            $jafungTujuanId = $data['jafung_tujuan_id'] ?? $usulan->jafung_tujuan_id;
+
+            // Validasi duplikasi saat update
+            if ($jafungTujuanId != $usulan->jafung_tujuan_id || $pegawaiId != $usulan->pegawai_id) {
+                $exists = UsulanJafung::where('pegawai_id', $pegawaiId)
+                    ->where('jafung_tujuan_id', $jafungTujuanId)
+                    ->where('id', '!=', $usulan->id)
+                    ->exists();
+                if ($exists) {
+                    throw ValidationException::withMessages([
+                        'jafung_tujuan_id' => 'Jabatan Akademik ini sudah pernah tercatat untuk dosen yang bersangkutan.',
+                    ]);
+                }
+            }
+
             $file = $data['file_sk_hasil'] ?? null;
             if ($file instanceof UploadedFile) {
                 if ($usulan->file_sk_hasil) {
@@ -78,12 +126,40 @@ class UsulanJafungService
                 $data['file_sk_hasil'] = $path;
             }
 
+            $oldJafungTujuanId = $usulan->jafung_tujuan_id;
             $usulan->update($data);
 
             if (($data['status_usulan'] ?? $usulan->status_usulan) === 'disetujui' && $usulan->jafung_tujuan_id && $usulan->pegawai_id) {
                 Pegawai::where('id', $usulan->pegawai_id)->update([
                     'jabatan_fungsional_id' => $usulan->jafung_tujuan_id,
                 ]);
+
+                // Jika jafung_tujuan berubah, hapus / update riwayat lama
+                if ($oldJafungTujuanId && $oldJafungTujuanId != $usulan->jafung_tujuan_id) {
+                    RiwayatJabatan::where('pegawai_id', $usulan->pegawai_id)
+                        ->where('jabatan_fungsional_id', $oldJafungTujuanId)
+                        ->delete();
+                }
+
+                $tmt = $usulan->tanggal_mulai_berlaku ?: ($usulan->created_at ? $usulan->created_at->format('Y-m-d') : now()->toDateString());
+                RiwayatJabatan::updateOrCreate(
+                    [
+                        'pegawai_id' => $usulan->pegawai_id,
+                        'jabatan_fungsional_id' => $usulan->jafung_tujuan_id,
+                    ],
+                    [
+                        'mulai_jabatan' => $tmt,
+                        'sk_nomor' => $usulan->nomor_sk,
+                        'sk_tanggal' => $tmt,
+                        'file_sk' => $usulan->file_sk_hasil,
+                        'is_active' => true,
+                    ]
+                );
+
+                RiwayatJabatan::where('pegawai_id', $usulan->pegawai_id)
+                    ->whereNotNull('jabatan_fungsional_id')
+                    ->where('jabatan_fungsional_id', '!=', $usulan->jafung_tujuan_id)
+                    ->update(['is_active' => false]);
             }
 
             $usulan->load([
@@ -107,7 +183,35 @@ class UsulanJafungService
                 $this->files->delete($usulan->file_sk_hasil);
             }
 
-            return (bool) $usulan->delete();
+            $pegawaiId = $usulan->pegawai_id;
+            $jafungId = $usulan->jafung_tujuan_id;
+
+            $deleted = (bool) $usulan->delete();
+
+            // Hapus sinkronisasi riwayat jabatan terkait
+            if ($pegawaiId && $jafungId) {
+                RiwayatJabatan::where('pegawai_id', $pegawaiId)
+                    ->where('jabatan_fungsional_id', $jafungId)
+                    ->delete();
+
+                // Kembalikan jabatan fungsional aktif ke JAD terakhir yang tersisa jika ada
+                $latestJad = UsulanJafung::where('pegawai_id', $pegawaiId)
+                    ->where('status_usulan', 'disetujui')
+                    ->latest('tanggal_mulai_berlaku')
+                    ->first();
+
+                Pegawai::where('id', $pegawaiId)->update([
+                    'jabatan_fungsional_id' => $latestJad?->jafung_tujuan_id,
+                ]);
+
+                if ($latestJad) {
+                    RiwayatJabatan::where('pegawai_id', $pegawaiId)
+                        ->where('jabatan_fungsional_id', $latestJad->jafung_tujuan_id)
+                        ->update(['is_active' => true]);
+                }
+            }
+
+            return $deleted;
         });
     }
 }
