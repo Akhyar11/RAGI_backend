@@ -27,6 +27,11 @@ class JabatanFungsionalAkademik extends Model
         'tunjangan_nominal' => 'float',
     ];
 
+    public function getAngkaKreditAttribute(): ?int
+    {
+        return $this->angka_kredit_min;
+    }
+
     public function golonganPangkat()
     {
         return $this->belongsTo(MasterGolonganPangkat::class, 'golongan_pangkat_id');

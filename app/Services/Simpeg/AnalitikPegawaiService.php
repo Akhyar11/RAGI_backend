@@ -129,7 +129,7 @@ class AnalitikPegawaiService
         $totalTendik = $pegawais->where('jenis_pegawai', '!=', 'dosen')->count();
 
         // Hitung persebaran JAD aktif
-        $masterJafung = JabatanFungsionalAkademik::where('is_active', true)->orderBy('angka_kredit')->get();
+        $masterJafung = JabatanFungsionalAkademik::orderBy('angka_kredit_min')->get();
         $jadCounts = [];
         $kategoriJad = [
             'tenaga_pengajar' => 0,
@@ -145,7 +145,7 @@ class AnalitikPegawaiService
             $jadCounts[] = [
                 'id' => $jf->id,
                 'nama' => $jf->nama,
-                'angka_kredit' => $jf->angka_kredit,
+                'angka_kredit' => $jf->angka_kredit_min,
                 'total' => $count,
             ];
 
@@ -258,7 +258,7 @@ class AnalitikPegawaiService
                 'jabatan_fungsional' => $p->jabatanFungsional ? [
                     'id' => $p->jabatanFungsional->id,
                     'nama' => $p->jabatanFungsional->nama,
-                    'angka_kredit' => $p->jabatanFungsional->angka_kredit,
+                    'angka_kredit' => $p->jabatanFungsional->angka_kredit_min,
                 ] : null,
                 'jad_aktif' => [
                     'tmt' => $tmt ? Carbon::parse($tmt)->format('Y-m-d') : null,
@@ -376,7 +376,7 @@ class AnalitikPegawaiService
             $sheet->setCellValue("F{$row}", $p->unitKerja?->nama ?: '-');
             $sheet->setCellValue("G{$row}", ucfirst($p->status_kepegawaian ?: '-'));
             $sheet->setCellValue("H{$row}", $p->jabatanFungsional?->nama ?: 'Belum Ada JAD');
-            $sheet->setCellValue("I{$row}", $p->jabatanFungsional?->angka_kredit ?: 0);
+            $sheet->setCellValue("I{$row}", $p->jabatanFungsional?->angka_kredit_min ?: 0);
             $sheet->setCellValueExplicit("J{$row}", $skNomor, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             $sheet->setCellValue("K{$row}", $tmt);
             $sheet->setCellValue("L{$row}", $skTanggal);
