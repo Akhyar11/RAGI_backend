@@ -26,6 +26,7 @@ class StoreUsulanJafungRequest extends FormRequest
             ],
             'nomor_sk' => 'required|string|max:150',
             'tanggal_mulai_berlaku' => 'required|date',
+            'tanggal_selesai_berlaku' => 'nullable|date|after_or_equal:tanggal_mulai_berlaku',
             'angka_kredit_usulan' => 'nullable|integer|min:0',
             'catatan_reviewer' => 'nullable|string',
             'file_sk_hasil' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
@@ -43,6 +44,8 @@ class StoreUsulanJafungRequest extends FormRequest
             'nomor_sk.required' => 'Nomor SK penetapan wajib diisi.',
             'tanggal_mulai_berlaku.required' => 'Tanggal mulai berlaku (TMT) wajib diisi.',
             'tanggal_mulai_berlaku.date' => 'Format tanggal mulai berlaku tidak valid.',
+            'tanggal_selesai_berlaku.date' => 'Format tanggal selesai berlaku tidak valid.',
+            'tanggal_selesai_berlaku.after_or_equal' => 'Tanggal selesai berlaku harus sama atau setelah tanggal mulai berlaku.',
             'file_sk_hasil.max' => 'Ukuran file SK maksimal 10MB.',
         ];
     }

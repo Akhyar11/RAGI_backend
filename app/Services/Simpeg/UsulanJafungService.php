@@ -71,6 +71,7 @@ class UsulanJafungService
                     ],
                     [
                         'mulai_jabatan' => $tmt,
+                        'selesai_jabatan' => $usulan->tanggal_selesai_berlaku,
                         'sk_nomor' => $usulan->nomor_sk,
                         'sk_tanggal' => $tmt,
                         'file_sk' => $usulan->file_sk_hasil,
@@ -149,6 +150,7 @@ class UsulanJafungService
                     ],
                     [
                         'mulai_jabatan' => $tmt,
+                        'selesai_jabatan' => $usulan->tanggal_selesai_berlaku,
                         'sk_nomor' => $usulan->nomor_sk,
                         'sk_tanggal' => $tmt,
                         'file_sk' => $usulan->file_sk_hasil,

@@ -18,6 +18,7 @@ class UsulanJafung extends Model
         'jafung_tujuan_id',
         'nomor_sk',
         'tanggal_mulai_berlaku',
+        'tanggal_selesai_berlaku',
         'angka_kredit_usulan',
         'status_usulan',
         'file_sk_hasil',
@@ -26,6 +27,7 @@ class UsulanJafung extends Model
 
     protected $casts = [
         'tanggal_mulai_berlaku' => 'date:Y-m-d',
+        'tanggal_selesai_berlaku' => 'date:Y-m-d',
         'angka_kredit_usulan' => 'integer',
     ];
 

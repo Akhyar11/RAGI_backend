@@ -37,7 +37,7 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
 | `status_usulan` | string | ❌ | — | Filter status: `disetujui`, `submitted`, `ditolak` |
 | `jafung_tujuan_id` | integer | ❌ | — | Filter ID jabatan fungsional tujuan |
 | `pegawai_id` | integer | ❌ | — | Filter ID pegawai tertentu |
-| `sort_by` | string | ❌ | `created_at` | Kolom urutan (`created_at`, `tanggal_mulai_berlaku`, `nomor_sk`, `angka_kredit_usulan`, `status_usulan`, `id`) |
+| `sort_by` | string | ❌ | `created_at` | Kolom urutan (`created_at`, `tanggal_mulai_berlaku`, `tanggal_selesai_berlaku`, `nomor_sk`, `angka_kredit_usulan`, `status_usulan`, `id`) |
 | `sort_order` | string | ❌ | `desc` | Arah urutan: `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
 | `page` | integer | ❌ | `1` | Halaman yang diminta |
@@ -56,6 +56,7 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
             "jafung_tujuan_id": 3,
             "nomor_sk": "SK LLDIKTI No. 123/LL6/AK/2026",
             "tanggal_mulai_berlaku": "2026-01-15",
+            "tanggal_selesai_berlaku": "2028-01-14",
             "angka_kredit_usulan": 300,
             "status_usulan": "disetujui",
             "catatan_reviewer": "Penetapan Lektor",
@@ -216,6 +217,7 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
     "jafung_tujuan_id": 3,
     "nomor_sk": "SK LLDIKTI No. 123/LL6/AK/2026",
     "tanggal_mulai_berlaku": "2026-01-15",
+    "tanggal_selesai_berlaku": "2028-01-14",
     "jafung_asal_id": 2,
     "angka_kredit_usulan": 300,
     "status_usulan": "disetujui",
@@ -230,6 +232,7 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
 | `jafung_tujuan_id` | integer | ✅ | Exists di `simpeg_jabatan_fungsional_akademik,id`, unik per dosen |
 | `nomor_sk` | string | ✅ | Max: 150 |
 | `tanggal_mulai_berlaku` | date | ✅ | Format: `YYYY-MM-DD` |
+| `tanggal_selesai_berlaku` | date | ❌ | Format: `YYYY-MM-DD`, `after_or_equal:tanggal_mulai_berlaku` |
 | `jafung_asal_id` | integer | ❌ | Exists di `simpeg_jabatan_fungsional_akademik,id` |
 | `angka_kredit_usulan` | numeric | ❌ | Min: 0 |
 | `status_usulan` | string | ❌ | In: `disetujui,submitted,ditolak` |
@@ -249,6 +252,7 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
         "jafung_tujuan_id": 3,
         "nomor_sk": "SK LLDIKTI No. 123/LL6/AK/2026",
         "tanggal_mulai_berlaku": "2026-01-15",
+        "tanggal_selesai_berlaku": "2028-01-14",
         "angka_kredit_usulan": 300,
         "status_usulan": "disetujui",
         "created_at": "2026-10-29T08:10:00.000000Z",
@@ -308,6 +312,9 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
 | `pegawai_id` | integer | ❌ | `sometimes|required|exists:simpeg_pegawai,id` | ID Pegawai |
 | `jafung_asal_id` | integer | ❌ | `nullable|exists:simpeg_jabatan_fungsional_akademik,id` | ID Jafung Asal |
 | `jafung_tujuan_id` | integer | ❌ | `sometimes|required|exists:simpeg_jabatan_fungsional_akademik,id` | ID Jafung Tujuan |
+| `nomor_sk` | string | ❌ | `sometimes|required|string|max:150` | Nomor SK Penetapan |
+| `tanggal_mulai_berlaku` | date | ❌ | `sometimes|required|date` | Tanggal Mulai Berlaku TMT |
+| `tanggal_selesai_berlaku` | date | ❌ | `sometimes|nullable|date|after_or_equal:tanggal_mulai_berlaku` | Tanggal Selesai Berlaku SK (Opsional) |
 | `angka_kredit_usulan` | integer | ❌ | `sometimes|required|integer|min:0` | Angka Kredit Usulan |
 | `status_usulan` | string | ❌ | `nullable|in:disetujui,ditolak` | Status Usulan Hasil Verifikasi |
 | `catatan_reviewer` | string | ❌ | `nullable|string` | Catatan Tim Penilai |
@@ -315,6 +322,9 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
 
 ```json
 {
+    "nomor_sk": "SK LLDIKTI No. 123/LL6/AK/2026/REV",
+    "tanggal_mulai_berlaku": "2026-01-15",
+    "tanggal_selesai_berlaku": "2028-01-14",
     "angka_kredit_usulan": 300,
     "status_usulan": "disetujui",
     "catatan_reviewer": "Memenuhi syarat angka kredit kumulatif",
@@ -330,6 +340,8 @@ Modul ini mengelola pencatatan data dan berkas SK penetapan Jabatan Fungsional A
     "message": "Usulan jafung berhasil diperbarui",
     "data": {
         "id": 2,
+        "tanggal_mulai_berlaku": "2026-01-15",
+        "tanggal_selesai_berlaku": "2028-01-14",
         "status_usulan": "disetujui",
         "catatan_reviewer": "Memenuhi syarat angka kredit kumulatif",
         "updated_at": "2026-09-19T08:15:00.000000Z"

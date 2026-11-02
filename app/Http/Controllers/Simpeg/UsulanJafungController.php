@@ -78,7 +78,7 @@ class UsulanJafungController extends Controller
         }
 
         // Sorting
-        $allowedSort = ['created_at', 'tanggal_mulai_berlaku', 'nomor_sk', 'angka_kredit_usulan', 'status_usulan', 'id'];
+        $allowedSort = ['created_at', 'tanggal_mulai_berlaku', 'tanggal_selesai_berlaku', 'nomor_sk', 'angka_kredit_usulan', 'status_usulan', 'id'];
         $sortBy = in_array($request->sort_by, $allowedSort, true) ? $request->sort_by : 'created_at';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);

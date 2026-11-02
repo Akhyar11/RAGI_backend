@@ -32,6 +32,7 @@ class UpdateUsulanJafungRequest extends FormRequest
             ],
             'nomor_sk' => 'sometimes|required|string|max:150',
             'tanggal_mulai_berlaku' => 'sometimes|required|date',
+            'tanggal_selesai_berlaku' => 'sometimes|nullable|date|after_or_equal:tanggal_mulai_berlaku',
             'angka_kredit_usulan' => 'sometimes|nullable|integer|min:0',
             'status_usulan' => 'nullable|in:disetujui,ditolak',
             'catatan_reviewer' => 'nullable|string',
@@ -45,6 +46,8 @@ class UpdateUsulanJafungRequest extends FormRequest
             'pegawai_id.exists' => 'Pegawai tidak valid.',
             'jafung_tujuan_id.exists' => 'Jabatan fungsional tujuan tidak valid.',
             'jafung_tujuan_id.unique' => 'Jabatan Akademik ini sudah pernah tercatat untuk dosen yang bersangkutan.',
+            'tanggal_selesai_berlaku.date' => 'Format tanggal selesai berlaku tidak valid.',
+            'tanggal_selesai_berlaku.after_or_equal' => 'Tanggal selesai berlaku harus sama atau setelah tanggal mulai berlaku.',
             'file_sk_hasil.max' => 'Ukuran file SK maksimal 10MB.',
         ];
     }
