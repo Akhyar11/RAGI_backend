@@ -209,9 +209,15 @@ class SpmbPendaftaranService
                 ? $existing->no_pendaftaran
                 : ('REG-'.date('Ymd').'-'.rand(1000, 9999));
 
-            // GELOMBANG IMMUTABILITY PROTECTION:
-            // If candidate already registered/paid in a gelombang, lock gelombang_id so future admin gelombang changes won't affect them.
-            if ($existing && ! empty($existing->gelombang_id)) {
+            // Lock the wave after billing or final submission. Auth-created empty
+            // drafts may still select a currently open wave in the registration form.
+            $hasRegistrationBill = $existing && TagihanMahasiswa::where('calon_mahasiswa_id', $existing->id)
+                ->where('source_system', 'SPMB')
+                ->where(function ($q) {
+                    $q->where('tipe_referensi', 'spmb_pendaftaran')->orWhereNull('tipe_referensi');
+                })
+                ->exists();
+            if ($existing && ! empty($existing->gelombang_id) && ($hasRegistrationBill || $existing->status !== 'draft')) {
                 $validated['gelombang_id'] = $existing->gelombang_id;
             }
 

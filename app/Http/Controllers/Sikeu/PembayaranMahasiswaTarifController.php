@@ -395,8 +395,8 @@ class PembayaranMahasiswaTarifController extends Controller
                         if ($item->program_studi_id) {
                             $m->where('program_studi_id', $item->program_studi_id);
                         }
-                    })->orWhereHas('calonMahasiswa.gelombangPenerimaan', function ($g) use ($item) {
-                        $g->whereYear('tanggal_buka', $item->tahun_angkatan);
+                    })->orWhereHas('calonMahasiswa', function ($calon) use ($item) {
+                        $calon->whereYear('created_at', $item->tahun_angkatan);
                     });
                 });
             })

@@ -9,6 +9,7 @@ use App\Http\Controllers\API\Spmb\PendaftaranController;
 use App\Http\Controllers\API\Spmb\PotonganCalonController;
 use App\Http\Controllers\API\Spmb\SpmbKuotaProdiController;
 use App\Http\Controllers\API\Spmb\SpmbSekolahMitraController;
+use App\Http\Controllers\API\Spmb\SpmbKodeDiskonController;
 
 
 /*
@@ -82,6 +83,8 @@ Route::get('laporan/statistik', [LaporanSpmbController::class, 'statistik']);
 Route::get('laporan/export-csv', [LaporanSpmbController::class, 'exportCsv']);
 
 // Referral (Kode Rujukan Mahasiswa Baru) — data milik pengguna yang login.
+Route::middleware('can:spmb.pendaftaran.create')->post('kode-diskon/validate', [SpmbKodeDiskonController::class, 'validateCode']);
+
 Route::get('referral/saya', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'me']);
 Route::get('referral/saya/usages', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'usages']);
 Route::post('referral/payout', [\App\Http\Controllers\API\Spmb\ReferralController::class, 'payout']);
@@ -95,6 +98,10 @@ Route::middleware('can:spmb.laporan.read')->group(function () {
 
 // Master Biaya SPMB (Dinamis)
 Route::middleware('can:spmb.manage')->group(function () {
+    Route::apiResource('master/kode-diskon', SpmbKodeDiskonController::class)
+        ->parameters(['kode-diskon' => 'id'])
+        ->except(['create', 'edit']);
+
     Route::get('master/komponen-biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'getKomponen']);
     Route::get('master/komponen-biaya-role-options', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'roleOptions']);
     Route::get('master/komponen-biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'showKomponen']);

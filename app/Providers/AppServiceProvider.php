@@ -54,6 +54,8 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Permission::observe(\App\Observers\PermissionObserver::class);
         
         // SPMB Observers
+        \App\Models\Spmb\SpmbKodeDiskon::observe(\App\Observers\Spmb\SpmbKodeDiskonObserver::class);
+        \App\Models\Spmb\SpmbKodeDiskonPenggunaan::observe(\App\Observers\Spmb\SpmbKodeDiskonPenggunaanObserver::class);
         \App\Models\Spmb\PendaftaranCalonMhs::observe(\App\Observers\Spmb\PendaftaranCalonMhsObserver::class);
         \App\Models\Spmb\GelombangPenerimaan::observe(\App\Observers\Spmb\GelombangPenerimaanObserver::class);
         \App\Models\Spmb\SpmbKuotaProdi::observe(\App\Observers\Spmb\SpmbKuotaProdiObserver::class);

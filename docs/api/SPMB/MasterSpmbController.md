@@ -172,8 +172,8 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 | `search` | string | - | Pencarian kata kunci pada nama gelombang |
 | `nama` | string | - | Filter spesifik berdasarkan nama gelombang |
 | `jalur_masuk_id` | integer | - | Filter berdasarkan ID master jalur penerimaan |
-| `tanggal_buka` | string | - | Filter tanggal pembukaan gelombang minimal (format `YYYY-MM-DD`) |
-| `tanggal_tutup` | string | - | Filter tanggal penutupan gelombang maksimal (format `YYYY-MM-DD`) |
+| `tanggal_buka` | string | - | Filter periode tanggal buka minimal (format `MM-DD`) |
+| `tanggal_tutup` | string | - | Filter periode tanggal tutup maksimal (format `MM-DD`) |
 | `kuota` | string | - | Filter status kuota: `tersedia` atau `penuh` |
 | `biaya` | string | - | Filter jenis biaya pendaftaran: `gratis` atau `berbayar` |
 | `status` | string | - | Filter status (`draft`, `aktif`, `ditutup`, `selesai`) |
@@ -194,14 +194,15 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
             "id": 1,
             "nama": "Gelombang 1 Reguler 2026/2027",
             "jalur_masuk_id": 1,
-            "tanggal_buka": "2026-01-01",
-            "tanggal_tutup": "2026-04-30",
+            "tanggal_buka": "01-01",
+            "tanggal_tutup": "04-30",
             "tanggal_pengumuman": "2026-05-05",
             "kuota_total": 150,
             "kuota_terisi": 45,
             "biaya_pendaftaran": 250000,
             "potongan_biaya_daftar_ulang": 10.00,
             "status": "aktif",
+            "pendaftaran_dibuka": true,
             "created_at": "2026-09-21T10:00:00.000000Z",
             "updated_at": "2026-09-21T10:00:00.000000Z",
             "jalur_masuk": {
@@ -275,16 +276,16 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
     "data": {
         "id": 1,
         "nama": "Gelombang 1 Reguler 2026/2027",
-        "tahun_akademik_id": 1,
         "jalur_masuk_id": 1,
-        "tanggal_buka": "2026-01-01",
-        "tanggal_tutup": "2026-04-30",
+        "tanggal_buka": "01-01",
+        "tanggal_tutup": "04-30",
         "tanggal_pengumuman": "2026-05-05",
         "kuota_total": 150,
         "kuota_terisi": 45,
         "biaya_pendaftaran": 250000,
         "potongan_biaya_daftar_ulang": 10.00,
         "status": "aktif",
+        "pendaftaran_dibuka": true,
         "created_at": "2026-09-21T10:00:00.000000Z",
         "updated_at": "2026-09-21T10:00:00.000000Z",
         "jalur_masuk": {
@@ -326,7 +327,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 
 ## [POST] /api/spmb/master/gelombang
 
-> Membuat data gelombang penerimaan baru. Bila `status` diisi `aktif`, gelombang aktif lain pada `jalur_masuk_id` yang sama otomatis diubah menjadi `ditutup`.
+> Membuat jadwal gelombang penerimaan. `status: aktif` mengaktifkan jadwal; backend menghitung `pendaftaran_dibuka` secara langsung dari tanggal saat ini di zona waktu `SPMB_TIMEZONE` (default `Asia/Jakarta`). Periode bersifat inklusif dan mendukung rentang yang melewati tahun baru. Beberapa gelombang aktif dapat dijadwalkan pada jalur yang sama.
 
 ### Headers
 
@@ -342,8 +343,8 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 {
     "jalur_masuk_id": "integer, required, exists:spmb_jalur_masuk,id",
     "nama": "string, required",
-    "tanggal_buka": "date, required (YYYY-MM-DD)",
-    "tanggal_tutup": "date, required, after_or_equal:tanggal_buka",
+    "tanggal_buka": "string, required (MM-DD; recurring annual period)",
+    "tanggal_tutup": "string, required (MM-DD; recurring annual period)",
     "tanggal_pengumuman": "date, nullable",
     "kuota_total": "integer, required, min:1",
     "biaya_pendaftaran": "numeric, nullable, min:0",
@@ -363,14 +364,15 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
         "id": 2,
         "jalur_masuk_id": 1,
         "nama": "Gelombang 2 Reguler 2026/2027",
-        "tanggal_buka": "2026-05-01",
-        "tanggal_tutup": "2026-07-31",
+        "tanggal_buka": "05-01",
+        "tanggal_tutup": "07-31",
         "tanggal_pengumuman": "2026-08-05",
         "kuota_total": 150,
         "kuota_terisi": 0,
         "biaya_pendaftaran": "250000.00",
         "potongan_biaya_daftar_ulang": "10.00",
         "status": "draft",
+        "pendaftaran_dibuka": false,
         "created_at": "2026-10-01T10:00:00.000000Z",
         "updated_at": "2026-10-01T10:00:00.000000Z",
         "jalur_masuk": {
@@ -401,7 +403,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
     "message": "Data yang diberikan tidak valid.",
     "errors": {
         "jalur_masuk_id": ["The selected jalur masuk id is invalid."],
-        "tanggal_tutup": ["The tanggal tutup must be a date after or equal to tanggal buka."],
+        "tanggal_tutup": ["The tanggal tutup period is invalid."],
         "potongan_biaya_daftar_ulang": ["The potongan biaya daftar ulang must not be greater than 100."]
     }
 }
@@ -427,8 +429,8 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 {
     "jalur_masuk_id": "integer, required, exists:spmb_jalur_masuk,id",
     "nama": "string, required",
-    "tanggal_buka": "date, required (YYYY-MM-DD)",
-    "tanggal_tutup": "date, required, after_or_equal:tanggal_buka",
+    "tanggal_buka": "string, required (MM-DD; recurring annual period)",
+    "tanggal_tutup": "string, required (MM-DD; recurring annual period)",
     "tanggal_pengumuman": "date, nullable",
     "kuota_total": "integer, required, min:1",
     "biaya_pendaftaran": "numeric, nullable, min:0",
@@ -448,14 +450,15 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
         "id": 2,
         "jalur_masuk_id": 1,
         "nama": "Gelombang 2 Reguler 2026/2027",
-        "tanggal_buka": "2026-05-01",
-        "tanggal_tutup": "2026-07-31",
+        "tanggal_buka": "05-01",
+        "tanggal_tutup": "07-31",
         "tanggal_pengumuman": "2026-08-05",
         "kuota_total": 200,
         "kuota_terisi": 0,
         "biaya_pendaftaran": "250000.00",
         "potongan_biaya_daftar_ulang": "15.50",
         "status": "aktif",
+        "pendaftaran_dibuka": true,
         "created_at": "2026-10-01T10:00:00.000000Z",
         "updated_at": "2026-10-01T10:05:00.000000Z",
         "jalur_masuk": {

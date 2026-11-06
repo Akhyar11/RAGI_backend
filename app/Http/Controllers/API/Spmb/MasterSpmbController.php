@@ -10,6 +10,7 @@ use App\Models\MasterTipeJalur;
 use App\Models\System\MasterReferensi;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 
 class MasterSpmbController extends Controller
 {
@@ -304,11 +305,11 @@ class MasterSpmbController extends Controller
         }
 
         if ($request->filled('tanggal_buka')) {
-            $query->whereDate('tanggal_buka', '>=', $request->tanggal_buka);
+            $query->where('tanggal_buka_siklus', '>=', $request->tanggal_buka);
         }
 
         if ($request->filled('tanggal_tutup')) {
-            $query->whereDate('tanggal_tutup', '<=', $request->tanggal_tutup);
+            $query->where('tanggal_tutup_siklus', '<=', $request->tanggal_tutup);
         }
 
         if ($request->filled('kuota')) {
@@ -344,7 +345,11 @@ class MasterSpmbController extends Controller
         $allowedSortColumns = ['id', 'nama', 'tanggal_buka', 'tanggal_tutup', 'kuota_total', 'biaya_pendaftaran', 'status', 'created_at'];
         $sortBy = in_array($request->sort_by, $allowedSortColumns) ? $request->sort_by : 'created_at';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
-        $query->orderBy($sortBy, $sortOrder);
+        $sortColumns = [
+            'tanggal_buka' => 'tanggal_buka_siklus',
+            'tanggal_tutup' => 'tanggal_tutup_siklus',
+        ];
+        $query->orderBy($sortColumns[$sortBy] ?? $sortBy, $sortOrder);
 
         $paginated = $query->paginate($perPage);
 
@@ -396,8 +401,8 @@ class MasterSpmbController extends Controller
         $validated = $request->validate([
             'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
             'nama' => 'required|string',
-            'tanggal_buka' => 'required|date',
-            'tanggal_tutup' => 'required|date|after_or_equal:tanggal_buka',
+            'tanggal_buka' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
+            'tanggal_tutup' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
             'tanggal_pengumuman' => 'nullable|date',
             'kuota_total' => 'required|integer|min:1',
             'biaya_pendaftaran' => 'nullable|numeric|min:0',
@@ -405,9 +410,7 @@ class MasterSpmbController extends Controller
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
 
-        if ($validated['status'] === 'aktif') {
-            $this->deactivateOtherActiveGelombang($validated['jalur_masuk_id']);
-        }
+        $this->validateCyclePeriodDates($validated);
 
         $gelombang = GelombangPenerimaan::create($validated);
         $gelombang->load(['jalurMasuk']);
@@ -429,8 +432,8 @@ class MasterSpmbController extends Controller
         $validated = $request->validate([
             'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
             'nama' => 'required|string',
-            'tanggal_buka' => 'required|date',
-            'tanggal_tutup' => 'required|date|after_or_equal:tanggal_buka',
+            'tanggal_buka' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
+            'tanggal_tutup' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
             'tanggal_pengumuman' => 'nullable|date',
             'kuota_total' => 'required|integer|min:1',
             'biaya_pendaftaran' => 'nullable|numeric|min:0',
@@ -438,9 +441,7 @@ class MasterSpmbController extends Controller
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
 
-        if ($validated['status'] === 'aktif') {
-            $this->deactivateOtherActiveGelombang($validated['jalur_masuk_id'], $id);
-        }
+        $this->validateCyclePeriodDates($validated);
 
         $gelombang->update($validated);
         $gelombang->load(['jalurMasuk']);
@@ -467,21 +468,32 @@ class MasterSpmbController extends Controller
     }
 
     /**
-     * Pastikan hanya satu gelombang yang berstatus 'aktif' per jalur masuk.
-     * Saat sebuah gelombang di-set aktif, gelombang lain di jalur yang sama
-     * otomatis diubah ke 'ditutup'.
-     *
-     * @param int $jalurMasukId
-     * @param int|null $exceptId Abaikan gelombang dengan id ini (saat update).
+     * Validate recurring MM-DD boundaries, allowing February 29 in leap years.
+     * An end boundary before the start boundary intentionally means the cycle
+     * wraps into the next calendar year, so an after_or_equal date rule is not valid here.
      */
-    private function deactivateOtherActiveGelombang(int $jalurMasukId, ?int $exceptId = null): void
+    private function validateCyclePeriodDates(array $validated): void
     {
-        GelombangPenerimaan::where('jalur_masuk_id', $jalurMasukId)
-            ->where('status', 'aktif')
-            ->when($exceptId !== null, function ($q) use ($exceptId) {
-                $q->where('id', '!=', $exceptId);
-            })
-            ->update(['status' => 'ditutup']);
+        $start = $validated['tanggal_buka'];
+        $end = $validated['tanggal_tutup'];
+
+        foreach (['tanggal_buka', 'tanggal_tutup'] as $field) {
+            [$month, $day] = array_map('intval', explode('-', $validated[$field]));
+            if (! checkdate($month, $day, 2000)) {
+                throw ValidationException::withMessages([
+                    $field => 'Tanggal periode tidak valid.',
+                ]);
+            }
+        }
+
+        // Resolve the closing boundary in the next cycle when MM-DD wraps.
+        [$endMonth, $endDay] = array_map('intval', explode('-', $end));
+        $endYear = $end < $start ? 2004 : 2000;
+        if (! checkdate($endMonth, $endDay, $endYear)) {
+            throw ValidationException::withMessages([
+                'tanggal_tutup' => 'Tanggal tutup periode tidak valid.',
+            ]);
+        }
     }
 
     /**

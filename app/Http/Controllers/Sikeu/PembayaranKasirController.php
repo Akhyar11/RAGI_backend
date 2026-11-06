@@ -1096,7 +1096,8 @@ class PembayaranKasirController extends Controller
             $nim = $calon->nim ?: '-';
             $nama = $calon->nama_lengkap ?? ('Calon Mahasiswa #' . $id);
             $prodi = $calon->programStudi?->nama ?? '-';
-            $angkatan = (int)($calon->gelombangPenerimaan?->tahunPendaftaran() ?? date('Y'));
+            $angkatan = (int)($calon->created_at?->timezone(config('spmb.timezone', 'Asia/Jakarta'))->format('Y')
+                ?? now(config('spmb.timezone', 'Asia/Jakarta'))->format('Y'));
             $jalur = 'SPMB Baru';
             $noPendaftaran = $calon->no_pendaftaran;
             $nik = $calon->nik;

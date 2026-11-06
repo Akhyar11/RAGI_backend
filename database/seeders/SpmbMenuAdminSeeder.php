@@ -79,9 +79,10 @@ class SpmbMenuAdminSeeder extends Seeder
                     ['name' => 'Persyaratan Berkas', 'url' => '/spmb/master/berkas-requirement', 'icon' => 'FaFileAlt', 'order_index' => 1],
                     ['name' => 'Master Biaya SPMB', 'url' => '/spmb/master/biaya', 'icon' => 'FaCoins', 'order_index' => 2],
                     ['name' => 'Komponen Biaya', 'url' => '/spmb/master/komponen-biaya', 'icon' => 'FaTag', 'order_index' => 3],
-                    ['name' => 'Master Data Referensi', 'url' => '/spmb/master/referensi', 'icon' => 'FaDatabase', 'order_index' => 4],
-                    ['name' => 'Master Tipe Referensi', 'url' => '/spmb/master/tipe-referensi', 'icon' => 'FaLayers', 'order_index' => 5],
-                    ['name' => 'Template SK & Surat', 'url' => '/spmb/master/template-surat', 'icon' => 'FaFileSignature', 'order_index' => 6],
+                    ['name' => 'Kode Diskon', 'url' => '/spmb/master/kode-diskon', 'icon' => 'FaTags', 'order_index' => 4],
+                    ['name' => 'Master Data Referensi', 'url' => '/spmb/master/referensi', 'icon' => 'FaDatabase', 'order_index' => 5],
+                    ['name' => 'Master Tipe Referensi', 'url' => '/spmb/master/tipe-referensi', 'icon' => 'FaLayers', 'order_index' => 6],
+                    ['name' => 'Template SK & Surat', 'url' => '/spmb/master/template-surat', 'icon' => 'FaFileSignature', 'order_index' => 7],
                 ],
             ],
             [

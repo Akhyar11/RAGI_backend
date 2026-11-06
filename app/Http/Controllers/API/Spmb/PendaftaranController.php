@@ -101,6 +101,7 @@ class PendaftaranController extends Controller
             'hasilSeleksi',
             'skArsipRequest:id,kode_request,status',
             'referrer:id,username,name,referral_code',
+            'kodeDiskonUsage.kodeDiskon',
         ])->findOrFail($id);
 
         // Ringkasan daftar ulang (tagihan & pembayaran dikelola modul SIKEU).

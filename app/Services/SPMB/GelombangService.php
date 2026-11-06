@@ -13,7 +13,7 @@ class GelombangService
      */
     public function getAllGelombang()
     {
-        return GelombangPenerimaan::with('jalurMasuk')->orderBy('tanggal_buka', 'desc')->get();
+        return GelombangPenerimaan::with('jalurMasuk')->orderBy('tanggal_buka_siklus', 'desc')->get();
     }
 
     /**

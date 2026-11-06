@@ -152,6 +152,11 @@ class PendaftaranCalonMhs extends Model
         return $this->hasOne(ReferralUsage::class, 'pendaftaran_id');
     }
 
+    public function kodeDiskonUsage()
+    {
+        return $this->hasOne(SpmbKodeDiskonPenggunaan::class, 'pendaftaran_id');
+    }
+
     public function konversi()
     {
         return $this->hasOne(KonversiMahasiswa::class, 'pendaftaran_id');

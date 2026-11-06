@@ -101,40 +101,44 @@ class AuthController extends Controller
         // Auto-create draft PendaftaranCalonMhs for calon mahasiswa
         if ($roleSlug === 'calon_mhs' || ($defaultRole && $defaultRole->slug === 'calon_mhs')) {
             try {
-                $gelombang = \App\Models\Spmb\GelombangPenerimaan::where('status', 'aktif')->first()
-                    ?? \App\Models\Spmb\GelombangPenerimaan::first();
-                $gelombangId = $gelombang ? $gelombang->id : 1;
+                $gelombang = \App\Models\Spmb\GelombangPenerimaan::pendaftaranDibuka()->first();
 
-                $defaultProdi = \App\Models\Spmb\MasterProgramStudi::where('is_active', true)->first();
-                $prodiId = $defaultProdi ? $defaultProdi->id : 1;
+                if ($gelombang) {
+                    $defaultProdi = \App\Models\Spmb\MasterProgramStudi::where('is_active', true)->first();
+                    $prodiId = $defaultProdi ? $defaultProdi->id : 1;
 
-                \App\Models\Spmb\PendaftaranCalonMhs::firstOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'gelombang_id' => $gelombangId,
-                        'program_studi_id' => $prodiId,
-                        'no_pendaftaran' => 'REG-' . date('Ymd') . '-' . rand(1000, 9999),
-                        'nama_lengkap' => $user->username,
-                        'nik' => '3300' . str_pad($user->id, 12, '0', STR_PAD_LEFT),
-                        'tanggal_lahir' => now()->subYears(18)->format('Y-m-d'),
-                        'tempat_lahir' => '-',
-                        'jenis_kelamin' => 'L',
-                        'kewarganegaraan' => 'WNI',
-                        'alamat' => '-',
-                        'asal_sekolah' => '-',
-                        'jurusan_sekolah' => '-',
-                        'no_hp' => $user->phone,
-                        'status' => 'draft',
-                        'status_pembayaran' => 'belum_bayar',
-                    ]
-                );
+                    \App\Models\Spmb\PendaftaranCalonMhs::firstOrCreate(
+                        ['user_id' => $user->id],
+                        [
+                            'gelombang_id' => $gelombang->id,
+                            'program_studi_id' => $prodiId,
+                            'no_pendaftaran' => 'REG-' . date('Ymd') . '-' . rand(1000, 9999),
+                            'nama_lengkap' => $user->username,
+                            'nik' => '3300' . str_pad($user->id, 12, '0', STR_PAD_LEFT),
+                            'tanggal_lahir' => now()->subYears(18)->format('Y-m-d'),
+                            'tempat_lahir' => '-',
+                            'jenis_kelamin' => 'L',
+                            'kewarganegaraan' => 'WNI',
+                            'alamat' => '-',
+                            'asal_sekolah' => '-',
+                            'jurusan_sekolah' => '-',
+                            'no_hp' => $user->phone,
+                            'status' => 'draft',
+                            'status_pembayaran' => 'belum_bayar',
+                        ]
+                    );
 
-                // Lampirkan kode referral (jika ada) ke draft pendaftaran yang baru dibuat.
-                if ($request->filled('referral_code')) {
-                    $pendaftaran = \App\Models\Spmb\PendaftaranCalonMhs::where('user_id', $user->id)->first();
-                    if ($pendaftaran) {
-                        $this->referralService->attachToPendaftaran($pendaftaran, $request->input('referral_code'));
+                    // Lampirkan kode referral (jika ada) ke draft pendaftaran yang baru dibuat.
+                    if ($request->filled('referral_code')) {
+                        $pendaftaran = \App\Models\Spmb\PendaftaranCalonMhs::where('user_id', $user->id)->first();
+                        if ($pendaftaran) {
+                            $this->referralService->attachToPendaftaran($pendaftaran, $request->input('referral_code'));
+                        }
                     }
+                } else {
+                    \Illuminate\Support\Facades\Log::info('Draft SPMB tidak dibuat karena belum ada gelombang yang sedang dibuka.', [
+                        'user_id' => $user->id,
+                    ]);
                 }
             } catch (\Throwable $th) {
                 \Illuminate\Support\Facades\Log::warning('Gagal auto-create PendaftaranCalonMhs: ' . $th->getMessage());

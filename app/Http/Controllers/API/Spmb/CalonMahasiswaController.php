@@ -10,16 +10,19 @@ use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\VirtualAccount;
 use App\Models\Spmb\BerkasRequirement;
 use App\Models\Spmb\DokumenPendaftaran;
+use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Services\Sikeu\ExternalTagihanService;
 use App\Services\Spmb\MasterBiayaService;
 use App\Services\Spmb\SpmbPendaftaranService;
+use App\Services\Spmb\SpmbKodeDiskonService;
 use App\Services\Storage\FileStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class CalonMahasiswaController extends Controller
 {
@@ -27,7 +30,8 @@ class CalonMahasiswaController extends Controller
 
     public function __construct(
         SpmbPendaftaranService $pendaftaranService,
-        private FileStorageService $files
+        private FileStorageService $files,
+        private SpmbKodeDiskonService $kodeDiskonService
     ) {
         $this->pendaftaranService = $pendaftaranService;
     }
@@ -47,6 +51,7 @@ class CalonMahasiswaController extends Controller
             'dokumenPendaftaran',
             'progressAlur.masterAlur',
             'referrer:id,username,name,referral_code',
+            'kodeDiskonUsage.kodeDiskon',
         ])
             ->where('user_id', $user->id)
             ->first();
@@ -107,21 +112,44 @@ class CalonMahasiswaController extends Controller
     public function storeBiodata(StoreBiodataRequest $request): JsonResponse
     {
         $user = $request->user();
+        $validated = $request->validated();
+        $kodeDiskon = $validated['kode_diskon'] ?? null;
+        unset($validated['kode_diskon']);
 
-        $pendaftaran = $this->pendaftaranService->saveBiodata($user, $request->validated());
+        $existingPendaftaran = PendaftaranCalonMhs::where('user_id', $user->id)->first();
+        $existingTagihan = $existingPendaftaran
+            ? TagihanMahasiswa::where('calon_mahasiswa_id', $existingPendaftaran->id)
+                ->where('source_system', 'SPMB')
+                ->where(function ($q) {
+                    $q->where('tipe_referensi', 'spmb_pendaftaran')->orWhereNull('tipe_referensi');
+                })
+                ->first()
+            : null;
+
+        if (! $existingTagihan) {
+            $gelombangLocked = $existingPendaftaran
+                && $existingPendaftaran->gelombang_id
+                && $existingPendaftaran->status !== PendaftaranCalonMhs::STATUS_DRAFT;
+            $gelombangId = $gelombangLocked
+                ? $existingPendaftaran->gelombang_id
+                : ($validated['gelombang_id'] ?? $existingPendaftaran?->gelombang_id);
+            $gelombang = $gelombangId ? GelombangPenerimaan::find($gelombangId) : null;
+            if (! $gelombang || ! $gelombang->pendaftaran_dibuka) {
+                throw ValidationException::withMessages([
+                    'gelombang_id' => 'Pendaftaran hanya dapat dibuat pada gelombang yang sedang dibuka.',
+                ]);
+            }
+        }
+
+        $pendaftaran = $this->pendaftaranService->saveBiodata($user, $validated);
         $namaLengkap = $pendaftaran->nama_lengkap ?? 'Calon Mahasiswa';
 
         // Fetch / Re-use existing External Bill via SIKEU to prevent duplicate invoices on multi-step draft saves
-        $existingTagihan = TagihanMahasiswa::with('virtualAccount')
-            ->where('calon_mahasiswa_id', $pendaftaran->id)
-            ->where('source_system', 'SPMB')
-            ->where(function ($q) {
-                $q->where('tipe_referensi', 'spmb_pendaftaran')->orWhereNull('tipe_referensi');
-            })
-            ->first();
+        $existingTagihan = $existingTagihan?->load('virtualAccount');
 
         $tagihanPayload = null;
         if ($existingTagihan) {
+            $this->kodeDiskonService->ensureCodeMatchesRegistration($pendaftaran, $kodeDiskon);
             $tagihanPayload = [
                 'tagihan' => $existingTagihan,
                 'virtual_account' => $existingTagihan->virtualAccount,
@@ -136,6 +164,14 @@ class CalonMahasiswaController extends Controller
             // Potongan biaya kustom per calon (bila ada) untuk tahap pendaftaran.
             $potongan = app(\App\Services\Spmb\SpmbPotonganCalonService::class)
                 ->buildPotonganPayload($pendaftaran, 'pendaftaran', $details);
+
+            $penggunaanDiskon = $this->kodeDiskonService->applyToRegistration(
+                $pendaftaran,
+                $kodeDiskon,
+                $details,
+                $potongan,
+            );
+            $potongan = array_merge($potongan, $this->kodeDiskonService->toTagihanPotongan($penggunaanDiskon));
 
             // Generate External Bill via internal Request
             $payload = [
@@ -152,6 +188,9 @@ class CalonMahasiswaController extends Controller
             // Generate External Bill via SIKEU service
             try {
                 $issued = app(ExternalTagihanService::class)->issueExternalBill($payload);
+                if ($penggunaanDiskon) {
+                    $this->kodeDiskonService->attachTagihan($penggunaanDiskon, $issued['tagihan']->id);
+                }
                 $tagihanPayload = [
                     'tagihan' => $issued['tagihan'],
                     'virtual_account' => $issued['virtual_account'],

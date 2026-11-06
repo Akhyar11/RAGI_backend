@@ -42,6 +42,7 @@
 | MasterSpmbController | Master referensi SPMB (Tahun Akademik, Jalur, Gelombang, Opsi, Rincian Beban Pendaftaran) | [docs/api/SPMB/MasterSpmbController.md](api/SPMB/MasterSpmbController.md) |
 | SpmbKuotaProdiController | Manajemen kuota penerimaan calon mahasiswa baru per program studi | [docs/api/SPMB/SpmbKuotaProdiController.md](api/SPMB/SpmbKuotaProdiController.md) |
 | MasterBiayaSpmbController | Master biaya SPMB per gelombang & program studi | [docs/api/SPMB/MasterBiayaSpmbController.md](api/SPMB/MasterBiayaSpmbController.md) |
+| SpmbKodeDiskonController | CRUD kode diskon dan validasi kupon yang hanya mengurangi beban pendaftaran Master Biaya | [docs/api/SPMB/SpmbKodeDiskonController.md](api/SPMB/SpmbKodeDiskonController.md) |
 | TarifUktSpmbController (DIHAPUS) | Pengganti: MasterBiayaSpmbController (beban pendaftaran/daftar ulang) | [docs/api/SPMB/TarifUktSpmbController.md](api/SPMB/TarifUktSpmbController.md) |
 | CalonMahasiswaController | Alur pendaftaran calon mahasiswa (biodata, berkas, tagihan, VA) | [docs/api/SPMB/CalonMahasiswaController.md](api/SPMB/CalonMahasiswaController.md) |
 | PendaftaranController | Data pendaftar admin SPMB: daftar, detail (termasuk ringkasan pembayaran daftar ulang), verifikasi berkas & status, sinkronisasi API eksternal | [docs/api/SPMB/PendaftaranController.md](api/SPMB/PendaftaranController.md) |

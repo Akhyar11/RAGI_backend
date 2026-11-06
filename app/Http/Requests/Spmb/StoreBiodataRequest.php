@@ -67,6 +67,7 @@ class StoreBiodataRequest extends FormRequest
             'nim_pt' => 'sometimes|nullable|string',
             'tahun_lulus_pt' => 'sometimes|nullable|string',
             'used_referral_code' => 'sometimes|nullable|string|max:50',
+            'kode_diskon' => 'sometimes|nullable|string|max:50',
         ];
     }
 }

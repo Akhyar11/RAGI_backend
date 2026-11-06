@@ -68,7 +68,7 @@ class SpmbPendaftaranSyncService
         $calonMhsRole = Role::where('slug', 'calon_mhs')->first();
 
         // Resolusi gelombang aktif default
-        $defaultGelombang = GelombangPenerimaan::where('status', 'aktif')->first();
+        $defaultGelombang = GelombangPenerimaan::pendaftaranDibuka()->first();
 
         // Cache prodi untuk efisiensi
         $allProdis = ProgramStudi::all();

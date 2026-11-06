@@ -414,7 +414,8 @@ class SikeuMasterController extends Controller
                 $nim = $calon->nim;
                 $nama = $calon->nama_lengkap ?? ('Calon Mhs #' . $calonId);
                 $prodi = $calon->programStudi?->nama ?? '-';
-                $tahun = $calon->gelombangPenerimaan?->tahunPendaftaran() ?? date('Y');
+                $tahun = (int) ($calon->created_at?->timezone(config('spmb.timezone', 'Asia/Jakarta'))->format('Y')
+                    ?? now(config('spmb.timezone', 'Asia/Jakarta'))->format('Y'));
                 $jalur = 'SPMB Baru';
 
                 // Unpaid bills for calon mahasiswa

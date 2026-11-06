@@ -569,7 +569,7 @@ class PermissionSeeder extends Seeder
 
         // 10. Calon Mahasiswa -> Akses Khusus Portal & Dashboard Calon Mahasiswa
         if ($calonMhsRole) {
-            $studentSlugs = ['spmb.student.read', 'spmb.dashboard.read', 'spmb.pendaftaran.read'];
+            $studentSlugs = ['spmb.student.read', 'spmb.dashboard.read', 'spmb.pendaftaran.read', 'spmb.pendaftaran.create'];
             $perms = Permission::whereIn('slug', $studentSlugs)->get();
             foreach ($perms as $p) {
                 RolePermission::firstOrCreate(['role_id' => $calonMhsRole->id, 'permission_id' => $p->id]);

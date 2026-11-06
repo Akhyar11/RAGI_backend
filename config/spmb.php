@@ -2,6 +2,8 @@
 
 return [
 
+    'timezone' => env('SPMB_TIMEZONE', 'Asia/Jakarta'),
+
     /*
     |--------------------------------------------------------------------------
     | SPMB — Pengaturan Referral
