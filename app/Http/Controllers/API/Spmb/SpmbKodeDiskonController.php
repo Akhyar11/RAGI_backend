@@ -48,6 +48,30 @@ class SpmbKodeDiskonController extends Controller
         if ($request->filled('nilai_max')) {
             $query->where('nilai', '<=', (float) $request->input('nilai_max'));
         }
+        if ($request->filled('maksimum_potongan_min')) {
+            $query->where('maksimum_potongan', '>=', (float) $request->input('maksimum_potongan_min'));
+        }
+        if ($request->filled('maksimum_potongan_max')) {
+            $query->where('maksimum_potongan', '<=', (float) $request->input('maksimum_potongan_max'));
+        }
+        if ($request->input('potongan_status') === 'berbatas') {
+            $query->whereNotNull('maksimum_potongan');
+        } elseif ($request->input('potongan_status') === 'tanpa_batas') {
+            $query->whereNull('maksimum_potongan');
+        }
+
+        $kuotaStatus = $request->input('kuota_status');
+        $usageCountSql = '(SELECT COUNT(*) FROM spmb_kode_diskon_penggunaan WHERE spmb_kode_diskon_penggunaan.kode_diskon_id = spmb_kode_diskon.id)';
+        if ($kuotaStatus === 'tersedia') {
+            $query->whereNotNull('batas_penggunaan')
+                ->whereRaw($usageCountSql.' < spmb_kode_diskon.batas_penggunaan');
+        } elseif ($kuotaStatus === 'penuh') {
+            $query->whereNotNull('batas_penggunaan')
+                ->whereRaw($usageCountSql.' >= spmb_kode_diskon.batas_penggunaan');
+        } elseif ($kuotaStatus === 'tanpa_batas') {
+            $query->whereNull('batas_penggunaan');
+        }
+
         foreach (['berlaku_mulai', 'berlaku_sampai'] as $dateFilter) {
             if ($request->filled($dateFilter)) {
                 $query->whereDate($dateFilter, $request->input($dateFilter));
@@ -75,6 +99,14 @@ class SpmbKodeDiskonController extends Controller
                     'search' => $request->input('search'),
                     'is_active' => $request->input('is_active'),
                     'tipe_diskon' => $request->input('tipe_diskon'),
+                    'nilai_min' => $request->input('nilai_min'),
+                    'nilai_max' => $request->input('nilai_max'),
+                    'maksimum_potongan_min' => $request->input('maksimum_potongan_min'),
+                    'maksimum_potongan_max' => $request->input('maksimum_potongan_max'),
+                    'potongan_status' => $request->input('potongan_status'),
+                    'kuota_status' => $kuotaStatus,
+                    'berlaku_mulai' => $request->input('berlaku_mulai'),
+                    'berlaku_sampai' => $request->input('berlaku_sampai'),
                     'sort_by' => $sortBy,
                     'sort_order' => $sortOrder,
                 ],

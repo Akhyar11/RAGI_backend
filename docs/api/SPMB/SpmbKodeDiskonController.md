@@ -40,6 +40,10 @@ Mengambil daftar kode diskon terpaginasikan. Permission: spmb.manage.
 | tipe_diskon | string | - | persen atau nominal |
 | nilai_min | numeric | - | Nilai diskon minimum |
 | nilai_max | numeric | - | Nilai diskon maksimum |
+| maksimum_potongan_min | numeric | - | Batas nominal potongan minimum |
+| maksimum_potongan_max | numeric | - | Batas nominal potongan maksimum |
+| potongan_status | string | - | `berbatas` atau `tanpa_batas` |
+| kuota_status | string | - | `tersedia`, `penuh`, atau `tanpa_batas` berdasarkan jumlah klaim dan kuota |
 | berlaku_mulai | date | - | Filter tanggal mulai yang sama persis (YYYY-MM-DD) |
 | berlaku_sampai | date | - | Filter tanggal akhir yang sama persis (YYYY-MM-DD) |
 | sort_by | string | created_at | kode, nama, tipe_diskon, nilai, batas_penggunaan, berlaku_mulai, berlaku_sampai, is_active, created_at, atau updated_at |
@@ -84,6 +88,14 @@ Mengambil daftar kode diskon terpaginasikan. Permission: spmb.manage.
       "search": null,
       "is_active": null,
       "tipe_diskon": null,
+      "nilai_min": null,
+      "nilai_max": null,
+      "maksimum_potongan_min": null,
+      "maksimum_potongan_max": null,
+      "potongan_status": null,
+      "kuota_status": null,
+      "berlaku_mulai": null,
+      "berlaku_sampai": null,
       "sort_by": "created_at",
       "sort_order": "desc"
     }
