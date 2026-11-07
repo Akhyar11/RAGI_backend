@@ -46,6 +46,7 @@
 | TarifUktSpmbController (DIHAPUS) | Pengganti: MasterBiayaSpmbController (beban pendaftaran/daftar ulang) | [docs/api/SPMB/TarifUktSpmbController.md](api/SPMB/TarifUktSpmbController.md) |
 | CalonMahasiswaController | Alur pendaftaran calon mahasiswa (biodata, berkas, tagihan, VA) | [docs/api/SPMB/CalonMahasiswaController.md](api/SPMB/CalonMahasiswaController.md) |
 | PendaftaranController | Data pendaftar admin SPMB: daftar, detail (termasuk ringkasan pembayaran daftar ulang), verifikasi berkas & status, sinkronisasi API eksternal | [docs/api/SPMB/PendaftaranController.md](api/SPMB/PendaftaranController.md) |
+| PendaftaranManualController | Input pendaftaran dari formulir kertas, akun calon otomatis, referral berbasis pilihan user, daftar pihak ketiga, dan bukti transfer privat | [docs/api/SPMB/PendaftaranManualController.md](api/SPMB/PendaftaranManualController.md) |
 | ReferralController | Kode referral mahasiswa baru: validasi, statistik mandiri, reward per role, payout (bukti PDF) & laporan | [docs/api/SPMB/ReferralController.md](api/SPMB/ReferralController.md) |
 | DaftarUlangController | Tagihan & konfirmasi daftar ulang calon mahasiswa lulus | [docs/api/SPMB/DaftarUlangController.md](api/SPMB/DaftarUlangController.md) |
 | PotonganCalonController | Potongan biaya kustom per calon mahasiswa (per komponen biaya) | [docs/api/SPMB/PotonganCalonController.md](api/SPMB/PotonganCalonController.md) |

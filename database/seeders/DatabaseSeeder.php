@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\SpmbMenuAdminSeeder::class,
             \Database\Seeders\IAM\AdminUserSeeder::class,
             \Database\Seeders\IAM\SuperAdminSeeder::class,
+            \Database\Seeders\IAM\SystemSettingSeeder::class,
             \Database\Seeders\SpmbBerkasRequirementSeeder::class,
             \Database\Seeders\SpmbTemplateSuratSeeder::class,
             \Database\Seeders\ArsipUnitSeeder::class,

@@ -39,6 +39,15 @@ class SystemSettingController extends Controller
             }
         }
 
+        if (!isset($settings['third_party_registration_role'])) {
+            $settings['third_party_registration_role'] = [
+                'id' => null,
+                'key' => 'third_party_registration_role',
+                'value' => '',
+                'description' => 'Slug role otomatis untuk akun pihak ketiga SPMB',
+            ];
+        }
+
         if (!isset($settings[RestrictedRoleService::SETTING_KEY])) {
             $settings[RestrictedRoleService::SETTING_KEY] = [
                 'id'          => null,
@@ -158,10 +167,34 @@ class SystemSettingController extends Controller
                 $value = json_encode($restrictedRoles->sanitizeIds($decoded));
             }
 
-            SystemSetting::updateOrCreate(
-                ['key' => $setting['key']],
-                ['value' => $value]
-            );
+            if ($setting['key'] === 'third_party_registration_role' && !\App\Models\Role::query()->where('slug', $value)->where('is_active', true)->exists()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Role pihak ketiga tidak ditemukan atau tidak aktif.',
+                    'errors' => ['value' => ['Role pihak ketiga tidak ditemukan atau tidak aktif.']],
+                ], 422);
+            }
+
+            $settingModel = SystemSetting::firstOrNew(['key' => $setting['key']]);
+            $oldValues = ['value' => $settingModel->value];
+            $settingModel->value = $value;
+            $settingModel->save();
+
+            if ($setting['key'] === 'third_party_registration_role') {
+                try {
+                    \App\Services\AuditLogService::record(
+                        module: 'IAM',
+                        action: 'update_system_setting',
+                        tableName: $settingModel->getTable(),
+                        recordId: $settingModel->id,
+                        oldValues: $oldValues,
+                        newValues: ['value' => $value],
+                        request: $request,
+                    );
+                } catch (\Throwable $exception) {
+                    \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log pengaturan role pihak ketiga: '.$exception->getMessage());
+                }
+            }
 
             if (in_array($setting['key'], ['feeder_url', 'feeder_username', 'feeder_password'], true)) {
                 $feederChanged = true;

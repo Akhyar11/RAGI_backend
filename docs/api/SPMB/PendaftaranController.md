@@ -160,7 +160,7 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan cal
 
 ## GET /api/spmb/pendaftaran/{id}
 
-> Mengambil detail satu pendaftar beserta relasi. Field `daftar_ulang` berisi ringkasan pembayaran daftar ulang (tagihan diterbitkan & dibayar di modul **SIKEU**): total tagihan, sudah dibayar, sisa kurang, virtual account, dan riwayat pembayaran.
+> Mengambil detail satu pendaftar beserta relasi. Field `daftar_ulang` berisi ringkasan pembayaran daftar ulang (tagihan diterbitkan & dibayar di modul **SIKEU**): total tagihan, sudah dibayar, sisa kurang, virtual account, dan riwayat pembayaran. Untuk pengguna dengan izin `spmb.manage`, respons juga menyertakan `pihak_ketiga`, `bukti_pembayaran_manual`, dan `admin_penginput`; relasi tersebut tidak dimuat untuk pengguna lain.
 
 ### Path Parameters
 
@@ -190,6 +190,13 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan cal
         },
         "program_studi": { "id": 12, "nama": "S1 Informatika" },
         "dokumen_pendaftaran": [],
+        "pihak_ketiga": [
+            { "id": 12, "user_id": 32, "nama": "Mitra Sekolah", "urutan": 0 }
+        ],
+        "bukti_pembayaran_manual": [
+            { "id": 9, "original_name": "bukti-transfer.pdf", "status": "menunggu_verifikasi" }
+        ],
+        "admin_penginput": { "id": 4, "username": "admin-spmb", "name": "Admin SPMB" },
         "daftar_ulang": {
             "has_tagihan": true,
             "status_daftar_ulang": "menunggu_pembayaran",

@@ -85,6 +85,8 @@ class PendaftaranCalonMhs extends Model
         'telepon_wali',
         'status',
         'status_pembayaran',
+        'sumber_pendaftaran',
+        'diinput_oleh',
         'catatan_verifikasi',
         'diverifikasi_oleh',
         'diverifikasi_at',
@@ -155,6 +157,21 @@ class PendaftaranCalonMhs extends Model
     public function kodeDiskonUsage()
     {
         return $this->hasOne(SpmbKodeDiskonPenggunaan::class, 'pendaftaran_id');
+    }
+
+    public function pihakKetiga()
+    {
+        return $this->hasMany(PendaftaranPihakKetiga::class, 'pendaftaran_id')->orderBy('urutan');
+    }
+
+    public function buktiPembayaranManual()
+    {
+        return $this->hasMany(PendaftaranBuktiPembayaran::class, 'pendaftaran_id')->latest('id');
+    }
+
+    public function adminPenginput()
+    {
+        return $this->belongsTo(User::class, 'diinput_oleh');
     }
 
     public function konversi()

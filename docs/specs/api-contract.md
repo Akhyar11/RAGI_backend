@@ -8,6 +8,10 @@ Nomor SK kelulusan SPMB hanya diterbitkan melalui alur permohonan dan persetujua
 
 Konfigurasi template SPMB mengambil referensi modul, klasifikasi, dan unit melalui ID dari master. Admin mengonfigurasi template dengan record unit penerbit `INDO` yang tersedia di master; ID unit pada template menjadi sumber untuk permohonan. Arsip tidak boleh mengganti unit yang diminta ketika menyetujui permohonan. `format_nomor_surat` dipertahankan untuk kompatibilitas data lama, tetapi tidak lagi menentukan nomor SK.
 
+## Konfigurasi Role Pihak Ketiga SPMB
+
+Pengaturan IAM menyimpan `third_party_registration_role` sebagai slug role akun pihak ketiga. Akun yang dibuat dari formulir manual mendapat role ini secara otomatis. Dropdown pihak ketiga hanya mengembalikan akun aktif dengan role tersebut. POST manual menerima `pihak_ketiga_user_ids[]` dan menautkan akun terpilih ke pendaftaran; nama lama tetap disimpan sebagai snapshot.
+
 ## Endpoint
 
 ### `POST /api/spmb/pendaftaran/{id}/terbitkan-sk`

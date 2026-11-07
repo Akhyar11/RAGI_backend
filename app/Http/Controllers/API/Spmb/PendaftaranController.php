@@ -90,9 +90,9 @@ class PendaftaranController extends Controller
     /**
      * Get detail Pendaftaran
      */
-    public function show($id): JsonResponse
+    public function show(Request $request, $id): JsonResponse
     {
-        $pendaftaran = PendaftaranCalonMhs::with([
+        $relations = [
             'gelombangPenerimaan',
             'programStudi',
             'programStudiPilihan2',
@@ -102,7 +102,16 @@ class PendaftaranController extends Controller
             'skArsipRequest:id,kode_request,status',
             'referrer:id,username,name,referral_code',
             'kodeDiskonUsage.kodeDiskon',
-        ])->findOrFail($id);
+        ];
+        if ($request->user()?->hasPermission('spmb.manage')) {
+            $relations = array_merge($relations, [
+                'pihakKetiga:id,pendaftaran_id,nama,urutan',
+                'buktiPembayaranManual:id,pendaftaran_id,original_name,status,diunggah_oleh,diverifikasi_oleh,diverifikasi_at,catatan_verifikasi,created_at',
+                'adminPenginput:id,username,name',
+            ]);
+        }
+
+        $pendaftaran = PendaftaranCalonMhs::with($relations)->findOrFail($id);
 
         // Ringkasan daftar ulang (tagihan & pembayaran dikelola modul SIKEU).
         $daftarUlang = $this->pendaftaranService->daftarUlangSummary($pendaftaran);
