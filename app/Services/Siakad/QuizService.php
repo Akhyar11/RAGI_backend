@@ -438,7 +438,7 @@ class QuizService
                     $q->whereHas('krs', function ($krs) use ($kelasPerkuliahanId) {
                         $krs->whereIn('status', LmsService::VALID_KRS_STATUSES)
                             ->whereNull('deleted_at')
-                            ->whereHas('details', fn ($kd) => $kd->where('kelas_id', $kelasPerkuliahanId));
+                            ->whereHas('krsDetails', fn ($kd) => $kd->where('kelas_id', $kelasPerkuliahanId));
                     });
                 });
 

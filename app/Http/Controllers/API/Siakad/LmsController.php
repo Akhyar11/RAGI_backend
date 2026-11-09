@@ -260,6 +260,24 @@ class LmsController extends Controller
     }
 
     /**
+     * Refresh roster and attendance status without reloading all meeting content.
+     */
+    public function getPertemuanAbsensi(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar presensi pertemuan berhasil diperbarui.',
+            'data' => $this->lmsService->getPertemuanAbsensiRoster(
+                $id,
+                (int) $request->user()->id
+            ),
+        ]);
+    }
+
+    /**
      * Tambah konten materi pembelajaran baru.
      */
     public function storeMateri(StoreMateriRequest $request, int $pertemuanId): JsonResponse

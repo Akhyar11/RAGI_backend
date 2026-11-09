@@ -31,6 +31,7 @@ Route::middleware(['can:siakad.kelas.read'])->group(function () {
     Route::get('/kelas/{kelasId}/setting', [LmsController::class, 'getSetting']);
     Route::get('/kelas/{kelasId}/rekap-absensi', [LmsController::class, 'getRekapAbsensi']);
     Route::get('/pertemuan/{id}', [LmsController::class, 'getPertemuan']);
+    Route::get('/pertemuan/{id}/absensi', [LmsController::class, 'getPertemuanAbsensi']);
     Route::get('/download/{type}/{id}', [LmsController::class, 'downloadFile']);
     Route::post('/tugas/{tugasId}/kumpul', [LmsController::class, 'kumpulkanTugas']);
     // Perbarui & tarik kembali pengumpulan tugas (pemilik pengumpulan saja).

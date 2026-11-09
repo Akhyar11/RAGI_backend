@@ -1335,7 +1335,7 @@ Idempoten: menambahkan mahasiswa yang sudah terdaftar tidak menggandakan baris.
 
 ## [POST] /api/v1/lms/quiz/{quizId}/peserta-kelas
 
-Tambah batch peserta tryout berdasarkan kombinasi **kelas rombel** (`siakad_mahasiswa.kelas`, mis. `25A`), **program studi** (`program_studi_id`), **tahun angkatan** (`angkatan`, mis. `2025`), dan/atau **peserta KRS kelas perkuliahan** (`kelas_perkuliahan_id`). Minimal salah satu filter wajib diisi. Seluruh mahasiswa berstatus `aktif` yang cocok didaftarkan idempoten (`firstOrCreate` per mahasiswa) dalam satu transaksi. Tercatat pada audit log modul `LMS` tabel `lms_tryout_peserta` (`action: create`, `new_values` berisi filter, `added`, dan `skipped`).
+Tambah batch peserta tryout berdasarkan kombinasi **kelas rombel** (`siakad_mahasiswa.kelas`, mis. `25A`), **program studi** (`program_studi_id`), **tahun angkatan** (`angkatan`, mis. `2025`), dan/atau **peserta KRS kelas perkuliahan** (`kelas_perkuliahan_id`). Filter kelas perkuliahan mencocokkan detail KRS aktif pada kelas yang dipilih. Minimal salah satu filter wajib diisi. Seluruh mahasiswa berstatus `aktif` yang cocok didaftarkan idempoten (`firstOrCreate` per mahasiswa) dalam satu transaksi. Tercatat pada audit log modul `LMS` tabel `lms_tryout_peserta` (`action: create`, `new_values` berisi filter, `added`, dan `skipped`).
 
 ### Path Parameters
 
@@ -1359,7 +1359,7 @@ Tambah batch peserta tryout berdasarkan kombinasi **kelas rombel** (`siakad_maha
 | `kelas` | string \| null | ❌* | `max:10`, `regex:/^[0-9]{2}[A-Z]{1,3}$/` (dinormalisasi uppercase + trim) |
 | `program_studi_id` | integer \| null | ❌* | `exists:siakad_program_studi,id` |
 | `angkatan` | integer \| null | ❌* | `min:2000`, `max:2100` |
-| `kelas_perkuliahan_id` | integer \| null | ❌* | `exists:siakad_kelas,id` (mengambil mahasiswa yang memiliki KRS disetujui pada kelas tersebut) |
+| `kelas_perkuliahan_id` | integer \| null | ❌* | `exists:siakad_kelas,id` (mengambil mahasiswa yang memiliki status KRS valid dan detail KRS aktif pada kelas tersebut) |
 
 *\*Minimal salah satu dari keempat filter di atas wajib diisi.*
 

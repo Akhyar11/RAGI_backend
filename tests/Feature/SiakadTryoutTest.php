@@ -449,6 +449,18 @@ class SiakadTryoutTest extends TestCase
             ->assertJsonPath('data.added', 1)
             ->assertJsonPath('data.angkatan', 2025);
 
+        // Filter berdasarkan KRS aktif memakai relasi krsDetails pada model Krs.
+        $this->postJson("/api/v1/lms/quiz/{$quizId}/peserta-kelas", [
+            'kelas_perkuliahan_id' => $this->kelas->id,
+        ])->assertStatus(201)
+            ->assertJsonPath('data.added', 1)
+            ->assertJsonPath('data.kelas_perkuliahan_id', $this->kelas->id);
+
+        $this->assertDatabaseHas('lms_tryout_peserta', [
+            'quiz_id' => $quizId,
+            'mahasiswa_id' => $this->mahasiswa->id,
+        ]);
+
         // 5. Mahasiswa yang masuk batch (walau di luar KRS kelas) dapat melihat tryout di /lms/tryout dan mengerjakannya
         Passport::actingAs($this->userLuar);
         $this->getJson('/api/v1/lms/tryout')

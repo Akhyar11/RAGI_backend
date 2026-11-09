@@ -5,7 +5,7 @@
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-25
-> **Diperbarui**: 2026-11-09 (filter kelas Program Studi/kapasitas dan cut-off pengisian presensi)
+> **Diperbarui**: 2026-11-10 (roster presensi realtime dan status dari master SIAKAD)
 
 Controller untuk menangani seluruh aktivitas Learning Management System (LMS) dan Absensi Terintegrasi Perkuliahan. Meliputi manajemen materi perkuliahan multi-file, penugasan mahasiswa dengan auto-sync ke sistem penilaian OBE (`siakad_nilai_komponen_mhs`), absensi token 6-digit dengan masa aktif dinamis, rekapitulasi kehadiran kelas, pengajuan dan persetujuan izin/sakit mahasiswa, serta pengaturan media penyimpanan (Cloudflare R2 atau storage lokal).
 
@@ -39,6 +39,7 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | PUT | `/api/v1/lms/pengaturan/modul` | Simpan pengaturan global modul (audit log LMS) | ✅ `lms.pengaturan.manage` |
 | GET | `/api/v1/lms/public/settings` | Pengaturan publik non-sensitif untuk UI (tanpa autentikasi, cache 24 jam) | ❌ |
 | GET | `/api/v1/lms/pertemuan/{id}` | Detail pertemuan, materi, tugas, kehadiran, dan pengajuan izin | ✅ |
+| GET | `/api/v1/lms/pertemuan/{id}/absensi` | Refresh roster dan status presensi pertemuan tanpa memuat ulang konten lain | ✅ `siakad.kelas.read` |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/materi` | Tambah materi pembelajaran baru (teks/link/file) | ✅ |
 | PUT | `/api/v1/lms/materi/{materiId}` | Perbarui data materi pembelajaran | ✅ |
 | DELETE | `/api/v1/lms/materi/{materiId}` | Hapus materi pembelajaran beserta seluruh lampirannya | ✅ |
@@ -68,9 +69,116 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | GET | `/api/v1/lms/tugas/{tugasId}/export/pengumpulan` | Export status & nilai pengumpulan tugas (CSV/XLSX) | ✅ nilai |
 
 > **Feature flag `lms_fitur_presensi`**: seluruh endpoint presensi (rekap absensi, token absensi,
-> input token, bulk absensi, tutup presensi) menolak permintaan dengan `403` bila flag dimatikan
+> roster, input token, bulk absensi, tutup presensi) menolak permintaan dengan `403` bila flag dimatikan
 > oleh admin. Data kehadiran disimpan di RAG dan tidak dikirim ke sistem legacy. Monitoring lokal
 > tersedia di [LmsPresensiController.md](LmsPresensiController.md).
+
+## GET `/api/v1/lms/pertemuan/{id}/absensi`
+
+Mengambil snapshot daftar mahasiswa dalam KRS valid pada kelas pertemuan tersebut, status submit
+beserta label status, dan jumlah mahasiswa yang sudah/belum mengisi presensi. Halaman dosen
+memanggil endpoint ini berkala selama sesi QR aktif, tanpa memuat ulang materi, tugas, atau kuis.
+Mahasiswa tidak dapat membaca roster kelas; akses kelas tetap mengikuti relasi dosen pengampu atau
+hak pengelola pada kelas terkait.
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID pertemuan LMS |
+
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+Endpoint ini tidak menggunakan query parameters.
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Daftar presensi pertemuan berhasil diperbarui.",
+    "data": {
+        "pertemuan_id": 12,
+        "absensi_list": [
+            {
+                "id": 55,
+                "mahasiswa_id": 101,
+                "nama_lengkap": "Fulan Santoso",
+                "nim": "2024001",
+                "status": "hadir",
+                "status_label": "Hadir",
+                "catatan": null,
+                "is_submitted": true,
+                "waktu_absen": "2026-11-10T08:05:00+00:00"
+            },
+            {
+                "id": null,
+                "mahasiswa_id": 102,
+                "nama_lengkap": "Siti Aminah",
+                "nim": "2024002",
+                "status": null,
+                "status_label": null,
+                "catatan": null,
+                "is_submitted": false,
+                "waktu_absen": null
+            }
+        ],
+        "total_peserta": 2,
+        "total_sudah_absen": 1,
+        "total_belum_absen": 1,
+        "refreshed_at": "2026-11-10T08:10:00+00:00"
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** — token tidak valid atau sesi telah berakhir.
+
+```json
+{
+    "status": "error",
+    "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+**403 Forbidden** — permission `siakad.kelas.read` tidak tersedia, pengguna bukan dosen pengampu/pengelola kelas, pengguna adalah mahasiswa yang mencoba membaca roster, atau fitur presensi dinonaktifkan. Contoh ketika fitur presensi dinonaktifkan:
+
+```json
+{
+    "status": "error",
+    "message": "Fitur presensi sedang dinonaktifkan oleh administrator."
+}
+```
+
+**404 Not Found** — pertemuan tidak ditemukan.
+
+```json
+{
+    "status": "error",
+    "message": "Pertemuan tidak ditemukan."
+}
+```
+
+| Field | Type | Deskripsi |
+|---|---|---|
+| `data.pertemuan_id` | integer | ID pertemuan |
+| `data.absensi_list` | array | Roster peserta KRS valid, status presensi, catatan, waktu submit |
+| `data.total_peserta` | integer | Jumlah peserta pada roster |
+| `data.total_sudah_absen` | integer | Jumlah peserta dengan presensi terkirim |
+| `data.total_belum_absen` | integer | Jumlah peserta yang belum mengirim presensi |
+| `data.refreshed_at` | datetime | Waktu snapshot dibuat |
+
+Status yang dapat dipilih dosen pada input manual berasal dari Master Referensi SIAKAD bertipe
+`status_absensi` yang aktif. Super Admin/pengelola master dapat menambah atau menonaktifkan opsi
+status di menu Master Referensi Akademik. Kode status tersimpan di kolom `status`; hanya status
+berkode aktif, bertipe `status_absensi`, dan bermodul `siakad` yang diterima API. Perubahan status
+manual dicatat pada audit log LMS.
 
 ## Query Parameters (berlaku untuk endpoint list)
 
@@ -528,7 +636,7 @@ Memperbarui konfigurasi LMS satu kelas. Wajib permission `siakad.kelas.manage`.
 
 ### [GET] `/api/v1/lms/kelas/my`
 
-Mengambil daftar kelas yang diampu (untuk Dosen) atau kelas yang diikuti sesuai KRS yang disetujui (untuk Mahasiswa) pada tahun akademik aktif atau tahun akademik tertentu.
+Mengambil kelas yang dapat diakses pengguna pada tahun akademik aktif atau periode tertentu. Dosen hanya melihat kelas yang ditugaskan kepadanya; Kaprodi juga dapat melihat kelas di program studi yang dipimpinnya. Mahasiswa hanya melihat kelas dengan KRS yang valid, sedangkan pengelola global dapat memantau seluruh kelas.
 
 #### Query Parameters
 
@@ -1341,7 +1449,12 @@ Tugas 1: Framework MVC,2026001001,Mahasiswa LMS Testing,Terkumpul,-,tugas_mvc_20
 
 Ringkasan statistik untuk halaman `/lms/dashboard`. Scope kelas mengikuti
 `resolveAccessibleKelasIds` (dosen → kelas yang diampu, mahasiswa → kelas di KRS,
-pengelola/admin & kaprodi → seluruh kelas). Hasil di-cache **5 menit** per user.
+pengelola/admin & kaprodi → seluruh kelas). Dashboard dosen dan mahasiswa juga
+menyertakan maksimal 5 tugas aktif dan 5 materi terbit terbaru per periode
+akademik; daftar tugas mahasiswa hanya berisi tugas yang belum dikumpulkan. Kelas
+serta jadwal hari ini bersumber dari jadwal kelas SIAKAD dan mengikuti akses dosen
+atau KRS valid mahasiswa. Preview kuis juga dibatasi ke kelas tersebut. Hasil di-cache
+**5 menit** per user dan periode (serta tanggal untuk jadwal harian).
 
 **Response Sukses (200 OK)**
 
@@ -1362,9 +1475,98 @@ pengelola/admin & kaprodi → seluruh kelas). Hasil di-cache **5 menit** per use
             "tugas_belum_dikumpul": 1,
             "tryout_selesai": 2
         },
+        "jadwal": {
+            "hari_ini": "senin",
+            "tanggal": "2026-11-09",
+            "kelas": {
+                "hari_ini": [
+                    {
+                        "id": 14,
+                        "kode_kelas": "TI-3A",
+                        "nama_kelas": "TI-3A",
+                        "hari": "senin",
+                        "jam_mulai": "09:00:00",
+                        "jam_selesai": "10:40:00",
+                        "mata_kuliah": {
+                            "id": 45,
+                            "kode": "IF301",
+                            "nama": "Pemrograman Web Lanjut"
+                        }
+                    }
+                ],
+                "semua": [
+                    {
+                        "id": 14,
+                        "kode_kelas": "TI-3A",
+                        "nama_kelas": "TI-3A",
+                        "hari": "senin",
+                        "jam_mulai": "09:00:00",
+                        "jam_selesai": "10:40:00",
+                        "mata_kuliah": {
+                            "id": 45,
+                            "kode": "IF301",
+                            "nama": "Pemrograman Web Lanjut"
+                        }
+                    }
+                ]
+            }
+        },
         "tren": [
             { "tanggal": "2026-10-17", "pengumpulan": 0, "attempt": 1 }
-        ]
+        ],
+        "preview": {
+            "tugas": [
+                {
+                    "id": 31,
+                    "judul": "Rangkuman Materi",
+                    "deadline_at": "2026-11-12T16:00:00.000000Z",
+                    "pertemuan_id": 88,
+                    "kelas_id": 14,
+                    "kode_kelas": "TI-3A",
+                    "nama_kelas": "TI-3A",
+                    "mata_kuliah": {
+                        "id": 45,
+                        "kode": "IF301",
+                        "nama": "Pemrograman Web Lanjut"
+                    },
+                    "belum_dinilai": null
+                }
+            ],
+            "kuis": [
+                {
+                    "id": 42,
+                    "judul": "Kuis API",
+                    "tipe": "kuis",
+                    "dibuka_at": "2026-11-09T01:00:00.000000Z",
+                    "deadline_at": "2026-11-12T16:00:00.000000Z",
+                    "pertemuan_id": 88,
+                    "kelas_id": 14,
+                    "kode_kelas": "TI-3A",
+                    "nama_kelas": "TI-3A",
+                    "mata_kuliah": {
+                        "id": 45,
+                        "kode": "IF301",
+                        "nama": "Pemrograman Web Lanjut"
+                    }
+                }
+            ],
+            "materi": [
+                {
+                    "id": 52,
+                    "judul": "Pengenalan API",
+                    "updated_at": "2026-11-09T10:00:00.000000Z",
+                    "pertemuan_id": 88,
+                    "kelas_id": 14,
+                    "kode_kelas": "TI-3A",
+                    "nama_kelas": "TI-3A",
+                    "mata_kuliah": {
+                        "id": 45,
+                        "kode": "IF301",
+                        "nama": "Pemrograman Web Lanjut"
+                    }
+                }
+            ]
+        }
     }
 }
 ```
@@ -1375,7 +1577,12 @@ pengelola/admin & kaprodi → seluruh kelas). Hasil di-cache **5 menit** per use
 | `ringkasan.tugas_aktif` | Tugas terbit dengan `deadline_at >= now()` |
 | `ringkasan.tryout_aktif` | Tryout terbit, tidak diarsipkan |
 | `tambahan` | Mahasiswa: `tugas_belum_dikumpul`, `tryout_selesai`. Dosen/pengelola: `pengumpulan_belum_dinilai`, `attempt_belum_dinilai` |
+| `jadwal.kelas.hari_ini` | Kelas pada hari berjalan menurut jadwal SIAKAD, hanya dari kelas yang diampu dosen atau KRS valid mahasiswa |
+| `jadwal.kelas.semua` | Seluruh kelas pada periode terpilih dengan informasi hari, jam, dan mata kuliah |
 | `tren` | Selalu 7 entri (6 hari lalu s.d. hari ini), dihitung di PHP (portabel SQLite/MySQL) |
+| `preview.tugas` | Maksimal 5 tugas terbit dan masih dapat dikerjakan pada kelas dalam periode terpilih. Mahasiswa hanya menerima tugas yang belum dikumpulkan; dosen menerima jumlah pengumpulan yang belum dinilai pada tiap tugas. |
+| `preview.kuis` | Maksimal 5 kuis/tryout terbit yang belum melewati waktu tutup, beserta waktu buka dan deadline |
+| `preview.materi` | Maksimal 5 materi terbit terbaru dari kelas dalam periode terpilih. |
 
 ### [GET] `/api/v1/lms/pengaturan/modul`
 

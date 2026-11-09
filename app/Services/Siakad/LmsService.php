@@ -24,8 +24,10 @@ use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\NilaiKomponenMahasiswa;
 use App\Models\Siakad\ProgramStudi;
 use App\Models\Siakad\TahunAkademik;
+use App\Models\System\MasterReferensi;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\AuditLogService;
 use App\Services\Storage\FileStorageService;
 use App\Services\Simpeg\PresensiPengajaranService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -33,6 +35,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class LmsService
@@ -653,6 +656,68 @@ class LmsService
             'my_absensi' => $myAbsensi,
             'my_pengumpulan' => $myPengumpulan,
             'my_izin' => $myIzin,
+        ];
+    }
+
+    /**
+     * Snapshot roster presensi untuk refresh ringan pada layar dosen.
+     */
+    public function getPertemuanAbsensiRoster(int $pertemuanId, int $userId): array
+    {
+        $pertemuan = Pertemuan::findOrFail($pertemuanId);
+        $viewerContext = $this->assertCanViewKelas((int) $pertemuan->kelas_id, $userId);
+
+        if ($viewerContext['viewer_mode'] === 'mahasiswa') {
+            abort(403, 'Daftar presensi kelas hanya dapat dilihat oleh Dosen Pengampu atau pengelola.');
+        }
+
+        $roster = KrsDetail::query()
+            ->where('kelas_id', $pertemuan->kelas_id)
+            ->whereHas('krs', fn ($krs) => $krs->whereIn('status', self::VALID_KRS_STATUSES))
+            ->with('krs.mahasiswa:id,nim,nama_lengkap')
+            ->get()
+            ->map(fn (KrsDetail $detail) => $detail->krs?->mahasiswa)
+            ->filter()
+            ->unique('id')
+            ->sortBy('nama_lengkap')
+            ->values();
+
+        $attendanceByMahasiswa = AbsensiMahasiswa::query()
+            ->where('pertemuan_id', $pertemuanId)
+            ->where('is_submitted', true)
+            ->get()
+            ->keyBy('mahasiswa_id');
+
+        $statusLabels = MasterReferensi::query()
+            ->where('modul', 'siakad')
+            ->where('tipe', 'status_absensi')
+            ->pluck('nama', 'kode');
+
+        $absensiList = $roster->map(function (Mahasiswa $mahasiswa) use ($attendanceByMahasiswa, $statusLabels) {
+            $attendance = $attendanceByMahasiswa->get($mahasiswa->id);
+
+            return [
+                'id' => $attendance?->id,
+                'mahasiswa_id' => $mahasiswa->id,
+                'nama_lengkap' => $mahasiswa->nama_lengkap,
+                'nim' => $mahasiswa->nim,
+                'status' => $attendance?->status,
+                'status_label' => $attendance
+                    ? ($statusLabels[$attendance->status] ?? str($attendance->status)->replace('_', ' ')->title()->toString())
+                    : null,
+                'catatan' => $attendance?->catatan,
+                'is_submitted' => $attendance !== null,
+                'waktu_absen' => $attendance?->updated_at?->toIso8601String(),
+            ];
+        });
+
+        return [
+            'pertemuan_id' => $pertemuanId,
+            'absensi_list' => $absensiList,
+            'total_peserta' => $absensiList->count(),
+            'total_sudah_absen' => $absensiList->where('is_submitted', true)->count(),
+            'total_belum_absen' => $absensiList->where('is_submitted', false)->count(),
+            'refreshed_at' => now()->toIso8601String(),
         ];
     }
 
@@ -1411,33 +1476,78 @@ class LmsService
         $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, $userId);
         app(PresensiPengajaranService::class)->assertWriteAllowed($pertemuan, $userId);
 
-        DB::transaction(function () use ($pertemuanId, $absensiData) {
+        $statusIds = collect($absensiData)->pluck('status_id')->unique()->values();
+        $statusReferences = MasterReferensi::query()
+            ->active()
+            ->where('modul', 'siakad')
+            ->where('tipe', 'status_absensi')
+            ->whereIn('id', $statusIds)
+            ->get()
+            ->keyBy('id');
+
+        $enrolledStudentIds = KrsDetail::query()
+            ->where('kelas_id', $pertemuan->kelas_id)
+            ->whereHas('krs', fn ($krs) => $krs->whereIn('status', self::VALID_KRS_STATUSES))
+            ->with('krs.mahasiswa:id')
+            ->get()
+            ->map(fn (KrsDetail $detail) => $detail->krs?->mahasiswa?->id)
+            ->filter()
+            ->unique()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $invalidEntries = [];
+        foreach ($absensiData as $index => $item) {
+            $reference = $statusReferences->get($item['status_id'] ?? null);
+            if (!$reference || !$reference->kode || mb_strlen($reference->kode) > 50) {
+                $invalidEntries["absensi.{$index}.status_id"][] = 'Pilih status absensi SIAKAD yang aktif dengan kode maksimal 50 karakter.';
+            }
+            if (!in_array((int) ($item['mahasiswa_id'] ?? 0), $enrolledStudentIds, true)) {
+                $invalidEntries["absensi.{$index}.mahasiswa_id"][] = 'Mahasiswa bukan peserta KRS yang valid untuk kelas pertemuan ini.';
+            }
+        }
+
+        if ($invalidEntries !== []) {
+            throw ValidationException::withMessages($invalidEntries);
+        }
+
+        DB::transaction(function () use ($pertemuanId, $absensiData, $statusReferences) {
             foreach ($absensiData as $item) {
-                if (!isset($item['mahasiswa_id'])) {
-                    continue;
-                }
-
-                $statusKode = $item['status'] ?? null;
-                if (!empty($item['status_id']) && !$statusKode) {
-                    $ref = DB::table('spmb_master_referensi')->find($item['status_id']);
-                    $statusKode = $ref?->kode ?? 'hadir';
-                }
-
-                if (!$statusKode) {
-                    continue;
-                }
-
-                AbsensiMahasiswa::updateOrCreate(
+                $statusKode = $statusReferences->get($item['status_id'])->kode;
+                $attendance = AbsensiMahasiswa::firstOrNew(
                     [
                         'pertemuan_id' => $pertemuanId,
                         'mahasiswa_id' => $item['mahasiswa_id'],
-                    ],
-                    [
-                        'status'  => $statusKode,
-                        'is_submitted' => true,
-                        'catatan' => $item['catatan'] ?? null,
                     ]
                 );
+                $trackedFields = ['status', 'is_submitted', 'catatan'];
+                $oldValues = $attendance->exists
+                    ? array_intersect_key($attendance->getOriginal(), array_flip($trackedFields))
+                    : null;
+                $attendance->fill([
+                    'status' => $statusKode,
+                    'is_submitted' => true,
+                    'catatan' => $item['catatan'] ?? null,
+                ])->save();
+
+                if ($attendance->wasRecentlyCreated || $attendance->wasChanged($trackedFields)) {
+                    try {
+                        AuditLogService::record(
+                            module: 'LMS',
+                            action: $attendance->wasRecentlyCreated ? 'create' : 'update',
+                            tableName: 'siakad_absensi_mahasiswa',
+                            recordId: $attendance->id,
+                            oldValues: $oldValues,
+                            newValues: $attendance->only($trackedFields)
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning('Gagal mencatat audit log absensi LMS.', [
+                            'exception' => $e,
+                            'pertemuan_id' => $pertemuanId,
+                            'absensi_id' => $attendance->id,
+                        ]);
+                    }
+                }
             }
         });
 
@@ -1667,7 +1777,8 @@ class LmsService
     public function dashboardOverview(int $userId, ?int $tahunAkademikId = null): array
     {
         $effectiveTahunAkademikId = $tahunAkademikId ?? TahunAkademik::where('is_active', true)->value('id');
-        $cacheKey = "lms:dashboard:overview:{$userId}:" . ($effectiveTahunAkademikId ?: 'all');
+        $today = now();
+        $cacheKey = "lms:dashboard:overview:{$userId}:" . ($effectiveTahunAkademikId ?: 'all') . ':' . $today->toDateString();
 
         return Cache::remember($cacheKey, 300, function () use ($userId, $effectiveTahunAkademikId) {
             $kelasIds = $this->resolveAccessibleKelasIds($userId);
@@ -1681,6 +1792,75 @@ class LmsService
             $role = $mahasiswa
                 ? 'mahasiswa'
                 : (($dosen && !$isPengelolaRole) ? 'dosen' : 'pengelola');
+
+            $hariIni = [
+                'minggu',
+                'senin',
+                'selasa',
+                'rabu',
+                'kamis',
+                'jumat',
+                'sabtu',
+            ][now()->dayOfWeek];
+            $kelasDashboard = [
+                'hari_ini' => [],
+                'semua' => [],
+            ];
+
+            if (in_array($role, ['mahasiswa', 'dosen'], true)) {
+                $kelasItems = Kelas::query()
+                    ->with('mataKuliah')
+                    ->whereIn('id', $kelasIds ?? [])
+                    ->when(
+                        $effectiveTahunAkademikId,
+                        fn ($query) => $query->where('tahun_akademik_id', $effectiveTahunAkademikId)
+                    )
+                    ->get()
+                    ->map(function (Kelas $kelas) {
+                        $mataKuliah = $kelas->mataKuliah;
+
+                        return [
+                            'id' => $kelas->id,
+                            'kode_kelas' => $kelas->kode_kelas,
+                            'nama_kelas' => $kelas->nama_kelas,
+                            'hari' => $kelas->hari ? mb_strtolower($kelas->hari) : null,
+                            'jam_mulai' => $kelas->jam_mulai,
+                            'jam_selesai' => $kelas->jam_selesai,
+                            'mata_kuliah' => $mataKuliah ? [
+                                'id' => $mataKuliah->id,
+                                'kode' => $mataKuliah->kode_mk,
+                                'nama' => $mataKuliah->nama,
+                            ] : null,
+                        ];
+                    })
+                    ->sortBy(function (array $kelas) {
+                        $urutanHari = [
+                            'senin' => 1,
+                            'selasa' => 2,
+                            'rabu' => 3,
+                            'kamis' => 4,
+                            'jumat' => 5,
+                            'sabtu' => 6,
+                            'minggu' => 7,
+                        ];
+
+                        return sprintf(
+                            '%d-%s-%s',
+                            $urutanHari[$kelas['hari'] ?? ''] ?? 8,
+                            $kelas['jam_mulai'] ?? '99:99:99',
+                            $kelas['kode_kelas'] ?? ''
+                        );
+                    })
+                    ->values();
+
+                $kelasDashboard = [
+                    'hari_ini' => $kelasItems
+                        ->where('hari', $hariIni)
+                        ->values()
+                        ->all(),
+                    'semua' => $kelasItems->all(),
+                ];
+            }
 
             $kelasTotal = Kelas::query()
                 ->when($kelasIds !== null, fn ($query) => $query->whereIn('id', $kelasIds))
@@ -1837,12 +2017,175 @@ class LmsService
                 })
                 ->all();
 
+            $preview = [
+                'tugas' => [],
+                'kuis' => [],
+                'materi' => [],
+            ];
+
+            if (in_array($role, ['mahasiswa', 'dosen'], true)) {
+                $tugasPreviewQuery = Tugas::query()
+                    ->where('is_published', true)
+                    ->whereHas('pertemuan.kelas', function ($kelas) use ($kelasIds, $effectiveTahunAkademikId) {
+                        if ($kelasIds !== null) {
+                            $kelas->whereIn('id', $kelasIds);
+                        }
+                        if ($effectiveTahunAkademikId) {
+                            $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId);
+                        }
+                    })
+                    ->where(function ($query) {
+                        $query->whereNull('deadline_at')
+                            ->orWhere('deadline_at', '>=', now())
+                            ->orWhere('can_submit_late', true);
+                    })
+                    ->with('pertemuan.kelas.mataKuliah')
+                    ->withCount([
+                        'pengumpulan as belum_dinilai_count' => fn ($query) => $query->whereNull('nilai'),
+                    ]);
+
+                if ($mahasiswa) {
+                    $tugasPreviewQuery->whereDoesntHave(
+                        'pengumpulan',
+                        fn ($query) => $query->where('mahasiswa_id', $mahasiswa->id)
+                    );
+                }
+
+                $preview['tugas'] = $tugasPreviewQuery
+                    ->orderByRaw('deadline_at IS NULL')
+                    ->orderBy('deadline_at')
+                    ->orderByDesc('updated_at')
+                    ->limit(5)
+                    ->get()
+                    ->map(function (Tugas $tugas) use ($mahasiswa) {
+                        $pertemuan = $tugas->pertemuan;
+                        $kelas = $pertemuan?->kelas;
+                        $mataKuliah = $kelas?->mataKuliah;
+
+                        return [
+                            'id' => $tugas->id,
+                            'judul' => $tugas->judul,
+                            'deadline_at' => $tugas->deadline_at?->toISOString(),
+                            'pertemuan_id' => $pertemuan?->id,
+                            'kelas_id' => $kelas?->id,
+                            'kode_kelas' => $kelas?->kode_kelas,
+                            'nama_kelas' => $kelas?->nama_kelas,
+                            'mata_kuliah' => $mataKuliah ? [
+                                'id' => $mataKuliah->id,
+                                'kode' => $mataKuliah->kode_mk,
+                                'nama' => $mataKuliah->nama,
+                            ] : null,
+                            'belum_dinilai' => $mahasiswa ? null : (int) $tugas->belum_dinilai_count,
+                        ];
+                    })
+                    ->all();
+
+                $quizPreviewQuery = Quiz::query()
+                    ->where('is_published', true)
+                    ->where('is_archived', false)
+                    ->where(function ($query) use ($kelasIds) {
+                        $query->whereHas('kelas', function ($kelas) use ($kelasIds) {
+                            if ($kelasIds !== null) {
+                                $kelas->whereIn('id', $kelasIds);
+                            }
+                        })->orWhereHas('pertemuan.kelas', function ($kelas) use ($kelasIds) {
+                            if ($kelasIds !== null) {
+                                $kelas->whereIn('id', $kelasIds);
+                            }
+                        });
+                    })
+                    ->where(function ($query) {
+                        $query->whereNull('ditutup_at')
+                            ->orWhere('ditutup_at', '>=', now());
+                    })
+                    ->when($effectiveTahunAkademikId, function ($query) use ($effectiveTahunAkademikId) {
+                        $query->where(function ($scope) use ($effectiveTahunAkademikId) {
+                            $scope->whereHas('kelas', fn ($kelas) => $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId))
+                                ->orWhereHas('pertemuan.kelas', fn ($kelas) => $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId));
+                        });
+                    })
+                    ->with(['kelas.mataKuliah', 'pertemuan.kelas.mataKuliah'])
+                    ->orderByRaw('ditutup_at IS NULL')
+                    ->orderBy('ditutup_at')
+                    ->orderByDesc('id')
+                    ->limit(5);
+
+                $preview['kuis'] = $quizPreviewQuery
+                    ->get()
+                    ->map(function (Quiz $quiz) {
+                        $pertemuan = $quiz->pertemuan;
+                        $kelas = $quiz->kelas ?? $pertemuan?->kelas;
+                        $mataKuliah = $kelas?->mataKuliah;
+
+                        return [
+                            'id' => $quiz->id,
+                            'judul' => $quiz->judul,
+                            'tipe' => $quiz->tipe,
+                            'dibuka_at' => $quiz->dibuka_at?->toISOString(),
+                            'deadline_at' => $quiz->ditutup_at?->toISOString(),
+                            'pertemuan_id' => $pertemuan?->id,
+                            'kelas_id' => $kelas?->id,
+                            'kode_kelas' => $kelas?->kode_kelas,
+                            'nama_kelas' => $kelas?->nama_kelas,
+                            'mata_kuliah' => $mataKuliah ? [
+                                'id' => $mataKuliah->id,
+                                'kode' => $mataKuliah->kode_mk,
+                                'nama' => $mataKuliah->nama,
+                            ] : null,
+                        ];
+                    })
+                    ->all();
+
+                $preview['materi'] = MateriPertemuan::query()
+                    ->where('is_published', true)
+                    ->whereHas('pertemuan.kelas', function ($kelas) use ($kelasIds, $effectiveTahunAkademikId) {
+                        if ($kelasIds !== null) {
+                            $kelas->whereIn('id', $kelasIds);
+                        }
+                        if ($effectiveTahunAkademikId) {
+                            $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId);
+                        }
+                    })
+                    ->with('pertemuan.kelas.mataKuliah')
+                    ->orderByDesc('updated_at')
+                    ->orderByDesc('id')
+                    ->limit(5)
+                    ->get()
+                    ->map(function (MateriPertemuan $materi) {
+                        $pertemuan = $materi->pertemuan;
+                        $kelas = $pertemuan?->kelas;
+                        $mataKuliah = $kelas?->mataKuliah;
+
+                        return [
+                            'id' => $materi->id,
+                            'judul' => $materi->judul,
+                            'updated_at' => $materi->updated_at?->toISOString(),
+                            'pertemuan_id' => $pertemuan?->id,
+                            'kelas_id' => $kelas?->id,
+                            'kode_kelas' => $kelas?->kode_kelas,
+                            'nama_kelas' => $kelas?->nama_kelas,
+                            'mata_kuliah' => $mataKuliah ? [
+                                'id' => $mataKuliah->id,
+                                'kode' => $mataKuliah->kode_mk,
+                                'nama' => $mataKuliah->nama,
+                            ] : null,
+                        ];
+                    })
+                    ->all();
+            }
+
             return [
                 'role' => $role,
                 'tahun_akademik_id' => $effectiveTahunAkademikId ? (int) $effectiveTahunAkademikId : null,
+                'jadwal' => [
+                    'hari_ini' => $hariIni,
+                    'tanggal' => now()->toDateString(),
+                    'kelas' => $kelasDashboard,
+                ],
                 'ringkasan' => $ringkasan,
                 'tambahan' => $tambahan,
                 'tren' => $tren,
+                'preview' => $preview,
             ];
         });
     }

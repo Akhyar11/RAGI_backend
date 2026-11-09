@@ -17,6 +17,7 @@ use App\Models\Siakad\ProgramStudi;
 use App\Models\Siakad\TahunAkademik;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\System\MasterReferensi;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Passport\Passport;
@@ -31,6 +32,7 @@ class SiakadLmsPresensiTest extends TestCase
 
     protected User $userAdmin;
     protected User $userMhs;
+    protected User $userDosen;
     protected Mahasiswa $mahasiswa;
     protected Kelas $kelas;
     protected Pertemuan $pertemuan;
@@ -48,6 +50,11 @@ class SiakadLmsPresensiTest extends TestCase
         $this->userMhs = User::factory()->create([
             'username' => 'mhs.presensi',
             'email'    => 'mhs.presensi@test.ac.id',
+        ]);
+
+        $this->userDosen = User::factory()->create([
+            'username' => 'dosen.presensi',
+            'email'    => 'dosen.presensi@test.ac.id',
         ]);
 
         $prodi = ProgramStudi::create([
@@ -85,6 +92,7 @@ class SiakadLmsPresensiTest extends TestCase
         ]);
 
         $dosen = Dosen::create([
+            'user_id'          => $this->userDosen->id,
             'program_studi_id' => $prodi->id,
             'nidn'             => '0099887767',
             'nama_lengkap'     => 'Dosen Presensi',
@@ -146,10 +154,12 @@ class SiakadLmsPresensiTest extends TestCase
         // ── RBAC ──────────────────────────────────────────────────────
         $roleAdmin = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin']);
         $roleMhs   = Role::firstOrCreate(['slug' => 'mahasiswa'], ['name' => 'Mahasiswa']);
+        $roleDosen = Role::firstOrCreate(['slug' => 'dosen_pengajar'], ['name' => 'Dosen Pengajar']);
 
         $permRead   = Permission::firstOrCreate(['slug' => 'lms.presensi.read'], ['name' => 'Lihat Rekap Presensi LMS', 'module' => 'lms', 'action' => 'read']);
         $permManage = Permission::firstOrCreate(['slug' => 'lms.presensi.manage'], ['name' => 'Export Laporan Presensi LMS', 'module' => 'lms', 'action' => 'update']);
         $permKelas  = Permission::firstOrCreate(['slug' => 'siakad.kelas.read'], ['name' => 'Lihat Jadwal Kuliah', 'module' => 'siakad', 'action' => 'read']);
+        $permManageKelas = Permission::firstOrCreate(['slug' => 'siakad.kelas.manage'], ['name' => 'Kelola Kelas', 'module' => 'siakad', 'action' => 'update']);
 
         $roleAdmin->permissions()->syncWithoutDetaching([
             $permRead->id,
@@ -159,9 +169,14 @@ class SiakadLmsPresensiTest extends TestCase
         $roleMhs->permissions()->syncWithoutDetaching([
             $permKelas->id,
         ]);
+        $roleDosen->permissions()->syncWithoutDetaching([
+            $permKelas->id,
+            $permManageKelas->id,
+        ]);
 
         $this->userAdmin->roles()->attach($roleAdmin->id);
         $this->userMhs->roles()->attach($roleMhs->id);
+        $this->userDosen->roles()->attach($roleDosen->id);
     }
 
     /* -----------------------------------------------------------------
@@ -174,6 +189,91 @@ class SiakadLmsPresensiTest extends TestCase
 
         $this->getJson('/api/v1/lms/admin/presensi/kelas')->assertStatus(403);
         $this->getJson('/api/v1/lms/admin/presensi/rekap')->assertStatus(403);
+    }
+
+    public function test_dosen_can_refresh_live_attendance_roster_but_student_cannot_read_class_roster(): void
+    {
+        Passport::actingAs($this->userDosen);
+
+        $this->getJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/absensi")
+            ->assertOk()
+            ->assertJsonPath('data.total_peserta', 1)
+            ->assertJsonPath('data.total_sudah_absen', 1)
+            ->assertJsonPath('data.absensi_list.0.mahasiswa_id', $this->mahasiswa->id)
+            ->assertJsonPath('data.absensi_list.0.status', AbsensiMahasiswa::STATUS_HADIR);
+
+        Passport::actingAs($this->userMhs);
+
+        $this->getJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/absensi")
+            ->assertForbidden();
+    }
+
+    public function test_manual_attendance_accepts_active_custom_status_and_rejects_other_reference_types(): void
+    {
+        $customStatus = MasterReferensi::create([
+            'tipe' => 'status_absensi',
+            'modul' => 'siakad',
+            'kode' => 'kepentingan_khusus',
+            'nama' => 'Kepentingan Khusus',
+            'is_active' => true,
+        ]);
+        $unrelatedReference = MasterReferensi::create([
+            'tipe' => 'agama',
+            'modul' => 'siakad',
+            'kode' => 'uji_tidak_valid',
+            'nama' => 'Bukan Status Absensi',
+            'is_active' => true,
+        ]);
+
+        Passport::actingAs($this->userDosen);
+
+        $url = "/api/v1/lms/pertemuan/{$this->pertemuan->id}/bulk-absensi";
+        $payload = ['absensi' => [[
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status_id' => $customStatus->id,
+        ]]];
+        $this->postJson($url, $payload)->assertOk();
+        $this->assertDatabaseHas('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status' => 'kepentingan_khusus',
+        ]);
+        $attendanceId = AbsensiMahasiswa::query()
+            ->where('pertemuan_id', $this->pertemuan->id)
+            ->where('mahasiswa_id', $this->mahasiswa->id)
+            ->value('id');
+        $this->assertDatabaseHas('audit_logs', [
+            'module' => 'LMS',
+            'action' => 'update',
+            'table_name' => 'siakad_absensi_mahasiswa',
+            'record_id' => $attendanceId,
+        ]);
+
+        $payload['absensi'][0]['status_id'] = $unrelatedReference->id;
+        $this->postJson($url, $payload)->assertUnprocessable();
+        $this->assertDatabaseHas('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status' => 'kepentingan_khusus',
+        ]);
+
+        $nonparticipant = Mahasiswa::create([
+            'user_id' => User::factory()->create()->id,
+            'program_studi_id' => $this->mahasiswa->program_studi_id,
+            'nim' => '2026003999',
+            'nama_lengkap' => 'Mahasiswa Non Peserta',
+            'angkatan' => 2026,
+            'status_akademik' => 'aktif',
+        ]);
+        $payload['absensi'][0] = [
+            'mahasiswa_id' => $nonparticipant->id,
+            'status_id' => $customStatus->id,
+        ];
+        $this->postJson($url, $payload)->assertUnprocessable();
+        $this->assertDatabaseMissing('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $nonparticipant->id,
+        ]);
     }
 
     public function test_admin_bisa_mengambil_daftar_kelas_dengan_ringkasan_rekap(): void

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Lms\PengumpulanTugas;
+use App\Models\Lms\MateriPertemuan;
 use App\Models\Lms\Tugas;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\DosenPengampu;
@@ -437,6 +438,17 @@ class SiakadLmsRoleSeparationTest extends TestCase
     {
         Passport::actingAs($this->userDosenB);
 
+        $myKelasResponse = $this->getJson('/api/v1/lms/kelas/my')
+            ->assertStatus(200)
+            ->assertJsonStructure([
+                'status',
+                'data' => [['id', 'kode_kelas']],
+                'meta' => ['total'],
+            ]);
+
+        $myKelasIds = collect($myKelasResponse->json('data'))->pluck('id')->all();
+        $this->assertSame([$this->kelasB->id], $myKelasIds);
+
         // Dosen B bukan pengampu Kelas A -> tidak boleh lihat overview atau detail pertemuan Kelas A
         $this->getJson("/api/v1/lms/kelas/{$this->kelasA->id}/overview")
             ->assertStatus(403);
@@ -457,6 +469,82 @@ class SiakadLmsRoleSeparationTest extends TestCase
 
         $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}/token")
             ->assertStatus(403);
+    }
+
+    public function test_dashboard_previews_only_tasks_and_materials_in_the_users_classes(): void
+    {
+        $taskForStudent = Tugas::create([
+            'pertemuan_id' => $this->pertemuanA->id,
+            'judul' => 'Tugas Belum Dikumpulkan Kelas A',
+            'deadline_at' => now()->addDay(),
+            'is_published' => true,
+        ]);
+        $taskForDosenB = Tugas::create([
+            'pertemuan_id' => $this->pertemuanB->id,
+            'judul' => 'Tugas Dosen B',
+            'deadline_at' => now()->addDays(2),
+            'is_published' => true,
+        ]);
+
+        $materiA = MateriPertemuan::create([
+            'pertemuan_id' => $this->pertemuanA->id,
+            'judul' => 'Materi terbaru Kelas A',
+            'is_published' => true,
+        ]);
+        MateriPertemuan::create([
+            'pertemuan_id' => $this->pertemuanB->id,
+            'judul' => 'Materi terbaru Kelas B',
+            'is_published' => true,
+        ]);
+        MateriPertemuan::create([
+            'pertemuan_id' => $this->pertemuanA->id,
+            'judul' => 'Materi draft Kelas A',
+            'is_published' => false,
+        ]);
+
+        Passport::actingAs($this->userDosenA);
+        $dosenAResponse = $this->getJson('/api/v1/lms/dashboard/overview')
+            ->assertStatus(200)
+            ->assertJsonStructure([
+                'data' => [
+                    'preview' => [
+                        'tugas' => [['id', 'judul', 'deadline_at', 'kelas_id', 'pertemuan_id', 'mata_kuliah', 'belum_dinilai']],
+                        'materi' => [['id', 'judul', 'updated_at', 'kelas_id', 'pertemuan_id', 'mata_kuliah']],
+                    ],
+                ],
+            ]);
+        $dosenATasks = collect($dosenAResponse->json('data.preview.tugas'));
+        $this->assertSame(
+            [$this->tugasA->id, $taskForStudent->id],
+            $dosenATasks->pluck('id')->sort()->values()->all()
+        );
+        $this->assertSame(1, $dosenATasks->firstWhere('id', $this->tugasA->id)['belum_dinilai']);
+        $this->assertSame(
+            [$materiA->id],
+            collect($dosenAResponse->json('data.preview.materi'))->pluck('id')->all()
+        );
+
+        Passport::actingAs($this->userDosenB);
+        $dosenBResponse = $this->getJson('/api/v1/lms/dashboard/overview')->assertStatus(200);
+        $this->assertSame(
+            [$taskForDosenB->id],
+            collect($dosenBResponse->json('data.preview.tugas'))->pluck('id')->all()
+        );
+        $this->assertSame(
+            ['Materi terbaru Kelas B'],
+            collect($dosenBResponse->json('data.preview.materi'))->pluck('judul')->all()
+        );
+
+        Passport::actingAs($this->userMhsEnrolled);
+        $mahasiswaResponse = $this->getJson('/api/v1/lms/dashboard/overview')->assertStatus(200);
+        $this->assertSame(
+            [$taskForStudent->id],
+            collect($mahasiswaResponse->json('data.preview.tugas'))->pluck('id')->all()
+        );
+        $this->assertSame(
+            [$materiA->id],
+            collect($mahasiswaResponse->json('data.preview.materi'))->pluck('id')->all()
+        );
     }
 
     public function test_mahasiswa_requires_valid_krs_enrollment_for_class_access_and_participation(): void

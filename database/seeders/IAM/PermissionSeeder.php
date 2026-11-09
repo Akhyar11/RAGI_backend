@@ -411,6 +411,7 @@ class PermissionSeeder extends Seeder
         if ($dosenRole) {
             $dosenSlugs = [
                 'siakad.dashboard.read',
+                'siakad.kelas.read',
                 'siakad.nilai.read',
                 'siakad.kurikulum.read',
                 'siakad.mahasiswa.read',

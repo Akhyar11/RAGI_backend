@@ -155,4 +155,19 @@ class MenuVisibilityTest extends TestCase
         $this->assertContains('/profile/sessions', $urls);
         $this->assertContains('/profile/mfa', $urls);
     }
+
+    public function test_lms_learning_navigation_uses_concise_labels_on_existing_routes(): void
+    {
+        $menus = Menu::where('module', 'lms')
+            ->whereIn('url', ['#pembelajaran_lms', '/lms', '/lms/pertemuan', '/lms/forum', '/lms/notifikasi'])
+            ->pluck('name', 'url');
+
+        $this->assertSame([
+            '#pembelajaran_lms' => 'PEMBELAJARAN',
+            '/lms' => 'Kelas',
+            '/lms/pertemuan' => 'Agenda Pertemuan',
+            '/lms/forum' => 'Diskusi',
+            '/lms/notifikasi' => 'Notifikasi',
+        ], $menus->all());
+    }
 }

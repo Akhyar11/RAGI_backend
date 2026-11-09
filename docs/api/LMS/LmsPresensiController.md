@@ -41,7 +41,7 @@ Endpoint integrasi legacy untuk status/log/sinkronisasi/tarik riwayat sudah tida
 | `search` | string | ❌ | — | Cari NIM, nama mahasiswa, atau materi pertemuan |
 | `kelas_id` | integer | ❌ | — | Filter kelas lokal |
 | `pertemuan_ke` | integer | ❌ | — | Filter nomor pertemuan |
-| `status` | string | ❌ | — | `hadir`, `sakit`, `izin`, atau `alfa` |
+| `status` | string | ❌ | — | Kode status dari Master Referensi SIAKAD bertipe `status_absensi` (termasuk status kustom aktif) |
 | `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100); tidak berlaku untuk export |
 | `page` | integer | ❌ | `1` | Nomor halaman; tidak berlaku untuk export |
 | `format` | string | ❌ | `csv` | `csv` atau `xlsx`; hanya untuk export |

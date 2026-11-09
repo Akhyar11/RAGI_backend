@@ -398,7 +398,7 @@ return [
     // ── MODUL LMS (STANDALONE, PISAH DARI SIAKAD) ─────
     // Dikelompokkan rapi ke dalam grup hierarkis (Parent & Children):
     // 1. Dashboard LMS (Root)
-    // 2. PEMBELAJARAN & PERKULIAHAN (Kelas, Forum Diskusi, Notifikasi)
+    // 2. PEMBELAJARAN (Kelas, Agenda Pertemuan, Diskusi, Notifikasi)
     // 3. EVALUASI & CBT (Bank Soal, Tryout / Ujian)
     // 4. MONITORING & LAPORAN (Keaktifan Mengajar Dosen, Monitoring Presensi)
     // 5. PENGATURAN LMS (Pengaturan Kelas, Konfigurasi Modul LMS)
@@ -412,7 +412,7 @@ return [
         'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
     ],
     [
-        'name' => 'PEMBELAJARAN & PERKULIAHAN',
+        'name' => 'PEMBELAJARAN',
         'url' => '#pembelajaran_lms',
         'icon' => 'FaGraduationCap',
         'module' => 'lms',
@@ -421,7 +421,7 @@ return [
         'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
         'children' => [
             [
-                'name' => 'Kelas Perkuliahan',
+                'name' => 'Kelas',
                 'url' => '/lms',
                 'icon' => 'FaChalkboardTeacher',
                 'module' => 'lms',
@@ -430,7 +430,7 @@ return [
                 'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
             ],
             [
-                'name' => 'Pertemuan',
+                'name' => 'Agenda Pertemuan',
                 'url' => '/lms/pertemuan',
                 'icon' => 'FaCalendarAlt',
                 'module' => 'lms',
@@ -439,7 +439,7 @@ return [
                 'role_slugs' => ['superadmin', 'admin', 'admin_siakad', 'dosen', 'mahasiswa'],
             ],
             [
-                'name' => 'Forum Diskusi',
+                'name' => 'Diskusi',
                 'url' => '/lms/forum',
                 'icon' => 'FaUsers',
                 'module' => 'lms',
@@ -448,7 +448,7 @@ return [
                 'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
             ],
             [
-                'name' => 'Notifikasi LMS',
+                'name' => 'Notifikasi',
                 'url' => '/lms/notifikasi',
                 'icon' => 'FaBell',
                 'module' => 'lms',

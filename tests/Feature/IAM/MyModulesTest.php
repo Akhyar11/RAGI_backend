@@ -2,15 +2,16 @@
 
 namespace Tests\Feature\IAM;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Artisan;
-use Laravel\Passport\Passport;
-use Tests\TestCase;
 use App\Models\Menu;
 use App\Models\Module;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use Database\Seeders\IAM\PermissionSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Laravel\Passport\Passport;
+use Tests\TestCase;
 
 class MyModulesTest extends TestCase
 {
@@ -105,5 +106,39 @@ class MyModulesTest extends TestCase
         $this->assertContains('mod_a', $codes);
         $this->assertNotContains('mod_b', $codes); // Tidak punya menu di mod_b
         $this->assertNotContains('mod_c', $codes); // Nonaktif
+    }
+
+    public function test_dosen_role_permission_exposes_lms_in_module_launcher(): void
+    {
+        $dosenRole = Role::create(['name' => 'Dosen Pengajar', 'slug' => 'dosen', 'is_active' => true]);
+        Permission::create([
+            'name' => 'Lihat Kelas',
+            'slug' => 'siakad.kelas.read',
+            'module' => 'siakad',
+            'action' => 'read',
+        ]);
+        $lmsModule = Module::updateOrCreate(
+            ['code' => 'lms'],
+            ['name' => 'LMS', 'is_active' => true]
+        );
+        $lmsMenu = Menu::updateOrCreate(
+            ['url' => '/lms/dashboard', 'module' => 'lms'],
+            [
+                'name' => 'Dashboard LMS',
+                'permission_id' => Permission::where('slug', 'siakad.kelas.read')->value('id'),
+                'order_index' => 1,
+                'is_active' => true,
+            ]
+        );
+        $lmsMenu->roles()->syncWithoutDetaching([$dosenRole->id]);
+
+        app(PermissionSeeder::class)->run();
+
+        $dosen = User::factory()->create(['username' => 'dosen_launcher']);
+        $dosen->roles()->attach($dosenRole->id);
+
+        $response = $this->actingAs($dosen, 'api')->getJson('/api/modules/my-modules');
+        $response->assertStatus(200);
+        $this->assertContains($lmsModule->code, collect($response->json('data'))->pluck('code')->all());
     }
 }

@@ -9,7 +9,7 @@ class AbsensiMahasiswa extends Model
     protected $table = 'siakad_absensi_mahasiswa';
 
     /**
-     * Status kehadiran yang sah (closed-set domain, sesuai kolom `status`).
+     * Status bawaan; status tambahan dikelola melalui Master Referensi SIAKAD.
      */
     public const STATUS_HADIR = 'hadir';
     public const STATUS_SAKIT = 'sakit';
