@@ -376,4 +376,24 @@ class Pegawai extends Model
     {
         return $this->hasMany(\App\Models\Aset::class, 'penanggung_jawab_pegawai_id');
     }
+
+    public function dokumen()
+    {
+        return $this->hasMany(DokumenPegawai::class, 'pegawai_id');
+    }
+
+    public function usulanJafung()
+    {
+        return $this->hasMany(UsulanJafung::class, 'pegawai_id');
+    }
+
+    public function pengajuanCuti()
+    {
+        return $this->hasMany(PengajuanCuti::class, 'pegawai_id');
+    }
+
+    public function suratPeringatan()
+    {
+        return $this->hasMany(SuratPeringatan::class, 'pegawai_id');
+    }
 }

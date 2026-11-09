@@ -18,6 +18,7 @@ use App\Models\Simpeg\PresensiPeriode;
 use App\Services\AttendanceCutoffService;
 use App\Services\AttendanceRecapService;
 use App\Services\AttendanceService;
+use App\Services\AuditLogService;
 use App\Services\FingerprintSyncService;
 use App\Services\Simpeg\PresensiBundleService;
 use App\Services\Storage\FileStorageService;
@@ -1716,7 +1717,7 @@ class PresensiController extends Controller
 
         $processedCount = 0;
 
-        DB::transaction(function () use ($pegawais, $attendanceLogs, $bulanTahun, $periode, $user, $activeKolomKomponens, $allCustoms, &$processedCount) {
+        DB::transaction(function () use ($pegawais, $attendanceLogs, $bulanTahun, $periode, $user, $activeKolomKomponens, $allCustoms, $request, &$processedCount) {
             // Ketika bundle dikirim ke payroll, gantikan data draft lama di tabel payroll
             $existingDrafts = GajiPegawai::where('status_transfer', 'draft')->get();
             if ($existingDrafts->isNotEmpty()) {
