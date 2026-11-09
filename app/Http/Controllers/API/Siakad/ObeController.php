@@ -2521,10 +2521,44 @@ class ObeController extends Controller
 
         $perPage = min(100, $request->integer('per_page', 15));
 
-        $query = BankSoal::with(['mingguan', 'subCpmk.cpmk', 'rps.mataKuliah.kurikulum.programStudi', 'kategori', 'opsi']);
+        $query = BankSoal::with([
+            'mingguan',
+            'subCpmk.cpmk',
+            'rps.mataKuliah.kurikulum.programStudi',
+            'rps.dosenPengembang:id,user_id,nama_lengkap,gelar_depan,gelar_belakang',
+            'pembuat:id,username,email',
+            'kategori',
+            'opsi',
+        ]);
 
         if ($request->filled('rps_id')) {
             $query->where('rps_id', $request->input('rps_id'));
+        }
+        if ($request->filled('mata_kuliah_id')) {
+            $mkId = (int) $request->input('mata_kuliah_id');
+            $query->whereHas('rps', fn ($r) => $r->where('mata_kuliah_id', $mkId));
+        }
+        if ($request->filled('dosen_id')) {
+            $rawDosenIds = is_array($request->input('dosen_id'))
+                ? $request->input('dosen_id')
+                : explode(',', (string) $request->input('dosen_id'));
+            $dosenIds = array_slice(array_values(array_filter(array_map('intval', $rawDosenIds))), 0, 50);
+            if (!empty($dosenIds)) {
+                $dosenUserIds = \App\Models\Siakad\Dosen::whereIn('id', $dosenIds)
+                    ->whereNotNull('user_id')
+                    ->pluck('user_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+                $query->where(function ($q) use ($dosenIds, $dosenUserIds) {
+                    $q->whereHas('rps', fn ($r) => $r->whereIn('dosen_pengembang_id', $dosenIds));
+                    if (!empty($dosenUserIds)) {
+                        $q->orWhereIn('dibuat_oleh', $dosenUserIds);
+                    }
+                });
+            }
+        }
+        if ($request->filled('dibuat_oleh')) {
+            $query->where('dibuat_oleh', (int) $request->input('dibuat_oleh'));
         }
         if ($request->filled('rps_mingguan_id')) {
             $query->where('rps_mingguan_id', $request->input('rps_mingguan_id'));

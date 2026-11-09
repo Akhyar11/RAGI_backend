@@ -217,6 +217,7 @@ class LmsController extends Controller
         Gate::authorize('siakad.kelas.manage');
 
         $pertemuan = Pertemuan::findOrFail($pertemuanId);
+        $this->lmsService->assertDosenPengampuKelas((int) $pertemuan->kelas_id, (int) $request->user()->id);
         $oldValues = $pertemuan->getOriginal();
 
         // Dicatat SEBELUM penghapusan agar jejak audit memuat data asli yang lengkap.
@@ -452,6 +453,118 @@ class LmsController extends Controller
     }
 
     /**
+     * Dosen mengisi jurnal pertemuan sekaligus membuka sesi absensi (token & QR rotasi 30 detik).
+     */
+    public function bukaSesiPresensi(Request $request, int $pertemuanId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
+
+        $validated = $request->validate([
+            'materi'            => ['required', 'string', 'max:255'],
+            'catatan_pertemuan' => ['nullable', 'string', 'max:5000'],
+            'tanggal'           => ['nullable', 'date'],
+            'jam_mulai'         => ['nullable', 'string', 'max:10'],
+            'jam_selesai'       => ['nullable', 'string', 'max:10'],
+            'window_menit'      => ['nullable', 'integer', 'min:5', 'max:180'],
+        ]);
+
+        $existing = Pertemuan::findOrFail($pertemuanId);
+        $oldValues = $existing->getOriginal();
+
+        $sessionData = $this->lmsService->bukaSesiPresensiDenganJurnal(
+            $pertemuanId,
+            $validated,
+            (int) $request->user()->id
+        );
+
+        /** @var Pertemuan|null $updatedPertemuan */
+        $updatedPertemuan = $sessionData['pertemuan'] ?? null;
+        $newValues = $updatedPertemuan instanceof Pertemuan
+            ? $updatedPertemuan->getChanges()
+            : [];
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'update',
+                tableName: 'siakad_pertemuan',
+                recordId: $pertemuanId,
+                oldValues: $oldValues,
+                newValues: $newValues
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log buka sesi presensi: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Jurnal pertemuan disimpan dan sesi presensi QR berhasil dibuka (rotasi 30 detik).',
+            'data'    => $sessionData,
+        ]);
+    }
+
+    /**
+     * Mahasiswa melakukan scan QR Code atau token presensi (Web Scanner / Aplikasi Mobile).
+     */
+    public function scanPresensi(Request $request): JsonResponse
+    {
+        Gate::authorize('lms.presensi.create');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
+
+        $validated = $request->validate([
+            'qr_payload'   => ['nullable', 'string', 'max:500', 'required_without:token'],
+            'pertemuan_id' => ['nullable', 'integer', 'exists:siakad_pertemuan,id'],
+            'token'        => ['nullable', 'string', 'size:6'],
+            'latitude'     => ['nullable', 'numeric'],
+            'longitude'    => ['nullable', 'numeric'],
+            'device_info'  => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $hasil = $this->lmsService->scanTokenAbsensi((int) $request->user()->id, $validated);
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'create',
+                tableName: 'siakad_absensi_mahasiswa',
+                recordId: (int) ($hasil['pertemuan_id'] ?? 0),
+                oldValues: null,
+                newValues: $hasil
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log scan presensi: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Presensi berhasil dicatat.',
+            'data'    => $hasil,
+        ]);
+    }
+
+    /**
+     * Daftar sesi presensi kelas yang sedang aktif dibuka oleh dosen (untuk beranda/scanner mahasiswa).
+     */
+    public function sesiPresensiAktif(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
+
+        $tahunAkademikId = $request->filled('tahun_akademik_id')
+            ? (int) $request->input('tahun_akademik_id')
+            : null;
+
+        $sesi = $this->lmsService->listSesiPresensiAktifMahasiswa((int) $request->user()->id, $tahunAkademikId);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Daftar sesi presensi aktif berhasil diambil.',
+            'data'    => $sesi,
+        ]);
+    }
+
+    /**
      * Putar ulang token absensi dengan umur pendek (anti titip-hadir).
      */
     public function rotateToken(int $pertemuanId): JsonResponse
@@ -572,8 +685,9 @@ class LmsController extends Controller
         $this->lmsService->assertPresensiFiturAktif($request->user());
 
         $user = $request->user();
+        $context = $this->lmsService->assertCanViewKelas($kelasId, (int) $user->id);
         $onlyMahasiswaId = null;
-        if ($user && $user->hasRole('mahasiswa') && !$user->can('siakad.kelas.manage')) {
+        if ($context['viewer_mode'] === 'mahasiswa') {
             $onlyMahasiswaId = Mahasiswa::where('user_id', $user->id)->value('id');
         }
 
@@ -892,8 +1006,9 @@ class LmsController extends Controller
         Gate::authorize('siakad.kelas.read');
 
         $user = $request->user();
+        $context = $this->lmsService->assertCanViewKelas($kelasId, (int) $user->id);
         $onlyMahasiswaId = null;
-        if ($user && $user->hasRole('mahasiswa') && !$user->can('siakad.kelas.manage')) {
+        if ($context['viewer_mode'] === 'mahasiswa') {
             $onlyMahasiswaId = Mahasiswa::where('user_id', $user->id)->value('id');
         }
 
@@ -915,8 +1030,9 @@ class LmsController extends Controller
         Gate::authorize('siakad.kelas.read');
 
         $user = $request->user();
+        $context = $this->lmsService->assertCanViewKelas($kelasId, (int) $user->id);
         $mahasiswaId = null;
-        if ($user && $user->hasRole('mahasiswa') && !$user->can('siakad.kelas.manage')) {
+        if ($context['viewer_mode'] === 'mahasiswa') {
             $mahasiswaId = Mahasiswa::where('user_id', $user->id)->value('id');
         }
 
@@ -1041,10 +1157,14 @@ class LmsController extends Controller
     {
         Gate::authorize('siakad.kelas.read');
 
+        $tahunAkademikId = $request->filled('tahun_akademik_id')
+            ? (int) $request->input('tahun_akademik_id')
+            : null;
+
         return response()->json([
             'status'  => 'success',
             'message' => 'Ringkasan dashboard LMS berhasil diambil.',
-            'data'    => $this->lmsService->dashboardOverview((int) $request->user()->id),
+            'data'    => $this->lmsService->dashboardOverview((int) $request->user()->id, $tahunAkademikId),
         ]);
     }
 

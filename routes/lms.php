@@ -37,6 +37,8 @@ Route::middleware(['can:siakad.kelas.read'])->group(function () {
     Route::put('/tugas/{tugasId}/kumpulan', [LmsController::class, 'updatePengumpulan']);
     Route::delete('/tugas/{tugasId}/kumpulan', [LmsController::class, 'hapusPengumpulan']);
     Route::post('/pertemuan/{pertemuanId}/input-token', [LmsController::class, 'inputToken']);
+    Route::post('/presensi/scan', [LmsController::class, 'scanPresensi']);
+    Route::get('/presensi/sesi-aktif', [LmsController::class, 'sesiPresensiAktif']);
     Route::post('/pertemuan/{pertemuanId}/izin', [LmsController::class, 'ajukanIzin']);
     // Quiz — sisi mahasiswa
     Route::get('/quiz/{quizId}', [QuizController::class, 'showMahasiswa']);
@@ -117,6 +119,7 @@ Route::middleware(['can:siakad.kelas.manage'])->group(function () {
     Route::put('/tugas/{tugasId}', [LmsController::class, 'updateTugas']);
     Route::delete('/tugas/{tugasId}', [LmsController::class, 'destroyTugas']);
     Route::post('/pertemuan/{pertemuanId}/token', [LmsController::class, 'generateToken']);
+    Route::post('/pertemuan/{pertemuanId}/buka-sesi', [LmsController::class, 'bukaSesiPresensi']);
     Route::post('/pertemuan/{pertemuanId}/token/rotate', [LmsController::class, 'rotateToken']);
     Route::post('/pertemuan/{pertemuanId}/tutup-presensi', [LmsController::class, 'tutupPresensi']);
     // Quiz — sisi dosen pengelola
@@ -130,7 +133,8 @@ Route::middleware(['can:siakad.kelas.manage'])->group(function () {
     Route::post('/attempt/{attemptId}/reset', [QuizController::class, 'resetAttempt']);
     Route::get('/attempt/{attemptId}/detail', [QuizController::class, 'attemptDetail']);
     Route::get('/quiz/{quizId}/preview', [QuizController::class, 'preview']);
-    // Tryout — buat & kelola peserta (level kelas)
+    // Tryout — buat & kelola peserta (level kelas maupun ujian khusus lintas mata kuliah)
+    Route::post('/tryout', [QuizController::class, 'storeStandaloneTryout']);
     Route::post('/kelas/{kelasId}/tryout', [QuizController::class, 'storeTryout']);
     Route::post('/quiz/{quizId}/peserta', [QuizController::class, 'addPeserta']);
     Route::post('/quiz/{quizId}/peserta-kelas', [QuizController::class, 'addPesertaByKelas']);

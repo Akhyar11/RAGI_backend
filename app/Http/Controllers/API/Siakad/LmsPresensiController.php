@@ -83,13 +83,15 @@ class LmsPresensiController extends Controller
         $kelasId = $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null;
         $pertemuanKe = $request->filled('pertemuan_ke') ? (int) $request->input('pertemuan_ke') : null;
         $status = $request->filled('status') ? (string) $request->input('status') : null;
+        $tahunAkademikId = $request->filled('tahun_akademik_id') ? (int) $request->input('tahun_akademik_id') : null;
 
         $paginator = $this->lmsPresensiService->rekap(
             [
-                'search'       => $search,
-                'kelas_id'     => $kelasId,
-                'pertemuan_ke' => $pertemuanKe,
-                'status'        => $status,
+                'search'            => $search,
+                'kelas_id'          => $kelasId,
+                'pertemuan_ke'      => $pertemuanKe,
+                'status'            => $status,
+                'tahun_akademik_id' => $tahunAkademikId,
             ],
             $perPage
         );
@@ -107,10 +109,11 @@ class LmsPresensiController extends Controller
                 'to'           => $paginator->lastItem(),
             ],
             'filters' => [
-                'search'        => $search,
-                'kelas_id'      => $kelasId,
-                'pertemuan_ke' => $pertemuanKe,
-                'status'        => $status,
+                'search'            => $search,
+                'kelas_id'          => $kelasId,
+                'pertemuan_ke'      => $pertemuanKe,
+                'status'            => $status,
+                'tahun_akademik_id' => $tahunAkademikId,
             ],
         ]);
     }
@@ -123,10 +126,11 @@ class LmsPresensiController extends Controller
         Gate::authorize('lms.presensi.manage');
 
         $filters = [
-            'search'        => $request->filled('search') ? trim((string) $request->input('search')) : null,
-            'kelas_id'      => $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null,
-            'pertemuan_ke' => $request->filled('pertemuan_ke') ? (int) $request->input('pertemuan_ke') : null,
-            'status'        => $request->filled('status') ? (string) $request->input('status') : null,
+            'search'            => $request->filled('search') ? trim((string) $request->input('search')) : null,
+            'kelas_id'          => $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null,
+            'pertemuan_ke'      => $request->filled('pertemuan_ke') ? (int) $request->input('pertemuan_ke') : null,
+            'status'            => $request->filled('status') ? (string) $request->input('status') : null,
+            'tahun_akademik_id' => $request->filled('tahun_akademik_id') ? (int) $request->input('tahun_akademik_id') : null,
         ];
 
         $data = $this->lmsPresensiService->barisRekap($filters);

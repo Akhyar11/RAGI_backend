@@ -652,6 +652,10 @@ class LmsExportService
     {
         $krsDetails = KrsDetail::with('krs.mahasiswa.programStudi')
             ->where('kelas_id', $kelasId)
+            ->whereHas('krs', function ($q) {
+                $q->whereIn('status', LmsService::VALID_KRS_STATUSES)
+                    ->whereNull('deleted_at');
+            })
             ->get();
 
         return $krsDetails

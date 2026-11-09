@@ -634,4 +634,71 @@ class SiakadLmsTest extends TestCase
         $this->deleteJson("/api/v1/lms/tugas/{$tugasLain}/kumpulan")->assertStatus(200);
         $this->assertDatabaseMissing('lms_pengumpulan_tugas', ['id' => $idLain]);
     }
+
+    public function test_dosen_buka_sesi_jurnal_rotasi_30_detik_dan_mahasiswa_scan_qr(): void
+    {
+        $permPresensiCreate = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'lms.presensi.create'],
+            ['name' => 'Scan QR / Input Presensi & Izin LMS', 'module' => 'lms', 'action' => 'create']
+        );
+        $roleMhs = \App\Models\Role::where('slug', 'mahasiswa')->first();
+        $roleMhs?->permissions()->syncWithoutDetaching([$permPresensiCreate->id]);
+
+        // 1. Dosen mengisi jurnal pertemuan & membuka sesi presensi
+        Passport::actingAs($this->userDosen);
+        $resBuka = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/buka-sesi", [
+            'materi'            => 'Arsitektur Microservices & API Gateway',
+            'catatan_pertemuan' => 'Pembahasan studi kasus autentikasi dan rate limiting.',
+            'jam_mulai'         => '08:00',
+            'jam_selesai'       => '09:40',
+        ]);
+
+        $resBuka->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.rotate_interval_seconds', 30)
+            ->assertJsonPath('data.pertemuan.materi', 'Arsitektur Microservices & API Gateway')
+            ->assertJsonPath('data.pertemuan.status_pertemuan', 'berlangsung');
+
+        $firstToken = $resBuka->json('data.token');
+        $firstQr = $resBuka->json('data.qr_payload');
+        $this->assertSame("RAG-PRESENSI:{$this->pertemuan->id}:{$firstToken}", $firstQr);
+
+        // 2. Mahasiswa mengecek sesi presensi aktif (untuk beranda mobile/web)
+        Passport::actingAs($this->userMhs);
+        $resAktif = $this->getJson('/api/v1/lms/presensi/sesi-aktif');
+        $resAktif->assertStatus(200)
+            ->assertJsonPath('data.0.pertemuan_id', $this->pertemuan->id)
+            ->assertJsonPath('data.0.sudah_absen', false);
+
+        // 3. Dosen memutar token (simulasi auto-rotate 30 detik)
+        Passport::actingAs($this->userDosen);
+        $resRotate = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token/rotate");
+        $resRotate->assertStatus(200)
+            ->assertJsonPath('data.rotate_interval_seconds', 30);
+        $rotatedQr = $resRotate->json('data.qr_payload');
+        $this->assertNotEmpty($rotatedQr);
+
+        // 4. Mahasiswa melakukan scan QR Code
+        Passport::actingAs($this->userMhs);
+        $resScan = $this->postJson('/api/v1/lms/presensi/scan', [
+            'qr_payload'  => $rotatedQr,
+            'device_info' => 'RAG-Mobile-Android/1.0',
+        ]);
+        $resScan->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.pertemuan_id', $this->pertemuan->id)
+            ->assertJsonPath('data.status', 'hadir');
+
+        $this->assertDatabaseHas('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status'       => 'hadir',
+        ]);
+
+        // 5. Sesi presensi aktif kini menandai mahasiswa sudah absen
+        $resAktifAfter = $this->getJson('/api/v1/lms/presensi/sesi-aktif');
+        $resAktifAfter->assertStatus(200)
+            ->assertJsonPath('data.0.sudah_absen', true)
+            ->assertJsonPath('data.0.status_absensi', 'hadir');
+    }
 }

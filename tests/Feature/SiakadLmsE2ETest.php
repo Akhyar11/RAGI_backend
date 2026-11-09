@@ -558,7 +558,11 @@ class SiakadLmsE2ETest extends TestCase
         // Admin: tetap melihat semua kelas
         $userAdmin = User::factory()->create(['username' => 'admin.lms.my']);
         $roleAdmin = \App\Models\Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Administrator']);
-        $roleAdmin->permissions()->syncWithoutDetaching([$permRead->id]);
+        $permManage = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'siakad.kelas.manage'],
+            ['name' => 'Kelola Kelas', 'module' => 'siakad', 'action' => 'update']
+        );
+        $roleAdmin->permissions()->syncWithoutDetaching([$permRead->id, $permManage->id]);
         $userAdmin->roles()->attach($roleAdmin->id);
 
         Passport::actingAs($userAdmin);

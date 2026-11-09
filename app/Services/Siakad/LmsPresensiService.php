@@ -59,8 +59,11 @@ class LmsPresensiService
             });
         }
 
-        if (! empty($filters['tahun_akademik_id'])) {
-            $query->where('tahun_akademik_id', (int) $filters['tahun_akademik_id']);
+        $tahunAkademikId = ! empty($filters['tahun_akademik_id'])
+            ? (int) $filters['tahun_akademik_id']
+            : \App\Models\Siakad\TahunAkademik::where('is_active', true)->value('id');
+        if ($tahunAkademikId) {
+            $query->where('tahun_akademik_id', (int) $tahunAkademikId);
         }
 
         $allowedSorts = ['kode_kelas', 'nama_kelas', 'jumlah_sesi', 'created_at'];
@@ -185,6 +188,14 @@ class LmsPresensiService
      */
     protected function applyRekapFilters($query, array $filters): void
     {
+        $tahunAkademikId = ! empty($filters['tahun_akademik_id'])
+            ? (int) $filters['tahun_akademik_id']
+            : (empty($filters['kelas_id']) ? \App\Models\Siakad\TahunAkademik::where('is_active', true)->value('id') : null);
+
+        if ($tahunAkademikId) {
+            $query->where('siakad_kelas.tahun_akademik_id', (int) $tahunAkademikId);
+        }
+
         if (! empty($filters['kelas_id'])) {
             $query->where('siakad_pertemuan.kelas_id', (int) $filters['kelas_id']);
         }
@@ -243,8 +254,11 @@ class LmsPresensiService
                 'pertemuans as pertemuan_selesai' => fn ($q) => $q->where('status_pertemuan', Pertemuan::STATUS_SELESAI),
             ]);
 
-        if (! empty($filters['tahun_akademik_id'])) {
-            $query->where('tahun_akademik_id', (int) $filters['tahun_akademik_id']);
+        $tahunAkademikId = ! empty($filters['tahun_akademik_id'])
+            ? (int) $filters['tahun_akademik_id']
+            : \App\Models\Siakad\TahunAkademik::where('is_active', true)->value('id');
+        if ($tahunAkademikId) {
+            $query->where('tahun_akademik_id', (int) $tahunAkademikId);
         }
 
         if (! empty($filters['program_studi_id'])) {

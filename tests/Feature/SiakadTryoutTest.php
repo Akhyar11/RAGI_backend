@@ -351,4 +351,126 @@ class SiakadTryoutTest extends TestCase
         $this->postJson("/api/v1/lms/quiz/{$quizA}/soal/bulk-delete", ['quiz_soal_ids' => $idsA])
             ->assertStatus(422);
     }
+
+    public function test_tryout_ujian_khusus_lintas_mk_multi_dosen_dan_batch_peserta(): void
+    {
+        // Siapkan Dosen ke-2 (kolaborator) dan soal dari Bank Soal Dosen ke-2
+        $userDosen2 = User::factory()->create(['username' => 'dosen.kolab', 'email' => 'dosen.kolab@test.ac.id']);
+        $roleDosen = Role::where('slug', 'dosen_pengajar')->firstOrFail();
+        $userDosen2->roles()->attach($roleDosen->id);
+
+        $prodi = ProgramStudi::firstOrFail();
+        $dosen2 = Dosen::create([
+            'user_id' => $userDosen2->id,
+            'program_studi_id' => $prodi->id,
+            'nidn' => '0088008800',
+            'nama_lengkap' => 'Dosen Kolaborator Dua',
+            'status_aktif' => 'aktif',
+        ]);
+
+        $soalDosen2 = BankSoal::create([
+            'rps_id' => $this->rps->id,
+            'tipe_soal' => 'pilihan_ganda',
+            'pertanyaan' => 'Soal dari Bank Soal Dosen 2?',
+            'bobot' => 10,
+            'dibuat_oleh' => $userDosen2->id,
+        ]);
+        $opsiDosen2Benar = BankSoalOpsi::create([
+            'bank_soal_id' => $soalDosen2->id,
+            'teks' => 'Benar Dosen 2',
+            'is_benar' => true,
+            'urutan' => 1,
+        ]);
+        BankSoalOpsi::create([
+            'bank_soal_id' => $soalDosen2->id,
+            'teks' => 'Salah Dosen 2',
+            'is_benar' => false,
+            'urutan' => 2,
+        ]);
+
+        // Set kelas & angkatan pada mahasiswaLuar agar bisa ditarik via batch filter
+        $this->mahasiswaLuar->update([
+            'kelas' => '25A',
+            'angkatan' => 2025,
+            'status' => 'aktif',
+        ]);
+
+        // 1. Dosen 1 membuat Tryout Ujian Khusus (di luar mata kuliah, kelas_id = null) + melibatkan Dosen 2
+        Passport::actingAs($this->userDosen);
+        $createRes = $this->postJson('/api/v1/lms/tryout', [
+            'kelas_id' => null,
+            'judul' => 'Tryout Uji Kompetensi Khusus',
+            'deskripsi' => 'Ujian khusus lintas mata kuliah untuk angkatan 2025 kelas 25A',
+            'durasi_menit' => 90,
+            'max_attempt' => 1,
+            'is_published' => true,
+            'kolaborator_dosen_ids' => [$dosen2->id],
+        ]);
+        $createRes->assertStatus(201)
+            ->assertJsonPath('data.kelas_id', null)
+            ->assertJsonPath('data.tipe', 'tryout');
+
+        $quizId = (int) $createRes->json('data.id');
+
+        // Pastikan kedua dosen tercatat sebagai kolaborator tim tryout
+        $this->assertDatabaseHas('lms_quiz_kolaborator', [
+            'quiz_id' => $quizId,
+            'dosen_id' => $dosen2->id,
+        ]);
+
+        // 2. Dosen 1 melampirkan soal miliknya sendiri
+        $this->postJson("/api/v1/lms/quiz/{$quizId}/soal", [
+            'bank_soal_id' => $this->bankBenar,
+            'poin' => 50,
+        ])->assertStatus(201);
+
+        // 3. Dosen 2 (kolaborator) bisa melihat tryout standalone di daftar agregat,
+        // memfilter bank soal miliknya, dan melampirkan soal ke tryout tersebut
+        Passport::actingAs($userDosen2);
+        $this->getJson('/api/v1/lms/tryout')
+            ->assertStatus(200)
+            ->assertJsonFragment(['id' => $quizId, 'judul' => 'Tryout Uji Kompetensi Khusus']);
+
+        $this->getJson("/api/v1/siakad/obe/soal?dosen_id={$dosen2->id}")
+            ->assertStatus(200)
+            ->assertJsonFragment(['id' => $soalDosen2->id]);
+
+        $this->postJson("/api/v1/lms/quiz/{$quizId}/soal", [
+            'bank_soal_id' => $soalDosen2->id,
+            'poin' => 50,
+        ])->assertStatus(201);
+
+        // 4. Dosen 2 menambahkan batch peserta berdasarkan kombinasi kelas + prodi + tahun angkatan
+        $this->postJson("/api/v1/lms/quiz/{$quizId}/peserta-kelas", [
+            'kelas' => '25A',
+            'program_studi_id' => $prodi->id,
+            'angkatan' => 2025,
+        ])->assertStatus(201)
+            ->assertJsonPath('data.added', 1)
+            ->assertJsonPath('data.angkatan', 2025);
+
+        // 5. Mahasiswa yang masuk batch (walau di luar KRS kelas) dapat melihat tryout di /lms/tryout dan mengerjakannya
+        Passport::actingAs($this->userLuar);
+        $this->getJson('/api/v1/lms/tryout')
+            ->assertStatus(200)
+            ->assertJsonFragment(['id' => $quizId, 'judul' => 'Tryout Uji Kompetensi Khusus']);
+
+        $startRes = $this->postJson("/api/v1/lms/quiz/{$quizId}/start");
+        $startRes->assertStatus(201);
+        $attemptId = (int) $startRes->json('data.id');
+
+        $batch = $this->getJson("/api/v1/lms/quiz/{$quizId}/soal?page=1")->assertStatus(200);
+        $qsMap = collect($batch->json('data.data'))->pluck('quiz_soal_id', 'pertanyaan')->all();
+
+        $this->postJson("/api/v1/lms/attempt/{$attemptId}/autosave", [
+            'answers' => [
+                ['quiz_soal_id' => $qsMap['Ibukota Indonesia?'], 'bank_opsi_id' => $this->opsiBenarId],
+                ['quiz_soal_id' => $qsMap['Soal dari Bank Soal Dosen 2?'], 'bank_opsi_id' => $opsiDosen2Benar->id],
+            ],
+        ])->assertStatus(200);
+
+        $this->postJson("/api/v1/lms/attempt/{$attemptId}/submit")
+            ->assertStatus(200)
+            ->assertJsonPath('data.nilai_akhir', '100.00');
+    }
 }

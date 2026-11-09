@@ -51,10 +51,13 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | PUT | `/api/v1/lms/tugas/{tugasId}/kumpulan` | Mahasiswa memperbarui pengumpulan tugasnya (berkas &/atau catatan) | ✅ |
 | DELETE | `/api/v1/lms/tugas/{tugasId}/kumpulan` | Mahasiswa menarik kembali / menghapus pengumpulan tugasnya | ✅ |
 | PUT | `/api/v1/lms/pengumpulan/{pengumpulanId}/nilai` | Dosen memberikan nilai tugas dan auto-sync ke nilai OBE | ✅ |
+| POST | `/api/v1/lms/pertemuan/{pertemuanId}/buka-sesi` | Dosen mengisi jurnal perkuliahan sekaligus membuka sesi presensi (rotasi QR/token 30 detik) | ✅ |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/token` | Generate 6-digit token absensi realtime (masa aktif berbatas) | ✅ |
-| POST | `/api/v1/lms/pertemuan/{pertemuanId}/token/rotate` | Putar ulang token umur pendek (anti titip-hadir) | ✅ |
+| POST | `/api/v1/lms/pertemuan/{pertemuanId}/token/rotate` | Putar ulang token umur pendek tiap 30 detik (anti titip-hadir) | ✅ |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/tutup-presensi` | Tutup sesi presensi (input token ditolak setelah ini) | ✅ |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/input-token` | Mahasiswa input token absensi untuk mencatat kehadiran | ✅ |
+| POST | `/api/v1/lms/presensi/scan` | Mahasiswa scan QR presensi (`RAG-PRESENSI:{pertemuan_id}:{token}`) via web/mobile scanner | ✅ |
+| GET | `/api/v1/lms/presensi/sesi-aktif` | Daftar sesi presensi yang sedang dibuka pada kelas KRS mahasiswa aktif | ✅ |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/bulk-absensi` | Dosen menyimpan presensi mahasiswa secara massal/manual | ✅ |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/izin` | Mahasiswa mengajukan permohonan izin/sakit dengan bukti surat | ✅ |
 | PATCH | `/api/v1/lms/izin/{izinId}/proses` | Dosen menyetujui (disetujui) atau menolak (ditolak) surat izin | ✅ |
@@ -1473,6 +1476,116 @@ cache **24 jam**, di-invalidate saat pengaturan disimpan.
         "lms_upload_max_size_mb": 100,
         "lms_video_max_size_mb": 500
     }
+}
+```
+
+---
+
+## 9. Presensi Dinamis (Jurnal Dosen + QR/Token Rotasi 30 Detik + Scanner Mahasiswa)
+
+### [POST] `/api/v1/lms/pertemuan/{pertemuanId}/buka-sesi`
+
+Dosen pengampu mengisi jurnal pertemuan (`materi`, `catatan_pertemuan`, `tanggal`, `jam_mulai`, `jam_selesai`) sekaligus membuka sesi presensi dengan **QR Code & Token 6-Digit yang berputar tiap 30 detik** (`rotate_interval_seconds = 30`). Sekaligus mencatat kehadiran mengajar dosen ke SIMPEG (`SimpegPresensiPengajaranService`).
+
+#### Request Body
+```json
+{
+    "materi": "Arsitektur Microservices & API Gateway",
+    "catatan_pertemuan": "Pembahasan komunikasi sinkron vs asinkron antar layanan.",
+    "tanggal": "2026-11-09",
+    "jam_mulai": "08:00",
+    "jam_selesai": "10:30"
+}
+```
+
+#### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Jurnal pertemuan disimpan dan sesi presensi berhasil dibuka (rotasi token tiap 30 detik).",
+    "data": {
+        "pertemuan_id": 14,
+        "pertemuan_ke": 3,
+        "materi": "Arsitektur Microservices & API Gateway",
+        "catatan_pertemuan": "Pembahasan komunikasi sinkron vs asinkron antar layanan.",
+        "status_pertemuan": "berlangsung",
+        "token": "482910",
+        "qr_payload": "RAG-PRESENSI:14:482910",
+        "expired_at": "2026-11-09T08:00:30+07:00",
+        "ttl_detik": 30,
+        "rotate_interval_seconds": 30,
+        "window_menit": 15
+    }
+}
+```
+
+### [POST] `/api/v1/lms/presensi/scan`
+
+Digunakan oleh **Scanner Web** maupun **Aplikasi Mobile Mahasiswa** untuk memindai QR Code presensi (`RAG-PRESENSI:{pertemuan_id}:{token}`). Memiliki *grace window* 10 detik untuk token tepat sebelum rotasi agar pemindaian tepat di detik pergantian tetap sah.
+
+#### Request Body
+```json
+{
+    "qr_payload": "RAG-PRESENSI:14:482910",
+    "device_info": "RAG-Mobile/1.0 (Android 15; Pixel 8)",
+    "latitude": -6.200000,
+    "longitude": 106.816666
+}
+```
+
+#### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Presensi berhasil dicatat melalui QR/Token scanner.",
+    "data": {
+        "id": 91,
+        "kelas_id": 12,
+        "mahasiswa_id": 312,
+        "pertemuan_ke": 3,
+        "tanggal": "2026-11-09",
+        "status": "hadir",
+        "waktu_absen": "2026-11-09T08:00:12.000000Z",
+        "catatan": "Hadir via QR/Token Scanner (RAG-Mobile/1.0) [-6.2,106.816666]"
+    }
+}
+```
+
+### [GET] `/api/v1/lms/presensi/sesi-aktif`
+
+Menampilkan daftar sesi presensi yang sedang dibuka oleh dosen pada kelas-kelas yang diambil mahasiswa di periode aktif (untuk banner cepat **"Sesi Presensi Aktif — Scan Sekarang"** di Aplikasi Mobile Mahasiswa).
+
+#### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Daftar sesi presensi aktif berhasil diambil.",
+    "data": [
+        {
+            "pertemuan_id": 14,
+            "pertemuan_ke": 3,
+            "tanggal": "2026-11-09",
+            "jam_mulai": "08:00",
+            "jam_selesai": "10:30",
+            "materi": "Arsitektur Microservices & API Gateway",
+            "catatan_pertemuan": "Pembahasan komunikasi sinkron vs asinkron antar layanan.",
+            "kelas": {
+                "id": 12,
+                "kode_kelas": "IF-3A",
+                "nama_kelas": "Kelas A",
+                "mata_kuliah": {
+                    "id": 5,
+                    "kode_mk": "IF301",
+                    "nama": "Arsitektur Perangkat Lunak"
+                }
+            },
+            "token_expired_at": "2026-11-09T08:00:30+07:00",
+            "rotate_interval_seconds": 30,
+            "sudah_absen": false,
+            "status_absensi": null,
+            "waktu_absen": null
+        }
+    ]
 }
 ```
 

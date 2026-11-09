@@ -404,7 +404,7 @@ return [
     // 5. PENGATURAN LMS (Pengaturan Kelas, Konfigurasi Modul LMS)
     [
         'name' => 'Dashboard LMS',
-        'url' => '/lms',
+        'url' => '/lms/dashboard',
         'icon' => 'FaBookOpen',
         'module' => 'lms',
         'permission_slug' => 'siakad.kelas.read',
@@ -430,12 +430,21 @@ return [
                 'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
             ],
             [
+                'name' => 'Pertemuan',
+                'url' => '/lms/pertemuan',
+                'icon' => 'FaCalendarAlt',
+                'module' => 'lms',
+                'permission_slug' => 'siakad.kelas.read',
+                'order_index' => 2,
+                'role_slugs' => ['superadmin', 'admin', 'admin_siakad', 'dosen', 'mahasiswa'],
+            ],
+            [
                 'name' => 'Forum Diskusi',
                 'url' => '/lms/forum',
                 'icon' => 'FaUsers',
                 'module' => 'lms',
                 'permission_slug' => 'siakad.kelas.read',
-                'order_index' => 2,
+                'order_index' => 3,
                 'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
             ],
             [
@@ -444,7 +453,7 @@ return [
                 'icon' => 'FaBell',
                 'module' => 'lms',
                 'permission_slug' => 'siakad.kelas.read',
-                'order_index' => 3,
+                'order_index' => 4,
                 'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
             ],
         ],

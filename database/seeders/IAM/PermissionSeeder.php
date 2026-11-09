@@ -320,8 +320,9 @@ class PermissionSeeder extends Seeder
             ['name' => 'Kirim Pesan Forum', 'slug' => 'lms.forum.create', 'module' => 'lms', 'action' => 'create', 'description' => 'Mengirim pesan & balasan pada forum kelas'],
             ['name' => 'Kelola Forum Diskusi', 'slug' => 'lms.forum.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Membuat/hapus topik & moderasi pesan forum kelas'],
 
-            // ── MODUL LMS (MONITORING PRESENSI LOKAL) ───────────
+            // ── MODUL LMS (MONITORING & INTERAKSI PRESENSI LOKAL) ───────────
             ['name' => 'Lihat Monitoring Presensi LMS', 'slug' => 'lms.presensi.read', 'module' => 'lms', 'action' => 'read', 'description' => 'Memantau keaktifan mengajar dan rekap presensi lokal RAG'],
+            ['name' => 'Scan QR / Input Presensi & Izin LMS', 'slug' => 'lms.presensi.create', 'module' => 'lms', 'action' => 'create', 'description' => 'Mencatat kehadiran via scan QR/token 30 detik dan mengajukan permohonan izin/sakit perkuliahan'],
             ['name' => 'Export Laporan Presensi LMS', 'slug' => 'lms.presensi.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Mengunduh laporan keaktifan mengajar dan rekap presensi lokal RAG'],
 
             // ── MODUL LMS (PENGATURAN LEVEL MODUL) ───────────────
@@ -389,6 +390,7 @@ class PermissionSeeder extends Seeder
                 'siakad.pa.create',
                 'lms.forum.read',
                 'lms.forum.create',
+                'lms.presensi.create',
                 'sikeu.tagihan.read',
                 'sikeu.dispensasi.read',
                 'sikeu.dispensasi.create',

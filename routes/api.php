@@ -1191,6 +1191,41 @@ Route::prefix('v1')->group(function () {
         Route::post('/attendance/keterangan', [App\Http\Controllers\API\AttendanceController::class, 'keterangan']);
         Route::get('/attendance/history', [App\Http\Controllers\API\AttendanceController::class, 'history']);
         Route::get('/attendance/recap', [App\Http\Controllers\API\AttendanceController::class, 'recap']);
+
+        // Aplikasi Mobile Mahasiswa Terpadu (Beranda, Presensi QR 30 Detik, LMS, SIAKAD, & SIKEU)
+        Route::prefix('mobile/mahasiswa')->group(function () {
+            Route::get('/home', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'home']);
+            Route::get('/periode', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'periode']);
+
+            // Presensi Perkuliahan (QR/Token 30 Detik, Izin/Sakit, & Rekap)
+            Route::get('/presensi/sesi-aktif', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sesiPresensiAktif']);
+            Route::post('/presensi/scan', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'scanPresensi']);
+            Route::post('/presensi/pertemuan/{pertemuanId}/izin', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'ajukanIzin'])->whereNumber('pertemuanId');
+            Route::get('/presensi/rekap', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'rekapPresensi']);
+
+            // LMS Mobile (Overview, Kelas, Pertemuan, Tugas, Tryout/Ujian Khusus, & Forum)
+            Route::get('/lms/overview', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsOverview']);
+            Route::get('/lms/kelas', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsKelas']);
+            Route::get('/lms/kelas/{kelasId}', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsKelasDetail'])->whereNumber('kelasId');
+            Route::get('/lms/pertemuan/{pertemuanId}', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsPertemuanDetail'])->whereNumber('pertemuanId');
+            Route::get('/lms/tugas', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsTugas']);
+            Route::get('/lms/tryout', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsTryout']);
+            Route::get('/lms/forum', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsForum']);
+
+            // SIAKAD Mobile (Profil & KTM Digital, Jadwal, KRS, KHS, & Transkrip)
+            Route::get('/siakad/profil', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'siakadProfil']);
+            Route::get('/siakad/jadwal', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'siakadJadwal']);
+            Route::get('/siakad/krs', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'siakadKrs']);
+            Route::get('/siakad/khs', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'siakadKhs']);
+            Route::get('/siakad/transkrip', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'siakadTranskrip']);
+
+            // SIKEU Mobile (Ringkasan, Tagihan/Invoice, Riwayat Pembayaran, Beasiswa, & Dispensasi)
+            Route::get('/sikeu/ringkasan', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuRingkasan']);
+            Route::get('/sikeu/tagihan', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuTagihan']);
+            Route::get('/sikeu/pembayaran', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuPembayaran']);
+            Route::get('/sikeu/beasiswa', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuBeasiswa']);
+            Route::get('/sikeu/dispensasi', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuDispensasi']);
+        });
     });
 
     // 4. Akses Integrasi Sistem Eksternal (API Key)

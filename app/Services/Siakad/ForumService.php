@@ -60,14 +60,11 @@ class ForumService
 
     protected function assertAnggotaKelas(int $kelasId, int $userId): void
     {
-        $user = User::findOrFail($userId);
+        User::findOrFail($userId);
 
-        // Pengelola (dosen/admin via gate di controller) lolos bila mengampu atau istimewa.
         $mahasiswaId = Mahasiswa::where('user_id', $userId)->value('id');
         if ($mahasiswaId) {
-            $ikut = KrsDetail::where('kelas_id', $kelasId)
-                ->whereHas('krs', fn ($q) => $q->where('mahasiswa_id', $mahasiswaId))
-                ->exists();
+            $ikut = app(LmsService::class)->isMahasiswaEnrolledInKelas((int) $mahasiswaId, $kelasId);
             if (!$ikut) {
                 throw ValidationException::withMessages([
                     'kelas' => ['Anda tidak terdaftar pada kelas perkuliahan ini.'],
@@ -77,12 +74,9 @@ class ForumService
             return;
         }
 
-        $dosenId = Dosen::where('user_id', $userId)->value('id');
-        $mengampu = $dosenId
-            ? \App\Models\Siakad\DosenPengampu::where('kelas_id', $kelasId)->where('dosen_id', $dosenId)->exists()
-            : false;
+        $context = app(LmsService::class)->resolveKelasViewerContext($kelasId, $userId);
 
-        if (!$mengampu && !$user->isSuperAdmin() && !$user->hasPermission('siakad.kelas.manage')) {
+        if (!$context['is_pengampu'] && !$context['is_pengelola']) {
             throw ValidationException::withMessages([
                 'kelas' => ['Anda tidak terdaftar pada kelas perkuliahan ini.'],
             ]);
@@ -239,7 +233,12 @@ class ForumService
             $query->whereIn('kelas_id', $kelasIds === null ? [$kelasId] : array_values(array_intersect($kelasIds, [$kelasId])));
         }
 
-        if ($tahunAkademikId) {
+        $effectiveTahunAkademikId = $tahunAkademikId ?? \App\Models\Siakad\TahunAkademik::where('is_active', true)->value('id');
+        if ($effectiveTahunAkademikId && !$kelasId) {
+            $query->whereHas('kelas', function ($q) use ($effectiveTahunAkademikId) {
+                $q->where('tahun_akademik_id', $effectiveTahunAkademikId);
+            });
+        } elseif ($tahunAkademikId && $kelasId) {
             $query->whereHas('kelas', function ($q) use ($tahunAkademikId) {
                 $q->where('tahun_akademik_id', $tahunAkademikId);
             });

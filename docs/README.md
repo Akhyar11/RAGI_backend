@@ -92,11 +92,19 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
-| QuizController | Quiz per pertemuan + tryout level kelas & **agregat level modul** (batch-loading tanpa kunci, autosave, auto-grade, OBE sync) + **export hasil quiz/tryout (CSV/XLSX)** | [docs/api/LMS/QuizController.md](api/LMS/QuizController.md) |
+| QuizController | Quiz per pertemuan + tryout level kelas, **tryout ujian khusus (di luar MK)**, **multi-dosen kolaborator**, **batch peserta (kelas/prodi/angkatan/KRS)**, & **agregat level modul** (batch-loading tanpa kunci, autosave, auto-grade, OBE sync) + **export hasil quiz/tryout (CSV/XLSX)** | [docs/api/LMS/QuizController.md](api/LMS/QuizController.md) |
 | ForumController | Forum diskusi per kelas (topik + pesan/balasan 1 level), **topik default "Diskusi Umum" via aksi eksplisit** (idempoten) & daftar topik agregat level modul (read-only). Otorisasi memakai permission khusus `lms.forum.*` + Policy, bukan pinjam permission SIAKAD | [docs/api/LMS/ForumController.md](api/LMS/ForumController.md) |
-| LmsController | LMS standalone (`/api/v1/lms`, UI `/lms`): kelas/my per periode, materi, tugas + OBE sync, pengumpulan tugas (kirim/perbarui/tarik kembali), pengaturan kelas, absensi token & izin, **export laporan (nilai/absensi/izin/pengumpulan) CSV/XLSX**, **dashboard ringkasan split role**, **pengaturan level modul (`lms_*`) + pengaturan publik**. Otorisasi tetap Gate `siakad.kelas.*` + `lms.pengaturan.*` | [docs/api/LMS/LmsController.md](api/LMS/LmsController.md) |
+| LmsController | LMS standalone (`/api/v1/lms`, UI `/lms`): kelas/my per periode (default periode aktif), materi, tugas + OBE sync, pengumpulan tugas (kirim/perbarui/tarik kembali), pengaturan kelas, **sesi presensi jurnal dosen & QR/token rotasi 30 detik (`buka-sesi`, `token-aktif`, `scan`, `sesi-aktif`)**, izin, **export laporan (nilai/absensi/izin/pengumpulan) CSV/XLSX**, **dashboard ringkasan split role**, **pengaturan level modul (`lms_*`) + pengaturan publik**. Otorisasi tetap Gate `siakad.kelas.*` + `lms.pengaturan.*` | [docs/api/LMS/LmsController.md](api/LMS/LmsController.md) |
 | LmsPresensiController | Monitoring keaktifan mengajar dan rekap presensi lokal RAG/SIAKAD + export CSV/XLSX. Tidak terhubung ke sistem legacy | [docs/api/LMS/LmsPresensiController.md](api/LMS/LmsPresensiController.md) |
 | LmsNotifikasiController | Notifikasi in-app LMS (LMS-04): daftar notifikasi personal, tandai sudah dibaca (satu/semua), jumlah belum dibaca. Notifikasi disimpan (idempoten via `dedup_key`) & diisi oleh command terjadwal `lms:notifikasi-deadline` | [docs/api/LMS/LmsNotifikasiController.md](api/LMS/LmsNotifikasiController.md) |
+---
+
+## 📱 Modul Aplikasi Mobile Mahasiswa (`/api/v1/mobile/mahasiswa`)
+
+| Controller | Deskripsi | Dokumen |
+|---|---|---|
+| MobileMahasiswaController | Gateway API terpadu khusus Aplikasi Mobile Mahasiswa: Beranda (`/home`), Periode Akademik (default periode aktif), Presensi QR Scanner 30 Detik (`/presensi/scan`, `/presensi/sesi-aktif`, `/presensi/rekap`), LMS (`/lms/*`), SIAKAD (`/siakad/profil`, `/jadwal`, `/krs`, `/khs`, `/transkrip`), & SIKEU (`/sikeu/ringkasan`, `/tagihan`, `/pembayaran`, `/beasiswa`, `/dispensasi`) | [docs/api/MOBILE/MobileMahasiswaController.md](api/MOBILE/MobileMahasiswaController.md) |
+
 ---
 
 ## 💰 Modul SIKEU
