@@ -273,6 +273,8 @@ class PermissionSeeder extends Seeder
             ['name' => 'Setujui KRS Mahasiswa', 'slug' => 'siakad.krs.approve', 'module' => 'siakad', 'action' => 'approve', 'description' => 'Menyetujui KRS mahasiswa bimbingan wali'],
             ['name' => 'Lihat KHS & Nilai', 'slug' => 'siakad.nilai.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat kartu hasil studi & transkrip nilai'],
             ['name' => 'Input Nilai Mahasiswa', 'slug' => 'siakad.nilai.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Menginput bobot nilai mahasiswa pengampu'],
+            ['name' => 'Ajukan Koreksi Nilai', 'slug' => 'siakad.nilai.koreksi.create', 'module' => 'siakad', 'action' => 'create', 'description' => 'Mengajukan koreksi nilai final untuk kelas yang diampu'],
+            ['name' => 'Tinjau Koreksi Nilai', 'slug' => 'siakad.nilai.koreksi.approve', 'module' => 'siakad', 'action' => 'approve', 'description' => 'Menyetujui atau menolak pengajuan koreksi nilai pada lingkup program studi'],
             ['name' => 'Lihat Mahasiswa Bimbingan', 'slug' => 'siakad.mahasiswa.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat direktori mahasiswa wali'],
 
             // Level Administrator / BAAK Only
@@ -413,6 +415,7 @@ class PermissionSeeder extends Seeder
                 'siakad.dashboard.read',
                 'siakad.kelas.read',
                 'siakad.nilai.read',
+                'siakad.nilai.koreksi.create',
                 'siakad.kurikulum.read',
                 'siakad.mahasiswa.read',
                 'siakad.pa.read',
@@ -466,6 +469,7 @@ class PermissionSeeder extends Seeder
                 'siakad.kelas.manage',
                 'siakad.nilai.read',
                 'siakad.nilai.manage',
+                'siakad.nilai.koreksi.approve',
                 'siakad.pkl.read',
                 'siakad.pkl.manage',
                 'siakad.ta.read',

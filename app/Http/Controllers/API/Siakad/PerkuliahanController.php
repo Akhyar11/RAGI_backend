@@ -1253,8 +1253,12 @@ class PerkuliahanController extends Controller
         $uas = $request->input('nilai_uas', $nilai->nilai_uas);
         $praktik = $request->input('nilai_praktik', $nilai->nilai_praktik);
 
-        // Rumus bobot konvensional: 20% harian, 25% uts, 35% uas, 20% praktik
-        $akhir = ($harian * 0.20) + ($uts * 0.25) + ($uas * 0.35) + ($praktik * 0.20);
+        $bobot = $nilai->krsDetail?->kelas?->getBobotPenilaian()
+            ?? \App\Models\Siakad\Kelas::defaultBobotPenilaian();
+        $akhir = ($harian * $bobot['harian'])
+            + ($uts * $bobot['uts'])
+            + ($uas * $bobot['uas'])
+            + ($praktik * $bobot['praktik']);
 
         $prodiId = $nilai->krsDetail?->kelas?->mataKuliah?->kurikulum?->program_studi_id;
         $skala = SkalaNilai::konversiNilai((float) $akhir, $prodiId);

@@ -5,6 +5,7 @@ use App\Http\Controllers\API\Siakad\FeederSyncController;
 use App\Http\Controllers\API\Siakad\MahasiswaController;
 use App\Http\Controllers\API\Siakad\AkademikController;
 use App\Http\Controllers\API\Siakad\PerkuliahanController;
+use App\Http\Controllers\API\Siakad\NilaiKoreksiController;
 use App\Http\Controllers\API\Siakad\ObeController;
 use App\Http\Controllers\API\Siakad\PaController;
 use App\Http\Controllers\API\Siakad\MahasiswaBeasiswaController;
@@ -173,6 +174,10 @@ Route::prefix('perkuliahan')->group(function () {
     Route::get('/nilai', [PerkuliahanController::class, 'listNilai']);
     Route::put('/nilai/{id}', [PerkuliahanController::class, 'updateNilai']);
     Route::get('/transkrip', [PerkuliahanController::class, 'getTranskrip']);
+    Route::get('/nilai-koreksi', [NilaiKoreksiController::class, 'index']);
+    Route::post('/nilai-koreksi', [NilaiKoreksiController::class, 'store']);
+    Route::patch('/nilai-koreksi/{id}/approve', [NilaiKoreksiController::class, 'approve']);
+    Route::patch('/nilai-koreksi/{id}/reject', [NilaiKoreksiController::class, 'reject']);
 
     // Paket MK per rombel (BAAK/Kaprodi menetapkan MK yang disediakan per rombel)
     Route::get('/paket-mk/riwayat-rombel', [PaketKrsController::class, 'getMataKuliahByRombelHistory']);

@@ -33,6 +33,7 @@ use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\MataKuliah;
 use App\Services\Siakad\LmsModuleSettingService;
 use App\Services\Siakad\SiakadAkademikService;
+use App\Services\Siakad\NilaiKomponenSyncService;
 use App\Services\Siakad\SoalImportService;
 use App\Http\Requests\Siakad\StoreCplRequest;
 use App\Http\Requests\Siakad\StoreBahanKajianRequest;
@@ -46,10 +47,14 @@ use Illuminate\Support\Facades\Log;
 class ObeController extends Controller
 {
     protected SiakadAkademikService $akademikService;
+    protected NilaiKomponenSyncService $nilaiKomponenSyncService;
 
-    public function __construct(SiakadAkademikService $akademikService)
-    {
+    public function __construct(
+        SiakadAkademikService $akademikService,
+        NilaiKomponenSyncService $nilaiKomponenSyncService
+    ) {
         $this->akademikService = $akademikService;
+        $this->nilaiKomponenSyncService = $nilaiKomponenSyncService;
     }
 
     // --- CPL (Capaian Pembelajaran Lulusan) ---
@@ -1188,23 +1193,7 @@ class ObeController extends Controller
      */
     private function konversiHurufMutu(float $nilaiAkhir, ?int $prodiId = null): array
     {
-        $skala = SkalaNilai::konversiNilai($nilaiAkhir, $prodiId);
-        if ($skala) {
-            return [$skala->nilai_huruf, (float) $skala->bobot_indeks];
-        }
-
-        $huruf = 'E';
-        $mutu = 0.00;
-        if ($nilaiAkhir >= 85) { $huruf = 'A'; $mutu = 4.00; }
-        elseif ($nilaiAkhir >= 80) { $huruf = 'A-'; $mutu = 3.75; }
-        elseif ($nilaiAkhir >= 75) { $huruf = 'B+'; $mutu = 3.25; }
-        elseif ($nilaiAkhir >= 70) { $huruf = 'B'; $mutu = 3.00; }
-        elseif ($nilaiAkhir >= 65) { $huruf = 'B-'; $mutu = 2.75; }
-        elseif ($nilaiAkhir >= 60) { $huruf = 'C+'; $mutu = 2.25; }
-        elseif ($nilaiAkhir >= 55) { $huruf = 'C'; $mutu = 2.00; }
-        elseif ($nilaiAkhir >= 40) { $huruf = 'D'; $mutu = 1.00; }
-
-        return [$huruf, $mutu];
+        return $this->nilaiKomponenSyncService->convertGrade($nilaiAkhir, $prodiId);
     }
 
     public function saveBulkNilaiObe(Request $request, $kelasId)
@@ -4580,4 +4569,3 @@ class ObeController extends Controller
         ]);
     }
 }
-

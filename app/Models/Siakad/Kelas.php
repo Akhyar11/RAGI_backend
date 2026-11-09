@@ -122,4 +122,27 @@ class Kelas extends Model
     {
         return $this->hasOne(\App\Models\Lms\KelasLmsSetting::class, 'kelas_id');
     }
+
+    /**
+     * Bobot resmi penilaian konvensional yang digunakan oleh input dan koreksi nilai.
+     *
+     * @return array{harian: float, uts: float, uas: float, praktik: float}
+     */
+    public function getBobotPenilaian(): array
+    {
+        return self::defaultBobotPenilaian();
+    }
+
+    /**
+     * @return array{harian: float, uts: float, uas: float, praktik: float}
+     */
+    public static function defaultBobotPenilaian(): array
+    {
+        return [
+            'harian' => 0.20,
+            'uts' => 0.25,
+            'uas' => 0.35,
+            'praktik' => 0.20,
+        ];
+    }
 }

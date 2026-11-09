@@ -71,6 +71,10 @@ class AppServiceProvider extends ServiceProvider
             \App\Models\Spmb\PayoutReferral::class,
             \App\Policies\Spmb\PayoutReferralPolicy::class
         );
+        Gate::policy(
+            \App\Models\Siakad\KoreksiNilaiMahasiswa::class,
+            \App\Policies\Siakad\NilaiKoreksiMahasiswaPolicy::class
+        );
 
         // SIAKAD Observers
         \App\Models\Siakad\Mahasiswa::observe(\App\Observers\MahasiswaObserver::class);
@@ -82,6 +86,8 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Siakad\HakaksesKrs::observe(\App\Observers\Siakad\HakaksesKrsObserver::class);
         \App\Models\Siakad\KartuUjianToken::observe(\App\Observers\Siakad\KartuUjianTokenObserver::class);
         \App\Models\Siakad\DokumenToken::observe(\App\Observers\Siakad\DokumenTokenObserver::class);
+        \App\Models\Siakad\NilaiMahasiswa::observe(\App\Observers\Siakad\NilaiMahasiswaObserver::class);
+        \App\Models\Siakad\KoreksiNilaiMahasiswa::observe(\App\Observers\Siakad\KoreksiNilaiMahasiswaObserver::class);
 
         // SIKEU Observers
         \App\Models\Sikeu\PengajuanPencairanKas::observe(\App\Observers\Sikeu\PengajuanPencairanKasObserver::class);
