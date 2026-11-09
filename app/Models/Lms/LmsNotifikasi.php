@@ -57,6 +57,8 @@ class LmsNotifikasi extends Model
 
     public const JENIS_FORUM = 'forum';
 
+    public const JENIS_REMINDER_PRESENSI_PENGAJARAN = 'reminder_presensi_pengajaran';
+
     public const JENIS_INFO = 'info';
 
     /**
@@ -68,6 +70,7 @@ class LmsNotifikasi extends Model
         self::JENIS_TUGAS_BARU,
         self::JENIS_QUIZ_BARU,
         self::JENIS_FORUM,
+        self::JENIS_REMINDER_PRESENSI_PENGAJARAN,
         self::JENIS_INFO,
     ];
 

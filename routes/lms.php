@@ -164,22 +164,16 @@ Route::get('/notifikasi/unread-count', [LmsNotifikasiController::class, 'unreadC
 Route::post('/notifikasi/read-all', [LmsNotifikasiController::class, 'markAllRead']);
 Route::post('/notifikasi/{id}/read', [LmsNotifikasiController::class, 'markRead']);
 
-// --- Panel Administrasi Integrasi Presensi (PresensiV2) ---
-// Monitoring & sinkronisasi dua arah LMS <-> PresensiV2. Permission granular
-// modul LMS: `lms.presensi.read` (baca rekap & log) dan `lms.presensi.manage`
-// (sinkron ulang, tarik riwayat, export). Kedua permission hanya diberikan
-// kepada admin/superadmin karena panel ini memantau seluruh kampus.
+// --- Monitoring presensi lokal RAG/SIAKAD ---
 Route::middleware(['can:lms.presensi.read'])->group(function () {
-    Route::get('/admin/presensi/status', [LmsPresensiController::class, 'status']);
     Route::get('/admin/presensi/kelas', [LmsPresensiController::class, 'kelas']);
     Route::get('/admin/presensi/rekap', [LmsPresensiController::class, 'rekap']);
-    Route::get('/admin/presensi/log', [LmsPresensiController::class, 'log']);
+    Route::get('/admin/presensi/keaktifan-dosen', [LmsPresensiController::class, 'keaktifanDosen']);
 });
 
 Route::middleware(['can:lms.presensi.manage'])->group(function () {
     Route::get('/admin/presensi/export', [LmsPresensiController::class, 'export']);
-    Route::post('/admin/presensi/sync', [LmsPresensiController::class, 'sync']);
-    Route::post('/admin/presensi/tarik', [LmsPresensiController::class, 'tarik']);
+    Route::get('/admin/presensi/keaktifan-dosen/export', [LmsPresensiController::class, 'exportKeaktifanDosen']);
 });
 
 // Hak Akses Penilaian Akademik (OBE Sync)

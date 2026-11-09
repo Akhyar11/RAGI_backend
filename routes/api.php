@@ -294,6 +294,18 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::put('presensi/pegawai/{id}/office-locations', [App\Http\Controllers\Simpeg\PresensiController::class, 'updatePegawaiOfficeLocations'])->whereNumber('id');
     Route::post('presensi/office-assign-bulk', [App\Http\Controllers\Simpeg\PresensiController::class, 'assignOfficesBulk']);
 
+    Route::middleware('can:simpeg.presensi.pengajaran.read')->group(function () {
+        Route::get('presensi/pengajaran', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'index']);
+        Route::get('presensi/pengajaran/cutoff', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'cutoff']);
+        Route::get('presensi/pengajaran/exceptions', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'exceptions']);
+    });
+
+    Route::middleware('can:simpeg.presensi.pengajaran.manage')->group(function () {
+        Route::put('presensi/pengajaran/cutoff', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'updateCutoff']);
+        Route::post('presensi/pengajaran/exceptions', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'storeException']);
+        Route::patch('presensi/pengajaran/exceptions/{exception}/revoke', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'revokeException']);
+    });
+
     // Master Pengaturan Presensi (Lokasi, Shift, Parameter, Hari Libur, Perangkat Fingerprint)
     Route::get('presensi/settings', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'getSettings']);
     Route::put('presensi/settings', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateSettings']);

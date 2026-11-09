@@ -68,6 +68,8 @@ class PermissionSeeder extends Seeder
             ['name' => 'Tambah Absensi & Presensi', 'slug' => 'simpeg.presensi.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Mencatat log presensi pegawai'],
             ['name' => 'Ubah Absensi & Presensi', 'slug' => 'simpeg.presensi.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah log & koreksi absensi'],
             ['name' => 'Hapus Absensi & Presensi', 'slug' => 'simpeg.presensi.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus log absensi pegawai'],
+            ['name' => 'Lihat Monitoring Presensi Pengajaran', 'slug' => 'simpeg.presensi.pengajaran.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat rekap pertemuan dan kelengkapan presensi dosen dari LMS/SIAKAD'],
+            ['name' => 'Kelola Cut-off Presensi Pengajaran', 'slug' => 'simpeg.presensi.pengajaran.manage', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengatur cut-off periode serta memberikan atau mencabut izin khusus pengisian presensi'],
             ['name' => 'Lihat Slip Gaji & Payroll', 'slug' => 'simpeg.payroll.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat daftar & rincian slip gaji'],
             ['name' => 'Tambah Slip Gaji & Payroll', 'slug' => 'simpeg.payroll.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Menerbitkan slip gaji baru'],
             ['name' => 'Ubah Slip Gaji & Payroll', 'slug' => 'simpeg.payroll.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah status & rincian payroll'],
@@ -317,9 +319,9 @@ class PermissionSeeder extends Seeder
             ['name' => 'Kirim Pesan Forum', 'slug' => 'lms.forum.create', 'module' => 'lms', 'action' => 'create', 'description' => 'Mengirim pesan & balasan pada forum kelas'],
             ['name' => 'Kelola Forum Diskusi', 'slug' => 'lms.forum.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Membuat/hapus topik & moderasi pesan forum kelas'],
 
-            // ── MODUL LMS (INTEGRASI PRESENSI / PRESENSIV2) ─────
-            ['name' => 'Lihat Rekap Presensi LMS', 'slug' => 'lms.presensi.read', 'module' => 'lms', 'action' => 'read', 'description' => 'Memantau rekap kehadiran & log sinkronisasi integrasi PresensiV2'],
-            ['name' => 'Kelola Integrasi Presensi LMS', 'slug' => 'lms.presensi.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Menjalankan sinkron ulang, tarik riwayat, & export data presensi PresensiV2'],
+            // ── MODUL LMS (MONITORING PRESENSI LOKAL) ───────────
+            ['name' => 'Lihat Monitoring Presensi LMS', 'slug' => 'lms.presensi.read', 'module' => 'lms', 'action' => 'read', 'description' => 'Memantau keaktifan mengajar dan rekap presensi lokal RAG'],
+            ['name' => 'Export Laporan Presensi LMS', 'slug' => 'lms.presensi.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Mengunduh laporan keaktifan mengajar dan rekap presensi lokal RAG'],
 
             // ── MODUL LMS (PENGATURAN LEVEL MODUL) ───────────────
             ['name' => 'Lihat Pengaturan Modul LMS', 'slug' => 'lms.pengaturan.read', 'module' => 'lms', 'action' => 'read', 'description' => 'Melihat konfigurasi global modul LMS (batas import, batas upload, feature flag)'],

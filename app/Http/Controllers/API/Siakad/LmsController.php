@@ -525,7 +525,11 @@ class LmsController extends Controller
         Gate::authorize('siakad.kelas.manage');
         $this->lmsService->assertPresensiFiturAktif($request->user());
 
-        $this->lmsService->bulkInputAbsensi($pertemuanId, $request->validated('absensi'));
+        $this->lmsService->bulkInputAbsensi(
+            $pertemuanId,
+            $request->validated('absensi'),
+            (int) $request->user()->id
+        );
 
         return response()->json([
             'status'  => 'success',
@@ -729,12 +733,18 @@ class LmsController extends Controller
     {
         Gate::authorize('siakad.kelas.read');
 
-        $perPage      = min(100, $request->integer('per_page', 15));
+        $validated = $request->validate([
+            'program_studi_id' => ['nullable', 'integer', 'min:1'],
+            'min_kapasitas' => ['nullable', 'integer', 'min:0'],
+        ]);
+        $perPage      = min(100, max(1, $request->integer('per_page', 15)));
         $search       = $request->filled('search') ? (string) $request->input('search') : null;
         $allowedSorts = ['id', 'nama_kelas', 'kode_kelas', 'created_at', 'updated_at'];
         $sortBy       = in_array($request->sort_by, $allowedSorts, true) ? $request->sort_by : 'created_at';
         $sortOrder    = $request->sort_order === 'asc' ? 'asc' : 'desc';
         $tahunAkademikId = $request->filled('tahun_akademik_id') ? (int) $request->input('tahun_akademik_id') : null;
+        $programStudiId = isset($validated['program_studi_id']) ? (int) $validated['program_studi_id'] : null;
+        $minKapasitas = isset($validated['min_kapasitas']) ? (int) $validated['min_kapasitas'] : null;
 
         $paginator = $this->lmsService->getMyKelas(
             (int) $request->user()->id,
@@ -742,7 +752,9 @@ class LmsController extends Controller
             $search,
             $sortBy,
             $sortOrder,
-            $tahunAkademikId
+            $tahunAkademikId,
+            $programStudiId,
+            $minKapasitas
         );
 
         return response()->json([
@@ -762,6 +774,8 @@ class LmsController extends Controller
                 'sort_by'           => $sortBy,
                 'sort_order'        => $sortOrder,
                 'tahun_akademik_id' => $tahunAkademikId,
+                'program_studi_id'  => $programStudiId,
+                'min_kapasitas'     => $minKapasitas,
             ],
         ]);
     }

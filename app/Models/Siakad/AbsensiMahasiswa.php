@@ -2,13 +2,10 @@
 
 namespace App\Models\Siakad;
 
-use App\Models\Concerns\HasPresensiSyncStatus;
 use Illuminate\Database\Eloquent\Model;
 
 class AbsensiMahasiswa extends Model
 {
-    use HasPresensiSyncStatus;
-
     protected $table = 'siakad_absensi_mahasiswa';
 
     /**
@@ -30,14 +27,12 @@ class AbsensiMahasiswa extends Model
         'pertemuan_id',
         'mahasiswa_id',
         'status',
+        'is_submitted',
         'catatan',
-        'sync_status',
-        'sync_error',
-        'synced_at',
     ];
 
     protected $casts = [
-        'synced_at' => 'datetime',
+        'is_submitted' => 'boolean',
     ];
 
     public function pertemuan()

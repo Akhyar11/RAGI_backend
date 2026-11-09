@@ -109,29 +109,6 @@ return [
             ]) : [],
         ],
 
-        // Koneksi ke Database PresensiV2 (MySQL terpisah, server berbeda).
-        // Dipakai sebagai jalur "direct-DB" integrasi LMS -> PresensiV2
-        // (lihat config/lms_integration.php). Bila environment ini belum
-        // dikonfigurasi, integrasi otomatis berstatus "skipped".
-        'presensiv2' => [
-            'driver' => 'mysql',
-            'host' => env('PRESENSI_DB_HOST', '127.0.0.1'),
-            'port' => env('PRESENSI_DB_PORT', '3306'),
-            'database' => env('PRESENSI_DB_DATABASE', 'presensi'),
-            'username' => env('PRESENSI_DB_USERNAME', 'root'),
-            'password' => env('PRESENSI_DB_PASSWORD', ''),
-            'unix_socket' => env('PRESENSI_DB_SOCKET', ''),
-            'charset' => env('PRESENSI_DB_CHARSET', 'utf8mb4'),
-            'collation' => env('PRESENSI_DB_COLLATION', 'utf8mb4_unicode_ci'),
-            'prefix' => '',
-            'prefix_indexes' => true,
-            'strict' => false,
-            'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                $mysqlSslCa => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
-        ],
-
         'mysql_demo' => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),

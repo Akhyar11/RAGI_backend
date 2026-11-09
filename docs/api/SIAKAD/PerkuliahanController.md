@@ -1,5 +1,7 @@
 # PerkuliahanController
 
+> **Diperbarui**: 2026-11-09
+
 > **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/perkuliahan` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-25
 
 Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` mengacu ke `siakad_program_studi` dan `tahun_akademik_id` ke `siakad_tahun_akademik`.
@@ -228,6 +230,80 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 
 ---
 
+## [GET] /api/v1/siakad/perkuliahan/krs/available-classes
+
+Mengambil kelas aktif pada tahun akademik terpilih. Mahasiswa hanya dapat meminta kelas untuk dirinya sendiri; pengelola program studi dapat meminta kelas mahasiswa prodinya. Filter `program_studi_id` tanpa konteks mahasiswa hanya tersedia untuk pengelola akademik global.
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `mahasiswa_id` | integer | ❌ | mahasiswa login | Mahasiswa yang kelasnya dicari; untuk staf harus berada dalam prodi yang dikelola |
+| `program_studi_id` | integer | ❌ | prodi mahasiswa | Filter program studi; tanpa `mahasiswa_id` hanya admin global |
+| `tahun_akademik_id` | integer | ❌ | tahun akademik aktif | Periode kelas |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": [
+        {
+            "id": 12,
+            "kode_kelas": "IF101-A",
+            "nama_kelas": "IF-1A",
+            "mata_kuliah": { "id": 45, "kode_mk": "IF101", "nama": "Dasar Pemrograman" },
+            "sisa_kuota": 8,
+            "is_converted": false,
+            "is_enrolled": false,
+            "is_full": false,
+            "can_take": true
+        }
+    ]
+}
+```
+
+Mata kuliah dengan detail konversi final berstatus `disetujui` dan rincian `diakui` ditandai `is_converted: true` serta `can_take: false`.
+
+---
+
+## [POST] /api/v1/siakad/perkuliahan/krs/add-class
+
+Menambahkan kelas ke KRS mahasiswa. Mahasiswa hanya dapat menambah ke KRS miliknya; staf harus memiliki akses pengelola untuk prodi mahasiswa tersebut. Server memeriksa ulang konversi final—kelas untuk mata kuliah yang sudah diakui ditolak meskipun dikirim langsung tanpa melalui daftar kelas tersedia.
+
+### Request Body
+
+```json
+{
+    "kelas_id": 12,
+    "tahun_akademik_id": 1
+}
+```
+
+| Field | Type | Required | Deskripsi |
+|---|---|---|---|
+| `kelas_id` | integer | ✅ | ID kelas aktif |
+| `mahasiswa_id` | integer | ❌ | Diisi staf; mahasiswa login tidak dapat memilih mahasiswa lain |
+| `tahun_akademik_id` | integer | ❌ | Default tahun akademik aktif |
+
+### Response Error
+
+**422 Unprocessable Entity** — kelas mata kuliah sudah diakui melalui konversi:
+```json
+{
+    "status": "error",
+    "message": "Mata kuliah ini sudah diakui melalui konversi nilai dan tidak dapat diambil kembali.",
+    "errors": {
+        "kelas_id": ["Mata kuliah sudah tercatat sebagai hasil konversi."]
+    }
+}
+```
+
+Rincian konversi berstatus `ditolak` atau usulan yang belum mencapai status final `disetujui` tidak memblokir pengambilan mata kuliah.
+
+---
+
 ## [PUT] /api/v1/siakad/perkuliahan/nilai/{id}
 
 ### Request Body
@@ -437,3 +513,58 @@ Monitoring dan rekapitulasi progres pengisian KRS mahasiswa per program studi de
 > - Soft delete + restore berlaku pada KRS dan kelas (data transaksional akademik).
 > - Aksi tulis nilai/KRS/kelas tercatat pada audit log SIAKAD.
 > - Password/token tidak pernah dikembalikan pada response.
+> - Peserta untuk daftar presensi bersumber dari KRS berstatus `disetujui` atau `diajukan`; membuat pertemuan tidak otomatis mencatat status hadir.
+> - Absensi yang belum disimpan dikembalikan dengan `status: null` dan `is_submitted: false`. Status kosong bukan kehadiran.
+
+## Presensi Pertemuan
+
+### [GET] `/api/v1/siakad/perkuliahan/pertemuan/{pertemuanId}/absensi`
+
+Mengambil roster peserta kelas dari KRS bersama data presensi yang sudah tersimpan.
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `search` | string | ❌ | — | Cari nama atau NIM mahasiswa |
+| `per_page` | integer | ❌ | `25` | Jumlah baris per halaman (maks. 100) |
+| `page` | integer | ❌ | `1` | Halaman yang diminta |
+
+```json
+{
+    "status": "success",
+    "message": "Daftar absensi mahasiswa berhasil dimuat.",
+    "data": {
+        "pertemuan": { "id": 18, "kelas_id": 5, "pertemuan_ke": 3 },
+        "absensi": [
+            {
+                "id": null,
+                "pertemuan_id": 18,
+                "mahasiswa_id": 27,
+                "status": null,
+                "catatan": null,
+                "is_submitted": false,
+                "mahasiswa": { "id": 27, "nim": "2026001001", "nama_lengkap": "Mahasiswa" }
+            }
+        ]
+    },
+    "meta": { "current_page": 1, "per_page": 25, "total": 1, "last_page": 1, "from": 1, "to": 1 }
+}
+```
+
+### [POST] `/api/v1/siakad/perkuliahan/pertemuan/{pertemuanId}/absensi`
+
+Menyimpan status setiap mahasiswa yang dikirim; setiap status harus merupakan referensi `status_absensi` yang valid.
+
+```json
+{
+    "absensi": [
+        { "mahasiswa_id": 27, "status": "hadir", "catatan": null }
+    ]
+}
+```
+
+```json
+{
+    "status": "success",
+    "message": "Data absensi mahasiswa berhasil disimpan."
+}
+```

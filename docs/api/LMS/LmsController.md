@@ -5,7 +5,7 @@
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-25
-> **Diperbarui**: 2026-10-23 (dashboard ringkasan split role, pengaturan level modul `lms_*`, pengaturan publik)
+> **Diperbarui**: 2026-11-09 (filter kelas Program Studi/kapasitas dan cut-off pengisian presensi)
 
 Controller untuk menangani seluruh aktivitas Learning Management System (LMS) dan Absensi Terintegrasi Perkuliahan. Meliputi manajemen materi perkuliahan multi-file, penugasan mahasiswa dengan auto-sync ke sistem penilaian OBE (`siakad_nilai_komponen_mhs`), absensi token 6-digit dengan masa aktif dinamis, rekapitulasi kehadiran kelas, pengajuan dan persetujuan izin/sakit mahasiswa, serta pengaturan media penyimpanan (Cloudflare R2 atau storage lokal).
 
@@ -66,15 +66,16 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 
 > **Feature flag `lms_fitur_presensi`**: seluruh endpoint presensi (rekap absensi, token absensi,
 > input token, bulk absensi, tutup presensi) menolak permintaan dengan `403` bila flag dimatikan
-> oleh admin. Role yang memegang permission `lms.presensi.manage` (admin/superadmin) tetap dapat
-> mengakses untuk keperluan support. Detail flag & panel administrasi integrasi PresensiV2
-> ada di [LmsPresensiController.md](LmsPresensiController.md).
+> oleh admin. Data kehadiran disimpan di RAG dan tidak dikirim ke sistem legacy. Monitoring lokal
+> tersedia di [LmsPresensiController.md](LmsPresensiController.md).
 
 ## Query Parameters (berlaku untuk endpoint list)
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
 | `tahun_akademik_id` | integer | ❌ | aktif | Filter ID tahun akademik / semester perkuliahan |
+| `program_studi_id` | integer | ❌ | — | Filter kelas milik/tergabung dengan program studi |
+| `min_kapasitas` | integer | ❌ | — | Kapasitas minimum kelas |
 | `search` | string | ❌ | — | Pencarian judul materi, nama kelas, atau nama mahasiswa |
 | `sort_by` | string | ❌ | `created_at` | Kolom pengurutan data (`created_at`, `nama_kelas`, `id`) |
 | `sort_order` | string | ❌ | `desc` | Arah pengurutan: `asc` / `desc` |
@@ -532,6 +533,10 @@ Mengambil daftar kelas yang diampu (untuk Dosen) atau kelas yang diikuti sesuai 
 |---|---|---|---|---|
 | `tahun_akademik_id` | integer | ❌ | aktif | ID periode tahun akademik (default: periode `is_active = true`) |
 | `search` | string | ❌ | — | Pencarian nama kelas atau nama mata kuliah |
+| `program_studi_id` | integer | ❌ | — | Filter kelas pada program studi, termasuk kelas gabungan |
+| `min_kapasitas` | integer | ❌ | — | Filter kapasitas minimum (bilangan bulat >= 0) |
+
+Input/pembaruan absensi dan persetujuan izin yang memperbarui rekap mengikuti cut-off periode yang diatur Admin SIMPEG. Setelah cut-off, data dikunci kecuali dosen pengampu yang memiliki izin khusus aktif pada periode tersebut. Detail izin dan cut-off ada di [PresensiPengajaranController.md](../SIMPEG/PresensiPengajaranController.md).
 
 #### Response Sukses (200 OK)
 ```json
@@ -1395,7 +1400,7 @@ Hanya `admin`/`superadmin` (`lms.pengaturan.read`).
                 "type": "boolean",
                 "default": true,
                 "public": true,
-                "description": "Mengaktifkan presensi & integrasi PresensiV2 ..."
+                "description": "Mengaktifkan fitur presensi lokal LMS ..."
             }
         ]
     }
@@ -1519,6 +1524,7 @@ cache **24 jam**, di-invalidate saat pengaturan disimpan.
 - **Integritas Penilaian OBE**: Sinkronisasi nilai tugas ke `siakad_nilai_komponen_mhs` dilakukan secara transaksional dengan menjaga relasi antara mahasiswa, kelas, dan komponen penilaian terkait.
 - **Keamanan Berkas**: Tautan pengunduhan materi dan pengumpulan tugas menggunakan signed URL berbatas waktu atau *streamed response* terproteksi sehingga berkas tidak dapat diakses secara publik tanpa autentikasi yang sah.
 - **Privasi Data Mahasiswa**: Pemanggil ber-role mahasiswa hanya menerima data kehadiran miliknya sendiri pada endpoint rekap (`rekapitulasi` 1 baris) dan detail pertemuan (`absensi_list`, `izin_list`, dan `pengumpulan` tiap tugas difilter ke miliknya). Agregat hitungan (`absensi_summary`) tetap ditampilkan.
+- **Kelengkapan Presensi**: `absensi_list` untuk dosen/admin menampilkan roster KRS, termasuk peserta yang belum mengisi dengan `status: null`; `absensi_summary` hanya menghitung presensi yang benar-benar disimpan.
 - **Cakupan Daftar Kelas (`kelas/my`)**: dosen hanya melihat kelas yang diampunya (`dosen_pengampu`), mahasiswa hanya kelas di KRS-nya. Akun tanpa relasi dosen/mahasiswa tidak menerima data apa pun kecuali istimewa (admin/kaprodi). Tanpa parameter `tahun_akademik_id`, daftar dibatasi ke periode aktif (`is_active`); kirim ID periode lain untuk melihat riwayat semester lalu.
 - **Kerahasiaan Data**: Field sensitif seperti token akses storage, credential S3, dan password pengguna tidak akan dikembalikan dalam response API apapun.
 - **Penghapusan Berkas**: Saat materi atau tugas dihapus, berkas fisik yang tersimpan di disk storage akan dibersihkan secara otomatis.

@@ -186,6 +186,7 @@ class StatusAkademikController extends Controller
         $total = $pertemuanIds->count();
         $rows = AbsensiMahasiswa::with('mahasiswa')
             ->whereIn('pertemuan_id', $pertemuanIds)
+            ->where('is_submitted', true)
             ->get()
             ->groupBy('mahasiswa_id')
             ->map(function ($items) use ($total) {

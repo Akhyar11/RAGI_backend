@@ -256,7 +256,7 @@ class PaMonitoringService
             ->pluck('total_pertemuan', 'mahasiswa_id');
     }
 
-    /** Agregasi jumlah absensi per status kehadiran untuk himpunan mahasiswa. */
+    /** Agregasi jumlah presensi yang sudah disimpan per status kehadiran. */
     private function absensiPerMahasiswa(Collection $ids): Collection
     {
         if ($ids->isEmpty()) {
@@ -265,6 +265,7 @@ class PaMonitoringService
 
         return DB::table('siakad_absensi_mahasiswa')
             ->whereIn('mahasiswa_id', $ids)
+            ->where('is_submitted', true)
             ->groupBy('mahasiswa_id')
             ->selectRaw(
                 "mahasiswa_id,

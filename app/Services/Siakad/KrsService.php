@@ -10,6 +10,7 @@ use App\Models\Siakad\Krs;
 use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\NilaiMahasiswa;
+use App\Models\Siakad\KonversiTransfer;
 use App\Models\Siakad\PrasyaratMk;
 use Illuminate\Support\Facades\DB;
 
@@ -273,6 +274,26 @@ class KrsService
         ], 422));
     }
 
+    public function assertMataKuliahBelumDiakuiKonversi(Mahasiswa $mahasiswa, Kelas $kelas): void
+    {
+        $sudahDiakui = KonversiTransfer::query()
+            ->where('mahasiswa_id', $mahasiswa->id)
+            ->where('status', 'disetujui')
+            ->whereHas('details', function ($query) use ($kelas) {
+                $query->where('mata_kuliah_diakui_id', $kelas->mata_kuliah_id)
+                    ->where('status', 'diakui');
+            })
+            ->exists();
+
+        if ($sudahDiakui) {
+            abort(response()->json([
+                'status' => 'error',
+                'message' => 'Mata kuliah ini sudah diakui melalui konversi nilai dan tidak dapat diambil kembali.',
+                'errors' => ['kelas_id' => ['Mata kuliah sudah tercatat sebagai hasil konversi.']],
+            ], 422));
+        }
+    }
+
     /**
      * Dua kelas satu keluarga jika: sama persis induknya, atau salah satunya induk dari lainnya.
      */
@@ -303,6 +324,7 @@ class KrsService
             if ($kelas->kuota_krs <= 0) {
                 abort(response()->json(['status' => 'error', 'message' => 'Kuota kelas ini sudah penuh.'], 422));
             }
+            $this->assertMataKuliahBelumDiakuiKonversi($mhs, $kelas);
 
             $krs = Krs::where('mahasiswa_id', $mhs->id)
                 ->where('tahun_akademik_id', $tahunAkademikId)

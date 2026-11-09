@@ -19,8 +19,17 @@ class KonversiTransfer extends Model
         'prodi_asal',
         'nomor_sk',
         'diproses_oleh',
+        'disetujui_pa_oleh',
+        'disetujui_pa_pada',
+        'disetujui_kaprodi_oleh',
+        'disetujui_kaprodi_pada',
         'status',
         'catatan',
+    ];
+
+    protected $casts = [
+        'disetujui_pa_pada' => 'datetime',
+        'disetujui_kaprodi_pada' => 'datetime',
     ];
 
     public function mahasiswa()

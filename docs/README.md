@@ -71,7 +71,7 @@
 | AdminProdiController | Penugasan Admin OBE / Tim Kurikulum per Prodi, plotting menu khusus OBE, dan impersonasi personel prodi | [docs/api/SIAKAD/AdminProdiController.md](api/SIAKAD/AdminProdiController.md) |
 | AkademikController | Master akademik + opsi referensi dropdown (jenjang, akreditasi, tipe MK, mode penilaian) | [docs/api/SIAKAD/AkademikController.md](api/SIAKAD/AkademikController.md) |
 | FeederSyncController | Sinkronisasi Neo Feeder PDDikti (Dosen, Penugasan, Ajar, Mahasiswa, Kelas) | [docs/api/SIAKAD/FeederSyncController.md](api/SIAKAD/FeederSyncController.md) |
-| MahasiswaController | Data mahasiswa, NIM, usulan konversi transfer nilai (detail, edit, status), dan penugasan PA | [docs/api/SIAKAD/MahasiswaController.md](api/SIAKAD/MahasiswaController.md) |
+| MahasiswaController | Data mahasiswa, NIM, pengajuan konversi oleh mahasiswa, pemetaan prodi, persetujuan PA/kaprodi, dan penugasan PA | [docs/api/SIAKAD/MahasiswaController.md](api/SIAKAD/MahasiswaController.md) |
 | PindahProdiController | Pindah program studi: pengajuan, sign-off keuangan, approval akademik, apply + event ke SIKEU | [docs/api/SIAKAD/PindahProdiController.md](api/SIAKAD/PindahProdiController.md) |
 | ObeController | Kurikulum OBE (CPL/CPMK, Sub-CPMK, Profil Lulusan, Bahan Kajian, RPS, Nilai, Bank Soal & Kategori Opsi) + **import bank soal (XLSX), template import, bulk delete & bulk move** | [docs/api/SIAKAD/ObeController.md](api/SIAKAD/ObeController.md) |
 | ObeMasterController | Master OBE (rumpun MK, jenis CPL, profesi/prospek karir, rubrik penilaian, & aturan beban SKS KRS) | [docs/api/SIAKAD/ObeMasterController.md](api/SIAKAD/ObeMasterController.md) |
@@ -95,7 +95,7 @@
 | QuizController | Quiz per pertemuan + tryout level kelas & **agregat level modul** (batch-loading tanpa kunci, autosave, auto-grade, OBE sync) + **export hasil quiz/tryout (CSV/XLSX)** | [docs/api/LMS/QuizController.md](api/LMS/QuizController.md) |
 | ForumController | Forum diskusi per kelas (topik + pesan/balasan 1 level), **topik default "Diskusi Umum" via aksi eksplisit** (idempoten) & daftar topik agregat level modul (read-only). Otorisasi memakai permission khusus `lms.forum.*` + Policy, bukan pinjam permission SIAKAD | [docs/api/LMS/ForumController.md](api/LMS/ForumController.md) |
 | LmsController | LMS standalone (`/api/v1/lms`, UI `/lms`): kelas/my per periode, materi, tugas + OBE sync, pengumpulan tugas (kirim/perbarui/tarik kembali), pengaturan kelas, absensi token & izin, **export laporan (nilai/absensi/izin/pengumpulan) CSV/XLSX**, **dashboard ringkasan split role**, **pengaturan level modul (`lms_*`) + pengaturan publik**. Otorisasi tetap Gate `siakad.kelas.*` + `lms.pengaturan.*` | [docs/api/LMS/LmsController.md](api/LMS/LmsController.md) |
-| LmsPresensiController | Panel administrasi integrasi presensi LMS ↔ **PresensiV2** (LMS-03): status integrasi, rekap kehadiran lintas kelas, log sinkronisasi, sinkron ulang, tarik riwayat, export CSV/XLSX. Permission khusus `lms.presensi.read` / `lms.presensi.manage` | [docs/api/LMS/LmsPresensiController.md](api/LMS/LmsPresensiController.md) |
+| LmsPresensiController | Monitoring keaktifan mengajar dan rekap presensi lokal RAG/SIAKAD + export CSV/XLSX. Tidak terhubung ke sistem legacy | [docs/api/LMS/LmsPresensiController.md](api/LMS/LmsPresensiController.md) |
 | LmsNotifikasiController | Notifikasi in-app LMS (LMS-04): daftar notifikasi personal, tandai sudah dibaca (satu/semua), jumlah belum dibaca. Notifikasi disimpan (idempoten via `dedup_key`) & diisi oleh command terjadwal `lms:notifikasi-deadline` | [docs/api/LMS/LmsNotifikasiController.md](api/LMS/LmsNotifikasiController.md) |
 ---
 
@@ -115,7 +115,10 @@
 | PengajuanKasController | Pengajuan pencairan kas operasional unit, panjar dinas, persetujuan & penolakan | [docs/api/SIKEU/PengajuanKasController.md](api/SIKEU/PengajuanKasController.md) |
 | PengajuanOperasionalController | Pengajuan operasional & reimbursement (PO/RMB), LPJ defisit, pencairan & jurnal otomatis | [docs/api/SIKEU/PengajuanOperasionalController.md](api/SIKEU/PengajuanOperasionalController.md) |
 | PemasukanKampusController | Pencatatan Pemasukan Hibah, Donatur, & Kerjasama | [docs/api/SIKEU/PemasukanKampusController.md](api/SIKEU/PemasukanKampusController.md) |
+| PengeluaranKampusController | Pengeluaran, pemetaan COA eksplisit, pemilihan unit kas, pajak, dan jurnal otomatis | [docs/api/SIKEU/PengeluaranKampusController.md](api/SIKEU/PengeluaranKampusController.md) |
+| PajakKampusController | Kewajiban dan penyetoran pajak dengan unit kas serta jurnal penyetoran | [docs/api/SIKEU/PajakKampusController.md](api/SIKEU/PajakKampusController.md) |
 | AkuntansiController | Chart of Accounts (COA), Jurnal Umum, & Buku Besar | [docs/api/SIKEU/AkuntansiController.md](api/SIKEU/AkuntansiController.md) |
+| PajakPelaporanController | Alias nama akun untuk pelaporan pajak, publikasi mode pajak, dan penyajian nama akun tanpa mengubah jurnal sumber | [docs/api/SIKEU/PajakPelaporanController.md](api/SIKEU/PajakPelaporanController.md) |
 | SaldoAwalController | Saldo awal (opening balance): draft, posting ke jurnal, pembatalan, guard cut-off & audit migrasi | [docs/api/SIKEU/SaldoAwalController.md](api/SIKEU/SaldoAwalController.md) |
 | ReferralPencairanController | Invoice payout reward referral SPMB (tab SPMB Pengajuan Operasional): approval keuangan → direktur, cairkan (pengeluaran + jurnal otomatis), tolak | [docs/api/SIKEU/ReferralPencairanController.md](api/SIKEU/ReferralPencairanController.md) |
 | PaymentGatewayConfigController | Pengaturan Provider Payment Gateway (Midtrans/Xendit) | [docs/api/SIKEU/PaymentGatewayConfigController.md](api/SIKEU/PaymentGatewayConfigController.md) |
@@ -145,6 +148,7 @@
 | RiwayatController | Riwayat penugasan jabatan struktural/fungsional dan riwayat pendidikan pegawai | [docs/api/SIMPEG/RiwayatController.md](api/SIMPEG/RiwayatController.md) |
 | PegawaiController | Manajemen master data pegawai, multi-role SSO, import massal, & reset biometrik | [docs/api/SIMPEG/PegawaiController.md](api/SIMPEG/PegawaiController.md) |
 | PresensiController | Presensi biometrik mobile (Android Flutter), validasi wajah Python, bundle siklus 26 - 25 & matriks harian | [docs/api/SIMPEG/PresensiController.md](api/SIMPEG/PresensiController.md) |
+| PresensiPengajaranController | Monitoring bulanan pertemuan/presensi dosen berbasis penugasan SIAKAD, cut-off, dan izin khusus | [docs/api/SIMPEG/PresensiPengajaranController.md](api/SIMPEG/PresensiPengajaranController.md) |
 | AttendanceController | Endpoint mobile presensi: status harian, scan masuk/pulang, toleransi cutoff, izin & rekap | [docs/api/API/AttendanceController.md](api/API/AttendanceController.md) |
 | PresensiMasterSettingController | Master pengaturan presensi: parameter sistem, lokasi kantor, multi-tipe shift, & kalender libur | [docs/api/SIMPEG/PresensiMasterSettingController.md](api/SIMPEG/PresensiMasterSettingController.md) |
 | AttendanceDataApi | Spesifikasi API integrasi data absensi & rekapitulasi kehadiran | [docs/api/SIMPEG/ATTENDANCE_DATA_API.md](api/SIMPEG/ATTENDANCE_DATA_API.md) |

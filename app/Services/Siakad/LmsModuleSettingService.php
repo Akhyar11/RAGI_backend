@@ -43,7 +43,7 @@ class LmsModuleSettingService
                 'type' => 'boolean',
                 'default' => true,
                 'public' => true,
-                'description' => 'Mengaktifkan presensi & integrasi PresensiV2 untuk dosen/mahasiswa. Admin tetap bisa mengakses panel integrasi saat nonaktif.',
+                'description' => 'Mengaktifkan fitur presensi lokal LMS untuk dosen/mahasiswa.',
             ],
             LmsSetting::KEY_MAX_SOAL_IMPORT => [
                 'label' => 'Maksimal Soal per Import',

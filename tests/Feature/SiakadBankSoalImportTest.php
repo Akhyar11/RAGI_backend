@@ -128,9 +128,9 @@ class SiakadBankSoalImportTest extends TestCase
         Passport::actingAs($this->userDosen);
 
         $content = $this->makeXlsx([
-            ['tipe', 'pertanyaan', 'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e', 'kunci', 'poin', 'tingkat_kesulitan', 'pembahasan'],
-            ['pg', 'Ibu kota Indonesia adalah …', 'Jakarta', 'Bandung', 'Surabaya', 'Medan', '', 'A', 10, 'mudah', 'Jakarta'],
-            ['isian', 'Sebutkan kepanjangan HTTP.', '', '', '', '', '', 'HyperText Transfer Protocol', 15, 'sedang', ''],
+            ['tipe', 'pertanyaan', 'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e', 'kunci', 'poin', 'tingkat_kesulitan', 'pembahasan', 'gambar', 'gambar_opsi_a'],
+            ['pg', 'Ibu kota Indonesia adalah …', 'Jakarta', 'Bandung', 'Surabaya', 'Medan', '', 'A', 10, 'mudah', 'Jakarta', 'https://example.com/peta.png', 'https://example.com/monas.png'],
+            ['isian', 'Sebutkan kepanjangan HTTP.', '', '', '', '', '', 'HyperText Transfer Protocol', 15, 'sedang', '', '', ''],
         ]);
 
         $res = $this->post('/api/v1/siakad/obe/soal/import', [
@@ -150,6 +150,7 @@ class SiakadBankSoalImportTest extends TestCase
             'tipe_soal' => 'pilihan_ganda',
             'tingkat_kesulitan' => 'mudah',
             'bobot' => 10,
+            'gambar_path' => 'https://example.com/peta.png',
             'kunci_jawaban' => null,
         ]);
         $this->assertDatabaseHas('siakad_bank_soal', [
@@ -159,11 +160,11 @@ class SiakadBankSoalImportTest extends TestCase
             'bobot' => 15,
         ]);
 
-        // Opsi jawaban tersimpan beserta penanda satu jawaban benar.
+        // Opsi jawaban tersimpan beserta penanda satu jawaban benar dan gambar opsi.
         $soalPg = \App\Models\Siakad\BankSoal::where('tipe_soal', 'pilihan_ganda')->firstOrFail();
         $this->assertDatabaseCount('siakad_bank_soal_opsi', 4);
         $this->assertDatabaseHas('siakad_bank_soal_opsi', [
-            'bank_soal_id' => $soalPg->id, 'teks' => 'Jakarta', 'is_benar' => true, 'urutan' => 1,
+            'bank_soal_id' => $soalPg->id, 'teks' => 'Jakarta', 'gambar_path' => 'https://example.com/monas.png', 'is_benar' => true, 'urutan' => 1,
         ]);
         $this->assertDatabaseHas('siakad_bank_soal_opsi', [
             'bank_soal_id' => $soalPg->id, 'teks' => 'Bandung', 'is_benar' => false, 'urutan' => 2,

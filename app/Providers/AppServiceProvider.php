@@ -97,6 +97,8 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Simpeg\SuratTugas::observe(\App\Observers\Simpeg\SuratTugasObserver::class);
         \App\Models\Simpeg\UsulanJafung::observe(\App\Observers\Simpeg\UsulanJafungObserver::class);
         \App\Models\Simpeg\PegawaiKomponenGaji::observe(\App\Observers\Simpeg\PegawaiKomponenGajiObserver::class);
+        \App\Models\Simpeg\PresensiPengajaranCutoff::observe(\App\Observers\Simpeg\PresensiPengajaranCutoffObserver::class);
+        \App\Models\Simpeg\PresensiPengajaranException::observe(\App\Observers\Simpeg\PresensiPengajaranExceptionObserver::class);
         \App\Models\Simpeg\JabatanFungsionalAkademik::observe(\App\Observers\JabatanFungsionalAkademikObserver::class);
 
         // SINAPRA Observers
