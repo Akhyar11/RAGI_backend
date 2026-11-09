@@ -181,6 +181,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'Lihat Pengeluaran Kas', 'slug' => 'sikeu.pengeluaran.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat pengeluaran & beban operasional'],
             ['name' => 'Lihat Pemasukan Kas', 'slug' => 'sikeu.pemasukan.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat pemasukan kas non-akademik'],
             ['name' => 'Lihat Pajak', 'slug' => 'sikeu.pajak.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat data pajak & perpajakan'],
+            ['name' => 'Kelola Nama Akun Pelaporan Pajak', 'slug' => 'sikeu.pajak_akun.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengelola alias akun dan mode publikasi pelaporan pajak'],
             ['name' => 'Lihat Unit Kas & Rekening', 'slug' => 'sikeu.unitkas.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat unit kas & rekening bank'],
             ['name' => 'Kelola Payment Gateway', 'slug' => 'sikeu.paymentgateway.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengatur koneksi Xendit / H2H / rekening manual'],
             ['name' => 'Lihat Approval Keuangan', 'slug' => 'sikeu.approval.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat antrean approval keuangan'],
@@ -359,6 +360,9 @@ class PermissionSeeder extends Seeder
         $adminKeuPembayaranRole = Role::where('slug', 'admin_keuangan_pembayaran')->first();
         $petugasKasKecilRole = Role::where('slug', 'petugas_kas_kecil')->first();
         $auditorKeuanganRole = Role::where('slug', 'auditor_keuangan')->first();
+        $auditorKeuanganRole?->update([
+            'description' => 'Auditor internal keuangan: akses baca-saja data SIKEU, serta hak khusus mengelola alias akun pelaporan pajak dan mode publikasinya; tanpa hak ubah transaksi/approve',
+        ]);
         $adminSpmbRole = Role::whereIn('slug', ['admin-spmb', 'admin_spmb'])->first();
 
         // 1. Super Admin & Admin -> Semua permissions
@@ -636,15 +640,15 @@ class PermissionSeeder extends Seeder
             }
         }
 
-        // 13. Admin Keuangan Pembayaran Mahasiswa -> tagihan, kasir, & dispensasi (fokus pembayaran)
-        // Catatan: pakai sync() agar permission lama (master.manage, kas.manage,
-        // paymentgateway.manage) ikut terlepas saat seeder dijalankan ulang.
+        // 13. Admin Keuangan Pembayaran Mahasiswa -> tagihan, tarif, komponen biaya, kasir, & dispensasi
         if ($adminKeuPembayaranRole) {
             $pembayaranSlugs = [
                 'sikeu.dashboard.read',
                 'sikeu.tagihan.read',
                 'sikeu.tagihan.create',
                 'sikeu.dispensasi.read',
+                'sikeu.dispensasi.create',
+                'sikeu.master.manage',
                 'sikeu.unitkas.read',
             ];
             $perms = Permission::whereIn('slug', $pembayaranSlugs)->get();
@@ -676,6 +680,7 @@ class PermissionSeeder extends Seeder
                 'sikeu.pengeluaran.read',
                 'sikeu.pemasukan.read',
                 'sikeu.pajak.read',
+                'sikeu.pajak_akun.manage',
                 'sikeu.unitkas.read',
                 'sikeu.kaskecil.read',
                 'sikeu.approval.read',

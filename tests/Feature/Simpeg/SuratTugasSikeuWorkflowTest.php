@@ -97,21 +97,25 @@ class SuratTugasSikeuWorkflowTest extends TestCase
         ]);
 
         // Akun Keuangan & Unit Kas untuk SIKEU
-        $akunKas = AkunKeuangan::create([
-            'kode_akun' => '101.01',
-            'nama_akun' => 'Kas Operasional Rektorat',
-            'kategori' => 'aset',
-            'saldo_normal' => 'debet',
-            'is_active' => true,
-        ]);
+        $akunKas = AkunKeuangan::firstOrCreate(
+            ['kode_akun' => '101.01'],
+            [
+                'nama_akun' => 'Kas Operasional Rektorat',
+                'kelompok' => 'aset',
+                'saldo_normal' => 'debet',
+                'is_active' => true,
+            ]
+        );
 
-        AkunKeuangan::create([
-            'kode_akun' => '502.01',
-            'nama_akun' => 'Beban Perjalanan Dinas',
-            'kategori' => 'beban',
-            'saldo_normal' => 'debet',
-            'is_active' => true,
-        ]);
+        AkunKeuangan::firstOrCreate(
+            ['kode_akun' => '502.01'],
+            [
+                'nama_akun' => 'Beban Perjalanan Dinas',
+                'kelompok' => 'beban',
+                'saldo_normal' => 'debet',
+                'is_active' => true,
+            ]
+        );
 
         $this->unitKas = UnitKas::create([
             'nama_kas' => 'Kas Operasional Rektorat',

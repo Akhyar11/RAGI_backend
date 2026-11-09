@@ -40,13 +40,14 @@ class SikeuPengajuanGajiBatchTest extends TestCase
 
         AkunKeuangan::firstOrCreate(['kode_akun' => '501.01'], ['nama_akun' => 'Beban Gaji & Honorarium', 'kelompok' => 'beban', 'saldo_normal' => 'debet']);
         AkunKeuangan::firstOrCreate(['kode_akun' => '501.02'], ['nama_akun' => 'Beban Tunjangan & Insentif', 'kelompok' => 'beban', 'saldo_normal' => 'debet']);
-        AkunKeuangan::firstOrCreate(['kode_akun' => '102.01'], ['nama_akun' => 'Bank Operasional Kampus', 'kelompok' => 'aset', 'saldo_normal' => 'debet']);
+        $akunKas = AkunKeuangan::firstOrCreate(['kode_akun' => '102.01'], ['nama_akun' => 'Bank Operasional Kampus', 'kelompok' => 'aset', 'saldo_normal' => 'debet']);
         AkunKeuangan::firstOrCreate(['kode_akun' => '202.01'], ['nama_akun' => 'Utang Pajak PPh 21', 'kelompok' => 'liabilitas', 'saldo_normal' => 'kredit']);
         AkunKeuangan::firstOrCreate(['kode_akun' => '201.01'], ['nama_akun' => 'Utang Potongan BPJS', 'kelompok' => 'liabilitas', 'saldo_normal' => 'kredit']);
 
         $this->unitKas = UnitKas::create([
             'nama_kas' => 'Kas Operasional Rektorat',
             'tipe_kas' => 'utama',
+            'akun_keuangan_id' => $akunKas->id,
             'saldo_awal' => 500000000,
             'saldo_saat_ini' => 500000000,
             'status' => true,

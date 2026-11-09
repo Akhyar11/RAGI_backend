@@ -786,6 +786,11 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     // Akuntansi & COA
     Route::get('akuntansi/coa', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'indexCoa']);
     Route::post('akuntansi/coa', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'storeCoa']);
+    Route::middleware('can:sikeu.pajak_akun.manage')->prefix('pajak/pelaporan-akun')->group(function () {
+        Route::get('/', [App\Http\Controllers\Sikeu\PajakPelaporanController::class, 'index']);
+        Route::put('/{akunId}', [App\Http\Controllers\Sikeu\PajakPelaporanController::class, 'updateAlias'])->whereNumber('akunId');
+        Route::put('/mode', [App\Http\Controllers\Sikeu\PajakPelaporanController::class, 'updateMode']);
+    });
     Route::get('akuntansi/jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'indexJurnal']);
     Route::post('akuntansi/jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'storeJurnal']);
     Route::get('akuntansi/jurnal/{id}', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'showJurnal']);

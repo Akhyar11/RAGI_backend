@@ -3,15 +3,14 @@
 namespace App\Http\Controllers\Sikeu;
 
 use App\Http\Controllers\Controller;
-use App\Models\Sikeu\AkunKeuangan;
-use App\Models\Sikeu\DetailJurnalUmum;
-use App\Models\Sikeu\JurnalUmum;
 use App\Models\Sikeu\PengeluaranKampus;
 use App\Models\Sikeu\UnitKas;
+use App\Services\AuditLogService;
+use App\Services\Sikeu\JurnalSikeuService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 
 class PajakKampusController extends Controller
 {
@@ -110,7 +109,7 @@ class PajakKampusController extends Controller
         $validator = Validator::make($request->all(), [
             'ntpn' => 'required|string|min:6|max:50',
             'tanggal_setor' => 'nullable|date',
-            'unit_kas_id' => 'nullable|exists:sikeu_unit_kas,id',
+            'unit_kas_id' => 'required|exists:sikeu_unit_kas,id',
         ]);
 
         if ($validator->fails()) {
@@ -121,89 +120,83 @@ class PajakKampusController extends Controller
             ], 422);
         }
 
-        $pengeluaran = PengeluaranKampus::findOrFail($id);
+        try {
+            $ntpn = trim($request->ntpn);
+            $tanggalSetor = $request->tanggal_setor ?? now()->toDateString();
+            $result = DB::transaction(function () use ($id, $request, $ntpn, $tanggalSetor) {
+                $pengeluaran = PengeluaranKampus::lockForUpdate()->findOrFail($id);
+                if ($pengeluaran->status_pembayaran === 'disetor') {
+                    abort(422, 'Kewajiban pajak ini sudah pernah disetorkan sebelumnya.');
+                }
 
-        if ($pengeluaran->status_pembayaran === 'disetor') {
+                $unitKas = UnitKas::where('status', true)
+                    ->lockForUpdate()
+                    ->findOrFail($request->integer('unit_kas_id'));
+                $nominalPajak = (float) $pengeluaran->nominal_pajak;
+                if ($nominalPajak <= 0) {
+                    abort(422, 'Kewajiban pajak tidak memiliki nominal yang dapat disetorkan.');
+                }
+                if ((float) $unitKas->saldo_saat_ini < $nominalPajak) {
+                    abort(422, 'Saldo unit kas tidak mencukupi untuk menyetorkan kewajiban pajak ini.');
+                }
+
+                JurnalSikeuService::akunUtangPajak((string) $pengeluaran->jenis_pajak);
+                JurnalSikeuService::akunKasUnit($unitKas);
+
+                $oldValues = [
+                    'status_pembayaran' => $pengeluaran->status_pembayaran,
+                    'file_bukti_bayar' => $pengeluaran->file_bukti_bayar,
+                ];
+                $pengeluaran->status_pembayaran = 'disetor';
+                $pengeluaran->file_bukti_bayar = $ntpn;
+                $pengeluaran->save();
+
+                $unitKas->decrement('saldo_saat_ini', $nominalPajak);
+                $jurnal = JurnalSikeuService::jurnalPenyetoranPajak(
+                    $pengeluaran,
+                    $unitKas,
+                    $ntpn,
+                    $tanggalSetor
+                );
+
+                return compact('pengeluaran', 'oldValues', 'unitKas', 'jurnal');
+            });
+        } catch (\DomainException|\InvalidArgumentException $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Kewajiban pajak ini sudah pernah disetorkan sebelumnya.',
-            ], 400);
+                'message' => $e->getMessage(),
+            ], 422);
         }
 
         try {
-            DB::beginTransaction();
-
-            $nominalPajak = (float) $pengeluaran->nominal_pajak;
-            $ntpn = trim($request->ntpn);
-            $tanggalSetor = $request->tanggal_setor ?? date('Y-m-d');
-
-            // Mark as disetor and save NTPN in file_bukti_bayar or note
-            $pengeluaran->status_pembayaran = 'disetor';
-            $pengeluaran->file_bukti_bayar = $ntpn;
-            $pengeluaran->save();
-
-            // Deduct cash for tax remittance
-            $unitKas = UnitKas::find($request->unit_kas_id ?? 1) ?? UnitKas::first();
-            if ($unitKas) {
-                $unitKas->decrement('saldo_saat_ini', $nominalPajak);
-            }
-
-            // Post Balanced Accounting Journal: Dr Utang Pajak, Cr Kas/Bank
-            $akunUtangPajak = AkunKeuangan::where('kelompok', 'liabilitas')->first();
-            $akunKas = AkunKeuangan::where('kelompok', 'aset')->first();
-
-            if ($akunUtangPajak && $akunKas) {
-                $jurnal = JurnalUmum::create([
-                    'nomor_jurnal' => 'JRN-TAX-' . date('Ymd') . '-' . Str::random(4),
-                    'tanggal_jurnal' => $tanggalSetor,
-                    'jenis_sumber' => 'pengeluaran_manual',
-                    'referensi_id' => $pengeluaran->id,
-                    'keterangan' => "Penyetoran Pajak {$pengeluaran->jenis_pajak} ke Kas Negara (NTPN: {$ntpn})",
-                    'status_posting' => 'posted',
-                    'total_debet' => $nominalPajak,
-                    'total_kredit' => $nominalPajak,
-                    'created_by' => auth()->id() ?? 1,
-                    'posted_by' => auth()->id() ?? 1,
-                    'posted_at' => now(),
-                ]);
-
-                // Dr Utang Pajak
-                DetailJurnalUmum::create([
-                    'jurnal_id' => $jurnal->id,
-                    'akun_id' => $akunUtangPajak->id,
-                    'debet' => $nominalPajak,
-                    'kredit' => 0,
-                    'keterangan' => "Pelunasan Utang Pajak {$pengeluaran->jenis_pajak} NTPN: {$ntpn}",
-                ]);
-
-                // Cr Kas / Bank
-                DetailJurnalUmum::create([
-                    'jurnal_id' => $jurnal->id,
-                    'akun_id' => $akunKas->id,
-                    'debet' => 0,
-                    'kredit' => $nominalPajak,
-                    'keterangan' => "Setoran Pajak Kas Negara NTPN: {$ntpn}",
-                ]);
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'status' => 'success',
-                'message' => "Penyetoran pajak berhasil dicatat dengan NTPN: {$ntpn}.",
-                'data' => [
-                    'id' => $pengeluaran->id,
-                    'status' => 'disetor',
-                    'ntpn' => $ntpn,
-                    'tanggal_setor' => $tanggalSetor,
-                ]
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Gagal mencatat penyetoran pajak: ' . $e->getMessage()
-            ], 500);
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'update',
+                tableName: 'sikeu_pengeluaran_kampus',
+                recordId: (int) $result['pengeluaran']->id,
+                oldValues: $result['oldValues'],
+                newValues: [
+                    'status_pembayaran' => $result['pengeluaran']->status_pembayaran,
+                    'file_bukti_bayar' => $result['pengeluaran']->file_bukti_bayar,
+                    'unit_kas_id' => $result['unitKas']->id,
+                    'jurnal_id' => $result['jurnal']->id,
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log penyetoran pajak SIKEU: ' . $e->getMessage());
         }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Penyetoran pajak berhasil dicatat dengan NTPN: {$ntpn}.",
+            'data' => [
+                'id' => $result['pengeluaran']->id,
+                'status' => 'disetor',
+                'ntpn' => $ntpn,
+                'tanggal_setor' => $tanggalSetor,
+                'jurnal_id' => $result['jurnal']->id,
+            ],
+        ]);
     }
 }

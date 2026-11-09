@@ -27,4 +27,9 @@ class AkunKeuangan extends Model
     {
         return $this->hasMany(DetailJurnalUmum::class, 'akun_id');
     }
+
+    public function pajakAlias()
+    {
+        return $this->hasOne(AkunPajak::class, 'akun_id');
+    }
 }

@@ -85,6 +85,7 @@ class AppServiceProvider extends ServiceProvider
 
         // SIKEU Observers
         \App\Models\Sikeu\PengajuanPencairanKas::observe(\App\Observers\Sikeu\PengajuanPencairanKasObserver::class);
+        \App\Models\Sikeu\AkunPajak::observe(\App\Observers\Sikeu\AkunPajakObserver::class);
         \App\Models\Sikeu\PengeluaranKampus::observe(\App\Observers\Sikeu\PengeluaranKampusObserver::class);
         \App\Models\Sikeu\UnitKas::observe(\App\Observers\Sikeu\UnitKasObserver::class);
         \App\Models\Sikeu\TransaksiKasUnit::observe(\App\Observers\Sikeu\TransaksiKasUnitObserver::class);

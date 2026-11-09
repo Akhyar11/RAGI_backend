@@ -7,6 +7,7 @@ use App\Models\Sikeu\AkunKeuangan;
 use App\Models\Sikeu\JurnalUmum;
 use App\Models\Sikeu\DetailJurnalUmum;
 use App\Models\Sikeu\PeriodeAkuntansi;
+use App\Services\Sikeu\PajakPelaporanService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -27,6 +28,7 @@ class AkuntansiController extends Controller
         }
 
         $coa = $query->orderBy('kode_akun', 'asc')->get();
+        app(PajakPelaporanService::class)->applyPublicAliasesToAccounts($coa);
 
         return response()->json([
             'status' => 'success',
@@ -131,6 +133,7 @@ class AkuntansiController extends Controller
         $jurnal = $query->orderBy('tanggal_jurnal', 'desc')
             ->orderBy('id', 'desc')
             ->paginate($perPage);
+        app(PajakPelaporanService::class)->applyPublicAliasesToJournals($jurnal->items());
 
         return response()->json([
             'status' => 'success',
@@ -154,6 +157,7 @@ class AkuntansiController extends Controller
     public function showJurnal($id)
     {
         $jurnal = JurnalUmum::with(['details.akun'])->findOrFail($id);
+        app(PajakPelaporanService::class)->applyPublicAliasesToJournals([$jurnal]);
 
         // Ref balik ke pengajuan operasional bila jurnal berasal dari sana.
         $referensi = null;
@@ -286,10 +290,13 @@ class AkuntansiController extends Controller
                 request: $request,
             );
 
+            $jurnal->load('details.akun');
+            app(PajakPelaporanService::class)->applyPublicAliasesToJournals([$jurnal]);
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Jurnal berhasil diperbarui.',
-                'data' => $jurnal->load('details.akun'),
+                'data' => $jurnal,
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -437,10 +444,13 @@ class AkuntansiController extends Controller
 
             DB::commit();
 
+            $jurnal->load('details.akun');
+            app(PajakPelaporanService::class)->applyPublicAliasesToJournals([$jurnal]);
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Jurnal umum/penyesuaian berhasil disimpan.',
-                'data' => $jurnal->load('details.akun')
+                'data' => $jurnal
             ], 201);
 
         } catch (\Exception $e) {
@@ -467,6 +477,7 @@ class AkuntansiController extends Controller
         }
 
         $items = $query->orderBy('created_at', 'desc')->paginate($request->input('per_page', 20));
+        app(PajakPelaporanService::class)->applyPublicAliasesToLedgerEntries($items->items());
 
         return response()->json([
             'status' => 'success',

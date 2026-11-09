@@ -7,6 +7,7 @@ use App\Models\Sikeu\DetailJurnalUmum;
 use App\Models\Sikeu\DispensasiTagihan;
 use App\Models\Sikeu\JurnalUmum;
 use App\Models\Sikeu\Pembayaran;
+use App\Models\Sikeu\PengeluaranKampus;
 use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\UnitKas;
 use Illuminate\Support\Str;
@@ -29,12 +30,22 @@ class JurnalSikeuService
      * tersebar sebagai literal di tiap method jurnal).
      */
     public const AKUN_BEBAN_OPERASIONAL = '502.01';
+    public const AKUN_BEBAN_PEMELIHARAAN = '502.02';
+    public const AKUN_BEBAN_LABORATORIUM = '502.03';
+    public const AKUN_BEBAN_PENYUSUTAN = '505.01';
+    public const AKUN_AKUMULASI_PENYUSUTAN = '105.01';
+    public const AKUN_PIUTANG = '103.01';
+    public const AKUN_PENDAPATAN_UKT = '401.01';
+    public const AKUN_PENDAPATAN_SPMB = '401.02';
     public const AKUN_KAS_TUNAI = '101.01';
     public const AKUN_KAS_BANK = '102.01';
     public const AKUN_BEBAN_GAJI = '501.01';
     public const AKUN_BEBAN_TUNJANGAN_SDM = '501.02';
     public const AKUN_UTANG_PPH21 = '202.01';
+    public const AKUN_UTANG_PPH23 = '202.02';
+    public const AKUN_UTANG_PPN = '202.03';
     public const AKUN_UTANG_POTONGAN = '201.01';
+    public const AKUN_BEBAN_POTONGAN = '504.01';
 
     /**
      * Prefix nomor jurnal per jenis, dapat dikonfigurasi kampus via
@@ -51,6 +62,7 @@ class JurnalSikeuService
         'penutupan' => 'JRN-TUTUP',
         'pemasukan' => 'JRN-INC',
         'pengeluaran' => 'JRN-EXP',
+        'penyetoran_pajak' => 'JRN-TAX',
         'reimbursement' => 'JRN-RMB',
         'penggajian' => 'JRN-GAJI',
         'penyusutan' => 'JRN-DEP',
@@ -84,66 +96,61 @@ class JurnalSikeuService
     }
     public static function akunPiutang(): AkunKeuangan
     {
-        $akun = AkunKeuangan::where('kode_akun', '103.01')->first()
-            ?? AkunKeuangan::where('kelompok', 'aset')->where('nama_akun', 'like', '%piutang%')->first();
-
-        if (!$akun) {
-            throw new \RuntimeException('Akun Piutang UKT/SPP (103.01) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.');
-        }
-
-        return $akun;
+        return self::akunWajib(self::AKUN_PIUTANG, 'Piutang UKT/SPP');
     }
 
     public static function akunPendapatan(bool $isCalon): AkunKeuangan
     {
-        $kode = $isCalon ? '401.02' : '401.01';
-        $akun = AkunKeuangan::where('kode_akun', $kode)->first()
-            ?? AkunKeuangan::where('kelompok', 'pendapatan')->first();
-
-        if (!$akun) {
-            throw new \RuntimeException("Akun Pendapatan ({$kode}) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.");
-        }
-
-        return $akun;
+        $kode = $isCalon ? self::AKUN_PENDAPATAN_SPMB : self::AKUN_PENDAPATAN_UKT;
+        return self::akunWajib($kode, 'Pendapatan mahasiswa');
     }
 
     public static function akunKas(bool $isTunai): AkunKeuangan
     {
-        $kode = $isTunai ? '101.01' : '102.01';
-
-        return AkunKeuangan::where('kode_akun', $kode)->first()
-            ?? AkunKeuangan::where('kelompok', 'aset')->first()
-            ?? throw new \RuntimeException("Akun Kas ({$kode}) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.");
+        $kode = $isTunai ? self::AKUN_KAS_TUNAI : self::AKUN_KAS_BANK;
+        return self::akunWajib($kode, 'Kas/Bank');
     }
 
     public static function akunBebanPotongan(): AkunKeuangan
     {
-        $akun = AkunKeuangan::where('kode_akun', '504.01')->first()
-            ?? AkunKeuangan::where('kelompok', 'beban')->first();
+        return self::akunWajib(self::AKUN_BEBAN_POTONGAN, 'Beban Beasiswa & Potongan');
+    }
 
-        if (!$akun) {
-            throw new \RuntimeException('Akun Beban Beasiswa & Potongan (504.01) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.');
-        }
+    public static function akunUtangPajak(string $jenisPajak): AkunKeuangan
+    {
+        $kode = match ($jenisPajak) {
+            'pph_21' => self::AKUN_UTANG_PPH21,
+            'pph_23' => self::AKUN_UTANG_PPH23,
+            'ppn_11' => self::AKUN_UTANG_PPN,
+            default => throw new \InvalidArgumentException("Jenis pajak '{$jenisPajak}' tidak memiliki pemetaan akun utang pajak.")
+        };
 
-        return $akun;
+        return self::akunWajib($kode, "Utang pajak {$jenisPajak}");
+    }
+
+    protected static function akunWajib(string $kode, string $label): AkunKeuangan
+    {
+        return AkunKeuangan::where('kode_akun', $kode)->first()
+            ?? throw new \DomainException("Akun {$label} ({$kode}) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.");
     }
 
     /**
      * Akun kas-bank mengikuti kanal UnitKas (tunai/bank_manual/bank_h2h/xendit).
-     * Tanpa pemetaan, fallback ke kode default agar transaksi lama tetap berjalan.
+     * Unit kas harus memiliki pemetaan COA yang eksplisit. Kode default hanya
+     * berlaku untuk transaksi yang memang tidak memakai UnitKas.
      */
-    public static function akunKasUnit(?UnitKas $unitKas, string $defaultKode = '101.01'): AkunKeuangan
+    public static function akunKasUnit(?UnitKas $unitKas, string $defaultKode = self::AKUN_KAS_TUNAI): AkunKeuangan
     {
         if ($unitKas) {
             $terpetakan = $unitKas->akunKeuangan;
             if ($terpetakan && $terpetakan->kelompok === 'aset') {
                 return $terpetakan;
             }
+
+            throw new \DomainException("Unit kas {$unitKas->nama_kas} belum dipetakan ke akun COA aset.");
         }
 
-        return AkunKeuangan::where('kode_akun', $defaultKode)->first()
-            ?? AkunKeuangan::where('kelompok', 'aset')->first()
-            ?? throw new \RuntimeException("Akun Kas ({$defaultKode}) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.");
+        return self::akunWajib($defaultKode, 'Kas/Bank unit');
     }
 
     /**
@@ -182,7 +189,14 @@ class JurnalSikeuService
         return null;
     }
 
-    protected static function header(string $prefix, string $jenisSumber, ?int $referensiId, string $keterangan, float $total): JurnalUmum
+    protected static function header(
+        string $prefix,
+        string $jenisSumber,
+        ?int $referensiId,
+        string $keterangan,
+        float $total,
+        ?string $tanggal = null
+    ): JurnalUmum
     {
         do {
             $nomorJurnal = $prefix . '-' . date('Ymd') . '-' . strtoupper(Str::random(6)) . ($referensiId ? '-' . $referensiId : '');
@@ -190,7 +204,7 @@ class JurnalSikeuService
 
         return JurnalUmum::create([
             'nomor_jurnal' => $nomorJurnal,
-            'tanggal_jurnal' => now()->toDateString(),
+            'tanggal_jurnal' => $tanggal ?? now()->toDateString(),
             'jenis_sumber' => $jenisSumber,
             'referensi_id' => $referensiId,
             'keterangan' => $keterangan,
@@ -212,6 +226,70 @@ class JurnalSikeuService
             'kredit' => $kredit,
             'keterangan' => $keterangan,
         ]);
+    }
+
+    public static function jurnalPengeluaranKampus(
+        PengeluaranKampus $pengeluaran,
+        AkunKeuangan $akunBeban,
+        AkunKeuangan $akunKas,
+        ?AkunKeuangan $akunUtangPajak
+    ): JurnalUmum {
+        $nominal = (float) $pengeluaran->nominal;
+        $pajak = (float) $pengeluaran->nominal_pajak;
+        $net = (float) $pengeluaran->net_dibayarkan;
+        $beban = $nominal + ($pengeluaran->jenis_pajak === 'ppn_11' ? $pajak : 0);
+
+        if ($nominal <= 0 || $pajak < 0 || $net < 0 || abs($beban - $pajak - $net) > 0.01) {
+            throw new \DomainException('Nilai pengeluaran, pajak, dan pembayaran bersih tidak seimbang; jurnal dibatalkan.');
+        }
+        if ($pajak > 0 && !$akunUtangPajak) {
+            throw new \DomainException("Akun utang untuk jenis pajak {$pengeluaran->jenis_pajak} belum dikonfigurasi.");
+        }
+
+        $jurnal = self::header(
+            self::prefix('pengeluaran'),
+            'pengeluaran_manual',
+            (int) $pengeluaran->id,
+            "Pengeluaran {$pengeluaran->kategori} - {$pengeluaran->nama_vendor}",
+            $beban,
+            $pengeluaran->tanggal_transaksi ? \Illuminate\Support\Carbon::parse($pengeluaran->tanggal_transaksi)->toDateString() : null
+        );
+
+        self::baris($jurnal, $akunBeban->id, $beban, 0, "Beban {$pengeluaran->kategori} {$pengeluaran->nama_vendor}");
+        self::baris($jurnal, $akunKas->id, 0, $net, "Pembayaran kas/bank ke {$pengeluaran->nama_vendor}");
+        if ($pajak > 0) {
+            self::baris($jurnal, $akunUtangPajak->id, 0, $pajak, "Utang Pajak {$pengeluaran->jenis_pajak} atas transaksi {$pengeluaran->nomor_transaksi}");
+        }
+
+        return $jurnal;
+    }
+
+    public static function jurnalPenyetoranPajak(
+        PengeluaranKampus $pengeluaran,
+        UnitKas $unitKas,
+        string $ntpn,
+        string $tanggal
+    ): JurnalUmum {
+        $nominal = (float) $pengeluaran->nominal_pajak;
+        if ($nominal <= 0) {
+            throw new \DomainException('Nilai pajak harus lebih dari nol untuk dibuatkan jurnal penyetoran.');
+        }
+
+        $akunUtangPajak = self::akunUtangPajak((string) $pengeluaran->jenis_pajak);
+        $akunKas = self::akunKasUnit($unitKas);
+        $jurnal = self::header(
+            self::prefix('penyetoran_pajak'),
+            'pengeluaran_manual',
+            (int) $pengeluaran->id,
+            "Penyetoran Pajak {$pengeluaran->jenis_pajak} ke Kas Negara (NTPN: {$ntpn})",
+            $nominal,
+            $tanggal
+        );
+
+        self::baris($jurnal, $akunUtangPajak->id, $nominal, 0, "Pelunasan Utang Pajak {$pengeluaran->jenis_pajak} NTPN: {$ntpn}");
+        self::baris($jurnal, $akunKas->id, 0, $nominal, "Setoran Pajak Kas Negara NTPN: {$ntpn}");
+
+        return $jurnal;
     }
 
     /**
@@ -384,14 +462,8 @@ class JurnalSikeuService
             throw new \RuntimeException('Nominal realisasi LPJ harus lebih dari nol.');
         }
 
-        $akunBeban = AkunKeuangan::where('kode_akun', $kodeBeban)->first()
-            ?? AkunKeuangan::where('kelompok', 'beban')->first();
-        $akunKas = AkunKeuangan::where('kode_akun', '101.01')->first()
-            ?? AkunKeuangan::where('kelompok', 'aset')->first();
-
-        if (!$akunBeban || !$akunKas) {
-            throw new \RuntimeException('Akun Beban (502.01) atau Kas (101.01) belum dikonfigurasi di COA.');
-        }
+        $akunBeban = self::akunWajib($kodeBeban, 'Beban operasional');
+        $akunKas = self::akunWajib(self::AKUN_KAS_TUNAI, 'Kas tunai');
 
         $jurnal = self::header(
             self::prefix('pengeluaran'),
@@ -419,13 +491,8 @@ class JurnalSikeuService
             throw new \RuntimeException('Nominal reimbursement harus lebih dari nol.');
         }
 
-        $akunBeban = AkunKeuangan::where('kode_akun', $kodeBeban)->first()
-            ?? AkunKeuangan::where('kelompok', 'beban')->first();
+        $akunBeban = self::akunWajib($kodeBeban, 'Beban reimbursement');
         $akunKas = self::akunKasUnit($unitKas, self::AKUN_KAS_TUNAI);
-
-        if (!$akunBeban || !$akunKas) {
-            throw new \RuntimeException('Akun Beban (502.01) atau Kas (101.01) belum dikonfigurasi di COA.');
-        }
 
         $jurnal = self::header(
             self::prefix('reimbursement'),
@@ -514,13 +581,8 @@ class JurnalSikeuService
             throw new \RuntimeException('Nominal transaksi keluar kas kecil harus lebih dari nol.');
         }
 
-        $akunBeban = AkunKeuangan::where('kode_akun', '502.01')->first()
-            ?? AkunKeuangan::where('kelompok', 'beban')->first();
-        $akunKas = self::akunKasUnit($unitKas, '101.01');
-
-        if (!$akunBeban) {
-            throw new \RuntimeException('Akun Beban (502.01) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.');
-        }
+        $akunBeban = self::akunWajib(self::AKUN_BEBAN_OPERASIONAL, 'Beban operasional');
+        $akunKas = self::akunKasUnit($unitKas, self::AKUN_KAS_TUNAI);
 
         $jurnal = self::header(
             self::prefix('pengeluaran'),
@@ -547,13 +609,8 @@ class JurnalSikeuService
             throw new \RuntimeException('Nominal pengisian kas kecil harus lebih dari nol.');
         }
 
-        $akunKasUtama = AkunKeuangan::where('kode_akun', '101.01')->first()
-            ?? AkunKeuangan::where('kelompok', 'aset')->first();
-        $akunKasUnit = self::akunKasUnit($unitKas, '101.01');
-
-        if (!$akunKasUtama) {
-            throw new \RuntimeException('Akun Kas Utama (101.01) belum dikonfigurasi di COA. Jurnal otomatis dibatalkan.');
-        }
+        $akunKasUtama = self::akunWajib(self::AKUN_KAS_TUNAI, 'Kas utama');
+        $akunKasUnit = self::akunKasUnit($unitKas, self::AKUN_KAS_TUNAI);
 
         // Pengisian kas kecil harus memindahkan dana ANTAR akun kas yang berbeda.
         // Jika akun kas unit sama dengan kas utama, jurnal menjadi netral & tidak bermakna.
@@ -593,19 +650,8 @@ class JurnalSikeuService
             throw new \InvalidArgumentException('Nominal beban penyusutan aset harus lebih dari nol.');
         }
 
-        $akunBeban = AkunKeuangan::where('kode_akun', '505.01')->first()
-            ?? AkunKeuangan::where('kelompok', 'beban')->where('nama_akun', 'like', '%penyusutan%')->first()
-            ?? AkunKeuangan::firstOrCreate(
-                ['kode_akun' => '505.01'],
-                ['nama_akun' => 'Beban Penyusutan Aset Tetap', 'kelompok' => 'beban', 'saldo_normal' => 'debet']
-            );
-
-        $akunAkumulasi = AkunKeuangan::where('kode_akun', '105.01')->first()
-            ?? AkunKeuangan::where('kelompok', 'aset')->where('nama_akun', 'like', '%akumulasi%')->first()
-            ?? AkunKeuangan::firstOrCreate(
-                ['kode_akun' => '105.01'],
-                ['nama_akun' => 'Akumulasi Penyusutan Aset Tetap', 'kelompok' => 'aset', 'saldo_normal' => 'kredit']
-            );
+        $akunBeban = self::akunWajib(self::AKUN_BEBAN_PENYUSUTAN, 'Beban penyusutan aset tetap');
+        $akunAkumulasi = self::akunWajib(self::AKUN_AKUMULASI_PENYUSUTAN, 'Akumulasi penyusutan aset tetap');
 
         $jurnal = self::header(
             self::prefix('penyusutan'),
