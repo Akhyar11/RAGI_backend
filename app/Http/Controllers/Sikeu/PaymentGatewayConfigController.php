@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Sikeu;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Sikeu\UpdatePaymentGatewayConfigRequest;
 use App\Models\Sikeu\PaymentGatewayConfig;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class PaymentGatewayConfigController extends Controller
 {
@@ -94,10 +96,25 @@ class PaymentGatewayConfigController extends Controller
                 ];
             }
 
-            $config = PaymentGatewayConfig::updateOrCreate(
-                ['gateway_name' => $gatewayName],
-                $payload
-            );
+            $config = PaymentGatewayConfig::firstOrNew(['gateway_name' => $gatewayName]);
+            $oldValues = $config->exists ? $config->getOriginal() : [];
+            $isNew = !$config->exists;
+
+            $config->fill($payload)->save();
+
+            try {
+                AuditLogService::record(
+                    action: $isNew ? 'create' : 'update',
+                    module: 'sikeu',
+                    targetType: PaymentGatewayConfig::class,
+                    targetId: (string) $config->id,
+                    oldData: $oldValues,
+                    newData: $config->getChanges() ?: $config->toArray(),
+                    description: "Pembaruan konfigurasi Payment Gateway {$gatewayName}"
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log konfigurasi gateway: ' . $e->getMessage());
+            }
 
             DB::commit();
 
@@ -122,16 +139,21 @@ class PaymentGatewayConfigController extends Controller
      */
     public function balance($gatewayName)
     {
-        if (strtolower((string) $gatewayName) === 'bsn_h2h') {
+        $gatewayName = strtolower((string) $gatewayName);
+
+        if ($gatewayName === 'bsn_h2h' || $gatewayName === 'rekening_manual') {
             return response()->json([
                 'status' => 'error',
-                'message' => 'H2H BTN Syariah tidak memiliki saldo gateway. Gunakan GET /api/v1/sikeu/h2h/status untuk diagnostik bridge.',
+                'message' => 'H2H BTN Syariah / Rekening Manual tidak memiliki saldo gateway. Gunakan GET /api/v1/sikeu/h2h/status untuk diagnostik bridge.',
             ], 422);
         }
 
         $config = PaymentGatewayConfig::where('gateway_name', $gatewayName)->first();
         if (!$config) {
-            return response()->json(['status' => 'error', 'message' => 'Config not found'], 404);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Konfigurasi gateway tidak ditemukan.',
+            ], 404);
         }
 
         $balance = 0;
@@ -154,10 +176,8 @@ class PaymentGatewayConfigController extends Controller
                 } else {
                     throw new \Exception("Gagal menghubungi API Xendit: " . $response->body());
                 }
-            } else if ($gatewayName === 'duitku') {
-                // Duitku has no direct balance API documented in standard ways usually available like this, 
-                // but we will return 0 or placeholder if real API doesn't exist, or mock it if requested. 
-                // However, since user explicitly mentioned Xendit, we focus on Xendit.
+            } else if ($gatewayName === 'midtrans' || $gatewayName === 'duitku') {
+                // Midtrans & Duitku melakukan settlement langsung ke rekening bank operasional kampus
                 $balance = 0;
             }
 

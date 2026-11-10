@@ -81,6 +81,7 @@ return [
         'btns_api_token' => env('API_TOKEN_BTNS', env('H2H_BTNS_API_TOKEN')),
         'btns_secret_key' => env('SECRET_KEY_BTNS', env('H2H_BTNS_SECRET_KEY')),
         'h2h' => [
+            'base_url' => env('H2H_BTNS_BASE_URL', 'http://127.0.0.1:3002'),
             'prefixes' => [
                 'mahasiswa' => ['13'],
                 'calon_mhs' => ['01'],

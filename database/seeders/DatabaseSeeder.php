@@ -30,6 +30,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\IAM\IamApiIntegrationSeeder::class,
             \Database\Seeders\Sikeu\SikeuAkuntansiSeeder::class,
             \Database\Seeders\Sikeu\SikeuLegacyCoaMappingSeeder::class,
+            \Database\Seeders\Sikeu\PaymentGatewayConfigSeeder::class,
             \Database\Seeders\Sikeu\UnitKasSeeder::class,
             \Database\Seeders\SiakadAturanSksSeeder::class,
             \Database\Seeders\Sikeu\SikeuAdminSeeder::class,
