@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Cache;
 use App\Http\Requests\IAM\UpdateSystemSettingRequest;
 use App\Http\Requests\IAM\TestSmtpSettingRequest;
 use App\Http\Requests\IAM\TestR2SettingRequest;
+use App\Services\Storage\StorageSettingsService;
 
 class SystemSettingController extends Controller
 {
@@ -146,9 +147,13 @@ class SystemSettingController extends Controller
         ]);
     }
 
-    public function update(UpdateSystemSettingRequest $request, RestrictedRoleService $restrictedRoles)
-    {
+    public function update(
+        UpdateSystemSettingRequest $request,
+        RestrictedRoleService $restrictedRoles,
+        StorageSettingsService $storageSettings,
+    ) {
         $feederChanged = false;
+        $storageChanged = false;
 
         foreach ($request->settings as $setting) {
             $value = $setting['value'];
@@ -199,6 +204,27 @@ class SystemSettingController extends Controller
             if (in_array($setting['key'], ['feeder_url', 'feeder_username', 'feeder_password'], true)) {
                 $feederChanged = true;
             }
+
+            if (in_array($setting['key'], [
+                'filesystem_disk',
+                'filesystem_public_disk',
+                'filesystem_private_disk',
+                'r2_access_key_id',
+                'r2_secret_access_key',
+                'r2_default_region',
+                'r2_bucket',
+                'r2_private_bucket',
+                'r2_url',
+                'r2_private_url',
+                'r2_endpoint',
+                'r2_use_path_style_endpoint',
+            ], true)) {
+                $storageChanged = true;
+            }
+        }
+
+        if ($storageChanged) {
+            $storageSettings->refresh();
         }
 
         // Kredensial berubah: buang token cache agar Tes Koneksi memakai nilai baru,
