@@ -143,6 +143,7 @@
 | TutupKasController | Tutup kas per unit (parity legacy tutup_bukus divisi) + guard kasir/UMK | [docs/api/SIKEU/TutupKasController.md](api/SIKEU/TutupKasController.md) |
 | LaporanBendaharaController | Laporan bendahara basis kas: saldo/harian/bulanan, periodik/perakun, rekap mhs + perprodikelas, export Excel | [docs/api/SIKEU/LaporanBendaharaController.md](api/SIKEU/LaporanBendaharaController.md) |
 | SikeuCompatController | Shim legacy untuk gate SIAKAD/SPMB: ringkasan, tagihan aktif, eligibilitas ujian, biaya lain, belum-DU + email kwitansi | [docs/api/SIKEU/SikeuCompatController.md](api/SIKEU/SikeuCompatController.md) |
+| H2hBankController | Integrasi Native Host-to-Host (H2H) Bank BTN Syariah (Inquiry, Payment, Reversal) & Koeksistensi Xendit | [docs/api/SIKEU/H2hBankController.md](api/SIKEU/H2hBankController.md) |
 
 ---
 

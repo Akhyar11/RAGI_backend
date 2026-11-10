@@ -907,6 +907,24 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
 
 /*
 |--------------------------------------------------------------------------
+| Host-to-Host (H2H) Bank Native Endpoints (BTN Syariah)
+|--------------------------------------------------------------------------
+| Menangani integrasi langsung transaksi perbankan (Inquiry, Payment, Reversal)
+| tanpa dependensi microservice Go atau database sikeudb terpisah.
+*/
+Route::middleware('h2h.bank.auth')->group(function () {
+    Route::post('v1/h2h/btns', [App\Http\Controllers\Sikeu\H2hBankController::class, 'handleBtns']);
+    Route::get('v1/h2h/btns/tes', [App\Http\Controllers\Sikeu\H2hBankController::class, 'ping']);
+
+    // Alias untuk kompatibilitas backward spesifikasi URL Bank
+    Route::post('h2h/btns', [App\Http\Controllers\Sikeu\H2hBankController::class, 'handleBtns']);
+    Route::get('h2h/btns/tes', [App\Http\Controllers\Sikeu\H2hBankController::class, 'ping']);
+    Route::post('btns', [App\Http\Controllers\Sikeu\H2hBankController::class, 'handleBtns']);
+    Route::get('btns/tes', [App\Http\Controllers\Sikeu\H2hBankController::class, 'ping']);
+});
+
+/*
+|--------------------------------------------------------------------------
 | Payment Gateway Callbacks / Webhooks (publik + verifikasi token)
 |--------------------------------------------------------------------------
 | Tidak memakai auth:api agar dapat dipanggil oleh payment gateway. Keamanan

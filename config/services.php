@@ -76,4 +76,19 @@ return [
         ))),
     ],
 
+    'sikeu' => [
+        'callback_token' => env('SIKEU_CALLBACK_TOKEN'),
+        'btns_api_token' => env('API_TOKEN_BTNS', env('H2H_BTNS_API_TOKEN')),
+        'btns_secret_key' => env('SECRET_KEY_BTNS', env('H2H_BTNS_SECRET_KEY')),
+        'h2h' => [
+            'prefixes' => [
+                'mahasiswa' => ['13'],
+                'calon_mhs' => ['01'],
+            ],
+            'default_biller' => '31310',
+            'default_channel' => 'MBANK',
+            'default_terminal' => 'TERM_BTNS',
+        ],
+    ],
+
 ];
