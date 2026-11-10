@@ -353,6 +353,7 @@ class PermissionSeeder extends Seeder
         $mahasiswaRole = Role::where('slug', 'mahasiswa')->first();
         $operatorSdmRole = Role::where('slug', 'operator_sdm')->first();
         $operatorSikeuRole = Role::where('slug', 'operator_sikeu')->first();
+        $kabagKeuanganRole = Role::where('slug', 'kabag_keuangan')->first();
         $adminLppmRole = Role::where('slug', 'admin_lppm')->first();
         $adminSimpegRole = Role::where('slug', 'admin_simpeg')->first();
         $adminSarprasRole = Role::where('slug', 'admin_sarpras')->first();
@@ -522,11 +523,17 @@ class PermissionSeeder extends Seeder
             }
         }
 
-        // 5. Operator SIKEU
+        // 5. Operator SIKEU & Kabag Keuangan
         if ($operatorSikeuRole) {
             $sikeuPerms = Permission::where('module', 'sikeu')->get();
             foreach ($sikeuPerms as $p) {
                 RolePermission::firstOrCreate(['role_id' => $operatorSikeuRole->id, 'permission_id' => $p->id]);
+            }
+        }
+        if ($kabagKeuanganRole) {
+            $sikeuPerms = Permission::where('module', 'sikeu')->get();
+            foreach ($sikeuPerms as $p) {
+                RolePermission::firstOrCreate(['role_id' => $kabagKeuanganRole->id, 'permission_id' => $p->id]);
             }
         }
 

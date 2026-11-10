@@ -13,10 +13,6 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        Schema::disableForeignKeyConstraints();
-        DB::table('core_user_roles')->truncate();
-        Schema::enableForeignKeyConstraints();
-
         $createOrRestoreUser = function ($email, $attributes) {
             $user = User::withTrashed()->updateOrCreate(['email' => $email], $attributes);
             if ($user->trashed()) {
