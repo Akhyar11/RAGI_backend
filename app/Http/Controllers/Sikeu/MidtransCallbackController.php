@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Sikeu;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Sikeu\MidtransCallbackRequest;
+use App\Http\Requests\Sikeu\MidtransSnapTokenRequest;
 use App\Http\Requests\Sikeu\MidtransTrialRequest;
 use App\Models\Sikeu\DetailTagihan;
 use App\Models\Sikeu\PaymentGatewayConfig;
@@ -17,6 +18,7 @@ use App\Services\Sikeu\JurnalSikeuService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -306,10 +308,196 @@ class MidtransCallbackController extends Controller
     }
 
     /**
+     * Penerbitan Token Midtrans Snap untuk Pembayaran Mahasiswa / SPMB
+     * HTTP POST /api/v1/sikeu/midtrans/snap-token
+     *
+     * @param MidtransSnapTokenRequest $request
+     * @return JsonResponse
+     */
+    public function createSnapToken(MidtransSnapTokenRequest $request): JsonResponse
+    {
+        $tagihanId = $request->integer('tagihan_id');
+        $tagihan = TagihanMahasiswa::with(['mahasiswa', 'calonMahasiswa', 'detailTagihan'])->find($tagihanId);
+
+        if (!$tagihan) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Tagihan mahasiswa tidak ditemukan.',
+            ], 404);
+        }
+
+        if ($tagihan->status === 'lunas') {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Tagihan ini sudah lunas.',
+            ], 422);
+        }
+
+        $totalTagihan = (float) $tagihan->total_tagihan;
+        $totalBayar = (float) $tagihan->total_bayar;
+        $totalPotongan = (float) $tagihan->total_potongan;
+        $totalDenda = (float) $tagihan->total_denda;
+        $sisaTagihan = max(0, $totalTagihan - $totalBayar - $totalPotongan + $totalDenda);
+
+        if ($sisaTagihan <= 0) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Sisa tagihan mahasiswa adalah Rp 0 atau sudah terpenuhi.',
+            ], 422);
+        }
+
+        $orderId = 'TAG-' . $tagihan->id . '-' . time();
+
+        $customerName = $request->input('first_name');
+        $customerEmail = $request->input('email');
+        $customerPhone = $request->input('phone');
+
+        if (empty($customerName)) {
+            $customerName = $tagihan->mahasiswa?->nama ?? $tagihan->calonMahasiswa?->nama_lengkap ?? auth()->user()?->name ?? 'Mahasiswa Kampus';
+        }
+        if (empty($customerEmail)) {
+            $customerEmail = $tagihan->mahasiswa?->email ?? $tagihan->calonMahasiswa?->email ?? auth()->user()?->email ?? 'pembayaran@kampus.ac.id';
+        }
+        if (empty($customerPhone)) {
+            $customerPhone = $tagihan->mahasiswa?->nomor_hp ?? $tagihan->calonMahasiswa?->no_hp ?? auth()->user()?->phone ?? '081234567890';
+        }
+
+        $itemDetails = [
+            [
+                'id'       => (string) $tagihan->id,
+                'price'    => (int) $sisaTagihan,
+                'quantity' => 1,
+                'name'     => Str::limit('Pembayaran ' . ($tagihan->nomor_tagihan ?: ('Tagihan #' . $tagihan->id)), 45, ''),
+            ]
+        ];
+
+        $snapPayload = [
+            'transaction_details' => [
+                'order_id'     => $orderId,
+                'gross_amount' => (int) $sisaTagihan,
+            ],
+            'customer_details' => [
+                'first_name' => Str::limit($customerName, 50, ''),
+                'email'      => $customerEmail,
+                'phone'      => $customerPhone,
+            ],
+            'item_details' => $itemDetails,
+        ];
+
+        $isProd = $this->isProduction();
+        $snapEndpoint = $isProd
+            ? 'https://app.midtrans.com/snap/v1/transactions'
+            : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
+
+        $serverKey = $this->resolveServerKey();
+        $clientKey = $this->resolveClientKey();
+
+        try {
+            $response = Http::withBasicAuth($serverKey, '')
+                ->withHeaders([
+                    'Accept'       => 'application/json',
+                    'Content-Type' => 'application/json',
+                ])
+                ->timeout(15)
+                ->post($snapEndpoint, $snapPayload);
+
+            if (!$response->successful()) {
+                Log::error("Midtrans Snap Token Generation Failed: {$response->body()}", [
+                    'order_id' => $orderId,
+                    'status'   => $response->status(),
+                ]);
+
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Gagal menerbitkan token Midtrans Snap: ' . ($response->json('error_messages.0') ?? $response->body()),
+                ], $response->status() >= 400 && $response->status() < 500 ? $response->status() : 502);
+            }
+
+            $resData = $response->json();
+            $snapToken = $resData['token'] ?? null;
+            $redirectUrl = $resData['redirect_url'] ?? null;
+
+            try {
+                if (auth()->check()) {
+                    AuditLogService::record(
+                        auth()->user(),
+                        'midtrans_snap_token_created',
+                        'sikeu',
+                        "Token Midtrans Snap diterbitkan untuk tagihan #{$tagihan->id} (Order: {$orderId})",
+                        ['tagihan_id' => $tagihan->id, 'order_id' => $orderId, 'gross_amount' => (int) $sisaTagihan]
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log snap token: ' . $e->getMessage(), [
+                    'tagihan_id' => $tagihan->id,
+                    'order_id'   => $orderId,
+                ]);
+            }
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Token Midtrans Snap berhasil diterbitkan.',
+                'data'    => [
+                    'token'        => $snapToken,
+                    'redirect_url' => $redirectUrl,
+                    'order_id'     => $orderId,
+                    'client_key'   => $clientKey,
+                    'gross_amount' => (int) $sisaTagihan,
+                    'environment'  => $isProd ? 'production' : 'sandbox',
+                ],
+            ], 201);
+        } catch (\Throwable $e) {
+            Log::error("Midtrans Snap Exception: " . $e->getMessage());
+
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Terjadi kendala saat menghubungkan ke server Midtrans Snap: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * ==========================================
      * HELPER RESOLVERS
      * ==========================================
      */
+
+    protected function resolveClientKey(): string
+    {
+        try {
+            $config = PaymentGatewayConfig::where('gateway_name', 'midtrans')->first();
+            if ($config && !empty($config->public_key_encrypted)) {
+                return (string) $config->public_key_encrypted;
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        $clientKey = config('services.sikeu.midtrans.client_key');
+        if (!empty($clientKey)) {
+            return (string) $clientKey;
+        }
+
+        if (app()->environment(['local', 'testing'])) {
+            return 'test-midtrans-client-key';
+        }
+
+        return '';
+    }
+
+    protected function isProduction(): bool
+    {
+        try {
+            $config = PaymentGatewayConfig::where('gateway_name', 'midtrans')->first();
+            if ($config && !empty($config->environment)) {
+                return strtolower((string) $config->environment) === 'production';
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        return (bool) config('services.sikeu.midtrans.is_production', false);
+    }
 
     protected function resolveServerKey(): string
     {

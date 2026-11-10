@@ -591,7 +591,9 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::get('/payment-gateway/active', [App\Http\Controllers\Sikeu\PaymentGatewayConfigController::class, 'getActive']);
     Route::get('/payment-gateway/{gatewayName}/balance', [App\Http\Controllers\Sikeu\PaymentGatewayConfigController::class, 'balance']);
     Route::put('/payment-gateway/{gatewayName}', [App\Http\Controllers\Sikeu\PaymentGatewayConfigController::class, 'update']);
-    Route::post('/payment-gateway/midtrans/trial', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'trialPayment']);
+    Route::post('/payment-gateway/midtrans/trial', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'trialPayment'])
+        ->middleware('can:sikeu.paymentgateway.manage');
+    Route::post('midtrans/snap-token', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'createSnapToken']);
 
     // Unit Kas Master
     Route::get('master/unit-kas', [App\Http\Controllers\Sikeu\UnitKasController::class, 'index']);

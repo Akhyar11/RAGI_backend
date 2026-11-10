@@ -12,6 +12,8 @@ use App\Models\Sikeu\Pembayaran;
 use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\UnitKas;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Http;
+use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 class MidtransIntegrationTest extends TestCase
@@ -203,8 +205,8 @@ class MidtransIntegrationTest extends TestCase
         ]);
 
         // 3. Eksekusi Trial Pembayaran sebagai Super Admin
-        $response = $this->actingAs($user, 'api')
-            ->postJson('/api/v1/sikeu/payment-gateway/midtrans/trial', [
+        Passport::actingAs($user);
+        $response = $this->postJson('/api/v1/sikeu/payment-gateway/midtrans/trial', [
                 'tagihan_id'   => $tagihan->id,
                 'nominal'      => $nominal,
                 'payment_type' => 'qris',
@@ -222,5 +224,129 @@ class MidtransIntegrationTest extends TestCase
 
         // 4. Verifikasi Tagihan Berubah Lunas
         $this->assertEquals('lunas', $tagihan->fresh()->status);
+    }
+
+    public function test_midtrans_create_snap_token_success(): void
+    {
+        // 1. Fake Midtrans Snap API HTTP Response
+        Http::fake([
+            'https://app.sandbox.midtrans.com/snap/v1/transactions' => Http::response([
+                'token'        => 'mock-snap-token-xyz123',
+                'redirect_url' => 'https://app.sandbox.midtrans.com/snap/v2/vtweb/mock-snap-token-xyz123',
+            ], 201),
+        ]);
+
+        // 2. User berwenang
+        $user = User::factory()->create();
+        $permission = Permission::firstOrCreate(
+            ['slug' => 'sikeu.tagihan.read'],
+            [
+                'name'        => 'Lihat Tagihan',
+                'module'      => 'sikeu',
+                'action'      => 'read',
+                'description' => 'Melihat tagihan mahasiswa',
+            ]
+        );
+        $role = Role::firstOrCreate(
+            ['slug' => 'staff_keuangan_snap_test'],
+            ['name' => 'Staff Keuangan Snap Test', 'module' => 'sikeu']
+        );
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $user->roles()->syncWithoutDetaching([$role->id]);
+
+        // 3. Tagihan Mahasiswa Belum Lunas
+        $nominal = 1250000;
+        $tagihan = TagihanMahasiswa::create([
+            'nomor_tagihan'  => 'TAG-SNAP-' . uniqid(),
+            'total_tagihan'  => $nominal,
+            'total_bayar'    => 0,
+            'total_potongan' => 0,
+            'total_denda'    => 0,
+            'status'         => 'belum_bayar',
+            'source_system'  => 'SIAKAD',
+        ]);
+
+        // 4. Request Snap Token
+        Passport::actingAs($user);
+        $response = $this->postJson('/api/v1/sikeu/midtrans/snap-token', [
+                'tagihan_id' => $tagihan->id,
+                'first_name' => 'Ahmad Fulan',
+                'email'      => 'fulan@kampus.ac.id',
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'status'  => 'success',
+                'message' => 'Token Midtrans Snap berhasil diterbitkan.',
+                'data'    => [
+                    'token'        => 'mock-snap-token-xyz123',
+                    'redirect_url' => 'https://app.sandbox.midtrans.com/snap/v2/vtweb/mock-snap-token-xyz123',
+                    'gross_amount' => $nominal,
+                    'environment'  => 'sandbox',
+                ],
+            ]);
+    }
+
+    public function test_midtrans_create_snap_token_fails_when_tagihan_already_paid(): void
+    {
+        $user = User::factory()->create();
+        $permission = Permission::firstOrCreate(
+            ['slug' => 'sikeu.tagihan.read'],
+            ['name' => 'Lihat Tagihan', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat tagihan']
+        );
+        $role = Role::firstOrCreate(
+            ['slug' => 'staff_keuangan_snap_test2'],
+            ['name' => 'Staff Keuangan Snap Test 2', 'module' => 'sikeu']
+        );
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $user->roles()->syncWithoutDetaching([$role->id]);
+
+        $tagihan = TagihanMahasiswa::create([
+            'nomor_tagihan'  => 'TAG-PAID-' . uniqid(),
+            'total_tagihan'  => 500000,
+            'total_bayar'    => 500000,
+            'total_potongan' => 0,
+            'total_denda'    => 0,
+            'status'         => 'lunas',
+            'source_system'  => 'SIAKAD',
+        ]);
+
+        Passport::actingAs($user);
+        $response = $this->postJson('/api/v1/sikeu/midtrans/snap-token', [
+                'tagihan_id' => $tagihan->id,
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'status'  => 'error',
+                'message' => 'Tagihan ini sudah lunas.',
+            ]);
+    }
+
+    public function test_midtrans_create_snap_token_forbidden_without_permission(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::firstOrCreate(
+            ['slug' => 'user_biasa_test'],
+            ['name' => 'User Biasa Test', 'module' => 'umum']
+        );
+        $user->roles()->syncWithoutDetaching([$role->id]);
+
+        $tagihan = TagihanMahasiswa::create([
+            'nomor_tagihan'  => 'TAG-FORBIDDEN-' . uniqid(),
+            'total_tagihan'  => 500000,
+            'total_bayar'    => 0,
+            'total_potongan' => 0,
+            'total_denda'    => 0,
+            'status'         => 'belum_bayar',
+            'source_system'  => 'SIAKAD',
+        ]);
+
+        Passport::actingAs($user);
+        $response = $this->postJson('/api/v1/sikeu/midtrans/snap-token', [
+                'tagihan_id' => $tagihan->id,
+            ]);
+
+        $response->assertStatus(403);
     }
 }

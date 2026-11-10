@@ -50,6 +50,7 @@ class CheckMenuAccess
         'POST /sikeu/callback/va-paid',
         'POST /sikeu/callback/spmb/{calonMahasiswaId}',
         'GET /sikeu/checkout/lookup-va',
+        'POST /sikeu/midtrans/snap-token',
         // Kas Kecil: referensi master untuk form (auth tetap wajib, hanya lewat cek menu)
         'GET /sikeu/kas-kecil/referensi/kategori',
         'GET /sikeu/kas-kecil/referensi/petugas',

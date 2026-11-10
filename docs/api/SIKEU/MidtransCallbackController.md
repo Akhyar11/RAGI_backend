@@ -18,6 +18,7 @@ Controller ini mengelola integrasi pembayaran via **Midtrans Payment Gateway** d
 |---|---|---|---|
 | POST | `/api/v1/sikeu/callback/midtrans` | Webhook notifikasi pembayaran dari Midtrans | ✅ Signature SHA512 |
 | POST | `/api/v1/sikeu/payment-gateway/midtrans/trial` | Simulasi & trial pembayaran untuk Super Admin | ✅ Super Admin (`sikeu.paymentgateway.manage`) |
+| POST | `/api/v1/sikeu/midtrans/snap-token` | Menerbitkan Snap token untuk checkout popup mahasiswa / SPMB | ✅ Mahasiswa / Staff Keuangan |
 
 ---
 
@@ -149,6 +150,56 @@ Digunakan oleh Super Admin pada halaman konfigurasi Payment Gateway untuk menguj
 }
 ```
 
+---
+
+## 3. POST /api/v1/sikeu/midtrans/snap-token
+
+Menerbitkan transaksi Midtrans Snap dan mengembalikan Snap token serta Client Key untuk menginisialisasi popup checkout `window.snap.pay(token)` pada portal mahasiswa atau pendaftaran calon mahasiswa.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+  "tagihan_id": 105,
+  "first_name": "Budi Santoso",
+  "email": "budi@kampus.ac.id",
+  "phone": "081234567890"
+}
+```
+
+### Response Sukses (201 Created)
+
+```json
+{
+  "status": "success",
+  "message": "Token Midtrans Snap berhasil diterbitkan.",
+  "data": {
+    "token": "d5045437-768c-4a37-b715-f5b244d2d480",
+    "redirect_url": "https://app.sandbox.midtrans.com/snap/v2/vtweb/d5045437-768c-4a37-b715-f5b244d2d480",
+    "order_id": "TAG-105-1762747200",
+    "client_key": "SB-Mid-client-0123456789",
+    "gross_amount": 1500000,
+    "environment": "sandbox"
+  }
+}
+```
+
+### Response Error (401 Unauthorized / Token Tidak Valid)
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
 ### Response Error (403 Forbidden / Tanpa Hak Akses)
 
 ```json
@@ -163,7 +214,16 @@ Digunakan oleh Super Admin pada halaman konfigurasi Payment Gateway untuk menguj
 ```json
 {
   "status": "error",
-  "message": "Tagihan mahasiswa untuk order TAG-999999 tidak ditemukan dalam sistem."
+  "message": "Tagihan mahasiswa tidak ditemukan."
+}
+```
+
+### Response Error (422 Unprocessable Entity / Tagihan Sudah Lunas)
+
+```json
+{
+  "status": "error",
+  "message": "Tagihan ini sudah lunas."
 }
 ```
 
