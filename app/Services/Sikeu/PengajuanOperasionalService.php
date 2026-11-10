@@ -125,7 +125,7 @@ class PengajuanOperasionalService
             throw new \InvalidArgumentException('Format periode harus YYYY-MM.');
         }
 
-        $pengajuan = DB::transaction(function () use ($periode) {
+        $pengajuan = DB::transaction(function () use ($periode, $request) {
             $rows = GajiPegawai::with('pegawai')
                 ->where('periode_bulan_tahun', $periode)
                 ->whereIn('status_transfer', ['draft', 'cancelled'])
