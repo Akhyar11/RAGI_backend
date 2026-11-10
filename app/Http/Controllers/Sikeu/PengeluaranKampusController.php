@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Sikeu;
 
 use App\Http\Controllers\Controller;
 use App\Models\Sikeu\AkunKeuangan;
-use App\Models\Sikeu\DetailJurnalUmum;
-use App\Models\Sikeu\JurnalUmum;
 use App\Models\Sikeu\PengeluaranKampus;
 use App\Models\Sikeu\UnitKas;
+use App\Services\AuditLogService;
+use App\Services\Sikeu\JurnalSikeuService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -85,7 +86,7 @@ class PengeluaranKampusController extends Controller
             'nama_vendor' => 'required|string|max:255',
             'npwp_vendor' => 'nullable|string|max:50',
             'jenis_pajak' => 'required|in:tanpa_pajak,pph_21,pph_23,ppn_11',
-            'unit_kas_id' => 'nullable|exists:sikeu_unit_kas,id',
+            'unit_kas_id' => 'required|exists:sikeu_unit_kas,id',
             'keterangan' => 'nullable|string',
             'file_bukti_bayar' => 'nullable|string',
         ]);
@@ -99,156 +100,105 @@ class PengeluaranKampusController extends Controller
         }
 
         try {
-            DB::beginTransaction();
-
             $nominal = (float) $request->nominal;
             $jenisPajak = $request->jenis_pajak;
-            $tarifPajakPersen = 0.0;
-            $nominalPajak = 0.0;
-
-            if ($jenisPajak === 'pph_21') {
-                $tarifPajakPersen = 5.0; // Standard default 5%
-                $nominalPajak = $nominal * ($tarifPajakPersen / 100);
-            } elseif ($jenisPajak === 'pph_23') {
-                $tarifPajakPersen = 2.0; // Standard 2%
-                $nominalPajak = $nominal * ($tarifPajakPersen / 100);
-            } elseif ($jenisPajak === 'ppn_11') {
-                $tarifPajakPersen = 11.0;
-                $nominalPajak = $nominal * ($tarifPajakPersen / 100);
-            }
-
-            // Net amount to be paid out from cash
-            // For withholding tax (PPh 21/23), net is gross minus tax
-            // For PPN, institution pays net gross
-            $netDibayarkan = in_array($jenisPajak, ['pph_21', 'pph_23']) ? ($nominal - $nominalPajak) : $nominal;
-
-            $nomorTransaksi = 'EXP-' . strtoupper(substr($request->kategori, 0, 3)) . '-' . date('Ymd') . '-' . Str::random(4);
-
-            // Unit Kas deduct
-            $unitKas = UnitKas::find($request->unit_kas_id ?? 1) ?? UnitKas::first();
-            if ($unitKas) {
-                $unitKas->decrement('saldo_saat_ini', $netDibayarkan);
-            }
-
-            // Accounting COA mapping: beban mengikuti kategori, utang mengikuti jenis pajak.
-            // (Sebelumnya selalu memakai akun pertama tiap kelompok sehingga seluruh
-            // beban menumpuk di 501.01 dan seluruh utang pajak di 201.01.)
-            // Pengguna boleh meng-override akun beban secara eksplisit lewat akun_beban_id
-            // (mis. operasional yang ternyata belanja ATK, bukan listrik/air/internet).
-            $akunBeban = null;
-            if ($request->filled('akun_beban_id')) {
-                $akunBeban = AkunKeuangan::where('id', $request->akun_beban_id)
-                    ->where('kelompok', 'beban')
-                    ->first();
-                if (!$akunBeban) {
-                    DB::rollBack();
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => 'Akun beban yang dipilih tidak valid (harus akun kelompok beban).',
-                    ], 422);
-                }
-            }
-            if (!$akunBeban) {
-                $kodeBeban = match ($request->kategori) {
-                    'honorarium' => '501.01',
-                    'pemeliharaan' => '502.02',
-                    'laboratorium' => '502.03',
-                    default => '502.01',
-                };
-                $akunBeban = AkunKeuangan::where('kode_akun', $kodeBeban)->first()
-                    ?? AkunKeuangan::where('kelompok', 'beban')->first();
-            }
-            $akunKas = \App\Services\Sikeu\JurnalSikeuService::akunKasUnit($unitKas, '101.01');
-            $kodeUtangPajak = match ($jenisPajak) {
-                'pph_21' => '202.01',
-                'pph_23' => '202.02',
-                'ppn_11' => '202.03',
-                default => null,
+            $tarifPajakPersen = match ($jenisPajak) {
+                'pph_21' => 5.0,
+                'pph_23' => 2.0,
+                'ppn_11' => 11.0,
+                default => 0.0,
             };
-            $akunUtangPajak = $kodeUtangPajak
-                ? AkunKeuangan::where('kode_akun', $kodeUtangPajak)->first()
-                : null;
-            $akunUtangPajak ??= AkunKeuangan::where('kelompok', 'liabilitas')->first();
-
-            $pengeluaran = PengeluaranKampus::create([
-                'nomor_transaksi' => $nomorTransaksi,
-                'kategori' => $request->kategori,
-                'akun_beban_id' => $akunBeban ? $akunBeban->id : null,
-                'akun_kas_id' => $akunKas ? $akunKas->id : null,
-                'nominal' => $nominal,
-                'keterangan' => $request->keterangan ?? "Pengeluaran {$request->kategori} - {$request->nama_vendor}",
-                'tanggal_transaksi' => $request->tanggal_transaksi,
-                'nama_vendor' => $request->nama_vendor,
-                'npwp_vendor' => $request->npwp_vendor,
-                'jenis_pajak' => $jenisPajak,
-                'tarif_pajak_persen' => $tarifPajakPersen,
-                'nominal_pajak' => $nominalPajak,
-                'net_dibayarkan' => $netDibayarkan,
-                'status_pembayaran' => 'lunas',
-                'file_bukti_bayar' => $request->file_bukti_bayar,
-                'created_by' => auth()->id() ?? 1,
-            ]);
-
-            // Automatic Balanced Journal Posting
-            if ($akunBeban && $akunKas) {
-                $jurnal = JurnalUmum::create([
-                    'nomor_jurnal' => \App\Services\Sikeu\JurnalSikeuService::prefix('pengeluaran') . '-' . date('Ymd') . '-' . Str::random(4),
-                    'tanggal_jurnal' => $request->tanggal_transaksi,
-                    'jenis_sumber' => 'pengeluaran_manual',
-                    'referensi_id' => $pengeluaran->id,
-                    'keterangan' => "Pengeluaran {$request->kategori} - {$request->nama_vendor}",
-                    'status_posting' => 'posted',
-                    'total_debet' => $nominal,
-                    'total_kredit' => $nominal,
-                    'created_by' => auth()->id() ?? 1,
-                    'posted_by' => auth()->id() ?? 1,
-                    'posted_at' => now(),
-                ]);
-
-                // Dr Beban Operasional (Gross Nominal)
-                DetailJurnalUmum::create([
-                    'jurnal_id' => $jurnal->id,
-                    'akun_id' => $akunBeban->id,
-                    'debet' => $nominal,
-                    'kredit' => 0,
-                    'keterangan' => "Beban {$request->kategori} {$request->nama_vendor}",
-                ]);
-
-                // Cr Kas/Bank (Net Dibayarkan)
-                DetailJurnalUmum::create([
-                    'jurnal_id' => $jurnal->id,
-                    'akun_id' => $akunKas->id,
-                    'debet' => 0,
-                    'kredit' => $netDibayarkan,
-                    'keterangan' => "Pembayaran kas/bank ke {$request->nama_vendor}",
-                ]);
-
-                // Cr Utang Pajak (jika ada potongan pajak)
-                if ($nominalPajak > 0 && $akunUtangPajak) {
-                    DetailJurnalUmum::create([
-                        'jurnal_id' => $jurnal->id,
-                        'akun_id' => $akunUtangPajak->id,
-                        'debet' => 0,
-                        'kredit' => $nominalPajak,
-                        'keterangan' => "Utang Pajak {$jenisPajak} atas transaksi {$nomorTransaksi}",
-                    ]);
+            $nominalPajak = round($nominal * ($tarifPajakPersen / 100), 2);
+            $netDibayarkan = in_array($jenisPajak, ['pph_21', 'pph_23'], true)
+                ? $nominal - $nominalPajak
+                : $nominal;
+            $user = $request->user();
+            $result = DB::transaction(function () use ($request, $nominal, $jenisPajak, $tarifPajakPersen, $nominalPajak, $netDibayarkan, $user) {
+                $unitKas = UnitKas::where('status', true)
+                    ->lockForUpdate()
+                    ->findOrFail($request->integer('unit_kas_id'));
+                if ((float) $unitKas->saldo_saat_ini < $netDibayarkan) {
+                    abort(422, 'Saldo unit kas tidak mencukupi untuk mencatat pengeluaran ini.');
                 }
-            }
 
-            DB::commit();
+                $kodeBeban = match ($request->kategori) {
+                    'honorarium' => JurnalSikeuService::AKUN_BEBAN_GAJI,
+                    'pemeliharaan' => JurnalSikeuService::AKUN_BEBAN_PEMELIHARAAN,
+                    'laboratorium' => JurnalSikeuService::AKUN_BEBAN_LABORATORIUM,
+                    'operasional', 'kegiatan', 'lainnya' => JurnalSikeuService::AKUN_BEBAN_OPERASIONAL,
+                };
+                $akunBeban = $request->filled('akun_beban_id')
+                    ? AkunKeuangan::whereKey($request->akun_beban_id)->where('kelompok', 'beban')->first()
+                    : AkunKeuangan::where('kode_akun', $kodeBeban)->first();
+                if (!$akunBeban) {
+                    abort(422, 'Akun beban yang dipilih atau dipetakan tidak tersedia pada COA.');
+                }
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Pengeluaran berhasil dicatat, kas unit disesuaikan, dan jurnal akuntansi telah diterbitkan.',
-                'data' => $pengeluaran->load(['akunBeban', 'akunKas'])
-            ], 201);
-        } catch (\Exception $e) {
-            DB::rollBack();
+                $akunKas = JurnalSikeuService::akunKasUnit($unitKas);
+                $akunUtangPajak = $nominalPajak > 0
+                    ? JurnalSikeuService::akunUtangPajak($jenisPajak)
+                    : null;
+                $nomorTransaksi = 'EXP-' . strtoupper(substr($request->kategori, 0, 3)) . '-' . now()->format('Ymd') . '-' . Str::random(8);
+                $pengeluaran = PengeluaranKampus::create([
+                    'nomor_transaksi' => $nomorTransaksi,
+                    'kategori' => $request->kategori,
+                    'akun_beban_id' => $akunBeban->id,
+                    'akun_kas_id' => $akunKas->id,
+                    'nominal' => $nominal,
+                    'keterangan' => $request->keterangan ?? "Pengeluaran {$request->kategori} - {$request->nama_vendor}",
+                    'tanggal_transaksi' => $request->tanggal_transaksi,
+                    'nama_vendor' => $request->nama_vendor,
+                    'npwp_vendor' => $request->npwp_vendor,
+                    'jenis_pajak' => $jenisPajak,
+                    'tarif_pajak_persen' => $tarifPajakPersen,
+                    'nominal_pajak' => $nominalPajak,
+                    'net_dibayarkan' => $netDibayarkan,
+                    'status_pembayaran' => 'lunas',
+                    'file_bukti_bayar' => $request->file_bukti_bayar,
+                    'created_by' => $user?->id,
+                ]);
+                $jurnal = JurnalSikeuService::jurnalPengeluaranKampus(
+                    $pengeluaran,
+                    $akunBeban,
+                    $akunKas,
+                    $akunUtangPajak
+                );
+                $unitKas->decrement('saldo_saat_ini', $netDibayarkan);
+
+                return compact('pengeluaran', 'jurnal', 'unitKas');
+            });
+        } catch (\DomainException|\InvalidArgumentException $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Gagal mencatat pengeluaran: ' . $e->getMessage()
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 422);
         }
+
+        try {
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'create',
+                tableName: 'sikeu_pengeluaran_kampus',
+                recordId: (int) $result['pengeluaran']->id,
+                newValues: [
+                    'nomor_transaksi' => $result['pengeluaran']->nomor_transaksi,
+                    'nominal' => $result['pengeluaran']->nominal,
+                    'jenis_pajak' => $result['pengeluaran']->jenis_pajak,
+                    'nominal_pajak' => $result['pengeluaran']->nominal_pajak,
+                    'unit_kas_id' => $result['unitKas']->id,
+                    'jurnal_id' => $result['jurnal']->id,
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log pengeluaran SIKEU: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pengeluaran berhasil dicatat, saldo unit kas disesuaikan, dan jurnal akuntansi telah diterbitkan.',
+            'data' => $result['pengeluaran']->load(['akunBeban', 'akunKas']),
+        ], 201);
     }
 
     /**

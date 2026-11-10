@@ -349,6 +349,24 @@ $menus = \App\Support\MenuCatalog::definitions();
             $adminKeuAkuntansiRole->menus()->syncWithoutDetaching($akuntansiMenuIds);
         }
 
+        // Auditor Keuangan: akses menu baca SIKEU dan menu khusus alias akun pajak.
+        $auditorKeuanganRole = \App\Models\Role::where('slug', 'auditor_keuangan')->first();
+        if ($auditorKeuanganRole) {
+            $auditorPermissionIds = $auditorKeuanganRole->permissions()->pluck('core_permissions.id');
+            $auditorMenuIds = Menu::where('module', 'sikeu')
+                ->where(function ($query) use ($auditorPermissionIds) {
+                    $query->whereIn('permission_id', $auditorPermissionIds)
+                        ->orWhereIn('url', [
+                            '/sikeu/akuntansi/jurnal',
+                            '/sikeu/akuntansi/buku-besar',
+                            '/sikeu/akuntansi/coa',
+                        ]);
+                })
+                ->pluck('id')
+                ->toArray();
+            $auditorKeuanganRole->menus()->syncWithoutDetaching($auditorMenuIds);
+        }
+
         // Petugas Kas Kecil: menu kas kecil + parent groupnya, tanpa menu keuangan lain.
         $petugasKasKecilRole = \App\Models\Role::where('slug', 'petugas_kas_kecil')->first();
         if ($petugasKasKecilRole) {
@@ -363,7 +381,7 @@ $menus = \App\Support\MenuCatalog::definitions();
             $petugasKasKecilRole->menus()->syncWithoutDetaching($petugasKasKecilMenuIds);
         }
 
-        // Admin Keuangan Pembayaran Mahasiswa: tagihan, kasir, validasi, gateway.
+        // Admin Keuangan Pembayaran Mahasiswa: tagihan, kasir, tarif, komponen biaya, validasi, gateway.
         $adminKeuPembayaranRole = \App\Models\Role::where('slug', 'admin_keuangan_pembayaran')->first();
         if ($adminKeuPembayaranRole) {
             $pembayaranMenuIds = Menu::where('module', 'sikeu')
@@ -377,7 +395,8 @@ $menus = \App\Support\MenuCatalog::definitions();
                     '/sikeu/piutang',
                     '/sikeu/dispensasi',
                     '/sikeu/pembayaran-mahasiswa/validasi-manual',
-                    '/sikeu/dispensasi',
+                    '#master_sikeu',
+                    '/sikeu/master',
                     '/sikeu/unit-kas',
                     '/sikeu/payment-gateway',
                     '/sikeu/panduan',

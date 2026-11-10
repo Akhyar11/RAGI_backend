@@ -209,7 +209,7 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 ## [GET] /api/v1/siakad/mahasiswa/konversi
 
 > Daftar usulan konversi transfer mahasiswa dengan pagination dan filter pencarian/status.
-> Akses: SuperAdmin, Admin SIAKAD, Admin OBE (`isObeAdmin`), atau pemegang permission `siakad.kurikulum.manage` / `siakad.master.manage`. Dosen murni hanya dapat melihat mahasiswa bimbingan PA-nya jika flag `advisees_only` diaktifkan.
+> Mahasiswa hanya melihat usulan miliknya, Dosen PA hanya melihat mahasiswa bimbingannya, pengelola program studi hanya melihat mahasiswa prodinya, dan admin global dapat melihat seluruh usulan.
 
 #### Headers
 
@@ -226,10 +226,9 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 | `per_page` | `integer` | ❌ | Jumlah item per halaman (min 1, max 100, default: 15). |
 | `search` | `string` | ❌ | Pencarian no transaksi, kampus asal, prodi asal, atau nama/NIM mahasiswa. |
 | `mahasiswa_id` | `integer` | ❌ | Filter ID spesifik mahasiswa transfer. |
-| `status` | `string` | ❌ | Filter status usulan: `all`, `draft`, `diajukan`, `disetujui`, `ditolak`. |
+| `status` | `string` | ❌ | Filter status usulan: `all`, `draft`, `diajukan`, `menunggu_pa`, `menunggu_kaprodi`, `disetujui`, `ditolak`. |
 | `sort_by` | `string` | ❌ | Kolom pengurutan: `created_at`, `no_transaksi`, `status`, `kampus_asal` (default: `created_at`). |
 | `sort_order` | `string` | ❌ | Arah pengurutan: `asc`, `desc` (default: `desc`). |
-| `advisees_only` | `boolean` | ❌ | Jika `true`, membatasi pada mahasiswa bimbingan PA user dosen yang sedang login. |
 
 #### Responses
 
@@ -395,7 +394,7 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 ## [POST] /api/v1/siakad/mahasiswa/konversi
 
-> Buat atau perbarui usulan konversi transfer mahasiswa. Bila `nomor_sk` diisi, sistem memvalidasi keabsahan nomor surat di modul Arsip (`core_arsip_nomor_surat`) dan memastikan berkas fisik SK sudah terunggah.
+> Mahasiswa membuat pengajuan untuk dirinya sendiri. `mahasiswa_id` tidak perlu dikirim oleh mahasiswa; staf hanya dapat mengajukan untuk mahasiswa prodinya bila memiliki hak pengelola program studi. Pilihan mata kuliah lokal dari mahasiswa merupakan kandidat awal yang dapat diubah prodi sebelum diteruskan ke PA. Status awal adalah `diajukan`. Bila `nomor_sk` diisi, sistem memvalidasi nomor dan dokumen fisiknya di modul Arsip.
 
 #### Headers
 
@@ -409,10 +408,8 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 ```json
 {
-    "mahasiswa_id": 5,
     "kampus_asal": "Universitas Nusantara",
     "prodi_asal": "Teknik Komputer",
-    "nomor_sk": "12/SK-KONV/UTI/2026",
     "catatan": "Penyetaraan mahasiswa transfer angkatan 2026",
     "status": "diajukan",
     "details": [
@@ -434,11 +431,19 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
     "message": "Konversi transfer nilai mahasiswa berhasil disimpan",
     "data": {
         "id": 1,
-        "no_transaksi": "KNV-2026-001",
-        "nomor_sk": "12/SK-KONV/UTI/2026"
+        "mahasiswa_id": 5,
+        "status": "diajukan",
+        "details": [
+            {
+                "mata_kuliah_diakui_id": 45,
+                "status": "menunggu"
+            }
+        ]
     }
 }
 ```
+
+`mahasiswa_id` bersifat kondisional: wajib untuk pengajuan staf dan harus sesuai prodi yang dikelola; dilarang untuk dipakai mahasiswa untuk memilih identitas mahasiswa lain.
 
 **422 Unprocessable Entity (SK Tidak Sah di Arsip)**
 ```json
@@ -457,9 +462,7 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 ## [PUT] /api/v1/siakad/mahasiswa/konversi/{id}
 
-> Perbarui usulan konversi (dipakai halaman edit). Rincian `details` diganti penuh:
-> baris lama dihapus lalu dibuat ulang dari payload. Aturan kunci status `disetujui`
-> dan penentuan status otomatis sama seperti endpoint POST.
+> Pemilik mahasiswa atau pengelola program studi dapat memperbarui usulan hanya pada status `draft`/`diajukan`. Rincian `details` diganti penuh. Jika mahasiswa yang mengubah, status rincian baru menjadi `menunggu`; perubahan oleh prodi menjadi pemetaan awal `diakui`. Status verifikasi tidak dapat diubah melalui endpoint ini.
 
 #### Headers
 
@@ -514,7 +517,7 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 ```json
 {
     "status": "error",
-    "message": "Konversi sudah disetujui dan tidak dapat diubah."
+    "message": "Usulan sudah masuk tahap verifikasi dan tidak dapat diubah mahasiswa."
 }
 ```
 
@@ -549,7 +552,7 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 ## [PATCH] /api/v1/siakad/mahasiswa/konversi/{id}/status
 
-> Keputusan verifikasi konversi satuan: ubah status usulan (`draft`/`diajukan`/`disetujui`/`ditolak`), opsional mencatat keputusan per-MK diakui/ditolak beserta alasan penolakan dan nomor SK resmi Arsip.
+> Memajukan pengajuan melalui verifikasi berurutan: prodi memetakan lalu mengirim ke PA (`menunggu_pa`), PA mahasiswa menyetujui pemetaan (`menunggu_kaprodi`), kemudian pengelola prodi memberi keputusan akhir (`disetujui`/`ditolak`). PA dapat menolak saat tahapnya; pengelola prodi dapat menolak pengajuan sebelum atau sesudah verifikasi PA. Hanya rincian `diakui` pada usulan final `disetujui` yang dianggap sebagai mata kuliah konversi.
 
 #### Headers
 
@@ -563,9 +566,8 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 
 ```json
 {
-    "status": "disetujui",
-    "nomor_sk": "12/SK-KONV/UTI/2026",
-    "catatan": "Disetujui sesuai rapat pleno kurikulum",
+    "status": "menunggu_kaprodi",
+    "catatan": "Pemetaan disetujui Dosen PA",
     "details": [
         {
             "id": 11,
@@ -580,14 +582,19 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 ```json
 {
     "status": "success",
-    "message": "Status konversi menjadi: disetujui (1 diakui, 0 ditolak).",
+    "message": "Status konversi menjadi: menunggu_kaprodi (1 diakui, 0 ditolak).",
     "data": {
         "id": 1,
-        "status": "disetujui",
-        "nomor_sk": "12/SK-KONV/UTI/2026"
+        "status": "menunggu_kaprodi"
     }
 }
 ```
+
+Status yang dapat dikirim adalah `menunggu_pa`, `menunggu_kaprodi`, `disetujui`, atau `ditolak`; transisi yang tidak sesuai tahap atau peran menghasilkan `403`. Perubahan pemetaan/proposal sebelum verifikasi tetap dilakukan melalui `PUT /konversi/{id}`.
+
+### Dampak pada KRS
+
+Setelah keputusan final `disetujui`, mata kuliah lokal dengan rincian berstatus `diakui` tidak lagi ditawarkan ke KRS mahasiswa. Pemeriksaan yang sama dilakukan server saat kelas ditambahkan, sehingga permintaan langsung ke endpoint KRS juga ditolak. Rincian `ditolak` dan usulan yang belum disetujui tidak menutup akses pengambilan mata kuliah.
 
 ---
 

@@ -100,6 +100,11 @@ class Quiz extends Model
         return $this->hasMany(QuizKolaborator::class, 'quiz_id');
     }
 
+    public function pembuat()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'dibuat_oleh');
+    }
+
     /**
      * Batch size efektif: override per quiz, fallback ke setting global.
      */

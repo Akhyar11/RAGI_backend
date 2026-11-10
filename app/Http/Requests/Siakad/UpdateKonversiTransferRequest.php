@@ -26,7 +26,7 @@ class UpdateKonversiTransferRequest extends FormRequest
             'prodi_asal' => 'required|string|max:255',
             'nomor_sk' => 'nullable|string|max:150',
             'catatan' => 'nullable|string',
-            'status' => 'nullable|string|in:draft,diajukan,disetujui,ditolak',
+            'status' => 'nullable|string|in:draft,diajukan',
             'details' => 'required|array|min:1',
             'details.*.mata_kuliah_diakui_id' => 'required|exists:siakad_mata_kuliah,id',
             'details.*.kode_mk_asal' => 'required|string|max:50',

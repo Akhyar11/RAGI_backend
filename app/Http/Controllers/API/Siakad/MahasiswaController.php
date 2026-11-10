@@ -11,6 +11,7 @@ use App\Http\Requests\Siakad\UpdateKonversiTransferRequest;
 use App\Models\User;
 use App\Models\Role;
 use App\Services\Siakad\KonversiTransferService;
+use App\Services\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Gate;
@@ -687,18 +688,41 @@ class MahasiswaController extends Controller
         $query = KonversiTransfer::with(['mahasiswa.programStudi', 'diprosesOleh', 'details.mataKuliahDiakui', 'arsipNomorSurat']);
 
         $user = $request->user();
-        $isPriv = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->isObeAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'));
-        $isDosenMurni = $user && $user->hasRole('dosen') && !$isPriv;
+        abort_unless($user, 401, 'Autentikasi diperlukan.');
 
-        if ($isDosenMurni || ($user && !$isPriv && $request->boolean('advisees_only'))) {
-            $dosen = \App\Models\Siakad\Dosen::where('user_id', $user->id)->first();
-            if ($dosen) {
-                $query->whereHas('mahasiswa', function ($q) use ($dosen) {
-                    $q->where('dosen_wali_id', $dosen->id);
-                });
-            } else {
-                $query->whereRaw('1 = 0');
+        $mahasiswaLogin = Mahasiswa::where('user_id', $user->id)->first();
+        $konversiService = app(KonversiTransferService::class);
+        if ($mahasiswaLogin) {
+            if ($request->filled('mahasiswa_id') && (int) $request->mahasiswa_id !== (int) $mahasiswaLogin->id) {
+                abort(403, 'Mahasiswa hanya dapat melihat usulan konversi miliknya sendiri.');
             }
+            $query->where('mahasiswa_id', $mahasiswaLogin->id);
+        } elseif (!$konversiService->isGlobalManager($user)) {
+            $managedProdiIds = $user->getSiakadProdiIds();
+            $dosen = \App\Models\Siakad\Dosen::where('user_id', $user->id)->first();
+
+            if ($dosen && $konversiService->canManageProgram(
+                $user,
+                new Mahasiswa(['program_studi_id' => $dosen->program_studi_id])
+            )) {
+                $managedProdiIds->push((int) $dosen->program_studi_id);
+            }
+
+            if ($managedProdiIds->isEmpty() && !$dosen) {
+                abort(403, 'Anda tidak memiliki akses ke daftar konversi.');
+            }
+
+            $managedProdiIds = $managedProdiIds->unique()->values();
+            $query->whereHas('mahasiswa', function ($q) use ($managedProdiIds, $dosen) {
+                if ($managedProdiIds->isNotEmpty()) {
+                    $q->whereIn('program_studi_id', $managedProdiIds);
+                    if ($dosen) {
+                        $q->orWhere('dosen_wali_id', $dosen->id);
+                    }
+                } elseif ($dosen) {
+                    $q->where('dosen_wali_id', $dosen->id);
+                }
+            });
         }
 
         if ($request->filled('status') && $request->status !== 'all') {
@@ -763,13 +787,13 @@ class MahasiswaController extends Controller
 
     public function storeKonversi(Request $request)
     {
-        $request->validate([
-            'mahasiswa_id' => 'required|exists:siakad_mahasiswa,id',
+        $validated = $request->validate([
+            'mahasiswa_id' => 'nullable|exists:siakad_mahasiswa,id',
             'kampus_asal' => 'required|string|max:255',
             'prodi_asal' => 'required|string|max:255',
             'nomor_sk' => 'nullable|string|max:150',
             'catatan' => 'nullable|string',
-            'status' => 'nullable|string|in:draft,diajukan,disetujui,ditolak',
+            'status' => 'nullable|string|in:draft,diajukan',
             'details' => 'required|array|min:1',
             'details.*.mata_kuliah_diakui_id' => 'required|exists:siakad_mata_kuliah,id',
             'details.*.kode_mk_asal' => 'required|string|max:50',
@@ -777,6 +801,29 @@ class MahasiswaController extends Controller
             'details.*.sks_asal' => 'required|integer|min:1',
             'details.*.nilai_huruf_asal' => 'required|string|max:5',
         ]);
+
+        $user = $request->user();
+        abort_unless($user, 401, 'Autentikasi diperlukan.');
+        $mahasiswaLogin = Mahasiswa::where('user_id', $user->id)->first();
+        $konversiService = app(KonversiTransferService::class);
+
+        if ($mahasiswaLogin) {
+            if ($request->filled('mahasiswa_id') && (int) $request->mahasiswa_id !== (int) $mahasiswaLogin->id) {
+                abort(403, 'Mahasiswa hanya dapat mengajukan konversi untuk dirinya sendiri.');
+            }
+            $mhsId = $mahasiswaLogin->id;
+            $isStudent = true;
+        } else {
+            $mhsId = $validated['mahasiswa_id'] ?? null;
+            abort_unless($mhsId, 422, 'mahasiswa_id wajib diisi untuk pengajuan staf.');
+            $mhsForAccess = Mahasiswa::findOrFail($mhsId);
+            abort_unless(
+                $konversiService->canManageProgram($user, $mhsForAccess),
+                403,
+                'Hanya BAAK atau pengelola program studi yang dapat membuat usulan untuk mahasiswa lain.'
+            );
+            $isStudent = false;
+        }
 
         $nomorSk = trim((string) $request->input('nomor_sk'));
         if ($nomorSk !== '') {
@@ -802,40 +849,19 @@ class MahasiswaController extends Controller
             }
         }
 
-        return DB::transaction(function () use ($request) {
-            $mhs = Mahasiswa::findOrFail($request->mahasiswa_id);
-            
-            // Determine status
-            $status = $request->status;
-            $user = $request->user();
-
-            $isPrivileged = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->isObeAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'));
-            $isPa = false;
-            if ($user && !$isPrivileged) {
-                $dosenLogin = \App\Models\Siakad\Dosen::where('user_id', $user->id)->first();
-                $isPa = $dosenLogin && (int) $mhs->dosen_wali_id === (int) $dosenLogin->id;
-            }
-            if ($isPrivileged || $isPa) {
-                $status = $status ?? 'disetujui';
-            } else {
-                // Students can only save as draft or diajukan
-                if (!in_array($status, ['draft', 'diajukan'])) {
-                    $status = 'draft';
-                }
-            }
+        return DB::transaction(function () use ($request, $mhsId, $isStudent, $user) {
+            $mhs = Mahasiswa::lockForUpdate()->findOrFail($mhsId);
+            $status = $request->input('status', 'diajukan');
             
             $konversi = null;
             if ($mhs->konversi_id) {
                 $konversi = KonversiTransfer::find($mhs->konversi_id);
             }
 
-            // Konversi yang sudah DISETUJUI terkunci bagi mahasiswa (hubungi BAAK).
-            // Admin/dosen PA/superadmin boleh merevisi (mis. koreksi) — status ditentukan ulang di bawah.
-            $isStaff = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->isObeAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'));
-            if ($konversi && $konversi->status === 'disetujui' && !$isStaff && !$isPa) {
+            if ($konversi && !in_array($konversi->status, ['draft', 'diajukan'], true)) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Penyetaraan sudah disetujui dan terkunci. Hubungi BAAK bila ada koreksi.',
+                    'message' => 'Usulan sudah masuk tahap verifikasi dan tidak dapat diajukan ulang.',
                 ], 403);
             }
 
@@ -850,10 +876,10 @@ class MahasiswaController extends Controller
                 ]);
                 $konversi->details()->delete();
             } else {
-                $noTransaksi = 'KNV-' . date('Y') . '-' . str_pad(KonversiTransfer::count() + 1, 3, '0', STR_PAD_LEFT);
+                $noTransaksi = 'KNV-' . now()->format('Y') . '-' . strtoupper((string) \Illuminate\Support\Str::ulid());
 
                 $konversi = KonversiTransfer::create([
-                    'mahasiswa_id' => $request->mahasiswa_id,
+                    'mahasiswa_id' => $mhsId,
                     'no_transaksi' => $noTransaksi,
                     'kampus_asal' => $request->kampus_asal,
                     'prodi_asal' => $request->prodi_asal,
@@ -874,6 +900,7 @@ class MahasiswaController extends Controller
                     'nama_mk_asal' => $item['nama_mk_asal'],
                     'sks_asal' => $item['sks_asal'],
                     'nilai_huruf_asal' => $item['nilai_huruf_asal'],
+                    'status' => $isStudent ? 'menunggu' : 'diakui',
                 ]);
             }
 
@@ -900,17 +927,40 @@ class MahasiswaController extends Controller
         ]);
     }
 
-    public function destroyKonversi($id)
+    public function destroyKonversi(Request $request, $id, KonversiTransferService $konversiService)
     {
         $konversi = KonversiTransfer::findOrFail($id);
-        if ($konversi->status === 'disetujui') {
+        $mahasiswa = Mahasiswa::findOrFail($konversi->mahasiswa_id);
+        $user = $request->user();
+        $isOwner = $user && (int) $mahasiswa->user_id === (int) $user->id;
+        if (!$isOwner) {
+            Gate::authorize('siakad.konversi.manage');
+            if (!$konversiService->canManageProgram($user, $mahasiswa)) {
+                abort(403, 'Anda tidak memiliki akses untuk menghapus usulan konversi ini.');
+            }
+        }
+        if (!in_array($konversi->status, ['draft', 'diajukan'], true)) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Konversi yang sudah disetujui tidak dapat dihapus (dokumen akademik resmi). Tolak statusnya terlebih dahulu bila memang batal.',
+                'message' => 'Usulan yang sudah masuk tahap verifikasi tidak dapat dihapus.',
             ], 422);
         }
+        $oldValues = $konversi->load('details')->toArray();
         Mahasiswa::where('konversi_id', $konversi->id)->update(['konversi_id' => null]);
         $konversi->delete();
+
+        try {
+            AuditLogService::record(
+                module: 'SIAKAD',
+                action: 'delete',
+                tableName: 'siakad_konversi_transfer',
+                recordId: (int) $konversi->id,
+                oldValues: $oldValues,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log penghapusan konversi transfer: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
@@ -918,10 +968,12 @@ class MahasiswaController extends Controller
         ]);
     }
 
-    public function updateKonversiStatus(Request $request, $id)
+    public function updateKonversiStatus(Request $request, $id, KonversiTransferService $konversiService)
     {
-        $request->validate([
-            'status' => 'required|in:draft,diajukan,disetujui,ditolak',
+        Gate::authorize('siakad.konversi.manage');
+
+        $validated = $request->validate([
+            'status' => 'required|in:menunggu_pa,menunggu_kaprodi,disetujui,ditolak',
             'nomor_sk' => 'nullable|string|max:150',
             'catatan' => 'nullable|string',
             'details' => 'nullable|array',
@@ -954,62 +1006,15 @@ class MahasiswaController extends Controller
             }
         }
 
-        $konversi = KonversiTransfer::with(['details', 'mahasiswa'])->findOrFail($id);
+        $konversi = $konversiService->transition($id, $validated, $request->user());
+        $diakui = $konversi->details->where('status', 'diakui')->count();
+        $ditolak = $konversi->details->where('status', 'ditolak')->count();
 
-        // Verifikator: admin/obe admin/permission, atau PA dari mahasiswa yang bersangkutan
-        $user = $request->user();
-        $allowed = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->isObeAdmin() || $user->hasPermission('siakad.kurikulum.manage') || $user->hasPermission('siakad.master.manage'));
-        if (!$allowed && $user) {
-            $dosen = \App\Models\Siakad\Dosen::where('user_id', $user->id)->first();
-            $allowed = $dosen && (int) $konversi->mahasiswa?->dosen_wali_id === (int) $dosen->id;
-        }
-        if (!$allowed) {
-            return response()->json(['status' => 'error', 'message' => 'Hanya BAAK, Kaprodi, atau Dosen PA mahasiswa ini yang dapat memverifikasi konversi.'], 403);
-        }
-
-        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $konversi) {
-            // Keputusan per-MK (parsial): tandai diakui/ditolak per baris
-            if ($request->filled('details')) {
-                foreach ($request->details as $d) {
-                    $detail = $konversi->details->firstWhere('id', $d['id']);
-                    if (!$detail) {
-                        continue;
-                    }
-                    $detail->update([
-                        'status' => $d['status'],
-                        'catatan_penolakan' => $d['status'] === 'ditolak' ? ($d['catatan_penolakan'] ?? null) : null,
-                    ]);
-                }
-            }
-
-            // Menyetujui butuh minimal 1 MK diakui; kalau semua ditolak, tolak keseluruhan
-            if ($request->status === 'disetujui' && $konversi->details()->where('status', 'diakui')->count() === 0) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Tidak ada MK yang diakui. Tolak keseluruhan usulan (status ditolak) bila memang tidak ada yang memenuhi syarat.',
-                ], 422);
-            }
-
-            $updatePayload = [
-                'status' => $request->status,
-                'diproses_oleh' => $request->user()?->id,
-                'catatan' => $request->catatan ?? $konversi->catatan,
-            ];
-            if ($request->has('nomor_sk')) {
-                $updatePayload['nomor_sk'] = $request->nomor_sk;
-            }
-
-            $konversi->update($updatePayload);
-
-            $diakui = $konversi->details()->where('status', 'diakui')->count();
-            $ditolak = $konversi->details()->where('status', 'ditolak')->count();
-
-            return response()->json([
-                'status' => 'success',
-                'message' => "Status konversi menjadi: {$request->status} ({$diakui} diakui, {$ditolak} ditolak).",
-                'data' => $konversi->load(['details.mataKuliahDiakui', 'arsipNomorSurat']),
-            ]);
-        });
+        return response()->json([
+            'status' => 'success',
+            'message' => "Status konversi menjadi: {$konversi->status} ({$diakui} diakui, {$ditolak} ditolak).",
+            'data' => $konversi,
+        ]);
     }
 
     /**
@@ -1018,6 +1023,8 @@ class MahasiswaController extends Controller
      */
     public function bulkUpdateKonversiStatus(Request $request)
     {
+        Gate::authorize('siakad.konversi.manage');
+
         $validated = $request->validate([
             'ids' => 'required|array|min:1|max:200',
             'ids.*' => 'exists:siakad_konversi_transfer,id',
@@ -1027,19 +1034,12 @@ class MahasiswaController extends Controller
 
         return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $validated) {
             $count = 0;
+            $konversiService = app(KonversiTransferService::class);
             foreach ($validated['ids'] as $id) {
-                $konversi = KonversiTransfer::with('details')->find($id);
-                if (!$konversi || $konversi->status === $validated['status']) {
-                    continue;
-                }
-                if ($validated['status'] === 'disetujui' && $konversi->details()->where('status', 'diakui')->count() === 0) {
-                    continue;
-                }
-                $konversi->update([
+                $konversiService->transition($id, [
                     'status' => $validated['status'],
-                    'diproses_oleh' => $request->user()?->id,
-                    'catatan' => $validated['catatan'] ?? $konversi->catatan,
-                ]);
+                    'catatan' => $validated['catatan'] ?? null,
+                ], $request->user());
                 $count++;
             }
 

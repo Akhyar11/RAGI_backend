@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-10-05  
-> **Diperbarui**: 2026-10-23 (passing score & status kelulusan, salin peserta, bulk lepas soal, cari mahasiswa)
+> **Diperbarui**: 2026-11-09 (tryout ujian khusus/di luar mata kuliah, multi-dosen kolaborator, & batch peserta berdasarkan kelas/prodi/angkatan/kelas perkuliahan)
 
 Quiz per pertemuan dan tryout level kelas dengan mesin pengerjaan yang sama:
 batch-loading soal (kunci tidak pernah ke client), autosave bulk, auto-grade
@@ -38,8 +38,9 @@ Super admin (sesuai `system_settings.superadmin_role`) melewati seluruh gate.
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
-| GET | `/api/v1/lms/tryout` | Daftar tryout agregat seluruh kelas yang diakses (halaman `/lms/tryout`) | ✅ `siakad.kelas.read` |
-| POST | `/api/v1/lms/kelas/{kelasId}/tryout` | Buat tryout level kelas | ✅ `siakad.kelas.manage` |
+| GET | `/api/v1/lms/tryout` | Daftar tryout agregat seluruh kelas & tryout ujian khusus yang diakses (halaman `/lms/tryout`) | ✅ `siakad.kelas.read` |
+| POST | `/api/v1/lms/tryout` | Buat tryout ujian khusus (di luar mata kuliah / `kelas_id` opsional) + tim dosen kolaborator | ✅ `siakad.kelas.manage` |
+| POST | `/api/v1/lms/kelas/{kelasId}/tryout` | Buat tryout level kelas + tim dosen kolaborator | ✅ `siakad.kelas.manage` |
 | GET | `/api/v1/lms/kelas/{kelasId}/tryout` | Daftar tryout satu kelas | ✅ `siakad.kelas.read` |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/quiz` | Buat quiz per pertemuan | ✅ `siakad.kelas.manage` |
 | GET | `/api/v1/lms/quiz/{quizId}/manage` | Detail quiz dosen (soal + kunci + ringkasan attempt) | ✅ `siakad.kelas.manage` |
@@ -53,8 +54,8 @@ Super admin (sesuai `system_settings.superadmin_role`) melewati seluruh gate.
 | GET | `/api/v1/lms/quiz/{quizId}/preview` | Preview quiz ala mahasiswa (tanpa kunci) | ✅ `siakad.kelas.manage` |
 | PUT | `/api/v1/lms/attempt-jawaban/{id}/nilai` | Nilai manual + recompute + OBE resync | ✅ `siakad.nilai.manage` |
 | POST | `/api/v1/lms/quiz/{quizId}/peserta` | Tambah peserta eksplisit tryout | ✅ `siakad.kelas.manage` |
-| POST | `/api/v1/lms/quiz/{quizId}/peserta-kelas` | Tambah peserta tryout per kelas (cth `25A`) + filter prodi opsional | ✅ `siakad.kelas.manage` |
-| POST | `/api/v1/lms/quiz/{quizId}/peserta-copy` | Salin peserta eksplisit dari tryout lain pada kelas yang sama | ✅ `siakad.kelas.manage` |
+| POST | `/api/v1/lms/quiz/{quizId}/peserta-kelas` | Tambah batch peserta tryout berdasarkan kombinasi kelas (`25A`), prodi, tahun angkatan (`2025`), dan/atau kelas perkuliahan | ✅ `siakad.kelas.manage` |
+| POST | `/api/v1/lms/quiz/{quizId}/peserta-copy` | Salin peserta eksplisit dari tryout lain | ✅ `siakad.kelas.manage` |
 | POST | `/api/v1/lms/quiz/{quizId}/soal/bulk-delete` | Lepas beberapa soal sekaligus (ditolak bila attempt ada) | ✅ `siakad.kelas.manage` |
 | GET | `/api/v1/lms/mahasiswa/search` | Cari mahasiswa (NIM/nama) untuk pemilih peserta | ✅ `siakad.kelas.manage` |
 | DELETE | `/api/v1/lms/tryout-peserta/{id}` | Hapus peserta eksplisit | ✅ `siakad.kelas.manage` |
@@ -90,16 +91,17 @@ per-kelas tetap dipakai saat konteksnya sudah berada di dalam satu kelas.
 | `search` | string | ❌ | `null` | Pencarian pada `judul`, `deskripsi`, nama/kode kelas, dan nama/kode mata kuliah |
 | `sort_by` | string | ❌ | `id` | `id`, `judul`, `durasi_menit`, `dibuka_at`, `ditutup_at`, `created_at` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
-| `tahun_akademik_id` | integer | ❌ | `null` | Filter periode (FK ke master tahun akademik) |
+| `tahun_akademik_id` | integer | ❌ | `null` | Filter periode (FK ke master tahun akademik; tryout ujian khusus `kelas_id = null` tetap disertakan) |
 | `kelas_id` | integer | ❌ | `null` | Filter satu kelas tertentu |
+| `standalone` | boolean | ❌ | `null` | `true` = hanya tryout ujian khusus (`kelas_id IS NULL`), `false` = hanya tryout terikat kelas perkuliahan |
 
 ### Scope Data per Role
 
-| Peran | Kelas yang terlihat |
+| Peran | Tryout yang terlihat |
 |---|---|
-| `superadmin`, `admin`, `kaprodi`, `wakil_prodi` | Seluruh kelas |
-| `dosen` | Kelas yang diampu (`siakad_dosen_pengampu`) |
-| `mahasiswa` | Kelas yang diambil lewat KRS **atau** tryout dengan peserta eksplisit |
+| `superadmin`, `admin`, `kaprodi`, `wakil_prodi` (`Pengelola`) | Seluruh tryout kelas maupun tryout ujian khusus (mode inspeksi) |
+| `dosen` | Tryout pada kelas yang diampu (`siakad_dosen_pengampu`), tryout yang dibuat sendiri (`dibuat_oleh`), atau tryout tempat dosen terdaftar sebagai tim kolaborator (`lms_quiz_kolaborator`) |
+| `mahasiswa` | Tryout dari kelas KRS aktif **atau** tryout dengan peserta eksplisit (`lms_tryout_peserta`, termasuk ujian khusus `kelas_id = null`) |
 
 Mahasiswa hanya melihat tryout `is_published = true` dan `is_archived = false`.
 
@@ -185,14 +187,18 @@ bukan `403` dan bukan data kelas tersebut.
 
 ---
 
-## B. Tryout Level Kelas
+## B. Pembuatan Tryout (Ujian Khusus / Di Luar Mata Kuliah & Level Kelas)
+
+## [POST] /api/v1/lms/tryout
+
+Buat tryout **ujian khusus (di luar mata kuliah)** dengan `kelas_id = null` (atau opsional mengirim `kelas_id`). Mendukung penugasan lebih dari 1 dosen melalui `kolaborator_dosen_ids` (dosen pembuat otomatis didaftarkan sebagai kolaborator `editor`).
 
 ## [POST] /api/v1/lms/kelas/{kelasId}/tryout
 
 Buat tryout lintas pertemuan pada satu kelas. `kode_akses` opsional (maks. 20 karakter);
 tryout berkode hanya bisa dimulai bila mahasiswa mengirim kode yang cocok.
 
-### Path Parameters
+### Path Parameters (khusus `/kelas/{kelasId}/tryout`)
 
 | Parameter | Tipe | Required | Deskripsi |
 |---|---|---|---|
@@ -202,21 +208,22 @@ tryout berkode hanya bisa dimulai bila mahasiswa mengirim kode yang cocok.
 
 ```json
 {
-    "judul": "Tryout UTS",
-    "deskripsi": "Latihan UTS",
-    "durasi_menit": 60,
-    "max_attempt": 2,
-    "passing_score": 60,
+    "judul": "Tryout Ujian Kompetensi Nasional Angkatan 2025",
+    "deskripsi": "Ujian khusus lintas mata kuliah",
+    "durasi_menit": 90,
+    "max_attempt": 1,
+    "passing_score": 70,
     "batch_size": 10,
-    "komponen_penilaian_id": 12,
-    "kode_akses": "TO123",
-    "is_published": true
+    "kode_akses": "UKOM25",
+    "is_published": true,
+    "kolaborator_dosen_ids": [12, 15]
 }
 ```
 
 | Field | Tipe | Required | Validasi |
 |---|---|---|---|
 | `judul` | string | ✅ | `max:255` |
+| `kelas_id` | integer \| null | ❌ | `nullable`, `exists:siakad_kelas,id` (pada `POST /api/v1/lms/tryout`) |
 | `deskripsi` | string | ❌ | — |
 | `durasi_menit` | integer | ❌ | `min:1`, `max:1440` |
 | `max_attempt` | integer | ❌ | `min:1`, `max:10` |
@@ -226,9 +233,10 @@ tryout berkode hanya bisa dimulai bila mahasiswa mengirim kode yang cocok.
 | `batch_size` | integer | ❌ | `min:1`, `max:200` |
 | `dibuka_at` | datetime | ❌ | `after_or_equal:ditutup_at` |
 | `ditutup_at` | datetime | ❌ | `after_or_equal:dibuka_at` |
-| `komponen_penilaian_id` | integer | ❌ | `exists:siakad_komponen_penilaian,id` |
+| `komponen_penilaian_id` | integer | ❌ | `exists:siakad_komponen_penilaian,id` (hanya bila terikat `kelas_id`) |
 | `kode_akses` | string | ❌ | `max:20` |
 | `is_published` | boolean | ❌ | — |
+| `kolaborator_dosen_ids` | integer[] | ❌ | Array ID `siakad_dosen.id` yang ikut menyusun soal & menilai tryout |
 
 ### Response Sukses (201 Created)
 
@@ -1327,12 +1335,7 @@ Idempoten: menambahkan mahasiswa yang sudah terdaftar tidak menggandakan baris.
 
 ## [POST] /api/v1/lms/quiz/{quizId}/peserta-kelas
 
-Tambah peserta tryout **per kelas** (kolom `siakad_mahasiswa.kelas`, mis. `25A` =
-2 digit angkatan + huruf) dengan filter program studi opsional. Seluruh
-mahasiswa berstatus `aktif` yang cocok didaftarkan idempoten (`firstOrCreate`
-per mahasiswa) dalam satu transaksi. Tercatat pada audit log modul `LMS`
-tabel `lms_tryout_peserta` (`action: create`, `new_values` ringkas berisi
-`kelas`, `program_studi_id`, `added`, `skipped`).
+Tambah batch peserta tryout berdasarkan kombinasi **kelas rombel** (`siakad_mahasiswa.kelas`, mis. `25A`), **program studi** (`program_studi_id`), **tahun angkatan** (`angkatan`, mis. `2025`), dan/atau **peserta KRS kelas perkuliahan** (`kelas_perkuliahan_id`). Filter kelas perkuliahan mencocokkan detail KRS aktif pada kelas yang dipilih. Minimal salah satu filter wajib diisi. Seluruh mahasiswa berstatus `aktif` yang cocok didaftarkan idempoten (`firstOrCreate` per mahasiswa) dalam satu transaksi. Tercatat pada audit log modul `LMS` tabel `lms_tryout_peserta` (`action: create`, `new_values` berisi filter, `added`, dan `skipped`).
 
 ### Path Parameters
 
@@ -1343,24 +1346,36 @@ tabel `lms_tryout_peserta` (`action: create`, `new_values` ringkas berisi
 ### Request Body
 
 ```json
-{ "kelas": "25A", "program_studi_id": 1 }
+{
+    "kelas": "25A",
+    "program_studi_id": 1,
+    "angkatan": 2025,
+    "kelas_perkuliahan_id": null
+}
 ```
 
 | Field | Tipe | Required | Validasi |
 |---|---|---|---|
-| `kelas` | string | ✅ | `max:10`, `regex:/^[0-9]{2}[A-Z]{1,3}$/` (dinormalisasi uppercase + trim) |
-| `program_studi_id` | integer | ❌ | `exists:siakad_program_studi,id` |
+| `kelas` | string \| null | ❌* | `max:10`, `regex:/^[0-9]{2}[A-Z]{1,3}$/` (dinormalisasi uppercase + trim) |
+| `program_studi_id` | integer \| null | ❌* | `exists:siakad_program_studi,id` |
+| `angkatan` | integer \| null | ❌* | `min:2000`, `max:2100` |
+| `kelas_perkuliahan_id` | integer \| null | ❌* | `exists:siakad_kelas,id` (mengambil mahasiswa yang memiliki status KRS valid dan detail KRS aktif pada kelas tersebut) |
+
+*\*Minimal salah satu dari keempat filter di atas wajib diisi.*
 
 ### Response Sukses (201 Created)
 
 ```json
 {
     "status": "success",
-    "message": "Berhasil menambahkan 30 peserta tryout kelas 25A.",
+    "message": "Berhasil menambahkan 30 peserta tryout (Kelas 25A, Prodi #1, Angkatan 2025).",
     "data": {
         "added": 30,
         "skipped": 2,
-        "kelas": "25A"
+        "kelas": "25A",
+        "program_studi_id": 1,
+        "angkatan": 2025,
+        "kelas_perkuliahan_id": null
     }
 }
 ```

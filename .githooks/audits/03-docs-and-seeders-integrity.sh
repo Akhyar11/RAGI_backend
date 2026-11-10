@@ -32,7 +32,7 @@ fi
 PROMPT_FILE=$(mktemp)
 
 cat << 'EOF' > "$PROMPT_FILE"
-Kamu adalah Code Auditor khusus Dokumentasi API dan Database Seeder Laravel (AI Muse Spark 1.3).
+Kamu adalah Code Auditor khusus Dokumentasi API dan Database Seeder Laravel (Big Pickle).
 Tugasmu adalah memeriksa FULL Git Diff berikut secara SANGAT KETAT terhadap kelengkapan dokumentasi API dan database seeder.
 
 ================================ STANDAR EVALUASI ================================

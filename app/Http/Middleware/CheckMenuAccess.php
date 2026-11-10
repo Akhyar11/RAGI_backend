@@ -50,6 +50,7 @@ class CheckMenuAccess
         'POST /sikeu/callback/va-paid',
         'POST /sikeu/callback/spmb/{calonMahasiswaId}',
         'GET /sikeu/checkout/lookup-va',
+        'POST /sikeu/midtrans/snap-token',
         // Kas Kecil: referensi master untuk form (auth tetap wajib, hanya lewat cek menu)
         'GET /sikeu/kas-kecil/referensi/kategori',
         'GET /sikeu/kas-kecil/referensi/petugas',
@@ -85,23 +86,34 @@ class CheckMenuAccess
             }
         }
 
-        // 3. Query database Menu model directly by URL
-        $menu = Menu::where('url', $targetUrl)->first();
+        // 3. Match exact/parameterized routes first, then the most specific parent menu.
+        $menus = Menu::whereNotNull('url')
+            ->where('url', '!=', '#')
+            ->where('url', '!=', '')
+            ->get();
+        $matchingMenus = $menus->filter(
+            fn ($menu) => $this->pathMatches($targetUrl, $menu->url)
+        );
 
-        // 4. Dynamic DB Menu entity matching fallback
-        if (!$menu) {
-            $lastSegment = basename($targetUrl);
-            $menu = Menu::whereNotNull('url')
-                        ->where('url', '!=', '#')
-                        ->get()
-                        ->first(function ($m) use ($targetUrl, $lastSegment) {
-                            return str_contains($m->url, $lastSegment) || str_contains($targetUrl, basename($m->url));
-                        });
+        if ($matchingMenus->isEmpty()) {
+            $matchingMenus = $menus->filter(function ($menu) use ($targetUrl) {
+                $menuUrl = rtrim($menu->url, '/');
+
+                return str_starts_with($targetUrl, $menuUrl . '/');
+            });
         }
 
-        if ($menu) {
+        if ($matchingMenus->isNotEmpty()) {
+            $longestUrlLength = $matchingMenus->max(
+                fn ($menu) => strlen(rtrim($menu->url, '/'))
+            );
+            $matchingMenus = $matchingMenus->filter(
+                fn ($menu) => strlen(rtrim($menu->url, '/')) === $longestUrlLength
+            );
             $roleIds = $user->roles()->pluck('core_roles.id')->toArray();
-            $hasAccess = $menu->roles()->whereIn('core_roles.id', $roleIds)->exists();
+            $hasAccess = $matchingMenus->contains(
+                fn ($menu) => $menu->roles()->whereIn('core_roles.id', $roleIds)->exists()
+            );
 
             if (!$hasAccess) {
                 return response()->json([

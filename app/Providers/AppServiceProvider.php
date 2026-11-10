@@ -48,6 +48,12 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        app(\App\Services\Storage\StorageSettingsService::class)->refresh();
+
+        \Illuminate\Support\Facades\Queue::before(function (): void {
+            app(\App\Services\Storage\StorageSettingsService::class)->refresh();
+        });
+
         // Observers
         \App\Models\User::observe(\App\Observers\UserObserver::class);
         \App\Models\Role::observe(\App\Observers\RoleObserver::class);
@@ -71,6 +77,10 @@ class AppServiceProvider extends ServiceProvider
             \App\Models\Spmb\PayoutReferral::class,
             \App\Policies\Spmb\PayoutReferralPolicy::class
         );
+        Gate::policy(
+            \App\Models\Siakad\KoreksiNilaiMahasiswa::class,
+            \App\Policies\Siakad\NilaiKoreksiMahasiswaPolicy::class
+        );
 
         // SIAKAD Observers
         \App\Models\Siakad\Mahasiswa::observe(\App\Observers\MahasiswaObserver::class);
@@ -82,9 +92,12 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Siakad\HakaksesKrs::observe(\App\Observers\Siakad\HakaksesKrsObserver::class);
         \App\Models\Siakad\KartuUjianToken::observe(\App\Observers\Siakad\KartuUjianTokenObserver::class);
         \App\Models\Siakad\DokumenToken::observe(\App\Observers\Siakad\DokumenTokenObserver::class);
+        \App\Models\Siakad\NilaiMahasiswa::observe(\App\Observers\Siakad\NilaiMahasiswaObserver::class);
+        \App\Models\Siakad\KoreksiNilaiMahasiswa::observe(\App\Observers\Siakad\KoreksiNilaiMahasiswaObserver::class);
 
         // SIKEU Observers
         \App\Models\Sikeu\PengajuanPencairanKas::observe(\App\Observers\Sikeu\PengajuanPencairanKasObserver::class);
+        \App\Models\Sikeu\AkunPajak::observe(\App\Observers\Sikeu\AkunPajakObserver::class);
         \App\Models\Sikeu\PengeluaranKampus::observe(\App\Observers\Sikeu\PengeluaranKampusObserver::class);
         \App\Models\Sikeu\UnitKas::observe(\App\Observers\Sikeu\UnitKasObserver::class);
         \App\Models\Sikeu\TransaksiKasUnit::observe(\App\Observers\Sikeu\TransaksiKasUnitObserver::class);
@@ -97,6 +110,8 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Simpeg\SuratTugas::observe(\App\Observers\Simpeg\SuratTugasObserver::class);
         \App\Models\Simpeg\UsulanJafung::observe(\App\Observers\Simpeg\UsulanJafungObserver::class);
         \App\Models\Simpeg\PegawaiKomponenGaji::observe(\App\Observers\Simpeg\PegawaiKomponenGajiObserver::class);
+        \App\Models\Simpeg\PresensiPengajaranCutoff::observe(\App\Observers\Simpeg\PresensiPengajaranCutoffObserver::class);
+        \App\Models\Simpeg\PresensiPengajaranException::observe(\App\Observers\Simpeg\PresensiPengajaranExceptionObserver::class);
         \App\Models\Simpeg\JabatanFungsionalAkademik::observe(\App\Observers\JabatanFungsionalAkademikObserver::class);
 
         // SINAPRA Observers
@@ -287,51 +302,6 @@ class AppServiceProvider extends ServiceProvider
                     ]);
                 }
 
-                // Konfigurasi dinamis Cloudflare R2 / Filesystem dari core_system_settings
-                $fsDisk = \App\Models\SystemSetting::get('filesystem_disk');
-                if (!empty($fsDisk)) {
-                    config(['filesystems.default' => $fsDisk]);
-                }
-                $fsPublic = \App\Models\SystemSetting::get('filesystem_public_disk');
-                if (!empty($fsPublic)) {
-                    config(['filesystems.public_disk' => $fsPublic]);
-                }
-                $fsPrivate = \App\Models\SystemSetting::get('filesystem_private_disk');
-                if (!empty($fsPrivate)) {
-                    config(['filesystems.private_disk' => $fsPrivate]);
-                }
-
-                $r2Endpoint = \App\Models\SystemSetting::get('r2_endpoint');
-                $r2Key = \App\Models\SystemSetting::get('r2_access_key_id');
-                $r2Secret = \App\Models\SystemSetting::get('r2_secret_access_key');
-                $r2Bucket = \App\Models\SystemSetting::get('r2_bucket');
-
-                if (!empty($r2Endpoint) || !empty($r2Key) || !empty($r2Bucket)) {
-                    $r2Region = \App\Models\SystemSetting::get('r2_default_region', config('filesystems.disks.r2.region', 'auto'));
-                    $r2Url = \App\Models\SystemSetting::get('r2_url', config('filesystems.disks.r2.url'));
-                    $r2PathStyle = filter_var(\App\Models\SystemSetting::get('r2_use_path_style_endpoint', config('filesystems.disks.r2.use_path_style_endpoint', true)), FILTER_VALIDATE_BOOLEAN);
-
-                    $r2PrivateBucket = \App\Models\SystemSetting::get('r2_private_bucket', $r2Bucket);
-                    $r2PrivateUrl = \App\Models\SystemSetting::get('r2_private_url', config('filesystems.disks.r2-private.url'));
-
-                    config([
-                        'filesystems.disks.r2.key' => $r2Key ?: config('filesystems.disks.r2.key'),
-                        'filesystems.disks.r2.secret' => $r2Secret ?: config('filesystems.disks.r2.secret'),
-                        'filesystems.disks.r2.region' => $r2Region ?: 'auto',
-                        'filesystems.disks.r2.bucket' => $r2Bucket ?: config('filesystems.disks.r2.bucket'),
-                        'filesystems.disks.r2.url' => $r2Url ?: config('filesystems.disks.r2.url'),
-                        'filesystems.disks.r2.endpoint' => $r2Endpoint ?: config('filesystems.disks.r2.endpoint'),
-                        'filesystems.disks.r2.use_path_style_endpoint' => $r2PathStyle,
-
-                        'filesystems.disks.r2-private.key' => $r2Key ?: config('filesystems.disks.r2-private.key'),
-                        'filesystems.disks.r2-private.secret' => $r2Secret ?: config('filesystems.disks.r2-private.secret'),
-                        'filesystems.disks.r2-private.region' => $r2Region ?: 'auto',
-                        'filesystems.disks.r2-private.bucket' => $r2PrivateBucket ?: config('filesystems.disks.r2-private.bucket'),
-                        'filesystems.disks.r2-private.url' => $r2PrivateUrl ?: config('filesystems.disks.r2-private.url'),
-                        'filesystems.disks.r2-private.endpoint' => $r2Endpoint ?: config('filesystems.disks.r2-private.endpoint'),
-                        'filesystems.disks.r2-private.use_path_style_endpoint' => $r2PathStyle,
-                    ]);
-                }
             }
         } catch (\Throwable $th) {
             // Lewati jika database belum siap / saat proses migrasi

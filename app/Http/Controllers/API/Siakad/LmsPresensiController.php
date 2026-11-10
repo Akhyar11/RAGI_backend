@@ -4,8 +4,6 @@ namespace App\Http\Controllers\API\Siakad;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Siakad\Lms\ExportLmsRequest;
-use App\Http\Requests\Siakad\Lms\SyncPresensiRequest;
-use App\Http\Requests\Siakad\Lms\TarikPresensiRequest;
 use App\Services\AuditLogService;
 use App\Services\Siakad\LmsExportService;
 use App\Services\Siakad\LmsPresensiService;
@@ -15,15 +13,7 @@ use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Panel administrasi integrasi presensi LMS (LMS-03).
- *
- * Menyediakan monitoring & sinkronisasi dua arah antara LMS dan aplikasi
- * PresensiV2: rekap kehadiran lintas kelas, jejak sinkronisasi, percobaan
- * sinkron ulang, dan tarik riwayat dari PresensiV2.
- *
- * Otorisasi memakai permission granular modul LMS:
- *  - `lms.presensi.read`   → membaca status, rekap, dan log sinkronisasi.
- *  - `lms.presensi.manage` → sinkron ulang, tarik riwayat, dan export.
+ * Monitoring dan ekspor presensi yang tersimpan di RAG/SIAKAD.
  */
 class LmsPresensiController extends Controller
 {
@@ -31,20 +21,6 @@ class LmsPresensiController extends Controller
         protected LmsPresensiService $lmsPresensiService,
         protected LmsExportService $lmsExportService
     ) {}
-
-    /**
-     * Status integrasi PresensiV2 + feature flag + ringkasan sinkronisasi.
-     */
-    public function status(Request $request): JsonResponse
-    {
-        Gate::authorize('lms.presensi.read');
-
-        return response()->json([
-            'status'  => 'success',
-            'message' => 'Status integrasi presensi berhasil diambil.',
-            'data'    => $this->lmsPresensiService->status(),
-        ]);
-    }
 
     /**
      * Daftar kelas yang memiliki sesi presensi beserta ringkasan absensinya.
@@ -107,15 +83,15 @@ class LmsPresensiController extends Controller
         $kelasId = $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null;
         $pertemuanKe = $request->filled('pertemuan_ke') ? (int) $request->input('pertemuan_ke') : null;
         $status = $request->filled('status') ? (string) $request->input('status') : null;
-        $syncStatus = $request->filled('sync_status') ? (string) $request->input('sync_status') : null;
+        $tahunAkademikId = $request->filled('tahun_akademik_id') ? (int) $request->input('tahun_akademik_id') : null;
 
         $paginator = $this->lmsPresensiService->rekap(
             [
-                'search'       => $search,
-                'kelas_id'     => $kelasId,
-                'pertemuan_ke' => $pertemuanKe,
-                'status'       => $status,
-                'sync_status'  => $syncStatus,
+                'search'            => $search,
+                'kelas_id'          => $kelasId,
+                'pertemuan_ke'      => $pertemuanKe,
+                'status'            => $status,
+                'tahun_akademik_id' => $tahunAkademikId,
             ],
             $perPage
         );
@@ -133,43 +109,11 @@ class LmsPresensiController extends Controller
                 'to'           => $paginator->lastItem(),
             ],
             'filters' => [
-                'search'        => $search,
-                'kelas_id'      => $kelasId,
-                'pertemuan_ke' => $pertemuanKe,
-                'status'        => $status,
-                'sync_status'   => $syncStatus,
-            ],
-        ]);
-    }
-
-    /**
-     * Jejak percobaan sinkronisasi ke PresensiV2.
-     */
-    public function log(Request $request): JsonResponse
-    {
-        Gate::authorize('lms.presensi.read');
-
-        $perPage = min(100, max(1, $request->integer('per_page', 15)));
-        $status = $request->filled('status') ? (string) $request->input('status') : null;
-        $kelasId = $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null;
-
-        $paginator = $this->lmsPresensiService->logSinkronisasi($perPage, $status, $kelasId);
-
-        return response()->json([
-            'status'  => 'success',
-            'message' => 'Log sinkronisasi presensi berhasil diambil.',
-            'data'    => $paginator->items(),
-            'meta'    => [
-                'current_page' => $paginator->currentPage(),
-                'per_page'     => $paginator->perPage(),
-                'total'        => $paginator->total(),
-                'last_page'    => $paginator->lastPage(),
-                'from'         => $paginator->firstItem(),
-                'to'           => $paginator->lastItem(),
-            ],
-            'filters' => [
-                'status'   => $status,
-                'kelas_id' => $kelasId,
+                'search'            => $search,
+                'kelas_id'          => $kelasId,
+                'pertemuan_ke'      => $pertemuanKe,
+                'status'            => $status,
+                'tahun_akademik_id' => $tahunAkademikId,
             ],
         ]);
     }
@@ -182,11 +126,11 @@ class LmsPresensiController extends Controller
         Gate::authorize('lms.presensi.manage');
 
         $filters = [
-            'search'        => $request->filled('search') ? trim((string) $request->input('search')) : null,
-            'kelas_id'      => $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null,
-            'pertemuan_ke' => $request->filled('pertemuan_ke') ? (int) $request->input('pertemuan_ke') : null,
-            'status'        => $request->filled('status') ? (string) $request->input('status') : null,
-            'sync_status'   => $request->filled('sync_status') ? (string) $request->input('sync_status') : null,
+            'search'            => $request->filled('search') ? trim((string) $request->input('search')) : null,
+            'kelas_id'          => $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null,
+            'pertemuan_ke'      => $request->filled('pertemuan_ke') ? (int) $request->input('pertemuan_ke') : null,
+            'status'            => $request->filled('status') ? (string) $request->input('status') : null,
+            'tahun_akademik_id' => $request->filled('tahun_akademik_id') ? (int) $request->input('tahun_akademik_id') : null,
         ];
 
         $data = $this->lmsPresensiService->barisRekap($filters);
@@ -210,101 +154,73 @@ class LmsPresensiController extends Controller
     }
 
     /**
-     * Sinkronkan ulang jurnal & kehadiran ke PresensiV2.
+     * Monitoring keaktifan dosen mengajar & pengisian presensi kelas perkuliahan.
      */
-    public function sync(SyncPresensiRequest $request): JsonResponse
+    public function keaktifanDosen(Request $request): JsonResponse
     {
-        Gate::authorize('lms.presensi.manage');
+        Gate::authorize('lms.presensi.read');
 
-        $result = $this->lmsPresensiService->syncUlang($request->pertemuanId(), $request->kelasId());
+        $perPage = min(100, max(1, $request->integer('per_page', 15)));
+        $search = $request->filled('search') ? trim((string) $request->query('search')) : null;
+        $programStudiId = $request->filled('program_studi_id')
+            ? (int) $request->query('program_studi_id')
+            : null;
 
-        try {
-            AuditLogService::record(
-                module: 'LMS',
-                action: 'sync_presensi',
-                tableName: 'siakad_pertemuan',
-                recordId: $request->pertemuanId() ?? $request->kelasId(),
-                newValues: [
-                    'kelas_id'     => $request->kelasId(),
-                    'pertemuan_id' => $request->pertemuanId(),
-                    'sukses'       => $result['success'] ?? false,
-                ],
-                request: $request
-            );
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log sync presensi: ' . $e->getMessage());
-        }
-
-        if (!($result['success'] ?? false)) {
-            $payload = [
-                'status'  => 'error',
-                'message' => $result['message'] ?? 'Sinkronisasi gagal diproses.',
-            ];
-
-            if (isset($result['errors']) && is_array($result['errors'])) {
-                $payload['errors'] = $result['errors'];
-            }
-
-            $statusCode = is_int($result['code'] ?? null) && $result['code'] >= 400 && $result['code'] < 600
-                ? $result['code']
-                : 422;
-
-            return response()->json($payload, $statusCode);
-        }
+        $paginator = $this->lmsPresensiService->monitoringKeaktifanDosen([
+            'search' => $search,
+            'program_studi_id' => $programStudiId,
+        ], $perPage);
 
         return response()->json([
             'status'  => 'success',
-            'message' => $result['message'] ?? 'Sinkronisasi selesai.',
-            'data'    => $result,
+            'message' => 'Data monitoring keaktifan dosen berhasil diambil.',
+            'data'    => $paginator->items(),
+            'meta'    => [
+                'current_page' => $paginator->currentPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'last_page'    => $paginator->lastPage(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+            ],
+            'filters' => [
+                'search' => $search,
+                'program_studi_id' => $programStudiId,
+            ],
         ]);
     }
 
     /**
-     * Tarik riwayat jurnal & rekap dari PresensiV2 ke LMS.
+     * Export laporan keaktifan mengajar dosen (CSV/XLSX).
      */
-    public function tarik(TarikPresensiRequest $request): JsonResponse
+    public function exportKeaktifanDosen(ExportLmsRequest $request): StreamedResponse
     {
         Gate::authorize('lms.presensi.manage');
 
-        $result = $this->lmsPresensiService->tarikRiwayat($request->kelasId());
+        $format = $request->exportFormat();
+        $payload = $this->lmsPresensiService->barisKeaktifanDosen([
+            'search' => $request->query('search'),
+            'program_studi_id' => $request->query('program_studi_id'),
+        ]);
 
         try {
             AuditLogService::record(
                 module: 'LMS',
-                action: 'tarik_presensi',
+                action: 'export_keaktifan_dosen',
                 tableName: 'siakad_kelas',
-                recordId: $request->kelasId(),
-                newValues: [
-                    'sukses' => $result['success'] ?? false,
-                    'via'    => $result['via'] ?? null,
-                ],
+                recordId: null,
+                newValues: ['format' => $format, 'total_baris' => count($payload['rows'])],
                 request: $request
             );
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log tarik presensi: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log export keaktifan dosen: ' . $e->getMessage());
         }
 
-        if (!($result['success'] ?? false)) {
-            $payload = [
-                'status'  => 'error',
-                'message' => $result['message'] ?? 'Penarikan riwayat gagal diproses.',
-            ];
-
-            if (isset($result['errors']) && is_array($result['errors'])) {
-                $payload['errors'] = $result['errors'];
-            }
-
-            $statusCode = is_int($result['code'] ?? null) && $result['code'] >= 400 && $result['code'] < 600
-                ? $result['code']
-                : 422;
-
-            return response()->json($payload, $statusCode);
-        }
-
-        return response()->json([
-            'status'  => 'success',
-            'message' => $result['message'] ?? 'Penarikan riwayat selesai.',
-            'data'    => $result,
-        ]);
+        return $this->lmsExportService->download(
+            filenameBase: $payload['filename'],
+            headers: $payload['headers'],
+            rows: $payload['rows'],
+            format: $format
+        );
     }
 }

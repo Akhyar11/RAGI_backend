@@ -31,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // F-004: tegakkan expires_at per-baris oauth_access_tokens pada semua
         // rute grup `api` (melewatkan sesi tanpa token / token transien).
         $middleware->appendToGroup('api', \App\Http\Middleware\EnsurePassportTokenIsFresh::class);
+        $middleware->appendToGroup('api', \App\Http\Middleware\RefreshStorageSettings::class);
 
         $middleware->redirectTo(
             guests: fn (Request $request) => $request->is('api/*') ? null : '/login'
@@ -46,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'api.key' => \App\Http\Middleware\ValidateApiKey::class,
             'payment.callback' => \App\Http\Middleware\VerifyPaymentCallbackToken::class,
+            'h2h.bank.auth' => \App\Http\Middleware\H2hBankAuthMiddleware::class,
             'turnstile' => \App\Http\Middleware\VerifyTurnstile::class,
         ]);
     })

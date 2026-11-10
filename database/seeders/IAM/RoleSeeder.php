@@ -120,7 +120,7 @@ class RoleSeeder extends Seeder
             [
                 'name' => 'Auditor Keuangan',
                 'slug' => 'auditor_keuangan',
-                'description' => 'Auditor internal keuangan: akses baca-saja (read-only) seluruh data SIKEU & jejak audit untuk audit dan rekonsiliasi, tanpa hak ubah/approve',
+                'description' => 'Auditor internal keuangan: akses baca-saja data SIKEU, serta hak khusus mengelola alias akun pelaporan pajak dan mode publikasinya; tanpa hak ubah transaksi/approve',
             ],
         ];
 

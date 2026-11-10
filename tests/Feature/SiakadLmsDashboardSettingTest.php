@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Lms\PengumpulanTugas;
+use App\Models\Lms\Quiz;
 use App\Models\Lms\Tugas;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\DosenPengampu;
@@ -242,6 +243,69 @@ class SiakadLmsDashboardSettingTest extends TestCase
         $response->assertJsonPath('data.role', 'dosen');
         $response->assertJsonPath('data.ringkasan.kelas', 1);
         $response->assertJsonPath('data.tambahan.pengumpulan_belum_dinilai', 0);
+    }
+
+    public function test_dashboard_menampilkan_jadwal_siakad_dan_deadline_quiz_dalam_scope_kelas_user(): void
+    {
+        $hariPekan = ['minggu', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
+        $hariIni = $hariPekan[now()->dayOfWeek];
+        $this->kelas->update([
+            'hari' => $hariIni,
+            'jam_mulai' => '09:00:00',
+            'jam_selesai' => '10:30:00',
+        ]);
+        $this->buatTugas();
+
+        $quiz = Quiz::create([
+            'pertemuan_id' => $this->pertemuan->id,
+            'tipe' => Quiz::TIPE_KUIS,
+            'judul' => 'Kuis Dashboard',
+            'dibuka_at' => now()->subHour(),
+            'ditutup_at' => now()->addDays(2),
+            'is_published' => true,
+        ]);
+
+        Kelas::create([
+            'program_studi_id' => $this->kelas->program_studi_id,
+            'mata_kuliah_id' => $this->kelas->mata_kuliah_id,
+            'tahun_akademik_id' => $this->kelas->tahun_akademik_id,
+            'kode_kelas' => 'IF-DASH-OUTSIDE',
+            'nama_kelas' => 'Kelas Di Luar Akses',
+            'kapasitas' => 30,
+            'hari' => $hariIni,
+            'jam_mulai' => '11:00:00',
+            'jam_selesai' => '12:00:00',
+        ]);
+
+        foreach ([$this->userDosen, $this->userMhs] as $user) {
+            Passport::actingAs($user);
+
+            $response = $this->getJson('/api/v1/lms/dashboard/overview')
+                ->assertStatus(200)
+                ->assertJsonStructure([
+                    'data' => [
+                        'jadwal' => [
+                            'hari_ini',
+                            'tanggal',
+                            'kelas' => [
+                                'hari_ini' => [['id', 'kode_kelas', 'hari', 'jam_mulai', 'jam_selesai', 'mata_kuliah']],
+                                'semua' => [['id', 'kode_kelas', 'hari', 'jam_mulai', 'jam_selesai', 'mata_kuliah']],
+                            ],
+                        ],
+                        'preview' => [
+                            'kuis' => [['id', 'judul', 'tipe', 'dibuka_at', 'deadline_at', 'kelas_id', 'pertemuan_id']],
+                        ],
+                    ],
+                ]);
+
+            $response->assertJsonPath('data.jadwal.hari_ini', $hariIni);
+            $response->assertJsonPath('data.jadwal.kelas.hari_ini.0.id', $this->kelas->id);
+            $response->assertJsonPath('data.jadwal.kelas.semua.0.jam_mulai', '09:00:00');
+            $response->assertJsonCount(1, 'data.jadwal.kelas.semua');
+            $response->assertJsonPath('data.preview.tugas.0.judul', 'Tugas Dashboard');
+            $response->assertJsonCount(1, 'data.preview.kuis');
+            $response->assertJsonPath('data.preview.kuis.0.id', $quiz->id);
+        }
     }
 
     public function test_pengaturan_modul_hanya_dapat_diakses_admin(): void

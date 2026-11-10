@@ -6,8 +6,7 @@ return [
     |--------------------------------------------------------------------------
     | Modul LMS (standalone)
     |--------------------------------------------------------------------------
-    | Konfigurasi khusus modul LMS. Integrasi ke sistem eksternal (PresensiV2)
-    | disimpan terpisah pada `config/lms_integration.php`.
+    | Konfigurasi khusus modul LMS.
     */
 
     'notifikasi' => [

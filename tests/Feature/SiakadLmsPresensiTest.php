@@ -17,17 +17,14 @@ use App\Models\Siakad\ProgramStudi;
 use App\Models\Siakad\TahunAkademik;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\System\MasterReferensi;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 /**
- * Pengujian integrasi LMS <-> PresensiV2 (LMS-03).
- *
- * Mencakup endpoint panel administrasi presensi, feature flag `lms_fitur_presensi`,
- * serta perilaku fail-safe ketika integrasi eksternal belum dikonfigurasi.
+ * Pengujian monitoring presensi lokal RAG/SIAKAD dan feature flag LMS.
  */
 class SiakadLmsPresensiTest extends TestCase
 {
@@ -35,6 +32,7 @@ class SiakadLmsPresensiTest extends TestCase
 
     protected User $userAdmin;
     protected User $userMhs;
+    protected User $userDosen;
     protected Mahasiswa $mahasiswa;
     protected Kelas $kelas;
     protected Pertemuan $pertemuan;
@@ -44,13 +42,6 @@ class SiakadLmsPresensiTest extends TestCase
         parent::setUp();
         $this->setUpPassport();
 
-        // Integrasi eksternal tidak dikonfigurasi secara default pada test.
-        config([
-            'lms_integration.presensi.mode'          => 'auto',
-            'lms_integration.presensi.api_url'      => '',
-            'lms_integration.presensi.db_configured' => false,
-        ]);
-
         $this->userAdmin = User::factory()->create([
             'username' => 'admin.presensi',
             'email'    => 'admin.presensi@test.ac.id',
@@ -59,6 +50,11 @@ class SiakadLmsPresensiTest extends TestCase
         $this->userMhs = User::factory()->create([
             'username' => 'mhs.presensi',
             'email'    => 'mhs.presensi@test.ac.id',
+        ]);
+
+        $this->userDosen = User::factory()->create([
+            'username' => 'dosen.presensi',
+            'email'    => 'dosen.presensi@test.ac.id',
         ]);
 
         $prodi = ProgramStudi::create([
@@ -96,6 +92,7 @@ class SiakadLmsPresensiTest extends TestCase
         ]);
 
         $dosen = Dosen::create([
+            'user_id'          => $this->userDosen->id,
             'program_studi_id' => $prodi->id,
             'nidn'             => '0099887767',
             'nama_lengkap'     => 'Dosen Presensi',
@@ -151,15 +148,18 @@ class SiakadLmsPresensiTest extends TestCase
             'pertemuan_id' => $this->pertemuan->id,
             'mahasiswa_id' => $this->mahasiswa->id,
             'status'       => AbsensiMahasiswa::STATUS_HADIR,
+            'is_submitted' => true,
         ]);
 
         // ── RBAC ──────────────────────────────────────────────────────
         $roleAdmin = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin']);
         $roleMhs   = Role::firstOrCreate(['slug' => 'mahasiswa'], ['name' => 'Mahasiswa']);
+        $roleDosen = Role::firstOrCreate(['slug' => 'dosen_pengajar'], ['name' => 'Dosen Pengajar']);
 
         $permRead   = Permission::firstOrCreate(['slug' => 'lms.presensi.read'], ['name' => 'Lihat Rekap Presensi LMS', 'module' => 'lms', 'action' => 'read']);
-        $permManage = Permission::firstOrCreate(['slug' => 'lms.presensi.manage'], ['name' => 'Kelola Integrasi Presensi LMS', 'module' => 'lms', 'action' => 'update']);
+        $permManage = Permission::firstOrCreate(['slug' => 'lms.presensi.manage'], ['name' => 'Export Laporan Presensi LMS', 'module' => 'lms', 'action' => 'update']);
         $permKelas  = Permission::firstOrCreate(['slug' => 'siakad.kelas.read'], ['name' => 'Lihat Jadwal Kuliah', 'module' => 'siakad', 'action' => 'read']);
+        $permManageKelas = Permission::firstOrCreate(['slug' => 'siakad.kelas.manage'], ['name' => 'Kelola Kelas', 'module' => 'siakad', 'action' => 'update']);
 
         $roleAdmin->permissions()->syncWithoutDetaching([
             $permRead->id,
@@ -169,47 +169,111 @@ class SiakadLmsPresensiTest extends TestCase
         $roleMhs->permissions()->syncWithoutDetaching([
             $permKelas->id,
         ]);
+        $roleDosen->permissions()->syncWithoutDetaching([
+            $permKelas->id,
+            $permManageKelas->id,
+        ]);
 
         $this->userAdmin->roles()->attach($roleAdmin->id);
         $this->userMhs->roles()->attach($roleMhs->id);
+        $this->userDosen->roles()->attach($roleDosen->id);
     }
 
     /* -----------------------------------------------------------------
      | Endpoint panel administrasi
      | ----------------------------------------------------------------- */
 
-    public function test_admin_bisa_mengambil_status_integrasi(): void
-    {
-        Passport::actingAs($this->userAdmin);
-
-        $response = $this->getJson('/api/v1/lms/admin/presensi/status');
-
-        $response->assertStatus(200);
-        $response->assertJsonStructure([
-            'status',
-            'message',
-            'data' => [
-                'configured',
-                'mode',
-                'via',
-                'fitur_presensi_aktif',
-                'total_pertemuan',
-                'total_gagal_sync',
-                'total_tersinkron',
-            ],
-        ]);
-        $response->assertJsonPath('data.configured', false);
-        $response->assertJsonPath('data.fitur_presensi_aktif', true);
-    }
-
     public function test_user_tanpa_izin_ditolak_akses_endpoint_admin_presensi(): void
     {
         Passport::actingAs($this->userMhs);
 
-        $this->getJson('/api/v1/lms/admin/presensi/status')->assertStatus(403);
         $this->getJson('/api/v1/lms/admin/presensi/kelas')->assertStatus(403);
         $this->getJson('/api/v1/lms/admin/presensi/rekap')->assertStatus(403);
-        $this->getJson('/api/v1/lms/admin/presensi/log')->assertStatus(403);
+    }
+
+    public function test_dosen_can_refresh_live_attendance_roster_but_student_cannot_read_class_roster(): void
+    {
+        Passport::actingAs($this->userDosen);
+
+        $this->getJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/absensi")
+            ->assertOk()
+            ->assertJsonPath('data.total_peserta', 1)
+            ->assertJsonPath('data.total_sudah_absen', 1)
+            ->assertJsonPath('data.absensi_list.0.mahasiswa_id', $this->mahasiswa->id)
+            ->assertJsonPath('data.absensi_list.0.status', AbsensiMahasiswa::STATUS_HADIR);
+
+        Passport::actingAs($this->userMhs);
+
+        $this->getJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/absensi")
+            ->assertForbidden();
+    }
+
+    public function test_manual_attendance_accepts_active_custom_status_and_rejects_other_reference_types(): void
+    {
+        $customStatus = MasterReferensi::create([
+            'tipe' => 'status_absensi',
+            'modul' => 'siakad',
+            'kode' => 'kepentingan_khusus',
+            'nama' => 'Kepentingan Khusus',
+            'is_active' => true,
+        ]);
+        $unrelatedReference = MasterReferensi::create([
+            'tipe' => 'agama',
+            'modul' => 'siakad',
+            'kode' => 'uji_tidak_valid',
+            'nama' => 'Bukan Status Absensi',
+            'is_active' => true,
+        ]);
+
+        Passport::actingAs($this->userDosen);
+
+        $url = "/api/v1/lms/pertemuan/{$this->pertemuan->id}/bulk-absensi";
+        $payload = ['absensi' => [[
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status_id' => $customStatus->id,
+        ]]];
+        $this->postJson($url, $payload)->assertOk();
+        $this->assertDatabaseHas('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status' => 'kepentingan_khusus',
+        ]);
+        $attendanceId = AbsensiMahasiswa::query()
+            ->where('pertemuan_id', $this->pertemuan->id)
+            ->where('mahasiswa_id', $this->mahasiswa->id)
+            ->value('id');
+        $this->assertDatabaseHas('audit_logs', [
+            'module' => 'LMS',
+            'action' => 'update',
+            'table_name' => 'siakad_absensi_mahasiswa',
+            'record_id' => $attendanceId,
+        ]);
+
+        $payload['absensi'][0]['status_id'] = $unrelatedReference->id;
+        $this->postJson($url, $payload)->assertUnprocessable();
+        $this->assertDatabaseHas('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status' => 'kepentingan_khusus',
+        ]);
+
+        $nonparticipant = Mahasiswa::create([
+            'user_id' => User::factory()->create()->id,
+            'program_studi_id' => $this->mahasiswa->program_studi_id,
+            'nim' => '2026003999',
+            'nama_lengkap' => 'Mahasiswa Non Peserta',
+            'angkatan' => 2026,
+            'status_akademik' => 'aktif',
+        ]);
+        $payload['absensi'][0] = [
+            'mahasiswa_id' => $nonparticipant->id,
+            'status_id' => $customStatus->id,
+        ];
+        $this->postJson($url, $payload)->assertUnprocessable();
+        $this->assertDatabaseMissing('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $nonparticipant->id,
+        ]);
     }
 
     public function test_admin_bisa_mengambil_daftar_kelas_dengan_ringkasan_rekap(): void
@@ -257,22 +321,6 @@ class SiakadLmsPresensiTest extends TestCase
         $response->assertJsonPath('data.0.kode_kelas', 'IF-PRES-A');
     }
 
-    public function test_admin_bisa_mengambil_log_sinkronisasi(): void
-    {
-        Passport::actingAs($this->userAdmin);
-
-        $response = $this->getJson('/api/v1/lms/admin/presensi/log');
-
-        $response->assertStatus(200);
-        $response->assertJsonStructure([
-            'status',
-            'message',
-            'data' => [],
-            'meta' => ['current_page', 'per_page', 'total', 'last_page'],
-        ]);
-        $response->assertJsonPath('meta.total', 0);
-    }
-
     public function test_admin_bisa_export_rekap_presensi_dalam_format_csv(): void
     {
         Passport::actingAs($this->userAdmin);
@@ -288,96 +336,14 @@ class SiakadLmsPresensiTest extends TestCase
         $this->assertStringContainsString('Hadir', $content);
     }
 
-    /* -----------------------------------------------------------------
-     | Sinkronisasi
-     | ----------------------------------------------------------------- */
-
-    public function test_sync_ditolak_bila_tidak_ada_pertemuan_maupun_kelas(): void
+    public function test_endpoint_sinkronisasi_legacy_sudah_tidak_tersedia(): void
     {
         Passport::actingAs($this->userAdmin);
 
-        $response = $this->postJson('/api/v1/lms/admin/presensi/sync', []);
-
-        $response->assertStatus(422);
-        $response->assertJsonStructure(['status', 'message', 'errors' => ['pertemuan_id']]);
-    }
-
-    public function test_sync_melewati_bila_integrasi_presensiv2_belum_dikonfigurasi(): void
-    {
-        Passport::actingAs($this->userAdmin);
-
-        $response = $this->postJson('/api/v1/lms/admin/presensi/sync', [
-            'pertemuan_id' => $this->pertemuan->id,
-        ]);
-
-        $response->assertStatus(422);
-        $this->assertStringContainsString(
-            'belum dikonfigurasi',
-            $response->json('message') ?? ''
-        );
-
-        // Data lokal tetap utuh — integrasi eksternal tidak boleh merusak LMS.
-        $this->assertDatabaseHas('siakad_pertemuan', [
-            'id'          => $this->pertemuan->id,
-            'sync_status' => Pertemuan::SYNC_LOCAL,
-        ]);
-    }
-
-    public function test_tarik_riwayat_melewati_bila_integrasi_belum_dikonfigurasi(): void
-    {
-        Passport::actingAs($this->userAdmin);
-
-        $response = $this->postJson('/api/v1/lms/admin/presensi/tarik', [
-            'kelas_id' => $this->kelas->id,
-        ]);
-
-        $response->assertStatus(422);
-        $this->assertStringContainsString(
-            'belum dikonfigurasi',
-            $response->json('message') ?? ''
-        );
-    }
-
-    public function test_sync_jurnal_mengirim_payload_ke_api_presensiv2(): void
-    {
-        config([
-            'lms_integration.presensi.mode'     => 'api',
-            'lms_integration.presensi.api_url' => 'https://presensi.test',
-        ]);
-
-        Http::fake([
-            'https://presensi.test/api/sync.php' => Http::response([
-                'status'    => 'success',
-                'id_jurnal' => 77,
-            ], 200),
-        ]);
-
-        Passport::actingAs($this->userAdmin);
-
-        $response = $this->postJson('/api/v1/lms/admin/presensi/sync', [
-            'pertemuan_id' => $this->pertemuan->id,
-        ]);
-
-        $response->assertStatus(200);
-
-        Http::assertSent(function ($request) {
-            return $request->url() === 'https://presensi.test/api/sync.php'
-                && $request['action'] === 'buka_jurnal'
-                && $request['xid_kls'] === 'IF-PRES-A'
-                && (int) $request['pertemuan_ke'] === 1;
-        });
-
-        $this->assertDatabaseHas('siakad_pertemuan', [
-            'id'                   => $this->pertemuan->id,
-            'id_jurnal_presensiv2' => 77,
-            'sync_status'          => Pertemuan::SYNC_SYNCED,
-        ]);
-
-        $this->assertDatabaseHas('siakad_absensi_mahasiswa', [
-            'pertemuan_id' => $this->pertemuan->id,
-            'mahasiswa_id' => $this->mahasiswa->id,
-            'sync_status'  => AbsensiMahasiswa::SYNC_SYNCED,
-        ]);
+        $this->getJson('/api/v1/lms/admin/presensi/status')->assertNotFound();
+        $this->getJson('/api/v1/lms/admin/presensi/log')->assertNotFound();
+        $this->postJson('/api/v1/lms/admin/presensi/sync', ['kelas_id' => $this->kelas->id])->assertNotFound();
+        $this->postJson('/api/v1/lms/admin/presensi/tarik', ['kelas_id' => $this->kelas->id])->assertNotFound();
     }
 
     /* -----------------------------------------------------------------
@@ -411,39 +377,42 @@ class SiakadLmsPresensiTest extends TestCase
     }
 
     /* -----------------------------------------------------------------
-     | Command retry
+     | Monitoring Keaktifan Dosen & Export
      | ----------------------------------------------------------------- */
 
-    public function test_perintah_retry_presensi_sync_aman_bila_integrasi_belum_dikonfigurasi(): void
+    public function test_admin_dapat_melihat_monitoring_keaktifan_dosen(): void
     {
-        $this->artisan('lms:retry-presensi-sync')
-            ->expectsOutputToContain('belum dikonfigurasi')
-            ->assertSuccessful();
+        Passport::actingAs($this->userAdmin);
+
+        $res = $this->getJson('/api/v1/lms/admin/presensi/keaktifan-dosen');
+
+        $res->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.kode_kelas', 'IF-PRES-A')
+            ->assertJsonStructure([
+                'status',
+                'message',
+                'data',
+                'meta',
+            ]);
     }
 
-    public function test_perintah_retry_presensi_sync_mencoba_ulang_pertemuan_gagal(): void
+    public function test_admin_dapat_export_laporan_keaktifan_dosen(): void
     {
-        config([
-            'lms_integration.presensi.mode'     => 'api',
-            'lms_integration.presensi.api_url' => 'https://presensi.test',
-        ]);
+        Passport::actingAs($this->userAdmin);
 
-        Http::fake([
-            'https://presensi.test/api/sync.php' => Http::response([
-                'status'    => 'success',
-                'id_jurnal' => 88,
-            ], 200),
-        ]);
+        $res = $this->get('/api/v1/lms/admin/presensi/keaktifan-dosen/export?format=csv');
 
-        $this->pertemuan->update(['sync_status' => Pertemuan::SYNC_FAILED]);
+        $res->assertStatus(200);
+        $this->assertStringContainsString('text/csv', $res->headers->get('content-type') ?? '');
+    }
 
-        $this->artisan('lms:retry-presensi-sync --limit=10')
-            ->assertSuccessful();
+    public function test_mahasiswa_dilarang_mengakses_monitoring_keaktifan_dosen(): void
+    {
+        Passport::actingAs($this->userMhs);
 
-        $this->assertDatabaseHas('siakad_pertemuan', [
-            'id'                   => $this->pertemuan->id,
-            'id_jurnal_presensiv2' => 88,
-            'sync_status'          => Pertemuan::SYNC_SYNCED,
-        ]);
+        $this->getJson('/api/v1/lms/admin/presensi/keaktifan-dosen')
+            ->assertStatus(403);
     }
 }

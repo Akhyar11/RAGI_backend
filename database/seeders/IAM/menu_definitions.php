@@ -112,6 +112,7 @@ return [
         'order_index' => 3,
         'children' => [
             ['name' => 'Presensi & Absensi', 'url' => '/simpeg/presensi', 'icon' => 'FaClock', 'module' => 'simpeg', 'permission_slug' => 'simpeg.presensi.read', 'order_index' => 1],
+            ['name' => 'Monitoring Pengajaran', 'url' => '/simpeg/presensi/pengajaran', 'icon' => 'FaChalkboardTeacher', 'module' => 'simpeg', 'permission_slug' => 'simpeg.presensi.pengajaran.read', 'order_index' => 10],
             ['name' => 'Cuti & Izin Kerja', 'url' => '/simpeg/cuti', 'icon' => 'FaCalendar', 'module' => 'simpeg', 'permission_slug' => 'simpeg.cuti.read', 'order_index' => 2],
             ['name' => 'Payroll & Slip Gaji', 'url' => '/simpeg/payroll', 'icon' => 'FaMoneyBillWave', 'module' => 'simpeg', 'permission_slug' => 'simpeg.payroll.read', 'order_index' => 3],
             ['name' => 'Jabatan Akademik (JAD)', 'url' => '/simpeg/usulan-jafung', 'icon' => 'FaAward', 'module' => 'simpeg', 'permission_slug' => 'simpeg.usulan_jafung.read', 'order_index' => 4],
@@ -239,6 +240,7 @@ return [
             ['name' => 'Pindah Program Studi', 'url' => '/siakad/pindah-prodi', 'icon' => 'FaExchangeAlt', 'module' => 'siakad', 'permission_slug' => 'siakad.mahasiswa.manage', 'order_index' => 3],
             ['name' => 'Pengesahan KHS', 'url' => '/siakad/khs', 'icon' => 'FaFileCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.nilai.manage', 'order_index' => 4],
             ['name' => 'Monitoring Eksekutif', 'url' => '/siakad/eksekutif', 'icon' => 'FaChartBar', 'module' => 'siakad', 'permission_slug' => 'siakad.dashboard.read', 'order_index' => 5],
+            ['name' => 'Pengajuan Konversi Nilai', 'url' => '/siakad/konversi', 'icon' => 'FaExchangeAlt', 'module' => 'siakad', 'role_slugs' => ['mahasiswa'], 'order_index' => 6],
         ]
     ],
     [
@@ -394,114 +396,154 @@ return [
         'order_index' => 9,
     ],
     // ── MODUL LMS (STANDALONE, PISAH DARI SIAKAD) ─────
-    // `role_slugs` bersifat opsional: bila diisi, menu hanya dipetakan ke role
-    // tersebut. Tanpa key ini, pemetaan role mengikuti aturan generik
-    // MenuSeeder (menu tanpa permission_id pada modul role tersebut).
-    [
-        'name' => 'Ringkasan LMS',
-        'url' => '/lms/dashboard',
-        'icon' => 'FaChartPie',
-        'module' => 'lms',
-        'permission_slug' => 'siakad.kelas.read',
-        'order_index' => 0,
-        'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
-    ],
+    // Dikelompokkan rapi ke dalam grup hierarkis (Parent & Children):
+    // 1. Dashboard LMS (Root)
+    // 2. PEMBELAJARAN (Kelas, Agenda Pertemuan, Diskusi, Notifikasi)
+    // 3. EVALUASI & CBT (Bank Soal, Tryout / Ujian)
+    // 4. MONITORING & LAPORAN (Keaktifan Mengajar Dosen, Monitoring Presensi)
+    // 5. PENGATURAN LMS (Pengaturan Kelas, Konfigurasi Modul LMS)
     [
         'name' => 'Dashboard LMS',
-        'url' => '/lms',
+        'url' => '/lms/dashboard',
         'icon' => 'FaBookOpen',
         'module' => 'lms',
         'permission_slug' => 'siakad.kelas.read',
         'order_index' => 1,
-        'role_slugs' => ['dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+        'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
     ],
-    // Menu di bawah ini sebelumnya hanya dibuat lewat migrasi. Karena
-    // MenuSeeder melakukan `Menu::truncate()`, setiap seeding menghapus menu
-    // yang hanya hidup di migrasi — menu LMS ikut hilang. Definisi dipindah
-    // ke sini supaya `Menu::truncate()` + recreate tetap memunculkannya.
-    // `is_active` dipakai untuk menu yang sengaja dinonaktifkan (lihat
-    // migration 2026_10_06_090000_lms_alur_baru: halaman Pertemuan lama
-    // digantikan navigasi per-kelas dari /lms).
     [
-        'name' => 'Pertemuan',
-        'url' => '/lms/pertemuan',
-        'icon' => 'FaCalendarCheck',
+        'name' => 'PEMBELAJARAN',
+        'url' => '#pembelajaran_lms',
+        'icon' => 'FaGraduationCap',
         'module' => 'lms',
         'permission_slug' => 'siakad.kelas.read',
         'order_index' => 2,
-        'is_active' => false,
-        'role_slugs' => ['dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+        'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+        'children' => [
+            [
+                'name' => 'Kelas',
+                'url' => '/lms',
+                'icon' => 'FaChalkboardTeacher',
+                'module' => 'lms',
+                'permission_slug' => 'siakad.kelas.read',
+                'order_index' => 1,
+                'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+            ],
+            [
+                'name' => 'Agenda Pertemuan',
+                'url' => '/lms/pertemuan',
+                'icon' => 'FaCalendarAlt',
+                'module' => 'lms',
+                'permission_slug' => 'siakad.kelas.read',
+                'order_index' => 2,
+                'role_slugs' => ['superadmin', 'admin', 'admin_siakad', 'dosen', 'mahasiswa'],
+            ],
+            [
+                'name' => 'Diskusi',
+                'url' => '/lms/forum',
+                'icon' => 'FaUsers',
+                'module' => 'lms',
+                'permission_slug' => 'siakad.kelas.read',
+                'order_index' => 3,
+                'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+            ],
+            [
+                'name' => 'Notifikasi',
+                'url' => '/lms/notifikasi',
+                'icon' => 'FaBell',
+                'module' => 'lms',
+                'permission_slug' => 'siakad.kelas.read',
+                'order_index' => 4,
+                'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+            ],
+        ],
     ],
     [
-        'name' => 'Tryout',
-        'url' => '/lms/tryout',
+        'name' => 'EVALUASI & CBT',
+        'url' => '#evaluasi_cbt_lms',
         'icon' => 'FaClipboardCheck',
         'module' => 'lms',
         'permission_slug' => 'siakad.kelas.read',
         'order_index' => 3,
-        'role_slugs' => ['dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+        'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+        'children' => [
+            [
+                'name' => 'Bank Soal',
+                'url' => '/lms/bank-soal',
+                'icon' => 'FaDatabase',
+                'module' => 'lms',
+                'permission_slug' => 'siakad.nilai.manage',
+                'order_index' => 1,
+                'role_slugs' => ['superadmin', 'admin', 'dosen', 'kaprodi', 'wakil_prodi'],
+            ],
+            [
+                'name' => 'Tryout & Ujian CBT',
+                'url' => '/lms/tryout',
+                'icon' => 'FaLaptopCode',
+                'module' => 'lms',
+                'permission_slug' => 'siakad.kelas.read',
+                'order_index' => 2,
+                'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+            ],
+        ],
     ],
     [
-        'name' => 'Forum Diskusi',
-        'url' => '/lms/forum',
-        'icon' => 'FaUsers',
+        'name' => 'MONITORING & KEAKTIFAN',
+        'url' => '#monitoring_lms',
+        'icon' => 'FaChartPie',
         'module' => 'lms',
-        'permission_slug' => 'siakad.kelas.read',
+        'permission_slug' => 'lms.presensi.read',
         'order_index' => 4,
-        'role_slugs' => ['dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
+        'role_slugs' => ['superadmin', 'admin', 'kaprodi', 'wakil_prodi'],
+        'children' => [
+            [
+                'name' => 'Keaktifan Mengajar Dosen',
+                'url' => '/lms/presensi?tab=keaktifan',
+                'icon' => 'FaUserCheck',
+                'module' => 'lms',
+                'permission_slug' => 'lms.presensi.read',
+                'order_index' => 1,
+                'role_slugs' => ['superadmin', 'admin', 'kaprodi', 'wakil_prodi'],
+            ],
+            [
+                'name' => 'Monitoring Presensi',
+                'url' => '/lms/presensi',
+                'icon' => 'FaFingerprint',
+                'module' => 'lms',
+                'permission_slug' => 'lms.presensi.read',
+                'order_index' => 2,
+                'role_slugs' => ['superadmin', 'admin'],
+            ],
+        ],
     ],
     [
-        'name' => 'Pengaturan LMS',
-        'url' => '/lms/pengaturan',
+        'name' => 'PENGATURAN LMS',
+        'url' => '#pengaturan_lms',
         'icon' => 'FaCogs',
         'module' => 'lms',
         'permission_slug' => 'siakad.kelas.manage',
         'order_index' => 5,
-        // Mahasiswa sengaja tidak diberi: tidak memegang siakad.kelas.manage.
-        'role_slugs' => ['dosen', 'kaprodi', 'wakil_prodi'],
-    ],
-    [
-        'name' => 'Bank Soal',
-        'url' => '/lms/bank-soal',
-        'icon' => 'FaDatabase',
-        'module' => 'lms',
-        'permission_slug' => 'siakad.nilai.manage',
-        'order_index' => 6,
-        // Mahasiswa sengaja tidak diberi: tidak memegang siakad.nilai.manage.
-        'role_slugs' => ['dosen', 'kaprodi', 'wakil_prodi'],
-    ],
-    [
-        // Panel administrasi integrasi presensi LMS <-> PresensiV2.
-        // Hanya admin/superadmin: monitor seluruh kampus + memicu sinkron.
-        'name' => 'Presensi & Integrasi',
-        'url' => '/lms/presensi',
-        'icon' => 'FaFingerprint',
-        'module' => 'lms',
-        'permission_slug' => 'lms.presensi.read',
-        'order_index' => 7,
-        'role_slugs' => ['superadmin', 'admin'],
-    ],
-    [
-        // Inbox notifikasi in-app LMS (LMS-04). Tersedia untuk seluruh
-        // pengguna yang punya akses LMS, bukan hanya admin.
-        'name' => 'Notifikasi',
-        'url' => '/lms/notifikasi',
-        'icon' => 'FaBell',
-        'module' => 'lms',
-        'permission_slug' => 'siakad.kelas.read',
-        'order_index' => 8,
-        'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
-    ],
-    [
-        // Pengaturan global modul LMS (`lms_*` pada core_system_settings).
-        // Berbeda dari "Pengaturan LMS" (/lms/pengaturan) yang per kelas.
-        'name' => 'Pengaturan Modul LMS',
-        'url' => '/lms/pengaturan/modul',
-        'icon' => 'FaCogs',
-        'module' => 'lms',
-        'permission_slug' => 'lms.pengaturan.read',
-        'order_index' => 9,
-        'role_slugs' => ['superadmin', 'admin'],
+        'role_slugs' => ['superadmin', 'admin', 'dosen', 'kaprodi', 'wakil_prodi'],
+        'children' => [
+            [
+                'name' => 'Pengaturan Kelas LMS',
+                'url' => '/lms/pengaturan',
+                'icon' => 'FaSlidersH',
+                'module' => 'lms',
+                'permission_slug' => 'siakad.kelas.manage',
+                'order_index' => 1,
+                'role_slugs' => ['superadmin', 'admin', 'dosen', 'kaprodi', 'wakil_prodi'],
+            ],
+            [
+                'name' => 'Pengaturan Modul LMS',
+                'url' => '/lms/pengaturan/modul',
+                'icon' => 'FaCogs',
+                'module' => 'lms',
+                'permission_slug' => 'lms.pengaturan.read',
+                'order_index' => 2,
+                'role_slugs' => ['superadmin', 'admin'],
+            ],
+        ],
     ],
 
     // ── MODUL SPMB (PENERIMAAN MAHASISWA BARU) ─────────────
@@ -660,6 +702,7 @@ return [
             ['name' => 'Pemasukan Kas Non-Akademik', 'url' => '/sikeu/pemasukan', 'icon' => 'FaList', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pemasukan.read', 'order_index' => 3],
             ['name' => 'Kas Kecil', 'url' => '/sikeu/kas-kecil', 'icon' => 'FaCoins', 'module' => 'sikeu', 'permission_slug' => 'sikeu.kaskecil.read', 'order_index' => 4],
             ['name' => 'Pajak & Perpajakan', 'url' => '/sikeu/pajak', 'icon' => 'FaFileAlt', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pajak.read', 'order_index' => 5],
+            ['name' => 'Mode Pelaporan Pajak', 'url' => '/sikeu/pajak/pelaporan-akun', 'icon' => 'FaFileSignature', 'module' => 'sikeu', 'permission_slug' => 'sikeu.pajak_akun.manage', 'order_index' => 6],
         ]
     ],
     [

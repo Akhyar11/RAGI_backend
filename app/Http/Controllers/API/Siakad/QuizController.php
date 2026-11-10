@@ -75,6 +75,7 @@ class QuizController extends Controller
         Gate::authorize('siakad.kelas.manage');
 
         $quiz = Quiz::findOrFail($quizId);
+        $this->quizService->assertCanManageQuiz($quiz, (int) $request->user()->id);
         $oldValues = $quiz->getOriginal();
         $quiz->update($request->validated());
         $newValues = $quiz->getChanges();
@@ -108,6 +109,7 @@ class QuizController extends Controller
         Gate::authorize('siakad.kelas.manage');
 
         $quiz = Quiz::findOrFail($quizId);
+        $this->quizService->assertCanManageQuiz($quiz, (int) request()->user()->id);
         $oldValues = $quiz->getOriginal();
 
         try {
@@ -337,13 +339,48 @@ class QuizController extends Controller
     }
 
     /**
+     * Buat tryout level modul (bisa terikat kelas perkuliahan atau ujian khusus di luar mata kuliah).
+     */
+    public function storeStandaloneTryout(StoreQuizRequest $request): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $validated = $request->validated();
+        $kelasId = isset($validated['kelas_id']) && $validated['kelas_id'] !== null
+            ? (int) $validated['kelas_id']
+            : null;
+
+        $tryout = $this->quizService->createTryout($kelasId, $validated, (int) $request->user()->id);
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'create',
+                tableName: 'lms_quiz',
+                recordId: $tryout->id,
+                oldValues: null,
+                newValues: $tryout->toArray()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log buat tryout standalone: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Tryout berhasil dibuat. Lampirkan soal dari bank soal dan tambahkan peserta batch.',
+            'data' => $tryout,
+        ], 201);
+    }
+
+    /**
      * Daftar tryout satu kelas (dosen: semua; mahasiswa: published + tak diarsip + terdaftar).
      */
     public function listTryout(Request $request, int $kelasId): JsonResponse
     {
         Gate::authorize('siakad.kelas.read');
 
-        $forManage = $request->user()->can('siakad.kelas.manage');
+        $context = $this->lmsService->assertCanViewKelas($kelasId, (int) $request->user()->id);
+        $forManage = $context['is_pengampu'] || $context['is_pengelola'];
         $perPage = min(100, $request->integer('per_page', 15));
         $page = max(1, $request->integer('page', 1));
 
@@ -394,6 +431,9 @@ class QuizController extends Controller
         $sortOrder = $request->input('sort_order') === 'asc' ? 'asc' : 'desc';
         $tahunAkademikId = $request->filled('tahun_akademik_id') ? (int) $request->input('tahun_akademik_id') : null;
         $kelasId = $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null;
+        $onlyStandalone = $request->filled('standalone')
+            ? filter_var($request->input('standalone'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)
+            : null;
 
         $userId = (int) $request->user()->id;
         $paginator = $this->quizService->listTryoutAggregate(
@@ -405,7 +445,8 @@ class QuizController extends Controller
             $sortBy,
             $sortOrder,
             $tahunAkademikId,
-            $kelasId
+            $kelasId,
+            $onlyStandalone
         );
 
         return response()->json([
@@ -464,22 +505,32 @@ class QuizController extends Controller
     }
 
     /**
-     * Tambah peserta tryout per kelas (mis. "25A") + filter prodi opsional.
+     * Tambah peserta tryout secara batch berdasarkan kombinasi:
+     * - Kelas mahasiswa (mis. "25A", opsional)
+     * - Program Studi (opsional)
+     * - Tahun Angkatan (mis. 2025, opsional)
+     * - Kelas Perkuliahan SIAKAD (opsional)
      */
     public function addPesertaByKelas(Request $request, int $quizId): JsonResponse
     {
         Gate::authorize('siakad.kelas.manage');
 
         $validated = $request->validate([
-            'kelas' => 'required|string|max:10|regex:/^[0-9]{2}[A-Z]{1,3}$/',
+            'kelas' => 'nullable|string|max:20|regex:/^[0-9]{2}[A-Za-z0-9\-]{1,10}$/',
             'program_studi_id' => 'nullable|integer|exists:siakad_program_studi,id',
+            'angkatan' => 'nullable|integer|min:2000|max:2100',
+            'kelas_perkuliahan_id' => 'nullable|integer|exists:siakad_kelas,id',
         ]);
 
         $result = $this->quizService->addTryoutPesertaByKelas(
             $quizId,
-            strtoupper(trim($validated['kelas'])),
+            isset($validated['kelas']) && trim((string) $validated['kelas']) !== ''
+                ? strtoupper(trim((string) $validated['kelas']))
+                : null,
             isset($validated['program_studi_id']) ? (int) $validated['program_studi_id'] : null,
-            (int) $request->user()->id
+            (int) $request->user()->id,
+            isset($validated['angkatan']) ? (int) $validated['angkatan'] : null,
+            isset($validated['kelas_perkuliahan_id']) ? (int) $validated['kelas_perkuliahan_id'] : null
         );
 
         try {
@@ -489,20 +540,30 @@ class QuizController extends Controller
                 tableName: 'lms_tryout_peserta',
                 recordId: $quizId,
                 oldValues: null,
-                newValues: [
-                    'kelas' => $result['kelas'],
-                    'program_studi_id' => $validated['program_studi_id'] ?? null,
-                    'added' => $result['added'],
-                    'skipped' => $result['skipped'],
-                ]
+                newValues: $result
             );
         } catch (\Throwable $e) {
-            Log::warning('Gagal mencatat audit log tambah peserta tryout per kelas: ' . $e->getMessage());
+            Log::warning('Gagal mencatat audit log tambah peserta tryout per batch: ' . $e->getMessage());
         }
+
+        $labelParts = [];
+        if (!empty($result['kelas'])) {
+            $labelParts[] = "kelas {$result['kelas']}";
+        }
+        if (!empty($result['angkatan'])) {
+            $labelParts[] = "angkatan {$result['angkatan']}";
+        }
+        if (!empty($result['program_studi_id'])) {
+            $labelParts[] = "prodi #{$result['program_studi_id']}";
+        }
+        if (!empty($result['kelas_perkuliahan_id'])) {
+            $labelParts[] = "kelas perkuliahan #{$result['kelas_perkuliahan_id']}";
+        }
+        $labelText = !empty($labelParts) ? ' (' . implode(', ', $labelParts) . ')' : '';
 
         return response()->json([
             'status' => 'success',
-            'message' => "Berhasil menambahkan {$result['added']} peserta tryout kelas {$result['kelas']}." . ($result['skipped'] > 0 ? " ({$result['skipped']} dilewati karena sudah terdaftar)" : ''),
+            'message' => "Berhasil menambahkan {$result['added']} peserta tryout{$labelText}." . ($result['skipped'] > 0 ? " ({$result['skipped']} dilewati karena sudah terdaftar)" : ''),
             'data' => $result,
         ], 201);
     }

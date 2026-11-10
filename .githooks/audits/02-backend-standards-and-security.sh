@@ -36,7 +36,7 @@ fi
 PROMPT_FILE=$(mktemp)
 
 cat << 'EOF' > "$PROMPT_FILE"
-Kamu adalah Senior Principal Code Auditor khusus Ekosistem Backend Laravel (AI Muse Spark 1.3).
+Kamu adalah Senior Principal Code Auditor khusus Ekosistem Backend Laravel (Big Pickle).
 Tugasmu adalah memeriksa FULL Git Diff backend berikut secara SANGAT KETAT terhadap 5 Standar Inti Arsitektur & Keamanan.
 Evaluasi HANYA baris baru (+) yang ditambahkan atau diubah. Abaikan baris konteks tanpa tanda (+).
 
