@@ -591,6 +591,7 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::get('/payment-gateway/active', [App\Http\Controllers\Sikeu\PaymentGatewayConfigController::class, 'getActive']);
     Route::get('/payment-gateway/{gatewayName}/balance', [App\Http\Controllers\Sikeu\PaymentGatewayConfigController::class, 'balance']);
     Route::put('/payment-gateway/{gatewayName}', [App\Http\Controllers\Sikeu\PaymentGatewayConfigController::class, 'update']);
+    Route::post('/payment-gateway/midtrans/trial', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'trialPayment']);
 
     // Unit Kas Master
     Route::get('master/unit-kas', [App\Http\Controllers\Sikeu\UnitKasController::class, 'index']);
@@ -935,6 +936,10 @@ Route::middleware('payment.callback')->prefix('v1/sikeu')->group(function () {
     Route::post('callback/xendit', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'handleXenditCallback']);
     Route::post('callback/va-paid', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'vaPaymentCallback']);
 });
+
+// Webhook Midtrans (publik, keamanan divalidasi via SHA512 signature key di MidtransCallbackController)
+Route::post('v1/sikeu/callback/midtrans', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'handleCallback']);
+Route::post('sikeu/callback/midtrans', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'handleCallback']);
 
 // Simulasi pembayaran SPMB (khusus local/testing, butuh login & kepemilikan tagihan)
 Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {

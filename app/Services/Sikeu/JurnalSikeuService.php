@@ -164,6 +164,11 @@ class JurnalSikeuService
         $ch = strtoupper($channel ?? '');
         $bank = strtoupper(trim($bankKode ?? ''));
 
+        if (str_contains($ch, 'MIDTRANS')) {
+            return UnitKas::where('kanal', 'midtrans')->where('status', true)->first()
+                ?: UnitKas::where('bank_name', 'Midtrans')->first();
+        }
+
         if (str_contains($ch, 'XENDIT') || $ch === 'QRIS') {
             return UnitKas::where('kanal', 'xendit')->where('status', true)->first();
         }
