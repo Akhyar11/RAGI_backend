@@ -46,6 +46,7 @@ class LoginBannerSettingTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.system_logo_url', '')
             ->assertJsonPath('data.login_banner_url', '')
             ->assertJsonPath('data.login_banner_title', 'SSO Campus')
             ->assertJsonPath('data.login_banner_subtitle', 'Enterprise Identity Platform');
@@ -53,6 +54,7 @@ class LoginBannerSettingTest extends TestCase
 
     public function test_public_branding_returns_saved_custom_settings(): void
     {
+        SystemSetting::set('system_logo_url', 'https://cdn.example.com/branding/logo.png');
         SystemSetting::set('login_banner_url', 'https://example.com/kampus-banner.jpg');
         SystemSetting::set('login_banner_title', 'Universitas Nusantara');
         SystemSetting::set('login_banner_subtitle', 'Satu Pintu Layanan Digital Terpadu');
@@ -61,6 +63,7 @@ class LoginBannerSettingTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.system_logo_url', 'https://cdn.example.com/branding/logo.png')
             ->assertJsonPath('data.login_banner_url', 'https://example.com/kampus-banner.jpg')
             ->assertJsonPath('data.login_banner_title', 'Universitas Nusantara')
             ->assertJsonPath('data.login_banner_subtitle', 'Satu Pintu Layanan Digital Terpadu');
@@ -110,5 +113,51 @@ class LoginBannerSettingTest extends TestCase
                 'message',
                 'data' => ['path', 'url'],
             ]);
+    }
+
+    public function test_admin_can_upload_and_remove_system_logo(): void
+    {
+        /** @var mixed $user */
+        $user = $this->adminUser;
+        Passport::actingAs($user);
+        Storage::fake('public');
+
+        $response = $this->postJson('/api/admin/system-settings/upload-logo', [
+            'logo' => UploadedFile::fake()->image('system-logo.png', 300, 120),
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['data' => ['path', 'url']]);
+
+        $path = $response->json('data.path');
+        $this->assertSame($path, SystemSetting::get('system_logo_path'));
+        $this->assertSame($response->json('data.url'), SystemSetting::get('system_logo_url'));
+        Storage::disk('public')->assertExists($path);
+
+        $this->getJson('/api/auth/branding')
+            ->assertStatus(200)
+            ->assertJsonPath('data.system_logo_url', $response->json('data.url'));
+
+        $this->deleteJson('/api/admin/system-settings/logo')
+            ->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data', null);
+
+        $this->assertSame('', SystemSetting::get('system_logo_path'));
+        $this->assertSame('', SystemSetting::get('system_logo_url'));
+        Storage::disk('public')->assertMissing($path);
+    }
+
+    public function test_system_logo_upload_rejects_unsupported_file_types(): void
+    {
+        /** @var mixed $user */
+        $user = $this->adminUser;
+        Passport::actingAs($user);
+        Storage::fake('public');
+
+        $this->postJson('/api/admin/system-settings/upload-logo', [
+            'logo' => UploadedFile::fake()->create('logo.svg', 10, 'image/svg+xml'),
+        ])->assertStatus(422);
     }
 }

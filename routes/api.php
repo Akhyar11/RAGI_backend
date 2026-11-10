@@ -124,6 +124,8 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::post('system-settings', [App\Http\Controllers\IAM\SystemSettingController::class, 'update']);
     Route::post('system-settings/test-smtp', [App\Http\Controllers\IAM\SystemSettingController::class, 'testSmtp']);
     Route::post('system-settings/test-r2', [App\Http\Controllers\IAM\SystemSettingController::class, 'testR2']);
+    Route::post('system-settings/upload-logo', [App\Http\Controllers\IAM\SystemSettingController::class, 'uploadLogo']);
+    Route::delete('system-settings/logo', [App\Http\Controllers\IAM\SystemSettingController::class, 'deleteLogo']);
     Route::post('system-settings/upload-banner', [App\Http\Controllers\IAM\SystemSettingController::class, 'uploadBanner']);
 
     // API Integrations (SSO/IAM System Registry & Settings)

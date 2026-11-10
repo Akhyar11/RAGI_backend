@@ -18,6 +18,8 @@ Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings),
 | POST | `/api/admin/system-settings/test-smtp` | Mengirim email uji coba untuk verifikasi konfigurasi SMTP | ✅ Super Admin |
 | POST | `/api/admin/system-settings/test-r2` | Menguji konektivitas baca-tulis ke bucket Cloudflare R2 | ✅ Super Admin |
 | GET | `/api/auth/branding` | Mengambil data publik visual login (banner, judul, slogan) | ❌ Publik (Tanpa Auth) |
+| POST | `/api/admin/system-settings/upload-logo` | Mengunggah logo sistem ke storage publik | ✅ Admin (`iam.settings.update`) |
+| DELETE | `/api/admin/system-settings/logo` | Menghapus logo sistem dan berkas publiknya | ✅ Admin (`iam.settings.update`) |
 | POST | `/api/admin/system-settings/upload-banner` | Mengunggah foto banner login ke storage publik | ✅ Admin (`iam.settings.update`) |
 
 ---
@@ -278,7 +280,7 @@ Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings),
 
 ## 5. [GET] /api/auth/branding
 
-> Mengambil data konfigurasi publik branding login (URL foto banner, judul lencana, dan subjudul/slogan). Endpoint ini dapat diakses oleh siapa saja tanpa autentikasi (publik) agar halaman login dapat merender banner visual yang dikonfigurasi.
+> Mengambil konfigurasi publik logo sistem dan branding visual login. Endpoint ini dapat diakses tanpa autentikasi agar halaman autentikasi dan layout utama dapat menampilkan identitas sistem.
 
 ### Headers
 
@@ -293,6 +295,7 @@ Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings),
 {
     "status": "success",
     "data": {
+        "system_logo_url": "https://cdn.example.test/branding/logos/2026/11/logo-uuid.png",
         "login_banner_url": "http://localhost:8000/storage/branding/banners/2026/10/banner-uuid.jpg",
         "login_banner_title": "SSO Campus",
         "login_banner_subtitle": "Enterprise Identity Platform"
@@ -302,7 +305,110 @@ Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings),
 
 ---
 
-## 6. [POST] /api/admin/system-settings/upload-banner
+## 6. [POST] /api/admin/system-settings/upload-logo
+
+> Mengunggah logo sistem publik melalui `FileStorageService`, menyimpan path relatif pada `system_logo_path`, memperbarui URL publik `system_logo_url`, dan menghapus berkas logo lama setelah penggantian berhasil.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Content-Type` | `multipart/form-data` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Hak Akses
+Wajib memiliki salah satu role `superadmin`, role `admin`, atau permission `iam.settings.update`.
+
+### Request Body
+
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `logo` | File gambar | ✅ | PNG, JPG/JPEG, atau WebP; maksimal 2048 KB. SVG tidak diterima. |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Logo sistem berhasil diunggah.",
+    "data": {
+        "path": "branding/logos/2026/11/logo-uuid.png",
+        "url": "https://cdn.example.test/branding/logos/2026/11/logo-uuid.png"
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{"status":"error","message":"Unauthenticated."}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk mengunggah logo sistem."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "message": "Berkas logo wajib diunggah.",
+    "errors": {"logo": ["Berkas logo wajib diunggah."]}
+}
+```
+
+**500 Internal Server Error**
+```json
+{
+    "status": "error",
+    "message": "Gagal mengunggah logo sistem: [detail error]"
+}
+```
+
+## 7. [DELETE] /api/admin/system-settings/logo
+
+> Mengosongkan `system_logo_path` dan `system_logo_url`, serta menghapus berkas logo publik sebelumnya. Memerlukan autentikasi dan hak akses yang sama dengan upload logo.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Logo sistem berhasil dihapus.",
+    "data": null
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{"status":"error","message":"Unauthenticated."}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk menghapus logo sistem."
+}
+```
+
+## 8. [POST] /api/admin/system-settings/upload-banner
 
 > Mengunggah berkas foto banner visual halaman login ke storage publik (local/Cloudflare R2 via `FileStorageService`). Aksi ini otomatis mencatat aktivitas ke audit log IAM.
 

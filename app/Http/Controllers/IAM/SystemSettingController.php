@@ -125,6 +125,7 @@ class SystemSettingController extends Controller
         }
 
         $defaultBranding = [
+            'system_logo_url'       => (string) SystemSetting::get('system_logo_url', ''),
             'login_banner_url'      => (string) SystemSetting::get('login_banner_url', ''),
             'login_banner_title'    => (string) SystemSetting::get('login_banner_title', 'SSO Campus'),
             'login_banner_subtitle' => (string) SystemSetting::get('login_banner_subtitle', 'Enterprise Identity Platform'),
@@ -347,10 +348,125 @@ class SystemSettingController extends Controller
         return response()->json([
             'status' => 'success',
             'data'   => [
+                'system_logo_url'       => (string) SystemSetting::get('system_logo_url', ''),
                 'login_banner_url'      => (string) SystemSetting::get('login_banner_url', ''),
                 'login_banner_title'    => (string) SystemSetting::get('login_banner_title', 'SSO Campus'),
                 'login_banner_subtitle' => (string) SystemSetting::get('login_banner_subtitle', 'Enterprise Identity Platform'),
             ],
+        ]);
+    }
+
+    /**
+     * Upload logo sistem ke public disk (local / Cloudflare R2).
+     */
+    public function uploadLogo(Request $request, \App\Services\Storage\FileStorageService $fileStorage)
+    {
+        $user = $request->user();
+        if (!$user || (!$user->isSuperAdmin() && !$user->isAdmin() && !$user->hasPermission('iam.settings.update'))) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk mengunggah logo sistem.',
+            ], 403);
+        }
+
+        $request->validate([
+            'logo' => 'required|file|image|mimes:jpeg,png,jpg,webp|max:2048',
+        ], [
+            'logo.required' => 'Berkas logo wajib diunggah.',
+            'logo.image' => 'Berkas yang diunggah harus berupa gambar.',
+            'logo.mimes' => 'Format logo yang didukung: PNG, JPEG, dan WebP.',
+            'logo.max' => 'Ukuran logo maksimal 2MB.',
+        ]);
+
+        try {
+            $oldPath = (string) SystemSetting::get('system_logo_path', '');
+            $path = $fileStorage->store($request->file('logo'), 'branding/logos');
+            $url = $fileStorage->url($path);
+
+            SystemSetting::set('system_logo_path', $path, 'Path relatif logo sistem publik');
+            SystemSetting::set('system_logo_url', (string) $url, 'URL publik logo sistem');
+
+            if ($oldPath !== '' && $oldPath !== $path) {
+                try {
+                    $fileStorage->delete($oldPath);
+                } catch (\Throwable $exception) {
+                    \Illuminate\Support\Facades\Log::warning('Gagal menghapus logo sistem lama.', [
+                        'path' => $oldPath,
+                        'message' => $exception->getMessage(),
+                    ]);
+                }
+            }
+
+            try {
+                \App\Services\AuditLogService::record(
+                    module: 'IAM',
+                    action: 'upload',
+                    tableName: 'core_system_settings',
+                    recordId: null,
+                    oldValues: ['system_logo_path' => $oldPath ?: null],
+                    newValues: ['system_logo_path' => $path],
+                    request: $request
+                );
+            } catch (\Throwable $exception) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log upload logo sistem: '.$exception->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Logo sistem berhasil diunggah.',
+                'data' => ['path' => $path, 'url' => $url],
+            ]);
+        } catch (\Throwable $exception) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengunggah logo sistem: '.$exception->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function deleteLogo(Request $request, \App\Services\Storage\FileStorageService $fileStorage)
+    {
+        $user = $request->user();
+        if (!$user || (!$user->isSuperAdmin() && !$user->isAdmin() && !$user->hasPermission('iam.settings.update'))) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses untuk menghapus logo sistem.',
+            ], 403);
+        }
+
+        $oldPath = (string) SystemSetting::get('system_logo_path', '');
+        SystemSetting::set('system_logo_path', '', 'Path relatif logo sistem publik');
+        SystemSetting::set('system_logo_url', '', 'URL publik logo sistem');
+
+        if ($oldPath !== '') {
+            try {
+                $fileStorage->delete($oldPath);
+            } catch (\Throwable $exception) {
+                \Illuminate\Support\Facades\Log::warning('Gagal menghapus berkas logo sistem.', [
+                    'path' => $oldPath,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        try {
+            \App\Services\AuditLogService::record(
+                module: 'IAM',
+                action: 'delete',
+                tableName: 'core_system_settings',
+                recordId: null,
+                oldValues: ['system_logo_path' => $oldPath ?: null],
+                newValues: ['system_logo_path' => null],
+                request: $request
+            );
+        } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log penghapusan logo sistem: '.$exception->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Logo sistem berhasil dihapus.',
+            'data' => null,
         ]);
     }
 
