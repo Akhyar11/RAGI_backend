@@ -177,11 +177,10 @@ class DispensasiTagihanController extends Controller
             'alasan' => 'required|string',
             'allow_krs' => 'nullable|boolean',
             'dokumen_pendukung' => 'nullable|string',
-            'nomor_surat_arsip_id' => 'required|integer|exists:core_arsip_nomor_surat,id',
+            'nomor_surat_arsip_id' => 'nullable|integer|exists:core_arsip_nomor_surat,id',
             'nomor_surat_arsip' => 'nullable|string|max:150',
             'selected_detail_ids' => 'nullable|array',
         ], [
-            'nomor_surat_arsip_id.required' => 'Nomor surat dari Modul Arsip wajib diisi untuk permohonan dispensasi.',
             'nomor_surat_arsip_id.exists' => 'Nomor surat arsip yang dipilih tidak valid atau tidak ditemukan.',
         ]);
 

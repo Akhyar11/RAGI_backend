@@ -22,16 +22,20 @@ use App\Models\Siakad\Dosen;
 use App\Models\Siakad\DosenPengampu;
 use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\NilaiKomponenMahasiswa;
+use App\Models\Siakad\ProgramStudi;
 use App\Models\Siakad\TahunAkademik;
+use App\Models\System\MasterReferensi;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\AuditLogService;
 use App\Services\Storage\FileStorageService;
+use App\Services\Simpeg\PresensiPengajaranService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class LmsService
@@ -46,10 +50,231 @@ class LmsService
         self::STATUS_PENGATURAN_BELUM,
     ];
 
-    public function __construct(
-        protected FileStorageService $files,
-        protected PresensiV2SyncService $presensiSync
-    ) {}
+    /** Status KRS yang sah untuk memberikan akses ke kelas LMS. */
+    public const VALID_KRS_STATUSES = [
+        'disetujui',
+        'diajukan',
+    ];
+
+    public function __construct(protected FileStorageService $files) {}
+
+    /**
+     * Periksa apakah mahasiswa terdaftar aktif di kelas melalui KRS yang valid.
+     */
+    public function isMahasiswaEnrolledInKelas(int $mahasiswaId, int $kelasId): bool
+    {
+        return KrsDetail::query()
+            ->where('kelas_id', $kelasId)
+            ->whereHas('krs', function ($q) use ($mahasiswaId) {
+                $q->where('mahasiswa_id', $mahasiswaId)
+                    ->whereIn('status', self::VALID_KRS_STATUSES)
+                    ->whereNull('deleted_at');
+            })
+            ->exists();
+    }
+
+    /**
+     * Daftar ID kelas tempat mahasiswa terdaftar melalui KRS yang valid.
+     *
+     * @return array<int>
+     */
+    public function enrolledKelasIdsForMahasiswa(int $mahasiswaId): array
+    {
+        return KrsDetail::query()
+            ->whereHas('krs', function ($q) use ($mahasiswaId) {
+                $q->where('mahasiswa_id', $mahasiswaId)
+                    ->whereIn('status', self::VALID_KRS_STATUSES)
+                    ->whereNull('deleted_at');
+            })
+            ->pluck('kelas_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Periksa apakah user merupakan dosen pengampu pada kelas tertentu.
+     */
+    public function isDosenPengampuKelas(int $userId, int $kelasId): bool
+    {
+        $dosen = Dosen::where('user_id', $userId)->first();
+        if (!$dosen) {
+            return false;
+        }
+
+        return DosenPengampu::where('kelas_id', $kelasId)
+            ->where('dosen_id', $dosen->id)
+            ->exists();
+    }
+
+    /**
+     * Daftar ID program studi yang dikelola secara struktural oleh dosen (Kaprodi / Admin Prodi).
+     *
+     * @return array<int>
+     */
+    public function resolveManagedProdiIds(?User $user, ?Dosen $dosen = null): array
+    {
+        if (!$user) {
+            return [];
+        }
+
+        $dosen ??= Dosen::where('user_id', $user->id)->first();
+        if (!$dosen) {
+            return [];
+        }
+
+        $prodiIds = ProgramStudi::where('kaprodi_id', $dosen->id)->pluck('id')->all();
+
+        return array_values(array_unique(array_map('intval', $prodiIds)));
+    }
+
+    /**
+     * Periksa apakah user merupakan pengelola global LMS (memiliki izin kelola tanpa profil akademik).
+     */
+    public function isGlobalLmsManager(?User $user, ?Dosen $dosen = null, ?Mahasiswa $mahasiswa = null): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return !$dosen && !$mahasiswa && (
+            $user->hasPermission('siakad.kelas.manage')
+            || $user->hasPermission('lms.pengaturan.manage')
+            || $user->hasPermission('lms.presensi.read')
+        );
+    }
+
+    /**
+     * Tentukan konteks dan kapabilitas user saat membuka sebuah kelas LMS.
+     *
+     * @return array{
+     *     viewer_mode: string,
+     *     is_pengampu: bool,
+     *     is_peserta_krs: bool,
+     *     is_pengelola: bool,
+     *     can_teach: bool,
+     *     can_configure_kelas: bool,
+     *     can_participate: bool,
+     *     can_export: bool
+     * }
+     */
+    public function resolveKelasViewerContext(int $kelasId, ?int $userId = null): array
+    {
+        if (!$userId) {
+            return [
+                'viewer_mode' => 'pengelola',
+                'is_pengampu' => false,
+                'is_peserta_krs' => false,
+                'is_pengelola' => true,
+                'can_teach' => false,
+                'can_configure_kelas' => false,
+                'can_participate' => false,
+                'can_export' => false,
+            ];
+        }
+
+        $user = User::find($userId);
+        $dosen = Dosen::where('user_id', $userId)->first();
+        $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
+
+        $isPengampu = $dosen
+            ? DosenPengampu::where('kelas_id', $kelasId)->where('dosen_id', $dosen->id)->exists()
+            : false;
+
+        $isPesertaKrs = $mahasiswa
+            ? $this->isMahasiswaEnrolledInKelas($mahasiswa->id, $kelasId)
+            : false;
+
+        $isGlobalAdmin = $this->isGlobalLmsManager($user, $dosen, $mahasiswa);
+
+        $isProdiManager = false;
+        if ($user !== null && $dosen !== null) {
+            $managedProdiIds = $this->resolveManagedProdiIds($user, $dosen);
+            if ($managedProdiIds !== []) {
+                $isProdiManager = Kelas::where('id', $kelasId)
+                    ->where(function ($q) use ($managedProdiIds) {
+                        $q->whereIn('program_studi_id', $managedProdiIds)
+                            ->orWhereHas('programStudis', fn ($ps) => $ps->whereIn('siakad_program_studi.id', $managedProdiIds));
+                    })
+                    ->exists();
+            }
+        }
+
+        $isPengelola = $isGlobalAdmin || $isProdiManager;
+
+        $viewerMode = $isPengampu
+            ? 'dosen'
+            : ($isPesertaKrs ? 'mahasiswa' : 'pengelola');
+
+        return [
+            'viewer_mode' => $viewerMode,
+            'is_pengampu' => $isPengampu,
+            'is_peserta_krs' => $isPesertaKrs,
+            'is_pengelola' => $isPengelola,
+            'can_teach' => $isPengampu,
+            'can_configure_kelas' => $isPengampu || $isGlobalAdmin,
+            'can_participate' => $isPesertaKrs,
+            'can_export' => $isPengampu || $isPengelola,
+        ];
+    }
+
+    /**
+     * Pastikan user berhak melihat kelas ini (sebagai Dosen Pengampu, Mahasiswa KRS aktif, atau Pengelola).
+     */
+    public function assertCanViewKelas(int $kelasId, int $userId): array
+    {
+        $context = $this->resolveKelasViewerContext($kelasId, $userId);
+
+        if (!$context['is_pengampu'] && !$context['is_peserta_krs'] && !$context['is_pengelola']) {
+            abort(403, 'Anda tidak memiliki akses ke kelas perkuliahan ini.');
+        }
+
+        return $context;
+    }
+
+    /**
+     * Pastikan pemanggil adalah Dosen Pengampu resmi pada kelas tersebut.
+     * Administrator / Super Admin atau dosen lain yang tidak mengampu kelas ini ditolak (403).
+     */
+    public function assertDosenPengampuKelas(int $kelasId, int $userId): void
+    {
+        if (!$this->isDosenPengampuKelas($userId, $kelasId)) {
+            abort(403, 'Aksi akademik ini hanya dapat dilakukan oleh Dosen Pengampu kelas terkait.');
+        }
+    }
+
+    /**
+     * Pastikan pemanggil berhak mengubah konfigurasi LMS kelas (Dosen Pengampu atau Admin/Superadmin).
+     */
+    public function assertCanConfigureKelas(int $kelasId, int $userId): void
+    {
+        $context = $this->resolveKelasViewerContext($kelasId, $userId);
+        if (!$context['can_configure_kelas']) {
+            abort(403, 'Anda tidak memiliki izin untuk mengubah pengaturan LMS kelas ini.');
+        }
+    }
+
+    /**
+     * Pastikan pemanggil adalah Mahasiswa yang terdaftar aktif melalui KRS pada kelas tersebut.
+     */
+    public function assertMahasiswaPesertaKelas(int $kelasId, int $userId): Mahasiswa
+    {
+        $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
+        if (!$mahasiswa) {
+            abort(403, 'Fitur partisipasi kelas ini hanya dapat digunakan oleh Mahasiswa.');
+        }
+
+        if (!$this->isMahasiswaEnrolledInKelas($mahasiswa->id, $kelasId)) {
+            abort(403, 'Anda tidak terdaftar aktif melalui KRS pada kelas perkuliahan ini.');
+        }
+
+        return $mahasiswa;
+    }
 
     /**
      * Pastikan fitur presensi sedang aktif.
@@ -74,36 +299,6 @@ class LmsService
         }
 
         abort(403, 'Fitur presensi sedang dinonaktifkan oleh administrator.');
-    }
-
-    /**
-     * Sinkronkan data presensi lokal ke aplikasi PresensiV2.
-     *
-     * Integrasi eksternal bersifat opsional: bila PresensiV2 belum
-     * dikonfigurasi atau sedang bermasalah, proses lokal TETAP berhasil dan
-     * kegagalan hanya dicatat pada log sinkronisasi.
-     */
-    public function sinkronKePresensiV2(Pertemuan $pertemuan): void
-    {
-        try {
-            $this->presensiSync->syncKehadiran($pertemuan);
-        } catch (\Throwable $e) {
-            Log::warning('Sinkronisasi PresensiV2 gagal: '.$e->getMessage());
-        }
-    }
-
-    /**
-     * Sinkronkan satu baris kehadiran ke aplikasi PresensiV2.
-     *
-     * @see sinkronKePresensiV2() untuk catatan fail-safe.
-     */
-    public function sinkronAbsensiKePresensiV2(AbsensiMahasiswa $absensi): void
-    {
-        try {
-            $this->presensiSync->syncAbsensi($absensi);
-        } catch (\Throwable $e) {
-            Log::warning('Sinkronisasi PresensiV2 (absensi) gagal: '.$e->getMessage());
-        }
     }
 
     /**
@@ -208,22 +403,43 @@ class LmsService
             'lmsSetting',
             'pertemuans' => function ($q) {
                 $q->orderBy('pertemuan_ke')
-                  ->withCount(['materiList', 'tugasList', 'absensi']);
+                  ->withCount([
+                      'materiList',
+                      'tugasList',
+                      'absensi as absensi_count' => fn ($absensi) => $absensi->where('is_submitted', true),
+                      'absensi as hadir_count' => fn ($absensi) => $absensi
+                          ->where('is_submitted', true)
+                          ->where('status', AbsensiMahasiswa::STATUS_HADIR),
+                  ]);
             },
         ])->findOrFail($kelasId);
 
+        $viewerContext = $userId !== null
+            ? $this->assertCanViewKelas($kelasId, $userId)
+            : $this->resolveKelasViewerContext($kelasId, null);
+
         // Ambil mahasiswa peserta kelas dari KRS disetujui
-        $totalMahasiswa = KrsDetail::where('kelas_id', $kelasId)->count();
+        $totalMahasiswa = KrsDetail::query()
+            ->join('siakad_krs', 'siakad_krs.id', '=', 'siakad_krs_detail.krs_id')
+            ->where('siakad_krs_detail.kelas_id', $kelasId)
+            ->whereIn('siakad_krs.status', ['disetujui', 'diajukan'])
+            ->whereNull('siakad_krs.deleted_at')
+            ->distinct()
+            ->count('siakad_krs.mahasiswa_id');
 
         // Hitung statistik pertemuan
         $totalPertemuan = $kelas->pertemuans->count();
-        $pertemuanTerisi = $kelas->pertemuans->filter(function ($p) {
-            return $p->materi_list_count > 0 || $p->absensi_count > 0;
+        $pertemuanTerisi = $kelas->pertemuans->filter(function ($p) use ($totalMahasiswa) {
+            return $p->materi_list_count > 0
+                || ($totalMahasiswa > 0 && $p->absensi_count >= $totalMahasiswa);
         })->count();
 
         // Hitung rata-rata kehadiran jika ada absensi
-        $totalAbsen = AbsensiMahasiswa::whereIn('pertemuan_id', $kelas->pertemuans->pluck('id'))->count();
+        $totalAbsen = AbsensiMahasiswa::whereIn('pertemuan_id', $kelas->pertemuans->pluck('id'))
+            ->where('is_submitted', true)
+            ->count();
         $totalHadir = AbsensiMahasiswa::whereIn('pertemuan_id', $kelas->pertemuans->pluck('id'))
+            ->where('is_submitted', true)
             ->where('status', 'hadir')
             ->count();
         $rataHadirPersen = $totalAbsen > 0 ? round(($totalHadir / $totalAbsen) * 100, 1) : 0;
@@ -259,7 +475,7 @@ class LmsService
                 'is_token_active' => (bool) $tokenAktif,
                 'materi_list_count' => $p->materi_list_count ?? 0,
                 'tugas_list_count' => $p->tugas_list_count ?? 0,
-                'hadir_count' => $p->absensi_count ?? 0,
+                'hadir_count' => $p->hadir_count ?? 0,
             ];
         })->values()->all();
 
@@ -273,6 +489,7 @@ class LmsService
 
         return [
             'kelas' => $kelas,
+            'viewer_context' => $viewerContext,
             'lms_setting' => $kelas->lmsSetting ?? $this->getDefaultKelasSetting($kelas),
             'komponen_obe' => $komponenObe,
             'pertemuan_list' => $pertemuanList,
@@ -315,11 +532,14 @@ class LmsService
             'izinAbsensiList.mahasiswa',
         ])->findOrFail($pertemuanId);
 
-        $isMahasiswa = false;
+        $viewerContext = $userId !== null
+            ? $this->assertCanViewKelas((int) $pertemuan->kelas_id, $userId)
+            : $this->resolveKelasViewerContext((int) $pertemuan->kelas_id, null);
+
+        $isMahasiswa = $viewerContext['viewer_mode'] === 'mahasiswa';
         $mahasiswaModel = null;
-        if ($userId) {
+        if ($isMahasiswa && $userId) {
             $mahasiswaModel = Mahasiswa::where('user_id', $userId)->first();
-            $isMahasiswa = $mahasiswaModel !== null;
         }
 
         // Jika mahasiswa, filter hanya materi dan tugas yang sudah dipublish
@@ -332,12 +552,15 @@ class LmsService
             $quizList = $quizList->where('is_published', true)->values();
         }
 
+        $submittedAbsensi = $pertemuan->absensi->where('is_submitted', true)->values();
+        $absensiList = $submittedAbsensi;
+
         // Status absensi mahasiswa login
         $myAbsensi = null;
         $myPengumpulan = [];
         $myIzin = null;
         if ($mahasiswaModel) {
-            $myAbsensi = $pertemuan->absensi->firstWhere('mahasiswa_id', $mahasiswaModel->id);
+            $myAbsensi = $submittedAbsensi->firstWhere('mahasiswa_id', $mahasiswaModel->id);
             $myIzin = $pertemuan->izinAbsensiList->firstWhere('mahasiswa_id', $mahasiswaModel->id);
             foreach ($tugasList as $tugas) {
                 $sub = $tugas->pengumpulan->firstWhere('mahasiswa_id', $mahasiswaModel->id);
@@ -349,12 +572,41 @@ class LmsService
 
         // Summary absensi per pertemuan
         $absensiSummary = [
-            'hadir' => $pertemuan->absensi->where('status', 'hadir')->count(),
-            'sakit' => $pertemuan->absensi->where('status', 'sakit')->count(),
-            'izin'  => $pertemuan->absensi->where('status', 'izin')->count(),
-            'alfa'  => $pertemuan->absensi->where('status', 'alfa')->count(),
-            'total' => $pertemuan->absensi->count(),
+            'hadir' => $submittedAbsensi->where('status', 'hadir')->count(),
+            'sakit' => $submittedAbsensi->where('status', 'sakit')->count(),
+            'izin'  => $submittedAbsensi->where('status', 'izin')->count(),
+            'alfa'  => $submittedAbsensi->where('status', 'alfa')->count(),
+            'total' => $submittedAbsensi->count(),
         ];
+
+        if (!$isMahasiswa) {
+            $roster = KrsDetail::query()
+                ->where('kelas_id', $pertemuan->kelas_id)
+                ->whereHas('krs', fn ($krs) => $krs->whereIn('status', ['disetujui', 'diajukan']))
+                ->with('krs.mahasiswa:id,nim,nama_lengkap')
+                ->get()
+                ->map(fn (KrsDetail $detail) => $detail->krs?->mahasiswa)
+                ->filter()
+                ->unique('id')
+                ->sortBy('nama_lengkap')
+                ->values();
+
+            $absensiByMahasiswa = $submittedAbsensi->keyBy('mahasiswa_id');
+            $absensiList = $roster->map(function (Mahasiswa $mahasiswa) use ($pertemuan, $absensiByMahasiswa) {
+                $attendance = $absensiByMahasiswa->get($mahasiswa->id);
+
+                return [
+                    'id' => $attendance?->id,
+                    'pertemuan_id' => $pertemuan->id,
+                    'mahasiswa_id' => $mahasiswa->id,
+                    'nama_lengkap' => $mahasiswa->nama_lengkap,
+                    'nim' => $mahasiswa->nim,
+                    'status' => $attendance?->status,
+                    'catatan' => $attendance?->catatan,
+                    'is_submitted' => $attendance !== null,
+                ];
+            });
+        }
 
         // Status token aktif
         $tokenAktif = !empty($pertemuan->token_absensi) &&
@@ -365,9 +617,12 @@ class LmsService
         // Privasi data: mahasiswa hanya boleh melihat catatan miliknya sendiri,
         // bukan absensi/izin/pengumpulan seluruh kelas.
         if ($isMahasiswa && $mahasiswaModel) {
+            $absensiList = $submittedAbsensi
+                ->where('mahasiswa_id', $mahasiswaModel->id)
+                ->values();
             $pertemuan->setRelation(
                 'absensi',
-                $pertemuan->absensi->where('mahasiswa_id', $mahasiswaModel->id)->values()
+                $absensiList
             );
             $pertemuan->setRelation(
                 'izinAbsensiList',
@@ -383,6 +638,7 @@ class LmsService
 
         return [
             'pertemuan' => $pertemuan,
+            'viewer_context' => $viewerContext,
             'materi_list' => $materiList,
             'tugas_list' => $tugasList,
             'quiz_list' => $quizList->values(),
@@ -390,7 +646,7 @@ class LmsService
                 ->where('is_aktif', true)
                 ->orderBy('urutan')
                 ->get(['id', 'nama_komponen', 'bobot']),
-            'absensi_list' => $pertemuan->absensi,
+            'absensi_list' => $absensiList,
             'absensi_summary' => $absensiSummary,
             'izin_list' => $pertemuan->izinAbsensiList,
             'token_aktif' => $tokenAktif,
@@ -404,12 +660,77 @@ class LmsService
     }
 
     /**
+     * Snapshot roster presensi untuk refresh ringan pada layar dosen.
+     */
+    public function getPertemuanAbsensiRoster(int $pertemuanId, int $userId): array
+    {
+        $pertemuan = Pertemuan::findOrFail($pertemuanId);
+        $viewerContext = $this->assertCanViewKelas((int) $pertemuan->kelas_id, $userId);
+
+        if ($viewerContext['viewer_mode'] === 'mahasiswa') {
+            abort(403, 'Daftar presensi kelas hanya dapat dilihat oleh Dosen Pengampu atau pengelola.');
+        }
+
+        $roster = KrsDetail::query()
+            ->where('kelas_id', $pertemuan->kelas_id)
+            ->whereHas('krs', fn ($krs) => $krs->whereIn('status', self::VALID_KRS_STATUSES))
+            ->with('krs.mahasiswa:id,nim,nama_lengkap')
+            ->get()
+            ->map(fn (KrsDetail $detail) => $detail->krs?->mahasiswa)
+            ->filter()
+            ->unique('id')
+            ->sortBy('nama_lengkap')
+            ->values();
+
+        $attendanceByMahasiswa = AbsensiMahasiswa::query()
+            ->where('pertemuan_id', $pertemuanId)
+            ->where('is_submitted', true)
+            ->get()
+            ->keyBy('mahasiswa_id');
+
+        $statusLabels = MasterReferensi::query()
+            ->where('modul', 'siakad')
+            ->where('tipe', 'status_absensi')
+            ->pluck('nama', 'kode');
+
+        $absensiList = $roster->map(function (Mahasiswa $mahasiswa) use ($attendanceByMahasiswa, $statusLabels) {
+            $attendance = $attendanceByMahasiswa->get($mahasiswa->id);
+
+            return [
+                'id' => $attendance?->id,
+                'mahasiswa_id' => $mahasiswa->id,
+                'nama_lengkap' => $mahasiswa->nama_lengkap,
+                'nim' => $mahasiswa->nim,
+                'status' => $attendance?->status,
+                'status_label' => $attendance
+                    ? ($statusLabels[$attendance->status] ?? str($attendance->status)->replace('_', ' ')->title()->toString())
+                    : null,
+                'catatan' => $attendance?->catatan,
+                'is_submitted' => $attendance !== null,
+                'waktu_absen' => $attendance?->updated_at?->toIso8601String(),
+            ];
+        });
+
+        return [
+            'pertemuan_id' => $pertemuanId,
+            'absensi_list' => $absensiList,
+            'total_peserta' => $absensiList->count(),
+            'total_sudah_absen' => $absensiList->where('is_submitted', true)->count(),
+            'total_belum_absen' => $absensiList->where('is_submitted', false)->count(),
+            'refreshed_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
      * Buat materi pembelajaran baru.
      */
-    public function storeMateri(int $pertemuanId, array $data, ?UploadedFile $file = null): MateriPertemuan
+    public function storeMateri(int $pertemuanId, array $data, ?UploadedFile $file = null, ?int $userId = null): MateriPertemuan
     {
-        return DB::transaction(function () use ($pertemuanId, $data, $file) {
+        return DB::transaction(function () use ($pertemuanId, $data, $file, $userId) {
             $pertemuan = Pertemuan::with('kelas')->findOrFail($pertemuanId);
+            if ($actorUserId = $userId ?? auth()->id()) {
+                $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, (int) $actorUserId);
+            }
 
             $tipeKontenId = $data['tipe_konten_id'] ?? null;
             $tipeKonten   = $data['tipe_konten'] ?? null;
@@ -431,7 +752,7 @@ class LmsService
 
             // Jika ada berkas di-upload bersamaan
             if ($file) {
-                $this->uploadMateriFile($materi->id, $file);
+                $this->uploadMateriFile($materi->id, $file, $userId);
             }
 
             return $materi->load('files');
@@ -441,14 +762,18 @@ class LmsService
     /**
      * Perbarui data materi pembelajaran.
      */
-    public function updateMateri(int $materiId, array $data): MateriPertemuan
+    public function updateMateri(int $materiId, array $data, ?int $userId = null): MateriPertemuan
     {
         if (isset($data['tipe_konten_id']) && !isset($data['tipe_konten'])) {
             $ref = DB::table('spmb_master_referensi')->find($data['tipe_konten_id']);
             $data['tipe_konten'] = $ref?->kode ?? 'teks';
         }
 
-        $materi = MateriPertemuan::findOrFail($materiId);
+        $materi = MateriPertemuan::with('pertemuan')->findOrFail($materiId);
+        if (($actorUserId = $userId ?? auth()->id()) && $materi->pertemuan) {
+            $this->assertDosenPengampuKelas((int) $materi->pertemuan->kelas_id, (int) $actorUserId);
+        }
+
         $materi->update($data);
 
         return $materi->fresh(['files']);
@@ -457,10 +782,13 @@ class LmsService
     /**
      * Hapus materi beserta berkas fisiknya.
      */
-    public function deleteMateri(int $materiId): bool
+    public function deleteMateri(int $materiId, ?int $userId = null): bool
     {
-        return DB::transaction(function () use ($materiId) {
-            $materi = MateriPertemuan::with('files')->findOrFail($materiId);
+        return DB::transaction(function () use ($materiId, $userId) {
+            $materi = MateriPertemuan::with(['files', 'pertemuan'])->findOrFail($materiId);
+            if (($actorUserId = $userId ?? auth()->id()) && $materi->pertemuan) {
+                $this->assertDosenPengampuKelas((int) $materi->pertemuan->kelas_id, (int) $actorUserId);
+            }
 
             foreach ($materi->files as $file) {
                 if ($file->file_path && Storage::disk($file->disk)->exists($file->file_path)) {
@@ -479,9 +807,13 @@ class LmsService
      * Penyimpanan WAJIB lewat `FileStorageService` agar nama berkas selalu
      * UUID + ekstensi asli, path DB relatif, dan ekstensi executable ditolak.
      */
-    public function uploadMateriFile(int $materiId, UploadedFile $file): MateriFile
+    public function uploadMateriFile(int $materiId, UploadedFile $file, ?int $userId = null): MateriFile
     {
         $materi = MateriPertemuan::with('pertemuan.kelas')->findOrFail($materiId);
+        if (($actorUserId = $userId ?? auth()->id()) && $materi->pertemuan) {
+            $this->assertDosenPengampuKelas((int) $materi->pertemuan->kelas_id, (int) $actorUserId);
+        }
+
         $disk = $this->resolveDisk($materi->pertemuan?->kelas);
 
         $storedPath = $this->storeUploadedFile($file, 'siakad/lms/materi', $disk);
@@ -499,9 +831,12 @@ class LmsService
     /**
      * Hapus satu berkas lampiran materi.
      */
-    public function deleteMateriFile(int $fileId): bool
+    public function deleteMateriFile(int $fileId, ?int $userId = null): bool
     {
-        $file = MateriFile::findOrFail($fileId);
+        $file = MateriFile::with('materi.pertemuan')->findOrFail($fileId);
+        if (($actorUserId = $userId ?? auth()->id()) && $file->materi?->pertemuan) {
+            $this->assertDosenPengampuKelas((int) $file->materi->pertemuan->kelas_id, (int) $actorUserId);
+        }
 
         $this->files->delete($file->file_path, $file->disk);
 
@@ -511,9 +846,12 @@ class LmsService
     /**
      * Buat penugasan baru pada pertemuan tertentu.
      */
-    public function storeTugas(int $pertemuanId, array $data): Tugas
+    public function storeTugas(int $pertemuanId, array $data, ?int $userId = null): Tugas
     {
-        Pertemuan::findOrFail($pertemuanId);
+        $pertemuan = Pertemuan::findOrFail($pertemuanId);
+        if ($actorUserId = $userId ?? auth()->id()) {
+            $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, (int) $actorUserId);
+        }
 
         return Tugas::create([
             'pertemuan_id'          => $pertemuanId,
@@ -530,9 +868,13 @@ class LmsService
     /**
      * Perbarui data tugas perkuliahan.
      */
-    public function updateTugas(int $tugasId, array $data): Tugas
+    public function updateTugas(int $tugasId, array $data, ?int $userId = null): Tugas
     {
-        $tugas = Tugas::findOrFail($tugasId);
+        $tugas = Tugas::with('pertemuan')->findOrFail($tugasId);
+        if (($actorUserId = $userId ?? auth()->id()) && $tugas->pertemuan) {
+            $this->assertDosenPengampuKelas((int) $tugas->pertemuan->kelas_id, (int) $actorUserId);
+        }
+
         $tugas->update($data);
 
         return $tugas->fresh();
@@ -541,10 +883,13 @@ class LmsService
     /**
      * Hapus penugasan dan seluruh berkas pengumpulan mahasiswa.
      */
-    public function deleteTugas(int $tugasId): bool
+    public function deleteTugas(int $tugasId, ?int $userId = null): bool
     {
-        return DB::transaction(function () use ($tugasId) {
-            $tugas = Tugas::with('pengumpulan')->findOrFail($tugasId);
+        return DB::transaction(function () use ($tugasId, $userId) {
+            $tugas = Tugas::with(['pengumpulan', 'pertemuan'])->findOrFail($tugasId);
+            if (($actorUserId = $userId ?? auth()->id()) && $tugas->pertemuan) {
+                $this->assertDosenPengampuKelas((int) $tugas->pertemuan->kelas_id, (int) $actorUserId);
+            }
 
             foreach ($tugas->pengumpulan as $sub) {
                 if ($sub->file_path && Storage::disk($sub->disk)->exists($sub->file_path)) {
@@ -563,10 +908,11 @@ class LmsService
     public function kumpulkanTugas(int $tugasId, int $userId, array $data, ?UploadedFile $file = null): PengumpulanTugas
     {
         return DB::transaction(function () use ($tugasId, $userId, $data, $file) {
-            $mahasiswa = Mahasiswa::where('user_id', $userId)->firstOrFail();
+            $tugas = Tugas::with('pertemuan.kelas')->findOrFail($tugasId);
+            $kelasId = (int) ($tugas->pertemuan?->kelas_id ?? 0);
+            $mahasiswa = $this->assertMahasiswaPesertaKelas($kelasId, $userId);
             $mahasiswaId = $mahasiswa->id;
 
-            $tugas = Tugas::with('pertemuan.kelas')->findOrFail($tugasId);
             $disk = $this->resolveDisk($tugas->pertemuan?->kelas);
 
             $isLate = $this->hitungTerlambat($tugas);
@@ -611,9 +957,10 @@ class LmsService
     public function updatePengumpulan(int $tugasId, int $userId, array $data, ?UploadedFile $file = null): PengumpulanTugas
     {
         return DB::transaction(function () use ($tugasId, $userId, $data, $file) {
-            $mahasiswa = Mahasiswa::where('user_id', $userId)->firstOrFail();
-
             $tugas = Tugas::with('pertemuan.kelas')->findOrFail($tugasId);
+            $kelasId = (int) ($tugas->pertemuan?->kelas_id ?? 0);
+            $mahasiswa = $this->assertMahasiswaPesertaKelas($kelasId, $userId);
+
             $pengumpulan = PengumpulanTugas::where('tugas_id', $tugasId)
                 ->where('mahasiswa_id', $mahasiswa->id)
                 ->first();
@@ -660,7 +1007,9 @@ class LmsService
     public function hapusPengumpulan(int $tugasId, int $userId): bool
     {
         return DB::transaction(function () use ($tugasId, $userId) {
-            $mahasiswa = Mahasiswa::where('user_id', $userId)->firstOrFail();
+            $tugas = Tugas::with('pertemuan')->findOrFail($tugasId);
+            $kelasId = (int) ($tugas->pertemuan?->kelas_id ?? 0);
+            $mahasiswa = $this->assertMahasiswaPesertaKelas($kelasId, $userId);
 
             $pengumpulan = PengumpulanTugas::where('tugas_id', $tugasId)
                 ->where('mahasiswa_id', $mahasiswa->id)
@@ -722,6 +1071,10 @@ class LmsService
             $pengumpulan = PengumpulanTugas::with('tugas.pertemuan.kelas')->findOrFail($pengumpulanId);
             $tugas = $pengumpulan->tugas;
 
+            if ($tugas?->pertemuan?->kelas_id) {
+                $this->assertDosenPengampuKelas((int) $tugas->pertemuan->kelas_id, $dosenUserId);
+            }
+
             if ($nilai < 0 || $nilai > $tugas->maks_nilai) {
                 throw ValidationException::withMessages([
                     'nilai' => ["Nilai harus berada di antara 0 dan {$tugas->maks_nilai}."],
@@ -743,7 +1096,9 @@ class LmsService
                 // Cari KRS Detail mahasiswa untuk kelas ini
                 $krsDetail = KrsDetail::where('kelas_id', $kelasId)
                     ->whereHas('krs', function ($q) use ($mahasiswaId) {
-                        $q->where('mahasiswa_id', $mahasiswaId);
+                        $q->where('mahasiswa_id', $mahasiswaId)
+                            ->whereIn('status', self::VALID_KRS_STATUSES)
+                            ->whereNull('deleted_at');
                     })
                     ->first();
 
@@ -766,13 +1121,21 @@ class LmsService
         });
     }
 
+    public function buildPresensiQrPayload(int $pertemuanId, string $token): string
+    {
+        return "RAG-PRESENSI:{$pertemuanId}:{$token}";
+    }
+
     /**
      * Generate 6-digit token absensi realtime dengan masa aktif berbatas.
      * Membuka/membuka-ulang sesi: reset penanda tutup + set jendela sesi.
      */
-    public function generateTokenAbsensi(int $pertemuanId, ?int $windowMenit = null): array
+    public function generateTokenAbsensi(int $pertemuanId, ?int $windowMenit = null, ?int $userId = null): array
     {
         $pertemuan = Pertemuan::with('kelas.lmsSetting')->findOrFail($pertemuanId);
+        if ($actorUserId = $userId ?? auth()->id()) {
+            $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, (int) $actorUserId);
+        }
 
         if ($pertemuan->presensi_closed_at) {
             throw ValidationException::withMessages([
@@ -785,11 +1148,20 @@ class LmsService
             $ttlMinutes = 15;
         }
 
+        $rotateSeconds = (int) SystemSetting::get('lms_token_rotate_seconds', 30);
+        if ($rotateSeconds < 10) {
+            $rotateSeconds = 30;
+        }
+
         $defaultWindow = (int) SystemSetting::get('lms_presensi_window_menit', 30);
         if ($defaultWindow < 5) {
             $defaultWindow = 30;
         }
         $window = $windowMenit !== null ? max(5, min(180, $windowMenit)) : $defaultWindow;
+
+        if (!empty($pertemuan->token_absensi)) {
+            Cache::put("lms:presensi:prev_token:{$pertemuanId}", (string) $pertemuan->token_absensi, now()->addSeconds(10));
+        }
 
         // Generate 6 digit angka acak
         $token = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
@@ -805,23 +1177,29 @@ class LmsService
         ]);
 
         return [
-            'pertemuan_id' => $pertemuanId,
-            'token'      => $token,
-            'ttl_menit'  => $ttlMinutes,
-            'window_menit' => $window,
-            'expired_at' => $expiredAt->toIso8601String(),
-            'sisa_detik' => $ttlMinutes * 60,
+            'pertemuan_id'            => $pertemuanId,
+            'kelas_id'                => (int) $pertemuan->kelas_id,
+            'token'                   => $token,
+            'qr_payload'              => $this->buildPresensiQrPayload($pertemuanId, $token),
+            'rotate_interval_seconds' => $rotateSeconds,
+            'ttl_menit'               => $ttlMinutes,
+            'window_menit'            => $window,
+            'expired_at'              => $expiredAt->toIso8601String(),
+            'sisa_detik'              => $ttlMinutes * 60,
         ];
     }
 
     /**
      * Putar ulang token absensi dengan umur pendek (anti titip-hadir:
-     * screenshot/kiriman chat cepat basi selama dashboard dosen terbuka).
-     * Durasi diambil dari `lms_token_rotate_seconds` (default 120 detik).
+     * kode/QR berubah tiap 30 detik selama layar presensi dosen terbuka).
+     * Durasi diambil dari `lms_token_rotate_seconds` (default 30 detik).
      */
-    public function rotateTokenAbsensi(int $pertemuanId): array
+    public function rotateTokenAbsensi(int $pertemuanId, ?int $userId = null): array
     {
         $pertemuan = Pertemuan::findOrFail($pertemuanId);
+        if ($actorUserId = $userId ?? auth()->id()) {
+            $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, (int) $actorUserId);
+        }
 
         if ($pertemuan->presensi_closed_at) {
             throw ValidationException::withMessages([
@@ -829,9 +1207,13 @@ class LmsService
             ]);
         }
 
-        $rotateSeconds = (int) SystemSetting::get('lms_token_rotate_seconds', 120);
-        if ($rotateSeconds < 30) {
-            $rotateSeconds = 120;
+        $rotateSeconds = (int) SystemSetting::get('lms_token_rotate_seconds', 30);
+        if ($rotateSeconds < 10) {
+            $rotateSeconds = 30;
+        }
+
+        if (!empty($pertemuan->token_absensi)) {
+            Cache::put("lms:presensi:prev_token:{$pertemuanId}", (string) $pertemuan->token_absensi, now()->addSeconds(10));
         }
 
         $token = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
@@ -845,21 +1227,65 @@ class LmsService
         ]);
 
         return [
-            'pertemuan_id'  => $pertemuanId,
-            'token'       => $token,
-            'ttl_detik'   => $rotateSeconds,
-            'expired_at'  => $expiredAt->toIso8601String(),
-            'sisa_detik'  => $rotateSeconds,
+            'pertemuan_id'            => $pertemuanId,
+            'kelas_id'                => (int) $pertemuan->kelas_id,
+            'token'                   => $token,
+            'qr_payload'              => $this->buildPresensiQrPayload($pertemuanId, $token),
+            'rotate_interval_seconds' => $rotateSeconds,
+            'ttl_detik'               => $rotateSeconds,
+            'expired_at'              => $expiredAt->toIso8601String(),
+            'sisa_detik'              => $rotateSeconds,
         ];
+    }
+
+    /**
+     * Dosen mengisi jurnal pertemuan sekaligus membuka sesi absensi (token & QR rotasi 30 detik).
+     */
+    public function bukaSesiPresensiDenganJurnal(int $pertemuanId, array $data, ?int $userId = null): array
+    {
+        $pertemuan = Pertemuan::with('kelas.lmsSetting')->findOrFail($pertemuanId);
+        $actorUserId = (int) ($userId ?? auth()->id());
+        $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, $actorUserId);
+        app(PresensiPengajaranService::class)->assertWriteAllowed($pertemuan, $actorUserId);
+
+        $materi = trim((string) ($data['materi'] ?? $pertemuan->materi ?? ''));
+        if ($materi === '') {
+            throw ValidationException::withMessages([
+                'materi' => ['Pokok bahasan / jurnal materi pertemuan wajib diisi sebelum membuka sesi presensi.'],
+            ]);
+        }
+
+        $pertemuan->update([
+            'materi'             => $materi,
+            'catatan_pertemuan'  => array_key_exists('catatan_pertemuan', $data) ? $data['catatan_pertemuan'] : $pertemuan->catatan_pertemuan,
+            'tanggal'            => !empty($data['tanggal']) ? $data['tanggal'] : ($pertemuan->tanggal ?: now()->toDateString()),
+            'jam_mulai'          => array_key_exists('jam_mulai', $data) ? $data['jam_mulai'] : ($pertemuan->jam_mulai ?: now()->format('H:i')),
+            'jam_selesai'        => array_key_exists('jam_selesai', $data) ? $data['jam_selesai'] : $pertemuan->jam_selesai,
+            'presensi_closed_at' => null,
+            'status_pertemuan'   => Pertemuan::STATUS_BERLANGSUNG,
+        ]);
+
+        $tokenData = $this->rotateTokenAbsensi($pertemuanId, $actorUserId);
+        if (!empty($data['window_menit'])) {
+            $pertemuan->update(['window_menit' => max(5, min(180, (int) $data['window_menit']))]);
+            $tokenData['window_menit'] = (int) $pertemuan->window_menit;
+        }
+
+        return array_merge($tokenData, [
+            'pertemuan' => $pertemuan,
+        ]);
     }
 
     /**
      * Dosen menutup sesi presensi: input token mahasiswa ditolak setelah ini,
      * input manual dosen (bulk) tetap dimungkinkan untuk koreksi susulan.
      */
-    public function tutupPresensi(int $pertemuanId): Pertemuan
+    public function tutupPresensi(int $pertemuanId, ?int $userId = null): Pertemuan
     {
         $pertemuan = Pertemuan::findOrFail($pertemuanId);
+        if ($actorUserId = $userId ?? auth()->id()) {
+            $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, (int) $actorUserId);
+        }
 
         $pertemuan->update([
             'presensi_closed_at' => now(),
@@ -873,15 +1299,19 @@ class LmsService
 
     /**
      * Mahasiswa menginputkan token absensi untuk mencatatkan kehadiran.
-     * Syarat: sesi belum ditutup + token cocok ( timing-safe ) + belum kedaluwarsa
+     * Syarat: sesi belum ditutup + token cocok (timing-safe, termasuk toleransi rotasi 10d) + belum kedaluwarsa
      * + mahasiswa terdaftar di kelas via KRS.
      */
-    public function inputTokenAbsensi(int $pertemuanId, int $userId, string $token): void
+    public function inputTokenAbsensi(int $pertemuanId, int $userId, string $token, ?string $catatan = null): AbsensiMahasiswa
     {
-        $mahasiswa = Mahasiswa::where('user_id', $userId)->firstOrFail();
+        $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
+        if (!$mahasiswa) {
+            abort(403, 'Fitur presensi token mandiri hanya dapat digunakan oleh Mahasiswa.');
+        }
         $mahasiswaId = $mahasiswa->id;
 
         $pertemuan = Pertemuan::with('kelas')->findOrFail($pertemuanId);
+        app(PresensiPengajaranService::class)->assertWriteAllowed($pertemuan, $userId);
 
         if ($pertemuan->presensi_closed_at || $pertemuan->status_pertemuan === 'selesai') {
             throw ValidationException::withMessages([
@@ -889,83 +1319,238 @@ class LmsService
             ]);
         }
 
-        if (empty($pertemuan->token_absensi) || !hash_equals((string) $pertemuan->token_absensi, trim($token))) {
+        $cleanToken = trim($token);
+        $currentMatches = !empty($pertemuan->token_absensi) && hash_equals((string) $pertemuan->token_absensi, $cleanToken);
+        $prevToken = Cache::get("lms:presensi:prev_token:{$pertemuanId}");
+        $prevMatches = is_string($prevToken) && $prevToken !== '' && hash_equals($prevToken, $cleanToken);
+
+        if (!$currentMatches && !$prevMatches) {
             throw ValidationException::withMessages([
                 'token' => ['Token absensi tidak cocok atau tidak valid.'],
             ]);
         }
 
-        if (!$pertemuan->token_expired_at || now()->gt($pertemuan->token_expired_at)) {
+        if ($currentMatches && (!$pertemuan->token_expired_at || now()->gt($pertemuan->token_expired_at))) {
             throw ValidationException::withMessages([
-                'token' => ['Token absensi telah kedaluwarsa. Mintalah token baru kepada dosen pengampu.'],
+                'token' => ['Token absensi telah kedaluwarsa. Silakan scan ulang QR atau masukkan kode terbaru di layar dosen.'],
             ]);
         }
 
-        // Mahasiswa wajib peserta kelas (KRS) — cegah presensi ke kelas lain.
-        $terdaftar = KrsDetail::where('kelas_id', $pertemuan->kelas_id)
-            ->whereHas('krs', function ($q) use ($mahasiswaId) {
-                $q->where('mahasiswa_id', $mahasiswaId);
-            })
-            ->exists();
-        if (!$terdaftar) {
+        // Mahasiswa wajib peserta kelas (KRS aktif/valid) — cegah presensi ke kelas lain.
+        if (!$this->isMahasiswaEnrolledInKelas($mahasiswaId, (int) $pertemuan->kelas_id)) {
             throw ValidationException::withMessages([
                 'token' => ['Anda tidak terdaftar pada kelas perkuliahan ini.'],
             ]);
         }
 
-        $absensi = AbsensiMahasiswa::updateOrCreate(
+        return AbsensiMahasiswa::updateOrCreate(
             [
                 'pertemuan_id' => $pertemuanId,
                 'mahasiswa_id' => $mahasiswaId,
             ],
             [
-                'status'  => 'hadir',
-                'catatan' => 'Presensi mandiri via token LMS',
+                'status'       => 'hadir',
+                'is_submitted' => true,
+                'catatan'      => $catatan ?? 'Presensi mandiri via token LMS',
             ]
         );
+    }
 
-        // Cerminkan kehadiran ke PresensiV2 (opsional & tidak menggagalkan lokal).
-        $this->sinkronAbsensiKePresensiV2($absensi);
+    /**
+     * Mahasiswa melakukan scan QR Code atau mengirim payload scanner (Web / Mobile App).
+     * Mendukung:
+     * 1) `qr_payload` berformat `RAG-PRESENSI:{pertemuan_id}:{token}`
+     * 2) `qr_payload` berformat JSON `{"pertemuan_id":123,"token":"654321"}`
+     * 3) `pertemuan_id` + `token` (atau `qr_payload` berisi 6-digit token langsung saat `pertemuan_id` dikirim)
+     */
+    public function scanTokenAbsensi(int $userId, array $payload): array
+    {
+        $pertemuanId = isset($payload['pertemuan_id']) ? (int) $payload['pertemuan_id'] : null;
+        $token = isset($payload['token']) ? trim((string) $payload['token']) : null;
+        $qrPayload = isset($payload['qr_payload']) ? trim((string) $payload['qr_payload']) : '';
+
+        if ($qrPayload !== '') {
+            if (preg_match('/^RAG-PRESENSI:(\d+):([A-Za-z0-9]{6})$/i', $qrPayload, $matches)) {
+                $pertemuanId = (int) $matches[1];
+                $token = $matches[2];
+            } elseif (str_starts_with($qrPayload, '{')) {
+                $decoded = json_decode($qrPayload, true);
+                if (is_array($decoded)) {
+                    $pertemuanId = isset($decoded['pertemuan_id']) ? (int) $decoded['pertemuan_id'] : $pertemuanId;
+                    $token = isset($decoded['token']) ? trim((string) $decoded['token']) : $token;
+                }
+            } elseif ($pertemuanId && preg_match('/^[A-Za-z0-9]{6}$/', $qrPayload)) {
+                $token = $qrPayload;
+            }
+        }
+
+        if (!$pertemuanId || !$token) {
+            throw ValidationException::withMessages([
+                'qr_payload' => ['Format QR Code atau token presensi tidak valid. Pastikan memindai QR Code presensi dari layar dosen.'],
+            ]);
+        }
+
+        $catatan = 'Presensi mandiri via QR Scanner';
+        if (!empty($payload['device_info'])) {
+            $catatan .= ' (' . mb_substr(trim((string) $payload['device_info']), 0, 80) . ')';
+        }
+
+        $absensi = $this->inputTokenAbsensi($pertemuanId, $userId, $token, $catatan);
+        $pertemuan = Pertemuan::with(['kelas.mataKuliah', 'kelas.dosenPengampu.dosen'])->findOrFail($pertemuanId);
+
+        return [
+            'pertemuan_id' => $pertemuan->id,
+            'pertemuan_ke' => $pertemuan->pertemuan_ke,
+            'tanggal'      => $pertemuan->tanggal,
+            'materi'       => $pertemuan->materi,
+            'kelas_id'     => $pertemuan->kelas_id,
+            'kode_kelas'   => $pertemuan->kelas?->kode_kelas,
+            'nama_kelas'   => $pertemuan->kelas?->nama_kelas,
+            'mata_kuliah'  => $pertemuan->kelas?->mataKuliah?->nama,
+            'status'       => $absensi->status,
+            'waktu_absen'  => $absensi->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Daftar sesi presensi kelas yang sedang aktif dibuka dosen untuk mahasiswa (periode aktif).
+     */
+    public function listSesiPresensiAktifMahasiswa(int $userId, ?int $tahunAkademikId = null): array
+    {
+        $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
+        if (!$mahasiswa) {
+            return [];
+        }
+
+        $kelasIds = $this->enrolledKelasIdsForMahasiswa($mahasiswa->id);
+        if (empty($kelasIds)) {
+            return [];
+        }
+
+        $effectiveTahunAkademikId = $tahunAkademikId ?? TahunAkademik::where('is_active', true)->value('id');
+
+        $pertemuans = Pertemuan::with(['kelas.mataKuliah', 'kelas.dosenPengampu.dosen', 'kelas.ruangan'])
+            ->whereIn('kelas_id', $kelasIds)
+            ->when($effectiveTahunAkademikId, function ($q) use ($effectiveTahunAkademikId) {
+                $q->whereHas('kelas', fn ($k) => $k->where('tahun_akademik_id', $effectiveTahunAkademikId));
+            })
+            ->where('status_pertemuan', Pertemuan::STATUS_BERLANGSUNG)
+            ->whereNull('presensi_closed_at')
+            ->whereNotNull('token_absensi')
+            ->orderByDesc('token_rotated_at')
+            ->get();
+
+        $absensiMap = AbsensiMahasiswa::whereIn('pertemuan_id', $pertemuans->pluck('id'))
+            ->where('mahasiswa_id', $mahasiswa->id)
+            ->where('is_submitted', true)
+            ->get()
+            ->keyBy('pertemuan_id');
+
+        return $pertemuans->map(function (Pertemuan $p) use ($absensiMap) {
+            $myAbsen = $absensiMap->get($p->id);
+            return [
+                'pertemuan_id'   => $p->id,
+                'pertemuan_ke'   => $p->pertemuan_ke,
+                'tanggal'        => $p->tanggal,
+                'jam_mulai'      => $p->jam_mulai,
+                'jam_selesai'    => $p->jam_selesai,
+                'materi'         => $p->materi,
+                'kelas_id'       => $p->kelas_id,
+                'kode_kelas'     => $p->kelas?->kode_kelas,
+                'nama_kelas'     => $p->kelas?->nama_kelas,
+                'mata_kuliah'    => $p->kelas?->mataKuliah?->nama,
+                'ruangan'        => $p->kelas?->ruangan?->nama_ruangan ?? null,
+                'sudah_absen'    => $myAbsen !== null,
+                'status_absensi' => $myAbsen?->status,
+                'waktu_absen'    => $myAbsen?->updated_at?->toIso8601String(),
+            ];
+        })->values()->all();
     }
 
     /**
      * Input absensi massal oleh dosen untuk satu pertemuan.
      */
-    public function bulkInputAbsensi(int $pertemuanId, array $absensiData): void
+    public function bulkInputAbsensi(int $pertemuanId, array $absensiData, int $userId): void
     {
-        DB::transaction(function () use ($pertemuanId, $absensiData) {
-            Pertemuan::findOrFail($pertemuanId);
+        $pertemuan = Pertemuan::findOrFail($pertemuanId);
+        $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, $userId);
+        app(PresensiPengajaranService::class)->assertWriteAllowed($pertemuan, $userId);
 
+        $statusIds = collect($absensiData)->pluck('status_id')->unique()->values();
+        $statusReferences = MasterReferensi::query()
+            ->active()
+            ->where('modul', 'siakad')
+            ->where('tipe', 'status_absensi')
+            ->whereIn('id', $statusIds)
+            ->get()
+            ->keyBy('id');
+
+        $enrolledStudentIds = KrsDetail::query()
+            ->where('kelas_id', $pertemuan->kelas_id)
+            ->whereHas('krs', fn ($krs) => $krs->whereIn('status', self::VALID_KRS_STATUSES))
+            ->with('krs.mahasiswa:id')
+            ->get()
+            ->map(fn (KrsDetail $detail) => $detail->krs?->mahasiswa?->id)
+            ->filter()
+            ->unique()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $invalidEntries = [];
+        foreach ($absensiData as $index => $item) {
+            $reference = $statusReferences->get($item['status_id'] ?? null);
+            if (!$reference || !$reference->kode || mb_strlen($reference->kode) > 50) {
+                $invalidEntries["absensi.{$index}.status_id"][] = 'Pilih status absensi SIAKAD yang aktif dengan kode maksimal 50 karakter.';
+            }
+            if (!in_array((int) ($item['mahasiswa_id'] ?? 0), $enrolledStudentIds, true)) {
+                $invalidEntries["absensi.{$index}.mahasiswa_id"][] = 'Mahasiswa bukan peserta KRS yang valid untuk kelas pertemuan ini.';
+            }
+        }
+
+        if ($invalidEntries !== []) {
+            throw ValidationException::withMessages($invalidEntries);
+        }
+
+        DB::transaction(function () use ($pertemuanId, $absensiData, $statusReferences) {
             foreach ($absensiData as $item) {
-                if (!isset($item['mahasiswa_id'])) {
-                    continue;
-                }
-
-                $statusKode = $item['status'] ?? null;
-                if (!empty($item['status_id']) && !$statusKode) {
-                    $ref = DB::table('spmb_master_referensi')->find($item['status_id']);
-                    $statusKode = $ref?->kode ?? 'hadir';
-                }
-
-                if (!$statusKode) {
-                    continue;
-                }
-
-                AbsensiMahasiswa::updateOrCreate(
+                $statusKode = $statusReferences->get($item['status_id'])->kode;
+                $attendance = AbsensiMahasiswa::firstOrNew(
                     [
                         'pertemuan_id' => $pertemuanId,
                         'mahasiswa_id' => $item['mahasiswa_id'],
-                    ],
-                    [
-                        'status'  => $statusKode,
-                        'catatan' => $item['catatan'] ?? null,
                     ]
                 );
+                $trackedFields = ['status', 'is_submitted', 'catatan'];
+                $oldValues = $attendance->exists
+                    ? array_intersect_key($attendance->getOriginal(), array_flip($trackedFields))
+                    : null;
+                $attendance->fill([
+                    'status' => $statusKode,
+                    'is_submitted' => true,
+                    'catatan' => $item['catatan'] ?? null,
+                ])->save();
+
+                if ($attendance->wasRecentlyCreated || $attendance->wasChanged($trackedFields)) {
+                    try {
+                        AuditLogService::record(
+                            module: 'LMS',
+                            action: $attendance->wasRecentlyCreated ? 'create' : 'update',
+                            tableName: 'siakad_absensi_mahasiswa',
+                            recordId: $attendance->id,
+                            oldValues: $oldValues,
+                            newValues: $attendance->only($trackedFields)
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning('Gagal mencatat audit log absensi LMS.', [
+                            'exception' => $e,
+                            'pertemuan_id' => $pertemuanId,
+                            'absensi_id' => $attendance->id,
+                        ]);
+                    }
+                }
             }
         });
 
-        // Cerminkan rekap kehadiran ke PresensiV2 (opsional & tidak menggagalkan lokal).
-        $this->sinkronKePresensiV2(Pertemuan::findOrFail($pertemuanId));
     }
 
     /**
@@ -974,10 +1559,10 @@ class LmsService
     public function ajukanIzin(int $pertemuanId, int $userId, array $data, ?UploadedFile $suratFile = null): IzinAbsensi
     {
         return DB::transaction(function () use ($pertemuanId, $userId, $data, $suratFile) {
-            $mahasiswa = Mahasiswa::where('user_id', $userId)->firstOrFail();
+            $pertemuan = Pertemuan::with('kelas')->findOrFail($pertemuanId);
+            $mahasiswa = $this->assertMahasiswaPesertaKelas((int) $pertemuan->kelas_id, $userId);
             $mahasiswaId = $mahasiswa->id;
 
-            $pertemuan = Pertemuan::with('kelas')->findOrFail($pertemuanId);
             $disk = $this->resolveDisk($pertemuan->kelas);
 
             $suratPath = null;
@@ -1014,6 +1599,12 @@ class LmsService
      */
     public function prosesIzin(int $izinId, int $statusId, ?string $catatan, int $dosenUserId): IzinAbsensi
     {
+        $izinUntukDiproses = IzinAbsensi::with('pertemuan')->findOrFail($izinId);
+        if ($izinUntukDiproses->pertemuan) {
+            $this->assertDosenPengampuKelas((int) $izinUntukDiproses->pertemuan->kelas_id, $dosenUserId);
+            app(PresensiPengajaranService::class)->assertWriteAllowed($izinUntukDiproses->pertemuan, $dosenUserId);
+        }
+
         return DB::transaction(function () use ($izinId, $statusId, $catatan, $dosenUserId) {
             $izin = IzinAbsensi::findOrFail($izinId);
 
@@ -1036,6 +1627,7 @@ class LmsService
                     ],
                     [
                         'status'  => $izin->tipe_izin === 'sakit' ? 'sakit' : 'izin',
+                        'is_submitted' => true,
                         'catatan' => 'Disetujui dari pengajuan surat izin: ' . ($catatan ?? '-'),
                     ]
                 );
@@ -1059,7 +1651,11 @@ class LmsService
         // Ambil seluruh mahasiswa yang mengambil kelas ini via KRS Detail
         $krsDetails = KrsDetail::with('krs.mahasiswa')
             ->where('kelas_id', $kelasId)
+            ->whereHas('krs', fn ($krs) => $krs->whereIn('status', ['disetujui', 'diajukan']))
             ->get();
+        $krsDetails = $krsDetails
+            ->unique(fn (KrsDetail $detail) => $detail->krs?->mahasiswa_id)
+            ->values();
 
         $minHadirPersen = $kelas->lmsSetting?->batas_min_hadir_persen ?? 75;
 
@@ -1071,6 +1667,7 @@ class LmsService
 
             $absensiList = AbsensiMahasiswa::whereIn('pertemuan_id', $kelas->pertemuans->pluck('id'))
                 ->where('mahasiswa_id', $mhs->id)
+                ->where('is_submitted', true)
                 ->get();
 
             $hadir = $absensiList->where('status', 'hadir')->count();
@@ -1112,37 +1709,29 @@ class LmsService
         ?string $search = null,
         string $sortBy = 'created_at',
         string $sortOrder = 'desc',
-        ?int $tahunAkademikId = null
+        ?int $tahunAkademikId = null,
+        ?int $programStudiId = null,
+        ?int $minKapasitas = null
     ): \Illuminate\Contracts\Pagination\LengthAwarePaginator {
         $query = Kelas::with(['mataKuliah', 'tahunAkademik', 'programStudi', 'dosenPengampu.dosen', 'ruangan']);
 
         // Tanpa filter eksplisit, batasi ke periode aktif agar tidak tercampur semua tahun akademik.
         $tahunAkademikId ??= TahunAkademik::where('is_active', true)->value('id');
-        if ($tahunAkademikId) {
-            $query->where('tahun_akademik_id', $tahunAkademikId);
+        $effectiveTahunAkademikId = $tahunAkademikId ?? TahunAkademik::where('is_active', true)->value('id');
+        if ($effectiveTahunAkademikId) {
+            $query->where('tahun_akademik_id', $effectiveTahunAkademikId);
+        }
+        if ($programStudiId) {
+            $query->where(function ($program) use ($programStudiId) {
+                $program->where('program_studi_id', $programStudiId)
+                    ->orWhereHas('programStudis', fn ($query) => $query->whereKey($programStudiId));
+            });
+        }
+        if ($minKapasitas !== null) {
+            $query->where('kapasitas', '>=', $minKapasitas);
         }
 
-        $dosen = Dosen::where('user_id', $userId)->first();
-        if ($dosen) {
-            $kelasIds = DosenPengampu::where('dosen_id', $dosen->id)->pluck('kelas_id');
-            $query->whereIn('id', $kelasIds);
-        } else {
-            $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
-            if ($mahasiswa) {
-                $kelasIds = KrsDetail::whereHas('krs', function ($q) use ($mahasiswa) {
-                    $q->where('mahasiswa_id', $mahasiswa->id);
-                })->pluck('kelas_id');
-                $query->whereIn('id', $kelasIds);
-            } else {
-                // Tanpa relasi dosen/mahasiswa (mis. akun dosen belum tertaut):
-                // hanya istimewa (admin) boleh melihat semua; selain itu kosong.
-                $user = User::find($userId);
-                $isPriv = $user && ($user->isSuperAdmin() || $user->hasRole('admin') || $user->hasRole('kaprodi') || $user->hasRole('wakil_prodi'));
-                if (!$isPriv) {
-                    $query->whereRaw('1 = 0');
-                }
-            }
-        }
+        $this->applyKelasScope($query, $userId, 'id');
 
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
@@ -1185,17 +1774,97 @@ class LmsService
      *
      * @return array{role: string, ringkasan: array<string, int>, tambahan: array<string, int>, tren: array<int, array<string, mixed>>}
      */
-    public function dashboardOverview(int $userId): array
+    public function dashboardOverview(int $userId, ?int $tahunAkademikId = null): array
     {
-        return Cache::remember("lms:dashboard:overview:{$userId}", 300, function () use ($userId) {
+        $effectiveTahunAkademikId = $tahunAkademikId ?? TahunAkademik::where('is_active', true)->value('id');
+        $today = now();
+        $cacheKey = "lms:dashboard:overview:{$userId}:" . ($effectiveTahunAkademikId ?: 'all') . ':' . $today->toDateString();
+
+        return Cache::remember($cacheKey, 300, function () use ($userId, $effectiveTahunAkademikId) {
             $kelasIds = $this->resolveAccessibleKelasIds($userId);
+            $user = User::find($userId);
             $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
             $dosen = Dosen::where('user_id', $userId)->first();
 
-            $role = $mahasiswa ? 'mahasiswa' : ($dosen ? 'dosen' : 'pengelola');
+            $isPengelolaRole = $this->isGlobalLmsManager($user, $dosen, $mahasiswa)
+                || ($dosen !== null && $this->resolveManagedProdiIds($user, $dosen) !== []);
+
+            $role = $mahasiswa
+                ? 'mahasiswa'
+                : (($dosen && !$isPengelolaRole) ? 'dosen' : 'pengelola');
+
+            $hariIni = [
+                'minggu',
+                'senin',
+                'selasa',
+                'rabu',
+                'kamis',
+                'jumat',
+                'sabtu',
+            ][now()->dayOfWeek];
+            $kelasDashboard = [
+                'hari_ini' => [],
+                'semua' => [],
+            ];
+
+            if (in_array($role, ['mahasiswa', 'dosen'], true)) {
+                $kelasItems = Kelas::query()
+                    ->with('mataKuliah')
+                    ->whereIn('id', $kelasIds ?? [])
+                    ->when(
+                        $effectiveTahunAkademikId,
+                        fn ($query) => $query->where('tahun_akademik_id', $effectiveTahunAkademikId)
+                    )
+                    ->get()
+                    ->map(function (Kelas $kelas) {
+                        $mataKuliah = $kelas->mataKuliah;
+
+                        return [
+                            'id' => $kelas->id,
+                            'kode_kelas' => $kelas->kode_kelas,
+                            'nama_kelas' => $kelas->nama_kelas,
+                            'hari' => $kelas->hari ? mb_strtolower($kelas->hari) : null,
+                            'jam_mulai' => $kelas->jam_mulai,
+                            'jam_selesai' => $kelas->jam_selesai,
+                            'mata_kuliah' => $mataKuliah ? [
+                                'id' => $mataKuliah->id,
+                                'kode' => $mataKuliah->kode_mk,
+                                'nama' => $mataKuliah->nama,
+                            ] : null,
+                        ];
+                    })
+                    ->sortBy(function (array $kelas) {
+                        $urutanHari = [
+                            'senin' => 1,
+                            'selasa' => 2,
+                            'rabu' => 3,
+                            'kamis' => 4,
+                            'jumat' => 5,
+                            'sabtu' => 6,
+                            'minggu' => 7,
+                        ];
+
+                        return sprintf(
+                            '%d-%s-%s',
+                            $urutanHari[$kelas['hari'] ?? ''] ?? 8,
+                            $kelas['jam_mulai'] ?? '99:99:99',
+                            $kelas['kode_kelas'] ?? ''
+                        );
+                    })
+                    ->values();
+
+                $kelasDashboard = [
+                    'hari_ini' => $kelasItems
+                        ->where('hari', $hariIni)
+                        ->values()
+                        ->all(),
+                    'semua' => $kelasItems->all(),
+                ];
+            }
 
             $kelasTotal = Kelas::query()
                 ->when($kelasIds !== null, fn ($query) => $query->whereIn('id', $kelasIds))
+                ->when($effectiveTahunAkademikId, fn ($query) => $query->where('tahun_akademik_id', $effectiveTahunAkademikId))
                 ->count();
 
             $tugasAktif = Tugas::query()
@@ -1204,17 +1873,45 @@ class LmsService
                 ->when($kelasIds !== null, function ($query) use ($kelasIds) {
                     $query->whereHas('pertemuan', fn ($pertemuan) => $pertemuan->whereIn('kelas_id', $kelasIds));
                 })
+                ->when($effectiveTahunAkademikId, function ($query) use ($effectiveTahunAkademikId) {
+                    $query->whereHas('pertemuan.kelas', fn ($kelas) => $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId));
+                })
                 ->count();
 
             $tryoutAktif = Quiz::query()
                 ->where('tipe', Quiz::TIPE_TRYOUT)
                 ->where('is_published', true)
                 ->where('is_archived', false)
-                ->when($kelasIds !== null, fn ($query) => $query->whereIn('kelas_id', $kelasIds))
+                ->when($effectiveTahunAkademikId, function ($query) use ($effectiveTahunAkademikId) {
+                    $query->where(function ($q) use ($effectiveTahunAkademikId) {
+                        $q->whereNull('kelas_id')
+                            ->orWhereHas('kelas', fn ($kelas) => $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId));
+                    });
+                })
+                ->when($kelasIds !== null, function ($query) use ($kelasIds, $userId, $dosen, $mahasiswa) {
+                    $query->where(function ($q) use ($kelasIds, $userId, $dosen, $mahasiswa) {
+                        if (!empty($kelasIds)) {
+                            $q->whereIn('kelas_id', $kelasIds);
+                        } else {
+                            $q->whereRaw('1 = 0');
+                        }
+                        if ($mahasiswa) {
+                            $q->orWhereHas('tryoutPeserta', fn ($tp) => $tp->where('mahasiswa_id', $mahasiswa->id));
+                        } else {
+                            $q->orWhere(fn ($sub) => $sub->whereNull('kelas_id')->where('dibuat_oleh', $userId));
+                            if ($dosen) {
+                                $q->orWhereHas('kolaborators', fn ($k) => $k->where('dosen_id', $dosen->id));
+                            }
+                        }
+                    });
+                })
                 ->count();
 
             $forumTopik = ForumTopik::query()
                 ->when($kelasIds !== null, fn ($query) => $query->whereIn('kelas_id', $kelasIds))
+                ->when($effectiveTahunAkademikId, function ($query) use ($effectiveTahunAkademikId) {
+                    $query->whereHas('kelas', fn ($kelas) => $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId));
+                })
                 ->count();
 
             $ringkasan = [
@@ -1236,6 +1933,9 @@ class LmsService
                     ->when($kelasIds !== null, function ($query) use ($kelasIds) {
                         $query->whereHas('pertemuan', fn ($pertemuan) => $pertemuan->whereIn('kelas_id', $kelasIds));
                     })
+                    ->when($effectiveTahunAkademikId, function ($query) use ($effectiveTahunAkademikId) {
+                        $query->whereHas('pertemuan.kelas', fn ($kelas) => $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId));
+                    })
                     ->whereDoesntHave('pengumpulan', fn ($query) => $query->where('mahasiswa_id', $mahasiswa->id))
                     ->count();
 
@@ -1250,13 +1950,34 @@ class LmsService
                     ->when($kelasIds !== null, function ($query) use ($kelasIds) {
                         $query->whereHas('tugas.pertemuan', fn ($pertemuan) => $pertemuan->whereIn('kelas_id', $kelasIds));
                     })
+                    ->when($effectiveTahunAkademikId, function ($query) use ($effectiveTahunAkademikId) {
+                        $query->whereHas('tugas.pertemuan.kelas', fn ($kelas) => $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId));
+                    })
                     ->count();
 
                 $tambahan['attempt_belum_dinilai'] = QuizAttempt::query()
                     ->where('butuh_penilaian_manual', true)
-                    ->when($kelasIds !== null, function ($query) use ($kelasIds) {
-                        $query->whereHas('quiz', fn ($quiz) => $quiz->whereIn('kelas_id', $kelasIds));
+                    ->when($kelasIds !== null, function ($query) use ($kelasIds, $userId, $dosen) {
+                        $query->whereHas('quiz', function ($quiz) use ($kelasIds, $userId, $dosen) {
+                            $quiz->where(function ($q) use ($kelasIds, $userId, $dosen) {
+                                if (!empty($kelasIds)) {
+                                    $q->whereIn('kelas_id', $kelasIds);
+                                } else {
+                                    $q->whereRaw('1 = 0');
+                                }
+                                $q->orWhere(fn ($sub) => $sub->whereNull('kelas_id')->where('dibuat_oleh', $userId));
+                                if ($dosen) {
+                                    $q->orWhereHas('kolaborators', fn ($k) => $k->where('dosen_id', $dosen->id));
+                                }
+                            });
+                        });
                     })
+                    ->count();
+
+                $tambahan['kelas_belum_dikonfigurasi'] = Kelas::query()
+                    ->whereDoesntHave('lmsSetting')
+                    ->when($kelasIds !== null, fn ($query) => $query->whereIn('id', $kelasIds))
+                    ->when($effectiveTahunAkademikId, fn ($query) => $query->where('tahun_akademik_id', $effectiveTahunAkademikId))
                     ->count();
             }
 
@@ -1296,38 +2017,219 @@ class LmsService
                 })
                 ->all();
 
+            $preview = [
+                'tugas' => [],
+                'kuis' => [],
+                'materi' => [],
+            ];
+
+            if (in_array($role, ['mahasiswa', 'dosen'], true)) {
+                $tugasPreviewQuery = Tugas::query()
+                    ->where('is_published', true)
+                    ->whereHas('pertemuan.kelas', function ($kelas) use ($kelasIds, $effectiveTahunAkademikId) {
+                        if ($kelasIds !== null) {
+                            $kelas->whereIn('id', $kelasIds);
+                        }
+                        if ($effectiveTahunAkademikId) {
+                            $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId);
+                        }
+                    })
+                    ->where(function ($query) {
+                        $query->whereNull('deadline_at')
+                            ->orWhere('deadline_at', '>=', now())
+                            ->orWhere('can_submit_late', true);
+                    })
+                    ->with('pertemuan.kelas.mataKuliah')
+                    ->withCount([
+                        'pengumpulan as belum_dinilai_count' => fn ($query) => $query->whereNull('nilai'),
+                    ]);
+
+                if ($mahasiswa) {
+                    $tugasPreviewQuery->whereDoesntHave(
+                        'pengumpulan',
+                        fn ($query) => $query->where('mahasiswa_id', $mahasiswa->id)
+                    );
+                }
+
+                $preview['tugas'] = $tugasPreviewQuery
+                    ->orderByRaw('deadline_at IS NULL')
+                    ->orderBy('deadline_at')
+                    ->orderByDesc('updated_at')
+                    ->limit(5)
+                    ->get()
+                    ->map(function (Tugas $tugas) use ($mahasiswa) {
+                        $pertemuan = $tugas->pertemuan;
+                        $kelas = $pertemuan?->kelas;
+                        $mataKuliah = $kelas?->mataKuliah;
+
+                        return [
+                            'id' => $tugas->id,
+                            'judul' => $tugas->judul,
+                            'deadline_at' => $tugas->deadline_at?->toISOString(),
+                            'pertemuan_id' => $pertemuan?->id,
+                            'kelas_id' => $kelas?->id,
+                            'kode_kelas' => $kelas?->kode_kelas,
+                            'nama_kelas' => $kelas?->nama_kelas,
+                            'mata_kuliah' => $mataKuliah ? [
+                                'id' => $mataKuliah->id,
+                                'kode' => $mataKuliah->kode_mk,
+                                'nama' => $mataKuliah->nama,
+                            ] : null,
+                            'belum_dinilai' => $mahasiswa ? null : (int) $tugas->belum_dinilai_count,
+                        ];
+                    })
+                    ->all();
+
+                $quizPreviewQuery = Quiz::query()
+                    ->where('is_published', true)
+                    ->where('is_archived', false)
+                    ->where(function ($query) use ($kelasIds) {
+                        $query->whereHas('kelas', function ($kelas) use ($kelasIds) {
+                            if ($kelasIds !== null) {
+                                $kelas->whereIn('id', $kelasIds);
+                            }
+                        })->orWhereHas('pertemuan.kelas', function ($kelas) use ($kelasIds) {
+                            if ($kelasIds !== null) {
+                                $kelas->whereIn('id', $kelasIds);
+                            }
+                        });
+                    })
+                    ->where(function ($query) {
+                        $query->whereNull('ditutup_at')
+                            ->orWhere('ditutup_at', '>=', now());
+                    })
+                    ->when($effectiveTahunAkademikId, function ($query) use ($effectiveTahunAkademikId) {
+                        $query->where(function ($scope) use ($effectiveTahunAkademikId) {
+                            $scope->whereHas('kelas', fn ($kelas) => $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId))
+                                ->orWhereHas('pertemuan.kelas', fn ($kelas) => $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId));
+                        });
+                    })
+                    ->with(['kelas.mataKuliah', 'pertemuan.kelas.mataKuliah'])
+                    ->orderByRaw('ditutup_at IS NULL')
+                    ->orderBy('ditutup_at')
+                    ->orderByDesc('id')
+                    ->limit(5);
+
+                $preview['kuis'] = $quizPreviewQuery
+                    ->get()
+                    ->map(function (Quiz $quiz) {
+                        $pertemuan = $quiz->pertemuan;
+                        $kelas = $quiz->kelas ?? $pertemuan?->kelas;
+                        $mataKuliah = $kelas?->mataKuliah;
+
+                        return [
+                            'id' => $quiz->id,
+                            'judul' => $quiz->judul,
+                            'tipe' => $quiz->tipe,
+                            'dibuka_at' => $quiz->dibuka_at?->toISOString(),
+                            'deadline_at' => $quiz->ditutup_at?->toISOString(),
+                            'pertemuan_id' => $pertemuan?->id,
+                            'kelas_id' => $kelas?->id,
+                            'kode_kelas' => $kelas?->kode_kelas,
+                            'nama_kelas' => $kelas?->nama_kelas,
+                            'mata_kuliah' => $mataKuliah ? [
+                                'id' => $mataKuliah->id,
+                                'kode' => $mataKuliah->kode_mk,
+                                'nama' => $mataKuliah->nama,
+                            ] : null,
+                        ];
+                    })
+                    ->all();
+
+                $preview['materi'] = MateriPertemuan::query()
+                    ->where('is_published', true)
+                    ->whereHas('pertemuan.kelas', function ($kelas) use ($kelasIds, $effectiveTahunAkademikId) {
+                        if ($kelasIds !== null) {
+                            $kelas->whereIn('id', $kelasIds);
+                        }
+                        if ($effectiveTahunAkademikId) {
+                            $kelas->where('tahun_akademik_id', $effectiveTahunAkademikId);
+                        }
+                    })
+                    ->with('pertemuan.kelas.mataKuliah')
+                    ->orderByDesc('updated_at')
+                    ->orderByDesc('id')
+                    ->limit(5)
+                    ->get()
+                    ->map(function (MateriPertemuan $materi) {
+                        $pertemuan = $materi->pertemuan;
+                        $kelas = $pertemuan?->kelas;
+                        $mataKuliah = $kelas?->mataKuliah;
+
+                        return [
+                            'id' => $materi->id,
+                            'judul' => $materi->judul,
+                            'updated_at' => $materi->updated_at?->toISOString(),
+                            'pertemuan_id' => $pertemuan?->id,
+                            'kelas_id' => $kelas?->id,
+                            'kode_kelas' => $kelas?->kode_kelas,
+                            'nama_kelas' => $kelas?->nama_kelas,
+                            'mata_kuliah' => $mataKuliah ? [
+                                'id' => $mataKuliah->id,
+                                'kode' => $mataKuliah->kode_mk,
+                                'nama' => $mataKuliah->nama,
+                            ] : null,
+                        ];
+                    })
+                    ->all();
+            }
+
             return [
                 'role' => $role,
+                'tahun_akademik_id' => $effectiveTahunAkademikId ? (int) $effectiveTahunAkademikId : null,
+                'jadwal' => [
+                    'hari_ini' => $hariIni,
+                    'tanggal' => now()->toDateString(),
+                    'kelas' => $kelasDashboard,
+                ],
                 'ringkasan' => $ringkasan,
                 'tambahan' => $tambahan,
                 'tren' => $tren,
+                'preview' => $preview,
             ];
         });
     }
 
     public function resolveAccessibleKelasIds(int $userId): ?array
     {
-        $dosen = Dosen::where('user_id', $userId)->first();
-        if ($dosen) {
-            return DosenPengampu::where('dosen_id', $dosen->id)->pluck('kelas_id')->all();
-        }
-
-        $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
-        if ($mahasiswa) {
-            return KrsDetail::whereHas('krs', function ($q) use ($mahasiswa) {
-                $q->where('mahasiswa_id', $mahasiswa->id);
-            })->pluck('kelas_id')->all();
-        }
-
         $user = User::find($userId);
-        $isPrivileged = $user && (
-            $user->isSuperAdmin()
-            || $user->hasRole('admin')
-            || $user->hasRole('kaprodi')
-            || $user->hasRole('wakil_prodi')
-        );
+        if (!$user) {
+            return [];
+        }
 
-        return $isPrivileged ? null : [];
+        $dosen = Dosen::where('user_id', $userId)->first();
+        $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
+
+        if ($this->isGlobalLmsManager($user, $dosen, $mahasiswa)) {
+            return null;
+        }
+
+        if ($dosen) {
+            $managedProdiIds = $this->resolveManagedProdiIds($user, $dosen);
+            $prodiKelasIds = $managedProdiIds === []
+                ? []
+                : Kelas::query()
+                    ->where(function ($q) use ($managedProdiIds) {
+                        $q->whereIn('program_studi_id', $managedProdiIds)
+                            ->orWhereHas('programStudis', fn ($ps) => $ps->whereIn('siakad_program_studi.id', $managedProdiIds));
+                    })
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+
+            $pengampuKelasIds = DosenPengampu::where('dosen_id', $dosen->id)
+                ->pluck('kelas_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            return array_values(array_unique(array_merge($prodiKelasIds, $pengampuKelasIds)));
+        }
+
+        if ($mahasiswa) {
+            return $this->enrolledKelasIdsForMahasiswa($mahasiswa->id);
+        }
+
+        return [];
     }
 
     /**
@@ -1377,7 +2279,12 @@ class LmsService
             $query->where('kelas_id', $kelasId);
         }
 
-        if ($tahunAkademikId) {
+        $effectiveTahunAkademikId = $tahunAkademikId ?? TahunAkademik::where('is_active', true)->value('id');
+        if ($effectiveTahunAkademikId && !$kelasId) {
+            $query->whereHas('kelas', function ($q) use ($effectiveTahunAkademikId) {
+                $q->where('tahun_akademik_id', $effectiveTahunAkademikId);
+            });
+        } elseif ($tahunAkademikId && $kelasId) {
             $query->whereHas('kelas', function ($q) use ($tahunAkademikId) {
                 $q->where('tahun_akademik_id', $tahunAkademikId);
             });
@@ -1434,8 +2341,9 @@ class LmsService
         // Query ini berakar di tabel siakad_kelas, jadi kolomnya primary key 'id'.
         $this->applyKelasScope($query, $userId, 'id');
 
-        if ($tahunAkademikId) {
-            $query->where('tahun_akademik_id', $tahunAkademikId);
+        $effectiveTahunAkademikId = $tahunAkademikId ?? TahunAkademik::where('is_active', true)->value('id');
+        if ($effectiveTahunAkademikId) {
+            $query->where('tahun_akademik_id', $effectiveTahunAkademikId);
         }
 
         if ($metodeAbsensi) {
@@ -1482,8 +2390,12 @@ class LmsService
      *
      * Nomor pertemuan uniqueness dijaga terhadap pertemuan lain di kelas yang sama.
      */
-    public function updatePertemuan(Pertemuan $pertemuan, array $data): Pertemuan
+    public function updatePertemuan(Pertemuan $pertemuan, array $data, ?int $userId = null): Pertemuan
     {
+        if ($actorUserId = $userId ?? auth()->id()) {
+            $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, (int) $actorUserId);
+        }
+
         return DB::transaction(function () use ($pertemuan, $data) {
             $kelasId = $pertemuan->kelas_id;
             $pertemuanKe = $data['pertemuan_ke'] ?? $pertemuan->pertemuan_ke;
@@ -1518,8 +2430,12 @@ class LmsService
      * membuat data absensi/penilaian jadi tidak konsisten: materi, tugas,
      * quiz, izin absensi, dan rekap absensi mahasiswa.
      */
-    public function destroyPertemuan(Pertemuan $pertemuan): void
+    public function destroyPertemuan(Pertemuan $pertemuan, ?int $userId = null): void
     {
+        if ($actorUserId = $userId ?? auth()->id()) {
+            $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, (int) $actorUserId);
+        }
+
         $penghalang = [];
 
         if ($pertemuan->materiList()->exists()) {
@@ -1565,9 +2481,7 @@ class LmsService
             return Tugas::whereRaw('1 = 0')->paginate($perPage);
         }
 
-        $kelasIds = KrsDetail::whereHas('krs', function ($q) use ($mahasiswa) {
-            $q->where('mahasiswa_id', $mahasiswa->id);
-        })->pluck('kelas_id');
+        $kelasIds = $this->enrolledKelasIdsForMahasiswa($mahasiswa->id);
 
         $query = Tugas::whereHas('pertemuan', function ($q) use ($kelasIds) {
             $q->whereIn('kelas_id', $kelasIds);
@@ -1601,12 +2515,29 @@ class LmsService
     public function getDownloadUrl(string $type, int $id, int $userId): array
     {
         if ($type === 'materi') {
-            $file = MateriFile::findOrFail($id);
+            $file = MateriFile::with('materi.pertemuan')->findOrFail($id);
+            $kelasId = $file->materi?->pertemuan?->kelas_id;
+            if ($kelasId) {
+                $context = $this->assertCanViewKelas((int) $kelasId, $userId);
+                if ($context['viewer_mode'] === 'mahasiswa' && $file->materi && !$file->materi->is_published) {
+                    abort(403, 'Materi pembelajaran ini belum dipublikasikan.');
+                }
+            }
             $disk = $file->disk;
             $path = $file->file_path;
             $filename = $file->nama_file;
         } elseif ($type === 'pengumpulan') {
-            $pengumpulan = PengumpulanTugas::findOrFail($id);
+            $pengumpulan = PengumpulanTugas::with('tugas.pertemuan')->findOrFail($id);
+            $kelasId = $pengumpulan->tugas?->pertemuan?->kelas_id;
+            if ($kelasId) {
+                $context = $this->assertCanViewKelas((int) $kelasId, $userId);
+                if ($context['viewer_mode'] === 'mahasiswa') {
+                    $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
+                    if (!$mahasiswa || (int) $pengumpulan->mahasiswa_id !== (int) $mahasiswa->id) {
+                        abort(403, 'Anda hanya dapat mengunduh berkas pengumpulan tugas milik sendiri.');
+                    }
+                }
+            }
             $disk = $pengumpulan->disk;
             $path = $pengumpulan->file_path;
             $filename = $pengumpulan->nama_file_asli ?: 'submission.pdf';
@@ -1674,9 +2605,12 @@ class LmsService
     /**
      * Perbarui konfigurasi LMS kelas.
      */
-    public function updateKelasLmsSetting(int $kelasId, array $data): KelasLmsSetting
+    public function updateKelasLmsSetting(int $kelasId, array $data, ?int $userId = null): KelasLmsSetting
     {
         Kelas::findOrFail($kelasId);
+        if ($actorUserId = $userId ?? auth()->id()) {
+            $this->assertCanConfigureKelas($kelasId, (int) $actorUserId);
+        }
 
         return KelasLmsSetting::updateOrCreate(
             ['kelas_id' => $kelasId],
@@ -1718,11 +2652,15 @@ class LmsService
      * @param array $opsi ['copy_materi' => bool, 'copy_deskripsi' => bool]
      * @return array{disalin_materi: int, dibuat_pertemuan: int}
      */
-    public function importMateriDariKelas(int $targetKelasId, int $sumberKelasId, array $opsi = []): array
+    public function importMateriDariKelas(int $targetKelasId, int $sumberKelasId, array $opsi = [], ?int $userId = null): array
     {
-        return DB::transaction(function () use ($targetKelasId, $sumberKelasId, $opsi) {
+        return DB::transaction(function () use ($targetKelasId, $sumberKelasId, $opsi, $userId) {
             Kelas::findOrFail($targetKelasId);
             Kelas::findOrFail($sumberKelasId);
+            if ($actorUserId = $userId ?? auth()->id()) {
+                $this->assertDosenPengampuKelas($targetKelasId, (int) $actorUserId);
+                $this->assertCanViewKelas($sumberKelasId, (int) $actorUserId);
+            }
 
             $copyMateri = $opsi['copy_materi'] ?? true;
             $copyDeskripsi = $opsi['copy_deskripsi'] ?? true;
@@ -1806,7 +2744,11 @@ class LmsService
 
         $krsDetails = KrsDetail::with('krs.mahasiswa')
             ->where('kelas_id', $kelasId)
+            ->whereHas('krs', fn ($krs) => $krs->whereIn('status', ['disetujui', 'diajukan']))
             ->get();
+        $krsDetails = $krsDetails
+            ->unique(fn (KrsDetail $detail) => $detail->krs?->mahasiswa_id)
+            ->values();
 
         $detail = [];
         foreach ($krsDetails as $kd) {
@@ -1820,6 +2762,7 @@ class LmsService
 
             $statusByPertemuan = AbsensiMahasiswa::whereIn('pertemuan_id', $kelas->pertemuans->pluck('id'))
                 ->where('mahasiswa_id', $mhs->id)
+                ->where('is_submitted', true)
                 ->pluck('status', 'pertemuan_id');
 
             $baris = [];
@@ -1850,7 +2793,11 @@ class LmsService
 
         $krsDetails = KrsDetail::with('krs.mahasiswa')
             ->where('kelas_id', $kelasId)
-            ->when($mahasiswaId, fn ($q) => $q->whereHas('krs', fn ($k) => $k->where('mahasiswa_id', $mahasiswaId)))
+            ->whereHas('krs', function ($k) use ($mahasiswaId) {
+                $k->whereIn('status', self::VALID_KRS_STATUSES)
+                    ->whereNull('deleted_at')
+                    ->when($mahasiswaId, fn ($q) => $q->where('mahasiswa_id', $mahasiswaId));
+            })
             ->get();
 
         $ketercapaian = [];

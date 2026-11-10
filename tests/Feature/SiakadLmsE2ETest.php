@@ -17,6 +17,7 @@ use App\Models\Siakad\TahunAkademik;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
@@ -237,6 +238,8 @@ class SiakadLmsE2ETest extends TestCase
 
     public function test_e2e_token_generate_input_dan_kedaluwarsa(): void
     {
+        Http::fake();
+
         // 1. Dosen generate token
         Passport::actingAs($this->userDosen);
         $resToken = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token");
@@ -272,6 +275,8 @@ class SiakadLmsE2ETest extends TestCase
             'token' => $token,
         ]);
         $resExpired->assertStatus(422);
+
+        Http::assertNothingSent();
     }
 
     public function test_e2e_tugas_obe_sync_dan_overwrite(): void
@@ -487,6 +492,37 @@ class SiakadLmsE2ETest extends TestCase
         $this->assertCount(2, $resRekapDosen->json('data.rekapitulasi'));
     }
 
+    public function test_dosen_detail_shows_krs_roster_without_pre_marking_attendance(): void
+    {
+        $detail = app(\App\Services\Siakad\LmsService::class)
+            ->getPertemuanDetail($this->pertemuan->id, $this->userDosen->id);
+
+        $this->assertCount(1, $detail['absensi_list']);
+        $this->assertSame($this->mahasiswa->id, $detail['absensi_list'][0]['mahasiswa_id']);
+        $this->assertNull($detail['absensi_list'][0]['status']);
+        $this->assertFalse($detail['absensi_list'][0]['is_submitted']);
+        $this->assertDatabaseMissing('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+        ]);
+    }
+
+    public function test_siakad_absensi_endpoint_returns_roster_with_empty_status_until_saved(): void
+    {
+        Passport::actingAs($this->userDosen);
+
+        $response = $this->getJson(
+            "/api/v1/siakad/perkuliahan/pertemuan/{$this->pertemuan->id}/absensi"
+        );
+
+        $response->assertOk()
+            ->assertJsonPath('data.absensi.0.mahasiswa_id', $this->mahasiswa->id)
+            ->assertJsonPath('data.absensi.0.status', null)
+            ->assertJsonPath('data.absensi.0.is_submitted', false)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('message', 'Daftar absensi mahasiswa berhasil dimuat.');
+    }
+
     public function test_my_kelas_hanya_menampilkan_kelas_yang_berhak(): void
     {
         // Kelas kedua yang TIDAK diampu dosen penguji
@@ -522,7 +558,11 @@ class SiakadLmsE2ETest extends TestCase
         // Admin: tetap melihat semua kelas
         $userAdmin = User::factory()->create(['username' => 'admin.lms.my']);
         $roleAdmin = \App\Models\Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Administrator']);
-        $roleAdmin->permissions()->syncWithoutDetaching([$permRead->id]);
+        $permManage = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'siakad.kelas.manage'],
+            ['name' => 'Kelola Kelas', 'module' => 'siakad', 'action' => 'update']
+        );
+        $roleAdmin->permissions()->syncWithoutDetaching([$permRead->id, $permManage->id]);
         $userAdmin->roles()->attach($roleAdmin->id);
 
         Passport::actingAs($userAdmin);

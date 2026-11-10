@@ -68,6 +68,8 @@ class PermissionSeeder extends Seeder
             ['name' => 'Tambah Absensi & Presensi', 'slug' => 'simpeg.presensi.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Mencatat log presensi pegawai'],
             ['name' => 'Ubah Absensi & Presensi', 'slug' => 'simpeg.presensi.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah log & koreksi absensi'],
             ['name' => 'Hapus Absensi & Presensi', 'slug' => 'simpeg.presensi.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus log absensi pegawai'],
+            ['name' => 'Lihat Monitoring Presensi Pengajaran', 'slug' => 'simpeg.presensi.pengajaran.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat rekap pertemuan dan kelengkapan presensi dosen dari LMS/SIAKAD'],
+            ['name' => 'Kelola Cut-off Presensi Pengajaran', 'slug' => 'simpeg.presensi.pengajaran.manage', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengatur cut-off periode serta memberikan atau mencabut izin khusus pengisian presensi'],
             ['name' => 'Lihat Slip Gaji & Payroll', 'slug' => 'simpeg.payroll.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat daftar & rincian slip gaji'],
             ['name' => 'Tambah Slip Gaji & Payroll', 'slug' => 'simpeg.payroll.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Menerbitkan slip gaji baru'],
             ['name' => 'Ubah Slip Gaji & Payroll', 'slug' => 'simpeg.payroll.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah status & rincian payroll'],
@@ -179,6 +181,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'Lihat Pengeluaran Kas', 'slug' => 'sikeu.pengeluaran.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat pengeluaran & beban operasional'],
             ['name' => 'Lihat Pemasukan Kas', 'slug' => 'sikeu.pemasukan.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat pemasukan kas non-akademik'],
             ['name' => 'Lihat Pajak', 'slug' => 'sikeu.pajak.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat data pajak & perpajakan'],
+            ['name' => 'Kelola Nama Akun Pelaporan Pajak', 'slug' => 'sikeu.pajak_akun.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengelola alias akun dan mode publikasi pelaporan pajak'],
             ['name' => 'Lihat Unit Kas & Rekening', 'slug' => 'sikeu.unitkas.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat unit kas & rekening bank'],
             ['name' => 'Kelola Payment Gateway', 'slug' => 'sikeu.paymentgateway.manage', 'module' => 'sikeu', 'action' => 'update', 'description' => 'Mengatur koneksi Xendit / H2H / rekening manual'],
             ['name' => 'Lihat Approval Keuangan', 'slug' => 'sikeu.approval.read', 'module' => 'sikeu', 'action' => 'read', 'description' => 'Melihat antrean approval keuangan'],
@@ -270,6 +273,8 @@ class PermissionSeeder extends Seeder
             ['name' => 'Setujui KRS Mahasiswa', 'slug' => 'siakad.krs.approve', 'module' => 'siakad', 'action' => 'approve', 'description' => 'Menyetujui KRS mahasiswa bimbingan wali'],
             ['name' => 'Lihat KHS & Nilai', 'slug' => 'siakad.nilai.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat kartu hasil studi & transkrip nilai'],
             ['name' => 'Input Nilai Mahasiswa', 'slug' => 'siakad.nilai.manage', 'module' => 'siakad', 'action' => 'update', 'description' => 'Menginput bobot nilai mahasiswa pengampu'],
+            ['name' => 'Ajukan Koreksi Nilai', 'slug' => 'siakad.nilai.koreksi.create', 'module' => 'siakad', 'action' => 'create', 'description' => 'Mengajukan koreksi nilai final untuk kelas yang diampu'],
+            ['name' => 'Tinjau Koreksi Nilai', 'slug' => 'siakad.nilai.koreksi.approve', 'module' => 'siakad', 'action' => 'approve', 'description' => 'Menyetujui atau menolak pengajuan koreksi nilai pada lingkup program studi'],
             ['name' => 'Lihat Mahasiswa Bimbingan', 'slug' => 'siakad.mahasiswa.read', 'module' => 'siakad', 'action' => 'read', 'description' => 'Melihat direktori mahasiswa wali'],
 
             // Level Administrator / BAAK Only
@@ -317,9 +322,10 @@ class PermissionSeeder extends Seeder
             ['name' => 'Kirim Pesan Forum', 'slug' => 'lms.forum.create', 'module' => 'lms', 'action' => 'create', 'description' => 'Mengirim pesan & balasan pada forum kelas'],
             ['name' => 'Kelola Forum Diskusi', 'slug' => 'lms.forum.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Membuat/hapus topik & moderasi pesan forum kelas'],
 
-            // ── MODUL LMS (INTEGRASI PRESENSI / PRESENSIV2) ─────
-            ['name' => 'Lihat Rekap Presensi LMS', 'slug' => 'lms.presensi.read', 'module' => 'lms', 'action' => 'read', 'description' => 'Memantau rekap kehadiran & log sinkronisasi integrasi PresensiV2'],
-            ['name' => 'Kelola Integrasi Presensi LMS', 'slug' => 'lms.presensi.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Menjalankan sinkron ulang, tarik riwayat, & export data presensi PresensiV2'],
+            // ── MODUL LMS (MONITORING & INTERAKSI PRESENSI LOKAL) ───────────
+            ['name' => 'Lihat Monitoring Presensi LMS', 'slug' => 'lms.presensi.read', 'module' => 'lms', 'action' => 'read', 'description' => 'Memantau keaktifan mengajar dan rekap presensi lokal RAG'],
+            ['name' => 'Scan QR / Input Presensi & Izin LMS', 'slug' => 'lms.presensi.create', 'module' => 'lms', 'action' => 'create', 'description' => 'Mencatat kehadiran via scan QR/token 30 detik dan mengajukan permohonan izin/sakit perkuliahan'],
+            ['name' => 'Export Laporan Presensi LMS', 'slug' => 'lms.presensi.manage', 'module' => 'lms', 'action' => 'update', 'description' => 'Mengunduh laporan keaktifan mengajar dan rekap presensi lokal RAG'],
 
             // ── MODUL LMS (PENGATURAN LEVEL MODUL) ───────────────
             ['name' => 'Lihat Pengaturan Modul LMS', 'slug' => 'lms.pengaturan.read', 'module' => 'lms', 'action' => 'read', 'description' => 'Melihat konfigurasi global modul LMS (batas import, batas upload, feature flag)'],
@@ -357,6 +363,9 @@ class PermissionSeeder extends Seeder
         $adminKeuPembayaranRole = Role::where('slug', 'admin_keuangan_pembayaran')->first();
         $petugasKasKecilRole = Role::where('slug', 'petugas_kas_kecil')->first();
         $auditorKeuanganRole = Role::where('slug', 'auditor_keuangan')->first();
+        $auditorKeuanganRole?->update([
+            'description' => 'Auditor internal keuangan: akses baca-saja data SIKEU, serta hak khusus mengelola alias akun pelaporan pajak dan mode publikasinya; tanpa hak ubah transaksi/approve',
+        ]);
         $adminSpmbRole = Role::whereIn('slug', ['admin-spmb', 'admin_spmb'])->first();
 
         // 1. Super Admin & Admin -> Semua permissions
@@ -383,6 +392,7 @@ class PermissionSeeder extends Seeder
                 'siakad.pa.create',
                 'lms.forum.read',
                 'lms.forum.create',
+                'lms.presensi.create',
                 'sikeu.tagihan.read',
                 'sikeu.dispensasi.read',
                 'sikeu.dispensasi.create',
@@ -403,7 +413,9 @@ class PermissionSeeder extends Seeder
         if ($dosenRole) {
             $dosenSlugs = [
                 'siakad.dashboard.read',
+                'siakad.kelas.read',
                 'siakad.nilai.read',
+                'siakad.nilai.koreksi.create',
                 'siakad.kurikulum.read',
                 'siakad.mahasiswa.read',
                 'siakad.pa.read',
@@ -457,6 +469,7 @@ class PermissionSeeder extends Seeder
                 'siakad.kelas.manage',
                 'siakad.nilai.read',
                 'siakad.nilai.manage',
+                'siakad.nilai.koreksi.approve',
                 'siakad.pkl.read',
                 'siakad.pkl.manage',
                 'siakad.ta.read',
@@ -634,15 +647,15 @@ class PermissionSeeder extends Seeder
             }
         }
 
-        // 13. Admin Keuangan Pembayaran Mahasiswa -> tagihan, kasir, & dispensasi (fokus pembayaran)
-        // Catatan: pakai sync() agar permission lama (master.manage, kas.manage,
-        // paymentgateway.manage) ikut terlepas saat seeder dijalankan ulang.
+        // 13. Admin Keuangan Pembayaran Mahasiswa -> tagihan, tarif, komponen biaya, kasir, & dispensasi
         if ($adminKeuPembayaranRole) {
             $pembayaranSlugs = [
                 'sikeu.dashboard.read',
                 'sikeu.tagihan.read',
                 'sikeu.tagihan.create',
                 'sikeu.dispensasi.read',
+                'sikeu.dispensasi.create',
+                'sikeu.master.manage',
                 'sikeu.unitkas.read',
             ];
             $perms = Permission::whereIn('slug', $pembayaranSlugs)->get();
@@ -674,6 +687,7 @@ class PermissionSeeder extends Seeder
                 'sikeu.pengeluaran.read',
                 'sikeu.pemasukan.read',
                 'sikeu.pajak.read',
+                'sikeu.pajak_akun.manage',
                 'sikeu.unitkas.read',
                 'sikeu.kaskecil.read',
                 'sikeu.approval.read',

@@ -2,54 +2,17 @@
 
 namespace App\Services\Siakad;
 
-use App\Models\Lms\LmsPresensiSyncLog;
-use App\Models\Lms\LmsSetting;
 use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\Kelas;
 use App\Models\Siakad\Pertemuan;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\DB;
 
 /**
- * Service.layer untuk panel administrasi presensi LMS (LMS-03).
- *
- * Menyediakan data rekap presensi lintas kelas + orkestrasi sinkronisasi
- * ke aplikasi PresensiV2. Logika transport ke PresensiV2 sendiri berada di
- * {@see PresensiV2SyncService}.
+ * Menyediakan monitoring dan rekap presensi yang tersimpan di RAG/SIAKAD.
  */
 class LmsPresensiService
 {
-    public function __construct(protected PresensiV2SyncService $sync) {}
-
-    /* ---------------------------------------------------------------------
-     | Status integrasi
-     | --------------------------------------------------------------------- */
-
-    /**
-     * Ringkasan status integrasi PresensiV2 + feature flag.
-     *
-     * @return array<string, mixed>
-     */
-    public function status(): array
-    {
-        $status = $this->sync->status();
-
-        $status['fitur_presensi_aktif'] = LmsSetting::fiturPresensiAktif();
-        $status['total_pertemuan'] = Pertemuan::query()->count();
-        $status['total_gagal_sync'] = Pertemuan::query()
-            ->where('sync_status', Pertemuan::SYNC_FAILED)
-            ->count();
-        $status['total_tersinkron'] = Pertemuan::query()
-            ->where('sync_status', Pertemuan::SYNC_SYNCED)
-            ->count();
-        $status['sinkron_terakhir'] = LmsPresensiSyncLog::query()
-            ->latest('id')
-            ->first(['aksi', 'status', 'via', 'message', 'created_at']);
-
-        return $status;
-    }
-
     /* ---------------------------------------------------------------------
      | Daftar kelas
      | --------------------------------------------------------------------- */
@@ -67,12 +30,11 @@ class LmsPresensiService
             ->whereHas('pertemuans')
             ->withCount([
                 'pertemuans as jumlah_sesi',
-                'pertemuans as jumlah_gagal_sync' => fn ($q) => $q->where('sync_status', Pertemuan::SYNC_FAILED),
-                'pertemuans as jumlah_tersinkron' => fn ($q) => $q->where('sync_status', Pertemuan::SYNC_SYNCED),
             ])
             ->addSelect([
                 'jumlah_rekap' => AbsensiMahasiswa::query()
                     ->selectRaw('COUNT(*)')
+                    ->where('siakad_absensi_mahasiswa.is_submitted', true)
                     ->whereIn('siakad_absensi_mahasiswa.pertemuan_id', function ($sub) {
                         $sub->select('id')
                             ->from('siakad_pertemuan')
@@ -80,6 +42,7 @@ class LmsPresensiService
                     }),
                 'jumlah_hadir' => AbsensiMahasiswa::query()
                     ->selectRaw('COUNT(*)')
+                    ->where('siakad_absensi_mahasiswa.is_submitted', true)
                     ->where('siakad_absensi_mahasiswa.status', AbsensiMahasiswa::STATUS_HADIR)
                     ->whereIn('siakad_absensi_mahasiswa.pertemuan_id', function ($sub) {
                         $sub->select('id')
@@ -96,8 +59,11 @@ class LmsPresensiService
             });
         }
 
-        if (! empty($filters['tahun_akademik_id'])) {
-            $query->where('tahun_akademik_id', (int) $filters['tahun_akademik_id']);
+        $tahunAkademikId = ! empty($filters['tahun_akademik_id'])
+            ? (int) $filters['tahun_akademik_id']
+            : \App\Models\Siakad\TahunAkademik::where('is_active', true)->value('id');
+        if ($tahunAkademikId) {
+            $query->where('tahun_akademik_id', (int) $tahunAkademikId);
         }
 
         $allowedSorts = ['kode_kelas', 'nama_kelas', 'jumlah_sesi', 'created_at'];
@@ -116,7 +82,7 @@ class LmsPresensiService
      | --------------------------------------------------------------------- */
 
     /**
-     * Rekap kehadiranflatten (satu baris per mahasiswa per pertemuan).
+     * Rekap kehadiran (satu baris per mahasiswa per pertemuan).
      *
      * @param  array<string, mixed>  $filters
      * @return LengthAwarePaginator<int, object>
@@ -157,8 +123,6 @@ class LmsPresensiService
             'Nama Mahasiswa',
             'Status Kehadiran',
             'Catatan',
-            'Status Sinkron',
-            'Sinkron Terakhir',
         ];
 
         $rows = [];
@@ -178,8 +142,6 @@ class LmsPresensiService
                         $row->nama_lengkap ?? '-',
                         $this->labelStatus((string) $row->status),
                         $row->catatan ?? '-',
-                        $this->labelSyncStatus((string) $row->sync_status),
-                        $row->synced_at ? Carbon::parse($row->synced_at)->format('Y-m-d H:i') : '-',
                     ];
                 }
             });
@@ -203,12 +165,11 @@ class LmsPresensiService
             ->leftJoin('siakad_mata_kuliah', 'siakad_mata_kuliah.id', '=', 'siakad_kelas.mata_kuliah_id')
             ->join('siakad_mahasiswa', 'siakad_mahasiswa.id', '=', 'siakad_absensi_mahasiswa.mahasiswa_id')
             ->whereNull('siakad_mahasiswa.deleted_at')
+            ->where('siakad_absensi_mahasiswa.is_submitted', true)
             ->select([
                 'siakad_absensi_mahasiswa.id',
                 'siakad_absensi_mahasiswa.status',
                 'siakad_absensi_mahasiswa.catatan',
-                'siakad_absensi_mahasiswa.sync_status',
-                'siakad_absensi_mahasiswa.synced_at',
                 'siakad_pertemuan.id as pertemuan_id',
                 'siakad_pertemuan.pertemuan_ke',
                 'siakad_pertemuan.tanggal',
@@ -227,6 +188,14 @@ class LmsPresensiService
      */
     protected function applyRekapFilters($query, array $filters): void
     {
+        $tahunAkademikId = ! empty($filters['tahun_akademik_id'])
+            ? (int) $filters['tahun_akademik_id']
+            : (empty($filters['kelas_id']) ? \App\Models\Siakad\TahunAkademik::where('is_active', true)->value('id') : null);
+
+        if ($tahunAkademikId) {
+            $query->where('siakad_kelas.tahun_akademik_id', (int) $tahunAkademikId);
+        }
+
         if (! empty($filters['kelas_id'])) {
             $query->where('siakad_pertemuan.kelas_id', (int) $filters['kelas_id']);
         }
@@ -237,10 +206,6 @@ class LmsPresensiService
 
         if (! empty($filters['status'])) {
             $query->where('siakad_absensi_mahasiswa.status', (string) $filters['status']);
-        }
-
-        if (! empty($filters['sync_status'])) {
-            $query->where('siakad_absensi_mahasiswa.sync_status', (string) $filters['sync_status']);
         }
 
         if (! empty($filters['search'])) {
@@ -254,94 +219,132 @@ class LmsPresensiService
     }
 
     /* ---------------------------------------------------------------------
-     | Log sinkronisasi
+     | Monitoring & Rekap Keaktifan Mengajar Dosen
      | --------------------------------------------------------------------- */
 
     /**
-     * @return LengthAwarePaginator<int, LmsPresensiSyncLog>
+     * Rekap keaktifan mengajar dosen per kelas, termasuk realisasi pertemuan dan status pengisian presensi.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return LengthAwarePaginator<int, object>
      */
-    public function logSinkronisasi(int $perPage, ?string $status, ?int $kelasId): LengthAwarePaginator
+    public function monitoringKeaktifanDosen(array $filters, int $perPage = 15): LengthAwarePaginator
     {
-        $query = LmsPresensiSyncLog::query()->with('user:id,name,username');
+        $query = Kelas::query()
+            ->with([
+                'mataKuliah:id,kode_mk,nama',
+                'programStudi:id,kode_prodi,nama',
+                'tahunAkademik:id,kode,nama',
+                'dosenPengampu.dosen' => fn ($q) => $q->select('id', 'nama_lengkap', 'nidn', 'nip'),
+                'pertemuans' => fn ($q) => $q->select('id', 'kelas_id', 'pertemuan_ke', 'tanggal', 'status_pertemuan', 'materi')
+                    ->withCount([
+                        'absensi as absensi_count' => fn ($absensi) => $absensi
+                            ->where('is_submitted', true)
+                            ->whereHas('mahasiswa.krs.krsDetails', fn ($details) => $details
+                                ->whereColumn('siakad_krs_detail.kelas_id', 'siakad_pertemuan.kelas_id')
+                                ->whereHas('krs', fn ($krs) => $krs->whereIn('status', ['disetujui', 'diajukan']))),
+                    ]),
+            ])
+            ->withCount([
+                'pertemuans as total_pertemuan',
+                'pertemuans as pertemuan_terisi' => fn ($q) => $q->whereHas(
+                    'absensi',
+                    fn ($absensi) => $absensi->where('is_submitted', true)
+                ),
+                'pertemuans as pertemuan_selesai' => fn ($q) => $q->where('status_pertemuan', Pertemuan::STATUS_SELESAI),
+            ]);
 
-        if ($status) {
-            $query->where('status', $status);
+        $tahunAkademikId = ! empty($filters['tahun_akademik_id'])
+            ? (int) $filters['tahun_akademik_id']
+            : \App\Models\Siakad\TahunAkademik::where('is_active', true)->value('id');
+        if ($tahunAkademikId) {
+            $query->where('tahun_akademik_id', (int) $tahunAkademikId);
         }
 
-        if ($kelasId) {
-            $query->where('kelas_id', $kelasId);
+        if (! empty($filters['program_studi_id'])) {
+            $query->where('program_studi_id', (int) $filters['program_studi_id']);
         }
 
-        return $query->orderByDesc('id')->paginate($perPage)->withQueryString();
+        if (! empty($filters['search'])) {
+            $search = (string) $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('kode_kelas', 'like', "%{$search}%")
+                    ->orWhere('nama_kelas', 'like', "%{$search}%")
+                    ->orWhereHas('mataKuliah', fn ($mq) => $mq->where('nama', 'like', "%{$search}%")->orWhere('kode_mk', 'like', "%{$search}%"))
+                    ->orWhereHas('dosenPengampu.dosen', fn ($dq) => $dq->where('nama_lengkap', 'like', "%{$search}%")->orWhere('nidn', 'like', "%{$search}%"));
+            });
+        }
+
+        return $query
+            ->orderBy('kode_kelas')
+            ->paginate($perPage)
+            ->withQueryString();
     }
 
-    /* ---------------------------------------------------------------------
-     | Sinkronisasi
-     | --------------------------------------------------------------------- */
-
     /**
-     * Sinkronkan ulang satu pertemuan atau seluruh pertemuan sebuah kelas.
+     * Format data export keaktifan dosen mengajar.
      *
-     * @return array<string, mixed>
+     * @param  array<string, mixed>  $filters
+     * @return array{headers: array<int, string>, rows: array<int, array<int, mixed>>, filename: string}
      */
-    public function syncUlang(?int $pertemuanId, ?int $kelasId): array
+    public function barisKeaktifanDosen(array $filters): array
     {
-        if (! $this->sync->isConfigured()) {
-            return [
-                'success' => false,
-                'message' => 'Integrasi PresensiV2 belum dikonfigurasi.',
-                'pertemuan' => [],
-            ];
-        }
+        $paginator = $this->monitoringKeaktifanDosen($filters, 1000);
+        $headers = [
+            'Kode Kelas',
+            'Nama Kelas',
+            'Program Studi',
+            'Mata Kuliah',
+            'Dosen Pengampu',
+            'NIDN Dosen',
+            'Rencana Pertemuan',
+            'Realisasi Pertemuan',
+            'Pertemuan Ada Presensi',
+            'Pertemuan Selesai',
+            '% Keaktifan Presensi',
+            'Status Keaktifan',
+        ];
 
-        if ($pertemuanId) {
-            $pertemuan = Pertemuan::with('kelas')->findOrFail($pertemuanId);
-            $result = $this->sync->syncKehadiran($pertemuan);
-
-            return [
-                'success'     => (bool) ($result['success'] ?? false),
-                'message'     => $result['message'] ?? 'Sinkronisasi selesai.',
-                'pertemuan'  => [$pertemuan->id => $result],
-            ];
-        }
-
-        $pertemuans = Pertemuan::with('kelas')
-            ->where('kelas_id', $kelasId)
-            ->orderBy('pertemuan_ke')
-            ->get();
-
-        $hasil = [];
-        $sukses = 0;
-        $gagal = 0;
-
-        foreach ($pertemuans as $pertemuan) {
-            $result = $this->sync->syncKehadiran($pertemuan);
-            $hasil[$pertemuan->id] = $result;
-
-            if ($result['success'] ?? false) {
-                $sukses++;
-            } else {
-                $gagal++;
+        $rows = [];
+        foreach ($paginator->items() as $k) {
+            $dosenNames = [];
+            $dosenNidns = [];
+            foreach ($k->dosenPengampu as $dp) {
+                if ($dp->dosen) {
+                    $dosenNames[] = $dp->dosen->nama_lengkap;
+                    if ($dp->dosen->nidn) {
+                        $dosenNidns[] = $dp->dosen->nidn;
+                    }
+                }
             }
+
+            $total = (int) ($k->total_pertemuan ?? 0);
+            $terisi = (int) ($k->pertemuan_terisi ?? 0);
+            $selesai = (int) ($k->pertemuan_selesai ?? 0);
+            $persen = $total > 0 ? round(($terisi / $total) * 100, 1) : 0;
+            $status = $persen >= 80 ? 'Sangat Aktif' : ($persen >= 50 ? 'Cukup Aktif' : ($terisi > 0 ? 'Perlu Perhatian' : 'Belum Ada Presensi'));
+
+            $rows[] = [
+                $k->kode_kelas ?? '-',
+                $k->nama_kelas ?? '-',
+                $k->programStudi?->nama ?? '-',
+                $k->mataKuliah?->nama ?? '-',
+                implode(', ', $dosenNames) ?: 'Belum diplot',
+                implode(', ', $dosenNidns) ?: '-',
+                16, // Standar semester
+                $total,
+                $terisi,
+                $selesai,
+                "{$persen}%",
+                $status,
+            ];
         }
 
         return [
-            'success'    => $gagal === 0,
-            'message'    => "Sinkronisasi selesai: {$sukses} berhasil, {$gagal} gagal.",
-            'pertemuan' => $hasil,
+            'headers'  => $headers,
+            'rows'     => $rows,
+            'filename' => 'Laporan_Keaktifan_Mengajar_Dosen_' . now()->format('Ymd_His'),
         ];
-    }
-
-    /**
-     * Tarik riwayat jurnal + rekap dari PresensiV2 ke LMS untuk satu kelas.
-     *
-     * @return array<string, mixed>
-     */
-    public function tarikRiwayat(int $kelasId): array
-    {
-        $kelas = Kelas::with('mataKuliah', 'tahunAkademik', 'programStudi')->findOrFail($kelasId);
-
-        return $this->sync->tarikRiwayat($kelas);
     }
 
     /* ---------------------------------------------------------------------
@@ -359,14 +362,4 @@ class LmsPresensiService
         };
     }
 
-    protected function labelSyncStatus(string $status): string
-    {
-        return match ($status) {
-            AbsensiMahasiswa::SYNC_LOCAL   => 'Hanya di LMS',
-            AbsensiMahasiswa::SYNC_PENDING => 'Menunggu Sinkron',
-            AbsensiMahasiswa::SYNC_SYNCED  => 'Tersinkron',
-            AbsensiMahasiswa::SYNC_FAILED  => 'Gagal Sinkron',
-            default                        => $status === '' ? '-' : $status,
-        };
-    }
 }

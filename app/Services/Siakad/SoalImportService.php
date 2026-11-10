@@ -50,6 +50,7 @@ class SoalImportService
         'poin' => ['poin', 'bobot', 'point', 'score'],
         'tingkat' => ['tingkat_kesulitan', 'kesulitan', 'tingkat', 'difficulty'],
         'pembahasan' => ['pembahasan', 'explanation', 'alasan'],
+        'gambar' => ['gambar', 'gambar_path', 'image', 'url_gambar', 'image_url'],
     ];
 
     /**
@@ -63,6 +64,19 @@ class SoalImportService
         'C' => ['opsi_c', 'jawaban_c', 'pilihan_c', 'c'],
         'D' => ['opsi_d', 'jawaban_d', 'pilihan_d', 'd'],
         'E' => ['opsi_e', 'jawaban_e', 'pilihan_e', 'e'],
+    ];
+
+    /**
+     * Alias kolom gambar opsi jawaban (huruf A-E).
+     *
+     * @var array<string, array<int, string>>
+     */
+    private const HEADER_ALIAS_OPSI_GAMBAR = [
+        'A' => ['gambar_opsi_a', 'gambar_a', 'image_a'],
+        'B' => ['gambar_opsi_b', 'gambar_b', 'image_b'],
+        'C' => ['gambar_opsi_c', 'gambar_c', 'image_c'],
+        'D' => ['gambar_opsi_d', 'gambar_d', 'image_d'],
+        'E' => ['gambar_opsi_e', 'gambar_e', 'image_e'],
     ];
 
     /**
@@ -114,10 +128,15 @@ class SoalImportService
         $iPoin = self::col($index, self::HEADER_ALIAS['poin']);
         $iTingkat = self::col($index, self::HEADER_ALIAS['tingkat']);
         $iPembahasan = self::col($index, self::HEADER_ALIAS['pembahasan']);
+        $iGambar = self::col($index, self::HEADER_ALIAS['gambar']);
 
         $iOpsi = [];
+        $iOpsiGambar = [];
         foreach (self::HEADER_ALIAS_OPSI as $huruf => $aliases) {
             $iOpsi[$huruf] = self::col($index, $aliases);
+        }
+        foreach (self::HEADER_ALIAS_OPSI_GAMBAR as $huruf => $aliases) {
+            $iOpsiGambar[$huruf] = self::col($index, $aliases);
         }
 
         $errors = [];
@@ -180,15 +199,22 @@ class SoalImportService
             $pembahasan = trim((string) ($iPembahasan !== null ? ($line[$iPembahasan] ?? '') : ''));
             $pembahasan = $pembahasan === '' ? null : $pembahasan;
 
+            $gambarSoal = trim((string) ($iGambar !== null ? ($line[$iGambar] ?? '') : ''));
+            $gambarSoal = $gambarSoal === '' ? null : $gambarSoal;
+
             $kunci = trim((string) ($iKunci !== null ? ($line[$iKunci] ?? '') : ''));
 
             if ($tipe === BankSoal::TIPE_PILIHAN_GANDA) {
                 $opsi = [];
+                $opsiGbr = [];
                 foreach (self::OPSI_HURUF as $k) {
                     $c = $iOpsi[$k];
                     $t = $c !== null ? trim((string) ($line[$c] ?? '')) : '';
-                    if ($t !== '') {
+                    $cGbr = $iOpsiGambar[$k] ?? null;
+                    $g = $cGbr !== null ? trim((string) ($line[$cGbr] ?? '')) : '';
+                    if ($t !== '' || $g !== '') {
                         $opsi[$k] = $t;
+                        $opsiGbr[$k] = $g !== '' ? $g : null;
                     }
                 }
                 if (count($opsi) < 2) {
@@ -207,6 +233,7 @@ class SoalImportService
                 foreach ($opsi as $k => $teks) {
                     $opsiRows[] = [
                         'teks' => $teks,
+                        'gambar_path' => $opsiGbr[$k] ?? null,
                         'is_benar' => $k === $kunciHuruf,
                         'urutan' => $urutan++,
                     ];
@@ -215,6 +242,7 @@ class SoalImportService
                 $rows[] = [
                     'tipe_soal' => $tipe,
                     'pertanyaan' => $pertanyaan,
+                    'gambar_path' => $gambarSoal,
                     'bobot' => $bobot,
                     'kunci_jawaban' => null,
                     'pembahasan' => $pembahasan,
@@ -234,6 +262,7 @@ class SoalImportService
             $rows[] = [
                 'tipe_soal' => $tipe,
                 'pertanyaan' => $pertanyaan,
+                'gambar_path' => $gambarSoal,
                 'bobot' => $bobot,
                 'kunci_jawaban' => $kunci === '' ? null : $kunci,
                 'pembahasan' => $pembahasan,
@@ -270,6 +299,7 @@ class SoalImportService
                         'bobot' => $row['bobot'],
                         'kunci_jawaban' => $row['kunci_jawaban'] ?? null,
                         'pembahasan' => $row['pembahasan'] ?? null,
+                        'gambar_path' => $row['gambar_path'] ?? null,
                         'dibuat_oleh' => $context['dibuat_oleh'] ?? null,
                     ];
 
@@ -285,6 +315,7 @@ class SoalImportService
                         BankSoalOpsi::create([
                             'bank_soal_id' => $soal->id,
                             'teks' => $opsi['teks'],
+                            'gambar_path' => $opsi['gambar_path'] ?? null,
                             'is_benar' => $opsi['is_benar'],
                             'urutan' => $opsi['urutan'],
                         ]);
@@ -312,19 +343,19 @@ class SoalImportService
 
         $headers = [
             'tipe', 'pertanyaan', 'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e',
-            'kunci', 'poin', 'tingkat_kesulitan', 'pembahasan',
+            'kunci', 'poin', 'tingkat_kesulitan', 'pembahasan', 'gambar',
         ];
         $sheet->fromArray([$headers], null, 'A1');
 
         $contoh = [
-            ['pg', 'Ibukota Indonesia adalah …', 'Jakarta', 'Bandung', 'Surabaya', 'Medan', '', 'A', 10, 'mudah', 'Jakarta adalah ibu kota RI.'],
-            ['pg', '2 + 2 × 2 = …', '6', '8', '4', '10', '', 'A', 10, 'sedang', 'Operasi perkalian didahulukan.'],
-            ['isian', 'Sebutkan kepanjangan dari HTTP.', '', '', '', '', '', 'HyperText Transfer Protocol', 10, 'sedang', ''],
-            ['uraian', 'Jelaskan perbedaan OOP dan pemrograman prosedural.', '', '', '', '', '', '', 20, 'sukar', ''],
+            ['pg', 'Ibukota Indonesia adalah …', 'Jakarta', 'Bandung', 'Surabaya', 'Medan', '', 'A', 10, 'mudah', 'Jakarta adalah ibu kota RI.', ''],
+            ['pg', 'Perhatikan gambar berikut. Berapakah hasil 2 + 2 × 2 = …', '6', '8', '4', '10', '', 'A', 10, 'sedang', 'Operasi perkalian didahulukan.', 'https://example.com/soal-math.png'],
+            ['isian', 'Sebutkan kepanjangan dari HTTP.', '', '', '', '', '', 'HyperText Transfer Protocol', 10, 'sedang', '', ''],
+            ['uraian', 'Jelaskan perbedaan OOP dan pemrograman prosedural.', '', '', '', '', '', '', 20, 'sukar', '', ''],
         ];
         $sheet->fromArray($contoh, null, 'A2');
 
-        foreach (range('A', 'K') as $c) {
+        foreach (range('A', 'L') as $c) {
             $sheet->getColumnDimension($c)->setAutoSize(true);
         }
         $sheet->freezePane('A2');
@@ -342,6 +373,8 @@ class SoalImportService
             ['poin', 'Bobot nilai (angka >= 1, default 10, maksimal 100)'],
             ['tingkat_kesulitan', 'mudah | sedang | sukar (opsional)'],
             ['pembahasan', 'Pembahasan / kunci diskusi (opsional)'],
+            ['gambar', 'URL atau nama file gambar pertanyaan (opsional)'],
+            ['gambar_opsi_a..e', 'URL/file gambar per opsi (opsional, tambahkan kolom jika perlu)'],
             [''],
             ['Baris 2-5 adalah contoh dan AKAN ikut terimport bila tidak dihapus.'],
             ['Hapus baris contoh bila tidak diperlukan, lalu upload file ke halaman Bank Soal.'],

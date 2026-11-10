@@ -33,6 +33,7 @@ use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\MataKuliah;
 use App\Services\Siakad\LmsModuleSettingService;
 use App\Services\Siakad\SiakadAkademikService;
+use App\Services\Siakad\NilaiKomponenSyncService;
 use App\Services\Siakad\SoalImportService;
 use App\Http\Requests\Siakad\StoreCplRequest;
 use App\Http\Requests\Siakad\StoreBahanKajianRequest;
@@ -46,10 +47,14 @@ use Illuminate\Support\Facades\Log;
 class ObeController extends Controller
 {
     protected SiakadAkademikService $akademikService;
+    protected NilaiKomponenSyncService $nilaiKomponenSyncService;
 
-    public function __construct(SiakadAkademikService $akademikService)
-    {
+    public function __construct(
+        SiakadAkademikService $akademikService,
+        NilaiKomponenSyncService $nilaiKomponenSyncService
+    ) {
         $this->akademikService = $akademikService;
+        $this->nilaiKomponenSyncService = $nilaiKomponenSyncService;
     }
 
     // --- CPL (Capaian Pembelajaran Lulusan) ---
@@ -1188,23 +1193,7 @@ class ObeController extends Controller
      */
     private function konversiHurufMutu(float $nilaiAkhir, ?int $prodiId = null): array
     {
-        $skala = SkalaNilai::konversiNilai($nilaiAkhir, $prodiId);
-        if ($skala) {
-            return [$skala->nilai_huruf, (float) $skala->bobot_indeks];
-        }
-
-        $huruf = 'E';
-        $mutu = 0.00;
-        if ($nilaiAkhir >= 85) { $huruf = 'A'; $mutu = 4.00; }
-        elseif ($nilaiAkhir >= 80) { $huruf = 'A-'; $mutu = 3.75; }
-        elseif ($nilaiAkhir >= 75) { $huruf = 'B+'; $mutu = 3.25; }
-        elseif ($nilaiAkhir >= 70) { $huruf = 'B'; $mutu = 3.00; }
-        elseif ($nilaiAkhir >= 65) { $huruf = 'B-'; $mutu = 2.75; }
-        elseif ($nilaiAkhir >= 60) { $huruf = 'C+'; $mutu = 2.25; }
-        elseif ($nilaiAkhir >= 55) { $huruf = 'C'; $mutu = 2.00; }
-        elseif ($nilaiAkhir >= 40) { $huruf = 'D'; $mutu = 1.00; }
-
-        return [$huruf, $mutu];
+        return $this->nilaiKomponenSyncService->convertGrade($nilaiAkhir, $prodiId);
     }
 
     public function saveBulkNilaiObe(Request $request, $kelasId)
@@ -2521,10 +2510,44 @@ class ObeController extends Controller
 
         $perPage = min(100, $request->integer('per_page', 15));
 
-        $query = BankSoal::with(['mingguan', 'subCpmk.cpmk', 'rps.mataKuliah.kurikulum.programStudi', 'kategori', 'opsi']);
+        $query = BankSoal::with([
+            'mingguan',
+            'subCpmk.cpmk',
+            'rps.mataKuliah.kurikulum.programStudi',
+            'rps.dosenPengembang:id,user_id,nama_lengkap,gelar_depan,gelar_belakang',
+            'pembuat:id,username,email',
+            'kategori',
+            'opsi',
+        ]);
 
         if ($request->filled('rps_id')) {
             $query->where('rps_id', $request->input('rps_id'));
+        }
+        if ($request->filled('mata_kuliah_id')) {
+            $mkId = (int) $request->input('mata_kuliah_id');
+            $query->whereHas('rps', fn ($r) => $r->where('mata_kuliah_id', $mkId));
+        }
+        if ($request->filled('dosen_id')) {
+            $rawDosenIds = is_array($request->input('dosen_id'))
+                ? $request->input('dosen_id')
+                : explode(',', (string) $request->input('dosen_id'));
+            $dosenIds = array_slice(array_values(array_filter(array_map('intval', $rawDosenIds))), 0, 50);
+            if (!empty($dosenIds)) {
+                $dosenUserIds = \App\Models\Siakad\Dosen::whereIn('id', $dosenIds)
+                    ->whereNotNull('user_id')
+                    ->pluck('user_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+                $query->where(function ($q) use ($dosenIds, $dosenUserIds) {
+                    $q->whereHas('rps', fn ($r) => $r->whereIn('dosen_pengembang_id', $dosenIds));
+                    if (!empty($dosenUserIds)) {
+                        $q->orWhereIn('dibuat_oleh', $dosenUserIds);
+                    }
+                });
+            }
+        }
+        if ($request->filled('dibuat_oleh')) {
+            $query->where('dibuat_oleh', (int) $request->input('dibuat_oleh'));
         }
         if ($request->filled('rps_mingguan_id')) {
             $query->where('rps_mingguan_id', $request->input('rps_mingguan_id'));
@@ -4546,4 +4569,3 @@ class ObeController extends Controller
         ]);
     }
 }
-

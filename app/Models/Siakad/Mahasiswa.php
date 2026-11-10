@@ -131,10 +131,11 @@ class Mahasiswa extends Model
 
         if ($this->konversi_id) {
             $konvTransfer = $this->konversiTransfer;
-            if ($konvTransfer && $konvTransfer->status === 'disetujui' && $konvTransfer->details && count($konvTransfer->details) > 0) {
+            $detailDiakui = $konvTransfer?->details?->where('status', 'diakui') ?? collect();
+            if ($konvTransfer && $konvTransfer->status === 'disetujui' && $detailDiakui->isNotEmpty()) {
                 $totalSks = 0;
                 $totalMutu = 0;
-                foreach ($konvTransfer->details as $konv) {
+                foreach ($detailDiakui as $konv) {
                     $mk = $konv->mataKuliahDiakui;
                     $sks = $mk ? $mk->total_sks : $konv->sks_asal;
                     $huruf = strtoupper(trim((string) $konv->nilai_huruf_asal));

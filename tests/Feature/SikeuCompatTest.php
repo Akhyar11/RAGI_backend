@@ -119,6 +119,7 @@ class SikeuCompatTest extends TestCase
             'alasan' => 'Ujian test',
             'status' => 'approved',
             'allow_krs' => true,
+            'jatuh_tempo_baru' => now()->addDays(7)->toDateString(),
         ]);
         $res = $this->withHeaders($this->headers())->getJson(
             '/api/v1/sikeu/compat/eligibilitas-ujian?mahasiswa_id=' . $this->mahasiswa->id . '&tipe_ujian=ALL'

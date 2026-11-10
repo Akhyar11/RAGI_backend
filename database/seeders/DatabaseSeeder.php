@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\Simpeg\SimpegPayrollFlexibleSeeder::class,
             \Database\Seeders\IAM\IamApiIntegrationSeeder::class,
             \Database\Seeders\Sikeu\SikeuAkuntansiSeeder::class,
+            \Database\Seeders\Sikeu\UnitKasSeeder::class,
             \Database\Seeders\SiakadAturanSksSeeder::class,
             \Database\Seeders\Sikeu\SikeuAdminSeeder::class,
             \Database\Seeders\SiakadSamplePerkuliahanSeeder::class,

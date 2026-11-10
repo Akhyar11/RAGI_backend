@@ -31,12 +31,15 @@ Route::middleware(['can:siakad.kelas.read'])->group(function () {
     Route::get('/kelas/{kelasId}/setting', [LmsController::class, 'getSetting']);
     Route::get('/kelas/{kelasId}/rekap-absensi', [LmsController::class, 'getRekapAbsensi']);
     Route::get('/pertemuan/{id}', [LmsController::class, 'getPertemuan']);
+    Route::get('/pertemuan/{id}/absensi', [LmsController::class, 'getPertemuanAbsensi']);
     Route::get('/download/{type}/{id}', [LmsController::class, 'downloadFile']);
     Route::post('/tugas/{tugasId}/kumpul', [LmsController::class, 'kumpulkanTugas']);
     // Perbarui & tarik kembali pengumpulan tugas (pemilik pengumpulan saja).
     Route::put('/tugas/{tugasId}/kumpulan', [LmsController::class, 'updatePengumpulan']);
     Route::delete('/tugas/{tugasId}/kumpulan', [LmsController::class, 'hapusPengumpulan']);
     Route::post('/pertemuan/{pertemuanId}/input-token', [LmsController::class, 'inputToken']);
+    Route::post('/presensi/scan', [LmsController::class, 'scanPresensi']);
+    Route::get('/presensi/sesi-aktif', [LmsController::class, 'sesiPresensiAktif']);
     Route::post('/pertemuan/{pertemuanId}/izin', [LmsController::class, 'ajukanIzin']);
     // Quiz — sisi mahasiswa
     Route::get('/quiz/{quizId}', [QuizController::class, 'showMahasiswa']);
@@ -117,6 +120,7 @@ Route::middleware(['can:siakad.kelas.manage'])->group(function () {
     Route::put('/tugas/{tugasId}', [LmsController::class, 'updateTugas']);
     Route::delete('/tugas/{tugasId}', [LmsController::class, 'destroyTugas']);
     Route::post('/pertemuan/{pertemuanId}/token', [LmsController::class, 'generateToken']);
+    Route::post('/pertemuan/{pertemuanId}/buka-sesi', [LmsController::class, 'bukaSesiPresensi']);
     Route::post('/pertemuan/{pertemuanId}/token/rotate', [LmsController::class, 'rotateToken']);
     Route::post('/pertemuan/{pertemuanId}/tutup-presensi', [LmsController::class, 'tutupPresensi']);
     // Quiz — sisi dosen pengelola
@@ -130,7 +134,8 @@ Route::middleware(['can:siakad.kelas.manage'])->group(function () {
     Route::post('/attempt/{attemptId}/reset', [QuizController::class, 'resetAttempt']);
     Route::get('/attempt/{attemptId}/detail', [QuizController::class, 'attemptDetail']);
     Route::get('/quiz/{quizId}/preview', [QuizController::class, 'preview']);
-    // Tryout — buat & kelola peserta (level kelas)
+    // Tryout — buat & kelola peserta (level kelas maupun ujian khusus lintas mata kuliah)
+    Route::post('/tryout', [QuizController::class, 'storeStandaloneTryout']);
     Route::post('/kelas/{kelasId}/tryout', [QuizController::class, 'storeTryout']);
     Route::post('/quiz/{quizId}/peserta', [QuizController::class, 'addPeserta']);
     Route::post('/quiz/{quizId}/peserta-kelas', [QuizController::class, 'addPesertaByKelas']);
@@ -164,22 +169,16 @@ Route::get('/notifikasi/unread-count', [LmsNotifikasiController::class, 'unreadC
 Route::post('/notifikasi/read-all', [LmsNotifikasiController::class, 'markAllRead']);
 Route::post('/notifikasi/{id}/read', [LmsNotifikasiController::class, 'markRead']);
 
-// --- Panel Administrasi Integrasi Presensi (PresensiV2) ---
-// Monitoring & sinkronisasi dua arah LMS <-> PresensiV2. Permission granular
-// modul LMS: `lms.presensi.read` (baca rekap & log) dan `lms.presensi.manage`
-// (sinkron ulang, tarik riwayat, export). Kedua permission hanya diberikan
-// kepada admin/superadmin karena panel ini memantau seluruh kampus.
+// --- Monitoring presensi lokal RAG/SIAKAD ---
 Route::middleware(['can:lms.presensi.read'])->group(function () {
-    Route::get('/admin/presensi/status', [LmsPresensiController::class, 'status']);
     Route::get('/admin/presensi/kelas', [LmsPresensiController::class, 'kelas']);
     Route::get('/admin/presensi/rekap', [LmsPresensiController::class, 'rekap']);
-    Route::get('/admin/presensi/log', [LmsPresensiController::class, 'log']);
+    Route::get('/admin/presensi/keaktifan-dosen', [LmsPresensiController::class, 'keaktifanDosen']);
 });
 
 Route::middleware(['can:lms.presensi.manage'])->group(function () {
     Route::get('/admin/presensi/export', [LmsPresensiController::class, 'export']);
-    Route::post('/admin/presensi/sync', [LmsPresensiController::class, 'sync']);
-    Route::post('/admin/presensi/tarik', [LmsPresensiController::class, 'tarik']);
+    Route::get('/admin/presensi/keaktifan-dosen/export', [LmsPresensiController::class, 'exportKeaktifanDosen']);
 });
 
 // Hak Akses Penilaian Akademik (OBE Sync)

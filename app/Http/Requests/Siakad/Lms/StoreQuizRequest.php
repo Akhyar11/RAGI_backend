@@ -14,6 +14,7 @@ class StoreQuizRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'kelas_id' => 'nullable|integer|exists:siakad_kelas,id',
             'komponen_penilaian_id' => 'nullable|exists:siakad_komponen_penilaian,id',
             'judul' => 'required|string|max:255',
             'deskripsi' => 'nullable|string',
@@ -27,6 +28,8 @@ class StoreQuizRequest extends FormRequest
             'ditutup_at' => 'nullable|date|after_or_equal:dibuka_at',
             'is_published' => 'nullable|boolean',
             'kode_akses' => 'nullable|string|max:20',
+            'kolaborator_dosen_ids' => 'nullable|array',
+            'kolaborator_dosen_ids.*' => 'integer|exists:siakad_dosen,id',
         ];
     }
 }

@@ -90,8 +90,10 @@ class MenuService
         }
 
         // 1b. Dapatkan menu khusus Admin OBE berdasarkan Role (Dosen / Pegawai yang di-set Admin OBE)
+        // Catatan: Pembatasan menu khusus OBE hanya berlaku saat request menu modul 'siakad'.
+        // Modul lain (LMS, SIMPEG, SSO, dll.) tetap mengikuti hak akses normal user.
         $adminProdiMenuIds = [];
-        if ($isAdminObeProdi) {
+        if ($isAdminObeProdi && in_array($module, ['siakad', 'all'], true)) {
             // Cek plotting khusus per role di tabel siakad_admin_obe_role_menus
             $adminProdiMenuIds = \Illuminate\Support\Facades\DB::table('siakad_admin_obe_role_menus')
                 ->whereIn('role_id', $roleIds)

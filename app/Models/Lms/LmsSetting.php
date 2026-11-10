@@ -20,7 +20,7 @@ class LmsSetting extends Model
     protected $fillable = ['key', 'value', 'description'];
 
     /**
-     * Key feature flag integrasi presensi (PresensiV2).
+     * Key feature flag presensi lokal LMS.
      */
     public const KEY_FITUR_PRESENSI = 'lms_fitur_presensi';
 
@@ -50,7 +50,7 @@ class LmsSetting extends Model
     public const CACHE_KEY_FITUR_PRESENSI = 'lms_fitur_presensi';
 
     /**
-     * Apakah fitur presensi (termasuk integrasi PresensiV2) aktif.
+     * Apakah fitur presensi lokal LMS aktif.
      *
      * Default: aktif. Admin tetap boleh mengakses saat flag dimatikan
      * (untuk keperluan support), namun dosen & mahasiswa mendapat 403.

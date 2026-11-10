@@ -4,7 +4,7 @@
 | | |
 |---|---|
 | **Tanggal** | 22 Oktober 2026 |
-| **Status** | FINAL v1 — **Fase 0 DONE** ✅ · **Fase 1A (Export Laporan) DONE** ✅ · **Fase 1B (Import/Bulk Bank Soal) DONE** ✅ · **Fase 1C (Integrasi PresensiV2) DONE** ✅ · **Fase 3A (Notifikasi LMS) DONE** ✅ · **Fase 3B (Forum Lanjutan) DONE** ✅ · **Fase 4B (Tryout Lifecycle) DONE** ✅ · **Fase 5 (Dashboard & Pengaturan) DONE** ✅ · Fase 2 (AI Grading — DIHAPUS) & seterusnya pending |
+| **Status** | Dokumen rencana historis. LMS PresensiV2 yang dahulu direncanakan/diimplementasikan kini dinonaktifkan; lihat catatan arsitektur terbaru di bagian 4.A. |
 | **Sumber (donor)** | `/Users/it/Project/lms` (Laravel 13.8 API + Next.js 16 web + microservice AI Node) |
 | **Target (penerima)** | `/Users/it/Project/RAG` (Laravel 13.8 backend + Next.js 16 frontend) |
 | **Ruang lingkup** | Modul LMS RAG (prefix `/api/v1/lms`, 57 route, 14 tabel `lms_*`, 14 halaman FE) |
@@ -12,6 +12,11 @@
 > **Catatan ruang lingkup (perubahan atas rencana awal)**: **Fase 2 — AI Grading Esai DIHAPUS** atas instruksi user
 > (tidak ada tabel/kolom AI grading, tidak ada service, tidak ada toggle FE).
 > Semua fase lain tetap sesuai rencana.
+
+> **Catatan pembaruan arsitektur (2026-11-09)**: rencana integrasi PresensiV2 pada dokumen historis ini
+> tidak berlaku lagi. Modul presensi LMS hanya memakai data SIAKAD RAG; tidak ada koneksi, API,
+> scheduler retry, atau aksi UI ke sistem legacy. Kolom/tabel sinkronisasi historis dipertahankan
+> tanpa digunakan agar data lama tidak terhapus.
 >
 > **Keputusan teknis yang sudah diambil saat eksekusi:**
 >
@@ -155,35 +160,14 @@ Ini poin **paling penting** sebelum porting: ketiga area berikut di donor **tida
 - Feature flag `fitur_presensi` → `LmsSetting::fiturPresensiAktif()` (cache 120s), non-admin dapat 403 saat flag off.
 - `PresensiDevController` — rekap JSON + **export CSV 13 kolom dengan UTF-8 BOM**.
 
-**Kondisi RAG**
-- Absensi token 6-digit (`lms_tugas`…`: GenerateTokenRequest`, `InputTokenAbsensiRequest`), TTL + rotate dari `lms_token_ttl_minutes`/`lms_token_rotate_seconds`.
-- `bulk-absensi` manual, `tutup-presensi` manual + `lms:tutup-presensi-otomatis` (hourly).
-- `lms_izin_absensi` +approve dosen.
-- **Tidak ada** koneksi ke PresensiV2, **tidak ada** retry sync, **tidak ada** flag, **tidak ada** export.
+**Kondisi implementasi saat ini**
+- Absensi token 6-digit, bulk-absensi manual, penutupan sesi otomatis, pengajuan izin, monitoring keaktifan, dan export berjalan memakai tabel lokal RAG.
+- Integrasi PresensiV2 telah dinonaktifkan dan dihapus dari jalur runtime: tidak ada koneksi/config, service, endpoint sync/tarik, command retry, atau panel UI untuk sistem legacy.
+- Tabel log dan kolom sync lama yang sudah pernah dibuat tetap dipertahankan agar perubahan ini tidak menghapus data historis. Kolom tersebut tidak lagi digunakan atau ditampilkan.
+- Feature flag `lms_fitur_presensi` tetap mengatur aktif/tidaknya fitur presensi lokal.
+- Monitoring tersedia melalui `lms.presensi.read`; export lokal melalui `lms.presensi.manage`. Laporan hanya indikator monitoring dan tidak memengaruhi payroll.
 
-**Desain solusi RAG**
-
-| Item | Specifikasi |
-|---|---|
-| Config | `config/lms_integration.php` → blok `presensi`: `mode` (`auto`/`api`/`db`), `api_url`, `api_key`, `timeout`, `db_connection`, `jurnal_table`, `rekap_table`, `id_ptk_source`, `ruang_default` (semua via `env()`) |
-| Koneksi DB | Koneksi `presensiv2` ditambahkan di `config/database.php` (RW) |
-| Service | `app/Services/Siakad/PresensiV2SyncService.php` — `syncJurnal()`, `syncKehadiran()`, `syncAbsensi()`, `hapusAbsensi()`, `resetRekap()`, `tarikRiwayat()`, `status()` |
-| Service (panel) | `app/Services/Siakad/LmsPresensiService.php` — `status()`, `daftarKelas()`, `rekap()`, `barisRekap()`, `logSinkronisasi()`, `syncUlang()`, `tarikRiwayat()` |
-| Model/tabel | Tabel `lms_presensi_sync_log` + kolom sync (`sync_status`, `sync_error`, `synced_at`, `id_jurnal_presensiv2`) pada `siakad_pertemuan` & `siakad_absensi_mahasiswa` (migrasi `2026_10_22_000002`) |
-| Command | `app/Console/Commands/LmsRetryPresensiSync.php` → `lms:retry-presensi-sync --limit=100 --dry-run` |
-| Schedule | `routes/console.php` → `Schedule::command('lms:retry-presensi-sync')->hourly()->withoutOverlapping()` |
-| Flag | Key `lms_fitur_presensi` di `core_system_settings` (default aktif) + `App\Models\Lms\LmsSetting::fiturPresensiAktif()` (cache 120 detik) |
-| Gate | `LmsService::assertPresensiFiturAktif()` → 403 bila flag off & bukan-holder `lms.presensi.manage` |
-| Controller | `app/Http/Controllers/API/Siakad/LmsPresensiController.php` — permission `lms.presensi.read` (baca) & `lms.presensi.manage` (tulis/export) |
-| Endpoint | `GET /lms/admin/presensi/status`, `/kelas`, `/rekap`, `/log`, `/export` + `POST /lms/admin/presensi/sync`, `/tarik` |
-| Menu | `/lms/presensi` ("Presensi & Integrasi") — `role_slugs`: `superadmin`, `admin` |
-
-**Perhatian**: jangan buat tabel `lms_presensi_sesi`/`lms_presensi_rekap` — RAG memakai `siakad_pertemuan` + `siakad_absensi_mahasiswa` yang sudah ada.
-
-**Status**: ✅ **SELESAI (Fase 1C)** — seluruh item di atas terimplementasi, terdokumentasi di
-[`docs/api/LMS/LmsPresensiController.md`](api/LMS/LmsPresensiController.md), dan teruji pada
-`tests/Feature/SiakadLmsPresensiTest.php` (14 test). Integrasi bersifat **fail-safe**: seluruh
-alur presensi LMS tetap berfungsi normal ketika PresensiV2 belum dikonfigurasi.
+Detail endpoint aktif ada di [`docs/api/LMS/LmsPresensiController.md`](api/LMS/LmsPresensiController.md); pengujian ada di `tests/Feature/SiakadLmsPresensiTest.php` dan `tests/Feature/SiakadLmsE2ETest.php`.
 
 ---
 

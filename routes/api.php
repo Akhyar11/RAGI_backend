@@ -294,6 +294,18 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::put('presensi/pegawai/{id}/office-locations', [App\Http\Controllers\Simpeg\PresensiController::class, 'updatePegawaiOfficeLocations'])->whereNumber('id');
     Route::post('presensi/office-assign-bulk', [App\Http\Controllers\Simpeg\PresensiController::class, 'assignOfficesBulk']);
 
+    Route::middleware('can:simpeg.presensi.pengajaran.read')->group(function () {
+        Route::get('presensi/pengajaran', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'index']);
+        Route::get('presensi/pengajaran/cutoff', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'cutoff']);
+        Route::get('presensi/pengajaran/exceptions', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'exceptions']);
+    });
+
+    Route::middleware('can:simpeg.presensi.pengajaran.manage')->group(function () {
+        Route::put('presensi/pengajaran/cutoff', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'updateCutoff']);
+        Route::post('presensi/pengajaran/exceptions', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'storeException']);
+        Route::patch('presensi/pengajaran/exceptions/{exception}/revoke', [App\Http\Controllers\Simpeg\PresensiPengajaranController::class, 'revokeException']);
+    });
+
     // Master Pengaturan Presensi (Lokasi, Shift, Parameter, Hari Libur, Perangkat Fingerprint)
     Route::get('presensi/settings', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'getSettings']);
     Route::put('presensi/settings', [App\Http\Controllers\Simpeg\PresensiMasterSettingController::class, 'updateSettings']);
@@ -579,6 +591,9 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     Route::get('/payment-gateway/active', [App\Http\Controllers\Sikeu\PaymentGatewayConfigController::class, 'getActive']);
     Route::get('/payment-gateway/{gatewayName}/balance', [App\Http\Controllers\Sikeu\PaymentGatewayConfigController::class, 'balance']);
     Route::put('/payment-gateway/{gatewayName}', [App\Http\Controllers\Sikeu\PaymentGatewayConfigController::class, 'update']);
+    Route::post('/payment-gateway/midtrans/trial', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'trialPayment'])
+        ->middleware('can:sikeu.paymentgateway.manage');
+    Route::post('midtrans/snap-token', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'createSnapToken']);
 
     // Unit Kas Master
     Route::get('master/unit-kas', [App\Http\Controllers\Sikeu\UnitKasController::class, 'index']);
@@ -774,6 +789,11 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
     // Akuntansi & COA
     Route::get('akuntansi/coa', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'indexCoa']);
     Route::post('akuntansi/coa', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'storeCoa']);
+    Route::middleware('can:sikeu.pajak_akun.manage')->prefix('pajak/pelaporan-akun')->group(function () {
+        Route::get('/', [App\Http\Controllers\Sikeu\PajakPelaporanController::class, 'index']);
+        Route::put('/{akunId}', [App\Http\Controllers\Sikeu\PajakPelaporanController::class, 'updateAlias'])->whereNumber('akunId');
+        Route::put('/mode', [App\Http\Controllers\Sikeu\PajakPelaporanController::class, 'updateMode']);
+    });
     Route::get('akuntansi/jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'indexJurnal']);
     Route::post('akuntansi/jurnal', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'storeJurnal']);
     Route::get('akuntansi/jurnal/{id}', [App\Http\Controllers\Sikeu\AkuntansiController::class, 'showJurnal']);
@@ -890,6 +910,24 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
 
 /*
 |--------------------------------------------------------------------------
+| Host-to-Host (H2H) Bank Native Endpoints (BTN Syariah)
+|--------------------------------------------------------------------------
+| Menangani integrasi langsung transaksi perbankan (Inquiry, Payment, Reversal)
+| tanpa dependensi microservice Go atau database sikeudb terpisah.
+*/
+Route::middleware('h2h.bank.auth')->group(function () {
+    Route::post('v1/h2h/btns', [App\Http\Controllers\Sikeu\H2hBankController::class, 'handleBtns']);
+    Route::get('v1/h2h/btns/tes', [App\Http\Controllers\Sikeu\H2hBankController::class, 'ping']);
+
+    // Alias untuk kompatibilitas backward spesifikasi URL Bank
+    Route::post('h2h/btns', [App\Http\Controllers\Sikeu\H2hBankController::class, 'handleBtns']);
+    Route::get('h2h/btns/tes', [App\Http\Controllers\Sikeu\H2hBankController::class, 'ping']);
+    Route::post('btns', [App\Http\Controllers\Sikeu\H2hBankController::class, 'handleBtns']);
+    Route::get('btns/tes', [App\Http\Controllers\Sikeu\H2hBankController::class, 'ping']);
+});
+
+/*
+|--------------------------------------------------------------------------
 | Payment Gateway Callbacks / Webhooks (publik + verifikasi token)
 |--------------------------------------------------------------------------
 | Tidak memakai auth:api agar dapat dipanggil oleh payment gateway. Keamanan
@@ -900,6 +938,10 @@ Route::middleware('payment.callback')->prefix('v1/sikeu')->group(function () {
     Route::post('callback/xendit', [App\Http\Controllers\Sikeu\SpmBSikeuCallbackController::class, 'handleXenditCallback']);
     Route::post('callback/va-paid', [App\Http\Controllers\Sikeu\MahasiswaTagihanController::class, 'vaPaymentCallback']);
 });
+
+// Webhook Midtrans (publik, keamanan divalidasi via SHA512 signature key di MidtransCallbackController)
+Route::post('v1/sikeu/callback/midtrans', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'handleCallback']);
+Route::post('sikeu/callback/midtrans', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'handleCallback']);
 
 // Simulasi pembayaran SPMB (khusus local/testing, butuh login & kepemilikan tagihan)
 Route::middleware('auth:api')->prefix('v1/sikeu')->group(function () {
@@ -1174,6 +1216,41 @@ Route::prefix('v1')->group(function () {
         Route::post('/attendance/keterangan', [App\Http\Controllers\API\AttendanceController::class, 'keterangan']);
         Route::get('/attendance/history', [App\Http\Controllers\API\AttendanceController::class, 'history']);
         Route::get('/attendance/recap', [App\Http\Controllers\API\AttendanceController::class, 'recap']);
+
+        // Aplikasi Mobile Mahasiswa Terpadu (Beranda, Presensi QR 30 Detik, LMS, SIAKAD, & SIKEU)
+        Route::prefix('mobile/mahasiswa')->group(function () {
+            Route::get('/home', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'home']);
+            Route::get('/periode', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'periode']);
+
+            // Presensi Perkuliahan (QR/Token 30 Detik, Izin/Sakit, & Rekap)
+            Route::get('/presensi/sesi-aktif', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sesiPresensiAktif']);
+            Route::post('/presensi/scan', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'scanPresensi']);
+            Route::post('/presensi/pertemuan/{pertemuanId}/izin', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'ajukanIzin'])->whereNumber('pertemuanId');
+            Route::get('/presensi/rekap', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'rekapPresensi']);
+
+            // LMS Mobile (Overview, Kelas, Pertemuan, Tugas, Tryout/Ujian Khusus, & Forum)
+            Route::get('/lms/overview', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsOverview']);
+            Route::get('/lms/kelas', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsKelas']);
+            Route::get('/lms/kelas/{kelasId}', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsKelasDetail'])->whereNumber('kelasId');
+            Route::get('/lms/pertemuan/{pertemuanId}', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsPertemuanDetail'])->whereNumber('pertemuanId');
+            Route::get('/lms/tugas', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsTugas']);
+            Route::get('/lms/tryout', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsTryout']);
+            Route::get('/lms/forum', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'lmsForum']);
+
+            // SIAKAD Mobile (Profil & KTM Digital, Jadwal, KRS, KHS, & Transkrip)
+            Route::get('/siakad/profil', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'siakadProfil']);
+            Route::get('/siakad/jadwal', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'siakadJadwal']);
+            Route::get('/siakad/krs', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'siakadKrs']);
+            Route::get('/siakad/khs', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'siakadKhs']);
+            Route::get('/siakad/transkrip', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'siakadTranskrip']);
+
+            // SIKEU Mobile (Ringkasan, Tagihan/Invoice, Riwayat Pembayaran, Beasiswa, & Dispensasi)
+            Route::get('/sikeu/ringkasan', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuRingkasan']);
+            Route::get('/sikeu/tagihan', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuTagihan']);
+            Route::get('/sikeu/pembayaran', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuPembayaran']);
+            Route::get('/sikeu/beasiswa', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuBeasiswa']);
+            Route::get('/sikeu/dispensasi', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuDispensasi']);
+        });
     });
 
     // 4. Akses Integrasi Sistem Eksternal (API Key)

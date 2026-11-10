@@ -77,4 +77,9 @@ class BankSoal extends Model
     {
         return $this->hasMany(BankSoalOpsi::class, 'bank_soal_id')->orderBy('urutan');
     }
+
+    public function pembuat()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'dibuat_oleh');
+    }
 }

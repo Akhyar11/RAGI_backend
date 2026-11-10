@@ -329,7 +329,9 @@ class LmsExportService
 
         $absensi = [];
         if ($pertemuan->isNotEmpty()) {
-            $list = AbsensiMahasiswa::whereIn('pertemuan_id', $pertemuan->pluck('id'))->get();
+            $list = AbsensiMahasiswa::whereIn('pertemuan_id', $pertemuan->pluck('id'))
+                ->where('is_submitted', true)
+                ->get();
             foreach ($list as $a) {
                 $absensi[$a->pertemuan_id][$a->mahasiswa_id] = $a;
             }
@@ -650,6 +652,10 @@ class LmsExportService
     {
         $krsDetails = KrsDetail::with('krs.mahasiswa.programStudi')
             ->where('kelas_id', $kelasId)
+            ->whereHas('krs', function ($q) {
+                $q->whereIn('status', LmsService::VALID_KRS_STATUSES)
+                    ->whereNull('deleted_at');
+            })
             ->get();
 
         return $krsDetails

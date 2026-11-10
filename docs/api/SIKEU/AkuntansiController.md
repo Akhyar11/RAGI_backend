@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/sikeu`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-08-05  
-> **Diperbarui**: 2026-10-06
+> **Diperbarui**: 2026-11-09
 
 ## Daftar Endpoint
 
@@ -30,6 +30,10 @@
 > UI pengaturan: `/sikeu/akuntansi/pengaturan` (menu Pengaturan Akuntansi, grup AKUNTANSI & LAPORAN).
 
 > UI: `/sikeu/akuntansi/pengaturan` (menu Pengaturan Akuntansi di grup AKUNTANSI & LAPORAN).
+
+## Mode nama akun pelaporan pajak
+
+Jika Auditor Keuangan mengaktifkan mode `publik` melalui `/sikeu/pajak/pelaporan-akun`, nama alias akan ditampilkan sebagai `nama_akun` pada respons COA, jurnal, dan buku besar. Mode `dev` mengembalikan nama COA asli. Alias hanya mengubah penyajian; data COA, detail jurnal, nominal, dan saldo tidak diubah.
 
 ---
 

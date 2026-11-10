@@ -6,6 +6,7 @@ use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\TutupKasUnit;
 use App\Models\Sikeu\UangMukaKerja;
 use App\Models\Sikeu\UnitKas;
+use App\Models\Sikeu\AkunKeuangan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -35,6 +36,7 @@ class SikeuUmkTutupKasTest extends TestCase
         $this->unitKas = UnitKas::create([
             'nama_kas' => 'Kas Utama Test',
             'tipe_kas' => 'tunai',
+            'akun_keuangan_id' => AkunKeuangan::where('kode_akun', '101.01')->value('id'),
             'saldo_awal' => 10000000,
             'saldo_saat_ini' => 10000000,
             'status' => true,

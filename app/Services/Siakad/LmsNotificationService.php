@@ -7,6 +7,9 @@ use App\Models\Lms\PengumpulanTugas;
 use App\Models\Lms\Quiz;
 use App\Models\Lms\Tugas;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\DosenPengampu;
+use App\Models\Siakad\Pertemuan;
+use App\Models\Simpeg\PresensiPengajaranCutoff;
 use App\Models\User;
 use App\Services\Notification\CampusNotificationService;
 use Carbon\Carbon;
@@ -322,6 +325,86 @@ class LmsNotificationService
         }
 
         return ['quiz' => $jumlahQuiz, 'notifikasi' => $jumlahNotifikasi, 'outbound' => $jumlahOutbound];
+    }
+
+    /**
+     * Ingatkan dosen setiap hari untuk pertemuan selesai dengan presensi belum lengkap.
+     *
+     * Pengingat berhenti ketika presensi roster lengkap atau cut-off periode tercapai.
+     *
+     * @return array{pertemuan:int,notifikasi:int}
+     */
+    public function pushReminderPresensiPengajaran(): array
+    {
+        $jumlahNotifikasi = 0;
+        $jumlahPertemuan = 0;
+
+        $openCutoffs = PresensiPengajaranCutoff::query()
+            ->where('cutoff_at', '>', now())
+            ->get(['periode', 'cutoff_at']);
+
+        foreach ($openCutoffs as $cutoff) {
+            $period = Carbon::createFromFormat('Y-m', $cutoff->periode)->startOfMonth();
+            $meetings = Pertemuan::query()
+                ->whereBetween('tanggal', [$period->toDateString(), $period->copy()->endOfMonth()->toDateString()])
+                ->whereDate('tanggal', '<=', today())
+                ->where('status_pertemuan', Pertemuan::STATUS_SELESAI)
+                ->withCount([
+                    'absensi as absensi_terisi_count' => fn ($absensi) => $absensi->where('is_submitted', true),
+                ])
+                ->with(['kelas.dosenPengampu.dosen:id,user_id'])
+                ->get();
+
+            foreach ($meetings as $meeting) {
+                $totalMahasiswa = \App\Models\Siakad\KrsDetail::query()
+                    ->join('siakad_krs', 'siakad_krs.id', '=', 'siakad_krs_detail.krs_id')
+                    ->where('siakad_krs_detail.kelas_id', $meeting->kelas_id)
+                    ->whereIn('siakad_krs.status', ['disetujui', 'diajukan'])
+                    ->whereNull('siakad_krs.deleted_at')
+                    ->distinct()
+                    ->count('siakad_krs.mahasiswa_id');
+                if ($totalMahasiswa === 0 || $meeting->absensi_terisi_count >= $totalMahasiswa) {
+                    continue;
+                }
+
+                $userIds = $meeting->kelas?->dosenPengampu
+                    ->map(fn (DosenPengampu $assignment) => $assignment->dosen?->user_id)
+                    ->filter()
+                    ->unique()
+                    ->values() ?? collect();
+                if ($userIds->isEmpty()) {
+                    continue;
+                }
+
+                $jumlahPertemuan++;
+                foreach ($userIds as $userId) {
+                    $this->push(
+                        (int) $userId,
+                        LmsNotifikasi::JENIS_REMINDER_PRESENSI_PENGAJARAN,
+                        'Presensi pertemuan belum diisi',
+                        sprintf(
+                            'Presensi pertemuan ke-%s pada %s belum lengkap (%d dari %d peserta). Lengkapi sebelum cut-off %s.',
+                            $meeting->pertemuan_ke,
+                            Carbon::parse($meeting->tanggal)->format('d M Y'),
+                            $meeting->absensi_terisi_count,
+                            $totalMahasiswa,
+                            $cutoff->cutoff_at->format('d M Y H:i')
+                        ),
+                        [
+                            'rute' => '/lms/kelas/'.$meeting->kelas_id,
+                            'kelas_id' => $meeting->kelas_id,
+                            'entitas_type' => Pertemuan::class,
+                            'entitas_id' => $meeting->id,
+                            'prioritas' => LmsNotifikasi::PRIORITAS_TINGGI,
+                            'dedup_key' => sprintf('reminder_presensi_pengajaran:%d:%s', $meeting->id, today()->format('Ymd')),
+                        ]
+                    );
+                    $jumlahNotifikasi++;
+                }
+            }
+        }
+
+        return ['pertemuan' => $jumlahPertemuan, 'notifikasi' => $jumlahNotifikasi];
     }
 
     /**
