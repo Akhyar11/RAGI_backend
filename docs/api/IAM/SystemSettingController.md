@@ -2,10 +2,10 @@
 
 > **Modul**: IAM  
 > **Base URL**: `/api/admin/system-settings`  
-> **Autentikasi**: Bearer Token (Sanctum)  
-> **Dibuat/Diperbarui**: 2026-09-25  
+> **Autentikasi**: Bearer Token (Passport)
+> **Dibuat/Diperbarui**: 2026-11-11
 
-Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings), mencakup konfigurasi SMTP Mailer, Cloudflare R2 Object Storage, Neo Feeder PDDikti, LMS & Absensi Perkuliahan, serta pembatasan peran akun (Restricted Roles). Seluruh endpoint ini dilindungi hak akses administrator sistem (Super Admin).
+Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings), mencakup konfigurasi SMTP Mailer, Cloudflare R2 Object Storage, Neo Feeder PDDikti, LMS & Absensi Perkuliahan, pembatasan peran akun (Restricted Roles), serta mapping penerima admin SPMB. Baca/simpan pengaturan dan opsi akun admin SPMB memerlukan kewenangan IAM `iam.settings.update` (termasuk akses superadmin melalui Gate). Akses pengelola role untuk request yang hanya memperbarui `restricted_role_ids` tetap mengikuti policy role yang sudah ada.
 
 ---
 
@@ -13,8 +13,9 @@ Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings),
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
-| GET | `/api/admin/system-settings` | Mengambil seluruh daftar pengaturan sistem aktif | ✅ Super Admin |
-| POST | `/api/admin/system-settings` | Menyimpan atau memperbarui pengaturan sistem secara massal | ✅ Super Admin |
+| GET | `/api/admin/system-settings` | Mengambil dictionary konfigurasi sistem, termasuk mapping admin SPMB | ✅ `iam.settings.update` |
+| POST | `/api/admin/system-settings` | Menyimpan atau memperbarui pengaturan sistem secara massal | ✅ `iam.settings.update`; pengecualian request khusus restriksi role sesuai policy |
+| GET | `/api/admin/system-settings/spmb-admin-options` | Cari akun aktif untuk mapping admin SPMB | ✅ `iam.settings.update` |
 | POST | `/api/admin/system-settings/test-smtp` | Mengirim email uji coba untuk verifikasi konfigurasi SMTP | ✅ Super Admin |
 | POST | `/api/admin/system-settings/test-r2` | Menguji konektivitas baca-tulis ke bucket Cloudflare R2 | ✅ Super Admin |
 | GET | `/api/auth/branding` | Mengambil data publik visual login (banner, judul, slogan) | ❌ Publik (Tanpa Auth) |
@@ -22,9 +23,41 @@ Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings),
 | DELETE | `/api/admin/system-settings/logo` | Menghapus logo sistem dan berkas publiknya | ✅ Admin (`iam.settings.update`) |
 | POST | `/api/admin/system-settings/upload-banner` | Mengunggah foto banner login ke storage publik | ✅ Admin (`iam.settings.update`) |
 
+## [GET] /api/admin/system-settings/spmb-admin-options
+
+Pencarian server untuk pilihan akun pada mapping admin SPMB. Headers wajib: `Authorization: Bearer {access_token}` dan `Accept: application/json`. Tidak ada request body. Hanya akun aktif yang ditampilkan, tanpa filter nama role atau ID akun tetap.
+
+| Query | Tipe | Default | Keterangan |
+|---|---|---|---|
+| search | string | kosong | Nama, username, atau email; maksimal 200 karakter |
+| page | integer | 1 | Minimal 1 |
+| per_page | integer | 15 | Minimal 1, maksimum efektif 100 |
+| sort_by | string | name | name, username, email, atau id |
+| sort_order | string | asc | asc atau desc |
+
+**200 OK**:
+
+```json
+{
+  "status":"success",
+  "message":"Pilihan akun penerima admin SPMB berhasil dimuat.",
+  "data":[{"id":12,"name":"Admin Penerimaan","username":"penerimaan","email":"penerimaan@example.test","is_active":true}],
+  "meta":{"current_page":1,"per_page":15,"total":1,"last_page":1,"from":1,"to":1},
+  "filters":{"search":null,"sort_by":"name","sort_order":"asc"}
+}
+```
+
+**401 Unauthorized**: `{"status":"error","message":"Token tidak valid atau sesi telah berakhir."}`
+
+**403 Forbidden**: `{"status":"error","message":"Anda tidak memiliki izin untuk melakukan aksi ini."}`
+
+**422 Unprocessable Entity**: query tidak valid, dengan envelope `status`, `message`, dan `errors`. Endpoint opsi tidak memakai 400/404 pada operasi normal. List kosong mengembalikan `data: []` dan `meta.total: 0`.
+
 ---
 
 ## 1. [GET] /api/admin/system-settings
+
+Respons merupakan dictionary konfigurasi, bukan list terpaginasikan. Key `spmb_admin_notification_user_ids` selalu tersedia dengan default `value: "[]"`. Field `users` menyediakan label pilihan tersimpan, termasuk akun yang kemudian nonaktif. Tidak mengembalikan password atau token akun penerima.
 
 > Mengambil daftar seluruh pengaturan sistem yang tersimpan di database beserta nilai bawaan sistem (SMTP, R2, Neo Feeder, Google Workspace, dan LMS).
 
@@ -135,6 +168,36 @@ Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings),
 ## 2. [POST] /api/admin/system-settings
 
 > Memperbarui konfigurasi sistem dalam bentuk array key-value.
+
+Untuk mapping admin SPMB, kirim satu item `settings` dengan `key: "spmb_admin_notification_user_ids"` dan `value` JSON string array ID akun. Contoh body:
+
+```json
+{"settings":[{"key":"spmb_admin_notification_user_ids","value":"[12,34]"}]}
+```
+
+- Setiap ID harus integer positif dan menunjuk akun `core_users` yang aktif. Tidak ada pemilihan penerima berdasarkan nama role, email tertentu, atau inferensi permission SPMB.
+- Maksimal 100 entri; ID duplikat disimpan satu kali. `value: "[]"` mengosongkan mapping. Tidak ada penerima admin otomatis bila mapping kosong.
+- JSON bukan array, ID negatif/string/boolean, akun hilang/nonaktif, serta batas terlampaui menghasilkan 422 pada `errors["settings.{index}.value"]`, sebelum item pengaturan lainnya ditulis.
+- Perubahan mapping dicatat di `core_audit_logs`. Mapping tidak memberikan permission modul; akses akun tetap dikelola melalui IAM.
+- Pengiriman berikutnya membaca mapping terbaru. Akun nonaktif/hilang dilewati. Salinan admin menggunakan inbox dan email setelah commit; detail pemicu ada pada [SystemNotificationController](../System/SystemNotificationController.md).
+
+Contoh field mapping pada respons GET setelah disimpan:
+
+```json
+{
+  "id": 51,
+  "key": "spmb_admin_notification_user_ids",
+  "value": "[12]",
+  "description": "ID akun penerima notifikasi sistem dan email admin SPMB",
+  "users": [{"id":12,"name":"Admin Penerimaan","username":"penerimaan","email":"penerimaan@example.test","is_active":true}]
+}
+```
+
+Contoh error mapping:
+
+```json
+{"status":"error","message":"Semua akun penerima admin SPMB harus tersedia dan aktif.","errors":{"settings.0.value":["Semua akun penerima admin SPMB harus tersedia dan aktif."]}}
+```
 
 ### Headers
 

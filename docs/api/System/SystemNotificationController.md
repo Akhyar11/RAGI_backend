@@ -4,7 +4,7 @@
 > **Base URL**: `/api/notifications`
 > **Autentikasi**: Bearer Token (Passport, `auth:api`)
 > **Dibuat**: 2026-11-10
-> **Diperbarui**: 2026-11-10
+> **Diperbarui**: 2026-11-11
 
 Inbox personal untuk notifikasi lintas modul. Penerima hanya dapat melihat serta menandai miliknya sendiri, tanpa permission pengelolaan modul. Feed LMS tetap memakai `/api/v1/lms/notifikasi`; status baca kedua feed independen.
 
@@ -147,7 +147,11 @@ Jika tidak ada perubahan:
 | Tagihan berubah lunas | payment_paid | Pemilik + ID tagihan; pembayaran sebagian tidak memicu |
 | Daftar ulang menunggu pembayaran / lunas | reenrollment_menunggu_pembayaran / reenrollment_lunas | Pemilik + ID pendaftaran + status |
 
-Penerima selalu akun `pendaftaran.user_id`, bukan admin yang memproses, referrer, atau pihak ketiga. Penyimpanan ulang/retry tidak mengirim ulang inbox/email untuk keputusan yang sama. Tidak ada notifikasi pada hasil yang belum dipublikasikan. Hasil dengan tanggal masa depan memakai job tertunda dan memeriksa ulang waktu publikasi saat dieksekusi.
+Penerima calon adalah akun `pendaftaran.user_id`. Salinan admin dikirim ke akun aktif pada mapping `spmb_admin_notification_user_ids` di IAM → Pengaturan Sistem → Admin SPMB, dengan type `admin_{type_calon}`. Mapping kosong berarti tidak ada pengiriman admin. Pemilihan akun tidak bergantung pada nama role atau permission SPMB. Akun calon dikecualikan dari salinan admin untuk event pendaftarannya sendiri.
+
+Pesan admin menyebut nama/nomor pendaftar, memakai judul berawalan `Admin SPMB:`, serta URL `/spmb/pendaftaran/{id}`. Seluruh pemicu pada tabel di atas mendukung salinan admin, termasuk pendaftaran manual dan callback pembayaran. Mapping tidak memberikan hak akses ke detail pendaftaran.
+
+Penyimpanan ulang/retry tidak mengirim ulang inbox/email untuk keputusan yang sama kepada penerima yang sama. Status baca setiap penerima independen. Akun yang kemudian nonaktif/hilang dilewati dan perubahan mapping berlaku untuk event berikutnya. Tidak ada notifikasi pada hasil yang belum dipublikasikan. Hasil dengan tanggal masa depan memakai job tertunda, memeriksa ulang waktu publikasi serta mapping terkini saat dieksekusi. Pengaturan mapping dijelaskan pada [SystemSettingController](../IAM/SystemSettingController.md).
 
 Inbox disimpan sinkron di transaksi event model; rollback juga membatalkan inbox. Email memakai `SystemInboxEmailNotification` dan diantrikan setelah commit. Jalankan worker queue sesuai [SERVER_SETUP.md](../../SERVER_SETUP.md), dengan queue `notifications` disertakan, misalnya `php artisan queue:work --queue=notifications,default`. Kegagalan antrean dicatat tanpa menggagalkan proses utama; kegagalan transport job mengikuti retry/failed jobs Laravel. Tidak memerlukan seeder: tabel inbox berisi data transaksi, relasi modul memakai master yang sudah tersedia.
 

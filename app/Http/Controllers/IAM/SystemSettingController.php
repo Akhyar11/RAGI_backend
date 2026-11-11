@@ -6,7 +6,11 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\SystemSetting;
 use App\Services\IAM\RestrictedRoleService;
+use App\Services\IAM\SpmbAdminRecipientService;
+use App\Http\Requests\IAM\SpmbAdminOptionsRequest;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Http\JsonResponse;
 use App\Http\Requests\IAM\UpdateSystemSettingRequest;
 use App\Http\Requests\IAM\TestSmtpSettingRequest;
 use App\Http\Requests\IAM\TestR2SettingRequest;
@@ -14,9 +18,11 @@ use App\Services\Storage\StorageSettingsService;
 
 class SystemSettingController extends Controller
 {
-    public function index()
+    public function index(SpmbAdminRecipientService $spmbRecipients): JsonResponse
     {
+        Gate::authorize('iam.settings.update');
         $settings = SystemSetting::all()->keyBy('key')->toArray();
+        $settings[SpmbAdminRecipientService::SETTING_KEY] = $spmbRecipients->setting();
 
         $defaultSmtp = [
             'mail_mailer'       => config('mail.default', 'smtp'),
@@ -152,11 +158,16 @@ class SystemSettingController extends Controller
         UpdateSystemSettingRequest $request,
         RestrictedRoleService $restrictedRoles,
         StorageSettingsService $storageSettings,
+        SpmbAdminRecipientService $spmbRecipients,
     ) {
         $feederChanged = false;
         $storageChanged = false;
 
         foreach ($request->settings as $setting) {
+            if ($setting['key'] === SpmbAdminRecipientService::SETTING_KEY) {
+                $spmbRecipients->save($setting['value'] ?? null);
+                continue;
+            }
             $value = $setting['value'];
 
             if ($setting['key'] === RestrictedRoleService::SETTING_KEY) {
@@ -237,6 +248,26 @@ class SystemSettingController extends Controller
         return response()->json([
             'status'  => 'success',
             'message' => 'System settings updated successfully.',
+        ]);
+    }
+
+    public function spmbAdminOptions(SpmbAdminOptionsRequest $request, SpmbAdminRecipientService $spmbRecipients): JsonResponse
+    {
+        $paginator = $spmbRecipients->options($request->validated());
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pilihan akun penerima admin SPMB berhasil dimuat.',
+            'data' => $paginator->items(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(), 'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(), 'last_page' => $paginator->lastPage(),
+                'from' => $paginator->firstItem(), 'to' => $paginator->lastItem(),
+            ],
+            'filters' => [
+                'search' => $request->input('search'), 'sort_by' => $request->input('sort_by', 'name'),
+                'sort_order' => $request->input('sort_order', 'asc'),
+            ],
         ]);
     }
 

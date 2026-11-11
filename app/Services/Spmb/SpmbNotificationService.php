@@ -7,7 +7,9 @@ use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\VirtualAccount;
 use App\Models\Spmb\HasilSeleksi;
 use App\Models\Spmb\PendaftaranCalonMhs;
+use App\Services\IAM\SpmbAdminRecipientService;
 use App\Services\Notifications\SystemNotificationService;
+use Illuminate\Support\Facades\DB;
 
 class SpmbNotificationService
 {
@@ -21,7 +23,10 @@ class SpmbNotificationService
 
     private const PAYMENT_PAID = 'lunas';
 
-    public function __construct(private readonly SystemNotificationService $inbox) {}
+    public function __construct(
+        private readonly SystemNotificationService $inbox,
+        private readonly SpmbAdminRecipientService $adminRecipients,
+    ) {}
 
     public function applicationChanged(PendaftaranCalonMhs $application): void
     {
@@ -30,14 +35,14 @@ class SpmbNotificationService
         }
 
         $content = match ($application->status) {
-            PendaftaranCalonMhs::STATUS_SUBMITTED => ['Pendaftaran SPMB berhasil dikirim', 'Pendaftaran Anda menunggu verifikasi administrasi.'],
+            PendaftaranCalonMhs::STATUS_SUBMITTED => ['Pendaftaran SPMB berhasil dikirim', 'Pendaftaran Anda menunggu verifikasi administrasi.', 'Pendaftaran baru telah dikirim dan menunggu verifikasi administrasi.'],
             PendaftaranCalonMhs::STATUS_VERIFIED,
-            PendaftaranCalonMhs::STATUS_LULUS_ADMINISTRASI => ['Berkas pendaftaran telah diverifikasi', 'Pendaftaran Anda lolos verifikasi administrasi.'],
-            PendaftaranCalonMhs::STATUS_GAGAL_ADMINISTRASI => ['Pendaftaran belum lolos verifikasi administrasi', $application->catatan_verifikasi ?: 'Silakan hubungi panitia SPMB.'],
+            PendaftaranCalonMhs::STATUS_LULUS_ADMINISTRASI => ['Berkas pendaftaran telah diverifikasi', 'Pendaftaran Anda lolos verifikasi administrasi.', 'Pendaftar telah lolos verifikasi administrasi.'],
+            PendaftaranCalonMhs::STATUS_GAGAL_ADMINISTRASI => ['Pendaftaran belum lolos verifikasi administrasi', $application->catatan_verifikasi ?: 'Silakan hubungi panitia SPMB.', 'Pendaftar belum lolos verifikasi administrasi. Catatan: '.($application->catatan_verifikasi ?: '-')],
             default => null,
         };
         if ($content) {
-            $this->send($application, 'application_'.$application->status, ...$content);
+            $this->send($application, 'application_'.$application->status, $content[0], $content[1], adminMessage: $content[2]);
         }
     }
 
@@ -51,12 +56,12 @@ class SpmbNotificationService
             return;
         }
         $decision = match ($result->status) {
-            HasilSeleksi::STATUS_LULUS => 'Anda dinyatakan lulus seleksi. Silakan melanjutkan daftar ulang.',
-            HasilSeleksi::STATUS_CADANGAN => 'Anda berada dalam daftar cadangan. Pantau pembaruan berikutnya.',
-            default => 'Anda dinyatakan tidak lulus seleksi. Silakan hubungi panitia untuk informasi lebih lanjut.',
+            HasilSeleksi::STATUS_LULUS => ['Anda dinyatakan lulus seleksi. Silakan melanjutkan daftar ulang.', 'Hasil seleksi pendaftar telah dipublikasikan: lulus.'],
+            HasilSeleksi::STATUS_CADANGAN => ['Anda berada dalam daftar cadangan. Pantau pembaruan berikutnya.', 'Hasil seleksi pendaftar telah dipublikasikan: cadangan.'],
+            default => ['Anda dinyatakan tidak lulus seleksi. Silakan hubungi panitia untuk informasi lebih lanjut.', 'Hasil seleksi pendaftar telah dipublikasikan: tidak lulus.'],
         };
-        $this->send($application, 'result_published', 'Hasil seleksi SPMB telah diumumkan', $decision,
-            $result->status.'/'.($result->program_studi_diterima_id ?? 0), HasilSeleksi::class, $result->id);
+        $this->send($application, 'result_published', 'Hasil seleksi SPMB telah diumumkan', $decision[0],
+            $result->status.'/'.($result->program_studi_diterima_id ?? 0), HasilSeleksi::class, $result->id, $decision[1]);
     }
 
     public function reenrollmentChanged(HasilSeleksi $result): void
@@ -65,12 +70,12 @@ class SpmbNotificationService
             return;
         }
         $content = match ($result->status_daftar_ulang) {
-            HasilSeleksi::STATUS_DAFTAR_ULANG_MENUNGGU_PEMBAYARAN => ['Daftar ulang menunggu pembayaran', 'Tagihan daftar ulang tersedia. Silakan selesaikan pembayaran.'],
-            HasilSeleksi::STATUS_DAFTAR_ULANG_LUNAS => ['Daftar ulang SPMB selesai', 'Pembayaran daftar ulang Anda telah dikonfirmasi lunas.'],
+            HasilSeleksi::STATUS_DAFTAR_ULANG_MENUNGGU_PEMBAYARAN => ['Daftar ulang menunggu pembayaran', 'Tagihan daftar ulang tersedia. Silakan selesaikan pembayaran.', 'Pendaftar memulai daftar ulang dan menunggu pembayaran.'],
+            HasilSeleksi::STATUS_DAFTAR_ULANG_LUNAS => ['Daftar ulang SPMB selesai', 'Pembayaran daftar ulang Anda telah dikonfirmasi lunas.', 'Pembayaran daftar ulang pendaftar telah dikonfirmasi lunas.'],
             default => null,
         };
         if ($content && $result->pendaftaranCalonMhs) {
-            $this->send($result->pendaftaranCalonMhs, 'reenrollment_'.$result->status_daftar_ulang, ...$content);
+            $this->send($result->pendaftaranCalonMhs, 'reenrollment_'.$result->status_daftar_ulang, $content[0], $content[1], adminMessage: $content[2]);
         }
     }
 
@@ -103,14 +108,11 @@ class SpmbNotificationService
     }
 
     private function send(PendaftaranCalonMhs $application, string $type, string $title, string $message,
-        string $state = '', string $entityType = PendaftaranCalonMhs::class, ?int $entityId = null): void
+        string $state = '', string $entityType = PendaftaranCalonMhs::class, ?int $entityId = null,
+        ?string $adminMessage = null): void
     {
-        $user = $application->user;
-        if (! $user) {
-            return;
-        }
         $entityId ??= $application->id;
-        $this->inbox->create($user, [
+        $payload = [
             'module_id' => Module::query()->where('code', self::MODULE_CODE)->value('id'),
             'type' => $type,
             'title' => $title,
@@ -119,6 +121,22 @@ class SpmbNotificationService
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'dedup_key' => hash('sha256', $entityType.'/'.$entityId.'/'.$type.'/'.$state),
-        ]);
+        ];
+
+        DB::transaction(function () use ($application, $payload, $adminMessage, $message): void {
+            if ($application->user) {
+                $this->inbox->create($application->user, $payload);
+            }
+            $adminPayload = array_merge($payload, [
+                'type' => 'admin_'.$payload['type'],
+                'title' => 'Admin SPMB: '.$payload['title'],
+                'message' => $application->nama_lengkap.' ('.$application->no_pendaftaran.'): '.($adminMessage ?? $message),
+                'url' => '/spmb/pendaftaran/'.$application->id,
+                'dedup_key' => hash('sha256', $payload['dedup_key'].'/admin'),
+            ]);
+            foreach ($this->adminRecipients->recipients($application->user_id) as $admin) {
+                $this->inbox->create($admin, $adminPayload);
+            }
+        });
     }
 }

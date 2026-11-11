@@ -82,3 +82,21 @@ Eksekusi audit sempat ditolak peninjau izin otomatis karena `.githooks/pre-commi
 [AGENTS.md](../../AGENTS.md) melarang bypass hook, perubahan `core.hooksPath`, atau penggunaan `--no-verify`. Pemeriksaan lokal yang lulus tercatat di atas; audit AI dijalankan oleh hook commit normal dan hasilnya diperiksa sebelum push.
 
 Saat rilis disetujui, terapkan migrasi `2026_11_11_120000_create_core_notifications_table.php` dan jalankan worker yang mendengarkan `notifications,default` sesuai [SERVER_SETUP.md](../SERVER_SETUP.md). Migrasi database produksi dan deployment belum dijalankan dalam pekerjaan ini.
+
+## Tambahan: mapping admin SPMB melalui IAM
+
+IAM → Pengaturan Sistem kini menyediakan bagian **Admin SPMB** untuk memilih beberapa akun penerima inbox sistem dan email. Nilai awal kosong; akun penerima tidak ditentukan melalui nama role, email, ID tetap, ataupun permission SPMB. Mapping tidak menambahkan hak akses modul. Hanya pengguna dengan kewenangan `iam.settings.update` yang dapat membaca/mengubah mapping dan mencari pilihan akun.
+
+| Pemeriksaan tambahan (2026-11-11) | Hasil |
+|---|---|
+| `php -d memory_limit=1G -d max_execution_time=0 vendor/bin/phpunit tests/Feature/IAM tests/Feature/SPMB/SpmbSystemNotificationsTest.php tests/Feature/SPMB/SpmbAdminNotificationsTest.php tests/Feature/RestrictedRoleTest.php tests/Feature/FeederTokenModeTest.php tests/Feature/SiakadLmsNotifikasiTest.php` | 90 tes lulus, 541 assertion |
+| `npx tsc --noEmit` dan `npm run build` | Lulus |
+| ESLint pada komponen mapping, service, tipe, skema Zod, dan tes browser baru | 0 error, 0 warning |
+| `NOTIFICATION_TEST_URL=http://localhost:3113 npx playwright test tests/spmb-admin-settings.spec.js --workers=1 --reporter=line` | 5 tes lulus, build produksi lokal dengan API mock |
+| `NOTIFICATION_TEST_URL=http://127.0.0.1:3113 npx playwright test tests/notifications.spec.js --workers=1 --reporter=line` | 4 tes regresi inbox sistem/LMS lulus |
+
+Tes backend tambahan mencakup validasi mapping sebelum penulisan pengaturan, audit perubahan, pencarian/pagination akun aktif, metadata akun tersimpan di luar halaman pertama, pemicu seluruh tahap SPMB, deduplikasi, perubahan penerima, akun nonaktif/hilang, pengecualian salinan admin untuk calon pemilik pendaftaran, rollback, email antrean yang diserialisasi lalu dikirim melalui transport uji, jadwal publikasi/retry, serta isolasi status baca.
+
+Tes browser mapping mencakup pemuatan pilihan tersimpan, pencarian server, simpan dan muat ulang, pembatalan, pengosongan mapping berisi akun nonaktif, error validasi, dan kegagalan pemuatan opsi tanpa menyimpan mapping kosong. Hostname lokal dipisahkan sesuai routing yang sudah ada: produksi lokal `127.0.0.1` me-rewrite `/admin/settings` sebagai path modul, sedangkan `localhost` membatasi akses path modul `/lms`. Routing tersebut tidak diubah dalam fitur ini.
+
+Suite global backend/frontend yang masih memiliki kegagalan lama dijelaskan pada hasil pemeriksaan sebelumnya; suite global tersebut tidak diulang untuk tambahan mapping. Tidak ada migrasi baru untuk mapping karena menggunakan `core_system_settings`. Penerima nyata perlu dipilih melalui IAM setelah rilis, dan SMTP serta worker antrean tetap menggunakan konfigurasi server yang sudah ada. Pengiriman SMTP produksi belum diuji.
