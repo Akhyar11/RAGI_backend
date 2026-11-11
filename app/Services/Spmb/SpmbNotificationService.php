@@ -95,6 +95,11 @@ class SpmbNotificationService
 
     public function billChanged(TagihanMahasiswa $bill): void
     {
+        if ($bill->wasRecentlyCreated && $bill->payment_gateway_config_id && $bill->status !== self::PAYMENT_PAID && $this->isSpmbBill($bill)) {
+            $this->send($bill->calonMahasiswa, 'billing_issued', 'Tagihan pembayaran SPMB tersedia',
+                'Tagihan '.$bill->nomor_tagihan.' tersedia. Lihat rincian dan kanal pembayaran di halaman Pembayaran SPMB.',
+                '', TagihanMahasiswa::class, $bill->id, applicantUrl: '/spmb/pembayaran?tahap='.($bill->tipe_referensi === TagihanMahasiswa::TIPE_SPMB_DAFTAR_ULANG ? 'daftar_ulang' : 'pendaftaran'));
+        }
         if ($bill->status !== self::PAYMENT_PAID || (! $bill->wasRecentlyCreated && ! $bill->wasChanged('status')) || ! $this->isSpmbBill($bill)) {
             return;
         }
@@ -109,7 +114,7 @@ class SpmbNotificationService
 
     private function send(PendaftaranCalonMhs $application, string $type, string $title, string $message,
         string $state = '', string $entityType = PendaftaranCalonMhs::class, ?int $entityId = null,
-        ?string $adminMessage = null): void
+        ?string $adminMessage = null, ?string $applicantUrl = null): void
     {
         $entityId ??= $application->id;
         $payload = [
@@ -117,7 +122,7 @@ class SpmbNotificationService
             'type' => $type,
             'title' => $title,
             'message' => $application->no_pendaftaran.': '.$message,
-            'url' => self::APPLICATION_URL,
+            'url' => $applicantUrl ?? self::APPLICATION_URL,
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'dedup_key' => hash('sha256', $entityType.'/'.$entityId.'/'.$type.'/'.$state),

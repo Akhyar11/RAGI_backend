@@ -26,7 +26,7 @@ class MasterBiayaSpmbController extends Controller
 
     public function getKomponen(Request $request): JsonResponse
     {
-        $query = MasterKomponenBiaya::query()->with(['roleRewards.role:id,slug,name']);
+        $query = MasterKomponenBiaya::query()->with(['roleRewards.role:id,slug,name', 'paymentGateway']);
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -79,7 +79,7 @@ class MasterBiayaSpmbController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Komponen biaya berhasil ditambahkan.',
-            'data' => $komponen->load('roleRewards.role:id,slug,name'),
+            'data' => $komponen->load(['roleRewards.role:id,slug,name', 'paymentGateway']),
         ], 201);
     }
 
@@ -91,7 +91,7 @@ class MasterBiayaSpmbController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Komponen biaya berhasil diperbarui.',
-            'data' => $updated->load('roleRewards.role:id,slug,name'),
+            'data' => $updated->load(['roleRewards.role:id,slug,name', 'paymentGateway']),
         ]);
     }
 
@@ -99,7 +99,7 @@ class MasterBiayaSpmbController extends Controller
     {
 
 
-        $komponen = MasterKomponenBiaya::with('roleRewards.role:id,slug,name')->findOrFail($id);
+        $komponen = MasterKomponenBiaya::with(['roleRewards.role:id,slug,name', 'paymentGateway'])->findOrFail($id);
 
         return response()->json([
             'status' => 'success',

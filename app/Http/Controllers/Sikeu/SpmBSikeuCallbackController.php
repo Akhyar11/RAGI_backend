@@ -48,6 +48,7 @@ class SpmBSikeuCallbackController extends Controller
         // Picu Xendit (mode tes) agar transaksi tercatat di dashboard & saldo bertambah,
         // memakai external_id = nomor tagihan. Kegagalan Xendit tidak menggagalkan simulasi lokal.
         $tagihan = $this->findUnpaidSpmbTagihan((int) $calonMahasiswaId);
+        abort_if($tagihan?->payment_gateway_config_id !== null && $tagihan !== null, 422, 'Tagihan ini harus dibayar melalui kanal pembayaran yang dipilih.');
         if ($tagihan) {
             $amount = (float) ($request->input('nominal') ?: ($tagihan->virtualAccount?->nominal ?? $tagihan->total_tagihan));
             app(ExternalTagihanService::class)->simulateXenditVaPayment($tagihan->nomor_tagihan, $amount);
@@ -131,6 +132,7 @@ class SpmBSikeuCallbackController extends Controller
     protected function processPayment(array $validated, int $calonMahasiswaId)
     {
         $outcome = DB::transaction(function () use ($validated, $calonMahasiswaId) {
+            PendaftaranCalonMhs::whereKey($calonMahasiswaId)->lockForUpdate()->first();
             // Idempotency guard: pastikan order_id belum pernah diproses sebelumnya.
             $existingPembayaran = Pembayaran::where('kode_transaksi', $validated['order_id'])->first();
             if ($existingPembayaran) {
@@ -163,6 +165,8 @@ class SpmBSikeuCallbackController extends Controller
                     ],
                 ];
             }
+
+            abort_if($tagihan->payment_gateway_config_id !== null, 422, 'Tagihan ini harus dibayar melalui checkout kanal yang dipilih.');
 
             // Hitung status pembayaran secara proporsional (mendukung pembayaran sebagian).
             $totalBersih = (float) $tagihan->total_tagihan + (float) $tagihan->total_denda - (float) $tagihan->total_potongan;
@@ -207,7 +211,9 @@ class SpmBSikeuCallbackController extends Controller
                         'pembayaran' => $pembayaran,
                     ],
                 ],
-                'lunas_event' => ($newStatus === 'lunas' && $tagihan->calon_mahasiswa_id)
+                'lunas_event' => ($newStatus === 'lunas' && $tagihan->calon_mahasiswa_id
+                    && $tagihan->tipe_referensi !== TagihanMahasiswa::TIPE_SPMB_DAFTAR_ULANG
+                    && $tagihan->calonMahasiswa?->fresh()->status_pembayaran === 'lunas')
                     ? [$tagihan->calon_mahasiswa_id, $tagihan, $pembayaran]
                     : null,
             ];
@@ -233,49 +239,9 @@ class SpmBSikeuCallbackController extends Controller
      */
     protected function syncSpmbStatus(TagihanMahasiswa $tagihan, string $newStatus, float $nominal): void
     {
-        $pendaftaranId = $tagihan->calon_mahasiswa_id;
-        if (! $pendaftaranId) {
-            return;
-        }
-
-        $pendaftaran = PendaftaranCalonMhs::find($pendaftaranId);
-        if (! $pendaftaran) {
-            return;
-        }
-
-        $isDaftarUlang = $tagihan->tipe_referensi === 'spmb_daftar_ulang';
-
-        if ($isDaftarUlang) {
-            if ($newStatus === 'lunas') {
-                $hasil = HasilSeleksi::where('pendaftaran_id', $pendaftaran->id)->first();
-                if ($hasil && $hasil->status_daftar_ulang !== 'lunas') {
-                    $hasil->update(['status_daftar_ulang' => 'lunas']);
-                    event(new MahasiswaDiterima($pendaftaran));
-                }
-            }
-
-            return;
-        }
-
-        // Tagihan pendaftaran: status pembayaran + promote draft -> submitted hanya saat lunas.
-        $newStatusPendaftaran = $newStatus === 'lunas' ? 'lunas' : ($newStatus === 'sebagian' ? 'sebagian' : 'belum_bayar');
-        $newStatusPendaftaranRecord = $pendaftaran->status;
-        if ($newStatus === 'lunas' && $pendaftaran->status === PendaftaranCalonMhs::STATUS_DRAFT) {
-            $newStatusPendaftaranRecord = PendaftaranCalonMhs::STATUS_SUBMITTED;
-        }
-
-        $pendaftaran->update([
-            'status_pembayaran' => $newStatusPendaftaran,
-            'status' => $newStatusPendaftaranRecord,
-        ]);
-
-        if ($newStatus === 'lunas') {
-            PembayaranSpmb::where('pendaftaran_id', $pendaftaran->id)
-                ->update([
-                    'status' => 'paid',
-                    'jumlah_bayar' => $nominal,
-                    'paid_at' => now(),
-                ]);
+        if ($tagihan->calon_mahasiswa_id) {
+            app(\App\Services\Spmb\SpmbPaymentStatusService::class)->sync($tagihan->calon_mahasiswa_id,
+                $tagihan->tipe_referensi === TagihanMahasiswa::TIPE_SPMB_DAFTAR_ULANG);
         }
     }
 

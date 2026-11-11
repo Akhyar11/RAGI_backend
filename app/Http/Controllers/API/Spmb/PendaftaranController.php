@@ -199,13 +199,10 @@ class PendaftaranController extends Controller
 
         // Guard: daftar ulang harus lunas, kecuali admin melakukan override eksplisit.
         $force = $request->boolean('force');
-        $tagihanDaftarUlang = TagihanMahasiswa::where('calon_mahasiswa_id', $pendaftaran->id)
-            ->where('source_system', 'SPMB')
-            ->where('tipe_referensi', TagihanMahasiswa::TIPE_SPMB_DAFTAR_ULANG)
-            ->latest('id')
-            ->first();
+        $hasUnpaid = app(\App\Services\Spmb\SpmbBillingService::class)->stageQuery($pendaftaran->id, true)
+            ->where('status', '!=', 'lunas')->exists();
 
-        if ($tagihanDaftarUlang && $tagihanDaftarUlang->status !== 'lunas' && ! $force) {
+        if ($hasUnpaid && ! $force) {
             throw ValidationException::withMessages([
                 'daftar_ulang' => 'Daftar ulang belum lunas. Konversi memerlukan konfirmasi override.',
             ]);

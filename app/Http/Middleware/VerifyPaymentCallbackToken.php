@@ -43,7 +43,7 @@ class VerifyPaymentCallbackToken
 
     protected function expectedToken(): ?string
     {
-        $config = PaymentGatewayConfig::where('is_active', true)->first();
+        $config = PaymentGatewayConfig::active();
         $token = $config?->webhook_token_encrypted;
 
         if (! empty($token)) {

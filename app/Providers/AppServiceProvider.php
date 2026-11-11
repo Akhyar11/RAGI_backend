@@ -48,6 +48,7 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        \App\Models\Sikeu\PaymentCheckout::observe(\App\Observers\Sikeu\PaymentCheckoutObserver::class);
         foreach ([
             \App\Models\Spmb\PendaftaranCalonMhs::class => 'applicationSaved',
             \App\Models\Spmb\HasilSeleksi::class => 'resultSaved',

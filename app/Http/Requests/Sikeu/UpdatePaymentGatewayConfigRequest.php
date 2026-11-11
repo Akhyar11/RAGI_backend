@@ -2,13 +2,16 @@
 
 namespace App\Http\Requests\Sikeu;
 
+use App\Models\Sikeu\PaymentGatewayConfig;
+use App\Models\Sikeu\TagihanMahasiswa;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class UpdatePaymentGatewayConfigRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return (bool) $this->user()?->can('sikeu.paymentgateway.manage');
     }
 
     /**
@@ -23,6 +26,7 @@ class UpdatePaymentGatewayConfigRequest extends FormRequest
         $base = [
             'environment' => 'required|in:sandbox,production',
             'is_active' => 'required|boolean',
+            'is_default' => 'nullable|boolean',
         ];
 
         if ($gateway === 'bsn_h2h') {
@@ -62,5 +66,19 @@ class UpdatePaymentGatewayConfigRequest extends FormRequest
             'base_url.required' => 'URL API bridge H2H wajib diisi.',
             'base_url.url' => 'URL API bridge H2H tidak valid (contoh: http://192.168.1.10:3002).',
         ];
+    }
+
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if ($this->boolean('is_default') && ! $this->boolean('is_active')) {
+                $validator->errors()->add('is_default', 'Kanal default harus dalam keadaan aktif.');
+            }
+            $gateway = PaymentGatewayConfig::where('gateway_name', $this->route('gatewayName'))->first();
+            if ($gateway && $gateway->environment !== $this->input('environment')
+                && TagihanMahasiswa::where('payment_gateway_config_id', $gateway->id)->where('status', '!=', 'lunas')->exists()) {
+                $validator->errors()->add('environment', 'Lingkungan pembayaran tidak dapat diubah selama ada tagihan kanal ini yang belum lunas.');
+            }
+        }];
     }
 }

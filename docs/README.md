@@ -396,3 +396,10 @@ Authorization: Bearer {access_token}    (endpoint terproteksi)
 | SSO token kustom (access) | 15 menit |
 | SSO token kustom (refresh) | 30 hari |
 | Password reset token | 60 menit |
+
+### Kanal pembayaran komponen SPMB
+
+| Controller | Deskripsi | Dokumen |
+|---|---|---|
+| SpmbPaymentController | Opsi kanal komponen, tagihan pribadi, checkout Midtrans/Xendit/H2H | [API Pembayaran SPMB](api/SPMB/SpmbPaymentController.md) |
+| SpmbOnlinePaymentController | Callback invoice Xendit dan pelunasan order checkout | [API Callback Checkout](api/SIKEU/SpmbOnlinePaymentController.md) |

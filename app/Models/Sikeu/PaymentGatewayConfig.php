@@ -9,6 +9,11 @@ class PaymentGatewayConfig extends Model
 {
     use HasFactory;
 
+    public const MIDTRANS = 'midtrans';
+    public const XENDIT = 'xendit';
+    public const H2H = 'bsn_h2h';
+    public const SPMB_CHANNELS = [self::MIDTRANS, self::XENDIT, self::H2H];
+
     protected $table = 'sikeu_payment_gateway_configs';
 
     protected $fillable = [
@@ -28,6 +33,7 @@ class PaymentGatewayConfig extends Model
         'db_username',
         'db_password_encrypted',
         'is_active',
+        'is_default',
         'auto_disbursement_enabled',
         'account_validation_enabled',
         'max_disbursement_limit',
@@ -48,6 +54,7 @@ class PaymentGatewayConfig extends Model
         'db_password_encrypted' => 'encrypted',
         'db_port' => 'integer',
         'is_active' => 'boolean',
+        'is_default' => 'boolean',
         'auto_disbursement_enabled' => 'boolean',
         'account_validation_enabled' => 'boolean',
         'max_disbursement_limit' => 'decimal:2',
@@ -69,6 +76,20 @@ class PaymentGatewayConfig extends Model
      */
     public static function active(): ?self
     {
-        return static::where('is_active', true)->first();
+        return static::where('is_active', true)->orderByDesc('is_default')->orderBy('id')->first();
+    }
+
+    /**
+     * Konfigurasi gateway aktif yang didukung alur SPMB.
+     * Default global modul lain tidak boleh terpilih sebagai kanal SPMB.
+     */
+    public static function activeSpmb(): ?self
+    {
+        return static::query()
+            ->where('is_active', true)
+            ->whereIn('gateway_name', self::SPMB_CHANNELS)
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->first();
     }
 }

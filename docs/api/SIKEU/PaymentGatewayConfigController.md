@@ -37,12 +37,15 @@ Dokumentasi ini menjelaskan antarmuka API pengelolaan konfigurasi Payment Gatewa
 ```json
 {
     "status": "success",
+    "message": "Daftar konfigurasi payment gateway berhasil dimuat.",
     "data": [
         {
             "id": 1,
             "gateway_name": "midtrans",
             "environment": "sandbox",
             "is_active": true,
+            "is_default": true,
+            "callback_url": "https://rag.example.ac.id/api/v1/sikeu/callback/midtrans",
             "api_key_encrypted": "SB-Mid-server-XXXXX",
             "public_key_encrypted": "SB-Mid-client-XXXXX",
             "webhook_token_encrypted": "G123456789",
@@ -97,11 +100,13 @@ Dokumentasi ini menjelaskan antarmuka API pengelolaan konfigurasi Payment Gatewa
 ```json
 {
     "status": "success",
+    "message": "Konfigurasi payment gateway aktif berhasil dimuat.",
     "data": {
         "id": 1,
         "gateway_name": "midtrans",
         "environment": "sandbox",
         "is_active": true,
+        "is_default": true,
         "va_fee": 4000,
         "vat_percent": 11,
         "charge_fee_to_payer": true
@@ -218,3 +223,9 @@ Dokumentasi ini menjelaskan antarmuka API pengelolaan konfigurasi Payment Gatewa
 - **Penyimpanan Kredensial**: Seluruh Secret Key, Public Key, dan Password DB disimpan secara terenkripsi menggunakan Laravel Encrypter (AES-256-CBC).
 - **Paralel BSN H2H**: Mengaktifkan gateway `bsn_h2h` tidak menonaktifkan gateway online (Midtrans/Xendit), karena H2H BTN Syariah berfungsi sebagai kanal perbankan inbound paralel.
 - **Audit Logging**: Setiap aksi update mencatat nilai lama (`oldData`) dan nilai perubahan (`newData`) ke tabel `audit_logs`.
+
+## Beberapa kanal aktif dan kanal default (2026-11-11)
+
+Kanal dapat aktif bersamaan; mengaktifkan Midtrans tidak mematikan Xendit/H2H. PUT menerima `is_default` boolean opsional untuk kanal bawaan pemanggil lama yang belum menentukan provider. Menetapkan satu default menghapus flag default provider lain tanpa menonaktifkannya. Default harus aktif; menonaktifkan kanal menghapus flag defaultnya. Environment tidak dapat diganti selama ada tagihan terpetakan yang belum lunas (422). Mapping SPMB menunjuk ID konfigurasi dan tidak bergantung pada default setelah tagihan terbit.
+
+Index, active, balance, dan update memerlukan `sikeu.paymentgateway.manage` melalui Passport. Respons active hanya metadata aman (`id/gateway_name/environment/is_active/is_default/va_fee/vat_percent/charge_fee_to_payer`), tanpa credential. Index untuk pengelola menyertakan `callback_url` dari konfigurasi URL backend: Midtrans `/api/v1/sikeu/callback/midtrans`, invoice Xendit `/api/v1/sikeu/callback/xendit-checkout`. Jangan memakai origin frontend sebagai callback backend. Audit perubahan tidak menyertakan key/password/token provider.

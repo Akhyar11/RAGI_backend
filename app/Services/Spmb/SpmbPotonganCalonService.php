@@ -108,6 +108,7 @@ class SpmbPotonganCalonService
             $payload[] = [
                 'tipe' => 'diskon',
                 'nominal_potongan' => $nominal,
+                'komponen_biaya_id' => $potongan->komponen_biaya_id,
                 'keterangan' => $potongan->nama_potongan . ($potongan->nomor_sk ? ' (SK: ' . $potongan->nomor_sk . ')' : ''),
             ];
         }
@@ -179,6 +180,7 @@ class SpmbPotonganCalonService
             $payload[] = [
                 'tipe' => 'diskon',
                 'nominal_potongan' => round($diskon, 2),
+                'komponen_biaya_id' => $komponenId,
                 'keterangan' => ($detail['keterangan'] ?? 'Komponen biaya') . ' — ' . implode(' + ', $parts),
             ];
         }

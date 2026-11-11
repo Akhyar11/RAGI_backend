@@ -312,6 +312,7 @@ class MasterBiayaService
         return $this->getKomponenBeban($masterTipeJalurId, $programStudiId, $saatPendaftaran)
             ->map(fn ($item) => [
                 'komponen_biaya_id' => $item->komponen_biaya_id,
+                'payment_gateway_config_id' => $item->komponenBiaya->payment_gateway_config_id,
                 'master_biaya_kode' => $item->komponenBiaya->kode,
                 'nominal' => (float) $item->nominal,
                 'berlaku_diskon' => (bool) $item->berlaku_diskon,

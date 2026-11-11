@@ -117,3 +117,7 @@
     "errors": { "nominal": ["Nominal pembayaran minimal Rp 1.000."] }
 }
 ```
+
+## Kanal eksplisit SPMB (2026-11-11)
+
+Simulasi/callback lama tidak dapat melunasi tagihan yang telah dipetakan ke gateway (422); gunakan callback provider checkout tercatat atau sinkronisasi bank. Status pendaftaran dan daftar ulang kini diagregasi dari seluruh tagihan pada tahap masing-masing. Pelunasan satu invoice tidak membuka formulir/konversi jika invoice lain belum lunas. Callback invoice Xendit baru ada pada [SpmbOnlinePaymentController](SpmbOnlinePaymentController.md); callback VA lama tetap tersedia.

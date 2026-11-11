@@ -117,3 +117,7 @@ Bila request berasal dari user dengan role `petugas_kas_kecil` (non-admin), back
 }
 ```
 
+
+## Pemilihan gateway dashboard (2026-11-11)
+
+Ringkasan gateway mengikuti kanal aktif dengan `is_default` sebagai prioritas; kanal SPMB lain dapat tetap aktif bersamaan. Tidak mengubah kanal yang sudah disimpan pada invoice SPMB.

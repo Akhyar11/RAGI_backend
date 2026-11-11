@@ -51,6 +51,7 @@ class SpmbMenuCalonMahasiswaSeeder extends Seeder
             ['name' => 'Dashboard Pendaftaran', 'url' => '/spmb/dashboard', 'icon' => 'FaChartPie', 'order_index' => 1],
             ['name' => 'Formulir Registrasi', 'url' => '/spmb/registrasi', 'icon' => 'FaPen', 'order_index' => 2],
             ['name' => 'Daftar Ulang', 'url' => '/spmb/daftar-ulang', 'icon' => 'FaClipboardCheck', 'order_index' => 3],
+            ['name' => 'Pembayaran SPMB', 'url' => '/spmb/pembayaran', 'icon' => 'FaCreditCard', 'order_index' => 4],
         ];
 
         $menuIds = [$root->id];

@@ -190,7 +190,7 @@ class SikeuDashboardController extends Controller
             $pengajuanKasPending = PengajuanPencairanKas::where('status', 'pending_keuangan')->count();
 
             // 7. Payment Gateway (Xendit / Active Provider) Live Balance Tracker
-            $activeGateway = PaymentGatewayConfig::where('is_active', true)->first()
+            $activeGateway = PaymentGatewayConfig::active()
                 ?? PaymentGatewayConfig::where('gateway_name', 'xendit')->first();
 
             $gatewayData = [

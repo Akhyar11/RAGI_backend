@@ -181,3 +181,9 @@ Menangani proses **daftar ulang** calon mahasiswa yang telah lulus seleksi: pene
 > - Perubahan status daftar ulang tercatat pada audit log (`PendaftaranCalonMhsObserver`).
 > - Tidak ada operasi soft-delete pada endpoint ini.
 > - Password/token tidak pernah dikembalikan pada response.
+
+## Tagihan per kanal dan agregasi (2026-11-11)
+
+Generate tagihan hanya dapat dijalankan pemilik pendaftaran atau pengguna dengan `spmb.manage`. Komponen daftar ulang dikelompokkan per kanal; respons mempertahankan `data.tagihan/virtual_account` pertama serta menambahkan `data.tagihan_list[]` berisi setiap tagihan dan VA-nya. Permintaan ulang saat menunggu pembayaran mengembalikan 200 beserta daftar yang sudah ada, tanpa invoice ganda.
+
+Pembayaran dilakukan di `/spmb/pembayaran?tahap=daftar_ulang`. Pelunasan dan konversi baru diproses setelah semua tagihan daftar ulang lunas. Satu tagihan lunas tidak cukup untuk konfirmasi/konversi. Konfirmasi pengguna lain ditolak 403. Pembayaran tahap pendaftaran tidak melunasi daftar ulang.

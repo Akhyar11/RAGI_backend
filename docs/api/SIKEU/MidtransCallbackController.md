@@ -252,3 +252,9 @@ Menerbitkan transaksi Midtrans Snap dan mengembalikan Snap token serta Client Ke
   "message": "Terjadi kesalahan sistem saat memproses transaksi Midtrans."
 }
 ```
+
+## Order checkout komponen SPMB (2026-11-11)
+
+Order yang tercatat dalam `sikeu_payment_checkouts` diteruskan ke service pelunasan terpusat. Signature diperiksa memakai Server Key konfigurasi order, lalu nominal harus sama dengan checkout. Status settlement, atau capture dengan fraud_status accept, memproses pembayaran. Pending/expired/cancel tidak melunasi tagihan. Retry sukses idempoten: kas, jurnal, dan inbox tidak bertambah lagi. Kegagalan jurnal membatalkan pelunasan dan dapat dicoba kembali sesudah konfigurasi COA diperbaiki.
+
+Callback sukses mengembalikan envelope `status/message/data` dengan `data.processed`, `data.status`, serta `data.pembayaran_id` pada pemrosesan pertama. Signature salah 400, order salah 404, nominal/status tagihan tidak cocok 422. Callback lama tetap didukung untuk tagihan tanpa mapping; tagihan terpetakan wajib menggunakan order checkout yang diterbitkan, bukan ID tagihan yang ditebak. Snap endpoint lama untuk tagihan Midtrans terpetakan menggunakan checkout tercatat yang sama dan mendukung kepemilikan melalui `pendaftaran.user_id`.

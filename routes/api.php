@@ -490,11 +490,14 @@ Route::prefix('spmb')->group(function () {
 });
 
 Route::middleware('auth:api')->prefix('spmb')->group(function () {
+    Route::get('pembayaran', [\App\Http\Controllers\API\Spmb\SpmbPaymentController::class, 'index']);
+    Route::post('pembayaran/{id}/checkout', [\App\Http\Controllers\API\Spmb\SpmbPaymentController::class, 'checkout']);
     Route::get('laporan/statistik', [App\Http\Controllers\API\Spmb\LaporanSpmbController::class, 'statistik']);
     Route::get('laporan/export', [App\Http\Controllers\API\Spmb\LaporanSpmbController::class, 'exportCsv']);
 });
 
 Route::middleware(['auth:api', 'can:spmb.manage'])->prefix('spmb')->group(function () {
+    Route::get('master/payment-gateway-options', [\App\Http\Controllers\API\Spmb\SpmbPaymentController::class, 'options']);
     Route::get('master/komponen-biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'getKomponen']);
     Route::get('master/komponen-biaya/{id}', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'showKomponen']);
     Route::post('master/komponen-biaya', [\App\Http\Controllers\API\Spmb\MasterBiayaSpmbController::class, 'storeKomponen']);
@@ -951,6 +954,7 @@ Route::middleware('payment.callback')->prefix('v1/sikeu')->group(function () {
 
 // Webhook Midtrans (publik, keamanan divalidasi via SHA512 signature key di MidtransCallbackController)
 Route::post('v1/sikeu/callback/midtrans', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'handleCallback']);
+Route::post('v1/sikeu/callback/xendit-checkout', [App\Http\Controllers\Sikeu\SpmbOnlinePaymentController::class, 'xendit']);
 Route::post('sikeu/callback/midtrans', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'handleCallback']);
 
 // Simulasi pembayaran SPMB (khusus local/testing, butuh login & kepemilikan tagihan)

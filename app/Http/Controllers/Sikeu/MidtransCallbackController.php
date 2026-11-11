@@ -29,6 +29,11 @@ class MidtransCallbackController extends Controller
      */
     public function handleCallback(MidtransCallbackRequest $request): JsonResponse
     {
+        if (\App\Models\Sikeu\PaymentCheckout::where('order_id', $request->input('order_id'))->exists()) {
+            $outcome = app(\App\Services\Sikeu\SpmbOnlineSettlementService::class)->midtrans($request->validated());
+
+            return response()->json(['status' => 'success', 'message' => 'Notifikasi pembayaran Midtrans diterima.', 'data' => $outcome]);
+        }
         $orderId = (string) $request->input('order_id');
         $statusCode = (string) $request->input('status_code');
         $grossAmount = (string) $request->input('gross_amount');
@@ -83,6 +88,8 @@ class MidtransCallbackController extends Controller
                 'message' => "Tagihan mahasiswa untuk order {$orderId} tidak ditemukan dalam sistem.",
             ], 404);
         }
+
+        abort_if($tagihan->payment_gateway_config_id !== null, 422, 'Pembayaran tagihan ini wajib menggunakan checkout yang diterbitkan.');
 
         // 4. Proses Status Pembayaran
         $nominal = (float) $grossAmount;
@@ -331,6 +338,16 @@ class MidtransCallbackController extends Controller
                 'status'  => 'error',
                 'message' => 'Tagihan ini sudah lunas.',
             ], 422);
+        }
+
+        if ($tagihan->payment_gateway_config_id) {
+            abort_unless($tagihan->payment_gateway_name === \App\Models\Sikeu\PaymentGatewayConfig::MIDTRANS, 422, 'Tagihan menggunakan kanal pembayaran lain.');
+            $checkout = app(\App\Services\Sikeu\SpmbCheckoutService::class)->checkout($tagihan->id);
+            $attempt = \App\Models\Sikeu\PaymentCheckout::where('order_id', $checkout['order_id'])->firstOrFail();
+
+            return response()->json(['status' => 'success', 'message' => 'Token Midtrans Snap berhasil diterbitkan.', 'data' => array_merge($checkout, [
+                'token' => $attempt->token, 'client_key' => $tagihan->paymentGateway->public_key_encrypted, 'gross_amount' => $checkout['amount'],
+            ])], 201);
         }
 
         $totalTagihan = (float) $tagihan->total_tagihan;

@@ -487,3 +487,9 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 > - `berlaku_diskon` menyimpan penanda apakah komponen berhak atas diskon/potongan; default `false`.
 > - Password/token tidak pernah dikembalikan pada response.
 > - Seluruh aksi tulis (create/update/delete/restore) dicatat oleh observer audit (`MasterBiaya`, `MasterBiayaItem`, `MasterKomponenBiaya`).
+
+## Kanal pembayaran komponen (2026-11-11)
+
+POST/PUT komponen menerima `payment_gateway_config_id` (integer nullable, FK `sikeu_payment_gateway_configs`). ID harus merupakan kanal aktif dengan adapter SPMB; pilihan berasal dari `GET /api/spmb/master/payment-gateway-options` dengan `spmb.manage`. Null mengikuti kanal default SIKEU pada penerbitan berikutnya. Respons list/detail/create/update menambahkan `payment_gateway_config_id` dan relasi aman `payment_gateway` (`id/gateway_name/environment/is_active`) agar label pilihan tersimpan tetap terlihat meskipun di luar halaman pertama atau kemudian nonaktif. Credential tidak disertakan dalam relasi ini. Mapping yang tidak valid/nonaktif menghasilkan 422 pada field tersebut. Perubahan dicatat melalui observer komponen yang sudah ada.
+
+Komponen dengan kanal berbeda dikelompokkan menjadi tagihan terpisah; tagihan yang sudah diterbitkan mempertahankan kanal awal. Lihat [SpmbPaymentController](SpmbPaymentController.md) untuk pagination opsi, checkout, dan status pembayaran.

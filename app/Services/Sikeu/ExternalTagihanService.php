@@ -89,8 +89,9 @@ class ExternalTagihanService
             }
 
             // Opsi: biaya payment gateway dibebankan ke pendaftar (ditambah ke tagihan).
-            $pgConfig = PaymentGatewayConfig::where('is_active', true)->first();
-            if ($pgConfig && $pgConfig->charge_fee_to_payer && $pgConfig->computeVaFee() > 0) {
+            $pgConfig = ! empty($data['payment_gateway_config_id'])
+                ? PaymentGatewayConfig::findOrFail($data['payment_gateway_config_id']) : PaymentGatewayConfig::active();
+            if ($pgConfig && $pgConfig->gateway_name !== PaymentGatewayConfig::H2H && $pgConfig->charge_fee_to_payer && $pgConfig->computeVaFee() > 0) {
                 $fee = $pgConfig->computeVaFee();
                 $masterBiayaFee = $this->resolveMasterBiaya([
                     'master_biaya_kode' => 'BIAYA_VA',
@@ -127,6 +128,9 @@ class ExternalTagihanService
                 'requires_approval' => $requiresApproval,
                 'status_approval' => $statusApproval,
                 'source_system' => $sourceSystem,
+                'payment_gateway_config_id' => $data['payment_gateway_config_id'] ?? null,
+                'payment_gateway_name' => ! empty($data['payment_gateway_config_id']) ? $pgConfig?->gateway_name : null,
+                'payment_gateway_environment' => ! empty($data['payment_gateway_config_id']) ? $pgConfig?->environment : null,
                 'catatan_approval' => $data['keterangan'] ?? null,
                 'jatuh_tempo' => $data['jatuh_tempo'] ?? date('Y-m-d', strtotime('+30 days')),
             ]);
@@ -145,13 +149,13 @@ class ExternalTagihanService
 
             // If no approval required, generate VA automatically (Xendit Integration or Local VA)
             $vaData = null;
-            if (! $requiresApproval) {
+            if (! $requiresApproval && empty($data['payment_gateway_config_id'])) {
                 $bankCode = 'BNI';
                 $vaNumber = '888'.date('ymd').str_pad($tagihan->id, 5, '0', STR_PAD_LEFT);
                 $xenditVaId = null;
 
                 // Check active Payment Gateway Config
-                $pgConfig = PaymentGatewayConfig::where('is_active', true)->first();
+                $pgConfig = PaymentGatewayConfig::active();
                 $apiKey = $pgConfig->api_key_encrypted ?? $pgConfig->public_key_encrypted ?? null;
 
                 if ($pgConfig && $pgConfig->gateway_name === 'xendit' && ! empty($apiKey)) {
@@ -209,7 +213,7 @@ class ExternalTagihanService
      */
     public function simulateXenditVaPayment(string $externalId, float $amount): bool
     {
-        $config = PaymentGatewayConfig::where('is_active', true)->first();
+        $config = PaymentGatewayConfig::active();
         $apiKey = $config?->api_key_encrypted;
 
         if (! $config || $config->gateway_name !== 'xendit' || empty($apiKey)) {

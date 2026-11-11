@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Spmb;
 
+use App\Models\Sikeu\PaymentGatewayConfig;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateKomponenBiayaRequest extends FormRequest
 {
@@ -16,9 +18,11 @@ class UpdateKomponenBiayaRequest extends FormRequest
         $id = $this->route('id');
 
         return [
-            'kode' => 'required|string|max:50|unique:spmb_master_komponen_biaya,kode,' . $id,
+            'kode' => 'required|string|max:50|unique:spmb_master_komponen_biaya,kode,'.$id,
             'nama' => 'required|string|max:150',
             'kategori' => 'nullable|string|max:50',
+            'payment_gateway_config_id' => ['nullable', 'integer', Rule::exists('sikeu_payment_gateway_configs', 'id')
+                ->where('is_active', true)->whereIn('gateway_name', PaymentGatewayConfig::SPMB_CHANNELS)],
             'tipe_potongan' => 'nullable|boolean',
             'is_referral_reward' => 'nullable|boolean',
             'is_default_master_biaya' => 'nullable|boolean',

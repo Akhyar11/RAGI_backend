@@ -102,6 +102,9 @@ class CalonMahasiswaController extends Controller
                 'pendaftaran' => $pendaftaran,
                 'tagihan' => $tagihanData,
                 'daftar_ulang_tagihan' => $daftarUlangTagihanData,
+                'tagihan_list' => app(\App\Services\Spmb\SpmbBillingService::class)->envelope(
+                    TagihanMahasiswa::where('calon_mahasiswa_id', $pendaftaran->id)->where('source_system', 'SPMB')->orderBy('id')->get()->all()
+                )['tagihan_list'],
             ] : null,
         ]);
     }
@@ -150,10 +153,9 @@ class CalonMahasiswaController extends Controller
         $tagihanPayload = null;
         if ($existingTagihan) {
             $this->kodeDiskonService->ensureCodeMatchesRegistration($pendaftaran, $kodeDiskon);
-            $tagihanPayload = [
-                'tagihan' => $existingTagihan,
-                'virtual_account' => $existingTagihan->virtualAccount,
-            ];
+            $tagihanPayload = app(\App\Services\Spmb\SpmbBillingService::class)->envelope(
+                app(\App\Services\Spmb\SpmbBillingService::class)->stageQuery($pendaftaran->id)->orderBy('id')->get()->all()
+            );
         } else {
             // Beban awal pendaftaran disusun oleh service (termasuk fallback).
             $masterBiayaService = app(MasterBiayaService::class);
@@ -187,14 +189,17 @@ class CalonMahasiswaController extends Controller
 
             // Generate External Bill via SIKEU service
             try {
-                $issued = app(ExternalTagihanService::class)->issueExternalBill($payload);
+                $issued = app(\App\Services\Spmb\SpmbBillingService::class)->issue($payload);
                 if ($penggunaanDiskon) {
                     $this->kodeDiskonService->attachTagihan($penggunaanDiskon, $issued['tagihan']->id);
                 }
                 $tagihanPayload = [
                     'tagihan' => $issued['tagihan'],
                     'virtual_account' => $issued['virtual_account'],
+                    'tagihan_list' => $issued['tagihan_list'],
                 ];
+            } catch (ValidationException $e) {
+                throw $e;
             } catch (\Throwable $e) {
                 // Biodata tetap tersimpan; penerbitan tagihan dapat diulang via reissue-va.
                 Log::warning('Gagal menerbitkan tagihan eksternal SPMB: '.$e->getMessage());
@@ -247,6 +252,10 @@ class CalonMahasiswaController extends Controller
             })
             ->first();
 
+        if ($tagihan && ($tagihan->payment_gateway_config_id || (float) $tagihan->total_bayar > 0)) {
+            throw ValidationException::withMessages(['tagihan' => 'Tagihan ini tetap menggunakan kanal yang diterbitkan. Lanjutkan melalui halaman Pembayaran SPMB.']);
+        }
+
         if ($tagihan) {
             // Reset status to belum_bayar
             $pendaftaran->update(['status_pembayaran' => 'belum_bayar']);
@@ -264,7 +273,7 @@ class CalonMahasiswaController extends Controller
             $vaNumber = '13282'.date('ymd').str_pad($tagihan->id, 5, '0', STR_PAD_LEFT);
             $totalBayar = (float) $tagihan->total_bayar;
 
-            $pgConfig = PaymentGatewayConfig::where('is_active', true)->first();
+            $pgConfig = PaymentGatewayConfig::active();
             $apiKey = $pgConfig->api_key_encrypted ?? $pgConfig->public_key_encrypted ?? null;
 
             if ($pgConfig && $pgConfig->gateway_name === 'xendit' && ! empty($apiKey)) {
@@ -324,6 +333,11 @@ class CalonMahasiswaController extends Controller
         $user = $request->user();
         $pendaftaran = PendaftaranCalonMhs::where('user_id', $user->id)->first();
         if ($pendaftaran) {
+            if (TagihanMahasiswa::where('calon_mahasiswa_id', $pendaftaran->id)->where(function ($query) {
+                $query->whereNotNull('payment_gateway_config_id')->orWhere('total_bayar', '>', 0);
+            })->exists()) {
+                throw ValidationException::withMessages(['tagihan' => 'Pendaftaran dengan tagihan kanal pembayaran atau pembayaran tercatat tidak dapat direset.']);
+            }
             $tagihan = TagihanMahasiswa::where('calon_mahasiswa_id', $pendaftaran->id)
                 ->where('source_system', 'SPMB')
                 ->first();

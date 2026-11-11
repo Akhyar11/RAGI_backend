@@ -110,3 +110,9 @@ Jika `kode_diskon` diisi, backend memvalidasi ulang kode dan menerapkannya hanya
     }
 }
 ```
+
+## Tagihan beberapa kanal (2026-11-11)
+
+Penyimpanan biodata menerbitkan beban pendaftaran per kanal yang ditetapkan pada komponen biaya. Respons `data.tagihan` mempertahankan `tagihan/virtual_account` pertama dan menambahkan `tagihan_list[]` (masing-masing berisi `tagihan` dan `virtual_account`). Penyimpanan berulang menggunakan seluruh tagihan tahap yang sudah ada. `GET /api/spmb/pendaftaran/me` menambahkan `data.tagihan_list[]` berisi seluruh tagihan SPMB calon. Nominal total tahap harus dihitung dari semua tagihan, bukan hanya item pertama.
+
+Tagihan menyimpan `payment_gateway_config_id/payment_gateway_name/payment_gateway_environment`. VA dapat null sebelum checkout; jangan membuat VA lokal pengganti pada browser. Registrasi membuka `/spmb/pembayaran?tahap=pendaftaran`. Reissue VA tidak mengubah tagihan dengan kanal eksplisit atau pembayaran tercatat (422). Reset pendaftaran dengan tagihan kanal eksplisit atau pembayaran juga ditolak (422) agar riwayat/order provider tidak terhapus. Kesalahan mapping komponen diteruskan sebagai validasi 422.

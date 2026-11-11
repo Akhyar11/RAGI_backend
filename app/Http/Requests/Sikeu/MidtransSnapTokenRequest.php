@@ -15,7 +15,7 @@ class MidtransSnapTokenRequest extends FormRequest
     public function authorize(): bool
     {
         $user = $this->user();
-        if (!$user) {
+        if (! $user) {
             return false;
         }
 
@@ -33,10 +33,13 @@ class MidtransSnapTokenRequest extends FormRequest
         if ($tagihanId) {
             $tagihan = TagihanMahasiswa::find($tagihanId);
             if ($tagihan) {
-                if (!empty($user->mahasiswa_id) && $tagihan->mahasiswa_id == $user->mahasiswa_id) {
+                if (! empty($user->mahasiswa_id) && $tagihan->mahasiswa_id == $user->mahasiswa_id) {
                     return true;
                 }
-                if (!empty($user->calon_mahasiswa_id) && $tagihan->calon_mahasiswa_id == $user->calon_mahasiswa_id) {
+                if (! empty($user->calon_mahasiswa_id) && $tagihan->calon_mahasiswa_id == $user->calon_mahasiswa_id) {
+                    return true;
+                }
+                if ($tagihan->calonMahasiswa?->user_id === $user->id) {
                     return true;
                 }
                 // Relasi user ke mahasiswa jika ada

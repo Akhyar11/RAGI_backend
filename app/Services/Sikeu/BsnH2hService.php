@@ -6,6 +6,7 @@ use App\Models\Sikeu\PaymentGatewayConfig;
 use App\Models\Sikeu\Pembayaran;
 use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\UnitKas;
+use App\Services\AuditLogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -155,6 +156,9 @@ class BsnH2hService
      */
     public static function terbitkanBilling(TagihanMahasiswa $tagihan, bool $force = false): array
     {
+        if ($tagihan->payment_gateway_config_id && $tagihan->payment_gateway_name !== PaymentGatewayConfig::H2H) {
+            throw new \InvalidArgumentException('Tagihan ini menggunakan kanal pembayaran lain.');
+        }
         if (!self::isEnabled()) {
             throw new \RuntimeException('Kanal H2H BTN Syariah belum diaktifkan di menu Payment Gateway Bank.');
         }
@@ -251,18 +255,29 @@ class BsnH2hService
         }
 
         $data = $body['data'] ?? [];
+        if ($tagihan->payment_gateway_config_id && empty($data['id'])) {
+            throw new \RuntimeException('Bridge H2H tidak mengembalikan identitas billing yang valid.');
+        }
+        $oldValues = $tagihan->only(['h2h_billing_id', 'h2h_id_tagihan', 'h2h_custid']);
         $tagihan->update([
             'h2h_billing_id' => $data['id'] ?? null,
             'h2h_id_tagihan' => $data['id_tagihan'] ?? null,
             'h2h_custid' => $identitas['custid'],
         ]);
 
-        AuditLogServiceSafe::record('SIKEU', 'h2h_billing', 'sikeu_tagihan_mahasiswa', $tagihan->id, [
-            'h2h_billing_id' => $data['id'] ?? null,
-            'custid' => $identitas['custid'],
-            'nominal' => $sisa,
-            'va_fee' => $fee,
-        ]);
+        try {
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'update',
+                tableName: 'sikeu_tagihan_mahasiswa',
+                recordId: (int) $tagihan->id,
+                oldValues: $oldValues,
+                newValues: $tagihan->getChanges(),
+                request: request(),
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit billing H2H: '.$e->getMessage());
+        }
 
         return [
             'id_billing' => $data['id'] ?? null,
@@ -356,6 +371,18 @@ class BsnH2hService
     protected static function terapkanPembayaran(TagihanMahasiswa $tagihan, object $row): void
     {
         DB::transaction(function () use ($tagihan, $row) {
+            if ($tagihan->calon_mahasiswa_id) {
+                \App\Models\Spmb\PendaftaranCalonMhs::whereKey($tagihan->calon_mahasiswa_id)->lockForUpdate()->first();
+            }
+            $tagihan = TagihanMahasiswa::whereKey($tagihan->id)->lockForUpdate()->firstOrFail();
+            $transactionCode = !empty($row->id_transaksi) ? (string) $row->id_transaksi : self::fallbackKode($row);
+            if (Pembayaran::where('kode_transaksi', $transactionCode)->exists()) {
+                return;
+            }
+            if ($tagihan->payment_gateway_config_id && ($tagihan->payment_gateway_name !== PaymentGatewayConfig::H2H
+                || (string) $tagihan->h2h_billing_id !== (string) $row->id)) {
+                throw new \InvalidArgumentException('Billing H2H tidak sesuai dengan kanal tagihan.');
+            }
             $nominal = (float) $row->total_nominal;
 
             $totalBersih = (float) ($tagihan->total_tagihan + $tagihan->total_denda - $tagihan->total_potongan);
@@ -386,39 +413,43 @@ class BsnH2hService
 
             $newTotalBayar = (float) $tagihan->total_bayar + $alokasi;
             $newStatus = $newTotalBayar >= $totalBersih ? 'lunas' : ($newTotalBayar > 0 ? 'sebagian' : 'belum_bayar');
+            $oldTagihanValues = $tagihan->only(['total_bayar', 'status']);
             $tagihan->update(['total_bayar' => $newTotalBayar, 'status' => $newStatus]);
             \App\Models\Sikeu\DetailTagihan::alokasikan($tagihan, $alokasi);
 
-            AutoJournalService::recordStudentPaymentJournal($tagihan, $alokasi, $unitKas);
+            try {
+                AuditLogService::record(
+                    module: 'SIKEU',
+                    action: 'update',
+                    tableName: 'sikeu_tagihan_mahasiswa',
+                    recordId: (int) $tagihan->id,
+                    oldValues: $oldTagihanValues,
+                    newValues: $tagihan->getChanges(),
+                    request: request(),
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit status tagihan H2H: '.$e->getMessage());
+            }
 
-            AuditLogServiceSafe::record('SIKEU', 'h2h_sync', 'sikeu_pembayaran', $pembayaran->id, [
-                'h2h_billing_id' => $row->id,
-                'nominal' => $alokasi,
-                'tagihan_status' => $newStatus,
-            ]);
+            $journal = AutoJournalService::recordStudentPaymentJournal($tagihan, $alokasi, $unitKas);
+            if ($tagihan->payment_gateway_config_id && ! $journal) {
+                throw new \RuntimeException('Pemetaan COA kanal H2H belum lengkap; pembayaran belum dapat dibukukan.');
+            }
+
+            try {
+                AuditLogService::record(
+                    module: 'SIKEU',
+                    action: 'create',
+                    tableName: 'sikeu_pembayaran',
+                    recordId: (int) $pembayaran->id,
+                    oldValues: null,
+                    newValues: $pembayaran->getAttributes(),
+                    request: request(),
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit sinkronisasi H2H: '.$e->getMessage());
+            }
         });
     }
 }
 
-/**
- * Pembungkus AuditLog agar sync CLI (tanpa request) tidak fatal
- * saat auth()/request tidak tersedia.
- */
-class AuditLogServiceSafe
-{
-    public static function record(string $module, string $action, string $table, int $recordId, ?array $newValues = null): void
-    {
-        try {
-            \App\Services\AuditLogService::record(
-                module: $module,
-                action: $action,
-                tableName: $table,
-                recordId: $recordId,
-                newValues: $newValues,
-                request: request(),
-            );
-        } catch (\Throwable $e) {
-            Log::warning('AuditLog H2H dilewati: ' . $e->getMessage());
-        }
-    }
-}

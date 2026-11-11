@@ -17,6 +17,7 @@ class DaftarUlangController extends Controller
     public function generateTagihan(Request $request, $pendaftaran_id): JsonResponse
     {
         $pendaftaran = PendaftaranCalonMhs::with(['gelombang_penerimaan', 'hasilSeleksi'])->findOrFail($pendaftaran_id);
+        abort_unless($pendaftaran->user_id === $request->user()->id || $request->user()->can('spmb.manage'), 403);
         $hasil = HasilSeleksi::where('pendaftaran_id', $pendaftaran_id)->firstOrFail();
 
         if ($hasil->status !== 'lulus') {
@@ -34,10 +35,12 @@ class DaftarUlangController extends Controller
         }
 
         if ($hasil->status_daftar_ulang === 'menunggu_pembayaran') {
+            $bills = app(\App\Services\Spmb\SpmbBillingService::class)->stageQuery((int) $pendaftaran_id, true)->orderBy('id')->get();
             return response()->json([
-                'status' => 'error',
+                'status' => 'success',
                 'message' => 'Tagihan daftar ulang sudah dibuat, silakan lanjutkan pembayaran.',
-            ], 400);
+                'data' => app(\App\Services\Spmb\SpmbBillingService::class)->envelope($bills->all()),
+            ]);
         }
 
         // Biaya daftar ulang disusun oleh service (fallback otomatis ke SIKEU).
@@ -59,13 +62,16 @@ class DaftarUlangController extends Controller
             'potongan' => $potongan,
         ];
 
-        $issued = app(ExternalTagihanService::class)->issueExternalBill($payload);
+        $issued = app(\App\Services\Spmb\SpmbBillingService::class)->issue($payload);
         $vaData = [
             'tagihan' => $issued['tagihan'],
             'virtual_account' => $issued['virtual_account'],
+            'tagihan_list' => $issued['tagihan_list'],
         ];
 
-        $hasil->update(['status_daftar_ulang' => 'menunggu_pembayaran']);
+        if ($hasil->fresh()->status_daftar_ulang !== 'lunas') {
+            $hasil->update(['status_daftar_ulang' => 'menunggu_pembayaran']);
+        }
 
         return response()->json([
             'status' => 'success',
@@ -77,6 +83,7 @@ class DaftarUlangController extends Controller
     public function konfirmasi(Request $request, $pendaftaran_id): JsonResponse
     {
         $pendaftaran = PendaftaranCalonMhs::findOrFail($pendaftaran_id);
+        abort_unless($pendaftaran->user_id === $request->user()->id || $request->user()->can('spmb.manage'), 403);
         $hasil = HasilSeleksi::where('pendaftaran_id', $pendaftaran_id)->firstOrFail();
 
         if ($hasil->status_daftar_ulang === 'lunas') {
@@ -87,11 +94,8 @@ class DaftarUlangController extends Controller
         }
 
         // Pastikan tagihan daftar ulang benar-benar sudah lunas sebelum konversi.
-        $tagihanLunas = TagihanMahasiswa::where('calon_mahasiswa_id', $pendaftaran_id)
-            ->where('source_system', 'SPMB')
-            ->where('tipe_referensi', 'spmb_daftar_ulang')
-            ->where('status', 'lunas')
-            ->exists();
+        $bills = app(\App\Services\Spmb\SpmbBillingService::class)->stageQuery((int) $pendaftaran_id, true)->get();
+        $tagihanLunas = $bills->isNotEmpty() && $bills->every(fn ($bill) => $bill->status === 'lunas');
 
         if (! $tagihanLunas) {
             return response()->json([

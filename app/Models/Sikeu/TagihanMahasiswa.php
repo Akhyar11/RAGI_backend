@@ -2,6 +2,10 @@
 
 namespace App\Models\Sikeu;
 
+use App\Models\Siakad\Mahasiswa;
+use App\Models\Spmb\MasterTahunAkademik;
+use App\Models\Spmb\PendaftaranCalonMhs;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -38,11 +42,15 @@ class TagihanMahasiswa extends Model
         'tanggal_approval',
         'catatan_approval',
         'source_system',
+        'payment_gateway_config_id',
+        'payment_gateway_name',
+        'payment_gateway_environment',
         'koreksi_alokasi_id',
         'jatuh_tempo',
     ];
 
     protected $casts = [
+        'payment_gateway_config_id' => 'integer',
         'semester' => 'integer',        'total_tagihan' => 'decimal:2',
         'total_potongan' => 'decimal:2',
         'total_denda' => 'decimal:2',
@@ -54,17 +62,38 @@ class TagihanMahasiswa extends Model
 
     public function mahasiswa()
     {
-        return $this->belongsTo(\App\Models\Siakad\Mahasiswa::class, 'mahasiswa_id');
+        return $this->belongsTo(Mahasiswa::class, 'mahasiswa_id');
+    }
+
+    public function paymentGateway()
+    {
+        return $this->belongsTo(PaymentGatewayConfig::class, 'payment_gateway_config_id');
+    }
+
+    public function scopeSpmbStage(Builder $query, int $applicationId, bool $reenrollment = false): Builder
+    {
+        return $query->where('calon_mahasiswa_id', $applicationId)->where('source_system', 'SPMB')
+            ->where(function (Builder $builder) use ($reenrollment): void {
+                $builder->where('tipe_referensi', $reenrollment ? self::TIPE_SPMB_DAFTAR_ULANG : self::TIPE_SPMB_PENDAFTARAN);
+                if (! $reenrollment) {
+                    $builder->orWhereNull('tipe_referensi');
+                }
+            });
+    }
+
+    public function checkouts()
+    {
+        return $this->hasMany(PaymentCheckout::class, 'tagihan_id');
     }
 
     public function calonMahasiswa()
     {
-        return $this->belongsTo(\App\Models\Spmb\PendaftaranCalonMhs::class, 'calon_mahasiswa_id');
+        return $this->belongsTo(PendaftaranCalonMhs::class, 'calon_mahasiswa_id');
     }
 
     public function tahunAkademik()
     {
-        return $this->belongsTo(\App\Models\Spmb\MasterTahunAkademik::class, 'tahun_akademik_id');
+        return $this->belongsTo(MasterTahunAkademik::class, 'tahun_akademik_id');
     }
 
     public function tipeTagihanMahasiswa()

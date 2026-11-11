@@ -18,9 +18,20 @@ class PaymentGatewayConfigController extends Controller
      */
     public function index()
     {
-        $configs = PaymentGatewayConfig::all();
+        \Illuminate\Support\Facades\Gate::authorize('sikeu.paymentgateway.manage');
+        $configs = PaymentGatewayConfig::all()->map(function (PaymentGatewayConfig $gateway) {
+            $callback = match ($gateway->gateway_name) {
+                PaymentGatewayConfig::MIDTRANS => 'midtrans',
+                PaymentGatewayConfig::XENDIT => 'xendit-checkout',
+                default => null,
+            };
+            $gateway->setAttribute('callback_url', $callback ? rtrim((string) config('app.url'), '/').'/api/v1/sikeu/callback/'.$callback : null);
+
+            return $gateway;
+        });
         return response()->json([
             'status' => 'success',
+            'message' => 'Daftar konfigurasi payment gateway berhasil dimuat.',
             'data' => $configs
         ]);
     }
@@ -30,10 +41,12 @@ class PaymentGatewayConfigController extends Controller
      */
     public function getActive()
     {
-        $config = PaymentGatewayConfig::where('is_active', true)->first();
+        \Illuminate\Support\Facades\Gate::authorize('sikeu.paymentgateway.manage');
+        $config = PaymentGatewayConfig::active();
         return response()->json([
             'status' => 'success',
-            'data' => $config
+            'message' => 'Konfigurasi payment gateway aktif berhasil dimuat.',
+            'data' => $config?->only(['id', 'gateway_name', 'environment', 'is_active', 'is_default', 'va_fee', 'vat_percent', 'charge_fee_to_payer'])
         ]);
     }
 
@@ -50,18 +63,18 @@ class PaymentGatewayConfigController extends Controller
 
         DB::beginTransaction();
         try {
-            // H2H berjalan paralel: jangan ubah status gateway lain.
-            // Gateway online (xendit/duitku) tetap saling eksklusif satu sama lain.
-            if ($request->boolean('is_active') && $gatewayName !== 'bsn_h2h') {
-                PaymentGatewayConfig::where('gateway_name', '!=', $gatewayName)
-                    ->where('gateway_name', '!=', 'bsn_h2h')
-                    ->update(['is_active' => false]);
+            PaymentGatewayConfig::query()->lockForUpdate()->get(['id']);
+            // Multiple channels may be enabled; the default is only for legacy callers.
+            if ($request->boolean('is_default')) {
+                PaymentGatewayConfig::where('gateway_name', '!=', $gatewayName)->update(['is_default' => false]);
             }
 
             $payload = [
                 'environment' => $data['environment'],
                 'is_active' => $data['is_active'] ?? false,
-                'updated_by' => auth()->id() ?? 1,
+                'is_default' => $request->boolean('is_active') && ($request->boolean('is_default') || (! array_key_exists('is_default', $data)
+                    && (bool) PaymentGatewayConfig::where('gateway_name', $gatewayName)->value('is_default'))),
+                'updated_by' => $request->user()->id,
             ];
 
             if ($gatewayName === 'bsn_h2h') {
@@ -97,7 +110,8 @@ class PaymentGatewayConfigController extends Controller
             }
 
             $config = PaymentGatewayConfig::firstOrNew(['gateway_name' => $gatewayName]);
-            $oldValues = $config->exists ? $config->getOriginal() : [];
+            $secretFields = ['api_key_encrypted', 'public_key_encrypted', 'webhook_token_encrypted', 'db_password_encrypted'];
+            $oldValues = $config->exists ? \Illuminate\Support\Arr::except($config->getOriginal(), $secretFields) : [];
             $isNew = !$config->exists;
 
             $config->fill($payload)->save();
@@ -106,11 +120,11 @@ class PaymentGatewayConfigController extends Controller
                 AuditLogService::record(
                     action: $isNew ? 'create' : 'update',
                     module: 'sikeu',
-                    targetType: PaymentGatewayConfig::class,
-                    targetId: (string) $config->id,
-                    oldData: $oldValues,
-                    newData: $config->getChanges() ?: $config->toArray(),
-                    description: "Pembaruan konfigurasi Payment Gateway {$gatewayName}"
+                    tableName: $config->getTable(),
+                    recordId: $config->id,
+                    oldValues: $oldValues,
+                    newValues: \Illuminate\Support\Arr::except($config->getChanges(), $secretFields),
+                    request: $request,
                 );
             } catch (\Throwable $e) {
                 Log::warning('Gagal mencatat audit log konfigurasi gateway: ' . $e->getMessage());
@@ -139,6 +153,7 @@ class PaymentGatewayConfigController extends Controller
      */
     public function balance($gatewayName)
     {
+        \Illuminate\Support\Facades\Gate::authorize('sikeu.paymentgateway.manage');
         $gatewayName = strtolower((string) $gatewayName);
 
         if ($gatewayName === 'bsn_h2h' || $gatewayName === 'rekening_manual') {

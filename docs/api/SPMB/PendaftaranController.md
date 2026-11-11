@@ -593,3 +593,7 @@ Jika Arsip sudah menyetujui permohonan tetapi nomor INDO tidak ditemukan, error 
 > - Endpoint ini tidak melakukan operasi soft-delete.
 > - Password/token tidak pernah dikembalikan pada response.
 > - Endpoint `konversi-mahasiswa` memproses pembuatan email kampus Google Workspace di luar DB Transaction (non-blocking). Kegagalan API Google Workspace tidak akan membatalkan konversi NIM dan role.
+
+## Konversi dengan beberapa tagihan (2026-11-11)
+
+Guard konversi memeriksa seluruh tagihan daftar ulang calon. Selama ada satu tagihan yang belum lunas, konversi memerlukan override `force` oleh petugas yang memang berwenang. Tagihan terakhir yang lunas tidak mewakili status semua kanal.

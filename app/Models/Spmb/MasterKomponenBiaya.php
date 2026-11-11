@@ -16,6 +16,7 @@ class MasterKomponenBiaya extends Model
         'kode',
         'nama',
         'kategori',
+        'payment_gateway_config_id',
         'tipe_potongan',
         'is_referral_reward',
         'is_default_master_biaya',
@@ -30,11 +31,18 @@ class MasterKomponenBiaya extends Model
         'is_default_master_biaya' => 'boolean',
         'is_active' => 'boolean',
         'urutan' => 'integer',
+        'payment_gateway_config_id' => 'integer',
     ];
 
     public function items()
     {
         return $this->hasMany(MasterBiayaItem::class, 'komponen_biaya_id');
+    }
+
+    public function paymentGateway()
+    {
+        return $this->belongsTo(\App\Models\Sikeu\PaymentGatewayConfig::class, 'payment_gateway_config_id')
+            ->select(['id', 'gateway_name', 'environment', 'is_active']);
     }
 
     public function roleRewards()
