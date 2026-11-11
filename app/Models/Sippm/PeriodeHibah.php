@@ -31,6 +31,25 @@ class PeriodeHibah extends Model
         'is_active' => 'boolean',
     ];
 
+    protected $appends = ['nama_periode', 'tgl_buka', 'tgl_tutup'];
+
+    public function getNamaPeriodeAttribute()
+    {
+        return $this->nama_gelombang;
+    }
+
+    public function getTglBukaAttribute()
+    {
+        if (!$this->tgl_buka_proposal) return null;
+        return is_string($this->tgl_buka_proposal) ? substr($this->tgl_buka_proposal, 0, 10) : $this->tgl_buka_proposal->format('Y-m-d');
+    }
+
+    public function getTglTutupAttribute()
+    {
+        if (!$this->tgl_tutup_proposal) return null;
+        return is_string($this->tgl_tutup_proposal) ? substr($this->tgl_tutup_proposal, 0, 10) : $this->tgl_tutup_proposal->format('Y-m-d');
+    }
+
     public function proposalKegiatan()
     {
         return $this->hasMany(ProposalKegiatan::class, 'periode_id');

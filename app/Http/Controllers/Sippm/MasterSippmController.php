@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Sippm;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use App\Models\Sippm\SkemaKegiatan;
 use App\Models\Sippm\PeriodeHibah;
 
@@ -11,6 +12,8 @@ class MasterSippmController extends Controller
 {
     public function indexSkema()
     {
+        Gate::authorize('sippm.skema.read');
+
         $skema = SkemaKegiatan::orderBy('created_at', 'desc')->get();
         return response()->json([
             'status' => 'success',
@@ -20,8 +23,23 @@ class MasterSippmController extends Controller
 
     public function storeSkema(Request $request)
     {
+        Gate::authorize('sippm.skema.create');
+
+        if ($request->has('nama_skema') && !$request->has('nama')) {
+            $request->merge(['nama' => $request->input('nama_skema')]);
+        }
+        if ($request->has('kode_skema') && !$request->has('kode')) {
+            $request->merge(['kode' => $request->input('kode_skema')]);
+        }
+        if ($request->has('jenis_kegiatan') && !$request->has('tipe')) {
+            $request->merge(['tipe' => $request->input('jenis_kegiatan')]);
+        }
+        if ($request->has('maksimal_dana') && !$request->has('maksimal_anggaran')) {
+            $request->merge(['maksimal_anggaran' => $request->input('maksimal_dana')]);
+        }
+
         $validated = $request->validate([
-            'kode' => 'required|string|max:50|unique:skema_kegiatan,kode',
+            'kode' => 'required|string|max:50|unique:sippm_skema_kegiatan,kode',
             'nama' => 'required|string|max:255',
             'tipe' => 'required|in:penelitian,pengabdian',
             'sumber_dana' => 'required|in:internal,dikti_bima,mitra_industri,mandiri',
@@ -41,6 +59,8 @@ class MasterSippmController extends Controller
 
     public function indexPeriode()
     {
+        Gate::authorize('sippm.periode.read');
+
         $periode = PeriodeHibah::orderBy('tahun_anggaran', 'desc')
             ->orderBy('created_at', 'desc')
             ->get();
@@ -53,6 +73,17 @@ class MasterSippmController extends Controller
 
     public function storePeriode(Request $request)
     {
+        Gate::authorize('sippm.periode.create');
+        if ($request->has('nama_periode') && !$request->has('nama_gelombang')) {
+            $request->merge(['nama_gelombang' => $request->input('nama_periode')]);
+        }
+        if ($request->has('tgl_buka') && !$request->has('tgl_buka_proposal')) {
+            $request->merge(['tgl_buka_proposal' => $request->input('tgl_buka')]);
+        }
+        if ($request->has('tgl_tutup') && !$request->has('tgl_tutup_proposal')) {
+            $request->merge(['tgl_tutup_proposal' => $request->input('tgl_tutup')]);
+        }
+
         $validated = $request->validate([
             'tahun_anggaran' => 'required|string|max:20',
             'nama_gelombang' => 'required|string|max:100',
@@ -74,10 +105,25 @@ class MasterSippmController extends Controller
 
     public function updateSkema(Request $request, $id)
     {
+        Gate::authorize('sippm.skema.update');
+
         $skema = SkemaKegiatan::findOrFail($id);
 
+        if ($request->has('nama_skema') && !$request->has('nama')) {
+            $request->merge(['nama' => $request->input('nama_skema')]);
+        }
+        if ($request->has('kode_skema') && !$request->has('kode')) {
+            $request->merge(['kode' => $request->input('kode_skema')]);
+        }
+        if ($request->has('jenis_kegiatan') && !$request->has('tipe')) {
+            $request->merge(['tipe' => $request->input('jenis_kegiatan')]);
+        }
+        if ($request->has('maksimal_dana') && !$request->has('maksimal_anggaran')) {
+            $request->merge(['maksimal_anggaran' => $request->input('maksimal_dana')]);
+        }
+
         $validated = $request->validate([
-            'kode' => 'sometimes|required|string|max:50|unique:skema_kegiatan,kode,' . $id,
+            'kode' => 'sometimes|required|string|max:50|unique:sippm_skema_kegiatan,kode,' . $id,
             'nama' => 'sometimes|required|string|max:255',
             'tipe' => 'sometimes|required|in:penelitian,pengabdian',
             'sumber_dana' => 'sometimes|required|in:internal,dikti_bima,mitra_industri,mandiri',
@@ -97,6 +143,8 @@ class MasterSippmController extends Controller
 
     public function destroySkema($id)
     {
+        Gate::authorize('sippm.skema.delete');
+
         $skema = SkemaKegiatan::findOrFail($id);
         $skema->delete();
 
@@ -108,7 +156,19 @@ class MasterSippmController extends Controller
 
     public function updatePeriode(Request $request, $id)
     {
+        Gate::authorize('sippm.periode.update');
+
         $periode = PeriodeHibah::findOrFail($id);
+
+        if ($request->has('nama_periode') && !$request->has('nama_gelombang')) {
+            $request->merge(['nama_gelombang' => $request->input('nama_periode')]);
+        }
+        if ($request->has('tgl_buka') && !$request->has('tgl_buka_proposal')) {
+            $request->merge(['tgl_buka_proposal' => $request->input('tgl_buka')]);
+        }
+        if ($request->has('tgl_tutup') && !$request->has('tgl_tutup_proposal')) {
+            $request->merge(['tgl_tutup_proposal' => $request->input('tgl_tutup')]);
+        }
 
         $validated = $request->validate([
             'tahun_anggaran' => 'sometimes|required|string|max:20',
@@ -131,6 +191,8 @@ class MasterSippmController extends Controller
 
     public function destroyPeriode($id)
     {
+        Gate::authorize('sippm.periode.delete');
+
         $periode = PeriodeHibah::findOrFail($id);
         $periode->delete();
 

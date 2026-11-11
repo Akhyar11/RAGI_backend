@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Sippm;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use App\Models\Sippm\ReviewerKegiatan;
 use App\Models\Sippm\ProposalKegiatan;
 use App\Services\Sippm\ReviewerService;
@@ -19,7 +20,11 @@ class ReviewerKegiatanController extends Controller
 
     public function myAssignedProposals(Request $request)
     {
+        Gate::authorize('sippm.reviewer.read');
+
         $reviewerPegawaiId = $request->input('reviewer_pegawai_id') ?? $request->user()?->pegawai_id;
+        $perPage = min(100, $request->integer('per_page', 15));
+        $sortOrder = $request->input('sort_order') === 'asc' ? 'asc' : 'desc';
 
         $query = ReviewerKegiatan::with(['proposal.skema', 'proposal.ketuaPegawai', 'penilaian']);
 
@@ -27,17 +32,46 @@ class ReviewerKegiatanController extends Controller
             $query->where('reviewer_pegawai_id', $reviewerPegawaiId);
         }
 
-        $assigned = $query->orderBy('tgl_penugasan', 'desc')->get();
+        $assigned = $query->orderBy('tgl_penugasan', $sortOrder)->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
-            'data' => $assigned,
-        ]);
+            'message' => 'Daftar penugasan reviewer berhasil dimuat.',
+            'data' => $assigned->items(),
+            'meta' => [
+                'current_page' => $assigned->currentPage(),
+                'per_page' => $assigned->perPage(),
+                'total' => $assigned->total(),
+                'last_page' => $assigned->lastPage(),
+            ],
+        ], 200);
     }
 
     public function submitPenilaian(Request $request, $reviewerId)
     {
-        $reviewer = ReviewerKegiatan::findOrFail($reviewerId);
+        Gate::authorize('sippm.reviewer.evaluate');
+
+        $reviewer = ReviewerKegiatan::find($reviewerId);
+        if (!$reviewer) {
+            $reviewer = ReviewerKegiatan::where('proposal_kegiatan_id', $reviewerId)->firstOrFail();
+        }
+
+        // Normalize frontend aliases
+        $input = $request->all();
+        if (isset($input['skor_rab']) && !isset($input['skor_rencana_anggaran'])) {
+            $input['skor_rencana_anggaran'] = $input['skor_rab'];
+        }
+        if (isset($input['catatan_reviewer']) && !isset($input['catatan_revisi'])) {
+            $input['catatan_revisi'] = $input['catatan_reviewer'];
+        }
+        if (isset($input['rekomendasi'])) {
+            if ($input['rekomendasi'] === 'terima') {
+                $input['rekomendasi'] = 'diterima';
+            } elseif ($input['rekomendasi'] === 'tolak') {
+                $input['rekomendasi'] = 'ditolak';
+            }
+        }
+        $request->merge($input);
 
         $validated = $request->validate([
             'skor_rekam_jejak' => 'required|numeric|min:0|max:100',
@@ -60,6 +94,8 @@ class ReviewerKegiatanController extends Controller
 
     public function finalizeDecision(Request $request, $proposalId)
     {
+        Gate::authorize('sippm.proposal.finalize');
+
         $proposal = ProposalKegiatan::findOrFail($proposalId);
 
         $validated = $request->validate([

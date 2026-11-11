@@ -13,6 +13,15 @@ class PublikasiIlmiah extends Model
 
     protected $table = 'sippm_publikasi_ilmiah';
 
+    public const KATEGORI_MAP = [
+        'scopus' => ['jenis' => 'jurnal_internasional_bereputasi', 'indexing' => 'scopus_q2'],
+        'wos' => ['jenis' => 'jurnal_internasional_bereputasi', 'indexing' => 'wos'],
+        'sinta_1_2' => ['jenis' => 'jurnal_nasional_terakreditasi', 'indexing' => 'sinta_2'],
+        'sinta_3_6' => ['jenis' => 'jurnal_nasional_terakreditasi', 'indexing' => 'sinta_4'],
+        'international' => ['jenis' => 'prosiding_internasional', 'indexing' => 'lainnya'],
+        'national_indexed' => ['jenis' => 'jurnal_nasional_terakreditasi', 'indexing' => 'sinta_5'],
+    ];
+
     protected $fillable = [
         'proposal_id',
         'pegawai_id',

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Sippm;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use App\Models\Sippm\ProposalKegiatan;
 use App\Models\Sippm\KontrakKegiatan;
 use App\Services\Sippm\KontrakMonevService;
@@ -17,20 +18,34 @@ class KontrakMonevController extends Controller
         $this->kontrakMonevService = $kontrakMonevService;
     }
 
-    public function indexKontrak()
+    public function indexKontrak(Request $request)
     {
+        Gate::authorize('sippm.kontrak.read');
+
+        $perPage = min(100, $request->integer('per_page', 15));
+        $sortOrder = $request->input('sort_order') === 'asc' ? 'asc' : 'desc';
+
         $kontrak = KontrakKegiatan::with(['proposal.skema', 'proposal.ketuaPegawai', 'pencairanDana', 'laporan'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+            ->orderBy('created_at', $sortOrder)
+            ->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
-            'data' => $kontrak,
-        ]);
+            'message' => 'Daftar kontrak kegiatan berhasil dimuat.',
+            'data' => $kontrak->items(),
+            'meta' => [
+                'current_page' => $kontrak->currentPage(),
+                'per_page' => $kontrak->perPage(),
+                'total' => $kontrak->total(),
+                'last_page' => $kontrak->lastPage(),
+            ],
+        ], 200);
     }
 
     public function storeKontrak(Request $request, $proposalId)
     {
+        Gate::authorize('sippm.kontrak.create');
+
         $proposal = ProposalKegiatan::findOrFail($proposalId);
 
         if ($request->has('nominal_dana') && !$request->has('dana_disetujui')) {
@@ -56,7 +71,18 @@ class KontrakMonevController extends Controller
 
     public function requestPencairan(Request $request, $kontrakId)
     {
+        Gate::authorize('sippm.pencairan.request');
+
         $kontrak = KontrakKegiatan::findOrFail($kontrakId);
+
+        if ($request->has('termin') && !$request->has('termin_ke')) {
+            $request->merge(['termin_ke' => (int) $request->input('termin')]);
+        }
+        if ($request->has('nominal') && !$request->has('persen_pencairan')) {
+            $dana = (float) ($kontrak->dana_disetujui ?: 1);
+            $persen = min(100, max(1, round(((float) $request->input('nominal') / $dana) * 100, 2)));
+            $request->merge(['persen_pencairan' => $persen]);
+        }
 
         $validated = $request->validate([
             'termin_ke' => 'required|integer|min:1',
@@ -88,6 +114,8 @@ class KontrakMonevController extends Controller
 
     public function submitLaporan(Request $request, $kontrakId)
     {
+        Gate::authorize('sippm.kontrak.update');
+
         $kontrak = KontrakKegiatan::findOrFail($kontrakId);
 
         $validated = $request->validate([
@@ -113,6 +141,8 @@ class KontrakMonevController extends Controller
 
     public function uploadSpkTtdBasah(Request $request, $kontrakId)
     {
+        Gate::authorize('sippm.kontrak.update');
+
         $kontrak = KontrakKegiatan::findOrFail($kontrakId);
 
         $validated = $request->validate([
@@ -130,6 +160,8 @@ class KontrakMonevController extends Controller
 
     public function approveSpk(Request $request, $kontrakId)
     {
+        Gate::authorize('sippm.kontrak.update');
+
         $kontrak = KontrakKegiatan::findOrFail($kontrakId);
 
         $validated = $request->validate([
@@ -147,6 +179,8 @@ class KontrakMonevController extends Controller
 
     public function uploadResiSikeu(Request $request, $pencairanId)
     {
+        Gate::authorize('sippm.pencairan.verify');
+
         $validated = $request->validate([
             'bukti_transfer' => 'required|string',
         ]);

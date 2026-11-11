@@ -27,7 +27,7 @@ class SkemaKegiatan extends Model
         'is_active' => 'boolean',
     ];
 
-    protected $appends = ['nama_skema', 'kode_skema'];
+    protected $appends = ['nama_skema', 'kode_skema', 'maksimal_dana', 'jenis_kegiatan'];
 
     public function getNamaSkemaAttribute()
     {
@@ -37,6 +37,16 @@ class SkemaKegiatan extends Model
     public function getKodeSkemaAttribute()
     {
         return $this->kode;
+    }
+
+    public function getMaksimalDanaAttribute()
+    {
+        return (float) $this->maksimal_anggaran;
+    }
+
+    public function getJenisKegiatanAttribute()
+    {
+        return $this->tipe;
     }
 
     public function proposalKegiatan()

@@ -546,6 +546,8 @@ Route::middleware('auth:api')->prefix('sippm')->group(function () {
     Route::put('proposal/{id}', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'update']);
     Route::post('proposal/{id}/submit', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'submit']);
     Route::post('proposal/{id}/assign-reviewer', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'assignReviewer']);
+    Route::get('proposal/{id}/logbook', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'getLogbook']);
+    Route::post('proposal/{id}/logbook', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'storeLogbook']);
 
     // Reference Endpoints (SIMPEG Pegawai & SIAKAD Mata Kuliah Integration)
     Route::get('ref/dosen', [App\Http\Controllers\Sippm\ProposalKegiatanController::class, 'getDosenReference']);

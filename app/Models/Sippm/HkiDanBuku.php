@@ -13,6 +13,16 @@ class HkiDanBuku extends Model
 
     protected $table = 'sippm_hki_dan_buku';
 
+    public const KATEGORI_MAP = [
+        'paten' => 'paten',
+        'paten_sederhana' => 'paten',
+        'hak_cipta' => 'hak_cipta',
+        'merek' => 'hak_cipta',
+        'prototype' => 'hak_cipta',
+        'desain_industri' => 'desain_industri',
+        'buku_ajar' => 'buku_ajar',
+    ];
+
     protected $fillable = [
         'proposal_id',
         'pegawai_id',

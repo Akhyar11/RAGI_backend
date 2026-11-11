@@ -36,6 +36,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\Sikeu\SikeuAdminSeeder::class,
             \Database\Seeders\SiakadSamplePerkuliahanSeeder::class,
             \Database\Seeders\Simpeg\SimpegAnalitikSeeder::class,
+            \Database\Seeders\SIPPM\SippmLogbookSeeder::class,
         ]);
     }
 }

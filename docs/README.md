@@ -230,6 +230,11 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
+| MasterSippmController | Master Skema Penelitian & Periode Hibah | [docs/api/Sippm/MasterSippmController.md](api/Sippm/MasterSippmController.md) |
+| ProposalKegiatanController | Pengajuan proposal riset, integrasi SIAKAD & SIMPEG, dan logbook kegiatan | [docs/api/Sippm/ProposalKegiatanController.md](api/Sippm/ProposalKegiatanController.md) |
+| ReviewerKegiatanController | Penugasan reviewer dan penilaian desk evaluation | [docs/api/Sippm/ReviewerKegiatanController.md](api/Sippm/ReviewerKegiatanController.md) |
+| KontrakMonevController | Kontrak SPK penelitian, monev, dan pencairan dana termin SIKEU | [docs/api/Sippm/KontrakMonevController.md](api/Sippm/KontrakMonevController.md) |
+| LuaranSippmController | Registry luaran publikasi Scopus/Sinta dan sertifikat HKI/Paten | [docs/api/Sippm/LuaranSippmController.md](api/Sippm/LuaranSippmController.md) |
 | StandarIku5ProdiController | CRUD Nilai Target IKU 5 per Program Studi | [docs/api/Sippm/StandarIku5ProdiController.md](api/Sippm/StandarIku5ProdiController.md) |
 
 ---

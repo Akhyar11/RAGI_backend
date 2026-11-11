@@ -21,24 +21,9 @@ class ProposalService
             $count = ProposalKegiatan::whereYear('created_at', $year)->count() + 1;
             $kodeProposal = 'PRP-' . $year . '-' . str_pad($count, 3, '0', STR_PAD_LEFT);
 
-            // Validate Foreign Keys to ensure DB constraint integrity
-            $periodeId = (int) ($data['periode_id'] ?? 0);
-            if (!DB::table('periode_hibah')->where('id', $periodeId)->exists()) {
-                $activePeriode = DB::table('periode_hibah')->where('is_active', 1)->first() ?? DB::table('periode_hibah')->first();
-                $periodeId = $activePeriode ? $activePeriode->id : 3;
-            }
-
-            $skemaId = (int) ($data['skema_id'] ?? 0);
-            if (!DB::table('skema_kegiatan')->where('id', $skemaId)->exists()) {
-                $activeSkema = DB::table('skema_kegiatan')->where('is_active', 1)->first() ?? DB::table('skema_kegiatan')->first();
-                $skemaId = $activeSkema ? $activeSkema->id : 1;
-            }
-
-            $ketuaPegawaiId = (int) ($data['ketua_pegawai_id'] ?? 0);
-            if (!DB::table('pegawai')->where('id', $ketuaPegawaiId)->exists()) {
-                $firstPegawai = DB::table('pegawai')->first();
-                $ketuaPegawaiId = $firstPegawai ? $firstPegawai->id : 1;
-            }
+            $periodeId = (int) $data['periode_id'];
+            $skemaId = (int) $data['skema_id'];
+            $ketuaPegawaiId = (int) $data['ketua_pegawai_id'];
 
             $proposal = ProposalKegiatan::create([
                 'periode_id' => $periodeId,
@@ -72,7 +57,7 @@ class ProposalService
                     $jenisTim = $anggota['jenis_tim'] ?? ($anggota['jenis_anggota'] ?? 'dosen');
 
                     $memberPegawaiId = !empty($anggota['pegawai_id']) ? (int) $anggota['pegawai_id'] : null;
-                    if ($memberPegawaiId && !DB::table('pegawai')->where('id', $memberPegawaiId)->exists()) {
+                    if ($memberPegawaiId && !DB::table('simpeg_pegawai')->where('id', $memberPegawaiId)->exists()) {
                         $memberPegawaiId = null;
                     }
 
@@ -101,19 +86,73 @@ class ProposalService
     public function updateProposal(ProposalKegiatan $proposal, array $data): ProposalKegiatan
     {
         return DB::transaction(function () use ($proposal, $data) {
+            $oldValues = $proposal->getOriginal();
+
             $proposal->update(array_filter([
                 'judul' => $data['judul'] ?? null,
                 'abstrak' => $data['abstrak'] ?? null,
                 'rumpun_ilmu' => $data['rumpun_ilmu'] ?? null,
                 'target_tkt' => $data['target_tkt'] ?? null,
                 'anggaran_diajukan' => $data['anggaran_diajukan'] ?? null,
+                'anggaran_disetujui' => $data['anggaran_disetujui'] ?? null,
                 'file_proposal' => $data['file_proposal'] ?? null,
                 'mata_kuliah_id' => $data['mata_kuliah_id'] ?? null,
                 'status' => $data['status'] ?? null,
             ]));
 
+            $newValues = $proposal->getChanges();
+
+            if (!empty($newValues)) {
+                try {
+                    \App\Services\Core\AuditLogService::record(
+                        action: 'update',
+                        module: 'sippm',
+                        entityType: ProposalKegiatan::class,
+                        entityId: $proposal->id,
+                        oldValues: $oldValues,
+                        newValues: $newValues,
+                        description: "Memperbarui data proposal ID: {$proposal->id}"
+                    );
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log updateProposal: ' . $e->getMessage());
+                }
+            }
+
             return $proposal->fresh(['skema', 'periode', 'ketuaPegawai', 'anggota']);
         });
+    }
+
+    /**
+     * Add logbook entry to proposal.
+     */
+    public function addLogbookEntry(ProposalKegiatan $proposal, array $data, $user): \App\Models\Sippm\LogbookKegiatan
+    {
+        $logbook = DB::transaction(function () use ($proposal, $data) {
+            return \App\Models\Sippm\LogbookKegiatan::create([
+                'proposal_id' => $proposal->id,
+                'tgl_kegiatan' => $data['tgl_kegiatan'],
+                'persentase_capaian' => $data['persentase_capaian'],
+                'uraian_kegiatan' => $data['uraian_kegiatan'],
+                'hambatan' => $data['hambatan'] ?? null,
+                'status_verifikasi' => 'pending',
+            ]);
+        });
+
+        try {
+            \App\Services\Core\AuditLogService::record(
+                action: 'create',
+                module: 'sippm',
+                entityType: \App\Models\Sippm\LogbookKegiatan::class,
+                entityId: $logbook->id,
+                oldValues: null,
+                newValues: $logbook->toArray(),
+                description: "Menambahkan catatan logbook proposal ID: {$proposal->id}"
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log addLogbookEntry: ' . $e->getMessage());
+        }
+
+        return $logbook;
     }
 
     /**
@@ -150,19 +189,19 @@ class ProposalService
     public function getActiveMataKuliahForMahasiswa(int $mahasiswaId): array
     {
         // Try fetching active KRS & course details from SIAKAD if tables exist
-        if (DB::getSchemaBuilder()->hasTable('krs') && DB::getSchemaBuilder()->hasTable('krs_detail') && DB::getSchemaBuilder()->hasTable('mata_kuliah')) {
-            $courses = DB::table('krs_detail')
-                ->join('krs', 'krs_detail.krs_id', '=', 'krs.id')
-                ->join('kelas', 'krs_detail.kelas_id', '=', 'kelas.id')
-                ->join('mata_kuliah', 'kelas.mata_kuliah_id', '=', 'mata_kuliah.id')
-                ->where('krs.mahasiswa_id', $mahasiswaId)
-                ->where('krs_detail.status', 'aktif')
+        if (DB::getSchemaBuilder()->hasTable('siakad_krs') && DB::getSchemaBuilder()->hasTable('siakad_krs_detail') && DB::getSchemaBuilder()->hasTable('siakad_mata_kuliah')) {
+            $courses = DB::table('siakad_krs_detail')
+                ->join('siakad_krs', 'siakad_krs_detail.krs_id', '=', 'siakad_krs.id')
+                ->join('siakad_kelas', 'siakad_krs_detail.kelas_id', '=', 'siakad_kelas.id')
+                ->join('siakad_mata_kuliah', 'siakad_kelas.mata_kuliah_id', '=', 'siakad_mata_kuliah.id')
+                ->where('siakad_krs.mahasiswa_id', $mahasiswaId)
+                ->where('siakad_krs_detail.status', 'aktif')
                 ->select(
-                    'mata_kuliah.id as mata_kuliah_id',
-                    'mata_kuliah.kode_mk',
-                    'mata_kuliah.nama as nama_mk',
-                    'mata_kuliah.total_sks',
-                    'kelas.nama_kelas'
+                    'siakad_mata_kuliah.id as mata_kuliah_id',
+                    'siakad_mata_kuliah.kode_mk',
+                    'siakad_mata_kuliah.nama as nama_mk',
+                    'siakad_mata_kuliah.total_sks',
+                    'siakad_kelas.nama_kelas'
                 )
                 ->get();
 
