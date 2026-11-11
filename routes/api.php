@@ -63,6 +63,13 @@ Route::prefix('auth')->group(function () {
 */
 Route::middleware('auth:api')->group(function () {
     Route::get('/auth/user', [OAuthController::class, 'user']);
+
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [App\Http\Controllers\API\SystemNotificationController::class, 'index']);
+        Route::get('/unread-count', [App\Http\Controllers\API\SystemNotificationController::class, 'unreadCount']);
+        Route::post('/read-all', [App\Http\Controllers\API\SystemNotificationController::class, 'markAllRead']);
+        Route::post('/{id}/read', [App\Http\Controllers\API\SystemNotificationController::class, 'markRead'])->whereNumber('id');
+    });
 });
 
 // Master Referensi Global Endpoint (Bisa diakses seluruh modul)

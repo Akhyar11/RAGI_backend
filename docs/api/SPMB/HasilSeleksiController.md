@@ -4,6 +4,8 @@
 
 Menetapkan **hasil seleksi (kelulusan)** calon mahasiswa. Setelah status `lulus` ditetapkan, calon dapat melakukan **daftar ulang** (generate tagihan). Semua endpoint memerlukan permission granular `spmb.seleksi.read` / `spmb.seleksi.update`.
 
+Pembaruan 2026-11-10: penyimpanan ulang hasil lulus pada prodi sama tidak menambah kuota atau mengulang notifikasi publikasi, dan mempertahankan waktu pengumuman serta status daftar ulang. Perubahan prodi/status merekonsiliasi kuota asal/tujuan dalam transaksi dengan lock pendaftaran dan kuota. Tujuan penuh menghasilkan 422 tanpa perubahan parsial. Publikasi mengirim inbox serta email kepada pemilik pendaftaran sesuai [SystemNotificationController](../System/SystemNotificationController.md).
+
 ## Daftar Endpoint
 
 | Method | Endpoint | Fungsi | Auth |

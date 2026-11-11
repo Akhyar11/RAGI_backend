@@ -4,6 +4,7 @@ namespace App\Services\Spmb;
 
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\HasilSeleksi;
+use App\Models\Spmb\SpmbKuotaProdi;
 use App\Models\Spmb\BerkasRequirement;
 use App\Models\Spmb\DokumenPendaftaran;
 use App\Models\Sikeu\TagihanMahasiswa;
@@ -151,45 +152,47 @@ class SpmbPendaftaranService
      */
     public function tetapkanKelulusan(PendaftaranCalonMhs $pendaftaran, array $dataSeleksi): HasilSeleksi
     {
-        return DB::transaction(function () use ($pendaftaran, $dataSeleksi) {
-            
-            // Cek Kuota jika meluluskan
-            if ($dataSeleksi['status'] === 'lulus' && !empty($dataSeleksi['program_studi_diterima_id'])) {
-                $gelombang = $pendaftaran->gelombangPenerimaan;
-                $tahunAkademikId = \App\Models\Siakad\TahunAkademik::query()
-                    ->where('is_active', true)
-                    ->orderByDesc('kode')
-                    ->value('id') ?? 1;
-                $kuotaProdi = \App\Models\Spmb\SpmbKuotaProdi::where('tahun_akademik_id', $tahunAkademikId)
-                    ->where('program_studi_id', $dataSeleksi['program_studi_diterima_id'])
-                    ->lockForUpdate()
-                    ->first();
-                
-                if ($kuotaProdi && $kuotaProdi->kuota_terisi >= $kuotaProdi->kuota_total) {
+        return DB::transaction(function () use ($pendaftaran, $dataSeleksi): HasilSeleksi {
+            // Lock the parent as well: a first result does not yet have a row to lock.
+            PendaftaranCalonMhs::query()->whereKey($pendaftaran->id)->lockForUpdate()->firstOrFail();
+            $previous = HasilSeleksi::query()->where('pendaftaran_id', $pendaftaran->id)->lockForUpdate()->first();
+            $oldProdi = $previous?->status === HasilSeleksi::STATUS_LULUS
+                ? $previous->program_studi_diterima_id : null;
+            $newProdi = $dataSeleksi['status'] === HasilSeleksi::STATUS_LULUS
+                ? ($dataSeleksi['program_studi_diterima_id'] ?? null) : null;
+
+            if ($oldProdi != $newProdi) {
+                $tahunId = TahunAkademik::query()->where('is_active', true)->orderByDesc('kode')->value('id');
+                $quotas = SpmbKuotaProdi::query()
+                    ->where('tahun_akademik_id', $tahunId)
+                    ->whereIn('program_studi_id', array_filter([$oldProdi, $newProdi]))
+                    ->orderBy('program_studi_id')->lockForUpdate()->get()->keyBy('program_studi_id');
+                $target = $newProdi ? $quotas->get($newProdi) : null;
+                if ($target && $target->kuota_terisi >= $target->kuota_total) {
                     throw ValidationException::withMessages([
-                        'status' => 'Kuota untuk Program Studi ini sudah penuh (' . $kuotaProdi->kuota_total . ').'
+                        'status' => 'Kuota untuk Program Studi ini sudah penuh ('.$target->kuota_total.').',
                     ]);
                 }
-
-                if ($kuotaProdi) {
-                    $kuotaProdi->increment('kuota_terisi');
+                $origin = $oldProdi ? $quotas->get($oldProdi) : null;
+                if ($origin && $origin->kuota_terisi > 0) {
+                    $origin->decrement('kuota_terisi');
                 }
+                $target?->increment('kuota_terisi');
             }
 
-            $hasil = HasilSeleksi::updateOrCreate(
+            return HasilSeleksi::updateOrCreate(
                 ['pendaftaran_id' => $pendaftaran->id],
                 [
                     'program_studi_diterima_id' => $dataSeleksi['program_studi_diterima_id'] ?? null,
-                    'nilai_total' => $dataSeleksi['nilai_total'] ?? 0,
-                    'peringkat' => $dataSeleksi['peringkat'] ?? null,
-                    'status' => $dataSeleksi['status'], // 'lulus', 'tidak_lulus', 'cadangan'
-                    'status_daftar_ulang' => $dataSeleksi['status'] === 'lulus' ? 'belum' : 'belum',
-                    'catatan' => $dataSeleksi['catatan'] ?? null,
-                    'diumumkan_at' => $dataSeleksi['diumumkan_at'] ?? now(),
+                    'nilai_total' => $dataSeleksi['nilai_total'] ?? $previous?->nilai_total ?? 0,
+                    'peringkat' => $dataSeleksi['peringkat'] ?? $previous?->peringkat,
+                    'status' => $dataSeleksi['status'],
+                    'status_daftar_ulang' => $previous?->status_daftar_ulang ?? HasilSeleksi::STATUS_DAFTAR_ULANG_BELUM,
+                    'catatan' => $dataSeleksi['catatan'] ?? $previous?->catatan,
+                    'diumumkan_at' => array_key_exists('diumumkan_at', $dataSeleksi)
+                        ? $dataSeleksi['diumumkan_at'] : ($previous?->diumumkan_at ?? now()),
                 ]
             );
-
-            return $hasil;
         });
     }
 

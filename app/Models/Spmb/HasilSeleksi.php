@@ -20,6 +20,10 @@ class HasilSeleksi extends Model
 
     public const STATUS_DAFTAR_ULANG_LUNAS = 'lunas';
 
+    public const STATUS_DAFTAR_ULANG_BELUM = 'belum';
+
+    public const STATUS_DAFTAR_ULANG_MENUNGGU_PEMBAYARAN = 'menunggu_pembayaran';
+
     protected $fillable = [
         'pendaftaran_id',
         'program_studi_diterima_id',

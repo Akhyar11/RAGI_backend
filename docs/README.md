@@ -30,6 +30,7 @@
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
 | MasterReferensiController | Manajemen data item referensi umum, kode, modul, dan status aktif | [docs/api/System/MasterReferensiController.md](api/System/MasterReferensiController.md) |
+| SystemNotificationController | Inbox pribadi sistem, pemicu SPMB, email setelah commit, status baca | [docs/api/System/SystemNotificationController.md](api/System/SystemNotificationController.md) |
 | FileStreamController | Stream berkas privat generik via Signed URL (tanpa Bearer) | [docs/api/System/FileStreamController.md](api/System/FileStreamController.md) |
 | MasterTipeReferensiController | Manajemen kategori master tipe referensi sistem | [docs/api/System/MasterTipeReferensiController.md](api/System/MasterTipeReferensiController.md) |
 
@@ -61,6 +62,7 @@
 | Topik | Deskripsi | Dokumen |
 |---|---|---|
 | Konfigurasi Queue (Supervisor) | Cara menjalankan *background jobs* 24/7 di VPS/HestiaCP | [SERVER_SETUP.md](SERVER_SETUP.md) |
+| Verifikasi Notifikasi SPMB | Hasil tes, build, baseline kegagalan lama, dan status audit sebelum commit | [spmb-notifications-2026-11-11.md](verification/spmb-notifications-2026-11-11.md) |
 
 ---
 

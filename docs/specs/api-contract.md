@@ -1,5 +1,15 @@
 # API Contract: Nomor SK SPMB melalui Arsip
 
+## Inbox Sistem dan Transisi SPMB (2026-11-10)
+
+- Tabel `core_notifications` menyimpan notifikasi personal: `user_id` (FK core_users), `module_id` (FK nullable core_modules), `type`, `title`, `message`, `url`, `entity_type`, `entity_id`, `priority`, `is_read`, `read_at`, `dedup_key`, timestamps. Unique `(user_id, dedup_key)` mencegah duplikasi pada retry; ini data transaksi, bukan master.
+- `GET /api/notifications` memerlukan `auth:api` dan hanya mengambil milik pengguna aktif. Filter: `module_id`, `is_read`, `search`, `sort_by` (created_at/read_at/priority), `sort_order` (asc/desc), `per_page` (default 15, maksimum 100), `page`. Respons envelope standar dengan `data[]`, `meta`, `filters`, dan relasi `module` (id/name/code/primary_color).
+- `GET /api/notifications/unread-count` mengembalikan `data.unread_count`. `POST /api/notifications/{id}/read` mengembalikan notifikasi milik pengguna atau 404; timestamp baca tidak berubah pada pengulangan. `POST /api/notifications/read-all` hanya memperbarui notifikasi pengguna yang belum dibaca dan mengembalikan `data.updated`. Kedua POST tanpa body. Tidak ada permission modul yang diperlukan untuk inbox pribadi.
+- Penerima SPMB selalu `pendaftaran.user_id`, termasuk pendaftaran manual; bukan admin pemroses/referrer/pihak ketiga. Pemicu: submitted, keputusan verifikasi, hasil yang dipublikasikan, VA aktif terbit/diperbarui, tagihan lunas, serta daftar ulang menunggu pembayaran/lunas. Perubahan data tanpa transisi tidak mengirim ulang. Tagihan sebagian/pending tidak mengirim notifikasi lunas.
+- Inbox dicatat dalam transaksi pemicu. Email diantrikan setelah commit ke queue `notifications`; rollback tidak mengirim email. Kegagalan transport email dicatat tanpa membatalkan bisnis. Jalankan worker queue untuk pengiriman email. Hasil bertanggal masa depan dijadwalkan melalui job dan diperiksa ulang sebelum publikasi.
+- Penyimpanan ulang hasil lulus pada prodi sama tidak menambah kuota dan mempertahankan status daftar ulang serta waktu publikasi. Perubahan prodi/status merekonsiliasi kuota dalam transaksi dengan lock pendaftaran dan kuota. Prodi tujuan penuh menghasilkan 422 tanpa mengubah hasil/kuota asal.
+- Frontend bell mengambil feed sistem dan LMS secara independen, menjumlah unread, mengurutkan preview terbaru, dan menandai baca pada sumber yang tepat. Inbox `/notifikasi` untuk sistem; inbox `/lms/notifikasi` tetap tersedia dengan navigasi antar-inbox. Kegagalan satu sumber tidak menghapus sumber lain.
+
 ## Keputusan
 
 Nomor SK kelulusan SPMB hanya diterbitkan melalui alur permohonan dan persetujuan Arsip. SPMB tidak membuat nomor sendiri. Format nomor mengikuti generator Arsip:

@@ -48,6 +48,16 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        foreach ([
+            \App\Models\Spmb\PendaftaranCalonMhs::class => 'applicationSaved',
+            \App\Models\Spmb\HasilSeleksi::class => 'resultSaved',
+            \App\Models\Sikeu\VirtualAccount::class => 'accountSaved',
+            \App\Models\Sikeu\TagihanMahasiswa::class => 'billSaved',
+        ] as $model => $method) {
+            \Illuminate\Support\Facades\Event::listen('eloquent.saved: '.$model,
+                [\App\Listeners\Spmb\SendSpmbNotifications::class, $method]);
+        }
+
         app(\App\Services\Storage\StorageSettingsService::class)->refresh();
 
         \Illuminate\Support\Facades\Queue::before(function (): void {

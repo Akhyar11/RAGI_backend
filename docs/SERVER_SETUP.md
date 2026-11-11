@@ -35,7 +35,7 @@ Lalu, salin dan tempel kode berikut ke dalamnya:
 [program:integrasisistem-worker]
 process_name=%(program_name)s_%(process_num)02d
 # SESUAIKAN: Path absolut menuju root folder Laravel Anda
-command=php /home/USER_HESTIA/web/DOMAIN_ANDA/public_html/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
+command=php /home/USER_HESTIA/web/DOMAIN_ANDA/public_html/artisan queue:work database --queue=notifications,default --sleep=3 --tries=3 --max-time=3600
 autostart=true
 autorestart=true
 stopasgroup=true
