@@ -98,7 +98,7 @@ class IamApiIntegrationController extends Controller
             'is_active' => $request->boolean('is_active'),
         ]);
 
-        if ($request->has('token')) {
+        if ($request->filled('token')) {
             $integration->token = $request->token;
         }
 

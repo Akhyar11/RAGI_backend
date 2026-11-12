@@ -30,10 +30,19 @@ class IamApiIntegration extends Model
         'token',
     ];
 
+    protected $appends = [
+        'token_configured',
+    ];
+
     protected $casts = [
         'expected_schema' => 'array',
         'is_active' => 'boolean',
         'last_synced_at' => 'datetime',
         'token' => 'encrypted',
     ];
+
+    public function getTokenConfiguredAttribute(): bool
+    {
+        return filled($this->token);
+    }
 }

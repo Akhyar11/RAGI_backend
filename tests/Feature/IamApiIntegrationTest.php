@@ -90,6 +90,21 @@ class IamApiIntegrationTest extends TestCase
             ]);
     }
 
+    public function test_api_integration_responses_expose_token_presence_without_exposing_token(): void
+    {
+        $secret = 'configured-secret-token';
+        $this->integration->update(['token' => $secret]);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->getJson('/api/admin/api-integrations');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.0.token_configured', true)
+            ->assertJsonMissing(['token' => $secret]);
+
+        $response->assertJsonMissingPath('data.0.token');
+    }
+
     public function test_program_studi_migration_integration_is_seeded_idempotently_without_overwriting_connection_settings(): void
     {
         IamApiIntegration::updateOrCreate(
@@ -172,6 +187,23 @@ class IamApiIntegrationTest extends TestCase
             'auth_type' => 'bearer',
             'is_active' => 1,
         ]);
+    }
+
+    public function test_empty_token_is_not_sent_when_updating_other_integration_settings(): void
+    {
+        $secret = 'keep-this-secret-token';
+        $this->integration->update(['token' => $secret]);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->putJson("/api/admin/api-integrations/{$this->integration->id}", [
+                'url_api' => 'https://example.com/api/program-studi',
+                'token' => '',
+                'auth_type' => 'bearer',
+                'is_active' => true,
+            ]);
+
+        $response->assertStatus(200);
+        $this->assertSame($secret, $this->integration->fresh()->token);
     }
 
     public function test_admin_can_test_api_connection_with_http_mock()

@@ -68,7 +68,7 @@ Mengambil daftar seluruh integrasi API sistem yang terdaftar di database.
                 }
             },
             "url_api": "https://sumber.kampus.ac.id/api/program-studi",
-            "token": null,
+            "token_configured": false,
             "auth_type": "bearer",
             "is_active": true,
             "last_synced_at": null,
@@ -116,7 +116,7 @@ Mengambil detail satu integrasi API termasuk kontrak schema format JSON yang dih
         "description": "Sumber data read-only untuk migrasi program studi ke master SIAKAD",
         "expected_schema": { ... },
         "url_api": "https://sumber.kampus.ac.id/api/program-studi",
-        "token": null,
+        "token_configured": false,
         "auth_type": "bearer",
         "is_active": true,
         "last_synced_at": null,
@@ -129,7 +129,7 @@ Mengambil detail satu integrasi API termasuk kontrak schema format JSON yang dih
 
 ## PUT /api/api-integrations/{id}
 
-Mengubah URL endpoint, kredensial auth token, tipe autentikasi, serta status aktif/nonaktif.
+Mengubah URL endpoint, kredensial auth token, tipe autentikasi, serta status aktif/nonaktif. Respons hanya mengembalikan `token_configured`, bukan nilai token.
 
 ### Request Body
 
@@ -142,6 +142,8 @@ Mengubah URL endpoint, kredensial auth token, tipe autentikasi, serta status akt
 }
 ```
 
+Jika hanya mengubah pengaturan lain, hilangkan field `token` atau kirim `null`/string kosong. Token tersimpan akan dipertahankan. Kirim token non-kosong hanya untuk menggantinya.
+
 ### Response Sukses (200 OK)
 
 ```json
@@ -153,11 +155,14 @@ Mengubah URL endpoint, kredensial auth token, tipe autentikasi, serta status akt
         "key": "siakad_program_studi",
         "name": "Migrasi Program Studi SIAKAD",
         "url_api": "https://sumber.kampus.ac.id/api/program-studi",
+        "token_configured": true,
         "auth_type": "bearer",
         "is_active": true
     }
 }
 ```
+
+Nilai `token_configured` hanya memberi tahu apakah kredensial sudah tersimpan. Nilai token asli tidak pernah disertakan dalam respons API.
 
 ---
 
