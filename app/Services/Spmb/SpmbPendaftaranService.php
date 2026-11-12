@@ -46,8 +46,22 @@ class SpmbPendaftaranService
         }
 
         $this->validateBerkasWajib($pendaftaran);
+        $this->validateIdentitasPendaftar($pendaftaran);
 
         $pendaftaran->update(['status' => 'submitted']);
+    }
+
+    private function validateIdentitasPendaftar(PendaftaranCalonMhs $pendaftaran): void
+    {
+        $reference = $pendaftaran->kewarganegaraan_id
+            ? \App\Models\System\MasterReferensi::query()
+                ->where('tipe', 'kewarganegaraan')
+                ->where('is_active', true)
+                ->find($pendaftaran->kewarganegaraan_id)
+            : null;
+        $nationalityCode = $reference?->kode ?? $pendaftaran->kewarganegaraan ?? 'WNI';
+
+        app(SpmbApplicantIdentityValidator::class)->validate($pendaftaran->toArray(), (string) $nationalityCode);
     }
 
     /**
@@ -227,7 +241,12 @@ class SpmbPendaftaranService
             // Sanitasi input: jika nik kosong string, jadikan null agar tidak memicu duplikat unique key
             if (array_key_exists('nik', $validated)) {
                 if (empty(trim((string) $validated['nik']))) {
-                    $validated['nik'] = $existing ? $existing->nik : null;
+                    $nationality = isset($validated['kewarganegaraan_id'])
+                        ? \App\Models\System\MasterReferensi::query()->find($validated['kewarganegaraan_id'])
+                        : null;
+                    $validated['nik'] = strtoupper((string) $nationality?->kode) === 'WNA'
+                        ? null
+                        : ($existing ? $existing->nik : null);
                 }
             }
 
@@ -241,7 +260,11 @@ class SpmbPendaftaranService
                 array_merge($validated, [
                     'nama_lengkap' => $namaLengkap,
                     'no_pendaftaran' => $noPendaftaran,
-                    'kewarganegaraan' => $validated['kewarganegaraan'] ?? $existing->kewarganegaraan ?? 'WNI',
+                    'kewarganegaraan' => \App\Models\System\MasterReferensi::query()
+                        ->where('tipe', 'kewarganegaraan')
+                        ->find($validated['kewarganegaraan_id'] ?? null)?->nama
+                        ?? $existing->kewarganegaraan
+                        ?? 'WNI',
                     'status' => $existing ? $existing->status : 'draft',
                     'status_pembayaran' => $existing ? $existing->status_pembayaran : 'belum_bayar',
                 ])
@@ -497,6 +520,8 @@ class SpmbPendaftaranService
             'nama' => strtoupper($pendaftaran->nama_lengkap ?? '-'),
             'no_pendaftaran' => $pendaftaran->no_pendaftaran ?? '-',
             'nik' => $pendaftaran->nik ?? '-',
+            'nomor_paspor' => $pendaftaran->nomor_paspor ?? '-',
+            'kewarganegaraan' => $pendaftaran->kewarganegaraan ?? '-',
             'tempat_lahir' => $pendaftaran->tempat_lahir ?? '-',
             'tanggal_lahir' => $pendaftaran->tanggal_lahir ? $pendaftaran->tanggal_lahir->translatedFormat('d F Y') : '-',
             'asal_sekolah' => $pendaftaran->asal_sekolah ?? $pendaftaran->asal_pt ?? '-',

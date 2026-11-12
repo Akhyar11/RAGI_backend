@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Spmb;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class StoreBiodataRequest extends FormRequest
@@ -29,6 +30,21 @@ class StoreBiodataRequest extends FormRequest
                 'sometimes', 'nullable', 'string', 'max:20',
                 Rule::unique('spmb_pendaftaran_calon_mhs', 'nik')->ignore($pendaftaranId),
             ],
+            'kewarganegaraan_id' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                Rule::exists('spmb_master_referensi', 'id')
+                    ->where('tipe', 'kewarganegaraan')
+                    ->where('is_active', true),
+            ],
+            'nomor_paspor' => [
+                'sometimes', 'nullable', 'string', 'max:50',
+                Rule::unique('spmb_pendaftaran_calon_mhs', 'nomor_paspor')->ignore($pendaftaranId),
+            ],
+            'negara_penerbit_paspor' => 'sometimes|nullable|string|max:100',
+            'negara_kewarganegaraan' => 'sometimes|nullable|string|max:100',
+            'kode_negara_kewarganegaraan' => 'sometimes|nullable|string|size:2',
             'tanggal_lahir' => 'sometimes|nullable|date',
             'tempat_lahir' => 'sometimes|nullable|string',
             'jenis_kelamin' => 'sometimes|nullable|string|max:10',
@@ -37,6 +53,7 @@ class StoreBiodataRequest extends FormRequest
             'kewarganegaraan' => 'sometimes|nullable|string',
             'no_hp' => 'sometimes|nullable|string',
             'alamat' => 'sometimes|nullable|string',
+            'negara_domisili' => 'sometimes|nullable|string|max:100',
             'provinsi' => 'sometimes|nullable|string',
             'kota_kabupaten' => 'sometimes|nullable|string',
             'kecamatan' => 'sometimes|nullable|string',
@@ -69,5 +86,28 @@ class StoreBiodataRequest extends FormRequest
             'used_referral_code' => 'sometimes|nullable|string|max:50',
             'kode_diskon' => 'sometimes|nullable|string|max:50',
         ];
+    }
+
+    public function after(): array
+    {
+        return [function ($validator): void {
+            if (!$this->filled('kewarganegaraan_id')) return;
+
+            $reference = DB::table('spmb_master_referensi')
+                ->where('tipe', 'kewarganegaraan')
+                ->where('is_active', true)
+                ->find($this->integer('kewarganegaraan_id'));
+
+            if (!$reference) {
+                $validator->errors()->add('kewarganegaraan_id', 'Kewarganegaraan tidak tersedia.');
+                return;
+            }
+
+            $identityErrors = app(\App\Services\Spmb\SpmbApplicantIdentityValidator::class)
+                ->errors($this->all(), (string) $reference->kode);
+            foreach ($identityErrors as $field => $message) {
+                $validator->errors()->add($field, $message);
+            }
+        }];
     }
 }

@@ -124,8 +124,8 @@ Statistik dan export data pendaftaran SPMB (read-only / data agregat). Sumber ta
 
 **200 OK** — `Content-Type: text/csv`
 ```
-No Pendaftaran,Nama Lengkap,NIK,Asal Sekolah,Status Pendaftaran,Status Pembayaran,Status Kelulusan,Status Daftar Ulang
-REG-20260901-1234,Budi Santoso,3201010101010001,SMAN 1,lulus,lunas,lulus,lunas
+No Pendaftaran,Nama Lengkap,NIK,Nomor Paspor,Kewarganegaraan,Asal Sekolah,Status Pendaftaran,Status Pembayaran,Status Kelulusan,Status Daftar Ulang
+REG-20260901-1234,Budi Santoso,3201010101010001,,Warga Negara Indonesia,SMAN 1,lulus,lunas,lulus,lunas
 ```
 
 ### Response Error

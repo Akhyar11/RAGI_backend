@@ -54,6 +54,12 @@ class SpmbKonversiService
                     'nim' => $nim,
                     'nama_lengkap' => $pendaftaran->nama_lengkap,
                     'nik' => $pendaftaran->nik,
+                    'nomor_paspor' => $pendaftaran->nomor_paspor,
+                    'negara_penerbit_paspor' => $pendaftaran->negara_penerbit_paspor,
+                    'negara_kewarganegaraan' => $pendaftaran->negara_kewarganegaraan,
+                    'kode_negara_kewarganegaraan' => $this->getFeederNationalityCode($pendaftaran),
+                    'kewarganegaraan' => $pendaftaran->kewarganegaraan,
+                    'negara_domisili' => $pendaftaran->negara_domisili,
                     'tanggal_lahir' => $pendaftaran->tanggal_lahir,
                     'tempat_lahir' => $pendaftaran->tempat_lahir,
                     'jenis_kelamin' => $pendaftaran->jenis_kelamin ?? 'L',
@@ -80,6 +86,13 @@ class SpmbKonversiService
                 if (empty($mahasiswa->kelas) && $kelas !== null) {
                     $updateMhs['kelas'] = $kelas;
                 }
+                foreach (['nik', 'nomor_paspor', 'negara_penerbit_paspor', 'negara_kewarganegaraan', 'kode_negara_kewarganegaraan', 'kewarganegaraan', 'negara_domisili'] as $identityField) {
+                    if (!empty($pendaftaran->{$identityField}) && $mahasiswa->{$identityField} !== $pendaftaran->{$identityField}) {
+                        $updateMhs[$identityField] = $pendaftaran->{$identityField};
+                    }
+                }
+                $feederNationalityCode = $this->getFeederNationalityCode($pendaftaran);
+                if ($feederNationalityCode) $updateMhs['kode_negara_kewarganegaraan'] = $feederNationalityCode;
                 if (!empty($updateMhs)) {
                     $mahasiswa->update($updateMhs);
                 }
@@ -139,6 +152,22 @@ class SpmbKonversiService
         }
 
         return $konversi;
+    }
+
+    private function getFeederNationalityCode(PendaftaranCalonMhs $pendaftaran): ?string
+    {
+        $reference = $pendaftaran->kewarganegaraan_id
+            ? \App\Models\System\MasterReferensi::query()
+                ->where('tipe', 'kewarganegaraan')
+                ->find($pendaftaran->kewarganegaraan_id)
+            : null;
+        $code = strtoupper((string) ($reference?->kode ?? $pendaftaran->kewarganegaraan));
+
+        if ($code === 'WNI' || str_contains($code, 'INDONESIA')) {
+            return 'ID';
+        }
+
+        return strtoupper(trim((string) $pendaftaran->kode_negara_kewarganegaraan)) ?: null;
     }
 
     /**

@@ -59,13 +59,14 @@ class PendaftaranController extends Controller
             $query->where('used_referral_code', 'like', '%' . $request->input('referral_code') . '%');
         }
 
-        // Search by Nama Lengkap, No Pendaftaran, NIK, or User Account
+        // Search by Nama Lengkap, No Pendaftaran, NIK, passport, or User Account
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
                 $q->where('nama_lengkap', 'like', "%{$search}%")
                   ->orWhere('no_pendaftaran', 'like', "%{$search}%")
                   ->orWhere('nik', 'like', "%{$search}%")
+                  ->orWhere('nomor_paspor', 'like', "%{$search}%")
                   ->orWhereHas('user', function($uq) use ($search) {
                       $uq->where('email', 'like', "%{$search}%")
                          ->orWhere('username', 'like', "%{$search}%");

@@ -57,6 +57,9 @@ class SpmbAdminNotificationsTest extends TestCase
         $this->application = PendaftaranCalonMhs::create([
             'user_id' => $this->applicant->id, 'gelombang_id' => $wave->id, 'program_studi_id' => $this->prodi->id,
             'no_pendaftaran' => fake()->unique()->numerify('ADMIN-NOTIF-#####'), 'nama_lengkap' => fake()->name(),
+            'nik' => fake()->unique()->numerify('################'), 'kewarganegaraan' => 'WNI',
+            'alamat' => fake()->streetAddress(), 'negara_domisili' => 'Indonesia',
+            'provinsi' => 'Jawa Tengah', 'kota_kabupaten' => 'Surakarta', 'kecamatan' => 'Laweyan',
             'status' => PendaftaranCalonMhs::STATUS_DRAFT, 'status_pembayaran' => 'belum_bayar',
         ]);
     }
@@ -236,6 +239,7 @@ class SpmbAdminNotificationsTest extends TestCase
         $this->map([$this->adminA->id]);
         $manual = $this->application->replicate();
         $manual->no_pendaftaran = fake()->unique()->numerify('MANUAL-ADMIN-#####');
+        $manual->nik = fake()->unique()->numerify('################');
         $manual->status = PendaftaranCalonMhs::STATUS_SUBMITTED;
         $manual->sumber_pendaftaran = 'manual';
         $manual->diinput_oleh = $this->adminA->id;

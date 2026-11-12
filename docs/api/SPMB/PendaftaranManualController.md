@@ -141,7 +141,13 @@ Membuat akun role `calon_mhs` serta pendaftaran dengan status `submitted`, sumbe
 | `program_studi_id` | integer | Ya | ID program studi aktif |
 | `program_studi_pilihan2_id` | integer/null | Tidak | Program studi kedua; harus berbeda dari pilihan pertama |
 | `nama_lengkap` | string | Ya | Maksimal 255 karakter |
-| `nik` | string | Ya | Maksimal 20 karakter dan unik |
+| `nik` | string | WNI: ya, WNA: tidak | Maksimal 20 karakter, unik; wajib 16 digit untuk WNI |
+| `kewarganegaraan_id` | integer | Ya | ID item aktif `spmb_master_referensi` bertipe `kewarganegaraan` |
+| `nomor_paspor` | string | WNA: ya | Maksimal 50 karakter, unik |
+| `negara_penerbit_paspor` | string | WNA: ya | Negara penerbit paspor, maksimal 100 karakter |
+| `negara_kewarganegaraan` | string | WNA: ya | Negara kewarganegaraan |
+| `kode_negara_kewarganegaraan` | string | WNA: ya | Kode ISO 3166-1 alpha-2, dua huruf |
+| `negara_domisili` | string | Ya | Jika Indonesia, provinsi/kota/kecamatan wajib; negara lain memakai alamat bebas |
 | `no_hp` | string | Ya | Maksimal 30 karakter |
 | `alamat` | string | Ya | Maksimal 2.000 karakter |
 | `tanggal_lahir` | date | Tidak | Harus sebelum hari ini |

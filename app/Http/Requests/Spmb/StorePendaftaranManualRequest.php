@@ -22,7 +22,7 @@ class StorePendaftaranManualRequest extends FormRequest
 
         $this->merge([
             'email' => strtolower(trim((string) $this->input('email'))),
-            'nik' => preg_replace('/\s+/', '', (string) $this->input('nik')),
+            'nik' => preg_replace('/\s+/', '', (string) $this->input('nik')) ?: null,
             'pihak_ketiga_user_ids' => array_values(array_unique(array_filter($thirdPartyIds))),
         ]);
     }
@@ -45,13 +45,19 @@ class StorePendaftaranManualRequest extends FormRequest
                 Rule::exists('siakad_program_studi', 'id')->where('is_active', true)->whereNull('deleted_at'),
             ],
             'nama_lengkap' => ['required', 'string', 'max:255'],
-            'nik' => ['required', 'string', 'max:20', 'unique:spmb_pendaftaran_calon_mhs,nik'],
+            'nik' => ['nullable', 'string', 'max:20', 'unique:spmb_pendaftaran_calon_mhs,nik'],
+            'kewarganegaraan_id' => ['required', 'integer', Rule::exists('spmb_master_referensi', 'id')->where('tipe', 'kewarganegaraan')->where('is_active', true)],
+            'nomor_paspor' => ['nullable', 'string', 'max:50', 'unique:spmb_pendaftaran_calon_mhs,nomor_paspor'],
+            'negara_penerbit_paspor' => ['nullable', 'string', 'max:100'],
+            'negara_kewarganegaraan' => ['nullable', 'string', 'max:100'],
+            'kode_negara_kewarganegaraan' => ['nullable', 'string', 'size:2', 'regex:/^[A-Za-z]{2}$/'],
             'tanggal_lahir' => ['nullable', 'date', 'before:today'],
             'tempat_lahir' => ['nullable', 'string', 'max:100'],
             'jenis_kelamin' => ['nullable', Rule::in(['L', 'P'])],
             'agama' => ['nullable', 'string', 'max:50'],
             'status_sipil' => ['nullable', 'string', 'max:50'],
             'kewarganegaraan' => ['nullable', 'string', 'max:50'],
+            'negara_domisili' => ['required', 'string', 'max:100'],
             'no_hp' => ['required', 'string', 'max:30'],
             'alamat' => ['required', 'string', 'max:2000'],
             'provinsi' => ['nullable', 'string', 'max:100'],
@@ -112,5 +118,23 @@ class StorePendaftaranManualRequest extends FormRequest
             ],
             'bukti_transfer' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
         ];
+    }
+
+    public function after(): array
+    {
+        return [function ($validator): void {
+            $reference = \App\Models\System\MasterReferensi::query()
+                ->where('tipe', 'kewarganegaraan')
+                ->where('is_active', true)
+                ->find($this->integer('kewarganegaraan_id'));
+
+            if (!$reference) return;
+
+            $identityErrors = app(\App\Services\Spmb\SpmbApplicantIdentityValidator::class)
+                ->errors($this->all(), (string) $reference->kode);
+            foreach ($identityErrors as $field => $message) {
+                $validator->errors()->add($field, $message);
+            }
+        }];
     }
 }

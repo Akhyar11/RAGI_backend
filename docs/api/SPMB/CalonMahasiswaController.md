@@ -39,6 +39,10 @@
             "no_pendaftaran": "REG-20260910-1234",
             "nama_lengkap": "Ahmad",
             "nik": "3201234567890001",
+            "kewarganegaraan_id": 1,
+            "nomor_paspor": null,
+            "negara_penerbit_paspor": null,
+            "negara_domisili": "Indonesia",
             "status": "draft",
             "status_pembayaran": "belum_bayar"
         },
@@ -77,10 +81,16 @@ Jika `kode_diskon` diisi, backend memvalidasi ulang kode dan menerapkannya hanya
 | `kode_diskon` | string | ❌ | Kode diskon opsional; harus dikirim sebelum tagihan pendaftaran pertama kali dibuat |
 | `nama_lengkap` | string | ❌ | Nama lengkap calon mahasiswa |
 | `nik` | string | ❌ | NIK KTP / Kartu Identitas |
+| `kewarganegaraan_id` | integer | ❌ | ID item aktif `spmb_master_referensi` dengan tipe `kewarganegaraan` |
+| `nomor_paspor` | string | ❌ | Nomor paspor; wajib saat finalisasi WNA dan harus unik |
+| `negara_penerbit_paspor` | string | ❌ | Negara penerbit paspor; wajib saat finalisasi WNA |
+| `negara_kewarganegaraan` | string | ❌ | Negara kewarganegaraan; wajib saat finalisasi WNA |
+| `kode_negara_kewarganegaraan` | string | ❌ | Kode ISO 3166-1 alpha-2; wajib saat finalisasi WNA, dipakai untuk sinkronisasi PDDIKTI |
+| `negara_domisili` | string | ❌ | Negara domisili; jika Indonesia, provinsi, kota/kabupaten, dan kecamatan wajib |
 | `no_hp` | string | ❌ | Nomor HP / WhatsApp |
-| `provinsi` | string | ❌ | Nama Provinsi |
-| `kota_kabupaten` | string | ❌ | Nama Kota/Kabupaten |
-| `kecamatan` | string | ❌ | Nama Kecamatan |
+| `provinsi` | string | ❌ | Provinsi/state; wajib saat domisili Indonesia |
+| `kota_kabupaten` | string | ❌ | Kota/kabupaten/city; wajib saat domisili Indonesia |
+| `kecamatan` | string | ❌ | Kecamatan/distrik; wajib saat domisili Indonesia |
 | `kode_pos` | string | ❌ | Kode Pos |
 | `alamat` | string | ❌ | Alamat lengkap domisili |
 | `asal_sekolah` | string | ❌ | Nama sekolah asal |
@@ -114,5 +124,13 @@ Jika `kode_diskon` diisi, backend memvalidasi ulang kode dan menerapkannya hanya
 ## Tagihan beberapa kanal (2026-11-11)
 
 Penyimpanan biodata menerbitkan beban pendaftaran per kanal yang ditetapkan pada komponen biaya. Respons `data.tagihan` mempertahankan `tagihan/virtual_account` pertama dan menambahkan `tagihan_list[]` (masing-masing berisi `tagihan` dan `virtual_account`). Penyimpanan berulang menggunakan seluruh tagihan tahap yang sudah ada. `GET /api/spmb/pendaftaran/me` menambahkan `data.tagihan_list[]` berisi seluruh tagihan SPMB calon. Nominal total tahap harus dihitung dari semua tagihan, bukan hanya item pertama.
+
+## Identitas WNI dan WNA
+
+- Referensi `kewarganegaraan_id` harus mengarah ke item aktif dengan tipe `kewarganegaraan`. Kode WNI mewajibkan NIK 16 digit saat finalisasi. Kode WNA melarang NIK dan mewajibkan `nomor_paspor`, `negara_penerbit_paspor`, `negara_kewarganegaraan`, serta `kode_negara_kewarganegaraan` ISO 3166-1 alpha-2.
+- Draft tetap dapat disimpan bertahap sebelum identitas lengkap. `POST /api/spmb/pendaftaran/finalize` menjalankan ulang aturan identitas dan alamat.
+- `alamat` wajib untuk semua pendaftar. Jika `negara_domisili` adalah Indonesia (atau kosong pada data lama), `provinsi`, `kota_kabupaten`, dan `kecamatan` harus terisi. Untuk negara lain ketiga field administratif tersebut opsional.
+- WNA perlu memilih dokumen paspor melalui Master Syarat Berkas untuk jalur masuk yang sesuai. Dokumen tetap divalidasi menggunakan `jenis_dokumen` dan requirement aktif jalur tersebut.
+- Referensi `WNI` dan `WNA` dibuat/diaktifkan oleh migrasi identitas WNA. Dropdown mengambil label/kode master; server menggunakan kode master sebagai sumber aturan.
 
 Tagihan menyimpan `payment_gateway_config_id/payment_gateway_name/payment_gateway_environment`. VA dapat null sebelum checkout; jangan membuat VA lokal pengganti pada browser. Registrasi membuka `/spmb/pembayaran?tahap=pendaftaran`. Reissue VA tidak mengubah tagihan dengan kanal eksplisit atau pembayaran tercatat (422). Reset pendaftaran dengan tagihan kanal eksplisit atau pembayaran juga ditolak (422) agar riwayat/order provider tidak terhapus. Kesalahan mapping komponen diteruskan sebagai validasi 422.

@@ -35,7 +35,7 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan cal
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `search` | string | ❌ | — | Cari berdasarkan nama, no pendaftaran, NIK, atau akun user |
+| `search` | string | ❌ | — | Cari berdasarkan nama, no pendaftaran, NIK, nomor paspor, atau akun user |
 | `status` | string | ❌ | — | Filter status pendaftaran |
 | `status_pembayaran` | string | ❌ | — | Filter status pembayaran pendaftaran |
 | `gelombang_id` | integer | ❌ | — | Filter berdasarkan gelombang |

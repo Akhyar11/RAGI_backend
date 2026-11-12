@@ -52,6 +52,11 @@ class SpmbPendaftaranManualService
                     ]);
                 }
 
+                $nationality = \App\Models\System\MasterReferensi::query()
+                    ->where('tipe', 'kewarganegaraan')
+                    ->where('is_active', true)
+                    ->findOrFail($data['kewarganegaraan_id']);
+
                 $temporaryPassword = Str::random(20);
                 $user = User::create([
                     'username' => $this->generateUsername($email),
@@ -69,7 +74,8 @@ class SpmbPendaftaranManualService
                 $pendaftaran = PendaftaranCalonMhs::create(array_merge($data, [
                     'user_id' => $user->id,
                     'no_pendaftaran' => $this->generateRegistrationNumber(),
-                    'kewarganegaraan' => $data['kewarganegaraan'] ?? 'WNI',
+                    'kewarganegaraan' => $nationality->nama,
+                    'kode_negara_kewarganegaraan' => strtoupper((string) ($data['kode_negara_kewarganegaraan'] ?? '')) ?: null,
                     'status' => PendaftaranCalonMhs::STATUS_SUBMITTED,
                     'status_pembayaran' => PendaftaranCalonMhs::STATUS_PEMBAYARAN_BELUM,
                     'sumber_pendaftaran' => 'manual',

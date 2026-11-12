@@ -68,7 +68,7 @@ class LaporanSpmbController extends Controller
             
             // Header CSV
             fputcsv($handle, [
-                'No Pendaftaran', 'Nama Lengkap', 'NIK', 'Asal Sekolah', 
+                'No Pendaftaran', 'Nama Lengkap', 'NIK', 'Nomor Paspor', 'Kewarganegaraan', 'Asal Sekolah',
                 'Status Pendaftaran', 'Status Pembayaran', 'Status Kelulusan', 'Status Daftar Ulang'
             ]);
 
@@ -80,6 +80,8 @@ class LaporanSpmbController extends Controller
                             $p->no_pendaftaran,
                             $p->nama_lengkap,
                             $p->nik,
+                            $p->nomor_paspor,
+                            $p->kewarganegaraan,
                             $p->asal_sekolah,
                             $p->status,
                             $p->status_pembayaran,

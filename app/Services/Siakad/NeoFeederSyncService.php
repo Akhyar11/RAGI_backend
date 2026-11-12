@@ -51,15 +51,16 @@ class NeoFeederSyncService
 
         foreach ($mahasiswas as $mhs) {
             try {
+                $countryCode = $this->getFeederCountryCode($mhs);
                 $record = [
                     'nama_mahasiswa' => $mhs->nama_lengkap,
                     'jenis_kelamin' => $mhs->jenis_kelamin ?: 'L',
                     'tempat_lahir' => $mhs->tempat_lahir ?: 'Indonesia',
                     'tanggal_lahir' => $mhs->tanggal_lahir?->format('Y-m-d') ?: '2004-01-01',
                     'id_agama' => $this->mapAgama($mhs->agama),
-                    'nik' => $mhs->nik ?: '3201' . str_pad($mhs->id, 12, '0', STR_PAD_LEFT),
+                    'nik' => $mhs->nik ?: ($countryCode === 'ID' ? '3201' . str_pad($mhs->id, 12, '0', STR_PAD_LEFT) : null),
                     'nisn' => $mhs->nisn,
-                    'kewarganegaraan' => 'ID',
+                    'kewarganegaraan' => $countryCode ?: null,
                     'jalan' => $mhs->alamat ?: 'Jl. Kampus Terpadu No. 1',
                     'rt' => $mhs->rt,
                     'rw' => $mhs->rw,
@@ -247,6 +248,7 @@ class NeoFeederSyncService
     public function syncSingleMahasiswa($mahasiswaId, $userId = null)
     {
         $mhs = Mahasiswa::with(['programStudi', 'user', 'konversiTransfer.details'])->findOrFail($mahasiswaId);
+        $countryCode = $this->getFeederCountryCode($mhs);
 
         // 1. Sync Biodata
         $bioRecord = [
@@ -255,9 +257,9 @@ class NeoFeederSyncService
             'tempat_lahir' => $mhs->tempat_lahir ?: 'Indonesia',
             'tanggal_lahir' => $mhs->tanggal_lahir?->format('Y-m-d') ?: '2004-01-01',
             'id_agama' => $this->mapAgama($mhs->agama),
-            'nik' => $mhs->nik ?: '3201' . str_pad($mhs->id, 12, '0', STR_PAD_LEFT),
+            'nik' => $mhs->nik ?: ($countryCode === 'ID' ? '3201' . str_pad($mhs->id, 12, '0', STR_PAD_LEFT) : null),
             'nisn' => $mhs->nisn,
-            'kewarganegaraan' => 'ID',
+            'kewarganegaraan' => $countryCode ?: null,
             'jalan' => $mhs->alamat ?: 'Jl. Kampus Terpadu No. 1',
             'rt' => $mhs->rt,
             'rw' => $mhs->rw,
@@ -342,6 +344,17 @@ class NeoFeederSyncService
             'id_feeder_riwayat' => $riwayatFeederId,
             'synced_at' => now()->toIso8601String(),
         ];
+    }
+
+    private function getFeederCountryCode(Mahasiswa $mahasiswa): string
+    {
+        $code = strtoupper(trim((string) $mahasiswa->kode_negara_kewarganegaraan));
+        if (preg_match('/^[A-Z]{2}$/', $code)) {
+            return $code;
+        }
+
+        $nationality = strtoupper(trim((string) $mahasiswa->kewarganegaraan));
+        return $nationality === 'WNA' || str_contains($nationality, 'ASING') ? '' : 'ID';
     }
 
     /**
