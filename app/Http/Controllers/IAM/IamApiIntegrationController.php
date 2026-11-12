@@ -8,6 +8,8 @@ use App\Http\Requests\IAM\TestApiIntegrationRequest;
 use App\Models\IamApiIntegration;
 use App\Services\AuditLogService;
 use App\Services\IAM\ApiIntegrationService;
+use App\Services\IAM\ApiIntegrationSyncException;
+use App\Services\IAM\ProgramStudiIntegrationSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
@@ -239,6 +241,74 @@ class IamApiIntegrationController extends Controller
                 'status' => 'error',
                 'message' => 'Tes koneksi gagal terhubung ke server tujuan. Pastikan URL dapat dijangkau.',
             ], 502);
+        }
+    }
+
+    public function sync(Request $request, int $id, ProgramStudiIntegrationSyncService $syncService)
+    {
+        Gate::authorize('iam.api_integration.manage');
+
+        $integration = IamApiIntegration::findOrFail($id);
+        $oldValues = $integration->only(['last_synced_at', 'last_status']);
+
+        try {
+            $result = $syncService->sync($integration);
+            $integration->update([
+                'last_synced_at' => now(),
+                'last_status' => 'success',
+            ]);
+
+            try {
+                AuditLogService::record(
+                    module: 'IAM',
+                    action: 'sync',
+                    tableName: 'iam_api_integrations',
+                    recordId: $integration->id,
+                    oldValues: $oldValues,
+                    newValues: [
+                        'last_synced_at' => $integration->last_synced_at?->toISOString(),
+                        'last_status' => $integration->last_status,
+                        'result' => $result,
+                    ],
+                    request: $request
+                );
+            } catch (Throwable $auditError) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log sync API integration: ' . $auditError->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Sinkronisasi berhasil dijalankan.',
+                'data' => $result,
+            ]);
+        } catch (ApiIntegrationSyncException $exception) {
+            $integration->update([
+                'last_synced_at' => now(),
+                'last_status' => 'failed',
+            ]);
+
+            try {
+                AuditLogService::record(
+                    module: 'IAM',
+                    action: 'sync',
+                    tableName: 'iam_api_integrations',
+                    recordId: $integration->id,
+                    oldValues: $oldValues,
+                    newValues: [
+                        'last_synced_at' => $integration->last_synced_at?->toISOString(),
+                        'last_status' => $integration->last_status,
+                        'error' => $exception->getMessage(),
+                    ],
+                    request: $request
+                );
+            } catch (Throwable $auditError) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log sync API integration: ' . $auditError->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'error',
+                'message' => $exception->getMessage(),
+            ], $exception->statusCode);
         }
     }
 }

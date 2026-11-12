@@ -141,6 +141,7 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::get('api-integrations/{id}', [App\Http\Controllers\IAM\IamApiIntegrationController::class, 'show']);
     Route::put('api-integrations/{id}', [App\Http\Controllers\IAM\IamApiIntegrationController::class, 'update']);
     Route::post('api-integrations/{id}/test', [App\Http\Controllers\IAM\IamApiIntegrationController::class, 'testConnection']);
+    Route::post('api-integrations/{id}/sync', [App\Http\Controllers\IAM\IamApiIntegrationController::class, 'sync']);
 
     // Menus (Admin Management)
     Route::get('menus', [MenuController::class, 'index']);
