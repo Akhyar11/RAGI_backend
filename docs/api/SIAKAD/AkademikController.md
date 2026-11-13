@@ -1,6 +1,6 @@
 # AkademikController
 
-> **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/akademik` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-25
+> **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/akademik` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-11-13
 
 Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata kuliah, dan dosen. Sumber program studi kini tabel `siakad_program_studi`.
 
@@ -372,6 +372,8 @@ Tambah skala nilai mutu baru.
 | `search` | string | ❌ | — | Cari `nama` / `kode_prodi` |
 | `fakultas_id` | integer | ❌ | — | Filter fakultas |
 | `all` | boolean | ❌ | `false` | Abaikan batas scoping prodi bagi Admin OBE (ambil seluruh prodi aktif) |
+| `include_inactive` | boolean | ❌ | `false` | Sertakan prodi aktif dan nonaktif; hanya untuk Super Admin atau pengguna dengan permission `siakad.master.manage` |
+| `is_active` | boolean | ❌ | — | Filter status program studi; dapat dipakai bersama `include_inactive=true` |
 | `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `nama`, `kode_prodi`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 |
@@ -389,9 +391,19 @@ Tambah skala nilai mutu baru.
 {
     "status": "success",
     "data": [
-        { "id": 7, "kode_prodi": "TI01", "prefix_nim": "A", "nama": "Teknik Informatika", "jenjang": "S1", "is_active": true }
+        { "id": 7, "kode_prodi": "TI01", "prefix_nim": "A", "nama": "Teknik Informatika", "jenjang": "S1", "is_active": true, "fakultas_id": null }
     ],
     "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 }
+}
+```
+
+`include_inactive=true` melewati filter aktif default hanya untuk Super Admin atau permission `siakad.master.manage`. Request tanpa permission tersebut mendapat:
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melihat program studi nonaktif."
 }
 ```
 

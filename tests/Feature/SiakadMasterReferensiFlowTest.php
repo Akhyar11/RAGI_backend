@@ -59,6 +59,39 @@ class SiakadMasterReferensiFlowTest extends TestCase
         $this->assertNotEmpty($response->json('data'));
     }
 
+    public function test_master_prodi_admin_can_include_inactive_rows_but_default_list_stays_active_only(): void
+    {
+        $inactiveId = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => 'IMPORT-NONAKTIF',
+            'nama' => 'Program Studi Hasil Import Nonaktif',
+            'jenjang' => $this->masterKode('jenjang_prodi'),
+            'is_active' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $masterPermission = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'siakad.master.manage'],
+            ['name' => 'Kelola Master Fakultas & Prodi', 'module' => 'siakad', 'action' => 'update']
+        );
+        $this->admin->roles()->first()->permissions()->syncWithoutDetaching([$masterPermission->id]);
+
+        $defaultResponse = $this->getJson('/api/v1/siakad/akademik/prodi');
+        $defaultResponse->assertStatus(200);
+        $defaultIds = collect($defaultResponse->json('data'))->pluck('id');
+        $this->assertNotContains($inactiveId, $defaultIds->all());
+
+        $adminResponse = $this->getJson('/api/v1/siakad/akademik/prodi?include_inactive=1');
+        $adminResponse->assertStatus(200);
+        $adminRows = collect($adminResponse->json('data'));
+        $this->assertContains($inactiveId, $adminRows->pluck('id')->all());
+        $this->assertFalse((bool) $adminRows->firstWhere('id', $inactiveId)['is_active']);
+
+        $regularUser = User::factory()->create();
+        Passport::actingAs($regularUser);
+        $this->getJson('/api/v1/siakad/akademik/prodi?include_inactive=1')->assertStatus(403);
+    }
+
     public function test_alur_form_prodi_tersimpan_ke_database()
     {
         $fakultas = $this->postJson('/api/v1/siakad/akademik/fakultas', [

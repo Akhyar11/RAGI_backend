@@ -453,7 +453,21 @@ class AkademikController extends Controller
         $sortOrder = $request->sort_order === 'desc' ? 'desc' : 'asc';
         $query->orderBy($sortBy, $sortOrder);
 
-        $query->where('is_active', true);
+        if ($request->boolean('include_inactive')) {
+            $canManageProgramStudies = $user && (
+                $user->hasPermission('siakad.master.manage')
+                || $user->isSuperAdmin()
+            );
+
+            if (!$canManageProgramStudies) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda tidak memiliki izin untuk melihat program studi nonaktif.',
+                ], 403);
+            }
+        } else {
+            $query->where('is_active', true);
+        }
 
         if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
             $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
