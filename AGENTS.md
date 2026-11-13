@@ -18,6 +18,7 @@ Sebelum mengeksekusi tugas apapun, Anda WAJIB memeriksa daftar skill di bawah in
 | `seeder-standard`             | `.agent/skills/seeder_standard/SKILL.md`             | Membuat atau memodifikasi file Seeder                                    |
 | `event-listener-standard`     | `.agent/skills/event_listener_standard/SKILL.md`     | Membuat Event, Listener, atau alur reaktif antar-modul                   |
 | `api-documentation`           | `.agent/skills/api_documentation/SKILL.md`           | Membuat Controller baru ATAU memodifikasi endpoint yang sudah ada        |
+| `api-settings-workflow`       | `.agent/skills/api_settings_workflow/SKILL.md`       | Membuat/mengubah registry Pengaturan API, token/auth, tes koneksi, atau sync impor |
 | `rbac-refactoring-standard`   | `.agent/skills/rbac_refactoring_standard/SKILL.md`   | Melakukan refaktor controller, model, migration, atau merancang pengecekan akses (RBAC) tanpa mengandalkan field statis. |
 | `module-management-standard`| `.agent/skills/module_management_standard/SKILL.md`  | Merancang, menambah, atau memodifikasi modul aplikasi (Master Modul) di ekosistem kampus terintegrasi. |
 | `audit-fungsional-crud`       | `../RAGIFrontend/.agent/skills/audit_fungsional_crud/SKILL.md` | Diminta menguji, mengaudit, atau memverifikasi fungsi operasional halaman/form CRUD, dropdown data, integrasi API, dan alur bisnis modul. |

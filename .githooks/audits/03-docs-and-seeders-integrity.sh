@@ -44,6 +44,8 @@ Tugasmu adalah memeriksa FULL Git Diff berikut secara SANGAT KETAT terhadap kele
      * Tabel daftar endpoint: Method | Endpoint | Fungsi | Auth.
      * Request headers & Query parameters lengkap (default pagination: created_at, desc, per_page: 15, page: 1).
      * Request body (jika ada) dan contoh JSON response nyata (200/201, pagination, serta error 400/401/403/404/422).
+     - Untuk kontrak Pengaturan API: dokumentasikan boolean `token_configured` dan tegaskan token mentah tidak pernah dikembalikan; jelaskan bahwa field token yang tidak dikirim/null/kosong mempertahankan kredensial tersimpan.
+     - Jika ada aksi sync/import: dokumentasikan bahwa Uji Koneksi tidak menulis target dan Sync menjalankan impor; format respons counts (fetched/created/updated/skipped), format sumber yang didukung, perilaku idempotensi/mapping, kebijakan skip relasi tak valid, pagination cap, dan contoh error upstream.
 
 2. STANDAR DATABASE SEEDER & MIGRATION:
    - Data awal / master data pada seeder WAJIB menggunakan `updateOrCreate` atau `firstOrCreate` (DILARANG `::create()` mentah yang gagal jika di-seed ulang).

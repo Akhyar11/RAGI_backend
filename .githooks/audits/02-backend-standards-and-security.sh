@@ -70,6 +70,14 @@ Evaluasi HANYA baris baru (+) yang ditambahkan atau diubah. Abaikan baris kontek
    - Seluruh tabel database baru (`Schema::create`) dan Model (`protected $table`) WAJIB menggunakan prefix modul resmi (`iam_`, `spmb_`, `siakad_`, `sikeu_`, `simpeg_`, `sinapra_`, `sippm_`, `lms_`, `core_`, `oauth_`, `upm_`).
    - Foreign key wajib merujuk ke tabel yang berprefix.
 
+6. API SETTINGS, CREDENTIALS & SYNC IMPORT:
+    - Token integrasi wajib encrypted at rest dan hidden dari JSON. UI/API hanya boleh mengekspos boolean `token_configured`; dilarang mengembalikan token mentah, token mask/suffix, atau mencatatnya di log/audit/error.
+    - Update tanpa token atau dengan token null/string kosong wajib mempertahankan token tersimpan; hanya token non-kosong yang mengganti kredensial.
+    - Skema auth wajib eksplisit dan konsisten: `bearer` mengirim Authorization Bearer, `header_key` mengirim X-API-KEY. Jangan menganggap kredensial benar berarti skema header benar.
+    - Uji koneksi hanya memeriksa konektivitas dan tidak boleh menulis data target. Aksi Sync harus terpisah, terotorisasi, menjalankan service backend khusus, dan mengimpor respons sumber ke target.
+    - Sync wajib memvalidasi bentuk respons/baris, pagination berbatas, master referensi melalui domain owner, dan pemetaan sumber-target stabil/idempoten. Jangan menebak relasi yang hilang, menghapus data target hanya karena tidak ada di sumber, atau menimpa mapping existing dengan null.
+    - Hasil sync wajib membedakan fetched/created/updated/skipped serta alasan skip yang aman. Penulisan target transaksional; audit sync non-blocking; kegagalan upstream harus menghasilkan error terbungkus dengan status HTTP yang sesuai.
+
 ========================================================================================
 
 Catatan Penilaian:

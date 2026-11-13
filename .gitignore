@@ -26,6 +26,13 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 .agent/
+!.agent/
+.agent/*
+!.agent/skills/
+.agent/skills/*
+!.agent/skills/api_settings_workflow/
+.agent/skills/api_settings_workflow/*
+!.agent/skills/api_settings_workflow/SKILL.md
 database/seeders/Dummy/
 database/seeders/Dev/
 database/seeders/*Dev*
