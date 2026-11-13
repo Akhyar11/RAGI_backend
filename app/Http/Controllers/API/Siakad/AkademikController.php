@@ -510,7 +510,11 @@ class AkademikController extends Controller
     {
         $prodi = ProgramStudi::findOrFail($id);
 
-        $prodi->update($request->validated());
+        $validated = $request->validated();
+        if (array_key_exists('is_active', $validated)) {
+            $validated['is_status_manual'] = true;
+        }
+        $prodi->update($validated);
 
         return response()->json([
             'status' => 'success',

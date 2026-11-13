@@ -473,7 +473,7 @@ Wajib permission `siakad.master.manage` (atau akses Super Admin melalui Gate).
 
 ## [PUT] /api/v1/siakad/akademik/prodi/{id}
 
-Pada update, kode prodi dapat diubah selama unik, `is_active` dapat diubah untuk mengaktifkan/menonaktifkan prodi, dan `fakultas_id` bersifat nullable agar prodi hasil migrasi yang belum dipetakan tetap dapat diedit. Saat create, `fakultas_id` tetap wajib. Fakultas yang tidak dikirim saat update dipertahankan; kirim `null` untuk menghapus pemetaan fakultas.
+Pada update, kode prodi dapat diubah selama unik, `is_active` dapat diubah untuk mengaktifkan/menonaktifkan prodi, dan `fakultas_id` bersifat nullable agar prodi hasil migrasi yang belum dipetakan tetap dapat diedit. Saat create, `fakultas_id` tetap wajib. Fakultas yang tidak dikirim saat update dipertahankan; kirim `null` untuk menghapus pemetaan fakultas. Kode dan status yang diedit admin ditandai sebagai override lokal sehingga sync sumber berikutnya tidak menimpanya.
 
 | Parameter | Type | Required | Deskripsi |
 |---|---|---|---|

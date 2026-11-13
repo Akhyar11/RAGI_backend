@@ -293,7 +293,7 @@ Tidak memerlukan body. URL, token, tipe autentikasi, dan status aktif menggunaka
 ### Perilaku dan Batasan
 
 - Respons sumber dapat berupa array JSON, `{ "data": [...] }`, atau respons paginator dengan `meta.last_page`; proses dibatasi sampai 100 halaman.
-- Data dicocokkan berdasarkan `source_id` yang disimpan pada `siakad_program_studi.source_id`; data lama tanpa mapping external memakai fallback `kode_prodi`. Sync ulang memperbarui row yang sama walau kode sumber berubah dan tidak menghapus row tujuan yang tidak ada pada sumber.
+- Data dicocokkan berdasarkan `source_id` yang disimpan pada `siakad_program_studi.source_id`; data lama tanpa mapping external memakai fallback `kode_prodi`. `source_kode_prodi` menyimpan kode terakhir dari sumber. Jika admin mengganti `kode_prodi` dari kode sumber tersebut, sync selanjutnya mempertahankan kode target manual sambil tetap memperbarui `source_kode_prodi` dan field sumber lainnya. Jika target masih mengikuti kode sumber, perubahan kode baru dari sumber tetap diterapkan. Status yang diedit manual juga dipertahankan saat sync.
 - Jenjang dan akreditasi harus cocok dengan item aktif pada master referensi SIAKAD. Item tidak valid masuk ke `skipped_items` beserta alasan.
 - `fakultas_id` baru tetap null jika fakultas tidak dikirim. Fakultas yang dikirim harus cocok dengan kode atau nama fakultas aktif; relasi fakultas existing tidak dihapus ketika sumber tidak mengirim fakultas.
 - Program studi yang sudah soft-delete tidak dibuat ulang otomatis.

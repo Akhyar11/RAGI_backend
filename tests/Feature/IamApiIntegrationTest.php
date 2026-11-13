@@ -315,7 +315,11 @@ class IamApiIntegrationTest extends TestCase
             ->assertJsonPath('data.skipped', 0);
 
         $this->assertSame(1, DB::table('siakad_program_studi')->where('source_id', '101')->count());
-        $this->assertDatabaseMissing('siakad_program_studi', ['kode_prodi' => 'TI-D3']);
+        $this->assertDatabaseHas('siakad_program_studi', [
+            'id' => $programStudiId,
+            'source_kode_prodi' => 'TI-D3-REV',
+            'kode_prodi' => 'TI-D3-REV',
+        ]);
         $this->assertDatabaseHas('siakad_program_studi', [
             'id' => $programStudiId,
             'source_id' => '101',
@@ -325,6 +329,70 @@ class IamApiIntegrationTest extends TestCase
         $this->assertDatabaseHas('iam_api_integrations', [
             'id' => $this->integration->id,
             'last_status' => 'success',
+        ]);
+    }
+
+    public function test_resync_preserves_admin_edited_code_and_status_while_refreshing_source_code(): void
+    {
+        DB::table('spmb_master_referensi')->insert([
+            'modul' => 'siakad',
+            'tipe' => 'jenjang_prodi',
+            'kode' => 'D3',
+            'nama' => 'Diploma 3',
+            'urutan' => 1,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->integration->update([
+            'url_api' => 'https://legacy.example.test/api/program-studi',
+            'token' => 'sync-token',
+        ]);
+
+        Http::fakeSequence('https://legacy.example.test/api/program-studi*')
+            ->push(['data' => [[
+                'source_id' => 'legacy-77',
+                'kode_prodi' => 'SRC-77',
+                'nama' => 'Program Sumber',
+                'jenjang' => 'D3',
+                'is_active' => true,
+                'fakultas' => null,
+            ]], 'meta' => ['current_page' => 1, 'last_page' => 1]], 200)
+            ->push(['data' => [[
+                'source_id' => 'legacy-77',
+                'kode_prodi' => 'SRC-77-NEW',
+                'nama' => 'Program Sumber Diperbarui',
+                'jenjang' => 'D3',
+                'is_active' => true,
+                'fakultas' => null,
+            ]], 'meta' => ['current_page' => 1, 'last_page' => 1]], 200);
+
+        $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$this->integration->id}/sync")
+            ->assertStatus(200);
+
+        $program = \App\Models\Siakad\ProgramStudi::where('source_id', 'legacy-77')->firstOrFail();
+        $this->putJson("/api/v1/siakad/akademik/prodi/{$program->id}", [
+            'kode_prodi' => 'LOCAL-77',
+            'nama' => 'Nama Lokal',
+            'jenjang' => 'D3',
+            'fakultas_id' => null,
+            'is_active' => false,
+        ])->assertStatus(200);
+
+        $this->postJson("/api/admin/api-integrations/{$this->integration->id}/sync")
+            ->assertStatus(200)
+            ->assertJsonPath('data.updated', 1);
+
+        $this->assertDatabaseHas('siakad_program_studi', [
+            'id' => $program->id,
+            'kode_prodi' => 'LOCAL-77',
+            'source_kode_prodi' => 'SRC-77-NEW',
+            'nama' => 'Program Sumber Diperbarui',
+            'is_active' => 0,
+            'is_status_manual' => 1,
+            'fakultas_id' => null,
         ]);
     }
 

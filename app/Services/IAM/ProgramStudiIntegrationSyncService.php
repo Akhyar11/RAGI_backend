@@ -115,11 +115,25 @@ class ProgramStudiIntegrationSyncService
 
                 $attributes = [
                     'source_id' => $sourceId,
-                    'kode_prodi' => $code,
+                    'source_kode_prodi' => $code,
                     'nama' => trim($row['nama']),
                     'jenjang' => trim($row['jenjang']),
-                    'is_active' => $this->normalizeBoolean($row['is_active']),
                 ];
+
+                $previousSourceCode = $existingIncludingDeleted?->source_kode_prodi;
+                $targetCodeStillMatchesSource = !$existingIncludingDeleted;
+                if ($existingIncludingDeleted) {
+                    $targetCodeStillMatchesSource = $previousSourceCode === null
+                        ? $existingIncludingDeleted->kode_prodi === $code
+                        : $existingIncludingDeleted->kode_prodi === $previousSourceCode;
+                }
+
+                if ($targetCodeStillMatchesSource) {
+                    $attributes['kode_prodi'] = $code;
+                }
+                if (!$existingIncludingDeleted?->is_status_manual) {
+                    $attributes['is_active'] = $this->normalizeBoolean($row['is_active']);
+                }
 
                 if (array_key_exists('kode_prodi_dikti', $row)) {
                     $attributes['kode_prodi_dikti'] = $this->nullableTrim($row['kode_prodi_dikti']);

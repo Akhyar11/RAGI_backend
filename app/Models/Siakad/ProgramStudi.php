@@ -21,6 +21,8 @@ class ProgramStudi extends Model
         'kaprodi_id',
         'kode_prodi',
         'source_id',
+        'source_kode_prodi',
+        'is_status_manual',
         'prefix_nim',
         'kode_prodi_dikti',
         'id_feeder',
@@ -33,6 +35,7 @@ class ProgramStudi extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_status_manual' => 'boolean',
         'akreditasi_berlaku_sampai' => 'date',
     ];
 
