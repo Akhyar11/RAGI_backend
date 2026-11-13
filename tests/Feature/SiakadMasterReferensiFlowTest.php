@@ -118,17 +118,55 @@ class SiakadMasterReferensiFlowTest extends TestCase
 
         $this->putJson("/api/v1/siakad/akademik/prodi/{$programStudiId}", [
             'fakultas_id' => null,
+            'kode_prodi' => 'IMPORT-EDIT',
             'nama' => 'Prodi Impor Nonaktif Diperbarui',
             'jenjang' => $this->masterKode('jenjang_prodi'),
             'akreditasi' => null,
+            'is_active' => true,
         ])->assertStatus(200);
 
         $this->assertDatabaseHas('siakad_program_studi', [
             'id' => $programStudiId,
+            'kode_prodi' => 'IMPORT-EDIT',
             'nama' => 'Prodi Impor Nonaktif Diperbarui',
             'fakultas_id' => null,
-            'is_active' => 0,
+            'is_active' => 1,
         ]);
+    }
+
+    public function test_updating_program_studi_rejects_a_duplicate_code_from_another_program(): void
+    {
+        $masterPermission = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'siakad.master.manage'],
+            ['name' => 'Kelola Master Fakultas & Prodi', 'module' => 'siakad', 'action' => 'update']
+        );
+        $this->admin->roles()->first()->permissions()->syncWithoutDetaching([$masterPermission->id]);
+
+        $existing = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => 'PRODI-A',
+            'nama' => 'Program A',
+            'jenjang' => $this->masterKode('jenjang_prodi'),
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $target = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => 'PRODI-B',
+            'nama' => 'Program B',
+            'jenjang' => $this->masterKode('jenjang_prodi'),
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->putJson("/api/v1/siakad/akademik/prodi/{$target}", [
+            'kode_prodi' => 'PRODI-A',
+            'nama' => 'Program B',
+            'jenjang' => $this->masterKode('jenjang_prodi'),
+        ])->assertStatus(422)->assertJsonValidationErrors(['kode_prodi']);
+
+        $this->assertDatabaseHas('siakad_program_studi', ['id' => $existing, 'kode_prodi' => 'PRODI-A']);
+        $this->assertDatabaseHas('siakad_program_studi', ['id' => $target, 'kode_prodi' => 'PRODI-B']);
     }
 
     public function test_create_program_studi_still_requires_faculty(): void

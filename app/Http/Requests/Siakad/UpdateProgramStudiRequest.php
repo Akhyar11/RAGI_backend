@@ -20,11 +20,13 @@ class UpdateProgramStudiRequest extends FormRequest
         return [
             'fakultas_id' => 'nullable|exists:siakad_fakultas,id',
             'kaprodi_id' => 'nullable|exists:siakad_dosen,id',
+            'kode_prodi' => ['sometimes', 'required', 'string', 'max:20', Rule::unique(ProgramStudi::class, 'kode_prodi')->ignore($prodiId)],
             'nama' => 'required|string|max:255',
             'prefix_nim' => ['nullable', 'string', 'max:10', 'regex:/^[A-Za-z0-9\-]+$/', Rule::unique(ProgramStudi::class, 'prefix_nim')->ignore($prodiId)],
             'kode_prodi_dikti' => 'nullable|string|max:50',
             'jenjang' => ['required', 'string', 'max:20', new MasterReferensiExists('jenjang_prodi')],
             'akreditasi' => ['nullable', 'string', 'max:50', new MasterReferensiExists('akreditasi_prodi')],
+            'is_active' => 'sometimes|boolean',
         ];
     }
 
@@ -32,6 +34,8 @@ class UpdateProgramStudiRequest extends FormRequest
     {
         return [
             'jenjang.required' => 'Jenjang pendidikan wajib dipilih.',
+            'kode_prodi.required' => 'Kode program studi wajib diisi.',
+            'kode_prodi.unique' => 'Kode program studi sudah digunakan.',
         ];
     }
 }
