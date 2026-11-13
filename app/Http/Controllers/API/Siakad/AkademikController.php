@@ -519,6 +519,19 @@ class AkademikController extends Controller
         ]);
     }
 
+    public function showProgramStudi(int $id)
+    {
+        Gate::authorize('siakad.master.manage');
+
+        $programStudi = ProgramStudi::with(['fakultas', 'kaprodi.user'])->findOrFail($id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Detail program studi berhasil diambil',
+            'data' => $programStudi,
+        ]);
+    }
+
     public function destroyProgramStudi($id)
     {
         $prodi = ProgramStudi::findOrFail($id);

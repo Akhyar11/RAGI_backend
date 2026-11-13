@@ -92,6 +92,57 @@ class SiakadMasterReferensiFlowTest extends TestCase
         $this->getJson('/api/v1/siakad/akademik/prodi?include_inactive=1')->assertStatus(403);
     }
 
+    public function test_master_admin_can_edit_inactive_program_studi_without_faculty(): void
+    {
+        $masterPermission = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'siakad.master.manage'],
+            ['name' => 'Kelola Master Fakultas & Prodi', 'module' => 'siakad', 'action' => 'update']
+        );
+        $this->admin->roles()->first()->permissions()->syncWithoutDetaching([$masterPermission->id]);
+
+        $programStudiId = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => 'IMPORT-NONAKTIF-EDIT',
+            'nama' => 'Prodi Impor Nonaktif',
+            'jenjang' => $this->masterKode('jenjang_prodi'),
+            'fakultas_id' => null,
+            'is_active' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->getJson("/api/v1/siakad/akademik/prodi/{$programStudiId}")
+            ->assertStatus(200)
+            ->assertJsonPath('data.id', $programStudiId)
+            ->assertJsonPath('data.is_active', false)
+            ->assertJsonPath('data.fakultas_id', null);
+
+        $this->putJson("/api/v1/siakad/akademik/prodi/{$programStudiId}", [
+            'fakultas_id' => null,
+            'nama' => 'Prodi Impor Nonaktif Diperbarui',
+            'jenjang' => $this->masterKode('jenjang_prodi'),
+            'akreditasi' => null,
+        ])->assertStatus(200);
+
+        $this->assertDatabaseHas('siakad_program_studi', [
+            'id' => $programStudiId,
+            'nama' => 'Prodi Impor Nonaktif Diperbarui',
+            'fakultas_id' => null,
+            'is_active' => 0,
+        ]);
+    }
+
+    public function test_create_program_studi_still_requires_faculty(): void
+    {
+        $response = $this->postJson('/api/v1/siakad/akademik/prodi', [
+            'kode_prodi' => 'CREATE-NO-FACULTY',
+            'nama' => 'Program Tanpa Fakultas',
+            'jenjang' => $this->masterKode('jenjang_prodi'),
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['fakultas_id']);
+    }
+
     public function test_alur_form_prodi_tersimpan_ke_database()
     {
         $fakultas = $this->postJson('/api/v1/siakad/akademik/fakultas', [

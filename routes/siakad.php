@@ -109,6 +109,7 @@ Route::prefix('akademik')->group(function () {
     Route::delete('/fakultas/{id}', [AkademikController::class, 'destroyFakultas']);
 
     Route::get('/prodi', [AkademikController::class, 'listProgramStudi']);
+    Route::get('/prodi/{id}', [AkademikController::class, 'showProgramStudi']);
     Route::post('/prodi', [AkademikController::class, 'storeProgramStudi']);
     Route::put('/prodi/{id}', [AkademikController::class, 'updateProgramStudi']);
     Route::delete('/prodi/{id}', [AkademikController::class, 'destroyProgramStudi']);

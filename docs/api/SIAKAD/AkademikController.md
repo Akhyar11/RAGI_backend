@@ -31,6 +31,7 @@ Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata
 | PUT | `/api/v1/siakad/akademik/fakultas/{id}` | Perbarui fakultas | ✅ |
 | DELETE | `/api/v1/siakad/akademik/fakultas/{id}` | Hapus fakultas | ✅ |
 | GET | `/api/v1/siakad/akademik/prodi` | Daftar program studi | ✅ |
+| GET | `/api/v1/siakad/akademik/prodi/{id}` | Detail prodi untuk halaman edit admin master, termasuk prodi nonaktif | ✅ `siakad.master.manage` |
 | POST | `/api/v1/siakad/akademik/prodi` | Tambah program studi | ✅ |
 | PUT | `/api/v1/siakad/akademik/prodi/{id}` | Perbarui program studi | ✅ |
 | DELETE | `/api/v1/siakad/akademik/prodi/{id}` | Hapus program studi | ✅ |
@@ -406,6 +407,80 @@ Tambah skala nilai mutu baru.
     "message": "Anda tidak memiliki izin untuk melihat program studi nonaktif."
 }
 ```
+
+## [GET] /api/v1/siakad/akademik/prodi/{id}
+
+Mengambil detail satu program studi untuk form edit admin master. Endpoint ini dapat memuat prodi nonaktif, tetapi tidak memuat record yang sudah soft-delete.
+
+Wajib permission `siakad.master.manage` (atau akses Super Admin melalui Gate).
+
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Path Parameters
+
+| Parameter | Tipe | Wajib | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID program studi |
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Detail program studi berhasil diambil",
+    "data": {
+        "id": 13,
+        "kode_prodi": "62310",
+        "nama": "Akuntansi Perpajakan",
+        "jenjang": "D4",
+        "fakultas_id": null,
+        "is_active": false,
+        "fakultas": null,
+        "kaprodi": null
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "ProgramStudi tidak ditemukan."
+}
+```
+
+## [PUT] /api/v1/siakad/akademik/prodi/{id}
+
+Pada update, `fakultas_id` bersifat nullable agar prodi hasil migrasi yang belum dipetakan tetap dapat diedit. Saat create, `fakultas_id` tetap wajib. Fakultas yang tidak dikirim saat update dipertahankan; kirim `null` untuk menghapus pemetaan fakultas. Status `is_active` tidak berubah kecuali memang disediakan pada request update.
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `fakultas_id` | integer/null | ❌ | Fakultas induk; null diperbolehkan saat edit |
+| `nama` | string | ✅ | Nama program studi |
+| `jenjang` | string | ✅ | Kode aktif pada master referensi SIAKAD |
+| `akreditasi` | string/null | ❌ | Kode aktif pada master referensi atau null |
 
 ### Prefix NIM per Prodi
 

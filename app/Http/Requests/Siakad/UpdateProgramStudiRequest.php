@@ -18,7 +18,7 @@ class UpdateProgramStudiRequest extends FormRequest
     {
         $prodiId = $this->route('id');
         return [
-            'fakultas_id' => 'required|exists:siakad_fakultas,id',
+            'fakultas_id' => 'nullable|exists:siakad_fakultas,id',
             'kaprodi_id' => 'nullable|exists:siakad_dosen,id',
             'nama' => 'required|string|max:255',
             'prefix_nim' => ['nullable', 'string', 'max:10', 'regex:/^[A-Za-z0-9\-]+$/', Rule::unique(ProgramStudi::class, 'prefix_nim')->ignore($prodiId)],
