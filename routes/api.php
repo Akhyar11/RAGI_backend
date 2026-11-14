@@ -611,6 +611,20 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
         ->middleware('can:sikeu.paymentgateway.manage');
     Route::post('midtrans/snap-token', [App\Http\Controllers\Sikeu\MidtransCallbackController::class, 'createSnapToken']);
 
+    // SIKEU Migrator (Sinkronisasi Data Legacy Database / API Eksternal)
+    Route::prefix('migrator')->group(function () {
+        Route::get('status', [App\Http\Controllers\Sikeu\SikeuMigratorController::class, 'status'])
+            ->middleware('can:sikeu.akuntansi.read');
+        Route::post('start', [App\Http\Controllers\Sikeu\SikeuMigratorController::class, 'start'])
+            ->middleware('can:sikeu.akuntansi.manage');
+        Route::get('mappings', [App\Http\Controllers\Sikeu\SikeuMigratorController::class, 'mappings'])
+            ->middleware('can:sikeu.akuntansi.read');
+        Route::put('mappings/{id}', [App\Http\Controllers\Sikeu\SikeuMigratorController::class, 'updateMapping'])
+            ->middleware('can:sikeu.akuntansi.manage');
+        Route::post('reset', [App\Http\Controllers\Sikeu\SikeuMigratorController::class, 'reset'])
+            ->middleware('can:sikeu.akuntansi.manage');
+    });
+
     // Unit Kas Master
     Route::get('master/unit-kas', [App\Http\Controllers\Sikeu\UnitKasController::class, 'index']);
     Route::post('master/unit-kas', [App\Http\Controllers\Sikeu\UnitKasController::class, 'store']);

@@ -147,6 +147,13 @@
 | SikeuCompatController | Shim legacy untuk gate SIAKAD/SPMB: ringkasan, tagihan aktif, eligibilitas ujian, biaya lain, belum-DU + email kwitansi | [docs/api/SIKEU/SikeuCompatController.md](api/SIKEU/SikeuCompatController.md) |
 | H2hBankController | Integrasi Native Host-to-Host (H2H) Bank BTN Syariah (Inquiry, Payment, Reversal) & Koeksistensi Xendit | [docs/api/SIKEU/H2hBankController.md](api/SIKEU/H2hBankController.md) |
 | MidtransCallbackController | Integrasi Webhook Midtrans (QRIS, E-Wallet, VA) & Trial Simulasi Pembayaran Super Admin | [docs/api/SIKEU/MidtransCallbackController.md](api/SIKEU/MidtransCallbackController.md) |
+| SikeuMigratorController | Sinkronisasi data legacy (DB / API stream), Background Queue, dan Manajemen Mapping Akun COA | [docs/api/SIKEU/SikeuMigratorController.md](api/SIKEU/SikeuMigratorController.md) |
+
+**Panduan Integrasi & Operasional SIKEU:**
+- 📘 [Panduan Integrasi API Eksternal SIKEU (Third-Party Developer Guide)](PANDUAN_INTEGRASI_EKSTERNAL_SIKEU.md)
+- 📗 [Panduan Operasional SIKEU](PANDUAN_OPERASIONAL_SIKEU.md)
+- 📙 [Alur Sistem Pembayaran Mahasiswa](ALUR_SISTEM_PEMBAYARAN_MAHASISWA.md)
+- 📕 [Setup Payment Gateway](PAYMENT_GATEWAY_SETUP.md)
 
 ---
 

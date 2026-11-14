@@ -27,6 +27,7 @@ class SikeuLegacyCoaMappingSeeder extends Seeder
             '5115'     => ['101.01', 'KAS DITANGAN'],
 
             // Pendapatan & Dropping Kas
+            '4111'     => ['401.01', 'PENDAPATAN PENDIDIKAN'],
             '4115'     => ['302.01', 'DROPPING KAS ANTAR UNIT'],
             '411101'   => ['401.01', 'PENDAPATAN DARI SPP MAHASISWA'],
             '411102'   => ['401.03', 'PENDAPATAN DANA PENGEMBANGAN'],
@@ -49,18 +50,33 @@ class SikeuLegacyCoaMappingSeeder extends Seeder
             '411301'   => ['401.11', 'PENDAPATAN TES KESEHATAN'],
             '411302'   => ['401.11', 'PENDAPATAN TOEIC / TOEFL'],
             '411303'   => ['402.02', 'PENDAPATAN PELATIHAN, DIKLAT, WORKSHOP'],
+            '411305'   => ['404.01', 'PENDAPATAN PERPUSTAKAAN'],
+            '411306'   => ['401.05', 'PENDAPATAN LABORATORIUM PENELITIAN'],
             '411401'   => ['402.01', 'PENDAPATAN PKM MAHASISWA'],
             '411404'   => ['404.01', 'PENDAPATAN DARI APBN LAINNYA'],
+            '4117'     => ['101.02', 'KAS KECIL KAMPUS 1'],
+            '4118'     => ['101.02', 'KAS KECIL KAMPUS 2'],
+            '4119'     => ['101.02', 'KAS PRODI TRO'],
+            '4120'     => ['101.02', 'KAS PRODI TRPL'],
+            '4121'     => ['101.02', 'KAS PRODI HT'],
+            '4122'     => ['101.02', 'KAS PRODI FARMASI'],
+            '4123'     => ['101.02', 'KAS PRODI MIK'],
+            '4124'     => ['101.02', 'KAS PRODI TLM'],
+            '4125'     => ['101.02', 'KAS PRODI BMR'],
             '4126'     => ['101.02', 'KAS UNIT HUMAS'],
             '4127'     => ['101.02', 'KAS UNIT SARPRAS'],
             '4128'     => ['101.02', 'KAS UNIT KEPEGAWAIAN'],
+            '4129'     => ['101.02', 'KAS UNIT KERJASAMA'],
             '4130'     => ['101.02', 'KAS UNIT UPPM'],
             '4131'     => ['101.02', 'KAS UNIT UPM'],
+            '4132'     => ['101.02', 'KAS UNIT IT'],
             '4133'     => ['101.02', 'KAS UNIT PEMBANGUNAN'],
+            '4134'     => ['101.02', 'KAS UNIT KEMAHASISWAAN'],
             '4135'     => ['101.02', 'KAS UNIT CCTS'],
             '4136'     => ['101.02', 'KAS UNIT PERPUSTAKAAN'],
             '4137'     => ['401.05', 'KAS UNIT TEFA HT'],
             '4139'     => ['403.01', 'KAS UNIT POINT MART'],
+            '4140'     => ['101.02', 'KAS PRODI PM'],
             '4141'     => ['101.02', 'KAS UNIT RUMAH TANGGA'],
 
             // =========================================================
@@ -83,11 +99,15 @@ class SikeuLegacyCoaMappingSeeder extends Seeder
             '14'       => ['401.08', 'LEGALISIR IJAZAH'],
             '15'       => ['401.12', 'BEM UKM HMI'],
             '16'       => ['401.12', 'ALUMNI'],
+            '17'       => ['401.05', 'BIAYA LAB & PRAKTIKUM'],
+            '18'       => ['401.11', 'LES BAHASA ASING'],
             '98'       => ['101.01', 'SALDO AWAL KAS'],
             '99'       => ['301.01', 'SALDO AWAL EKUITAS'],
+            '998'      => ['301.03', 'SALDO AWAL EKUITAS'],
             '999'      => ['301.01', 'SALDO AWAL EKUITAS'],
 
             // Beban Pegawai
+            '5211'     => ['501.01', 'BEBAN GAJI DAN HONORARIUM'],
             '521101'   => ['501.01', 'BEBAN GAJI KARYAWAN TETAP'],
             '521102'   => ['501.02', 'HONORARIUM KELEBIHAN MENGAJAR'],
             '521103'   => ['501.06', 'HONORARIUM KARYAWAN OUTSORSING'],
@@ -97,8 +117,16 @@ class SikeuLegacyCoaMappingSeeder extends Seeder
             '521107'   => ['503.06', 'HONOR PERJALANAN DINAS'],
 
             // Beban Pembelajaran & Mahasiswa
+            '5311'     => ['502.01', 'BEBAN OPERASIONAL PEMBELAJARAN'],
             '531101'   => ['502.01', 'BEBAN BELANJA ATK'],
             '531102'   => ['502.02', 'BEBAN BAHAN PRAKTIKUM'],
+            '53110201' => ['502.02', 'BEBAN BAHAN PRAKTIKUM PRODI TRO'],
+            '53110202' => ['502.02', 'BEBAN BAHAN PRAKTIKUM PRODI TRPL'],
+            '53110203' => ['502.02', 'BEBAN BAHAN PRAKTIKUM PRODI PRODUKSI MEDIA'],
+            '53110204' => ['502.02', 'BEBAN BAHAN PRAKTIKUM PRODI PERHOTELAN'],
+            '53110205' => ['502.02', 'BEBAN BAHAN PRAKTIKUM PRODI FARMASI'],
+            '53110206' => ['502.02', 'BEBAN BAHAN PRAKTIKUM PRODI MIK'],
+            '53110207' => ['502.02', 'BEBAN BAHAN PRAKTIKUM PRODI TLM'],
             '531103'   => ['502.12', 'BEBAN ATRIBUT DAN SERAGAM MAHASISWA'],
             '531104'   => ['502.05', 'BEBAN KEGIATAN MAHASISWA'],
             '531105'   => ['502.05', 'BEBAN KEGIATAN OUTBOND'],
@@ -114,6 +142,7 @@ class SikeuLegacyCoaMappingSeeder extends Seeder
             '531115'   => ['501.09', 'BEBAN KEGIATAN WORKSHOP, DIKLAT, PELATIHAN'],
 
             // Beban Operasional Umum & Fasilitas
+            '5312'     => ['503.10', 'BEBAN OPERASIONAL KAMPUS'],
             '531201'   => ['503.01', 'BEBAN LISTRIK'],
             '531202'   => ['503.02', 'BEBAN INTERNET'],
             '531203'   => ['503.02', 'BEBAN TELEPON DAN AIR'],
@@ -319,7 +348,7 @@ class SikeuLegacyCoaMappingSeeder extends Seeder
         foreach ($mappings as $kdLama => [$kdBaru, $namaLama]) {
             $akunIdBaru = $coaMap[$kdBaru] ?? null;
 
-            DB::table('_mig_akun_mapping')->updateOrInsert(
+            DB::table('sikeu_mig_akun_mapping')->updateOrInsert(
                 ['kd_perkiraan_lama' => (string)$kdLama],
                 [
                     'nama_akun_lama' => $namaLama,

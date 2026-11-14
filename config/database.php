@@ -109,6 +109,46 @@ return [
             ]) : [],
         ],
 
+        // Koneksi ke Database Sumber Legacy INDONUSA (MySQL STMIK / Trkas & Trbyr)
+        'mysql_indonusa' => [
+            'driver' => 'mysql',
+            'host' => env('SRC_INDONUSA_HOST', '127.0.0.1'),
+            'port' => env('SRC_INDONUSA_PORT', '3306'),
+            'database' => env('SRC_INDONUSA_DATABASE', 'indonusa'),
+            'username' => env('SRC_INDONUSA_USERNAME', 'root'),
+            'password' => env('SRC_INDONUSA_PASSWORD', 'root'),
+            'unix_socket' => env('SRC_INDONUSA_SOCKET', ''),
+            'charset' => env('SRC_INDONUSA_CHARSET', 'latin1'),
+            'collation' => env('SRC_INDONUSA_COLLATION', 'latin1_swedish_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => false,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                $mysqlSslCa => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
+        // Koneksi ke Database Sumber Legacy SIKEUDB (Node.js / Sequelize Modern)
+        'mysql_sikeudb' => [
+            'driver' => 'mysql',
+            'host' => env('SRC_SIKEUDB_HOST', env('H2H_DB_HOST', '127.0.0.1')),
+            'port' => env('SRC_SIKEUDB_PORT', env('H2H_DB_PORT', '3306')),
+            'database' => env('SRC_SIKEUDB_DATABASE', env('H2H_DB_DATABASE', 'sikeudb')),
+            'username' => env('SRC_SIKEUDB_USERNAME', env('H2H_DB_USERNAME', 'root')),
+            'password' => env('SRC_SIKEUDB_PASSWORD', env('H2H_DB_PASSWORD', 'root')),
+            'unix_socket' => env('SRC_SIKEUDB_SOCKET', ''),
+            'charset' => env('SRC_SIKEUDB_CHARSET', 'utf8mb4'),
+            'collation' => env('SRC_SIKEUDB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                $mysqlSslCa => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
         'mysql_demo' => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),
