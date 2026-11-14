@@ -628,8 +628,8 @@ class SikeuMigratorService
      */
     protected function runFromApi(array $options): array
     {
-        $apiUrl = config('sikeu.migrator.api_url');
-        $apiToken = config('sikeu.migrator.api_token', '');
+        $apiUrl = !empty($options['api_url']) ? $options['api_url'] : config('sikeu.migrator.api_url');
+        $apiToken = !empty($options['api_token']) ? $options['api_token'] : config('sikeu.migrator.api_token', '');
         $authScheme = $options['auth_scheme'] ?? config('sikeu.migrator.auth_scheme', 'bearer');
         $maxPages = (int) config('sikeu.migrator.max_pages', 1000);
         $batchSize = (int) ($options['batch_size'] ?? 500);

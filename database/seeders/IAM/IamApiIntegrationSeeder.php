@@ -40,6 +40,56 @@ class IamApiIntegrationSeeder extends Seeder
                 'auth_type' => 'bearer',
                 'is_active' => true,
             ],
+            [
+                'key' => 'sikeu_transaksi_kas',
+                'name' => 'Migrasi Transaksi Kas & Jurnal SIKEU',
+                'module' => 'sikeu',
+                'http_method' => 'GET',
+                'description' => 'Sumber data transaksi kas masuk/keluar dari sistem keuangan legacy untuk dikonversi menjadi Jurnal Akuntansi berimbang (Double-Entry) dan dipetakan ke COA aktif RAG.',
+                'expected_schema' => [
+                    'type' => 'array',
+                    'description' => 'Daftar transaksi kas dari sistem keuangan legacy. Kode perkiraan wajib terpetakan pada sikeu_mig_akun_mapping.',
+                    'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'no_tran' => ['type' => ['string', 'integer'], 'description' => 'Nomor transaksi kas unik dari sistem legacy.'],
+                            'tgl_tran' => ['type' => 'string', 'description' => 'Tanggal transaksi kas (YYYY-MM-DD).'],
+                            'kd_perkiraan' => ['type' => 'string', 'description' => 'Kode perkiraan akun lawan legacy yang dipetakan ke COA RAG.'],
+                            'jenis' => ['type' => 'integer', 'description' => 'Arah kas: 1 untuk Kas Masuk (Debet Kas), 2 untuk Kas Keluar (Kredit Kas).'],
+                            'jumlah' => ['type' => 'number', 'description' => 'Nominal transaksi kas (harus > 0).'],
+                            'keterangan' => ['type' => ['string', 'null'], 'description' => 'Uraian atau deskripsi transaksi kas.'],
+                        ],
+                        'required' => ['no_tran', 'tgl_tran', 'kd_perkiraan', 'jumlah'],
+                    ],
+                ],
+                'auth_type' => 'bearer',
+                'is_active' => true,
+            ],
+            [
+                'key' => 'sikeu_transaksi_pembayaran',
+                'name' => 'Migrasi Pembayaran Mahasiswa SIKEU',
+                'module' => 'sikeu',
+                'http_method' => 'GET',
+                'description' => 'Sumber data transaksi pembayaran kuliah mahasiswa dari sistem legacy untuk dicatat sebagai tagihan lunas dan riwayat pembayaran resmi mahasiswa di SIKEU RAG.',
+                'expected_schema' => [
+                    'type' => 'array',
+                    'description' => 'Daftar transaksi pembayaran mahasiswa dari sistem legacy. NIM harus terdaftar pada siakad_mahasiswa.',
+                    'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'no_tran' => ['type' => ['string', 'integer'], 'description' => 'Nomor transaksi pembayaran unik dari sistem legacy.'],
+                            'nim' => ['type' => 'string', 'description' => 'Nomor Induk Mahasiswa (NIM) pembayar.'],
+                            'tgl_tran' => ['type' => 'string', 'description' => 'Tanggal pembayaran (YYYY-MM-DD).'],
+                            'jumlah' => ['type' => 'number', 'description' => 'Nominal pembayaran dalam Rupiah (harus > 0).'],
+                            'metode_bayar' => ['type' => ['string', 'null'], 'description' => 'Kanal / metode pembayaran (misal: TRANSFER_BANK, TUNAI, MIDTRANS).'],
+                            'keterangan' => ['type' => ['string', 'null'], 'description' => 'Catatan transaksi pembayaran.'],
+                        ],
+                        'required' => ['no_tran', 'nim', 'tgl_tran', 'jumlah'],
+                    ],
+                ],
+                'auth_type' => 'bearer',
+                'is_active' => true,
+            ],
         ];
 
         IamApiIntegration::withTrashed()

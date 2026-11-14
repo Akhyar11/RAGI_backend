@@ -45,4 +45,12 @@ class IamApiIntegration extends Model
     {
         return filled($this->token);
     }
+
+    /**
+     * Mengambil nilai token yang telah terdekripsi dengan aman.
+     */
+    public function getDecryptedToken(): string
+    {
+        return filled($this->token) ? (string) $this->token : '';
+    }
 }

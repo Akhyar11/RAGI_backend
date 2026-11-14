@@ -261,7 +261,10 @@ Melakukan *live testing* koneksi ke URL API target. Endpoint ini dapat menguji n
 
 ## POST /api/api-integrations/{id}/sync
 
-Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvalidasi kontrak dan referensi master, lalu menerapkan data ke target yang didukung. Saat ini key `siakad_program_studi` disinkronkan ke tabel `siakad_program_studi` berdasarkan `kode_prodi`.
+Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvalidasi kontrak dan referensi master, lalu menerapkan data ke target yang didukung. Modul dan key yang didukung saat ini:
+- `siakad_program_studi` (Modul `siakad`): disinkronkan ke tabel `siakad_program_studi` berdasarkan `kode_prodi` dan referensi jenjang/akreditasi aktif.
+- `sikeu_transaksi_kas` (Modul `sikeu`): disinkronkan ke tabel `sikeu_jurnal_umum` dan `sikeu_detail_jurnal_umum` berimbang (Double-Entry) dengan resolusi COA dinamis via `sikeu_mig_akun_mapping`.
+- `sikeu_transaksi_pembayaran` (Modul `sikeu`): disinkronkan ke tabel `sikeu_tagihan_mahasiswa` dan `sikeu_pembayaran` secara idempoten dengan verifikasi NIM mahasiswa di `siakad_mahasiswa`.
 
 ### Request Headers
 

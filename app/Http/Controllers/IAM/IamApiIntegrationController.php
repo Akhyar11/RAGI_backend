@@ -10,6 +10,7 @@ use App\Services\AuditLogService;
 use App\Services\IAM\ApiIntegrationService;
 use App\Services\IAM\ApiIntegrationSyncException;
 use App\Services\IAM\ProgramStudiIntegrationSyncService;
+use App\Services\IAM\SikeuIntegrationSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
@@ -244,15 +245,23 @@ class IamApiIntegrationController extends Controller
         }
     }
 
-    public function sync(Request $request, int $id, ProgramStudiIntegrationSyncService $syncService)
-    {
+    public function sync(
+        Request $request,
+        int $id,
+        ProgramStudiIntegrationSyncService $syncService,
+        SikeuIntegrationSyncService $sikeuSyncService
+    ) {
         Gate::authorize('iam.api_integration.manage');
 
         $integration = IamApiIntegration::findOrFail($id);
         $oldValues = $integration->only(['last_synced_at', 'last_status']);
 
         try {
-            $result = $syncService->sync($integration);
+            $result = match ($integration->module) {
+                'siakad' => $syncService->sync($integration),
+                'sikeu'  => $sikeuSyncService->sync($integration),
+                default  => throw new ApiIntegrationSyncException("Aksi sync belum didukung untuk modul '{$integration->module}'."),
+            };
             $integration->update([
                 'last_synced_at' => now(),
                 'last_status' => 'success',
