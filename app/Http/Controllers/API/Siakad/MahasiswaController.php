@@ -1346,4 +1346,105 @@ class MahasiswaController extends Controller
             ], 500);
         }
     }
+
+    public function syncFromSiakad(Request $request)
+    {
+        abort_unless($request->user(), 401, 'Autentikasi diperlukan.');
+        $this->authorize('siakad.mahasiswa.manage');
+
+        $validated = $request->validate([
+            'integration_id' => ['nullable', 'integer', 'exists:iam_api_integrations,id'],
+            'status' => ['nullable', 'string'],
+            'angkatan' => ['nullable'],
+            'prodi' => ['nullable', 'string'],
+            'nim' => ['nullable', 'string'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'max_pages' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        try {
+            $integration = !empty($validated['integration_id'])
+                ? \App\Models\IamApiIntegration::find($validated['integration_id'])
+                : \App\Models\IamApiIntegration::where('key', 'siakad_mahasiswa')->first();
+
+            if (!$integration) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Integrasi API "siakad_mahasiswa" belum terdaftar di modul IAM. Tambahkan/konfigurasi integrasi tersebut terlebih dahulu.',
+                ], 422);
+            }
+            if (!$integration->is_active) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Integrasi API mahasiswa SIAKAD sedang dinonaktifkan di modul IAM.',
+                ], 422);
+            }
+            if (empty($integration->url_api)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'URL API integrasi mahasiswa SIAKAD belum dikonfigurasi di modul IAM.',
+                ], 422);
+            }
+
+            $apiToken = method_exists($integration, 'getDecryptedToken')
+                ? $integration->getDecryptedToken()
+                : (filled($integration->token) ? (string) $integration->token : '');
+            if ($apiToken === '') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Token API integrasi mahasiswa SIAKAD belum dikonfigurasi di modul IAM.',
+                ], 422);
+            }
+
+            $options = $validated;
+            $options['url'] = $integration->url_api;
+            $options['token'] = $apiToken;
+            $options['auth_scheme'] = $integration->auth_type ?? 'bearer';
+
+            $service = app(\App\Services\Siakad\SiakadMahasiswaSyncService::class);
+            $result = $service->sync($options);
+
+            $processed = ($result['created'] ?? 0) + ($result['updated'] ?? 0);
+
+            try {
+                AuditLogService::record(
+                    module: 'SIAKAD',
+                    action: 'sync',
+                    tableName: 'siakad_mahasiswa',
+                    recordId: null,
+                    oldValues: null,
+                    newValues: [
+                        'source' => 'external_siakad_api',
+                        'integration' => 'siakad_mahasiswa',
+                        'created' => $result['created'] ?? 0,
+                        'updated' => $result['updated'] ?? 0,
+                        'skipped' => $result['skipped'] ?? 0,
+                        'failed' => $result['failed'] ?? 0,
+                        'fetched' => $result['fetched'] ?? 0,
+                    ],
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log sync mahasiswa siakad: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Sinkronisasi mahasiswa dari Siakad selesai. Diproses: {$processed} (dibuat: " . ($result['created'] ?? 0) . ", diperbarui: " . ($result['updated'] ?? 0) . "), dilewati: " . ($result['skipped'] ?? 0) . ", gagal: " . ($result['failed'] ?? 0) . ".",
+                'data' => $result,
+            ]);
+        } catch (\App\Services\Siakad\SiakadMahasiswaSyncException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Throwable $e) {
+            Log::error('Sync mahasiswa dari siakad gagal: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal melakukan sinkronisasi data mahasiswa dari Siakad.',
+            ], 500);
+        }
+    }
 }

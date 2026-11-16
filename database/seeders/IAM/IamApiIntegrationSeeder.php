@@ -90,6 +90,47 @@ class IamApiIntegrationSeeder extends Seeder
                 'auth_type' => 'bearer',
                 'is_active' => true,
             ],
+            [
+                'key' => 'siakad_mahasiswa',
+                'name' => 'Sinkronisasi Data Mahasiswa SIAKAD',
+                'module' => 'siakad',
+                'http_method' => 'GET',
+                'description' => 'Sumber data read-only mahasiswa dari SIAKAD legacy (wsia_mahasiswa/wsia_mahasiswa_pt) untuk disinkronkan ke siakad_mahasiswa RAG. Digunakan agar data mahasiswa (terutama NIM dan relasi prodi) tersedia sebelum/bersamaan sinkronisasi transaksi SIKEU.',
+                'expected_schema' => [
+                    'type' => 'object',
+                    'description' => 'Respons paginasi dari endpoint /api/mahasiswa SIAKAD legacy.',
+                    'properties' => [
+                        'status' => ['type' => 'boolean'],
+                        'message' => ['type' => 'string'],
+                        'pagination' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'total_records' => ['type' => 'integer'],
+                                'total_pages' => ['type' => 'integer'],
+                                'current_page' => ['type' => 'integer'],
+                                'limit' => ['type' => 'integer'],
+                                'has_next' => ['type' => 'boolean'],
+                                'has_prev' => ['type' => 'boolean'],
+                            ],
+                        ],
+                        'data' => [
+                            'type' => 'array',
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'identitas' => ['type' => 'object', 'description' => 'NIM, nama, NIK, NISN, TTL, jenis kelamin, agama.'],
+                                    'akademik' => ['type' => 'object', 'description' => 'Angkatan, prodi_id (xid_sms sumber), program_studi, jenjang, kelas, status_mahasiswa, tanggal_masuk, jenis pendaftaran.'],
+                                    'kontak' => ['type' => 'object'],
+                                    'alamat' => ['type' => 'object'],
+                                    'orang_tua_wali' => ['type' => 'object'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'auth_type' => 'bearer',
+                'is_active' => true,
+            ],
         ];
 
         IamApiIntegration::withTrashed()

@@ -10,6 +10,7 @@ use App\Services\AuditLogService;
 use App\Services\IAM\ApiIntegrationService;
 use App\Services\IAM\ApiIntegrationSyncException;
 use App\Services\IAM\ProgramStudiIntegrationSyncService;
+use App\Services\IAM\SiakadMahasiswaIntegrationSyncService;
 use App\Services\IAM\SikeuIntegrationSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -249,7 +250,8 @@ class IamApiIntegrationController extends Controller
         Request $request,
         int $id,
         ProgramStudiIntegrationSyncService $syncService,
-        SikeuIntegrationSyncService $sikeuSyncService
+        SikeuIntegrationSyncService $sikeuSyncService,
+        SiakadMahasiswaIntegrationSyncService $siakadMahasiswaSyncService
     ) {
         Gate::authorize('iam.api_integration.manage');
 
@@ -257,10 +259,11 @@ class IamApiIntegrationController extends Controller
         $oldValues = $integration->only(['last_synced_at', 'last_status']);
 
         try {
-            $result = match ($integration->module) {
-                'siakad' => $syncService->sync($integration),
-                'sikeu'  => $sikeuSyncService->sync($integration),
-                default  => throw new ApiIntegrationSyncException("Aksi sync belum didukung untuk modul '{$integration->module}'."),
+            $result = match (true) {
+                $integration->module === 'siakad' && $integration->key === 'siakad_program_studi' => $syncService->sync($integration),
+                $integration->module === 'siakad' && $integration->key === 'siakad_mahasiswa' => $siakadMahasiswaSyncService->sync($integration),
+                $integration->module === 'sikeu' => $sikeuSyncService->sync($integration),
+                default => throw new ApiIntegrationSyncException("Aksi sync belum didukung untuk integrasi '{$integration->key}' (modul '{$integration->module}')."),
             };
             $integration->update([
                 'last_synced_at' => now(),

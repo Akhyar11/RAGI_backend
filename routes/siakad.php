@@ -51,6 +51,7 @@ Route::prefix('mahasiswa')->group(function () {
     Route::patch('/{id}/status', [MahasiswaController::class, 'updateStatus']);
     Route::post('/import-nim', [MahasiswaController::class, 'importNimData']);
     Route::post('/sync-from-spmb', [MahasiswaController::class, 'syncFromSpmb']);
+    Route::post('/sync-from-siakad', [MahasiswaController::class, 'syncFromSiakad']);
     Route::get('/konversi', [MahasiswaController::class, 'listKonversi']);
     Route::get('/konversi/{id}', [MahasiswaController::class, 'showKonversi']);
     Route::post('/konversi', [MahasiswaController::class, 'storeKonversi']);
