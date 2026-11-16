@@ -17,16 +17,40 @@ class SpmbPaymentController extends Controller
 {
     public function options(PaymentGatewayOptionsRequest $request): JsonResponse
     {
-        $query = PaymentGatewayConfig::query()->select(['id', 'gateway_name', 'environment', 'is_active'])
-            ->where('is_active', true)->whereIn('gateway_name', PaymentGatewayConfig::SPMB_CHANNELS);
+        $configs = PaymentGatewayConfig::query()
+            ->whereIn('gateway_name', PaymentGatewayConfig::CONFIGURABLE_GATEWAYS)
+            ->get(['id', 'gateway_name', 'environment', 'is_active'])
+            ->keyBy('gateway_name');
+        $items = collect(PaymentGatewayConfig::CONFIGURABLE_GATEWAYS)
+            ->map(function (string $gatewayName) use ($configs): array {
+                $config = $configs->get($gatewayName);
+
+                return [
+                    'id' => $config?->id,
+                    'gateway_name' => $gatewayName,
+                    'environment' => $config?->environment,
+                    'is_active' => (bool) $config?->is_active,
+                    'is_configured' => (bool) $config,
+                    'is_spmb_supported' => in_array($gatewayName, PaymentGatewayConfig::SPMB_CHANNELS, true),
+                ];
+            });
         if ($request->filled('search')) {
-            $query->where('gateway_name', 'like', '%'.$request->string('search')->trim().'%');
+            $search = strtolower((string) $request->string('search')->trim());
+            $items = $items->filter(fn (array $item): bool => str_contains($item['gateway_name'], $search));
         }
         $sortOrder = strtolower((string) $request->input('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
-        $items = $query->orderBy($request->input('sort_by', 'gateway_name'), $sortOrder)
-            ->paginate(min(100, $request->integer('per_page', 15)));
+        $sortBy = $request->input('sort_by', 'gateway_name');
+        $items = $items->sortBy(fn (array $item) => $item[$sortBy] ?? '', SORT_REGULAR, $sortOrder === 'desc')->values();
+        $perPage = min(100, $request->integer('per_page', 15));
+        $page = $request->integer('page', 1);
+        $total = $items->count();
+        $pageItems = $items->forPage($page, $perPage)->values();
 
-        return $this->paginated($items, 'Pilihan kanal pembayaran berhasil dimuat.');
+        return response()->json(['status' => 'success', 'message' => 'Pilihan kanal pembayaran berhasil dimuat.', 'data' => $pageItems,
+            'meta' => ['current_page' => $page, 'per_page' => $perPage, 'total' => $total,
+                'last_page' => max(1, (int) ceil($total / $perPage)),
+                'from' => $pageItems->isEmpty() ? null : (($page - 1) * $perPage) + 1,
+                'to' => $pageItems->isEmpty() ? null : (($page - 1) * $perPage) + $pageItems->count()]]);
     }
 
     public function index(SpmbPaymentListRequest $request): JsonResponse

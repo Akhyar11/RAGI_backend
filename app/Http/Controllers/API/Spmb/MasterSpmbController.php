@@ -320,16 +320,6 @@ class MasterSpmbController extends Controller
             }
         }
 
-        if ($request->filled('biaya')) {
-            if ($request->biaya === 'gratis') {
-                $query->where(function ($q) {
-                    $q->whereNull('biaya_pendaftaran')->orWhere('biaya_pendaftaran', 0);
-                });
-            } elseif ($request->biaya === 'berbayar') {
-                $query->where('biaya_pendaftaran', '>', 0);
-            }
-        }
-
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -342,7 +332,7 @@ class MasterSpmbController extends Controller
         }
 
         $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
-        $allowedSortColumns = ['id', 'nama', 'tanggal_buka', 'tanggal_tutup', 'kuota_total', 'biaya_pendaftaran', 'status', 'created_at'];
+        $allowedSortColumns = ['id', 'nama', 'tanggal_buka', 'tanggal_tutup', 'kuota_total', 'status', 'created_at'];
         $sortBy = in_array($request->sort_by, $allowedSortColumns) ? $request->sort_by : 'created_at';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
         $sortColumns = [
@@ -372,7 +362,6 @@ class MasterSpmbController extends Controller
                 'tanggal_buka' => $request->tanggal_buka,
                 'tanggal_tutup' => $request->tanggal_tutup,
                 'kuota' => $request->kuota,
-                'biaya' => $request->biaya,
                 'status' => $request->status,
                 'sort_by' => $sortBy,
                 'sort_order' => $sortOrder,
@@ -405,7 +394,7 @@ class MasterSpmbController extends Controller
             'tanggal_tutup' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
             'tanggal_pengumuman' => 'nullable|date',
             'kuota_total' => 'required|integer|min:1',
-            'biaya_pendaftaran' => 'nullable|numeric|min:0',
+            'biaya_pendaftaran' => 'prohibited',
             'potongan_biaya_daftar_ulang' => 'nullable|numeric|min:0|max:100',
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
@@ -436,7 +425,7 @@ class MasterSpmbController extends Controller
             'tanggal_tutup' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
             'tanggal_pengumuman' => 'nullable|date',
             'kuota_total' => 'required|integer|min:1',
-            'biaya_pendaftaran' => 'nullable|numeric|min:0',
+            'biaya_pendaftaran' => 'prohibited',
             'potongan_biaya_daftar_ulang' => 'nullable|numeric|min:0|max:100',
             'status' => 'required|in:draft,aktif,ditutup,selesai',
         ]);
@@ -523,8 +512,7 @@ class MasterSpmbController extends Controller
         $pendaftaran = $map($service->getKomponenBeban($masterTipeJalurId, $prodiId, true));
         $daftarUlang = $map($service->getKomponenBeban($masterTipeJalurId, $prodiId, false));
 
-        // Sumber biaya: 'master' bila ada konfigurasi Master Biaya SPMB untuk
-        // (tipe jalur + prodi) ini, atau 'none' (UI akan memakai tarif SIKEU/gelombang).
+        // Sumber biaya pendaftaran hanya komponen Master Biaya SPMB.
         $hasMasterConfig = $pendaftaran->isNotEmpty() || $daftarUlang->isNotEmpty();
 
         return response()->json([

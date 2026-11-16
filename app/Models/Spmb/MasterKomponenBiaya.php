@@ -17,6 +17,7 @@ class MasterKomponenBiaya extends Model
         'nama',
         'kategori',
         'payment_gateway_config_id',
+        'payment_gateway_name',
         'tipe_potongan',
         'is_referral_reward',
         'is_default_master_biaya',

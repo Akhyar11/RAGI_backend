@@ -32,6 +32,8 @@ class PendaftaranController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        abort_unless($request->user()?->hasPermission('spmb.manage'), 403, 'Akses ditolak.');
+
         $query = PendaftaranCalonMhs::with([
             'gelombangPenerimaan.jalurMasuk',
             'programStudi',
@@ -113,6 +115,12 @@ class PendaftaranController extends Controller
         }
 
         $pendaftaran = PendaftaranCalonMhs::with($relations)->findOrFail($id);
+
+        $user = $request->user();
+        if ($pendaftaran->user_id !== $user?->id
+            && ! $user?->hasPermission('spmb.manage')) {
+            abort(403, 'Anda tidak memiliki hak akses untuk melihat pendaftaran ini.');
+        }
 
         // Ringkasan daftar ulang (tagihan & pembayaran dikelola modul SIKEU).
         $daftarUlang = $this->pendaftaranService->daftarUlangSummary($pendaftaran);
@@ -262,8 +270,7 @@ class PendaftaranController extends Controller
             $pendaftaran = PendaftaranCalonMhs::findOrFail($id);
         }
 
-        $isAdmin = $user->hasPermission('spmb.manage')
-            || $user->hasPermission('spmb.pendaftaran.read');
+        $isAdmin = $user->hasPermission('spmb.manage');
 
         if ($pendaftaran->user_id !== $user->id && ! $isAdmin) {
             abort(403, 'Anda tidak memiliki hak akses untuk mengunduh SK pendaftaran ini.');

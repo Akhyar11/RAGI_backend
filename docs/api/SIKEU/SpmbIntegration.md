@@ -9,40 +9,22 @@
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
-| GET | `/api/v1/sikeu/spmb/tarif` | Get tarif pendaftaran SPMB dinamis per jalur & gelombang | ✅ Bearer |
-| GET | `/api/v1/sikeu/master/tarif-spmb` | List master tarif SPMB | ✅ Admin |
-| POST | `/api/v1/sikeu/master/tarif-spmb` | Tambah master tarif SPMB baru | ✅ Admin |
-| PUT | `/api/v1/sikeu/master/tarif-spmb/{id}` | Update master tarif SPMB | ✅ Admin |
-| DELETE | `/api/v1/sikeu/master/tarif-spmb/{id}` | Hapus master tarif SPMB | ✅ Admin |
+| GET | `/api/v1/sikeu/spmb/tarif` | Deprecated; mengembalikan `410 Gone` | ✅ Bearer |
+| GET/POST/PUT/DELETE | `/api/v1/sikeu/master/tarif-spmb` | Deprecated; mengembalikan `410 Gone` dan tidak mengubah record historis | ✅ Admin |
 | POST | `/api/v1/sikeu/callback/spmb/{calonMahasiswaId}` | Webhook Callback pelunasan biaya SPMB | ✅ Bearer |
 
 ---
 
-## GET /api/v1/sikeu/spmb/tarif
+## Endpoint Tarif SPMB Legacy (Deprecated)
 
-> Mengambil nominal biaya pendaftaran SPMB berdasarkan `jalur_id` dan `gelombang_id` secara real-time. Jika kombinasi tidak ditemukan, mengembalikan `nominal_standar` dari `jenis_biaya` tipe `spmb_adm`.
-
-### Query Parameters
-
-| Parameter | Type | Required | Deskripsi |
-|---|---|---|---|
-| `jalur_id` | string/integer | ✅ | ID Jalur Masuk SPMB |
-| `gelombang_id` | string/integer | ✅ | ID Gelombang SPMB |
-
-### Response Sukses (200 OK)
+Semua endpoint `/api/v1/sikeu/spmb/tarif` dan `/api/v1/sikeu/master/tarif-spmb` mengembalikan **410 Gone**. Tarif SPMB tidak lagi dikelola di SIKEU. Record tarif yang sudah ada dipertahankan untuk arsip, tetapi tidak dipakai untuk invoice. Atur nominal hanya pada item Komponen Biaya di Master Biaya SPMB.
 
 ```json
 {
-    "status": "success",
-    "data": {
-        "jalur_id": "1",
-        "gelombang_id": "2",
-        "nominal": 250000.00
-    }
+    "status": "error",
+    "message": "Tarif SPMB tidak lagi dikelola di SIKEU. Atur seluruh komponen dan nominal melalui Master Biaya SPMB."
 }
 ```
-
----
 
 ## POST /api/v1/sikeu/callback/spmb/{calonMahasiswaId}
 

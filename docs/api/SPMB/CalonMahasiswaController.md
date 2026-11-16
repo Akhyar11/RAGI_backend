@@ -58,9 +58,9 @@
 
 ## [POST] /api/spmb/pendaftaran/biodata
 
-> Menyimpan draft pendaftaran calon mahasiswa per langkah (multi-step wizard). Saat tagihan pertama diterbitkan, rincian diambil dari komponen Master Biaya (gelombang + prodi) yang ditandai `dibebankan_saat_pendaftaran` sebagai **beban awal**; bila belum dikonfigurasi, fallback ke tarif SIKEU / `biaya_pendaftaran` gelombang. Kolom `tahun_akademik_id` tidak lagi dikirim pada payload tagihan.
+> Menyimpan draft pendaftaran calon mahasiswa per langkah (multi-step wizard). Saat tagihan pertama diterbitkan, rincian hanya diambil dari Komponen Master Biaya berdasarkan tipe jalur dan program studi yang ditandai `dibebankan_saat_pendaftaran` sebagai **beban awal**. Jika komponen belum dikonfigurasi, request mengembalikan `422`; tarif SIKEU dan `biaya_pendaftaran` gelombang bukan fallback. Kolom `tahun_akademik_id` tidak lagi dikirim pada payload tagihan.
 
-Jika `kode_diskon` diisi, backend memvalidasi ulang kode dan menerapkannya hanya ke rincian Master Biaya yang ditandai sebagai beban pendaftaran. Kode tidak dapat ditambahkan atau diganti setelah tagihan terbit. Bila tidak ada rincian Master Biaya yang memenuhi syarat, kode diskon ditolak meskipun tagihan tanpa kode masih dapat mengikuti fallback tarif SIKEU.
+Jika `kode_diskon` diisi, backend memvalidasi ulang kode dan menerapkannya hanya ke rincian Master Biaya yang ditandai sebagai beban pendaftaran. Kode tidak dapat ditambahkan atau diganti setelah tagihan terbit. Bila tidak ada rincian Master Biaya yang memenuhi syarat, penerbitan tagihan ditolak.
 
 ### Headers
 

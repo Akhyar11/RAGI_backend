@@ -23,7 +23,7 @@
 
 ## GET /api/spmb/master/payment-gateway-options
 
-Menampilkan konfigurasi kanal aktif yang didukung alur SPMB. Nilai dropdown adalah ID record konfigurasi, bukan label atau credential provider.
+Menampilkan katalog kanal yang dapat dikonfigurasi SIKEU, termasuk kanal yang belum memiliki konfigurasi. Setiap opsi berisi `id` konfigurasi nullable, nama, environment nullable, status aktif/konfigurasi, dan apakah adapter pembayaran SPMB tersedia. Credential provider tidak dikembalikan.
 
 | Query parameter | Tipe | Default | Keterangan |
 |---|---|---|---|
@@ -38,13 +38,13 @@ Menampilkan konfigurasi kanal aktif yang didukung alur SPMB. Nilai dropdown adal
   "status": "success",
   "message": "Pilihan kanal pembayaran berhasil dimuat.",
   "data": [
-    {"id": 12, "gateway_name": "midtrans", "environment": "sandbox", "is_active": true}
+    {"id": null, "gateway_name": "midtrans", "environment": null, "is_active": false, "is_configured": false, "is_spmb_supported": true}
   ],
   "meta": {"current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1}
 }
 ```
 
-Pilihan tersimpan pada komponen tetap memiliki metadata `payment_gateway` dari API detail komponen meskipun berada di luar halaman opsi pertama atau kemudian nonaktif. Opsi kosong bukan pemilihan kanal baru; `payment_gateway_config_id: null` berarti mengikuti default SIKEU ketika tagihan baru diterbitkan. Credential provider tidak pernah dikembalikan.
+Opsi mencakup `xendit`, `midtrans`, `duitku`, `bsn_h2h`, dan `rekening_manual` meskipun belum dikonfigurasi. Pilihan yang belum disiapkan tetap dapat disimpan sebagai `payment_gateway_name` pada komponen; penerbitan tagihan hanya berjalan setelah gateway didukung dan aktif. Nama pilihan kosong berarti mengikuti default SIKEU ketika tagihan baru diterbitkan. Credential provider tidak pernah dikembalikan.
 
 ## GET /api/spmb/pembayaran
 
@@ -92,7 +92,29 @@ Envelope list hanya memakai `status`, `message`, `data`, dan `meta`. Daftar koso
 
 Pemilik ditentukan melalui relasi `tagihan.calonMahasiswa.user_id`. Petugas dapat menyiapkan checkout dengan permission `sikeu.paymentgateway.manage` atau `sikeu.pembayaran.create`. Request tidak memerlukan body; browser tidak menentukan nominal, provider, maupun status lunas. Field `amount`, `nominal`, dan `payment_gateway_config_id` dilarang.
 
-**200 — Midtrans Snap redirect / Xendit invoice:**
+**200 — Midtrans Snap popup:**
+
+```json
+{
+  "status": "success",
+  "message": "Instruksi pembayaran berhasil disiapkan.",
+  "data": {
+    "method": "snap",
+    "gateway_name": "midtrans",
+    "environment": "sandbox",
+    "order_id": "SPMB-91-01JEXAMPLE",
+    "amount": 90000,
+    "snap_token": "<snap-token>",
+    "client_key": "SB-Mid-client-example",
+    "redirect_url": "https://app.sandbox.midtrans.com/snap/v2/vtweb/example",
+    "expires_at": "2026-11-12T00:00:00.000000Z"
+  }
+}
+```
+
+Frontend memuat Snap JS sesuai `environment` dan membuka popup pada halaman yang sama menggunakan `snap_token`. `client_key` adalah key publik, bukan Server Key. `redirect_url` hanya sebagai informasi/fallback provider dan tidak ditampilkan sebagai tombol tambahan untuk Midtrans. Callback/browser selesai tidak menandai lunas; hanya konfirmasi backend yang mengubah status.
+
+**200 — Xendit invoice redirect:**
 
 ```json
 {
@@ -100,17 +122,17 @@ Pemilik ditentukan melalui relasi `tagihan.calonMahasiswa.user_id`. Petugas dapa
   "message": "Instruksi pembayaran berhasil disiapkan.",
   "data": {
     "method": "redirect",
-    "gateway_name": "midtrans",
+    "gateway_name": "xendit",
     "environment": "sandbox",
     "order_id": "SPMB-91-01JEXAMPLE",
     "amount": 90000,
-    "redirect_url": "https://app.sandbox.midtrans.com/snap/v2/vtweb/example",
+    "redirect_url": "https://checkout.xendit.co/web/example",
     "expires_at": "2026-11-12T00:00:00.000000Z"
   }
 }
 ```
 
-URL berasal dari provider dan divalidasi HTTPS/domain provider. Checkout pending dengan nominal yang sama dipakai ulang selama masih berlaku. Return URL provider diarahkan ke halaman pembayaran sesuai tahap melalui frontend URL yang dikonfigurasi. Klik/link kembali dari provider belum menandai lunas; hanya konfirmasi backend yang mengubah status. Semua order disimpan di `sikeu_payment_checkouts`, termasuk percobaan gagal, agar callback tidak ditebak dari ID calon/tagihan.
+Checkout pending dengan nominal yang sama dipakai ulang selama masih berlaku. Semua order disimpan di `sikeu_payment_checkouts`, termasuk percobaan gagal, agar callback tidak ditebak dari ID calon/tagihan.
 
 **200 — H2H bank:**
 

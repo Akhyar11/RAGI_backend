@@ -11,6 +11,7 @@ use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\User;
+use Laravel\Passport\Passport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
@@ -129,6 +130,54 @@ class SpmbPendaftaranSyncTest extends TestCase
             ->postJson('/api/spmb/pendaftaran/sync-external');
 
         $response->assertStatus(403);
+    }
+
+    public function test_applicant_can_read_only_their_own_registration(): void
+    {
+        $applicantRole = Role::where('slug', 'calon_mhs')->firstOrFail();
+        $readPermission = Permission::firstOrCreate(
+            ['slug' => 'spmb.pendaftaran.read'],
+            ['name' => 'Lihat Pendaftaran', 'module' => 'spmb', 'action' => 'read']
+        );
+        $applicantRole->permissions()->syncWithoutDetaching([$readPermission->id]);
+
+        $otherApplicant = User::create([
+            'username' => 'other_applicant_test',
+            'email' => 'other_applicant@test.com',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+            'is_verified' => true,
+        ]);
+        $this->regularUser->roles()->syncWithoutDetaching([$applicantRole->id]);
+        $this->regularUser->unsetRelation('roles');
+
+        $ownRegistration = PendaftaranCalonMhs::create([
+            'user_id' => $this->regularUser->id,
+            'gelombang_id' => $this->gelombang->id,
+            'program_studi_id' => $this->prodi->id,
+            'no_pendaftaran' => 'REG-OWN-TEST',
+            'nama_lengkap' => 'Pemilik Pendaftaran',
+            'status' => PendaftaranCalonMhs::STATUS_DRAFT,
+            'status_pembayaran' => 'belum_bayar',
+        ]);
+        $otherRegistration = PendaftaranCalonMhs::create([
+            'user_id' => $otherApplicant->id,
+            'gelombang_id' => $this->gelombang->id,
+            'program_studi_id' => $this->prodi->id,
+            'no_pendaftaran' => 'REG-OTHER-TEST',
+            'nama_lengkap' => 'Pendaftar Lain',
+            'status' => PendaftaranCalonMhs::STATUS_DRAFT,
+            'status_pembayaran' => 'belum_bayar',
+        ]);
+
+        Passport::actingAs($this->regularUser->fresh());
+
+        $this->getJson('/api/spmb/pendaftaran')->assertForbidden();
+        $this->getJson('/api/spmb/pendaftaran/'.$ownRegistration->id)
+            ->assertOk()
+            ->assertJsonPath('data.id', $ownRegistration->id);
+        $this->getJson('/api/spmb/pendaftaran/'.$otherRegistration->id)->assertForbidden();
+        $this->getJson('/api/spmb/pendaftaran/'.$otherRegistration->id.'/sk-lulus')->assertForbidden();
     }
 
     public function test_sync_external_successfully_inserts_and_is_idempotent()

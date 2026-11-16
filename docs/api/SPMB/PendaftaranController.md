@@ -8,10 +8,10 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan cal
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
-| GET | `/api/spmb/pendaftaran` | Daftar pendaftar (filter, sorting, paginasi) | ✅ |
+| GET | `/api/spmb/pendaftaran` | Daftar semua pendaftar (filter, sorting, paginasi) | ✅ `spmb.manage` |
 | POST | `/api/spmb/pendaftaran/sync-external` | Sinkronisasi pendaftar dari API sistem eksternal via IAM | ✅ `spmb.manage` |
-| GET | `/api/spmb/pendaftaran/{id}` | Detail pendaftar + ringkasan daftar ulang | ✅ |
-| GET | `/api/spmb/pendaftaran/{id}/sk-lulus` | Unduh PDF SK bernomor resmi Arsip | ✅ |
+| GET | `/api/spmb/pendaftaran/{id}` | Detail pendaftaran milik sendiri atau pendaftar mana pun untuk pengelola | ✅ |
+| GET | `/api/spmb/pendaftaran/{id}/sk-lulus` | Unduh PDF SK bernomor resmi Arsip milik sendiri atau pendaftar mana pun untuk pengelola | ✅ |
 | POST | `/api/spmb/pendaftaran/{id}/terbitkan-sk` | Ajukan nomor ke Arsip atau buat PDF setelah nomor disetujui | ✅ `spmb.manage` |
 | POST | `/api/spmb/pendaftaran/berkas/{id}/verify` | Verifikasi satu berkas pendaftaran | ✅ |
 | POST | `/api/spmb/pendaftaran/{id}/status` | Tetapkan status pendaftaran (verifikasi) | ✅ |
@@ -21,7 +21,7 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan cal
 
 ## GET /api/spmb/pendaftaran
 
-> Mengambil daftar pendaftar calon mahasiswa beserta relasi gelombang, program studi, dan user.
+> Mengambil daftar seluruh pendaftar calon mahasiswa beserta relasi gelombang, program studi, dan user. Hanya pengelola dengan izin `spmb.manage`; calon mahasiswa membaca biodata miliknya melalui endpoint `/api/spmb/pendaftaran/me`.
 
 ### Headers
 
@@ -160,7 +160,7 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan cal
 
 ## GET /api/spmb/pendaftaran/{id}
 
-> Mengambil detail satu pendaftar beserta relasi. Field `daftar_ulang` berisi ringkasan pembayaran daftar ulang (tagihan diterbitkan & dibayar di modul **SIKEU**): total tagihan, sudah dibayar, sisa kurang, virtual account, dan riwayat pembayaran. Untuk pengguna dengan izin `spmb.manage`, respons juga menyertakan `pihak_ketiga`, `bukti_pembayaran_manual`, dan `admin_penginput`; relasi tersebut tidak dimuat untuk pengguna lain.
+> Mengambil detail satu pendaftar beserta relasi. Pemilik pendaftaran dapat melihat datanya sendiri; pendaftar lain hanya dapat dilihat pengguna dengan izin `spmb.manage`. Field `daftar_ulang` berisi ringkasan pembayaran daftar ulang (tagihan diterbitkan & dibayar di modul **SIKEU**): total tagihan, sudah dibayar, sisa kurang, virtual account, dan riwayat pembayaran. Untuk pengguna dengan izin `spmb.manage`, respons juga menyertakan `pihak_ketiga`, `bukti_pembayaran_manual`, dan `admin_penginput`; relasi tersebut tidak dimuat untuk pengguna lain.
 
 ### Path Parameters
 

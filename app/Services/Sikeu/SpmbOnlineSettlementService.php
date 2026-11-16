@@ -10,12 +10,29 @@ use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\VirtualAccount;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Services\AuditLogService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class SpmbOnlineSettlementService
 {
+    public function reconcileMidtransForApplicant(int $applicationId): void
+    {
+        $attempts = PaymentCheckout::query()
+            ->where('gateway_name', PaymentGatewayConfig::MIDTRANS)
+            ->where('status', 'pending')
+            ->whereHas('tagihan', fn ($query) => $query->where('calon_mahasiswa_id', $applicationId)->where('source_system', 'SPMB'))
+            ->get();
+
+        foreach ($attempts as $attempt) {
+            if (Cache::add('spmb-midtrans-reconcile:'.$attempt->id, true, now()->addSeconds(10))) {
+                $this->reconcileMidtrans($attempt);
+            }
+        }
+    }
+
     public function midtrans(array $payload): array
     {
         $attempt = PaymentCheckout::where('order_id', $payload['order_id'] ?? '')->firstOrFail();
@@ -27,6 +44,42 @@ class SpmbOnlineSettlementService
         $paid = $status === 'settlement' || ($status === 'capture' && ($payload['fraud_status'] ?? '') === 'accept');
 
         return $this->apply($attempt, $paid, $payload['gross_amount'] ?? 0, 'MIDTRANS_'.strtoupper($payload['payment_type'] ?? 'ONLINE'), $status);
+    }
+
+    private function reconcileMidtrans(PaymentCheckout $attempt): void
+    {
+        $serverKey = $attempt->gateway?->api_key_encrypted;
+        if (! $serverKey) {
+            return;
+        }
+
+        $host = $attempt->environment === 'production' ? 'api.midtrans.com' : 'api.sandbox.midtrans.com';
+        try {
+            $response = Http::withBasicAuth($serverKey, '')->acceptJson()->timeout(8)
+                ->get('https://'.$host.'/v2/'.rawurlencode($attempt->order_id).'/status');
+        } catch (\Throwable $exception) {
+            Log::warning('Gagal merekonsiliasi status checkout Midtrans SPMB.', ['checkout_id' => $attempt->id]);
+            return;
+        }
+
+        $payload = $response->json();
+        if (! $response->successful() || ! is_array($payload)
+            || ($payload['order_id'] ?? null) !== $attempt->order_id
+            || ($payload['currency'] ?? null) !== 'IDR'
+            || ! is_numeric($payload['gross_amount'] ?? null)
+            || (int) round((float) $payload['gross_amount'] * 100) !== (int) round((float) $attempt->amount * 100)) {
+            return;
+        }
+
+        $status = (string) ($payload['transaction_status'] ?? '');
+        $paid = $status === 'settlement' || ($status === 'capture' && ($payload['fraud_status'] ?? '') === 'accept');
+        if ($paid) {
+            if (($payload['status_code'] ?? null) === '200') {
+                $this->apply($attempt, true, $payload['gross_amount'], 'MIDTRANS_'.strtoupper($payload['payment_type'] ?? 'ONLINE'), $status);
+            }
+        } elseif (in_array($status, ['expire', 'cancel', 'deny', 'failure'], true)) {
+            $attempt->update(['status' => 'expired']);
+        }
     }
 
     public function xendit(array $payload, string $token): array

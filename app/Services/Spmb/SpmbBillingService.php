@@ -30,13 +30,24 @@ class SpmbBillingService
             }
             $details = $payload['details'];
             $default = PaymentGatewayConfig::activeSpmb();
+            $allowLocalVa = (bool) ($payload['allow_local_va'] ?? false);
             foreach ($details as &$detail) {
+                $selectedName = $detail['payment_gateway_name'] ?? null;
                 $id = $detail['payment_gateway_config_id'] ?? null;
-                $gateway = $id ? PaymentGatewayConfig::find($id) : $default;
-                if (! $id && (! $gateway || ! $gateway->is_active || ! in_array($gateway->gateway_name, PaymentGatewayConfig::SPMB_CHANNELS, true))) {
+                $gateway = $id ? PaymentGatewayConfig::find($id) : ($selectedName
+                    ? PaymentGatewayConfig::query()->where('gateway_name', $selectedName)->where('is_active', true)->first()
+                    : $default);
+                if ($selectedName && ! in_array($selectedName, PaymentGatewayConfig::SPMB_CHANNELS, true)) {
+                    throw ValidationException::withMessages(['payment_gateway_name' => 'Kanal yang dipilih belum didukung untuk pembayaran SPMB.']);
+                }
+                if ($selectedName && (! $gateway || ! $gateway->is_active || $gateway->gateway_name !== $selectedName)) {
+                    throw ValidationException::withMessages(['payment_gateway_name' => 'Kanal yang dipilih belum dikonfigurasi aktif di SIKEU.']);
+                }
+                if (! $id && ! $selectedName && (! $gateway || ! $gateway->is_active || ! in_array($gateway->gateway_name, PaymentGatewayConfig::SPMB_CHANNELS, true)) && ! $allowLocalVa) {
                     throw ValidationException::withMessages(['payment_gateway_config_id' => 'Kanal default pembayaran SPMB belum dikonfigurasi. Pilih kanal aktif pada komponen biaya atau atur default SIKEU.']);
                 }
-                if ($id && (! $gateway || ! $gateway->is_active || ! in_array($gateway->gateway_name, PaymentGatewayConfig::SPMB_CHANNELS, true))) {
+                if ($id && (! $gateway || ! $gateway->is_active || ! in_array($gateway->gateway_name, PaymentGatewayConfig::SPMB_CHANNELS, true)
+                    || ($selectedName && $gateway->gateway_name !== $selectedName))) {
                     throw ValidationException::withMessages(['payment_gateway_config_id' => 'Kanal pembayaran komponen biaya tidak aktif atau tidak didukung. Hubungi panitia SPMB.']);
                 }
                 $detail['payment_gateway_config_id'] = $gateway && in_array($gateway->gateway_name, PaymentGatewayConfig::SPMB_CHANNELS, true) ? $gateway->id : null;
@@ -45,6 +56,7 @@ class SpmbBillingService
             $bills = [];
             $zeroBills = [];
             foreach ($this->allocator->split($details, $payload['potongan'] ?? []) as $group) {
+                $group['force_local_va'] = $allowLocalVa && empty($group['payment_gateway_config_id']);
                 $issued = $this->issuer->issueExternalBill(array_merge($payload, $group));
                 $bill = $issued['tagihan'];
                 $net = (float) $bill->total_tagihan - (float) $bill->total_potongan;

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Spmb;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreMasterBiayaRequest extends FormRequest
 {
@@ -16,7 +17,9 @@ class StoreMasterBiayaRequest extends FormRequest
         return [
             'master_tipe_jalur_id' => 'required|exists:core_master_tipe_jalur,id',
             'program_studi_id' => 'required|exists:siakad_program_studi,id',
-            'nomor_sk' => 'required|string|max:150',
+            'evidence_type' => ['required', Rule::in(['arsip', 'upload'])],
+            'nomor_sk' => 'nullable|required_if:evidence_type,arsip|prohibited_if:evidence_type,upload|string|max:150',
+            'dokumen_pendukung' => 'nullable|required_if:evidence_type,upload|prohibited_if:evidence_type,arsip|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'is_active' => 'nullable|boolean',
             'keterangan' => 'nullable|string',
             'items' => 'required|array',
@@ -28,22 +31,35 @@ class StoreMasterBiayaRequest extends FormRequest
         ];
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('evidence_type')) {
+            return;
+        }
+
+        $this->merge([
+            'evidence_type' => $this->hasFile('dokumen_pendukung') ? 'upload' : ($this->filled('nomor_sk') ? 'arsip' : null),
+        ]);
+    }
+
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            $nomorSk = trim((string) $this->input('nomor_sk'));
-            if ($nomorSk !== '') {
-                $surat = \App\Models\Arsip\NomorSurat::with('request')
-                    ->where('nomor_surat', $nomorSk)
-                    ->first();
+            if ($this->input('evidence_type') !== 'arsip') {
+                return;
+            }
 
-                if (!$surat) {
-                    $validator->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' tidak terdaftar di modul Arsip.");
-                } elseif ($surat->status === 'dibatalkan') {
-                    $validator->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' berstatus DIBATALKAN.");
-                } elseif (!$surat->has_dokumen) {
-                    $validator->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' terdaftar di Arsip, tetapi dokumen fisik SK belum diunggah/kosong.");
-                }
+            $nomorSk = trim((string) $this->input('nomor_sk'));
+            $surat = \App\Models\Arsip\NomorSurat::with('request')
+                ->where('nomor_surat', $nomorSk)
+                ->first();
+
+            if (!$surat) {
+                $validator->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' tidak terdaftar di modul Arsip.");
+            } elseif ($surat->status === 'dibatalkan') {
+                $validator->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' berstatus DIBATALKAN.");
+            } elseif (!$surat->has_dokumen) {
+                $validator->errors()->add('nomor_sk', "Nomor SK '{$nomorSk}' terdaftar di Arsip, tetapi dokumen fisik SK belum diunggah/kosong.");
             }
         });
     }

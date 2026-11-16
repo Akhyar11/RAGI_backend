@@ -175,9 +175,8 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 | `tanggal_buka` | string | - | Filter periode tanggal buka minimal (format `MM-DD`) |
 | `tanggal_tutup` | string | - | Filter periode tanggal tutup maksimal (format `MM-DD`) |
 | `kuota` | string | - | Filter status kuota: `tersedia` atau `penuh` |
-| `biaya` | string | - | Filter jenis biaya pendaftaran: `gratis` atau `berbayar` |
 | `status` | string | - | Filter status (`draft`, `aktif`, `ditutup`, `selesai`) |
-| `sort_by` | string | `created_at` | Kolom pengurutan (`id`, `nama`, `tanggal_buka`, `tanggal_tutup`, `kuota_total`, `biaya_pendaftaran`, `status`, `created_at`) |
+| `sort_by` | string | `created_at` | Kolom pengurutan (`id`, `nama`, `tanggal_buka`, `tanggal_tutup`, `kuota_total`, `status`, `created_at`) |
 | `sort_order` | string | `desc` | Arah urutan (`asc`, `desc`) |
 | `per_page` | integer | `15` | Jumlah data per halaman (1 s/d 100) |
 | `page` | integer | `1` | Nomor halaman data |
@@ -199,7 +198,6 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
             "tanggal_pengumuman": "2026-05-05",
             "kuota_total": 150,
             "kuota_terisi": 45,
-            "biaya_pendaftaran": 250000,
             "potongan_biaya_daftar_ulang": 10.00,
             "status": "aktif",
             "pendaftaran_dibuka": true,
@@ -227,7 +225,6 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
         "tanggal_buka": null,
         "tanggal_tutup": null,
         "kuota": null,
-        "biaya": null,
         "status": null,
         "sort_by": "created_at",
         "sort_order": "desc"
@@ -282,7 +279,6 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
         "tanggal_pengumuman": "2026-05-05",
         "kuota_total": 150,
         "kuota_terisi": 45,
-        "biaya_pendaftaran": 250000,
         "potongan_biaya_daftar_ulang": 10.00,
         "status": "aktif",
         "pendaftaran_dibuka": true,
@@ -327,7 +323,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 
 ## [POST] /api/spmb/master/gelombang
 
-> Membuat jadwal gelombang penerimaan. `status: aktif` mengaktifkan jadwal; backend menghitung `pendaftaran_dibuka` secara langsung dari tanggal saat ini di zona waktu `SPMB_TIMEZONE` (default `Asia/Jakarta`). Periode bersifat inklusif dan mendukung rentang yang melewati tahun baru. Beberapa gelombang aktif dapat dijadwalkan pada jalur yang sama.
+> Membuat periode, kuota, dan status gelombang penerimaan. Nominal biaya dikelola melalui Master Biaya dan Komponen Biaya SPMB. `status: aktif` mengaktifkan jadwal; backend menghitung `pendaftaran_dibuka` dari tanggal saat ini di zona waktu `SPMB_TIMEZONE` (default `Asia/Jakarta`).
 
 ### Headers
 
@@ -347,7 +343,6 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
     "tanggal_tutup": "string, required (MM-DD; recurring annual period)",
     "tanggal_pengumuman": "date, nullable",
     "kuota_total": "integer, required, min:1",
-    "biaya_pendaftaran": "numeric, nullable, min:0",
     "potongan_biaya_daftar_ulang": "numeric, nullable, min:0, max:100 (persen)",
     "status": "enum: draft|aktif|ditutup|selesai"
 }
@@ -369,7 +364,6 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
         "tanggal_pengumuman": "2026-08-05",
         "kuota_total": 150,
         "kuota_terisi": 0,
-        "biaya_pendaftaran": "250000.00",
         "potongan_biaya_daftar_ulang": "10.00",
         "status": "draft",
         "pendaftaran_dibuka": false,
@@ -433,7 +427,6 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
     "tanggal_tutup": "string, required (MM-DD; recurring annual period)",
     "tanggal_pengumuman": "date, nullable",
     "kuota_total": "integer, required, min:1",
-    "biaya_pendaftaran": "numeric, nullable, min:0",
     "potongan_biaya_daftar_ulang": "numeric, nullable, min:0, max:100 (persen)",
     "status": "enum: draft|aktif|ditutup|selesai"
 }
@@ -455,7 +448,6 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
         "tanggal_pengumuman": "2026-08-05",
         "kuota_total": 200,
         "kuota_terisi": 0,
-        "biaya_pendaftaran": "250000.00",
         "potongan_biaya_daftar_ulang": "15.50",
         "status": "aktif",
         "pendaftaran_dibuka": true,

@@ -17,6 +17,7 @@ use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\Spmb\HasilSeleksi;
 use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\MasterBiaya;
+use App\Models\Spmb\MasterBiayaItem;
 use App\Models\Spmb\MasterKomponenBiaya;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\User;
@@ -77,8 +78,18 @@ class SpmbPaymentChannelsTest extends TestCase
             ->assertJsonMissingPath('filters');
         $this->assertArrayNotHasKey('api_key_encrypted', $response->json('data.0'));
         $this->assertArrayNotHasKey('webhook_token_encrypted', $response->json('data.0'));
+        $catalog = $this->getJson('/api/spmb/master/payment-gateway-options?per_page=100')->assertOk();
+        $catalog->assertJsonPath('meta.total', 5);
+        $this->assertEqualsCanonicalizing(PaymentGatewayConfig::CONFIGURABLE_GATEWAYS,
+            collect($catalog->json('data'))->pluck('gateway_name')->all());
+        $this->getJson('/api/spmb/master/payment-gateway-options?search=duitku')->assertOk()->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.gateway_name', PaymentGatewayConfig::DUITKU)
+            ->assertJsonPath('data.0.id', null);
+        $this->getJson('/api/spmb/master/payment-gateway-options?search=rekening_manual')
+            ->assertOk()->assertJsonPath('data.0.gateway_name', PaymentGatewayConfig::REKENING_MANUAL);
         $this->midtrans->update(['is_active' => false]);
-        $this->getJson('/api/spmb/master/payment-gateway-options?search=midtrans')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/spmb/master/payment-gateway-options?search=midtrans')
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.is_active', false);
     }
 
     public function test_component_mapping_can_be_created_read_updated_and_cleared(): void
@@ -92,11 +103,92 @@ class SpmbPaymentChannelsTest extends TestCase
         $payload['payment_gateway_config_id'] = null;
         $this->putJson('/api/spmb/master/komponen-biaya/'.$id, $payload)->assertOk();
         $this->assertDatabaseHas('spmb_master_komponen_biaya', ['id' => $id, 'payment_gateway_config_id' => null]);
+        $payload['payment_gateway_name'] = PaymentGatewayConfig::DUITKU;
+        $this->putJson('/api/spmb/master/komponen-biaya/'.$id, $payload)
+            ->assertOk()->assertJsonPath('data.payment_gateway_name', PaymentGatewayConfig::DUITKU)
+            ->assertJsonPath('data.payment_gateway_config_id', null);
+        $this->assertDatabaseHas('spmb_master_komponen_biaya', [
+            'id' => $id,
+            'payment_gateway_name' => PaymentGatewayConfig::DUITKU,
+            'payment_gateway_config_id' => null,
+        ]);
         $this->xendit->update(['is_active' => false]);
         $payload['payment_gateway_config_id'] = $this->xendit->id;
         $this->putJson('/api/spmb/master/komponen-biaya/'.$id, $payload)->assertUnprocessable();
         $this->deleteJson('/api/spmb/master/komponen-biaya/'.$id)->assertOk();
         $this->assertSoftDeleted('spmb_master_komponen_biaya', ['id' => $id]);
+    }
+
+    public function test_component_can_be_created_with_gateway_name_before_gateway_setup(): void
+    {
+        $this->grant('spmb.manage');
+        $payload = [
+            'kode' => fake()->unique()->lexify('B????'),
+            'nama' => fake()->sentence(2),
+            'payment_gateway_name' => PaymentGatewayConfig::DUITKU,
+        ];
+
+        $response = $this->postJson('/api/spmb/master/komponen-biaya', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.payment_gateway_name', PaymentGatewayConfig::DUITKU)
+            ->assertJsonPath('data.payment_gateway_config_id', null);
+
+        $this->assertDatabaseHas('spmb_master_komponen_biaya', [
+            'id' => $response->json('data.id'),
+            'payment_gateway_name' => PaymentGatewayConfig::DUITKU,
+            'payment_gateway_config_id' => null,
+        ]);
+    }
+
+    public function test_applicant_can_issue_one_unpaid_registration_invoice_from_master_biaya(): void
+    {
+        $this->midtrans->update(['is_active' => false]);
+        $this->xendit->update(['is_active' => false]);
+        $type = MasterTipeJalur::create(['kode' => fake()->unique()->lexify('T????'), 'nama' => fake()->sentence(2)]);
+        $component = MasterKomponenBiaya::create([
+            'kode' => fake()->unique()->lexify('C????'),
+            'nama' => 'Biaya pendaftaran',
+            'kategori' => 'pendaftaran',
+            'is_active' => true,
+        ]);
+        $master = MasterBiaya::create([
+            'master_tipe_jalur_id' => $type->id,
+            'program_studi_id' => $this->application->program_studi_id,
+            'is_active' => true,
+        ]);
+        MasterBiayaItem::create([
+            'master_biaya_id' => $master->id,
+            'komponen_biaya_id' => $component->id,
+            'nominal' => 25000,
+            'dibebankan_saat_pendaftaran' => true,
+            'berlaku_diskon' => false,
+        ]);
+        $this->application->update(['master_tipe_jalur_id' => $type->id]);
+        $role = Role::create(['slug' => fake()->unique()->slug(), 'name' => fake()->sentence(2), 'is_active' => true]);
+        $this->owner->roles()->attach($role->id);
+        $this->owner->unsetRelation('roles');
+        Passport::actingAs($this->owner->fresh());
+
+        $first = $this->postJson('/api/spmb/pendaftaran/terbitkan-tagihan')
+            ->assertCreated()
+            ->assertJsonPath('data.tagihan.status', 'belum_bayar')
+            ->assertJsonPath('data.virtual_account.bank_nama', 'Bank BNI');
+        $this->assertEquals(25000, (float) $first->json('data.tagihan.total_tagihan'));
+
+        $invoiceId = $first->json('data.tagihan.id');
+        $this->assertDatabaseHas('sikeu_tagihan_mahasiswa', [
+            'id' => $invoiceId,
+            'calon_mahasiswa_id' => $this->application->id,
+            'source_system' => 'SPMB',
+            'status' => 'belum_bayar',
+            'total_tagihan' => 25000,
+            'total_bayar' => 0,
+        ]);
+
+        $this->postJson('/api/spmb/pendaftaran/terbitkan-tagihan')
+            ->assertOk()
+            ->assertJsonPath('data.tagihan.id', $invoiceId);
+        $this->assertDatabaseCount('sikeu_tagihan_mahasiswa', 1);
     }
 
     public function test_bills_group_channels_allocate_discounts_once_and_keep_snapshot_on_retry(): void
@@ -145,8 +237,13 @@ class SpmbPaymentChannelsTest extends TestCase
         $bill = $this->issue([$this->detail($this->midtrans, 100000)])['tagihan'];
         $kas = UnitKas::where('kanal', 'midtrans')->firstOrFail();
         $this->fakeMidtrans();
-        $checkout = $this->postJson('/api/spmb/pembayaran/'.$bill->id.'/checkout')->assertOk()->assertJsonPath('data.method', 'redirect')->json('data');
-        $this->postJson('/api/spmb/pembayaran/'.$bill->id.'/checkout')->assertOk()->assertJsonPath('data.order_id', $checkout['order_id']);
+        $checkout = $this->postJson('/api/spmb/pembayaran/'.$bill->id.'/checkout')
+            ->assertOk()->assertJsonPath('data.method', 'snap')->assertJsonPath('data.client_key', $this->midtrans->public_key_encrypted)
+            ->json('data');
+        $this->assertNotEmpty($checkout['snap_token']);
+        $this->postJson('/api/spmb/pembayaran/'.$bill->id.'/checkout')
+            ->assertOk()->assertJsonPath('data.method', 'snap')->assertJsonPath('data.order_id', $checkout['order_id'])
+            ->assertJsonPath('data.snap_token', $checkout['snap_token']);
         Http::assertSentCount(1);
         $this->assertDatabaseCount('sikeu_payment_checkouts', 1);
         Http::assertSent(fn ($request) => $request['transaction_details']['gross_amount'] === 100000
@@ -179,6 +276,50 @@ class SpmbPaymentChannelsTest extends TestCase
         $this->postJson('/api/v1/sikeu/callback/midtrans', $pending)->assertOk();
         $this->assertDatabaseCount('sikeu_pembayaran', 0);
         $this->assertSame('belum_bayar', $bill->fresh()->status);
+    }
+
+    public function test_applicant_status_poll_reconciles_paid_midtrans_transaction(): void
+    {
+        $bill = $this->issue([$this->detail($this->midtrans, 25000)])['tagihan'];
+        $this->fakeMidtrans();
+        $checkout = $this->postJson('/api/spmb/pembayaran/'.$bill->id.'/checkout')->assertOk()->json('data');
+        Http::fake(['api.sandbox.midtrans.com/v2/*/status' => Http::response([
+            'order_id' => $checkout['order_id'],
+            'status_code' => '200',
+            'gross_amount' => '25000.00',
+            'currency' => 'IDR',
+            'transaction_status' => 'settlement',
+            'payment_type' => 'qris',
+        ])]);
+
+        $this->getJson('/api/spmb/pendaftaran/me')->assertOk()
+            ->assertJsonPath('data.pendaftaran.status_pembayaran', 'lunas');
+
+        $this->assertSame('paid', $bill->fresh()->checkouts()->firstOrFail()->status);
+        $this->assertSame('lunas', $bill->fresh()->status);
+        $this->assertSame('lunas', $this->application->fresh()->status_pembayaran);
+        $this->assertDatabaseCount('sikeu_pembayaran', 1);
+    }
+
+    public function test_applicant_status_poll_marks_expired_midtrans_checkout(): void
+    {
+        $bill = $this->issue([$this->detail($this->midtrans, 25000)])['tagihan'];
+        $this->fakeMidtrans();
+        $checkout = $this->postJson('/api/spmb/pembayaran/'.$bill->id.'/checkout')->assertOk()->json('data');
+        Http::fake(['api.sandbox.midtrans.com/v2/*/status' => Http::response([
+            'order_id' => $checkout['order_id'],
+            'status_code' => '407',
+            'gross_amount' => '25000.00',
+            'currency' => 'IDR',
+            'transaction_status' => 'expire',
+            'payment_type' => 'qris',
+        ])]);
+
+        $this->getJson('/api/spmb/pendaftaran/me')->assertOk();
+
+        $this->assertSame('expired', $bill->fresh()->checkouts()->firstOrFail()->status);
+        $this->assertSame('belum_bayar', $bill->fresh()->status);
+        $this->assertDatabaseCount('sikeu_pembayaran', 0);
     }
 
     public function test_xendit_invoice_callback_checks_token_status_identity_amount_and_retries(): void
@@ -350,6 +491,26 @@ class SpmbPaymentChannelsTest extends TestCase
             $this->issue([$detail]);
             $this->fail('Missing default must fail.');
         } catch (ValidationException) {
+            $this->assertDatabaseCount('sikeu_tagihan_mahasiswa', 0);
+            $this->assertDatabaseCount('sikeu_virtual_account', 0);
+        }
+    }
+
+    public function test_selected_unconfigured_gateway_can_be_saved_but_cannot_issue_bills(): void
+    {
+        $detail = [
+            'master_biaya_kode' => fake()->unique()->lexify('PG-??????'),
+            'payment_gateway_config_id' => null,
+            'payment_gateway_name' => PaymentGatewayConfig::DUITKU,
+            'nominal' => 100000,
+            'keterangan' => fake()->sentence(2),
+        ];
+
+        try {
+            $this->issue([$detail]);
+            $this->fail('An unsupported, unconfigured provider must not issue an invoice.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('payment_gateway_name', $exception->errors());
             $this->assertDatabaseCount('sikeu_tagihan_mahasiswa', 0);
             $this->assertDatabaseCount('sikeu_virtual_account', 0);
         }

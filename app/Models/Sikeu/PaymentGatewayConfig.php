@@ -11,8 +11,11 @@ class PaymentGatewayConfig extends Model
 
     public const MIDTRANS = 'midtrans';
     public const XENDIT = 'xendit';
+    public const DUITKU = 'duitku';
     public const H2H = 'bsn_h2h';
+    public const REKENING_MANUAL = 'rekening_manual';
     public const SPMB_CHANNELS = [self::MIDTRANS, self::XENDIT, self::H2H];
+    public const CONFIGURABLE_GATEWAYS = [self::XENDIT, self::MIDTRANS, self::DUITKU, self::H2H, self::REKENING_MANUAL];
 
     protected $table = 'sikeu_payment_gateway_configs';
 

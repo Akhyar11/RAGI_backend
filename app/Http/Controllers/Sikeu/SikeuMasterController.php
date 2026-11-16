@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Sikeu;
 
 use App\Http\Controllers\Controller;
-use App\Models\Sikeu\TarifSpmb;
 use App\Models\Sikeu\MasterBiaya;
 use App\Models\Sikeu\MasterBiayaModule;
 use App\Models\Sikeu\TagihanMahasiswa;
 use App\Models\Sikeu\DispensasiTagihan;
-use App\Services\Sikeu\SpmbSikeuService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -568,157 +567,53 @@ class SikeuMasterController extends Controller
      * GET /api/v1/sikeu/master/tarif-spmb
      * List master tarif SPMB berdasarkan jalur & gelombang
      */
-    public function indexTarifSpmb(Request $request)
+    public function indexTarifSpmb(Request $request): JsonResponse
     {
-        $query = TarifSpmb::with('masterBiaya');
-
-        if ($request->filled('jalur_id')) {
-            $query->where('jalur_id', $request->jalur_id);
-        }
-
-        if ($request->filled('gelombang_id')) {
-            $query->where('gelombang_id', $request->gelombang_id);
-        }
-
-        if ($request->filled('is_active')) {
-            $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
-        }
-
-        $tarif = $query->orderBy('jalur_id', 'asc')
-            ->orderBy('gelombang_id', 'asc')
-            ->get();
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $tarif
-        ]);
+        return $this->spmbTariffDeprecatedResponse();
     }
 
     /**
      * POST /api/v1/sikeu/master/tarif-spmb
      * Store new Tarif SPMB
      */
-    public function storeTarifSpmb(Request $request)
+    public function storeTarifSpmb(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'master_biaya_id' => 'nullable|exists:sikeu_master_biaya,id',
-            'jalur_id' => 'required|string|max:50',
-            'gelombang_id' => 'required|string|max:50',
-            'nominal' => 'required|numeric|min:0',
-            'is_active' => 'nullable|boolean',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        // Default master_biaya_id to first available MasterBiaya if null
-        $masterBiayaId = $request->master_biaya_id;
-        if (!$masterBiayaId) {
-            $masterBiayaDefault = MasterBiaya::where('tipe', 'spmb_adm')->first() ?? MasterBiaya::first();
-            $masterBiayaId = $masterBiayaDefault?->id;
-        }
-
-        $tarif = TarifSpmb::create([
-            'master_biaya_id' => $masterBiayaId,
-            'jalur_id' => $request->jalur_id,
-            'gelombang_id' => $request->gelombang_id,
-            'nominal' => $request->nominal,
-            'is_active' => $request->boolean('is_active', true),
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Tarif SPMB berhasil ditambahkan.',
-            'data' => $tarif->load('masterBiaya')
-        ], 201);
+        return $this->spmbTariffDeprecatedResponse();
     }
 
     /**
      * PUT /api/v1/sikeu/master/tarif-spmb/{id}
      * Update Tarif SPMB
      */
-    public function updateTarifSpmb(Request $request, $id)
+    public function updateTarifSpmb(Request $request, $id): JsonResponse
     {
-        $tarif = TarifSpmb::findOrFail($id);
-
-        $validator = Validator::make($request->all(), [
-            'master_biaya_id' => 'nullable|exists:sikeu_master_biaya,id',
-            'jalur_id' => 'sometimes|required|string|max:50',
-            'gelombang_id' => 'sometimes|required|string|max:50',
-            'nominal' => 'sometimes|required|numeric|min:0',
-            'is_active' => 'nullable|boolean',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $tarif->update($request->only([
-            'master_biaya_id',
-            'jalur_id',
-            'gelombang_id',
-            'nominal',
-            'is_active',
-        ]));
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Tarif SPMB berhasil diperbarui.',
-            'data' => $tarif->load('masterBiaya')
-        ]);
+        return $this->spmbTariffDeprecatedResponse();
     }
 
     /**
      * DELETE /api/v1/sikeu/master/tarif-spmb/{id}
      * Delete Tarif SPMB
      */
-    public function destroyTarifSpmb($id)
+    public function destroyTarifSpmb($id): JsonResponse
     {
-        $tarif = TarifSpmb::findOrFail($id);
-        $tarif->delete();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Tarif SPMB berhasil dihapus.'
-        ]);
+        return $this->spmbTariffDeprecatedResponse();
     }
 
     /**
      * GET /api/v1/sikeu/spmb/tarif
      * Service Endpoint untuk SPMB mengambil nominal pendaftaran secara real-time
      */
-    public function getTarifSpmb(Request $request, SpmbSikeuService $service)
+    public function getTarifSpmb(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'jalur_id' => 'required',
-            'gelombang_id' => 'required',
-        ]);
+        return $this->spmbTariffDeprecatedResponse();
+    }
 
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Parameter jalur_id dan gelombang_id wajib diisi',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $nominal = $service->getTarifPendaftaranSpmb($request->jalur_id, $request->gelombang_id);
-
+    private function spmbTariffDeprecatedResponse(): JsonResponse
+    {
         return response()->json([
-            'status' => 'success',
-            'data' => [
-                'jalur_id' => $request->jalur_id,
-                'gelombang_id' => $request->gelombang_id,
-                'nominal' => $nominal,
-            ]
-        ]);
+            'status' => 'error',
+            'message' => 'Tarif SPMB tidak lagi dikelola di SIKEU. Atur seluruh komponen dan nominal melalui Master Biaya SPMB.',
+        ], 410);
     }
 
     // ==========================================

@@ -89,8 +89,11 @@ class ExternalTagihanService
             }
 
             // Opsi: biaya payment gateway dibebankan ke pendaftar (ditambah ke tagihan).
-            $pgConfig = ! empty($data['payment_gateway_config_id'])
-                ? PaymentGatewayConfig::findOrFail($data['payment_gateway_config_id']) : PaymentGatewayConfig::active();
+            $pgConfig = ! empty($data['force_local_va'])
+                ? null
+                : (! empty($data['payment_gateway_config_id'])
+                    ? PaymentGatewayConfig::findOrFail($data['payment_gateway_config_id'])
+                    : PaymentGatewayConfig::active());
             if ($pgConfig && $pgConfig->gateway_name !== PaymentGatewayConfig::H2H && $pgConfig->charge_fee_to_payer && $pgConfig->computeVaFee() > 0) {
                 $fee = $pgConfig->computeVaFee();
                 $masterBiayaFee = $this->resolveMasterBiaya([
@@ -155,7 +158,7 @@ class ExternalTagihanService
                 $xenditVaId = null;
 
                 // Check active Payment Gateway Config
-                $pgConfig = PaymentGatewayConfig::active();
+                $pgConfig = ! empty($data['force_local_va']) ? null : PaymentGatewayConfig::active();
                 $apiKey = $pgConfig->api_key_encrypted ?? $pgConfig->public_key_encrypted ?? null;
 
                 if ($pgConfig && $pgConfig->gateway_name === 'xendit' && ! empty($apiKey)) {

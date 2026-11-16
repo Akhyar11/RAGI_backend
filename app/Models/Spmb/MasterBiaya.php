@@ -17,6 +17,7 @@ class MasterBiaya extends Model
         'master_tipe_jalur_id',
         'program_studi_id',
         'nomor_sk',
+        'dokumen_pendukung_path',
         'total_biaya',
         'is_active',
         'keterangan',
@@ -25,6 +26,15 @@ class MasterBiaya extends Model
     public function arsipNomorSurat()
     {
         return $this->belongsTo(\App\Models\Arsip\NomorSurat::class, 'nomor_sk', 'nomor_surat');
+    }
+
+    protected $appends = ['dokumen_pendukung_url'];
+
+    public function getDokumenPendukungUrlAttribute(): ?string
+    {
+        return $this->dokumen_pendukung_path
+            ? app(\App\Services\Storage\FileStorageService::class)->signedUrl($this->dokumen_pendukung_path)
+            : null;
     }
 
     protected $casts = [

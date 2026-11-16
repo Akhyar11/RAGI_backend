@@ -50,8 +50,9 @@ class SpmbMenuCalonMahasiswaSeeder extends Seeder
         $children = [
             ['name' => 'Dashboard Pendaftaran', 'url' => '/spmb/dashboard', 'icon' => 'FaChartPie', 'order_index' => 1],
             ['name' => 'Formulir Registrasi', 'url' => '/spmb/registrasi', 'icon' => 'FaPen', 'order_index' => 2],
-            ['name' => 'Daftar Ulang', 'url' => '/spmb/daftar-ulang', 'icon' => 'FaClipboardCheck', 'order_index' => 3],
-            ['name' => 'Pembayaran SPMB', 'url' => '/spmb/pembayaran', 'icon' => 'FaCreditCard', 'order_index' => 4],
+            ['name' => 'Biodata Pendaftaran', 'url' => '/spmb/pendaftaran/biodata', 'icon' => 'FaUser', 'order_index' => 3],
+            ['name' => 'Daftar Ulang', 'url' => '/spmb/daftar-ulang', 'icon' => 'FaClipboardCheck', 'order_index' => 4],
+            ['name' => 'Pembayaran SPMB', 'url' => '/spmb/pembayaran', 'icon' => 'FaCreditCard', 'order_index' => 5],
         ];
 
         $menuIds = [$root->id];
@@ -73,6 +74,18 @@ class SpmbMenuCalonMahasiswaSeeder extends Seeder
             );
 
             $menuIds[] = $menu->id;
+        }
+
+        $registrationMenu = Menu::where('module', 'spmb')
+            ->where('url', '/spmb/pendaftaran')
+            ->whereNotNull('parent_id')
+            ->first();
+        if ($registrationMenu) {
+            $registrationPermission = Permission::where('slug', 'spmb.pendaftaran.read')->first();
+            if ($registrationPermission) {
+                $registrationMenu->update(['permission_id' => $registrationPermission->id]);
+            }
+            $menuIds[] = $registrationMenu->id;
         }
 
         // 3. Ikatkan menu ke role calon mahasiswa

@@ -563,7 +563,7 @@ return [
         'permission_slug' => 'spmb.manage',
         'order_index' => 2,
         'children' => [
-            ['name' => 'Pendaftaran Mahasiswa Baru', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUserPlus', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 1],
+            ['name' => 'Pendaftaran Mahasiswa Baru', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUserPlus', 'module' => 'spmb', 'permission_slug' => 'spmb.pendaftaran.read', 'order_index' => 1],
             ['name' => 'Verifikasi Daftar Ulang', 'url' => '/spmb/daftar-ulang', 'icon' => 'FaClipboardCheck', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 2],
             ['name' => 'Registrasi Online', 'url' => '/spmb/registrasi', 'icon' => 'FaPen', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 3],
         ]

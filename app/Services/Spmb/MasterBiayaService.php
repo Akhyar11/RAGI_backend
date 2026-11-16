@@ -2,17 +2,17 @@
 
 namespace App\Services\Spmb;
 
-use App\Models\Sikeu\TarifSpmb;
-use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\Spmb\MasterBiaya;
 use App\Models\Spmb\MasterBiayaItem;
 use App\Models\Spmb\MasterKomponenBiaya;
-use App\Services\Sikeu\SpmbSikeuService;
+use App\Models\Sikeu\PaymentGatewayConfig;
+use App\Services\Storage\FileStorageService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class MasterBiayaService
 {
@@ -66,6 +66,7 @@ class MasterBiayaService
             $data['kategori'] = $data['kategori'] ?? 'daftar_ulang';
             $data['tipe_potongan'] = $data['tipe_potongan'] ?? false;
             $data['is_active'] = $data['is_active'] ?? true;
+            $this->resolvePaymentGatewayMapping($data);
 
             $roleRewards = $data['role_rewards'] ?? null;
 
@@ -120,6 +121,7 @@ class MasterBiayaService
 
             $roleRewards = $data['role_rewards'] ?? null;
 
+            $this->resolvePaymentGatewayMapping($data);
             unset($data['position_type'], $data['reference_id'], $data['role_rewards']);
 
             $komponen->update($data);
@@ -162,6 +164,25 @@ class MasterBiayaService
         }
     }
 
+    private function resolvePaymentGatewayMapping(array &$data): void
+    {
+        if (! array_key_exists('payment_gateway_name', $data) && ! array_key_exists('payment_gateway_config_id', $data)) {
+            return;
+        }
+
+        $gatewayName = $data['payment_gateway_name'] ?? null;
+        $gatewayId = $data['payment_gateway_config_id'] ?? null;
+
+        if ($gatewayName === null && $gatewayId) {
+            $gatewayName = PaymentGatewayConfig::find($gatewayId)?->gateway_name;
+        }
+
+        $data['payment_gateway_name'] = $gatewayName;
+        $data['payment_gateway_config_id'] = $gatewayName
+            ? PaymentGatewayConfig::query()->where('gateway_name', $gatewayName)->where('is_active', true)->value('id')
+            : null;
+    }
+
     public function deleteKomponen(MasterKomponenBiaya $komponen): bool
     {
         return (bool) $komponen->delete();
@@ -174,56 +195,105 @@ class MasterBiayaService
 
     public function createBiaya(array $data): MasterBiaya
     {
-        return DB::transaction(function () use ($data) {
-            $masterBiaya = MasterBiaya::updateOrCreate(
-                [
-                    'master_tipe_jalur_id' => $data['master_tipe_jalur_id'],
-                    'program_studi_id' => $data['program_studi_id'],
-                ],
-                [
-                    'nomor_sk' => $data['nomor_sk'] ?? null,
-                    'is_active' => $data['is_active'] ?? true,
-                    'keterangan' => $data['keterangan'] ?? null,
-                ]
-            );
+        $file = $data['dokumen_pendukung'] ?? null;
+        $evidenceType = $data['evidence_type'];
+        unset($data['dokumen_pendukung'], $data['evidence_type']);
+        $uploadedPath = $file ? app(FileStorageService::class)->store($file, 'spmb/master-biaya', private: true) : null;
+        $oldPath = null;
 
-            $total = 0;
-            if (! empty($data['items'])) {
-                foreach ($data['items'] as $item) {
-                    $nominal = (float) $item['nominal'];
-                    $total += $nominal;
+        try {
+            $created = DB::transaction(function () use ($data, $evidenceType, $uploadedPath, &$oldPath) {
+                $existing = MasterBiaya::query()
+                    ->where('master_tipe_jalur_id', $data['master_tipe_jalur_id'])
+                    ->where('program_studi_id', $data['program_studi_id'])
+                    ->first();
+                $oldPath = $existing?->dokumen_pendukung_path;
 
-                    MasterBiayaItem::updateOrCreate(
-                        [
-                            'master_biaya_id' => $masterBiaya->id,
-                            'komponen_biaya_id' => $item['komponen_biaya_id'],
-                        ],
-                        [
-                            'nominal' => $nominal,
-                            'dibebankan_saat_pendaftaran' => (bool) ($item['dibebankan_saat_pendaftaran'] ?? false),
-                            'berlaku_diskon' => (bool) ($item['berlaku_diskon'] ?? false),
-                            'keterangan' => $item['keterangan'] ?? null,
-                        ]
-                    );
+                $masterBiaya = MasterBiaya::updateOrCreate(
+                    [
+                        'master_tipe_jalur_id' => $data['master_tipe_jalur_id'],
+                        'program_studi_id' => $data['program_studi_id'],
+                    ],
+                    [
+                        'nomor_sk' => $evidenceType === 'arsip' ? $data['nomor_sk'] : null,
+                        'dokumen_pendukung_path' => $evidenceType === 'upload' ? $uploadedPath : null,
+                        'is_active' => $data['is_active'] ?? true,
+                        'keterangan' => $data['keterangan'] ?? null,
+                    ]
+                );
+
+                $total = 0;
+                if (! empty($data['items'])) {
+                    foreach ($data['items'] as $item) {
+                        $nominal = (float) $item['nominal'];
+                        $total += $nominal;
+
+                        MasterBiayaItem::updateOrCreate(
+                            [
+                                'master_biaya_id' => $masterBiaya->id,
+                                'komponen_biaya_id' => $item['komponen_biaya_id'],
+                            ],
+                            [
+                                'nominal' => $nominal,
+                                'dibebankan_saat_pendaftaran' => (bool) ($item['dibebankan_saat_pendaftaran'] ?? false),
+                                'berlaku_diskon' => (bool) ($item['berlaku_diskon'] ?? false),
+                                'keterangan' => $item['keterangan'] ?? null,
+                            ]
+                        );
+                    }
                 }
+
+                $masterBiaya->update(['total_biaya' => $total]);
+
+                return $masterBiaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat']);
+            });
+
+            if ($oldPath && $oldPath !== $uploadedPath) {
+                app(FileStorageService::class)->delete($oldPath, private: true);
             }
 
-            $masterBiaya->update(['total_biaya' => $total]);
+            return $created;
+        } catch (Throwable $exception) {
+            if ($uploadedPath) {
+                app(FileStorageService::class)->delete($uploadedPath, private: true);
+            }
 
-            return $masterBiaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat']);
-        });
+            throw $exception;
+        }
     }
 
     public function updateBiaya(MasterBiaya $biaya, array $data): MasterBiaya
     {
-        return DB::transaction(function () use ($biaya, $data) {
-            $biaya->update([
+        $file = $data['dokumen_pendukung'] ?? null;
+        $evidenceType = $data['evidence_type'] ?? null;
+        unset($data['dokumen_pendukung'], $data['evidence_type']);
+        $uploadedPath = $file ? app(FileStorageService::class)->store($file, 'spmb/master-biaya', private: true) : null;
+        $oldPath = null;
+
+        try {
+            $updated = DB::transaction(function () use ($biaya, $data, $evidenceType, $uploadedPath, &$oldPath) {
+                $changes = [
                 'master_tipe_jalur_id' => $data['master_tipe_jalur_id'] ?? $biaya->master_tipe_jalur_id,
                 'program_studi_id' => $data['program_studi_id'] ?? $biaya->program_studi_id,
-                'nomor_sk' => array_key_exists('nomor_sk', $data) ? $data['nomor_sk'] : $biaya->nomor_sk,
                 'is_active' => $data['is_active'] ?? $biaya->is_active,
                 'keterangan' => $data['keterangan'] ?? $biaya->keterangan,
-            ]);
+                ];
+
+                if ($evidenceType === 'arsip') {
+                    $changes['nomor_sk'] = $data['nomor_sk'];
+                    $changes['dokumen_pendukung_path'] = null;
+                    $oldPath = $biaya->dokumen_pendukung_path;
+                } elseif ($evidenceType === 'upload') {
+                    $changes['nomor_sk'] = null;
+                    if ($uploadedPath) {
+                        $changes['dokumen_pendukung_path'] = $uploadedPath;
+                        $oldPath = $biaya->dokumen_pendukung_path;
+                    }
+                } elseif (array_key_exists('nomor_sk', $data)) {
+                    $changes['nomor_sk'] = $data['nomor_sk'];
+                }
+
+                $biaya->update($changes);
 
             if (isset($data['items'])) {
                 $komponenIds = collect($data['items'])->pluck('komponen_biaya_id')->all();
@@ -259,8 +329,21 @@ class MasterBiayaService
                 $biaya->recalculateTotal();
             }
 
-            return $biaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat']);
-        });
+                return $biaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat']);
+            });
+
+            if ($oldPath) {
+                app(FileStorageService::class)->delete($oldPath, private: true);
+            }
+
+            return $updated;
+        } catch (Throwable $exception) {
+            if ($uploadedPath) {
+                app(FileStorageService::class)->delete($uploadedPath, private: true);
+            }
+
+            throw $exception;
+        }
     }
 
     public function deleteBiaya(MasterBiaya $biaya): bool
@@ -313,6 +396,7 @@ class MasterBiayaService
             ->map(fn ($item) => [
                 'komponen_biaya_id' => $item->komponen_biaya_id,
                 'payment_gateway_config_id' => $item->komponenBiaya->payment_gateway_config_id,
+                'payment_gateway_name' => $item->komponenBiaya->payment_gateway_name,
                 'master_biaya_kode' => $item->komponenBiaya->kode,
                 'nominal' => (float) $item->nominal,
                 'berlaku_diskon' => (bool) $item->berlaku_diskon,
@@ -321,12 +405,7 @@ class MasterBiayaService
             ->all();
     }
 
-    /**
-     * Detail beban awal pendaftaran, dengan fallback ke tarif SIKEU bila
-     * komponen pendaftaran belum dikonfigurasi. Parameter `$gelombangId`
-     * hanya dipakai untuk fallback tarif (bila konfigurasi master biaya
-     * berbasis tipe jalur belum ada).
-     */
+    /** Detail biaya pendaftaran hanya dari komponen Master Biaya SPMB. */
     public function buildDetailBebanPendaftaran(?int $masterTipeJalurId, ?int $programStudiId, ?int $gelombangId = null): array
     {
         $details = $this->buildDetailTagihan($masterTipeJalurId, $programStudiId, true);
@@ -334,41 +413,18 @@ class MasterBiayaService
             return $details;
         }
 
-        $gelombang = $gelombangId ? GelombangPenerimaan::find($gelombangId) : null;
-
-        Log::warning('SPMB: Master Biaya pendaftaran tidak ditemukan untuk tipe jalur + prodi; memakai fallback tarif SIKEU.', [
+        Log::warning('SPMB: Komponen Master Biaya pendaftaran belum dikonfigurasi.', [
             'master_tipe_jalur_id' => $masterTipeJalurId,
             'program_studi_id' => $programStudiId,
             'gelombang_id' => $gelombangId,
         ]);
 
-        $sikeuService = app(SpmbSikeuService::class);
-        $nominal = $sikeuService->getTarifPendaftaranSpmb($gelombang->jalur_masuk_id ?? null, $gelombangId);
-
-        if ($nominal <= 0) {
-            throw ValidationException::withMessages([
-                'biaya' => 'Biaya pendaftaran belum dikonfigurasi untuk gelombang ini. Hubungi panitia SPMB.',
-            ]);
-        }
-
-        $masterBiaya = \App\Models\Sikeu\MasterBiaya::where('is_active', true)
-            ->where(function ($q) {
-                $q->where('kode', 'SPMB_ADM')->orWhere('tipe', 'spmb_adm');
-            })
-            ->first();
-
-        return [[
-            'komponen_biaya_id' => null,
-            'master_biaya_kode' => $masterBiaya->kode ?? 'SPMB_ADM',
-            'nominal' => $nominal,
-            'keterangan' => $masterBiaya->nama ?? 'Biaya Formulir Pendaftaran SPMB',
-        ]];
+        throw ValidationException::withMessages([
+            'biaya' => 'Komponen biaya pendaftaran belum dikonfigurasi di Master Biaya SPMB untuk tipe jalur dan program studi ini.',
+        ]);
     }
 
-    /**
-     * Detail beban daftar ulang, dengan fallback ke tarif UKT SIKEU bila
-     * komponen daftar ulang belum dikonfigurasi.
-     */
+    /** Detail biaya daftar ulang hanya dari komponen Master Biaya SPMB. */
     public function buildDetailBebanDaftarUlang(?int $masterTipeJalurId, ?int $programStudiId): array
     {
         $details = $this->buildDetailTagihan($masterTipeJalurId, $programStudiId, false);
@@ -376,23 +432,13 @@ class MasterBiayaService
             return $details;
         }
 
-        Log::warning('SPMB: Master Biaya daftar ulang tidak ditemukan untuk tipe jalur + prodi; memakai fallback tarif SIKEU.', [
+        Log::warning('SPMB: Komponen Master Biaya daftar ulang belum dikonfigurasi.', [
             'master_tipe_jalur_id' => $masterTipeJalurId,
             'program_studi_id' => $programStudiId,
         ]);
 
-        $biayaDaftarUlang = TarifSpmb::with('masterBiaya')
-            ->whereHas('masterBiaya', function ($q) {
-                $q->where('kode', 'like', '%UKT%')->orWhere('nama', 'like', '%UKT%');
-            })->first();
-
-        $masterBiaya = $biayaDaftarUlang->masterBiaya ?? null;
-
-        return [[
-            'komponen_biaya_id' => null,
-            'master_biaya_kode' => $masterBiaya->kode ?? 'UKT_SMT1',
-            'nominal' => $biayaDaftarUlang->nominal ?? 5000000,
-            'keterangan' => 'Biaya UKT Semester 1',
-        ]];
+        throw ValidationException::withMessages([
+            'biaya' => 'Komponen biaya daftar ulang belum dikonfigurasi di Master Biaya SPMB untuk tipe jalur dan program studi ini.',
+        ]);
     }
 }

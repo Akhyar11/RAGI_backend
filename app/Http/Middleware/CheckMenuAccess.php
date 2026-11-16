@@ -24,9 +24,12 @@ class CheckMenuAccess
         'GET /spmb/sekolah-mitra',
         // Pendaftaran mandiri calon mahasiswa
         'GET /spmb/pendaftaran/me',
+        'GET /spmb/pendaftaran/{id}',
+        'GET /spmb/pendaftaran/biodata',
         'GET /spmb/pembayaran',
         'POST /spmb/pembayaran/{id}/checkout',
         'POST /spmb/pendaftaran/biodata',
+        'POST /spmb/pendaftaran/terbitkan-tagihan',
         'POST /spmb/pendaftaran/berkas',
         'POST /spmb/pendaftaran/finalize',
         'POST /spmb/pendaftaran/reissue-va',

@@ -25,14 +25,14 @@ class GelombangPenerimaan extends Model
         'tanggal_pengumuman',
         'kuota_total',
         'kuota_terisi',
-        'biaya_pendaftaran',
         'potongan_biaya_daftar_ulang',
         'status',
     ];
 
+    protected $hidden = ['biaya_pendaftaran'];
+
     protected $casts = [
         'tanggal_pengumuman' => 'date',
-        'biaya_pendaftaran' => 'decimal:2',
         'potongan_biaya_daftar_ulang' => 'decimal:2',
     ];
 

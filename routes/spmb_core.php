@@ -41,11 +41,12 @@ Route::delete('gelombang/{id}', [MasterSpmbController::class, 'destroyGelombang'
 
 
 // Pendaftaran SPMB
-Route::get('pendaftaran', [PendaftaranController::class, 'index']);
+Route::middleware('can:spmb.manage')->get('pendaftaran', [PendaftaranController::class, 'index']);
 
 // Calon Mahasiswa specific routes must be before {id} param route
 Route::get('pendaftaran/me', [CalonMahasiswaController::class, 'myPendaftaran']);
 Route::post('pendaftaran/biodata', [CalonMahasiswaController::class, 'storeBiodata']);
+Route::post('pendaftaran/terbitkan-tagihan', [CalonMahasiswaController::class, 'issueRegistrationInvoice']);
 Route::post('pendaftaran/berkas', [CalonMahasiswaController::class, 'uploadBerkas']);
 Route::post('pendaftaran/finalize', [CalonMahasiswaController::class, 'finalize']);
 Route::post('pendaftaran/reissue-va', [CalonMahasiswaController::class, 'reissueVa']);
@@ -55,8 +56,8 @@ Route::middleware('can:spmb.manage')->post('pendaftaran/sync-external', [Pendaft
 Route::get('pendaftaran/{id}', [PendaftaranController::class, 'show']);
 Route::get('pendaftaran/{id}/sk-lulus', [PendaftaranController::class, 'downloadSkLulus']);
 Route::middleware('can:spmb.manage')->post('pendaftaran/{id}/terbitkan-sk', [PendaftaranController::class, 'terbitkanSk']);
-Route::post('pendaftaran/{id}/status', [PendaftaranController::class, 'updateStatus']);
-Route::post('pendaftaran/berkas/{id}/verify', [PendaftaranController::class, 'verifyBerkas']);
+Route::middleware('can:spmb.manage')->post('pendaftaran/{id}/status', [PendaftaranController::class, 'updateStatus']);
+Route::middleware('can:spmb.manage')->post('pendaftaran/berkas/{id}/verify', [PendaftaranController::class, 'verifyBerkas']);
 Route::middleware('can:spmb.manage')->post('pendaftaran/{id}/konversi-mahasiswa', [PendaftaranController::class, 'konversiMahasiswa']);
 
 // Potongan biaya kustom per calon mahasiswa (Admin SPMB)

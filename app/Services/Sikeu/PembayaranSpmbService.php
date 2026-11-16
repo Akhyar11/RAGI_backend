@@ -4,10 +4,8 @@ namespace App\Services\Sikeu;
 
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\PembayaranSpmb;
-use App\Notifications\TagihanVaNotification;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Exception;
+use Illuminate\Validation\ValidationException;
 
 class PembayaranSpmbService
 {
@@ -16,44 +14,9 @@ class PembayaranSpmbService
      */
     public function generateTagihanPendaftaran(PendaftaranCalonMhs $pendaftaran): PembayaranSpmb
     {
-        return DB::transaction(function () use ($pendaftaran) {
-            // 1. Dapatkan nominal dari Gelombang (relasi yang benar: gelombangPenerimaan)
-            $gelombang = $pendaftaran->gelombangPenerimaan;
-            $biaya = 0.00;
-            if ($gelombang) {
-                $jalurId = $gelombang->jalur_masuk_id ?? $gelombang->jalur_id ?? null;
-                $biaya = app(SpmbSikeuService::class)
-                    ->getTarifPendaftaranSpmb($jalurId ?: 1, $gelombang->id);
-            }
-
-            // 2. Generate VA Number (Mocking integrasi BNI/Mandiri)
-            $vaNumber = '8' . rand(1000000000, 9999999999);
-
-            // 3. Simpan ke database
-            $pembayaran = PembayaranSpmb::create([
-                'pendaftaran_id' => $pendaftaran->id,
-                'kode_bayar' => 'INV-SPMB-' . time(),
-                'jumlah_tagihan' => $biaya,
-                'jumlah_bayar' => 0,
-                'status' => 'pending', // VARCHAR status (not ENUM)
-                'metode_bayar' => 'virtual_account',
-                'va_number' => $vaNumber,
-                'expired_at' => now()->addDays(2),
-            ]);
-
-            // 4. Kirim Notifikasi Tagihan via EMAIL
-            try {
-                // User yang mendaftar
-                $user = $pendaftaran->user;
-                if ($user) {
-                    $user->notify(new TagihanVaNotification($pembayaran));
-                }
-            } catch (Exception $e) {
-                Log::error('Gagal mengirim email tagihan VA: ' . $e->getMessage());
-            }
-
-            return $pembayaran;
-        });
+        throw ValidationException::withMessages([
+            'biaya' => 'Penerbitan tagihan SPMB harus melalui Master Biaya SPMB dan kanal pembayaran resmi.',
+        ]);
     }
 
     /**

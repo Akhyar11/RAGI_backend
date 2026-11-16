@@ -26,6 +26,7 @@ class SpmbMenuAdminSeeder extends Seeder
         $permissions = Permission::whereIn('slug', [
             'spmb.dashboard.read',
             'spmb.manage',
+            'spmb.pendaftaran.read',
             'spmb.laporan.read',
         ])->get()->keyBy('slug');
 
@@ -51,7 +52,7 @@ class SpmbMenuAdminSeeder extends Seeder
                 'permission' => 'spmb.manage',
                 'order_index' => 2,
                 'children' => [
-                    ['name' => 'Pendaftaran Mahasiswa Baru', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUserPlus', 'order_index' => 1],
+                    ['name' => 'Pendaftaran Mahasiswa Baru', 'url' => '/spmb/pendaftaran', 'icon' => 'FaUserPlus', 'permission' => 'spmb.pendaftaran.read', 'order_index' => 1],
                     ['name' => 'Verifikasi Daftar Ulang', 'url' => '/spmb/daftar-ulang', 'icon' => 'FaClipboardCheck', 'order_index' => 2],
                     ['name' => 'Registrasi Online', 'url' => '/spmb/registrasi', 'icon' => 'FaPen', 'order_index' => 3],
                 ],
@@ -137,7 +138,7 @@ class SpmbMenuAdminSeeder extends Seeder
                         'name' => $child['name'],
                         'icon' => $child['icon'],
                         'module' => 'spmb',
-                        'permission_id' => $permissionId($section['permission']),
+                        'permission_id' => $permissionId($child['permission'] ?? $section['permission']),
                         'order_index' => $child['order_index'],
                         'is_active' => true,
                     ]

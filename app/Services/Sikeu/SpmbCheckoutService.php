@@ -63,7 +63,7 @@ class SpmbCheckoutService
             $existing = $bill->checkouts()->where('status', 'pending')->where('amount', $remaining / 100)
                 ->where('expires_at', '>', now())->whereNotNull('redirect_url')->latest('id')->first();
             if ($existing) {
-                return ['response' => $this->response($existing)];
+                return ['response' => $this->checkoutResponse($existing)];
             }
             if ($bill->checkouts()->where('status', 'creating')->where('created_at', '>', now()->subMinute())->exists()) {
                 throw ValidationException::withMessages(['tagihan' => 'Checkout sedang disiapkan. Silakan coba beberapa saat lagi.']);
@@ -122,7 +122,7 @@ class SpmbCheckoutService
             $attempt->refresh();
             $attempt->update(['status' => $attempt->status === 'paid' ? 'paid' : 'pending', 'token' => $token, 'redirect_url' => $url, 'provider_id' => $providerId]);
 
-            return $this->response($attempt);
+            return $this->checkoutResponse($attempt);
         } catch (ConnectionException $exception) {
             $attempt->update(['status' => 'failed']);
             Log::error('Koneksi checkout SPMB gagal', ['tagihan_id' => $attempt->tagihan_id, 'gateway' => $gateway->gateway_name]);
@@ -130,11 +130,28 @@ class SpmbCheckoutService
         }
     }
 
-    private function response(PaymentCheckout $attempt): array
+    private function checkoutResponse(PaymentCheckout|array $attempt): array
     {
-        return ['method' => 'redirect', 'gateway_name' => $attempt->gateway_name, 'environment' => $attempt->environment,
-            'order_id' => $attempt->order_id, 'amount' => (float) $attempt->amount, 'redirect_url' => $attempt->redirect_url,
-            'expires_at' => $attempt->expires_at];
+        $gatewayName = $attempt instanceof PaymentCheckout ? $attempt->gateway_name : $attempt['gateway_name'];
+        $environment = $attempt instanceof PaymentCheckout ? $attempt->environment : $attempt['environment'];
+        $config = $attempt instanceof PaymentCheckout ? $attempt->gateway : null;
+        $data = [
+            'method' => $gatewayName === PaymentGatewayConfig::MIDTRANS ? 'snap' : 'redirect',
+            'gateway_name' => $gatewayName,
+            'environment' => $environment,
+            'order_id' => $attempt instanceof PaymentCheckout ? $attempt->order_id : $attempt['order_id'],
+            'amount' => (float) ($attempt instanceof PaymentCheckout ? $attempt->amount : $attempt['amount']),
+            'redirect_url' => $attempt instanceof PaymentCheckout ? $attempt->redirect_url : $attempt['redirect_url'],
+            'expires_at' => $attempt instanceof PaymentCheckout ? $attempt->expires_at : $attempt['expires_at'],
+        ];
+
+        if ($gatewayName === PaymentGatewayConfig::MIDTRANS) {
+            $data['snap_token'] = $attempt instanceof PaymentCheckout ? $attempt->token : $attempt['token'];
+            $data['client_key'] = $config?->public_key_encrypted
+                ?? PaymentGatewayConfig::query()->where('gateway_name', $gatewayName)->value('public_key_encrypted');
+        }
+
+        return $data;
     }
 
     private function validRedirect(mixed $url, string $gateway): bool

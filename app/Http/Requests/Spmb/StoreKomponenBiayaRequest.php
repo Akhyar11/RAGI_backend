@@ -19,6 +19,7 @@ class StoreKomponenBiayaRequest extends FormRequest
             'kode' => 'nullable|string|max:50|unique:spmb_master_komponen_biaya,kode',
             'nama' => 'required|string|max:150',
             'kategori' => 'nullable|string|max:50',
+            'payment_gateway_name' => ['nullable', 'string', Rule::in(PaymentGatewayConfig::CONFIGURABLE_GATEWAYS)],
             'payment_gateway_config_id' => ['nullable', 'integer', Rule::exists('sikeu_payment_gateway_configs', 'id')
                 ->where('is_active', true)->whereIn('gateway_name', PaymentGatewayConfig::SPMB_CHANNELS)],
             'tipe_potongan' => 'nullable|boolean',

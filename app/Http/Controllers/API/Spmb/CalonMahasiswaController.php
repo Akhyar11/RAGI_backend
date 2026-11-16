@@ -19,6 +19,7 @@ use App\Services\Spmb\SpmbKodeDiskonService;
 use App\Services\Storage\FileStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -55,6 +56,12 @@ class CalonMahasiswaController extends Controller
         ])
             ->where('user_id', $user->id)
             ->first();
+
+        if ($pendaftaran) {
+            app(\App\Services\Sikeu\SpmbOnlineSettlementService::class)
+                ->reconcileMidtransForApplicant($pendaftaran->id);
+            $pendaftaran->refresh();
+        }
 
         $tagihanData = null;
         if ($pendaftaran) {
@@ -215,6 +222,89 @@ class CalonMahasiswaController extends Controller
                 'tagihan' => $tagihanPayload,
             ],
         ]);
+    }
+
+    /** Issue the unpaid registration invoice for the authenticated applicant. */
+    public function issueRegistrationInvoice(Request $request): JsonResponse
+    {
+        $pendaftaran = PendaftaranCalonMhs::query()
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        $existingBills = app(\App\Services\Spmb\SpmbBillingService::class)
+            ->stageQuery($pendaftaran->id)
+            ->with(['virtualAccount', 'detailTagihan'])
+            ->orderBy('id')
+            ->get();
+
+        if ($existingBills->isNotEmpty()) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Invoice pendaftaran sudah tersedia.',
+                'data' => app(\App\Services\Spmb\SpmbBillingService::class)->envelope($existingBills->all()),
+            ]);
+        }
+
+        $gelombang = $pendaftaran->gelombangPenerimaan;
+        if (! $gelombang || ! $gelombang->pendaftaran_dibuka) {
+            throw ValidationException::withMessages([
+                'gelombang_id' => 'Gelombang pendaftaran sudah tidak dibuka; invoice baru tidak dapat diterbitkan.',
+            ]);
+        }
+
+        $masterBiayaService = app(MasterBiayaService::class);
+        $details = $masterBiayaService->buildDetailBebanPendaftaran(
+            $pendaftaran->master_tipe_jalur_id,
+            $pendaftaran->program_studi_id,
+            $pendaftaran->gelombang_id,
+        );
+        $potonganCalon = app(\App\Services\Spmb\SpmbPotonganCalonService::class)
+            ->buildPotonganPayload($pendaftaran, 'pendaftaran', $details);
+        $penggunaanDiskon = $pendaftaran->kodeDiskonUsage;
+        $potongan = array_merge(
+            $potonganCalon,
+            app(SpmbKodeDiskonService::class)->toTagihanPotongan($penggunaanDiskon),
+        );
+
+        $issued = DB::transaction(function () use ($pendaftaran, $details, $potongan): array {
+            $locked = PendaftaranCalonMhs::query()->lockForUpdate()->findOrFail($pendaftaran->id);
+            $alreadyIssued = app(\App\Services\Spmb\SpmbBillingService::class)
+                ->stageQuery($locked->id)
+                ->with(['virtualAccount', 'detailTagihan'])
+                ->orderBy('id')
+                ->get();
+            if ($alreadyIssued->isNotEmpty()) {
+                return app(\App\Services\Spmb\SpmbBillingService::class)->envelope($alreadyIssued->all());
+            }
+
+            $result = app(\App\Services\Spmb\SpmbBillingService::class)->issue([
+                'calon_mahasiswa_id' => $locked->id,
+                'tipe_referensi' => TagihanMahasiswa::TIPE_SPMB_PENDAFTARAN,
+                'source_system' => 'SPMB',
+                'master_biaya_tipe' => 'spmb_adm',
+                'requires_approval' => false,
+                'allow_local_va' => true,
+                'keterangan' => 'Pendaftaran SPMB - '.($locked->nama_lengkap ?? 'Calon Mahasiswa'),
+                'details' => $details,
+                'potongan' => $potongan,
+            ]);
+
+            return [
+                'tagihan' => $result['tagihan'],
+                'virtual_account' => $result['virtual_account'],
+                'tagihan_list' => $result['tagihan_list'],
+            ];
+        });
+
+        if ($penggunaanDiskon && ! empty($issued['tagihan']?->id)) {
+            $this->kodeDiskonService->attachTagihan($penggunaanDiskon, (int) $issued['tagihan']->id);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Invoice pendaftaran berhasil diterbitkan dan menunggu pembayaran.',
+            'data' => $issued,
+        ], 201);
     }
 
     /**
