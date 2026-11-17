@@ -15,6 +15,8 @@ class MataKuliah extends Model
         'kurikulum_id',
         'rumpun_mk_id',
         'kode_mk',
+        'source_id',
+        'id_feeder',
         'nama',
         'kategori',
         'sks_teori',

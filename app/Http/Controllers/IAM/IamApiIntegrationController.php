@@ -9,6 +9,7 @@ use App\Models\IamApiIntegration;
 use App\Services\AuditLogService;
 use App\Services\IAM\ApiIntegrationService;
 use App\Services\IAM\ApiIntegrationSyncException;
+use App\Services\IAM\MataKuliahIntegrationSyncService;
 use App\Services\IAM\ProgramStudiIntegrationSyncService;
 use App\Services\IAM\SiakadMahasiswaIntegrationSyncService;
 use App\Services\IAM\SikeuIntegrationSyncService;
@@ -93,14 +94,25 @@ class IamApiIntegrationController extends Controller
 
         $integration = IamApiIntegration::findOrFail($id);
         $oldValues = $integration->getOriginal();
+        $sourceType = $request->input('source_type', $integration->source_type ?? 'custom_api');
+
+        if ($sourceType === 'pddikti' && !in_array('pddikti', $integration->supported_sources ?? [], true)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Mode PDDIKTI Neo Feeder hanya didukung untuk integrasi mata kuliah SIAKAD.',
+            ], 422);
+        }
 
         $integration->fill([
-            'url_api' => $request->url_api,
+            'source_type' => $sourceType,
+            'url_api' => $sourceType === 'pddikti' ? null : $request->url_api,
             'auth_type' => $request->auth_type,
             'is_active' => $request->boolean('is_active'),
         ]);
 
-        if ($request->filled('token')) {
+        if ($sourceType === 'pddikti') {
+            $integration->token = null;
+        } elseif ($request->filled('token')) {
             $integration->token = $request->token;
         }
 
@@ -141,6 +153,18 @@ class IamApiIntegrationController extends Controller
 
         $integration = IamApiIntegration::findOrFail($id);
         $oldValues = $integration->getOriginal();
+
+        $requestedSource = $request->input('source_type', $integration->source_type ?? 'custom_api');
+        if ($requestedSource === 'pddikti' && !in_array('pddikti', $integration->supported_sources ?? [], true)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Mode PDDIKTI Neo Feeder hanya didukung untuk integrasi mata kuliah SIAKAD.',
+            ], 422);
+        }
+
+        if ($requestedSource === 'pddikti') {
+            return $this->testPddiktiConnection($request, $integration, $oldValues);
+        }
 
         $url = $request->filled('url_api') ? $request->url_api : $integration->url_api;
         $token = $request->has('token') ? $request->token : $integration->token;
@@ -246,10 +270,58 @@ class IamApiIntegrationController extends Controller
         }
     }
 
+    private function testPddiktiConnection(TestApiIntegrationRequest $request, IamApiIntegration $integration, array $oldValues)
+    {
+        $startTime = microtime(true);
+
+        try {
+            $result = app(MataKuliahIntegrationSyncService::class)->testPddiktiConnection();
+            $this->recordIntegrationTestAudit($request, $integration, $oldValues, ['test_status' => 'success']);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Tes koneksi Neo Feeder PDDikti berhasil.',
+                'data' => [
+                    'http_status' => 200,
+                    'is_success' => true,
+                    'duration_ms' => round((microtime(true) - $startTime) * 1000, 2),
+                    'headers' => [],
+                    'response_sample' => $result,
+                    'expected_schema' => $integration->expected_schema,
+                ],
+            ]);
+        } catch (ApiIntegrationSyncException $exception) {
+            $this->recordIntegrationTestAudit($request, $integration, $oldValues, ['test_status' => 'failed']);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => $exception->getMessage(),
+            ], $exception->statusCode);
+        }
+    }
+
+    private function recordIntegrationTestAudit(Request $request, IamApiIntegration $integration, array $oldValues, array $testValues): void
+    {
+        try {
+            AuditLogService::record(
+                module: 'IAM',
+                action: 'test_connection',
+                tableName: 'iam_api_integrations',
+                recordId: $integration->id,
+                oldValues: $oldValues,
+                newValues: $testValues,
+                request: $request
+            );
+        } catch (Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log test PDDIKTI API: ' . $exception->getMessage());
+        }
+    }
+
     public function sync(
         Request $request,
         int $id,
         ProgramStudiIntegrationSyncService $syncService,
+        MataKuliahIntegrationSyncService $mataKuliahSyncService,
         SikeuIntegrationSyncService $sikeuSyncService,
         SiakadMahasiswaIntegrationSyncService $siakadMahasiswaSyncService
     ) {
@@ -262,6 +334,7 @@ class IamApiIntegrationController extends Controller
             $result = match (true) {
                 $integration->module === 'siakad' && $integration->key === 'siakad_program_studi' => $syncService->sync($integration),
                 $integration->module === 'siakad' && $integration->key === 'siakad_mahasiswa' => $siakadMahasiswaSyncService->sync($integration),
+                $integration->module === 'siakad' && in_array('pddikti', $integration->supported_sources ?? [], true) => $mataKuliahSyncService->sync($integration),
                 $integration->module === 'sikeu' => $sikeuSyncService->sync($integration),
                 default => throw new ApiIntegrationSyncException("Aksi sync belum didukung untuk integrasi '{$integration->key}' (modul '{$integration->module}')."),
             };

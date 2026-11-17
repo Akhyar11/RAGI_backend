@@ -15,6 +15,7 @@ class Kurikulum extends Model
     protected $fillable = [
         'program_studi_id',
         'kode',
+        'id_feeder',
         'nama',
         'tahun_berlaku',
         'total_sks_lulus',

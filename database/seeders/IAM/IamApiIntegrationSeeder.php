@@ -131,6 +131,71 @@ class IamApiIntegrationSeeder extends Seeder
                 'auth_type' => 'bearer',
                 'is_active' => true,
             ],
+            [
+                'key' => 'siakad_mata_kuliah',
+                'name' => 'Migrasi Mata Kuliah SIAKAD',
+                'module' => 'siakad',
+                'http_method' => 'GET',
+                'description' => 'Sumber data read-only mata kuliah dari SIAKAD legacy untuk disinkronkan ke master mata kuliah RAG. Setiap baris harus merujuk kode kurikulum yang telah tersedia di sistem tujuan.',
+                'source_type' => 'pddikti',
+                'supported_sources' => ['pddikti', 'custom_api'],
+                'source_schemas' => [
+                    'pddikti' => [
+                        'source' => 'Neo Feeder PDDikti',
+                        'action' => 'GetMatkulKurikulum',
+                        'connection_managed' => true,
+                        'fields' => [
+                            'id_matkul' => 'UUID mata kuliah PDDIKTI',
+                            'id_kurikulum' => 'UUID kurikulum PDDIKTI',
+                            'id_prodi' => 'UUID program studi PDDIKTI',
+                            'kode_mata_kuliah' => 'Kode mata kuliah',
+                            'nama_mata_kuliah' => 'Nama mata kuliah',
+                            'semester' => 'Semester anjuran',
+                            'sks_mata_kuliah' => 'Total SKS',
+                            'sks_tatap_muka' => 'SKS teori',
+                            'sks_praktek' => 'SKS praktik',
+                            'apakah_wajib' => '1 wajib, selainnya pilihan',
+                            'nama_kurikulum' => 'Nama kurikulum untuk mapping prodi',
+                        ],
+                    ],
+                ],
+                'expected_schema' => [
+                    'type' => 'object',
+                    'description' => 'Respons array atau paginasi dari endpoint mata kuliah SIAKAD legacy.',
+                    'properties' => [
+                        'data' => [
+                            'type' => 'array',
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'source_id' => ['type' => ['string', 'integer'], 'description' => 'ID stabil mata kuliah pada sistem sumber; disimpan untuk rekonsiliasi dan idempotensi.'],
+                                    'kurikulum_kode' => ['type' => 'string', 'description' => 'Kode kurikulum yang harus sudah ada dan cocok persis di SIAKAD tujuan.'],
+                                    'kode_mk' => ['type' => 'string', 'description' => 'Kode mata kuliah unik pada SIAKAD tujuan.'],
+                                    'nama' => ['type' => 'string'],
+                                    'sks_teori' => ['type' => 'integer', 'minimum' => 0],
+                                    'sks_praktik' => ['type' => 'integer', 'minimum' => 0],
+                                    'total_sks' => ['type' => 'integer', 'minimum' => 0],
+                                    'semester_anjuran' => ['type' => 'integer', 'minimum' => 1],
+                                    'tipe' => ['type' => 'string', 'enum' => ['wajib', 'pilihan', 'wajib_prodi']],
+                                    'kategori' => ['type' => ['string', 'null']],
+                                    'jumlah_pertemuan' => ['type' => 'integer', 'minimum' => 1],
+                                    'is_active' => ['type' => 'boolean'],
+                                ],
+                                'required' => ['source_id', 'kurikulum_kode', 'kode_mk', 'nama', 'sks_teori', 'sks_praktik', 'total_sks', 'semester_anjuran', 'tipe', 'is_active'],
+                            ],
+                        ],
+                        'meta' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'current_page' => ['type' => 'integer'],
+                                'last_page' => ['type' => 'integer'],
+                            ],
+                        ],
+                    ],
+                ],
+                'auth_type' => 'bearer',
+                'is_active' => true,
+            ],
         ];
 
         IamApiIntegration::withTrashed()
@@ -145,12 +210,18 @@ class IamApiIntegrationSeeder extends Seeder
                     'token' => $existing->token,
                     'auth_type' => $existing->auth_type,
                     'is_active' => $existing->is_active,
+                    'source_type' => $existing->source_type ?? $item['source_type'] ?? 'custom_api',
+                    'supported_sources' => $item['supported_sources'] ?? ['custom_api'],
+                    'source_schemas' => $item['source_schemas'] ?? [],
                 ]
                 : [
                     'url_api' => null,
                     'token' => null,
                     'auth_type' => $item['auth_type'],
                     'is_active' => $item['is_active'],
+                    'source_type' => $item['source_type'] ?? 'custom_api',
+                    'supported_sources' => $item['supported_sources'] ?? ['custom_api'],
+                    'source_schemas' => $item['source_schemas'] ?? [],
                 ];
 
             IamApiIntegration::updateOrCreate(
@@ -161,6 +232,9 @@ class IamApiIntegrationSeeder extends Seeder
                     'http_method' => $item['http_method'],
                     'description' => $item['description'],
                     'expected_schema' => $item['expected_schema'],
+                    'source_type' => $connectionSettings['source_type'],
+                    'supported_sources' => $connectionSettings['supported_sources'],
+                    'source_schemas' => $connectionSettings['source_schemas'],
                 ], $connectionSettings)
             );
         }

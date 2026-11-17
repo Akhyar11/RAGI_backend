@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1` (atau `/api`)  
 > **Autentikasi**: Bearer Token (Sanctum / Passport)  
 > **Dibuat**: 2026-10-12  
-> **Diperbarui**: 2026-11-12
+> **Diperbarui**: 2026-11-17
 
 Controller ini mengelola registrasi integrasi API eksternal tingkat sistem yang dikunci oleh developer dan memberikan akses bagi Admin IAM untuk mengonfigurasi URL endpoint, kredensial token, menguji koneksi, serta menjalankan sinkronisasi data yang didukung.
 
@@ -14,9 +14,9 @@ Controller ini mengelola registrasi integrasi API eksternal tingkat sistem yang 
 |---|---|---|---|
 | GET | `/api/api-integrations` | Daftar integrasi API sistem dengan filter & paginasi | ✅ Permission `iam.api_integration.read` |
 | GET | `/api/api-integrations/{id}` | Detail konfigurasi & kontrak schema integrasi | ✅ Permission `iam.api_integration.read` |
-| PUT | `/api/api-integrations/{id}` | Update URL API, Token, Auth Type, dan Status | ✅ Permission `iam.api_integration.manage` |
-| POST | `/api/api-integrations/{id}/test` | Uji koneksi live (ping request & cek respons) | ✅ Permission `iam.api_integration.manage` |
-| POST | `/api/api-integrations/{id}/sync` | Ambil data sumber dan sinkronkan ke master Program Studi SIAKAD | ✅ Permission `iam.api_integration.manage` |
+| PUT | `/api/api-integrations/{id}` | Update tipe sumber, URL API, Token, Auth Type, dan Status | ✅ Permission `iam.api_integration.manage` |
+| POST | `/api/api-integrations/{id}/test` | Uji koneksi sumber Custom API atau Neo Feeder PDDikti | ✅ Permission `iam.api_integration.manage` |
+| POST | `/api/api-integrations/{id}/sync` | Ambil data sumber dan sinkronkan ke master yang didukung (SIAKAD/SIKEU) | ✅ Permission `iam.api_integration.manage` |
 
 ---
 
@@ -135,12 +135,15 @@ Mengubah URL endpoint, kredensial auth token, tipe autentikasi, serta status akt
 
 ```json
 {
+    "source_type": "custom_api",
     "url_api": "https://sumber.kampus.ac.id/api/program-studi",
     "token": "my-secret-token",
     "auth_type": "bearer",
     "is_active": true
 }
 ```
+
+Untuk integrasi `siakad_mata_kuliah`, `source_type` dapat bernilai `pddikti` atau `custom_api`. Pada mode PDDIKTI, URL/token custom tidak diperlukan; backend memakai kredensial di Pengaturan Sistem → Koneksi Neo Feeder PDDikti dan menghapus URL/token custom saat mode tersebut disimpan.
 
 Jika hanya mengubah pengaturan lain, hilangkan field `token` atau kirim `null`/string kosong. Token tersimpan akan dipertahankan. Kirim token non-kosong hanya untuk menggantinya.
 
@@ -168,17 +171,20 @@ Nilai `token_configured` hanya memberi tahu apakah kredensial sudah tersimpan. N
 
 ## POST /api/api-integrations/{id}/test
 
-Melakukan *live testing* koneksi ke URL API target. Endpoint ini dapat menguji nilai URL/Token yang dikirimkan di request body secara langsung (tanpa harus disimpan dulu) atau menguji nilai yang tersimpan di DB.
+Melakukan *live testing* ke sumber terpilih. Custom API menguji URL/token konfigurasi seperti biasa. Untuk `siakad_mata_kuliah` dengan `source_type: pddikti`, backend mengambil token dari Neo Feeder dan memanggil `GetMatkulKurikulum` dengan batas satu record; token tidak dikembalikan.
 
 ### Request Body (Opsional untuk pengujian ad-hoc)
 
 ```json
 {
+    "source_type": "custom_api",
     "url_api": "https://sumber.kampus.ac.id/api/program-studi",
     "token": "optional-override-token",
     "auth_type": "bearer"
 }
 ```
+
+Tes PDDIKTI dapat dikirim dengan body `{"source_type":"pddikti"}` atau menggunakan mode tersimpan. Jangan mengirim kredensial Neo Feeder melalui endpoint ini.
 
 ### Response Sukses (200 OK)
 
@@ -263,6 +269,8 @@ Melakukan *live testing* koneksi ke URL API target. Endpoint ini dapat menguji n
 
 Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvalidasi kontrak dan referensi master, lalu menerapkan data ke target yang didukung. Modul dan key yang didukung saat ini:
 - `siakad_program_studi` (Modul `siakad`): disinkronkan ke tabel `siakad_program_studi` berdasarkan `kode_prodi` dan referensi jenjang/akreditasi aktif.
+- `siakad_mata_kuliah` (Modul `siakad`): sumber dipilih melalui `source_type`. Mode `pddikti` menarik relasi mata kuliah-kurikulum via Neo Feeder `GetMatkulKurikulum`; mode `custom_api` memakai endpoint dan kredensial manual.
+- `siakad_mahasiswa` (Modul `siakad`): disinkronkan ke tabel `siakad_mahasiswa` melalui service sinkronisasi mahasiswa legacy.
 - `sikeu_transaksi_kas` (Modul `sikeu`): disinkronkan ke tabel `sikeu_jurnal_umum` dan `sikeu_detail_jurnal_umum` berimbang (Double-Entry) dengan resolusi COA dinamis via `sikeu_mig_akun_mapping`.
 - `sikeu_transaksi_pembayaran` (Modul `sikeu`): disinkronkan ke tabel `sikeu_tagihan_mahasiswa` dan `sikeu_pembayaran` secara idempoten dengan verifikasi NIM mahasiswa di `siakad_mahasiswa`.
 
@@ -296,6 +304,10 @@ Tidak memerlukan body. URL, token, tipe autentikasi, dan status aktif menggunaka
 ### Perilaku dan Batasan
 
 - Respons sumber dapat berupa array JSON, `{ "data": [...] }`, atau respons paginator dengan `meta.last_page`; proses dibatasi sampai 100 halaman.
+- Pada mode PDDIKTI, tarik prodi Neo Feeder terlebih dahulu sehingga `siakad_program_studi.id_feeder` cocok dengan `id_prodi`. Kurikulum dicocokkan memakai `siakad_kurikulum.id_feeder`; jika belum ada mapping, nama kurikulum harus cocok persis dan unik pada prodi tersebut. Kurikulum tidak dibuat otomatis.
+- PDDIKTI mengirim `id_matkul`, `id_kurikulum`, `id_prodi`, `kode_mata_kuliah`, `nama_mata_kuliah`, `semester`, `sks_mata_kuliah`, `sks_tatap_muka`, `sks_praktek`, dan `apakah_wajib`. ID mata kuliah disimpan pada `source_id`/`id_feeder`; `apakah_wajib = 1` dipetakan ke `wajib`, nilai lainnya ke `pilihan`.
+- Pada mode Custom API, item wajib berisi `source_id`, `kurikulum_kode`, `kode_mk`, `nama`, `sks_teori`, `sks_praktik`, `total_sks`, `semester_anjuran`, `tipe`, dan `is_active`. `kategori` serta `jumlah_pertemuan` opsional. Nilai `tipe`: `wajib`, `pilihan`, `wajib_prodi`.
+- Relasi prodi/kurikulum tak ditemukan atau ambigu, kode duplikat, dan konflik mapping dilewati dengan alasan di `skipped_items`. Sync idempoten, tidak menghapus data yang hilang dari sumber, dan menampilkan jumlah serta maksimal 100 detail skip.
 - Data dicocokkan berdasarkan `source_id` yang disimpan pada `siakad_program_studi.source_id`; data lama tanpa mapping external memakai fallback `kode_prodi`. `source_kode_prodi` menyimpan kode terakhir dari sumber. Jika admin mengganti `kode_prodi` dari kode sumber tersebut, sync selanjutnya mempertahankan kode target manual sambil tetap memperbarui `source_kode_prodi` dan field sumber lainnya. Jika target masih mengikuti kode sumber, perubahan kode baru dari sumber tetap diterapkan. Status yang diedit manual juga dipertahankan saat sync.
 - Jenjang dan akreditasi harus cocok dengan item aktif pada master referensi SIAKAD. Item tidak valid masuk ke `skipped_items` beserta alasan.
 - `fakultas_id` baru tetap null jika fakultas tidak dikirim. Fakultas yang dikirim harus cocok dengan kode atau nama fakultas aktif; relasi fakultas existing tidak dihapus ketika sumber tidak mengirim fakultas.

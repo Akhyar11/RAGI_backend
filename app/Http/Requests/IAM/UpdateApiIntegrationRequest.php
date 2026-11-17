@@ -14,6 +14,7 @@ class UpdateApiIntegrationRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'source_type' => 'sometimes|required|in:pddikti,custom_api',
             'url_api' => 'nullable|url|max:1000',
             'token' => 'nullable|string|max:2000',
             'auth_type' => 'required|in:bearer,header_key',

@@ -18,6 +18,9 @@ class IamApiIntegration extends Model
         'http_method',
         'description',
         'expected_schema',
+        'source_type',
+        'supported_sources',
+        'source_schemas',
         'url_api',
         'token',
         'auth_type',
@@ -36,6 +39,8 @@ class IamApiIntegration extends Model
 
     protected $casts = [
         'expected_schema' => 'array',
+        'supported_sources' => 'array',
+        'source_schemas' => 'array',
         'is_active' => 'boolean',
         'last_synced_at' => 'datetime',
         'token' => 'encrypted',
@@ -44,6 +49,25 @@ class IamApiIntegration extends Model
     public function getTokenConfiguredAttribute(): bool
     {
         return filled($this->token);
+    }
+
+    public function getSupportedSourcesAttribute(): array
+    {
+        return $this->attributes['supported_sources']
+            ? $this->asJsonArray($this->attributes['supported_sources'])
+            : ['custom_api'];
+    }
+
+    public function getSourceSchemasAttribute(): array
+    {
+        $schemas = $this->attributes['source_schemas'] ?? null;
+        return $schemas ? $this->asJsonArray($schemas) : [];
+    }
+
+    private function asJsonArray(string $value): array
+    {
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? $decoded : [];
     }
 
     /**
