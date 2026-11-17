@@ -466,6 +466,15 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::get('surat-peringatan/monitoring-tahunan', [App\Http\Controllers\Simpeg\SuratPeringatanController::class, 'annualMonitoring']);
     Route::get('surat-peringatan', [App\Http\Controllers\Simpeg\SuratPeringatanController::class, 'index']);
     Route::get('surat-peringatan/{id}', [App\Http\Controllers\Simpeg\SuratPeringatanController::class, 'show'])->whereNumber('id');
+
+    // Kebijakan & Pedoman Kepegawaian (Integrasi ARSIP)
+    Route::get('kebijakan-pedoman/masters', [App\Http\Controllers\Simpeg\KebijakanPedomanController::class, 'masters']);
+    Route::get('kebijakan-pedoman', [App\Http\Controllers\Simpeg\KebijakanPedomanController::class, 'index']);
+    Route::get('kebijakan-pedoman/{id}', [App\Http\Controllers\Simpeg\KebijakanPedomanController::class, 'show'])->whereNumber('id');
+    Route::post('kebijakan-pedoman', [App\Http\Controllers\Simpeg\KebijakanPedomanController::class, 'store']);
+    Route::post('kebijakan-pedoman/{id}', [App\Http\Controllers\Simpeg\KebijakanPedomanController::class, 'update'])->whereNumber('id');
+    Route::put('kebijakan-pedoman/{id}', [App\Http\Controllers\Simpeg\KebijakanPedomanController::class, 'update'])->whereNumber('id');
+    Route::delete('kebijakan-pedoman/{id}', [App\Http\Controllers\Simpeg\KebijakanPedomanController::class, 'destroy'])->whereNumber('id');
 });
 
 /*

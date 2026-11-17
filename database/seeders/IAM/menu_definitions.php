@@ -102,6 +102,7 @@ return [
         'children' => [
             ['name' => 'Data Pegawai', 'url' => '/simpeg/pegawai', 'icon' => 'FaUsers', 'module' => 'simpeg', 'permission_slug' => 'simpeg.pegawai.read', 'order_index' => 1],
             ['name' => 'E-File & Dokumen', 'url' => '/simpeg/dokumen', 'icon' => 'FaFileAlt', 'module' => 'simpeg', 'permission_slug' => 'simpeg.dokumen.read', 'order_index' => 2],
+            ['name' => 'Kebijakan & Pedoman', 'url' => '/simpeg/kebijakan-pedoman', 'icon' => 'FaBookOpen', 'module' => 'simpeg', 'permission_slug' => 'simpeg.kebijakan_pedoman.read', 'order_index' => 3],
         ]
     ],
     [

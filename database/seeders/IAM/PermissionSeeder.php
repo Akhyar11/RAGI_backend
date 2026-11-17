@@ -111,6 +111,10 @@ class PermissionSeeder extends Seeder
             ['name' => 'Hapus Arsip Nomor Surat SIMPEG', 'slug' => 'simpeg.nomor_surat.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus arsip nomor surat SIMPEG'],
             ['name' => 'Lihat Surat Peringatan', 'slug' => 'simpeg.surat_peringatan.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat daftar surat peringatan kepegawaian'],
             ['name' => 'Kelola Surat Peringatan', 'slug' => 'simpeg.surat_peringatan.manage', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengelola dan membatalkan surat peringatan kepegawaian'],
+            ['name' => 'Lihat Kebijakan & Pedoman', 'slug' => 'simpeg.kebijakan_pedoman.read', 'module' => 'simpeg', 'action' => 'read', 'description' => 'Melihat daftar dan dokumen kebijakan dan pedoman kepegawaian'],
+            ['name' => 'Tambah Kebijakan & Pedoman', 'slug' => 'simpeg.kebijakan_pedoman.create', 'module' => 'simpeg', 'action' => 'create', 'description' => 'Menambahkan kebijakan dan pedoman kepegawaian baru'],
+            ['name' => 'Ubah Kebijakan & Pedoman', 'slug' => 'simpeg.kebijakan_pedoman.update', 'module' => 'simpeg', 'action' => 'update', 'description' => 'Mengubah data kebijakan dan pedoman kepegawaian'],
+            ['name' => 'Hapus Kebijakan & Pedoman', 'slug' => 'simpeg.kebijakan_pedoman.delete', 'module' => 'simpeg', 'action' => 'delete', 'description' => 'Menghapus data kebijakan dan pedoman kepegawaian'],
 
             // ── MODUL SIPPM ───────────────────────────────────────
             ['name' => 'Lihat Dashboard SIPPM', 'slug' => 'sippm.dashboard.read', 'module' => 'sippm', 'action' => 'read', 'description' => 'Melihat dashboard utama & metrik IKU SIPPM'],
@@ -445,6 +449,7 @@ class PermissionSeeder extends Seeder
                 'simpeg.surat_tugas.read', 'simpeg.surat_tugas.create', 'simpeg.surat_tugas.update',
                 'simpeg.izin_kerja.read', 'simpeg.izin_kerja.create', 'simpeg.izin_kerja.update', 'simpeg.izin_kerja.delete',
                 'simpeg.sk_pegawai.read', 'simpeg.sk_pegawai.create', 'simpeg.sk_pegawai.update', 'simpeg.sk_pegawai.delete',
+                'simpeg.kebijakan_pedoman.read',
                 'simpeg.usulan_jafung.read', 'simpeg.usulan_jafung.create',
                 'simpeg.kinerja.read', 'simpeg.kinerja.create',
                 // SIPPM mandiri
@@ -501,6 +506,7 @@ class PermissionSeeder extends Seeder
                 'simpeg.surat_tugas.read', 'simpeg.surat_tugas.create', 'simpeg.surat_tugas.update',
                 'simpeg.izin_kerja.read', 'simpeg.izin_kerja.create', 'simpeg.izin_kerja.update', 'simpeg.izin_kerja.delete',
                 'simpeg.sk_pegawai.read', 'simpeg.sk_pegawai.create', 'simpeg.sk_pegawai.update', 'simpeg.sk_pegawai.delete',
+                'simpeg.kebijakan_pedoman.read',
                 'simpeg.kinerja.read', 'simpeg.kinerja.create',
             ];
             $perms = Permission::whereIn('slug', $tendikSlugs)->get();

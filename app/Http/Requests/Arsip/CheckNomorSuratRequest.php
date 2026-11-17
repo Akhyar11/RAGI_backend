@@ -30,7 +30,10 @@ class CheckNomorSuratRequest extends FormRequest
             || $user->hasPermission('siakad.beasiswa.manage')
             || $user->hasPermission('siakad.dashboard.read')
             || $user->hasPermission('siakad.kelas.read')
-            || $user->hasPermission('siakad.dosen.manage')
+            || $user->hasPermission('simpeg.kebijakan_pedoman.create')
+            || $user->hasPermission('simpeg.kebijakan_pedoman.read')
+            || $user->hasPermission('simpeg.pegawai.manage')
+            || $user->hasPermission('simpeg.sk_pegawai.create')
             || $user->hasPermission('siakad.mahasiswa.read')
             || $user->hasPermission('siakad.mahasiswa.manage');
     }

@@ -197,6 +197,7 @@
 | MasterJenisTransportasiController | Master moda dan jenis transportasi penugasan dinas luar (armada kampus vs umum/pribadi) | [docs/api/SIMPEG/MasterJenisTransportasiController.md](api/SIMPEG/MasterJenisTransportasiController.md) |
 | SimpegNomorSuratController | Portal mandiri penomoran surat SIMPEG: riwayat nomor surat, permohonan, & unggah scan | [docs/api/SIMPEG/SimpegNomorSuratController.md](api/SIMPEG/SimpegNomorSuratController.md) |
 | AnalitikPegawaiController | Analitik kepegawaian, sebaran TMT Jabatan Akademik Dosen (JAD), & export rekapitulasi Excel | [docs/api/SIMPEG/AnalitikPegawaiController.md](api/SIMPEG/AnalitikPegawaiController.md) |
+| KebijakanPedomanController | Kebijakan, pedoman, standar operasional prosedur (SOP), dan regulasi kepegawaian terintegrasi dua arah dengan modul Arsip | [docs/api/SIMPEG/KebijakanPedomanController.md](api/SIMPEG/KebijakanPedomanController.md) |
 
 
 ## 🏢 Modul SINAPRA (Sarana, Prasarana, & Aset)
