@@ -225,17 +225,17 @@ Menambahkan kebijakan dan pedoman baru beserta file scan PDF. Endpoint ini secar
 ### Request Body (Multipart/Form-Data)
 | Key | Type | Required | Deskripsi |
 |---|---|---|---|
-| `nomor_surat_arsip_id` | integer | ❌ | ID nomor surat dari tabel `core_arsip_nomor_surat` |
-| `kategori_kebijakan_id`| integer | ✅ | ID kategori dari `simpeg_master_kategori_kebijakan` |
 | `nomor_surat` | string | ✅ | Nomor surat resmi yang terbit di Arsip |
-| `judul` | string | ✅ | Judul kebijakan / pedoman |
-| `pejabat_penetap` | string | ✅ | Nama atau jabatan penetap (misal: Rektor Institut) |
-| `tanggal_penetapan` | date (Y-m-d) | ✅ | Tanggal penetapan surat |
-| `tanggal_berlaku` | date (Y-m-d) | ✅ | Tanggal mulai berlakunya kebijakan |
+| `file_dokumen` | file (pdf) | ✅ | Berkas scan dokumen PDF resmi (maks. 10MB / 10240 KB) |
+| `nomor_surat_arsip_id` | integer | ❌ | ID nomor surat dari tabel `core_arsip_nomor_surat` (otomatis jika tidak dikirim) |
+| `judul` | string | ❌ | Judul kebijakan / pedoman (otomatis mengambil perihal surat jika kosong) |
+| `kategori_kebijakan_id`| integer | ✅ | ID kategori dari `simpeg_master_kategori_kebijakan` |
+| `pejabat_penetap` | string | ❌ | Nama atau jabatan penetap (misal: Rektor Institut) |
+| `tanggal_penetapan` | date (Y-m-d) | ❌ | Tanggal penetapan surat (otomatis dari tanggal surat arsip) |
+| `tanggal_berlaku` | date (Y-m-d) | ❌ | Tanggal mulai berlakunya kebijakan |
 | `tanggal_berakhir` | date (Y-m-d) | ❌ | Tanggal berakhirnya masa berlaku kebijakan |
 | `deskripsi` | string | ❌ | Catatan ringkas / keterangan perihal kebijakan |
 | `is_active` | boolean | ❌ | Status keberlakuan aktif dokumen (default: true) |
-| `file_dokumen` | file (pdf) | ✅ | Berkas scan dokumen PDF resmi (maks. 10MB / 10240 KB) |
 
 ### Response Sukses (201 Created)
 ```json

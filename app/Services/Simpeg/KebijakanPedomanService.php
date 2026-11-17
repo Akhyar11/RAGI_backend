@@ -90,6 +90,42 @@ class KebijakanPedomanService
     public function create(array $data, UploadedFile $file, int $userId): KebijakanPedoman
     {
         return DB::transaction(function () use ($data, $file, $userId) {
+            // Resolusi data dari modul arsip jika belum terisi
+            $nomorArsip = null;
+            if (!empty($data['nomor_surat_arsip_id'])) {
+                $nomorArsip = NomorSurat::find($data['nomor_surat_arsip_id']);
+            } elseif (!empty($data['nomor_surat'])) {
+                $nomorArsip = NomorSurat::where('nomor_surat', $data['nomor_surat'])->first();
+                if ($nomorArsip) {
+                    $data['nomor_surat_arsip_id'] = $nomorArsip->id;
+                }
+            }
+
+            if ($nomorArsip) {
+                if (empty($data['judul'])) {
+                    $data['judul'] = $nomorArsip->perihal ?: $data['nomor_surat'];
+                }
+                if (empty($data['tanggal_penetapan'])) {
+                    $data['tanggal_penetapan'] = $nomorArsip->tanggal_surat 
+                        ? \Carbon\Carbon::parse($nomorArsip->tanggal_surat)->format('Y-m-d') 
+                        : now()->format('Y-m-d');
+                }
+            } else {
+                if (empty($data['judul'])) {
+                    $data['judul'] = $data['nomor_surat'] ?? 'Kebijakan dan Pedoman';
+                }
+                if (empty($data['tanggal_penetapan'])) {
+                    $data['tanggal_penetapan'] = now()->format('Y-m-d');
+                }
+            }
+
+            if (empty($data['tanggal_berlaku'])) {
+                $data['tanggal_berlaku'] = $data['tanggal_penetapan'];
+            }
+            if (!isset($data['is_active'])) {
+                $data['is_active'] = true;
+            }
+
             // 1. Simpan berkas scan ke disk privat
             $path = $this->fileStorage->store($file, 'simpeg/kebijakan_pedoman', private: true);
 
@@ -101,19 +137,16 @@ class KebijakanPedomanService
             $kebijakan = KebijakanPedoman::create($data);
 
             // 3. SINKRONISASI OTOMATIS KE MODUL ARSIP
-            if (!empty($data['nomor_surat_arsip_id'])) {
-                $nomorSurat = NomorSurat::find($data['nomor_surat_arsip_id']);
-                if ($nomorSurat) {
-                    $nomorSurat->update([
-                        'file_surat_path' => $path,
-                        'file_path' => $path,
-                        'status' => 'terpakai',
-                        'reference_type' => 'kebijakan_pedoman',
-                        'reference_id' => $kebijakan->id,
-                        'file_surat_uploaded_at' => now(),
-                        'file_surat_uploaded_by' => $userId,
-                    ]);
-                }
+            if ($nomorArsip) {
+                $nomorArsip->update([
+                    'file_surat_path' => $path,
+                    'file_path' => $path,
+                    'status' => 'terpakai',
+                    'reference_type' => 'kebijakan_pedoman',
+                    'reference_id' => $kebijakan->id,
+                    'file_surat_uploaded_at' => now(),
+                    'file_surat_uploaded_by' => $userId,
+                ]);
             }
 
             // 4. Catat jejak audit

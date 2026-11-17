@@ -22,10 +22,10 @@ class UpdateKebijakanPedomanRequest extends FormRequest
     {
         return [
             'nomor_surat' => 'sometimes|required|string|max:150|exists:core_arsip_nomor_surat,nomor_surat',
-            'nomor_surat_arsip_id' => 'sometimes|required|integer|exists:core_arsip_nomor_surat,id',
-            'judul' => 'sometimes|required|string|max:255',
+            'nomor_surat_arsip_id' => 'nullable|integer|exists:core_arsip_nomor_surat,id',
+            'judul' => 'nullable|string|max:255',
             'kategori_kebijakan_id' => 'sometimes|required|integer|exists:simpeg_master_kategori_kebijakan,id',
-            'tanggal_penetapan' => 'sometimes|required|date',
+            'tanggal_penetapan' => 'nullable|date',
             'tanggal_berlaku' => 'nullable|date',
             'pejabat_penetap' => 'nullable|string|max:150',
             'file_dokumen' => 'nullable|file|mimes:pdf|max:10240',
