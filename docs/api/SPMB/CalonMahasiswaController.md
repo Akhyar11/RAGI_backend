@@ -8,6 +8,7 @@
 |---|---|---|---|
 | GET | `/api/spmb/pendaftaran/my` | Mendapatkan data pendaftaran calon mahasiswa yang sedang login beserta status tagihan | ✅ Calon Mhs |
 | POST | `/api/spmb/pendaftaran/biodata` | Menyimpan / auto-save draft biodata pendaftaran calon mahasiswa | ✅ Calon Mhs |
+| POST | `/api/spmb/pendaftaran/terbitkan-tagihan` | Menerbitkan satu invoice pendaftaran, mengklaim kode diskon, dan memproses checkout | ✅ Calon Mhs |
 | POST | `/api/spmb/pendaftaran/finalize` | Finalisasi pendaftaran (kunci formulir dan ubah status draft menjadi submitted) | ✅ Calon Mhs |
 
 ---
@@ -58,9 +59,9 @@
 
 ## [POST] /api/spmb/pendaftaran/biodata
 
-> Menyimpan draft pendaftaran calon mahasiswa per langkah (multi-step wizard). Saat tagihan pertama diterbitkan, rincian hanya diambil dari Komponen Master Biaya berdasarkan tipe jalur dan program studi yang ditandai `dibebankan_saat_pendaftaran` sebagai **beban awal**. Jika komponen belum dikonfigurasi, request mengembalikan `422`; tarif SIKEU dan `biaya_pendaftaran` gelombang bukan fallback. Kolom `tahun_akademik_id` tidak lagi dikirim pada payload tagihan.
+> Menyimpan atau memperbarui draft pendaftaran per langkah. Endpoint ini tidak menerbitkan invoice dan tidak mengklaim kuota diskon. `kode_diskon` disimpan sebagai pilihan draft; kosong/null menghapus pilihan selama invoice belum ada. Setelah invoice terbit, pilihan jalur, prodi, jenis pendaftaran, dan kode diskon dikunci. Pilihan jalur baru harus mengarah ke gelombang aktif yang dibuka.
 
-Jika `kode_diskon` diisi, backend memvalidasi ulang kode dan menerapkannya hanya ke rincian Master Biaya yang ditandai sebagai beban pendaftaran. Kode tidak dapat ditambahkan atau diganti setelah tagihan terbit. Bila tidak ada rincian Master Biaya yang memenuhi syarat, penerbitan tagihan ditolak.
+Rincian biaya hanya berasal dari komponen Master Biaya yang ditandai `dibebankan_saat_pendaftaran`. Tarif SIKEU dan `biaya_pendaftaran` gelombang bukan fallback. Jika komponen belum dikonfigurasi, endpoint invoice mengembalikan 422. Kolom `tahun_akademik_id` tidak dikirim dari browser.
 
 ### Headers
 
@@ -78,7 +79,7 @@ Jika `kode_diskon` diisi, backend memvalidasi ulang kode dan menerapkannya hanya
 | `program_studi_id` | integer | ❌ | ID Program studi pilihan 1 |
 | `program_studi_pilihan2_id` | integer | ❌ | ID Program studi pilihan 2 |
 | `master_tipe_jalur_id` | integer | ❌ | Referensi master tipe jalur |
-| `kode_diskon` | string | ❌ | Kode diskon opsional; harus dikirim sebelum tagihan pendaftaran pertama kali dibuat |
+| `kode_diskon` | string/null | ❌ | Pilihan kode diskon draft. Tidak memakai kuota sebelum invoice dibuat. |
 | `nama_lengkap` | string | ❌ | Nama lengkap calon mahasiswa |
 | `nik` | string | ❌ | NIK KTP / Kartu Identitas |
 | `kewarganegaraan_id` | integer | ❌ | ID item aktif `spmb_master_referensi` dengan tipe `kewarganegaraan` |
@@ -109,21 +110,98 @@ Jika `kode_diskon` diisi, backend memvalidasi ulang kode dan menerapkannya hanya
 ```json
 {
     "status": "success",
-    "message": "Biodata berhasil disimpan dan Tagihan diterbitkan.",
+        "message": "Draft biodata berhasil disimpan.",
     "data": {
         "pendaftaran": {
             "id": 1,
             "no_pendaftaran": "REG-20260910-1234",
+                        "kode_diskon": "SPMBHEMAT",
             "status": "draft"
         },
-        "tagihan": {}
+                "tagihan": null
+    }
+}
+```
+
+## [POST] /api/spmb/pendaftaran/terbitkan-tagihan
+
+> Memvalidasi kode draft/payload, membekukan kuota, menghitung potongan, dan menerbitkan invoice. Operasi klaim serta pencatatan invoice berada dalam transaksi; retry mengembalikan invoice lama dengan 200 tanpa klaim kuota kedua. Request opsional menerima `kode_diskon`; bila field tidak dikirim server menggunakan pilihan draft.
+
+### Headers
+
+| Header | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `Authorization` | string | Ya | `Bearer {token_calon_mahasiswa}` |
+| `Accept` | string | Ya | `application/json` |
+| `Content-Type` | string | Ya | `application/json` |
+
+### Body Parameters
+
+| Parameter | Tipe | Wajib | Aturan |
+|---|---|---|---|
+| `kode_diskon` | string/null | Tidak | Jika dikirim, harus sama dengan pilihan draft sebelum invoice ada. Jika tidak dikirim, gunakan kode yang tersimpan pada draft. Maksimum 50 karakter. |
+
+### Request Body
+
+```json
+{
+    "kode_diskon": "SPMBHEMAT"
+}
+```
+
+### Response Sukses
+
+Invoice baru: `201 Created`. Retry: `200 OK`.
+
+```json
+{
+    "status": "success",
+    "message": "Invoice pendaftaran berhasil diterbitkan dan menunggu pembayaran.",
+    "data": {
+        "tagihan": { "id": 1, "total_tagihan": 250000, "total_potongan": 233000 },
+        "virtual_account": null,
+        "tagihan_list": [{ "tagihan": { "id": 1 }, "virtual_account": null }]
+    }
+}
+```
+
+Jika validasi kode, scope jalur/jenis, kuota, atau Master Biaya gagal, endpoint mengembalikan 422 dan klaim tidak tersimpan.
+
+### Response Error
+
+**401 Unauthorized**
+
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**404 Not Found**
+
+```json
+{
+    "status": "error",
+    "message": "Pendaftaran tidak ditemukan."
+}
+```
+
+**422 Unprocessable Entity**
+
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "kode_diskon": ["Kode diskon tidak berlaku untuk jalur masuk yang dipilih."]
     }
 }
 ```
 
 ## Tagihan beberapa kanal (2026-11-11)
 
-Penyimpanan biodata menerbitkan beban pendaftaran per kanal yang ditetapkan pada komponen biaya. Respons `data.tagihan` mempertahankan `tagihan/virtual_account` pertama dan menambahkan `tagihan_list[]` (masing-masing berisi `tagihan` dan `virtual_account`). Penyimpanan berulang menggunakan seluruh tagihan tahap yang sudah ada. `GET /api/spmb/pendaftaran/me` menambahkan `data.tagihan_list[]` berisi seluruh tagihan SPMB calon. Nominal total tahap harus dihitung dari semua tagihan, bukan hanya item pertama.
+Penerbitan invoice membuat beban per kanal yang ditetapkan pada komponen biaya. Respons `data.tagihan` mempertahankan `tagihan/virtual_account` pertama dan menambahkan `tagihan_list[]` (masing-masing berisi `tagihan` dan `virtual_account`). `GET /api/spmb/pendaftaran/me` menambahkan `data.tagihan_list[]` berisi seluruh tagihan SPMB calon dan `data.kode_diskon_usage` (snapshot klaim/nominal/tagihan_id). Nominal total tahap harus dihitung dari semua tagihan, bukan hanya item pertama.
 
 ## Identitas WNI dan WNA
 

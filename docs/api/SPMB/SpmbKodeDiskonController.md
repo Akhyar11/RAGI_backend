@@ -1,8 +1,8 @@
 # SpmbKodeDiskonController
 
-> **Modul**: SPMB / **Base URL**: /api/spmb / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-11-06
+> **Modul**: SPMB / **Base URL**: `/api/spmb` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-11-17
 
-Admin mengelola kode melalui /master/kode-diskon dengan permission spmb.manage. Pendaftar mengakses pratinjau melalui /kode-diskon/validate dengan permission spmb.pendaftaran.create.
+Admin mengelola kode melalui `/master/kode-diskon` dengan permission `spmb.manage`. Pendaftar mengakses pratinjau melalui `/kode-diskon/validate` dengan permission `spmb.pendaftaran.create`. Preview tidak mengklaim kuota; klaim terjadi saat invoice diterbitkan.
 
 ## Daftar Endpoint
 
@@ -37,7 +37,7 @@ Mengambil daftar kode diskon terpaginasikan. Permission: spmb.manage.
 | kode | string | - | Filter sebagian kode |
 | nama | string | - | Filter sebagian nama |
 | is_active | boolean | - | Filter status aktif |
-| tipe_diskon | string | - | persen atau nominal |
+| tipe_diskon | string | - | `persen`, `nominal`, atau `total_tetap` |
 | nilai_min | numeric | - | Nilai diskon minimum |
 | nilai_max | numeric | - | Nilai diskon maksimum |
 | maksimum_potongan_min | numeric | - | Batas nominal potongan minimum |
@@ -50,6 +50,8 @@ Mengambil daftar kode diskon terpaginasikan. Permission: spmb.manage.
 | sort_order | string | desc | asc atau desc |
 | per_page | integer | 15 | Jumlah data per halaman, antara 1–100 |
 | page | integer | 1 | Nomor halaman |
+
+List/detail menyertakan relasi `jalur_masuk[]` dan `jenis_pendaftaran[]`. Scope disimpan dengan ID master; relasi kosong berarti semua jalur/jenis.
 
 ### Response Sukses
 
@@ -113,21 +115,27 @@ Membuat kode diskon. Permission: spmb.manage.
 |---|---|---:|---|
 | kode | string | Ya | Maksimal 50 karakter, huruf/angka/-/_, unik; disimpan kapital |
 | nama | string | Ya | Maksimal 150 karakter |
-| tipe_diskon | string | Ya | persen atau nominal |
+| tipe_diskon | string | Ya | `persen`, `nominal`, atau `total_tetap` |
 | nilai | numeric | Ya | Lebih besar dari 0; persentase maksimal 100 |
-| maksimum_potongan | numeric/null | Tidak | Jika diisi harus lebih besar dari 0 |
+| maksimum_potongan | numeric/null | Tidak | Batas potongan `persen`/`nominal`; harus null untuk `total_tetap` |
+| jalur_masuk_ids | integer[] | Tidak | ID jalur masuk. Kosong berarti semua jalur. |
+| master_tipe_jalur_ids | integer[] | Tidak | ID jenis pendaftaran. Kosong berarti semua jenis. |
 | batas_penggunaan | integer/null | Tidak | Kuota total klaim; jika 10, maksimal 10 pendaftaran pertama |
 | berlaku_mulai | date/null | Tidak | Format YYYY-MM-DD |
 | berlaku_sampai | date/null | Tidak | Format YYYY-MM-DD, sama dengan atau setelah tanggal mulai |
 | is_active | boolean | Ya | Menentukan kode aktif |
 
+`persen` mengurangi persentase subtotal eligible, `nominal` mengurangi sebesar nilai nominal, dan `total_tetap` membuat total komponen eligible menjadi nilai target atau tetap lebih rendah bila biaya awal sudah di bawah target. Biaya gateway tidak termasuk target.
+
 ~~~json
 {
   "kode": "SPMBHEMAT",
   "nama": "Diskon Pendaftaran",
-  "tipe_diskon": "persen",
-  "nilai": 10,
-  "maksimum_potongan": 500000,
+  "tipe_diskon": "total_tetap",
+  "nilai": 17000,
+  "maksimum_potongan": null,
+  "jalur_masuk_ids": [1],
+  "master_tipe_jalur_ids": [2],
   "batas_penggunaan": 10,
   "berlaku_mulai": "2026-11-01",
   "berlaku_sampai": "2026-12-31",
@@ -260,64 +268,96 @@ Menonaktifkan kode dengan soft delete. Catatan klaim tetap tersedia untuk audit.
 }
 ~~~
 
-## [POST] /api/spmb/kode-diskon/validate
+## POST /api/spmb/kode-diskon/validate
 
-Mempratinjau kode diskon untuk pendaftaran milik pengguna yang sedang login. Permission: spmb.pendaftaran.create.
+Mempratinjau kode diskon untuk pendaftaran milik pengguna yang sedang login. Permission: `spmb.pendaftaran.create`. Preview tidak mengklaim kuota. Scope jalur diperiksa dari jalur yang terkait dengan `gelombang_id`; scope jenis dicocokkan dengan `master_tipe_jalur_id`.
+
+### Headers
+
+| Header | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `Authorization` | string | Ya | `Bearer {token_calon_mahasiswa}` |
+| `Accept` | string | Ya | `application/json` |
+| `Content-Type` | string | Ya | `application/json` |
+
+### Body Parameters
+
+| Parameter | Tipe | Wajib | Aturan |
+|---|---|---|---|
+| `kode` | string | Ya | Kode diskon, dinormalisasi menjadi huruf kapital |
+| `master_tipe_jalur_id` | integer | Ya | ID jenis pendaftaran dari master |
+| `program_studi_id` | integer | Ya | ID program studi |
+| `gelombang_id` | integer | Ya | ID gelombang; jalur diverifikasi server dari gelombang ini |
 
 ### Request Body
 
-| Field | Tipe | Wajib | Aturan |
-|---|---|---:|---|
-| kode | string | Ya | Kode diskon; normalisasi menjadi huruf kapital |
-| master_tipe_jalur_id | integer | Ya | ID tipe jalur yang terdaftar |
-| program_studi_id | integer | Ya | ID program studi yang terdaftar |
-| gelombang_id | integer | Ya | ID gelombang yang terdaftar |
-
-~~~json
+```json
 {
   "kode": "SPMBHEMAT",
-  "master_tipe_jalur_id": 1,
+  "master_tipe_jalur_id": 2,
   "program_studi_id": 1,
   "gelombang_id": 1
 }
-~~~
+```
 
 ### Response Sukses
 
 **200 OK**
 
-~~~json
+```json
 {
   "status": "success",
   "message": "Kode diskon valid.",
   "data": {
     "kode": "SPMBHEMAT",
-    "subtotal_komponen": 1000000,
-    "nominal_diskon": 100000,
-    "total_setelah_diskon": 900000,
-    "tipe_diskon": "persen",
-    "nilai": 10,
+    "subtotal_komponen": 250000,
+    "nominal_diskon": 233000,
+    "total_setelah_diskon": 17000,
+    "tipe_diskon": "total_tetap",
+    "nilai": 17000,
     "already_applied": false
   }
 }
-~~~
+```
 
-Pratinjau tidak memesan kuota. Kuota diperiksa kembali secara transaksional saat backend menyimpan kode penggunaan dan memulai penerbitan tagihan pendaftaran.
+### Response Error
 
-## Format Error
+**400 Bad Request**
 
-| HTTP | Kondisi | Contoh |
-|---:|---|---|
-| 400 | JSON request tidak valid | {"message":"Malformed JSON request."} |
-| 401 | Token tidak ada atau tidak valid | {"message":"Unauthenticated."} |
-| 403 | Tidak memiliki permission endpoint | {"message":"Akses ditolak."} |
-| 404 | ID kode tidak ditemukan | {"message":"No query results for model [App\\Models\\Spmb\\SpmbKodeDiskon] 999."} |
-| 422 | Validasi gagal, kode kedaluwarsa/nonaktif, kuota habis, atau komponen tidak memenuhi syarat | {"message":"The given data was invalid.","errors":{"batas_penggunaan":["The batas penggunaan must be greater than 0."]}} |
+```json
+{"status":"error","message":"Malformed JSON request."}
+```
+
+**401 Unauthorized**
+
+```json
+{"status":"error","message":"Unauthenticated."}
+```
+
+**403 Forbidden**
+
+```json
+{"status":"error","message":"Akses ditolak."}
+```
+
+**404 Not Found**
+
+```json
+{"status":"error","message":"Pendaftaran tidak ditemukan."}
+```
+
+**422 Unprocessable Entity**
+
+```json
+{
+  "status": "error",
+  "message": "Data yang diberikan tidak valid.",
+  "errors": {"kode_diskon": ["Kode diskon tidak berlaku untuk jalur masuk yang dipilih."]}
+}
+```
 
 ## Aturan Masa Berlaku dan Kuota Klaim
 
-Tanggal mulai dan akhir diperiksa langsung oleh backend setiap kali kode divalidasi dan sebelum tagihan pertama diterbitkan. Kedua tanggal inklusif dan mengikuti zona waktu SPMB_TIMEZONE (default Asia/Jakarta), tanpa scheduler.
+Tanggal mulai dan akhir inklusif dan mengikuti zona waktu `SPMB_TIMEZONE` (default `Asia/Jakarta`). Kuota total dikunci dan diperiksa ulang secara transaksional saat invoice berhasil diterbitkan, sehingga preview/draft tidak memakai kuota dan retry invoice tidak membuat klaim kedua.
 
-batas_penggunaan adalah kuota total klaim. Nilai 10 mengizinkan maksimal sepuluh pendaftaran pertama yang berhasil menerapkan kode; satu pendaftaran dihitung satu kali. Nilai null berarti tanpa batas. Pratinjau tidak memesan kuota. Saat kode diterapkan, backend mengunci baris kode dalam transaksi dan memeriksa ulang jumlah klaim agar permintaan bersamaan tidak melampaui kuota.
-
-Kode hanya diterapkan ke rincian Master Biaya SPMB yang memiliki dibebankan_saat_pendaftaran = true untuk tipe jalur dan program studi yang dipilih. Tarif fallback SIKEU dan komponen daftar ulang tidak memenuhi syarat. Satu pendaftaran hanya dapat memakai satu kode. Kode dan nominal potongan disimpan sebagai snapshot; kode baru tidak dapat dimasukkan setelah tagihan pendaftaran dibuat.
+Kode hanya diterapkan pada rincian Master Biaya positif yang ditandai `dibebankan_saat_pendaftaran = true`. Tarif fallback SIKEU dan komponen daftar ulang tidak eligible. `total_tetap` menghitung potongan agar total eligible mencapai target, tetapi tidak menaikkan tagihan jika biaya sudah di bawah target; biaya gateway tidak termasuk target.

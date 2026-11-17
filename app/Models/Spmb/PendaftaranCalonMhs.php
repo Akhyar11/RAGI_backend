@@ -45,6 +45,7 @@ class PendaftaranCalonMhs extends Model
         'info_daftar',
         'ket_info_daftar',
         'used_referral_code',
+        'kode_diskon',
         'referrer_user_id',
         'referral_validated_at',
         'no_pendaftaran',

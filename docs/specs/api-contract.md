@@ -1,5 +1,15 @@
 # API Contract: Nomor SK SPMB melalui Arsip
 
+## Kode diskon pendaftaran SPMB (2026-11-16)
+
+- `POST /api/spmb/pendaftaran/biodata` hanya menyimpan/memperbarui draft biodata dan pilihan `kode_diskon`; endpoint ini tidak menerbitkan invoice dan tidak mengklaim kuota kode.
+- `POST /api/spmb/pendaftaran/terbitkan-tagihan` menjadi satu-satunya langkah yang mengunci klaim kode dan menerbitkan invoice. Request menerima `kode_diskon` opsional; bila tidak dikirim server menggunakan pilihan tersimpan di draft. Klaim kode, nominal snapshot, dan penerbitan invoice berjalan dalam transaksi; retry memakai invoice/klaim yang sudah ada dan tidak menghabiskan kuota ulang.
+- Kode diskon mendukung tipe `persen`, `nominal` (besar potongan), dan `total_tetap` (target total beban pendaftaran setelah potongan kode). Target total tetap tidak pernah menaikkan tagihan; potongan adalah maksimum sisa biaya eligible setelah potongan calon lain. `maksimum_potongan` dapat membatasi potongan untuk tipe persen/nominal dan tidak berlaku pada `total_tetap`.
+- Admin dapat membatasi kode ke beberapa `jalur_masuk_ids[]` dan `master_tipe_jalur_ids[]`, seluruhnya FK ke master. Array kosong berarti semua. Validasi preview dan penerbitan memeriksa jalur dari gelombang yang dipilih serta jenis pendaftaran aktual; browser tidak dipercaya untuk menentukan jalur.
+- Basis diskon hanya komponen Master Biaya positif yang ditandai sebagai beban pendaftaran. Tarif fallback dan daftar ulang tidak eligible. Jenis `total_tetap` menargetkan total komponen eligible tersebut, setelah potongan per calon yang sudah berlaku; biaya gateway berada di luar target.
+- `POST /api/spmb/kode-diskon/validate` hanya pratinjau, tidak mengunci kuota. Penggunaan hanya tercatat setelah invoice berhasil diterbitkan. Jika penerbitan gagal, transaksi mengembalikan klaim/kuota.
+- Pendaftaran yang belum memiliki invoice dapat memperbarui atau menghapus kode pada draft. Setelah invoice terbit kode, pilihan jalur, dan jenis pendaftaran terkunci; perubahan memerlukan alur pembatalan/reissue eksplisit.
+
 ## Kanal pembayaran komponen biaya SPMB (2026-11-14)
 
 - `spmb_master_komponen_biaya.payment_gateway_name` menyimpan kanal pilihan walau konfigurasi belum dibuat. `payment_gateway_config_id` tetap FK nullable untuk mengaitkan record konfigurasi SIKEU yang tersedia. API CRUD menerima kanal yang dapat dikonfigurasi (`xendit`, `midtrans`, `duitku`, `bsn_h2h`, `rekening_manual`); nama null berarti memakai kanal default SIKEU pada penerbitan baru.

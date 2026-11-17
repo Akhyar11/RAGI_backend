@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API\Spmb;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Spmb\StoreBiodataRequest;
+use App\Http\Requests\Spmb\IssueSpmbRegistrationInvoiceRequest;
 use App\Models\Sikeu\DetailTagihan;
 use App\Models\Sikeu\PaymentGatewayConfig;
 use App\Models\Sikeu\TagihanMahasiswa;
@@ -16,6 +17,7 @@ use App\Services\Sikeu\ExternalTagihanService;
 use App\Services\Spmb\MasterBiayaService;
 use App\Services\Spmb\SpmbPendaftaranService;
 use App\Services\Spmb\SpmbKodeDiskonService;
+use App\Services\AuditLogService;
 use App\Services\Storage\FileStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -107,6 +109,14 @@ class CalonMahasiswaController extends Controller
             'status' => 'success',
             'data' => $pendaftaran ? [
                 'pendaftaran' => $pendaftaran,
+                'kode_diskon_usage' => $pendaftaran->kodeDiskonUsage ? [
+                    'id' => $pendaftaran->kodeDiskonUsage->id,
+                    'kode_diskon' => $pendaftaran->kodeDiskonUsage->kode_diskon,
+                    'subtotal_komponen' => (float) $pendaftaran->kodeDiskonUsage->subtotal_komponen,
+                    'nominal_diskon' => (float) $pendaftaran->kodeDiskonUsage->nominal_diskon,
+                    'tagihan_id' => $pendaftaran->kodeDiskonUsage->tagihan_id,
+                    'digunakan_at' => $pendaftaran->kodeDiskonUsage->digunakan_at,
+                ] : null,
                 'tagihan' => $tagihanData,
                 'daftar_ulang_tagihan' => $daftarUlangTagihanData,
                 'tagihan_list' => app(\App\Services\Spmb\SpmbBillingService::class)->envelope(
@@ -123,8 +133,11 @@ class CalonMahasiswaController extends Controller
     {
         $user = $request->user();
         $validated = $request->validated();
-        $kodeDiskon = $validated['kode_diskon'] ?? null;
-        unset($validated['kode_diskon']);
+        if (array_key_exists('kode_diskon', $validated)) {
+            $validated['kode_diskon'] = $validated['kode_diskon'] === null
+                ? null
+                : (Str::upper(trim((string) $validated['kode_diskon'])) ?: null);
+        }
 
         $existingPendaftaran = PendaftaranCalonMhs::where('user_id', $user->id)->first();
         $existingTagihan = $existingPendaftaran
@@ -135,6 +148,23 @@ class CalonMahasiswaController extends Controller
                 })
                 ->first()
             : null;
+
+        if ($existingTagihan && $existingPendaftaran) {
+            foreach (['gelombang_id', 'program_studi_id', 'master_tipe_jalur_id'] as $lockedField) {
+                if (array_key_exists($lockedField, $validated)
+                    && (int) $validated[$lockedField] !== (int) $existingPendaftaran->{$lockedField}) {
+                    throw ValidationException::withMessages([
+                        $lockedField => 'Pilihan pendaftaran tidak dapat diubah setelah invoice terbit.',
+                    ]);
+                }
+            }
+            if (array_key_exists('kode_diskon', $validated)
+                && $validated['kode_diskon'] !== $existingPendaftaran->kode_diskon) {
+                throw ValidationException::withMessages([
+                    'kode_diskon' => 'Kode diskon tidak dapat diubah setelah invoice terbit.',
+                ]);
+            }
+        }
 
         if (! $existingTagihan) {
             $gelombangLocked = $existingPendaftaran
@@ -151,133 +181,90 @@ class CalonMahasiswaController extends Controller
             }
         }
 
+        $previousKodeDiskon = $existingPendaftaran?->kode_diskon;
         $pendaftaran = $this->pendaftaranService->saveBiodata($user, $validated);
-        $namaLengkap = $pendaftaran->nama_lengkap ?? 'Calon Mahasiswa';
-
-        // Fetch / Re-use existing External Bill via SIKEU to prevent duplicate invoices on multi-step draft saves
-        $existingTagihan = $existingTagihan?->load('virtualAccount');
-
-        $tagihanPayload = null;
-        if ($existingTagihan) {
-            $this->kodeDiskonService->ensureCodeMatchesRegistration($pendaftaran, $kodeDiskon);
-            $tagihanPayload = app(\App\Services\Spmb\SpmbBillingService::class)->envelope(
-                app(\App\Services\Spmb\SpmbBillingService::class)->stageQuery($pendaftaran->id)->orderBy('id')->get()->all()
-            );
-        } else {
-            // Beban awal pendaftaran disusun oleh service (termasuk fallback).
-            $masterBiayaService = app(MasterBiayaService::class);
-            $masterTipeJalurId = $pendaftaran->master_tipe_jalur_id;
-            $gelombangId = $pendaftaran->gelombang_id;
-            $details = $masterBiayaService->buildDetailBebanPendaftaran($masterTipeJalurId, $pendaftaran->program_studi_id, $gelombangId);
-
-            // Potongan biaya kustom per calon (bila ada) untuk tahap pendaftaran.
-            $potongan = app(\App\Services\Spmb\SpmbPotonganCalonService::class)
-                ->buildPotonganPayload($pendaftaran, 'pendaftaran', $details);
-
-            $penggunaanDiskon = $this->kodeDiskonService->applyToRegistration(
-                $pendaftaran,
-                $kodeDiskon,
-                $details,
-                $potongan,
-            );
-            $potongan = array_merge($potongan, $this->kodeDiskonService->toTagihanPotongan($penggunaanDiskon));
-
-            // Generate External Bill via internal Request
-            $payload = [
-                'calon_mahasiswa_id' => $pendaftaran->id,
-                'tipe_referensi' => 'spmb_pendaftaran',
-                'source_system' => 'SPMB',
-                'master_biaya_tipe' => 'spmb_adm',
-                'requires_approval' => false,
-                'keterangan' => 'Pendaftaran SPMB - '.$namaLengkap,
-                'details' => $details,
-                'potongan' => $potongan,
-            ];
-
-            // Generate External Bill via SIKEU service
+        if (array_key_exists('kode_diskon', $validated) && $previousKodeDiskon !== $pendaftaran->kode_diskon) {
             try {
-                $issued = app(\App\Services\Spmb\SpmbBillingService::class)->issue($payload);
-                if ($penggunaanDiskon) {
-                    $this->kodeDiskonService->attachTagihan($penggunaanDiskon, $issued['tagihan']->id);
-                }
-                $tagihanPayload = [
-                    'tagihan' => $issued['tagihan'],
-                    'virtual_account' => $issued['virtual_account'],
-                    'tagihan_list' => $issued['tagihan_list'],
-                ];
-            } catch (ValidationException $e) {
-                throw $e;
-            } catch (\Throwable $e) {
-                // Biodata tetap tersimpan; penerbitan tagihan dapat diulang via reissue-va.
-                Log::warning('Gagal menerbitkan tagihan eksternal SPMB: '.$e->getMessage());
-                $tagihanPayload = null;
+                AuditLogService::record(
+                    module: 'SPMB',
+                    action: 'update',
+                    tableName: 'spmb_pendaftaran_calon_mhs',
+                    recordId: $pendaftaran->id,
+                    oldValues: ['kode_diskon' => $previousKodeDiskon],
+                    newValues: ['kode_diskon' => $pendaftaran->kode_diskon],
+                    request: $request,
+                );
+            } catch (\Throwable $exception) {
+                Log::warning('Gagal mencatat audit pilihan kode diskon draft SPMB: '.$exception->getMessage());
             }
         }
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Biodata berhasil disimpan dan Tagihan diterbitkan.',
+            'message' => 'Draft biodata berhasil disimpan.',
             'data' => [
                 'pendaftaran' => $pendaftaran,
-                'tagihan' => $tagihanPayload,
+                'tagihan' => null,
             ],
         ]);
     }
 
     /** Issue the unpaid registration invoice for the authenticated applicant. */
-    public function issueRegistrationInvoice(Request $request): JsonResponse
+    public function issueRegistrationInvoice(IssueSpmbRegistrationInvoiceRequest $request): JsonResponse
     {
-        $pendaftaran = PendaftaranCalonMhs::query()
-            ->where('user_id', $request->user()->id)
-            ->firstOrFail();
-
-        $existingBills = app(\App\Services\Spmb\SpmbBillingService::class)
-            ->stageQuery($pendaftaran->id)
-            ->with(['virtualAccount', 'detailTagihan'])
-            ->orderBy('id')
-            ->get();
-
-        if ($existingBills->isNotEmpty()) {
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Invoice pendaftaran sudah tersedia.',
-                'data' => app(\App\Services\Spmb\SpmbBillingService::class)->envelope($existingBills->all()),
-            ]);
-        }
-
-        $gelombang = $pendaftaran->gelombangPenerimaan;
-        if (! $gelombang || ! $gelombang->pendaftaran_dibuka) {
-            throw ValidationException::withMessages([
-                'gelombang_id' => 'Gelombang pendaftaran sudah tidak dibuka; invoice baru tidak dapat diterbitkan.',
-            ]);
-        }
-
-        $masterBiayaService = app(MasterBiayaService::class);
-        $details = $masterBiayaService->buildDetailBebanPendaftaran(
-            $pendaftaran->master_tipe_jalur_id,
-            $pendaftaran->program_studi_id,
-            $pendaftaran->gelombang_id,
-        );
-        $potonganCalon = app(\App\Services\Spmb\SpmbPotonganCalonService::class)
-            ->buildPotonganPayload($pendaftaran, 'pendaftaran', $details);
-        $penggunaanDiskon = $pendaftaran->kodeDiskonUsage;
-        $potongan = array_merge(
-            $potonganCalon,
-            app(SpmbKodeDiskonService::class)->toTagihanPotongan($penggunaanDiskon),
-        );
-
-        $issued = DB::transaction(function () use ($pendaftaran, $details, $potongan): array {
+        $validated = $request->validated();
+        $pendaftaran = PendaftaranCalonMhs::query()->where('user_id', $request->user()->id)->firstOrFail();
+        $alreadyIssued = false;
+        $issued = DB::transaction(function () use ($pendaftaran, $validated, &$alreadyIssued): array {
             $locked = PendaftaranCalonMhs::query()->lockForUpdate()->findOrFail($pendaftaran->id);
-            $alreadyIssued = app(\App\Services\Spmb\SpmbBillingService::class)
-                ->stageQuery($locked->id)
+            $billing = app(\App\Services\Spmb\SpmbBillingService::class);
+            $existingBills = $billing->stageQuery($locked->id)
                 ->with(['virtualAccount', 'detailTagihan'])
                 ->orderBy('id')
                 ->get();
-            if ($alreadyIssued->isNotEmpty()) {
-                return app(\App\Services\Spmb\SpmbBillingService::class)->envelope($alreadyIssued->all());
+            if ($existingBills->isNotEmpty()) {
+                $alreadyIssued = true;
+                $requestedCode = array_key_exists('kode_diskon', $validated)
+                    ? $validated['kode_diskon']
+                    : $locked->kode_diskon;
+                $this->kodeDiskonService->ensureCodeMatchesRegistration($locked, $requestedCode);
+
+                return $billing->envelope($existingBills->all());
             }
 
-            $result = app(\App\Services\Spmb\SpmbBillingService::class)->issue([
+            $gelombang = $locked->gelombangPenerimaan;
+            if (! $gelombang || ! $gelombang->pendaftaran_dibuka) {
+                throw ValidationException::withMessages([
+                    'gelombang_id' => 'Gelombang pendaftaran sudah tidak dibuka; invoice baru tidak dapat diterbitkan.',
+                ]);
+            }
+
+            $kodeDiskon = array_key_exists('kode_diskon', $validated)
+                ? $validated['kode_diskon']
+                : $locked->kode_diskon;
+            if ($kodeDiskon !== $locked->kode_diskon) {
+                $locked->update(['kode_diskon' => $kodeDiskon]);
+            }
+
+            $details = app(MasterBiayaService::class)->buildDetailBebanPendaftaran(
+                $locked->master_tipe_jalur_id,
+                $locked->program_studi_id,
+                $locked->gelombang_id,
+            );
+            $potonganCalon = app(\App\Services\Spmb\SpmbPotonganCalonService::class)
+                ->buildPotonganPayload($locked, 'pendaftaran', $details);
+            $penggunaanDiskon = $this->kodeDiskonService->applyToRegistration(
+                $locked,
+                $kodeDiskon,
+                $details,
+                $potonganCalon,
+            );
+            $potongan = array_merge(
+                $potonganCalon,
+                $this->kodeDiskonService->toTagihanPotongan($penggunaanDiskon),
+            );
+
+            $result = $billing->issue([
                 'calon_mahasiswa_id' => $locked->id,
                 'tipe_referensi' => TagihanMahasiswa::TIPE_SPMB_PENDAFTARAN,
                 'source_system' => 'SPMB',
@@ -288,6 +275,9 @@ class CalonMahasiswaController extends Controller
                 'details' => $details,
                 'potongan' => $potongan,
             ]);
+            if ($penggunaanDiskon && ! empty($result['tagihan']?->id)) {
+                $this->kodeDiskonService->attachTagihan($penggunaanDiskon, (int) $result['tagihan']->id);
+            }
 
             return [
                 'tagihan' => $result['tagihan'],
@@ -296,15 +286,36 @@ class CalonMahasiswaController extends Controller
             ];
         });
 
-        if ($penggunaanDiskon && ! empty($issued['tagihan']?->id)) {
-            $this->kodeDiskonService->attachTagihan($penggunaanDiskon, (int) $issued['tagihan']->id);
+        if (! $alreadyIssued && ! empty($issued['tagihan']?->id)) {
+            try {
+                $usage = $pendaftaran->fresh()->kodeDiskonUsage;
+                AuditLogService::record(
+                    module: 'SPMB',
+                    action: 'create',
+                    tableName: 'sikeu_tagihan_mahasiswa',
+                    recordId: (int) $issued['tagihan']->id,
+                    newValues: [
+                        'calon_mahasiswa_id' => $pendaftaran->id,
+                        'tipe_referensi' => TagihanMahasiswa::TIPE_SPMB_PENDAFTARAN,
+                        'total_tagihan' => (float) $issued['tagihan']->total_tagihan,
+                        'total_potongan' => (float) $issued['tagihan']->total_potongan,
+                        'kode_diskon' => $usage?->kode_diskon,
+                        'kode_diskon_usage_id' => $usage?->id,
+                    ],
+                    request: $request,
+                );
+            } catch (\Throwable $exception) {
+                Log::warning('Gagal mencatat audit penerbitan invoice SPMB: '.$exception->getMessage());
+            }
         }
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Invoice pendaftaran berhasil diterbitkan dan menunggu pembayaran.',
+            'message' => $alreadyIssued
+                ? 'Invoice pendaftaran sudah tersedia.'
+                : 'Invoice pendaftaran berhasil diterbitkan dan menunggu pembayaran.',
             'data' => $issued,
-        ], 201);
+        ], $alreadyIssued ? 200 : 201);
     }
 
     /**
