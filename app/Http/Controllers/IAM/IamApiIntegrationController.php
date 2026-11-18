@@ -290,6 +290,7 @@ class IamApiIntegrationController extends Controller
 
         try {
             $result = match ($targetEntity) {
+                'program_studi' => app(ProgramStudiIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 'kurikulum' => app(KurikulumIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 default => app(MataKuliahIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
             };
@@ -350,6 +351,9 @@ class IamApiIntegrationController extends Controller
 
         try {
             $result = match (true) {
+                $integration->module === 'siakad'
+                    && in_array('pddikti', $integration->supported_sources ?? [], true)
+                    && ($integration->source_schemas[$integration->source_type]['target_entity'] ?? null) === 'program_studi' => $syncService->sync($integration),
                 $integration->module === 'siakad' && $integration->key === 'siakad_program_studi' => $syncService->sync($integration),
                 $integration->module === 'siakad' && $integration->key === 'siakad_mahasiswa' => $siakadMahasiswaSyncService->sync($integration),
                 $integration->module === 'siakad'

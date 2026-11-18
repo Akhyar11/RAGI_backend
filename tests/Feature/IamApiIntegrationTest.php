@@ -167,6 +167,8 @@ class IamApiIntegrationTest extends TestCase
         $this->assertSame('https://legacy.example.test/api/program-studi', $integration->url_api);
         $this->assertSame('preserve-this-token', $integration->token);
         $this->assertSame('header_key', $integration->auth_type);
+        $this->assertSame('custom_api', $integration->source_type);
+        $this->assertSame(['pddikti', 'custom_api'], $integration->supported_sources);
         $this->assertFalse($integration->is_active);
         $this->assertArrayHasKey('source_id', $integration->expected_schema['items']['properties']);
         $this->assertSame(['string', 'null'], $integration->expected_schema['items']['properties']['fakultas']['type']);
@@ -193,6 +195,110 @@ class IamApiIntegrationTest extends TestCase
         $this->assertSame('pddikti', $integration->source_type);
         $this->assertNull($integration->url_api);
         $this->assertNull($integration->token);
+    }
+
+    public function test_program_study_registry_imports_get_prodi_and_stores_feeder_uuid(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_program_studi')->firstOrFail();
+
+        $this->assertSame(['pddikti', 'custom_api'], $integration->supported_sources);
+        $this->assertSame('GetProdi', $integration->source_schemas['pddikti']['action']);
+        $this->actingAs($this->admin, 'api')
+            ->putJson("/api/admin/api-integrations/{$integration->id}", [
+                'source_type' => 'pddikti',
+                'url_api' => null,
+                'auth_type' => 'bearer',
+                'is_active' => true,
+            ])
+            ->assertStatus(200)
+            ->assertJsonPath('data.source_type', 'pddikti');
+
+        DB::table('spmb_master_referensi')->insert([
+            'modul' => 'siakad',
+            'tipe' => 'jenjang_prodi',
+            'kode' => 'D3',
+            'nama' => 'Diploma 3',
+            'urutan' => 1,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fakeSequence('https://feeder.example.test/ws/live2.php')
+            ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => [[
+                'id_prodi' => 'program-uuid-77',
+                'kode_program_studi' => '55201',
+                'nama_program_studi' => 'Teknik Informatika',
+                'nama_jenjang_pendidikan' => 'D3',
+                'status' => 'A',
+            ]]], 200);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.created', 1)
+            ->assertJsonPath('data.skipped', 0);
+        $this->assertDatabaseHas('siakad_program_studi', [
+            'kode_prodi' => '55201',
+            'source_id' => 'program-uuid-77',
+            'id_feeder' => 'program-uuid-77',
+                'nama' => 'Teknik Informatika',
+            'jenjang' => 'D3',
+        ]);
+        $response->assertJsonMissing(['token' => 'runtime-feeder-token']);
+    }
+
+    public function test_program_study_source_can_switch_to_pddikti_and_sync_get_prodi(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_program_studi')->firstOrFail();
+        $integration->update([
+            'source_type' => 'pddikti',
+            'url_api' => null,
+            'token' => null,
+        ]);
+
+        DB::table('spmb_master_referensi')->insert([
+            'modul' => 'siakad',
+            'tipe' => 'jenjang_prodi',
+            'kode' => 'D3',
+            'nama' => 'Diploma 3',
+            'urutan' => 1,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fakeSequence('https://feeder.example.test/ws/live2.php')
+            ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => [[
+                'id_prodi' => 'program-uuid-88',
+                'kode_program_studi' => '55202',
+                'nama_program_studi' => 'Teknik Elektro',
+                'nama_jenjang_pendidikan' => 'D3',
+                'status' => 'A',
+            ]]], 200);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.created', 1)
+            ->assertJsonPath('data.skipped', 0);
+        $this->assertDatabaseHas('siakad_program_studi', [
+            'id_feeder' => 'program-uuid-88',
+            'source_id' => 'program-uuid-88',
+            'kode_prodi' => '55202',
+            'nama' => 'Teknik Elektro',
+            'jenjang' => 'D3',
+        ]);
     }
 
     public function test_admin_can_show_api_integration_detail()

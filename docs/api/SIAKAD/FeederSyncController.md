@@ -124,6 +124,7 @@
 - `riwayat_pendidikan_mahasiswa`: Sinkronisasi riwayat pendidikan mahasiswa.
 - `mata_kuliah`: Sinkronisasi data kurikulum dan mata kuliah.
 - `kelas`: Sinkronisasi data kelas perkuliahan dan nilai.
+- `prodi`: Pull daftar prodi menggunakan `GetProdi`; nilai UUID `id_prodi` dipetakan ke `siakad_program_studi.id_feeder`. Pull ini juga tersedia pada Pengaturan Integrasi API → Migrasi Program Studi dengan sumber PDDIKTI. Gunakan salah satu jalur tersebut untuk mengisi mapping prodi sebelum impor kurikulum dan mata kuliah.
 
 ### Response Sukses (200 OK)
 ```json

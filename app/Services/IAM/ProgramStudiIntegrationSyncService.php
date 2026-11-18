@@ -9,17 +9,29 @@ use App\Services\Siakad\ProgramStudiReferenceService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\DB;
+use App\Services\Siakad\NeoFeederService;
 
 class ProgramStudiIntegrationSyncService
 {
     private const MAX_SOURCE_PAGES = 100;
 
-    public function __construct(private ProgramStudiReferenceService $references) {}
+    public function __construct(
+        private ProgramStudiReferenceService $references,
+        private NeoFeederService $neoFeeder
+    ) {}
 
     public function sync(IamApiIntegration $integration): array
     {
         if (!$integration->is_active) {
             throw new ApiIntegrationSyncException('Integrasi sedang dinonaktifkan.');
+        }
+
+        if (($integration->source_type ?? 'custom_api') === 'pddikti') {
+            if (!in_array('pddikti', $integration->supported_sources ?? [], true)) {
+                throw new ApiIntegrationSyncException('Integrasi program studi tidak mendukung sumber PDDIKTI.');
+            }
+
+            return $this->syncPddikti();
         }
 
         if (empty($integration->url_api)) {
@@ -158,6 +170,163 @@ class ProgramStudiIntegrationSyncService
 
             return $result;
         });
+    }
+
+    public function testPddiktiConnection(string $action): array
+    {
+        if ($action !== 'GetProdi') {
+            throw new ApiIntegrationSyncException('Action tes koneksi program studi PDDIKTI tidak valid.');
+        }
+
+        try {
+            $response = $this->neoFeeder->request($action, ['limit' => 1, 'offset' => 0]);
+        } catch (\Throwable $exception) {
+            throw new ApiIntegrationSyncException('Koneksi Neo Feeder gagal. Periksa konfigurasi dan hak akses GetProdi.', 502);
+        }
+
+        if (($response['error_code'] ?? null) !== 0) {
+            throw new ApiIntegrationSyncException('Neo Feeder menolak permintaan GetProdi. Periksa hak akses akun Feeder.', 502);
+        }
+
+        $data = $response['data'] ?? [];
+        return ['action' => $action, 'data_count' => is_array($data) ? count($data) : 0];
+    }
+
+    private function syncPddikti(): array
+    {
+        $rows = $this->fetchPddiktiRows();
+
+        return DB::transaction(function () use ($rows): array {
+            $result = [
+                'source_total' => count($rows),
+                'created' => 0,
+                'updated' => 0,
+                'skipped' => 0,
+                'skipped_items' => [],
+            ];
+            $seenIds = [];
+            $seenCodes = [];
+
+            foreach ($rows as $index => $row) {
+                $reason = $this->validatePddiktiRow($row);
+                if ($reason !== null) {
+                    $this->skipPddikti($result, $index, $row, $reason);
+                    continue;
+                }
+
+                $sourceId = trim((string) $row['id_prodi']);
+                $code = trim((string) $row['kode_program_studi']);
+                if (isset($seenIds[$sourceId]) || isset($seenCodes[$code])) {
+                    $this->skipPddikti($result, $index, $row, 'UUID atau kode program studi duplikat dalam respons GetProdi.');
+                    continue;
+                }
+                $seenIds[$sourceId] = true;
+                $seenCodes[$code] = true;
+
+                $jenjang = trim((string) $row['nama_jenjang_pendidikan']);
+                if (!$this->references->hasActiveJenjang($jenjang)) {
+                    $this->skipPddikti($result, $index, $row, 'Kode jenjang PDDIKTI tidak tersedia pada master referensi SIAKAD.');
+                    continue;
+                }
+
+                $existing = ProgramStudi::withTrashed()->where('id_feeder', $sourceId)->first();
+                if (!$existing) {
+                    $existing = ProgramStudi::withTrashed()->where('kode_prodi', $code)->first();
+                }
+                if ($existing?->trashed()) {
+                    $this->skipPddikti($result, $index, $row, 'Program studi tujuan dengan kode tersebut sudah dihapus.');
+                    continue;
+                }
+                if ($existing && $existing->id_feeder !== null && $existing->id_feeder !== $sourceId) {
+                    $this->skipPddikti($result, $index, $row, 'Kode program studi sudah dipetakan ke UUID Feeder lain.');
+                    continue;
+                }
+
+                $attributes = [
+                    'id_feeder' => $sourceId,
+                    'source_id' => $sourceId,
+                    'source_kode_prodi' => $code,
+                    'kode_prodi_dikti' => $code,
+                    'nama' => trim((string) $row['nama_program_studi']),
+                    'jenjang' => $jenjang,
+                    'is_active' => (string) ($row['status'] ?? 'A') === 'A',
+                ];
+                if (!$existing || !$existing->is_status_manual) {
+                    $attributes['kode_prodi'] = $code;
+                }
+
+                if ($existing) {
+                    $existing->update($attributes);
+                    $result['updated']++;
+                } else {
+                    ProgramStudi::create($attributes);
+                    $result['created']++;
+                }
+            }
+
+            return $result;
+        });
+    }
+
+    private function fetchPddiktiRows(): array
+    {
+        $rows = [];
+        $offset = 0;
+        $limit = 500;
+        for ($page = 0; $page < self::MAX_SOURCE_PAGES; $page++) {
+            try {
+                $response = $this->neoFeeder->request('GetProdi', ['order' => 'kode_program_studi', 'limit' => $limit, 'offset' => $offset]);
+            } catch (\Throwable $exception) {
+                throw new ApiIntegrationSyncException('Gagal mengambil program studi dari Neo Feeder PDDIKTI.', 502);
+            }
+            if (($response['error_code'] ?? null) !== 0) {
+                throw new ApiIntegrationSyncException('Neo Feeder PDDIKTI menolak permintaan GetProdi.', 502);
+            }
+            $batch = $response['data'] ?? [];
+            if (!is_array($batch)) {
+                throw new ApiIntegrationSyncException('Respons GetProdi dari Neo Feeder tidak valid.', 502);
+            }
+            if ($batch !== [] && !array_is_list($batch)) {
+                $batch = [$batch];
+            }
+            $rows = array_merge($rows, $batch);
+            if (count($batch) < $limit) {
+                return $rows;
+            }
+            $offset += $limit;
+        }
+
+        throw new ApiIntegrationSyncException('Data program studi PDDIKTI melebihi batas 100 batch per proses sync.');
+    }
+
+    private function validatePddiktiRow(mixed $row): ?string
+    {
+        if (!is_array($row)) {
+            return 'Item GetProdi bukan object data.';
+        }
+        foreach (['id_prodi', 'kode_program_studi', 'nama_program_studi', 'nama_jenjang_pendidikan'] as $field) {
+            if (!isset($row[$field]) || !is_string($row[$field]) || trim($row[$field]) === '') {
+                return "Field {$field} wajib tersedia dari GetProdi.";
+            }
+        }
+        if (mb_strlen(trim($row['kode_program_studi'])) > 20 || mb_strlen(trim($row['nama_program_studi'])) > 255 || mb_strlen(trim($row['nama_jenjang_pendidikan'])) > 20) {
+            return 'Kode, nama, atau jenjang program studi melebihi panjang kolom tujuan.';
+        }
+
+        return null;
+    }
+
+    private function skipPddikti(array &$result, int $index, mixed $row, string $reason): void
+    {
+        $result['skipped']++;
+        if (count($result['skipped_items']) < 100) {
+            $result['skipped_items'][] = [
+                'source_id' => is_array($row) ? ($row['id_prodi'] ?? null) : null,
+                'item_ref' => is_array($row) ? ($row['kode_program_studi'] ?? null) : null,
+                'row' => $index + 1,
+                'reason' => $reason,
+            ];
+        }
     }
 
     private function fetchSourceRows(IamApiIntegration $integration): array

@@ -268,7 +268,7 @@ Tes PDDIKTI dapat dikirim dengan body `{"source_type":"pddikti"}` atau menggunak
 ## POST /api/api-integrations/{id}/sync
 
 Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvalidasi kontrak dan referensi master, lalu menerapkan data ke target yang didukung. Modul dan key yang didukung saat ini:
-- `siakad_program_studi` (Modul `siakad`): disinkronkan ke tabel `siakad_program_studi` berdasarkan `kode_prodi` dan referensi jenjang/akreditasi aktif.
+- `siakad_program_studi` (Modul `siakad`): sumber dapat dipilih sebagai PDDIKTI Neo Feeder (`GetProdi`) atau Custom API. Mode PDDIKTI menyimpan UUID `id_prodi` ke `siakad_program_studi.id_feeder`, sekaligus `source_id`; mode Custom API memakai validasi referensi jenjang/akreditasi yang sudah ada.
 - `siakad_kurikulum` (Modul `siakad`): mode PDDIKTI menarik `GetListKurikulum`, memetakan `id_prodi` ke UUID Feeder program studi, lalu menyimpan UUID kurikulum di `siakad_kurikulum.id_feeder`.
 - `siakad_mata_kuliah` (Modul `siakad`): sumber dipilih melalui `source_type`. Mode `pddikti` menarik relasi mata kuliah-kurikulum via Neo Feeder `GetMatkulKurikulum`; mode `custom_api` memakai endpoint dan kredensial manual.
 - `siakad_mahasiswa` (Modul `siakad`): disinkronkan ke tabel `siakad_mahasiswa` melalui service sinkronisasi mahasiswa legacy.
@@ -306,6 +306,7 @@ Tidak memerlukan body. URL, token, tipe autentikasi, dan status aktif menggunaka
 
 - Respons sumber dapat berupa array JSON, `{ "data": [...] }`, atau respons paginator dengan `meta.last_page`; proses dibatasi sampai 100 halaman.
 - Pada mode PDDIKTI, tarik prodi Neo Feeder terlebih dahulu sehingga `siakad_program_studi.id_feeder` cocok dengan `id_prodi`. Kurikulum dicocokkan memakai `siakad_kurikulum.id_feeder`; jika belum ada mapping, nama kurikulum harus cocok persis dan unik pada prodi tersebut. Kurikulum tidak dibuat otomatis.
+- Program Studi PDDIKTI menggunakan `GetProdi` dengan `id_prodi`, `kode_program_studi`, `nama_program_studi`, `nama_jenjang_pendidikan`, dan `status`. Sinkronisasi mengambil batch 500 (maksimum 100 batch), memvalidasi jenjang terhadap master referensi aktif, dan menyimpan UUID sumber sebagai mapping Feeder. Fakultas tidak diturunkan atau ditebak dari data PDDIKTI.
 - Urutan impor yang dianjurkan adalah prodi → kurikulum (`GetListKurikulum`) → mata kuliah (`GetMatkulKurikulum`). Sync kurikulum membuat kode lokal deterministik `PDDIKTI-{id_kurikulum}`, mengambil tahun dari `semester_mulai_berlaku` (fallback awal `id_semester`), serta menyimpan jumlah SKS lulus.
 - `http_method` registry `GET` menjelaskan sumber integrasi; koneksi internal ke Neo Feeder tetap menggunakan POST dengan payload `act=GetListKurikulum`, token runtime, `limit`, dan `offset`.
 - Kurikulum dengan UUID sumber yang sama diperbarui idempoten. Baris tanpa prodi tujuan yang memiliki ID Feeder atau tanpa tahun semester yang dapat dibaca dilewati; kurikulum tidak dihapus otomatis saat tidak lagi ada di respons sumber.

@@ -18,7 +18,24 @@ class IamApiIntegrationSeeder extends Seeder
                 'name' => 'Migrasi Program Studi SIAKAD',
                 'module' => 'siakad',
                 'http_method' => 'GET',
-                'description' => 'Sumber data read-only untuk migrasi program studi ke master SIAKAD. Fakultas tidak disediakan oleh sumber lama dan harus dipetakan terpisah di sistem tujuan.',
+                'description' => 'Migrasi program studi dari PDDIKTI Neo Feeder atau Custom API ke master SIAKAD.',
+                'source_type' => 'pddikti',
+                'supported_sources' => ['pddikti', 'custom_api'],
+                'source_schemas' => [
+                    'pddikti' => [
+                        'source' => 'Neo Feeder PDDikti',
+                        'action' => 'GetProdi',
+                        'connection_managed' => true,
+                        'target_entity' => 'program_studi',
+                        'fields' => [
+                            'id_prodi' => 'UUID program studi PDDIKTI; disimpan pada source_id dan id_feeder.',
+                            'kode_program_studi' => 'Kode program studi PDDIKTI.',
+                            'nama_program_studi' => 'Nama program studi.',
+                            'nama_jenjang_pendidikan' => 'Kode jenjang; harus tersedia pada master referensi SIAKAD.',
+                            'status' => 'Status program studi; A berarti aktif.',
+                        ],
+                    ],
+                ],
                 'expected_schema' => [
                     'type' => 'array',
                     'description' => 'Daftar program studi dari sistem sumber. ID sumber hanya untuk rekonsiliasi dan tidak digunakan sebagai ID siakad_program_studi.',
