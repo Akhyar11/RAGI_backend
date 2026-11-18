@@ -301,6 +301,158 @@ class IamApiIntegrationTest extends TestCase
         ]);
     }
 
+    public function test_program_study_pddikti_sync_maps_existing_source_uuid_without_overwriting_manual_code(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_program_studi')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti']);
+
+        DB::table('spmb_master_referensi')->insert([
+            'modul' => 'siakad',
+            'tipe' => 'jenjang_prodi',
+            'kode' => 'D4',
+            'nama' => 'Sarjana Terapan',
+            'urutan' => 1,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $manualProgramId = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => 'A',
+            'source_id' => 'feeder-uuid-manual-prodi',
+            'source_kode_prodi' => '21304',
+            'is_status_manual' => true,
+            'nama' => 'Nama Lokal Manual',
+            'jenjang' => 'D4',
+            'is_active' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fakeSequence('https://feeder.example.test/ws/live2.php')
+            ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => [[
+                'id_prodi' => 'feeder-uuid-manual-prodi',
+                'kode_program_studi' => '21304',
+                'nama_program_studi' => 'Teknologi Rekayasa Otomotif',
+                'nama_jenjang_pendidikan' => 'D4',
+                'status' => 'A',
+            ]]], 200);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.updated', 1)
+            ->assertJsonPath('data.skipped', 0);
+        $this->assertDatabaseHas('siakad_program_studi', [
+            'id' => $manualProgramId,
+            'id_feeder' => 'feeder-uuid-manual-prodi',
+            'source_id' => 'feeder-uuid-manual-prodi',
+            'kode_prodi' => 'A',
+            'source_kode_prodi' => '21304',
+            'nama' => 'Teknologi Rekayasa Otomotif',
+            'is_active' => false,
+            'is_status_manual' => true,
+        ]);
+        $this->assertDatabaseMissing('siakad_program_studi', [
+            'id_feeder' => 'feeder-uuid-manual-prodi',
+            'kode_prodi' => '21304',
+        ]);
+    }
+
+    public function test_program_study_pddikti_sync_resolves_duplicate_codes_by_uuid_and_skips_uuid_code_mismatch(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_program_studi')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti']);
+        DB::table('spmb_master_referensi')->insert([
+            'modul' => 'siakad',
+            'tipe' => 'jenjang_prodi',
+            'kode' => 'D3',
+            'nama' => 'Diploma 3',
+            'urutan' => 1,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $existingId = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => '21403',
+            'source_id' => 'feeder-uuid-engineering',
+            'nama' => 'Nama Legacy Berbeda',
+            'jenjang' => 'D3',
+            'is_active' => true,
+            'is_status_manual' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $mismatchedId = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => '57403',
+            'source_id' => 'feeder-uuid-wrong-program',
+            'nama' => 'Sistem Informasi Lokal',
+            'jenjang' => 'D3',
+            'is_active' => true,
+            'is_status_manual' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fakeSequence('https://feeder.example.test/ws/live2.php')
+            ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => [
+                [
+                    'id_prodi' => 'feeder-uuid-technology',
+                    'kode_program_studi' => '21403',
+                    'nama_program_studi' => 'Teknologi Otomotif',
+                    'nama_jenjang_pendidikan' => 'D3',
+                    'status' => 'H',
+                ],
+                [
+                    'id_prodi' => 'feeder-uuid-engineering',
+                    'kode_program_studi' => '21403',
+                    'nama_program_studi' => 'Mesin Otomotif',
+                    'nama_jenjang_pendidikan' => 'D3',
+                    'status' => 'B',
+                ],
+                [
+                    'id_prodi' => 'feeder-uuid-unmatched',
+                    'kode_program_studi' => '57401',
+                    'nama_program_studi' => 'Manajemen Informatika',
+                    'nama_jenjang_pendidikan' => 'D3',
+                    'status' => 'B',
+                ],
+            ]], 200);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.source_total', 3)
+            ->assertJsonPath('data.updated', 1)
+            ->assertJsonPath('data.created', 1)
+            ->assertJsonPath('data.skipped', 1)
+            ->assertJsonPath('data.skipped_items.0.reason', 'Kode program studi sudah terhubung ke UUID sumber lain.');
+        $this->assertDatabaseHas('siakad_program_studi', [
+            'id' => $existingId,
+            'id_feeder' => 'feeder-uuid-engineering',
+            'kode_prodi' => '21403',
+            'nama' => 'Mesin Otomotif',
+        ]);
+        $this->assertDatabaseHas('siakad_program_studi', [
+            'id' => $mismatchedId,
+            'id_feeder' => null,
+            'kode_prodi' => '57403',
+            'nama' => 'Sistem Informasi Lokal',
+        ]);
+    }
+
     public function test_admin_can_show_api_integration_detail()
     {
         $response = $this->actingAs($this->admin, 'api')

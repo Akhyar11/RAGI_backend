@@ -205,7 +205,6 @@ class ProgramStudiIntegrationSyncService
                 'skipped_items' => [],
             ];
             $seenIds = [];
-            $seenCodes = [];
 
             foreach ($rows as $index => $row) {
                 $reason = $this->validatePddiktiRow($row);
@@ -215,14 +214,13 @@ class ProgramStudiIntegrationSyncService
                 }
 
                 $sourceId = trim((string) $row['id_prodi']);
-                $code = trim((string) $row['kode_program_studi']);
-                if (isset($seenIds[$sourceId]) || isset($seenCodes[$code])) {
-                    $this->skipPddikti($result, $index, $row, 'UUID atau kode program studi duplikat dalam respons GetProdi.');
+                if (isset($seenIds[$sourceId])) {
+                    $this->skipPddikti($result, $index, $row, 'UUID program studi duplikat dalam respons GetProdi.');
                     continue;
                 }
                 $seenIds[$sourceId] = true;
-                $seenCodes[$code] = true;
 
+                $code = trim((string) $row['kode_program_studi']);
                 $jenjang = trim((string) $row['nama_jenjang_pendidikan']);
                 if (!$this->references->hasActiveJenjang($jenjang)) {
                     $this->skipPddikti($result, $index, $row, 'Kode jenjang PDDIKTI tidak tersedia pada master referensi SIAKAD.');
@@ -231,7 +229,15 @@ class ProgramStudiIntegrationSyncService
 
                 $existing = ProgramStudi::withTrashed()->where('id_feeder', $sourceId)->first();
                 if (!$existing) {
-                    $existing = ProgramStudi::withTrashed()->where('kode_prodi', $code)->first();
+                    $existing = ProgramStudi::withTrashed()->where('source_id', $sourceId)->first();
+                }
+                if (!$existing) {
+                    $codeMatches = ProgramStudi::withTrashed()->where('kode_prodi', $code)->get();
+                    if ($codeMatches->count() > 1) {
+                        $this->skipPddikti($result, $index, $row, 'Kode program studi cocok ke beberapa record tujuan; UUID Feeder tidak ditemukan untuk dipastikan.');
+                        continue;
+                    }
+                    $existing = $codeMatches->first();
                 }
                 if ($existing?->trashed()) {
                     $this->skipPddikti($result, $index, $row, 'Program studi tujuan dengan kode tersebut sudah dihapus.');
@@ -239,6 +245,10 @@ class ProgramStudiIntegrationSyncService
                 }
                 if ($existing && $existing->id_feeder !== null && $existing->id_feeder !== $sourceId) {
                     $this->skipPddikti($result, $index, $row, 'Kode program studi sudah dipetakan ke UUID Feeder lain.');
+                    continue;
+                }
+                if ($existing && $existing->source_id !== null && $existing->source_id !== $sourceId) {
+                    $this->skipPddikti($result, $index, $row, 'Kode program studi sudah terhubung ke UUID sumber lain.');
                     continue;
                 }
 
@@ -249,10 +259,10 @@ class ProgramStudiIntegrationSyncService
                     'kode_prodi_dikti' => $code,
                     'nama' => trim((string) $row['nama_program_studi']),
                     'jenjang' => $jenjang,
-                    'is_active' => (string) ($row['status'] ?? 'A') === 'A',
                 ];
                 if (!$existing || !$existing->is_status_manual) {
                     $attributes['kode_prodi'] = $code;
+                    $attributes['is_active'] = (string) ($row['status'] ?? 'A') === 'A';
                 }
 
                 if ($existing) {
