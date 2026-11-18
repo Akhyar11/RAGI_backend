@@ -4,6 +4,7 @@ namespace App\Services\Sinapra;
 
 use App\Models\KategoriAset;
 use App\Models\Aset;
+use App\Models\Ruangan;
 use App\Models\Sinapra\RiwayatPenyusutanAset;
 use App\Services\Sikeu\JurnalSikeuService;
 use App\Services\AuditLogService;
@@ -87,29 +88,42 @@ class AsetService
     }
 
     /**
-     * Format kode ruangan standar inventaris (contoh: RF075 dari ruangan ID 75).
+     * Format kode ruangan standar inventaris.
+     * Mengambil nilai asli kolom kode pada tabel sinapra_ruangan (misal: RF023).
      */
-    public function formatKodeRuangan(?int $ruanganId): string
+    public function formatKodeRuangan(?int $ruanganId, ?string $kodeRuangan = null): string
     {
+        if (!empty($kodeRuangan)) {
+            $cleaned = strtoupper(trim($kodeRuangan));
+            return str_replace('/', '-', $cleaned);
+        }
+
         if (!$ruanganId) {
             return 'RF000';
         }
+
+        $ruangan = Ruangan::find($ruanganId);
+        if ($ruangan && !empty($ruangan->kode)) {
+            $cleaned = strtoupper(trim($ruangan->kode));
+            return str_replace('/', '-', $cleaned);
+        }
+
         return 'RF' . str_pad((string) $ruanganId, 3, '0', STR_PAD_LEFT);
     }
 
     /**
      * Memformat nomor inventaris baku institusi:
      * {nomor_urut}/{kode_ruangan}/{kode_kategori}/{kode_institusi}/{tahun}
-     * Contoh: 4523/RF075/KUR/INDO/2023
+     * Contoh: 4523/RF023/KUR/INDO/2023
      */
-    public function formatNomorInventaris(int $nomorUrut, ?int $ruanganId, ?string $kodeKategori, int $tahun): string
+    public function formatNomorInventaris(int $nomorUrut, ?int $ruanganId, ?string $kodeKategori, int $tahun, ?string $kodeRuangan = null): string
     {
-        $kodeRuangan = $this->formatKodeRuangan($ruanganId);
+        $kodeRuanganFormatted = $this->formatKodeRuangan($ruanganId, $kodeRuangan);
         $cleanKategori = strtoupper(trim($kodeKategori ?: 'AST'));
         $cleanKategori = str_replace('/', '-', $cleanKategori);
         $institusi = $this->getKodeInstitusi();
 
-        return "{$nomorUrut}/{$kodeRuangan}/{$cleanKategori}/{$institusi}/{$tahun}";
+        return "{$nomorUrut}/{$kodeRuanganFormatted}/{$cleanKategori}/{$institusi}/{$tahun}";
     }
 
     /**
@@ -256,6 +270,8 @@ class AsetService
 
             $createdItems = collect();
 
+            $kodeRuangan = $this->formatKodeRuangan($data['ruangan_id'] ?? null);
+
             for ($i = 0; $i < $jumlah; $i++) {
                 $itemData = $data;
                 $itemUrut = $currentUrut + $i;
@@ -264,7 +280,8 @@ class AsetService
                     $itemUrut,
                     $itemData['ruangan_id'] ?? null,
                     $kodeKategori,
-                    $tahun
+                    $tahun,
+                    $kodeRuangan
                 );
 
                 $aset = Aset::create($itemData);

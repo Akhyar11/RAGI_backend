@@ -39,7 +39,7 @@ class SinapraAsetNomorDanBulkTest extends TestCase
 
         $this->ruangan = Ruangan::create([
             'gedung_id' => $gedung->id,
-            'kode' => 'LAB-TEST-' . uniqid(),
+            'kode' => 'RF023',
             'nama' => 'Ruang Laboratorium Uji',
             'lantai' => 1,
             'kapasitas' => 30,
@@ -67,14 +67,14 @@ class SinapraAsetNomorDanBulkTest extends TestCase
                     'nomor_urut_mulai' => 4523,
                     'nomor_urut_selesai' => 4527,
                     'jumlah' => 5,
-                    'kode_ruangan' => 'RF' . str_pad((string) $this->ruangan->id, 3, '0', STR_PAD_LEFT),
+                    'kode_ruangan' => 'RF023',
                     'kode_kategori' => 'KUR',
                     'default_institusi' => 'INDO',
                     'tahun' => 2023,
                 ],
             ]);
 
-        $expectedKode = '4523/RF' . str_pad((string) $this->ruangan->id, 3, '0', STR_PAD_LEFT) . '/KUR/INDO/2023';
+        $expectedKode = '4523/RF023/KUR/INDO/2023';
         $this->assertEquals($expectedKode, $response->json('data.preview_nomor'));
     }
 
@@ -97,7 +97,7 @@ class SinapraAsetNomorDanBulkTest extends TestCase
 
         $response = $this->postJson('/api/sinapra/aset', $payload);
 
-        $expectedKode = '4523/RF' . str_pad((string) $this->ruangan->id, 3, '0', STR_PAD_LEFT) . '/KUR/INDO/2023';
+        $expectedKode = '4523/RF023/KUR/INDO/2023';
 
         $response->assertStatus(201)
             ->assertJson([
@@ -138,10 +138,9 @@ class SinapraAsetNomorDanBulkTest extends TestCase
         $response->assertStatus(201);
         $this->assertCount(3, $response->json('data'));
 
-        $rf = 'RF' . str_pad((string) $this->ruangan->id, 3, '0', STR_PAD_LEFT);
-        $this->assertEquals("5001/{$rf}/KUR/INDO/2023", $response->json('data.0.kode_aset'));
-        $this->assertEquals("5002/{$rf}/KUR/INDO/2023", $response->json('data.1.kode_aset'));
-        $this->assertEquals("5003/{$rf}/KUR/INDO/2023", $response->json('data.2.kode_aset'));
+        $this->assertEquals("5001/RF023/KUR/INDO/2023", $response->json('data.0.kode_aset'));
+        $this->assertEquals("5002/RF023/KUR/INDO/2023", $response->json('data.1.kode_aset'));
+        $this->assertEquals("5003/RF023/KUR/INDO/2023", $response->json('data.2.kode_aset'));
 
         $this->assertDatabaseHas('sinapra_aset', ['nomor_urut' => 5001]);
         $this->assertDatabaseHas('sinapra_aset', ['nomor_urut' => 5002]);

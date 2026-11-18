@@ -242,12 +242,12 @@ Deskripsi: Menghitung simulasi penomoran inventaris secara real-time berdasarkan
         "nomor_urut_mulai": 4523,
         "nomor_urut_selesai": 4527,
         "jumlah": 5,
-        "kode_ruangan": "RF075",
+        "kode_ruangan": "RF023",
         "kode_kategori": "KUR",
         "default_institusi": "INDO",
         "tahun": 2023,
-        "preview_nomor": "4523/RF075/KUR/INDO/2023",
-        "preview_rentang": "4523/RF075/KUR/INDO/2023 s/d 4527/RF075/KUR/INDO/2023",
+        "preview_nomor": "4523/RF023/KUR/INDO/2023",
+        "preview_rentang": "4523/RF023/KUR/INDO/2023 s/d 4527/RF023/KUR/INDO/2023",
         "formula": "{nomor_urut}/{kode_ruangan}/{kode_kategori}/INDO/{tahun}"
     }
 }
