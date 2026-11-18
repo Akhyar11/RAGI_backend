@@ -8,6 +8,7 @@ use App\Models\Sinapra\RiwayatPenyusutanAset;
 use App\Services\Sikeu\JurnalSikeuService;
 use App\Services\AuditLogService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -78,7 +79,85 @@ class AsetService
     }
 
     /**
-     * Membuat Aset baru.
+     * Mendapatkan kode institusi kampus untuk nomor inventaris.
+     */
+    public function getKodeInstitusi(): string
+    {
+        return (string) config('sinapra.kode_institusi', config('app.institution_code', 'INDO'));
+    }
+
+    /**
+     * Format kode ruangan standar inventaris (contoh: RF075 dari ruangan ID 75).
+     */
+    public function formatKodeRuangan(?int $ruanganId): string
+    {
+        if (!$ruanganId) {
+            return 'RF000';
+        }
+        return 'RF' . str_pad((string) $ruanganId, 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Memformat nomor inventaris baku institusi:
+     * {nomor_urut}/{kode_ruangan}/{kode_kategori}/{kode_institusi}/{tahun}
+     * Contoh: 4523/RF075/KUR/INDO/2023
+     */
+    public function formatNomorInventaris(int $nomorUrut, ?int $ruanganId, ?string $kodeKategori, int $tahun): string
+    {
+        $kodeRuangan = $this->formatKodeRuangan($ruanganId);
+        $cleanKategori = strtoupper(trim($kodeKategori ?: 'AST'));
+        $cleanKategori = str_replace('/', '-', $cleanKategori);
+        $institusi = $this->getKodeInstitusi();
+
+        return "{$nomorUrut}/{$kodeRuangan}/{$cleanKategori}/{$institusi}/{$tahun}";
+    }
+
+    /**
+     * Mengambil nomor urut inventaris berikutnya.
+     */
+    public function getNextNomorUrut(?int $tahun = null): int
+    {
+        $max = Aset::max('nomor_urut');
+        if ($max && $max > 0) {
+            return (int) $max + 1;
+        }
+
+        return 1;
+    }
+
+    /**
+     * Menghitung preview nomor inventaris secara real-time.
+     */
+    public function previewNomorInventaris(?int $ruanganId, ?int $kategoriId, ?int $tahun = null, ?int $customUrut = null, int $jumlah = 1): array
+    {
+        $tahun = $tahun ?: (int) date('Y');
+        $kategori = $kategoriId ? KategoriAset::find($kategoriId) : null;
+        $kodeKategori = $kategori ? $kategori->kode : 'AST';
+
+        $startUrut = $customUrut ?: $this->getNextNomorUrut($tahun);
+        $jumlah = max(1, min(100, $jumlah));
+        $endUrut = $startUrut + $jumlah - 1;
+
+        $sampleStart = $this->formatNomorInventaris($startUrut, $ruanganId, $kodeKategori, $tahun);
+        $sampleEnd = $jumlah > 1 ? $this->formatNomorInventaris($endUrut, $ruanganId, $kodeKategori, $tahun) : $sampleStart;
+        $institusi = $this->getKodeInstitusi();
+
+        return [
+            'nomor_urut_mulai' => $startUrut,
+            'nomor_urut_selesai' => $endUrut,
+            'jumlah' => $jumlah,
+            'kode_ruangan' => $this->formatKodeRuangan($ruanganId),
+            'kode_kategori' => $kodeKategori,
+            'default_institusi' => $institusi,
+            'tahun' => $tahun,
+            'preview_nomor' => $sampleStart,
+            'preview_rentang' => $jumlah > 1 ? "{$sampleStart} s/d {$sampleEnd}" : $sampleStart,
+            'formula' => "{nomor_urut}/{kode_ruangan}/{kode_kategori}/{$institusi}/{tahun}",
+        ];
+    }
+
+    /**
+     * Membuat Aset baru (satuan).
      */
     public function createAset(array $data): Aset
     {
@@ -97,17 +176,115 @@ class AsetService
                 }
             }
 
+            $tahun = !empty($data['tanggal_perolehan'])
+                ? (int) Carbon::parse($data['tanggal_perolehan'])->format('Y')
+                : (int) date('Y');
+
+            if (empty($data['nomor_urut'])) {
+                $data['nomor_urut'] = $this->getNextNomorUrut($tahun);
+            }
+
+            if (empty($data['kode_aset'])) {
+                $kategori = !empty($data['kategori_id']) ? KategoriAset::find($data['kategori_id']) : null;
+                $kodeKategori = $kategori ? $kategori->kode : 'AST';
+                $data['kode_aset'] = $this->formatNomorInventaris(
+                    (int) $data['nomor_urut'],
+                    $data['ruangan_id'] ?? null,
+                    $kodeKategori,
+                    $tahun
+                );
+            }
+
+            if (!empty($data['nomor_seri']) && empty($data['serial_number'])) {
+                $data['serial_number'] = $data['nomor_seri'];
+            }
+
+            unset($data['mode'], $data['jumlah_barang'], $data['nomor_seri']);
+
             $aset = Aset::create($data);
 
-            AuditLogService::record(
-                module: 'SINAPRA',
-                action: 'create',
-                tableName: 'aset',
-                recordId: $aset->id,
-                newValues: $aset->toArray()
-            );
+            try {
+                AuditLogService::record(
+                    module: 'SINAPRA',
+                    action: 'create',
+                    tableName: 'sinapra_aset',
+                    recordId: $aset->id,
+                    newValues: $aset->toArray()
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log create aset: ' . $e->getMessage());
+            }
 
             return $aset;
+        });
+    }
+
+    /**
+     * Mendaftarkan banyak barang inventaris sekaligus (bulk/masal) dengan nomor berurutan.
+     */
+    public function createBulkAset(array $data, int $jumlah): \Illuminate\Support\Collection
+    {
+        return DB::transaction(function () use ($data, $jumlah) {
+            $jumlah = max(1, min(100, $jumlah));
+
+            if (!isset($data['harga_perolehan'])) {
+                $data['harga_perolehan'] = 0;
+            }
+            if (!isset($data['nilai_buku'])) {
+                $data['nilai_buku'] = $data['harga_perolehan'];
+            }
+
+            if (empty($data['program_studi_id']) && !empty($data['ruangan_id'])) {
+                $ruangan = \App\Models\Ruangan::find($data['ruangan_id']);
+                if ($ruangan && $ruangan->program_studi_id) {
+                    $data['program_studi_id'] = $ruangan->program_studi_id;
+                }
+            }
+
+            $tahun = !empty($data['tanggal_perolehan'])
+                ? (int) Carbon::parse($data['tanggal_perolehan'])->format('Y')
+                : (int) date('Y');
+
+            $kategori = !empty($data['kategori_id']) ? KategoriAset::find($data['kategori_id']) : null;
+            $kodeKategori = $kategori ? $kategori->kode : 'AST';
+
+            $currentUrut = !empty($data['nomor_urut'])
+                ? (int) $data['nomor_urut']
+                : $this->getNextNomorUrut($tahun);
+
+            unset($data['mode'], $data['jumlah_barang'], $data['nomor_seri']);
+
+            $createdItems = collect();
+
+            for ($i = 0; $i < $jumlah; $i++) {
+                $itemData = $data;
+                $itemUrut = $currentUrut + $i;
+                $itemData['nomor_urut'] = $itemUrut;
+                $itemData['kode_aset'] = $this->formatNomorInventaris(
+                    $itemUrut,
+                    $itemData['ruangan_id'] ?? null,
+                    $kodeKategori,
+                    $tahun
+                );
+
+                $aset = Aset::create($itemData);
+
+                try {
+                    AuditLogService::record(
+                        module: 'SINAPRA',
+                        action: 'create_bulk',
+                        tableName: 'sinapra_aset',
+                        recordId: $aset->id,
+                        newValues: $aset->toArray()
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('Gagal mencatat audit log create_bulk aset: ' . $e->getMessage());
+                }
+
+                $createdItems->push($aset);
+            }
+
+            return $createdItems;
         });
     }
 

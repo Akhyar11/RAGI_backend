@@ -1057,6 +1057,7 @@ Route::middleware('auth:api')->prefix('sinapra')->group(function () {
 
     Route::get('aset', [App\Http\Controllers\Sinapra\AsetController::class, 'index']);
     Route::post('aset', [App\Http\Controllers\Sinapra\AsetController::class, 'store']);
+    Route::get('aset/preview-nomor', [App\Http\Controllers\Sinapra\AsetController::class, 'previewNomor']);
     Route::post('aset/labels/batch', [App\Http\Controllers\Sinapra\AsetController::class, 'getBatchLabels']);
     Route::get('aset/{aset}', [App\Http\Controllers\Sinapra\AsetController::class, 'show']);
     Route::get('aset/{aset}/label', [App\Http\Controllers\Sinapra\AsetController::class, 'getLabel']);

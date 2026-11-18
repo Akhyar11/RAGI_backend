@@ -204,11 +204,48 @@ class AsetController extends Controller
         ]);
     }
 
+    public function previewNomor(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Aset::class);
+
+        $ruanganId = $request->filled('ruangan_id') ? (int) $request->ruangan_id : null;
+        $kategoriId = $request->filled('kategori_id') ? (int) $request->kategori_id : null;
+        $tahun = $request->filled('tahun') ? (int) $request->tahun : null;
+        $customUrut = $request->filled('nomor_urut') ? (int) $request->nomor_urut : null;
+        $jumlah = max(1, min(100, $request->integer('jumlah', 1)));
+
+        $preview = $this->service->previewNomorInventaris($ruanganId, $kategoriId, $tahun, $customUrut, $jumlah);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Preview format nomor inventaris berhasil dihitung',
+            'data' => $preview,
+        ]);
+    }
+
     public function store(AsetRequest $request): JsonResponse
     {
         $this->authorize('create', Aset::class);
 
-        $aset = $this->service->createAset($request->validated());
+        $validated = $request->validated();
+        $isBulk = ($validated['mode'] ?? 'satuan') === 'bulk' || ($validated['jumlah_barang'] ?? 1) > 1;
+
+        if ($isBulk) {
+            $jumlah = (int) ($validated['jumlah_barang'] ?? 1);
+            $items = $this->service->createBulkAset($validated, $jumlah);
+            $loadedItems = Aset::whereIn('id', $items->pluck('id'))
+                ->with(['kategori', 'ruangan.gedung', 'penanggungJawab.unitKerja', 'programStudi:id,kode_prodi,nama,jenjang'])
+                ->orderBy('nomor_urut', 'asc')
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Berhasil menambahkan {$loadedItems->count()} unit barang inventaris aset sekaligus",
+                'data' => $loadedItems,
+            ], 201);
+        }
+
+        $aset = $this->service->createAset($validated);
 
         return response()->json([
             'status' => 'success',

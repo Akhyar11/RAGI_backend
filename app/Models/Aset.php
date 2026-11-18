@@ -20,6 +20,7 @@ class Aset extends Model
         'program_studi_id',
         'penanggung_jawab_pegawai_id',
         'kode_aset',
+        'nomor_urut',
         'nama',
         'merk',
         'model',
@@ -31,9 +32,12 @@ class Aset extends Model
         'status',
         'is_borrowable',
         'is_lab_asset',
+        'spesifikasi',
+        'keterangan',
     ];
 
     protected $casts = [
+        'nomor_urut' => 'integer',
         'program_studi_id' => 'integer',
         'penanggung_jawab_pegawai_id' => 'integer',
         'tanggal_perolehan' => 'date',

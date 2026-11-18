@@ -16,7 +16,8 @@
 | PUT | `/api/sinapra/kategori-aset/{id}` | Update kategori aset | ✅ |
 | DELETE | `/api/sinapra/kategori-aset/{id}` | Hapus kategori aset | ✅ |
 | GET | `/api/sinapra/aset` | Listing inventaris barang/aset | ✅ |
-| POST | `/api/sinapra/aset` | Tambah aset baru | ✅ |
+| POST | `/api/sinapra/aset` | Tambah aset baru (satuan atau bulk masal) | ✅ |
+| GET | `/api/sinapra/aset/preview-nomor` | Preview kalkulasi format nomor inventaris | ✅ |
 | GET | `/api/sinapra/aset/{id}` | Detail aset & riwayat perbaikan/peminjaman | ✅ |
 | GET | `/api/sinapra/aset/{id}/label` | Generate label fisik barcode & QR Code aset | ✅ |
 | POST | `/api/sinapra/aset/labels/batch` | Generate batch label fisik barcode & QR Code | ✅ |
@@ -101,57 +102,182 @@ Deskripsi: Mengambil daftar inventaris barang/aset dengan filter kategori, ruang
 
 ## POST /api/sinapra/aset
 
-Deskripsi: Menambahkan unit inventaris barang/aset baru ke dalam sistem.
+Deskripsi: Menambahkan unit inventaris barang/aset baru ke dalam sistem, baik secara Satuan (1 unit) maupun Masal / Bulk (banyak barang sejenis di ruangan yang sama) dengan penomoran baku otomatis: `{nomor_urut}/{kode_ruangan}/{kode_kategori}/INDO/{tahun}`.
+
+### Headers
+- `Authorization: Bearer {token}`
+- `Accept: application/json`
+- `Content-Type: application/json`
 
 ### Request Body
 ```json
 {
+    "mode": "bulk",
+    "jumlah_barang": 5,
     "kategori_id": 2,
-    "ruangan_id": 5,
+    "ruangan_id": 75,
     "program_studi_id": 1,
-    "kode_aset": "AST-LAB-002",
-    "nama": "Spektrofotometer UV-Vis",
-    "merk": "Shimadzu",
-    "model": "UV-1900i",
-    "serial_number": "SHM-2026-004",
-    "tanggal_perolehan": "2026-02-10",
-    "harga_perolehan": 45000000,
+    "nama": "Monitor LED Samsung 24 Inch",
+    "merk": "Samsung",
+    "model": "S24R350",
+    "serial_number": null,
+    "tanggal_perolehan": "2023-08-15",
+    "harga_perolehan": 1850000,
+    "nomor_urut": 4523,
     "kondisi": "baik",
     "status": "tersedia",
     "is_borrowable": true,
-    "is_lab_asset": true
+    "is_lab_asset": true,
+    "spesifikasi": "IPS Panel 75Hz Full HD",
+    "keterangan": "Pengadaan lab komputer semester ganjil"
 }
 ```
 
-### Response Sukses (201 Created)
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `mode` | string | ❌ | `satuan` (default) atau `bulk` |
+| `jumlah_barang` | integer | ❌ | Jumlah unit jika mode bulk (min: 1, max: 100) |
+| `kategori_id` | integer | ✅ | ID kategori aset (`sinapra_kategori_aset`) |
+| `ruangan_id` | integer | ❌ | ID ruangan penempatan aset (`sinapra_ruangan`) |
+| `program_studi_id` | integer | ❌ | ID program studi pemilik aset |
+| `penanggung_jawab_pegawai_id` | integer | ❌ | ID pegawai PIC aset |
+| `kode_aset` | string | ❌ | Nomor inventaris (otomatis digenerate jika kosong) |
+| `nomor_urut` | integer | ❌ | Titik awal nomor urut inventaris (opsional) |
+| `nama` | string | ✅ | Nama barang / inventaris |
+| `merk` | string | ❌ | Merk barang |
+| `model` | string | ❌ | Tipe / model barang |
+| `serial_number` | string | ❌ | Nomor seri pabrikan (untuk mode satuan) |
+| `tanggal_perolehan` | string (date) | ❌ | Format YYYY-MM-DD |
+| `harga_perolehan` | numeric | ❌ | Harga beli satuan (Rp) |
+| `kondisi` | string | ✅ | `baik`, `rusak_ringan`, `rusak_berat` |
+| `status` | string | ✅ | `tersedia`, `dipinjam`, `maintenance`, `disetujui_diapkir`, `dihapuskan` |
+| `is_borrowable` | boolean | ❌ | Apakah barang dapat dipinjam |
+| `is_lab_asset` | boolean | ❌ | Apakah aset laboratorium |
+| `spesifikasi` | string | ❌ | Rincian spesifikasi teknis barang |
+| `keterangan` | string | ❌ | Catatan perolehan / garansi |
+
+### Response Sukses (201 Created - Satuan)
 ```json
 {
     "status": "success",
-    "message": "Aset berhasil ditambahkan",
+    "message": "Data aset berhasil ditambahkan",
     "data": {
-        "id": 2,
+        "id": 101,
+        "kode_aset": "4523/RF075/KUR/INDO/2023",
+        "nomor_urut": 4523,
+        "nama": "Kursi Kuliah Ergonomis",
         "kategori_id": 2,
-        "ruangan_id": 5,
-        "program_studi_id": 1,
-        "kode_aset": "AST-LAB-002",
-        "nama": "Spektrofotometer UV-Vis",
-        "merk": "Shimadzu",
-        "model": "UV-1900i",
-        "serial_number": "SHM-2026-004",
-        "tanggal_perolehan": "2026-02-10",
-        "harga_perolehan": 45000000.0,
-        "nilai_buku": 45000000.0,
+        "ruangan_id": 75,
         "kondisi": "baik",
         "status": "tersedia",
-        "is_borrowable": true,
-        "is_lab_asset": true,
-        "program_studi": {
-            "id": 1,
-            "kode_prodi": "TI-S1",
-            "nama": "S1 Teknik Informatika",
-            "jenjang": "S1"
+        "created_at": "2026-11-18T13:30:00.000000Z"
+    }
+}
+```
+
+### Response Sukses (201 Created - Masal / Bulk)
+```json
+{
+    "status": "success",
+    "message": "Berhasil menambahkan 5 unit barang inventaris aset sekaligus",
+    "data": [
+        {
+            "id": 102,
+            "kode_aset": "4523/RF075/KUR/INDO/2023",
+            "nomor_urut": 4523,
+            "nama": "Monitor LED Samsung 24 Inch"
         },
-        "created_at": "2026-02-10T10:00:00.000000Z"
+        {
+            "id": 103,
+            "kode_aset": "4524/RF075/KUR/INDO/2023",
+            "nomor_urut": 4524,
+            "nama": "Monitor LED Samsung 24 Inch"
+        }
+    ]
+}
+```
+
+### Response Error (422 Unprocessable Entity)
+```json
+{
+    "status": "error",
+    "message": "Validasi data gagal.",
+    "errors": {
+        "nama": [
+            "Nama barang / inventaris wajib diisi."
+        ],
+        "kategori_id": [
+            "Kategori aset yang dipilih tidak valid."
+        ],
+        "jumlah_barang": [
+            "Jumlah unit barang maksimal 100 unit."
+        ]
+    }
+}
+```
+
+---
+
+## GET /api/sinapra/aset/preview-nomor
+
+Deskripsi: Menghitung simulasi penomoran inventaris secara real-time berdasarkan input ruangan, kategori aset, tahun perolehan, nomor urut awal, dan jumlah barang.
+
+### Headers
+- `Authorization: Bearer {token}`
+- `Accept: application/json`
+
+### Query Parameters
+- `ruangan_id` (integer, optional) - ID lokasi penempatan ruangan.
+- `kategori_id` (integer, optional) - ID master kategori aset.
+- `tahun` (integer, optional) - Tahun perolehan (default: tahun berjalan).
+- `nomor_urut` (integer, optional) - Custom titik awal nomor urut.
+- `jumlah` (integer, default: 1, max: 100) - Jumlah barang (mode bulk).
+
+### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Preview format nomor inventaris berhasil dihitung",
+    "data": {
+        "nomor_urut_mulai": 4523,
+        "nomor_urut_selesai": 4527,
+        "jumlah": 5,
+        "kode_ruangan": "RF075",
+        "kode_kategori": "KUR",
+        "default_institusi": "INDO",
+        "tahun": 2023,
+        "preview_nomor": "4523/RF075/KUR/INDO/2023",
+        "preview_rentang": "4523/RF075/KUR/INDO/2023 s/d 4527/RF075/KUR/INDO/2023",
+        "formula": "{nomor_urut}/{kode_ruangan}/{kode_kategori}/INDO/{tahun}"
+    }
+}
+```
+
+### Response Error (401 Unauthorized)
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+### Response Error (403 Forbidden)
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki kewenangan untuk mengakses sumber daya ini."
+}
+```
+
+### Response Error (422 Unprocessable Entity)
+```json
+{
+    "status": "error",
+    "message": "Validasi query gagal.",
+    "errors": {
+        "jumlah": [
+            "Jumlah unit tidak boleh melebihi 100."
+        ]
     }
 }
 ```
