@@ -6,6 +6,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\ProgramStudi;
+use App\Services\Spmb\SpmbKonversiService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -111,5 +112,31 @@ class SiakadMahasiswaImportNimTest extends TestCase
             'id' => $mhs->id,
             'nim' => '2601002',
         ]);
+    }
+
+    public function test_generate_nim_uses_program_study_prefix_and_incrementing_sequence(): void
+    {
+        $this->prodi->update(['prefix_nim' => 'D']);
+
+        Mahasiswa::create([
+            'program_studi_id' => $this->prodi->id,
+            'nim' => 'D25010',
+            'nama_lengkap' => 'Mahasiswa Sebelumnya',
+            'jenis_kelamin' => 'L',
+            'status' => 'aktif',
+            'angkatan' => 2025,
+        ]);
+
+        $nim = app(SpmbKonversiService::class)->generateNIM(2025, $this->prodi->id);
+
+        $this->assertSame('D25011', $nim);
+    }
+
+    public function test_generate_nim_uses_standard_fallback_when_prefix_is_empty(): void
+    {
+        $nim = app(SpmbKonversiService::class)->generateNIM(2025, $this->prodi->id);
+        $expectedPrefix = '25' . str_pad((string) $this->prodi->id, 2, '0', STR_PAD_LEFT);
+
+        $this->assertSame($expectedPrefix . '0001', $nim);
     }
 }

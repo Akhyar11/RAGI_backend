@@ -239,7 +239,7 @@ class SpmbKonversiService
 
     /**
      * Algoritma pembuatan NIM:
-     * - Jika prodi punya prefix_nim (mis. Otomotif = "A"): {PREFIX}{2-digit tahun}{3-digit sequential}, cth A25001.
+     * - Jika prodi punya prefix_nim: {PREFIX}{2-digit tahun}{3-digit sequential}, cth D25001.
      * - Jika kosong: fallback standar {2-digit tahun}{2-digit kode prodi}{4-digit sequential}.
      */
     public function generateNIM(int $angkatan, int $prodiId): string
@@ -248,7 +248,7 @@ class SpmbKonversiService
         $prefixNim = null;
         try {
             $prodi = \App\Models\Siakad\ProgramStudi::find($prodiId);
-            $raw = trim((string) ($prodi?->kode_prodi ?? ''));
+            $raw = trim((string) ($prodi?->prefix_nim ?? ''));
             if ($raw !== '') {
                 $prefixNim = strtoupper($raw);
             }
