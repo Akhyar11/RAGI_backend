@@ -599,6 +599,7 @@ class IamApiIntegrationTest extends TestCase
         DB::table('siakad_kurikulum')->insert([
             'program_studi_id' => $programStudiId,
             'kode' => 'KUR-TI-PDDIKTI',
+            'id_feeder' => 'kurikulum-uuid-1',
             'nama' => 'Kurikulum Teknik Informatika 2024',
             'tahun_berlaku' => 2024,
             'total_sks_lulus' => 144,
@@ -606,6 +607,8 @@ class IamApiIntegrationTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+        DB::table('siakad_kurikulum')->where('kode', 'KUR-TI-PDDIKTI')
+            ->update(['id_feeder' => 'kurikulum-uuid-1']);
 
         SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
         SystemSetting::set('feeder_username', 'kampus-test');
@@ -644,13 +647,233 @@ class IamApiIntegrationTest extends TestCase
             'tipe' => 'wajib',
             'total_sks' => 3,
         ]);
-        $this->assertDatabaseHas('siakad_kurikulum', [
-            'kode' => 'KUR-TI-PDDIKTI',
-            'id_feeder' => 'kurikulum-uuid-1',
-        ]);
+        $this->assertDatabaseHas('siakad_kurikulum', ['kode' => 'KUR-TI-PDDIKTI', 'id_feeder' => 'kurikulum-uuid-1']);
         Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'GetMatkulKurikulum')
             || str_contains($request->body(), 'GetToken'));
         $response->assertJsonMissing(['token' => 'runtime-feeder-token']);
+    }
+
+    public function test_pddikti_curriculum_sync_maps_programs_and_is_idempotent(): void
+    {
+        $integration = IamApiIntegration::create([
+            'key' => 'siakad_kurikulum',
+            'name' => 'Migrasi Kurikulum SIAKAD',
+            'module' => 'siakad',
+            'http_method' => 'GET',
+            'description' => 'Sinkronisasi kurikulum Neo Feeder.',
+            'expected_schema' => ['type' => 'object'],
+            'source_type' => 'pddikti',
+            'supported_sources' => ['pddikti'],
+            'source_schemas' => ['pddikti' => ['connection_managed' => true, 'action' => 'GetListKurikulum', 'target_entity' => 'kurikulum']],
+            'auth_type' => 'bearer',
+            'is_active' => true,
+        ]);
+
+        $programStudiId = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => 'TI-KUR-TEST',
+            'nama' => 'Teknik Informatika',
+            'jenjang' => 'D3',
+            'id_feeder' => 'prodi-curriculum-uuid',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fakeSequence('https://feeder.example.test/ws/live2.php')
+            ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => [
+                [
+                    'id_kurikulum' => 'curriculum-uuid-1',
+                    'nama_kurikulum' => 'Kurikulum TI 2024',
+                    'id_prodi' => 'prodi-curriculum-uuid',
+                    'nama_program_studi' => 'Teknik Informatika',
+                    'id_semester' => '20241',
+                    'semester_mulai_berlaku' => '2024/2025 Ganjil',
+                    'jumlah_sks_lulus' => 144,
+                    'jumlah_sks_wajib' => 120,
+                ],
+                [
+                    'id_kurikulum' => 'curriculum-uuid-unmapped',
+                    'nama_kurikulum' => 'Kurikulum Prodi Belum Ada',
+                    'id_prodi' => 'unknown-program-uuid',
+                    'nama_program_studi' => 'Program Belum Dipetakan',
+                    'id_semester' => '20241',
+                    'semester_mulai_berlaku' => '2024/2025 Ganjil',
+                    'jumlah_sks_lulus' => 120,
+                    'jumlah_sks_wajib' => 100,
+                ],
+            ]], 200)
+            ->push(['error_code' => 0, 'data' => [[
+                'id_kurikulum' => 'curriculum-uuid-1',
+                'nama_kurikulum' => 'Kurikulum TI 2024 Revisi',
+                'id_prodi' => 'prodi-curriculum-uuid',
+                'nama_program_studi' => 'Teknik Informatika',
+                'id_semester' => '20241',
+                'semester_mulai_berlaku' => '2024/2025 Ganjil',
+                'jumlah_sks_lulus' => 144,
+                'jumlah_sks_wajib' => 120,
+            ]]], 200);
+
+        $firstSync = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+
+        $firstSync->assertStatus(200)
+            ->assertJsonPath('data.source_total', 2)
+            ->assertJsonPath('data.created', 1)
+            ->assertJsonPath('data.skipped', 1)
+            ->assertJsonPath('data.skipped_items.0.reason', 'Program studi PDDIKTI belum dipetakan ke ID Feeder di SIAKAD.');
+
+        $this->assertDatabaseHas('siakad_kurikulum', [
+            'program_studi_id' => $programStudiId,
+            'id_feeder' => 'curriculum-uuid-1',
+            'kode' => 'PDDIKTI-curriculum-uuid-1',
+            'nama' => 'Kurikulum TI 2024',
+            'tahun_berlaku' => 2024,
+            'total_sks_lulus' => 144,
+        ]);
+
+        $secondSync = $this->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+        $secondSync->assertStatus(200)
+            ->assertJsonPath('data.created', 0)
+            ->assertJsonPath('data.updated', 1)
+            ->assertJsonPath('data.skipped', 0);
+
+        $this->assertSame(1, DB::table('siakad_kurikulum')->where('id_feeder', 'curriculum-uuid-1')->count());
+        $this->assertDatabaseHas('siakad_kurikulum', [
+            'id_feeder' => 'curriculum-uuid-1',
+            'nama' => 'Kurikulum TI 2024 Revisi',
+        ]);
+    }
+
+    public function test_pddikti_curriculum_registry_imports_get_list_curriculum_before_courses(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_kurikulum')->firstOrFail();
+        $sourceSchema = $integration->source_schemas['pddikti'];
+
+        $this->assertSame('pddikti', $integration->source_type);
+        $this->assertSame(['pddikti'], $integration->supported_sources);
+        $this->assertSame('GetListKurikulum', $sourceSchema['action']);
+        $this->assertSame('kurikulum', $sourceSchema['target_entity']);
+
+        $programStudiId = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => 'TI-KUR-TEST',
+            'nama' => 'Teknik Informatika',
+            'jenjang' => 'D3',
+            'id_feeder' => 'prodi-curriculum-uuid',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fakeSequence('https://feeder.example.test/ws/live2.php')
+            ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => [[
+                'id_kurikulum' => 'curriculum-uuid-1',
+                'nama_kurikulum' => 'Kurikulum TI 2024',
+                'id_prodi' => 'prodi-curriculum-uuid',
+                'nama_program_studi' => 'Teknik Informatika',
+                'id_semester' => '20241',
+                'semester_mulai_berlaku' => '2024/2025 Ganjil',
+                'jumlah_sks_lulus' => 144,
+                'jumlah_sks_wajib' => 120,
+            ]]], 200);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.created', 1)
+            ->assertJsonPath('data.skipped', 0);
+        $this->assertDatabaseHas('siakad_kurikulum', [
+            'program_studi_id' => $programStudiId,
+            'id_feeder' => 'curriculum-uuid-1',
+            'kode' => 'PDDIKTI-curriculum-uuid-1',
+            'tahun_berlaku' => 2024,
+            'total_sks_lulus' => 144,
+        ]);
+    }
+
+    public function test_pddikti_curriculum_connection_test_uses_get_list_curriculum_without_touching_sync_state(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_kurikulum')->firstOrFail();
+        $integration->update([
+            'supported_sources' => ['pddikti'],
+            'source_schemas' => ['pddikti' => [
+                'connection_managed' => true,
+                'action' => 'GetListKurikulum',
+                'target_entity' => 'kurikulum',
+            ]],
+            'last_synced_at' => '2026-11-02 08:00:00',
+            'last_status' => 'failed',
+        ]);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fakeSequence('https://feeder.example.test/ws/live2.php')
+            ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => []], 200);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/test");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.response_sample.action', 'GetListKurikulum')
+            ->assertJsonMissing(['token' => 'runtime-feeder-token']);
+        $this->assertDatabaseMissing('siakad_kurikulum', ['id_feeder' => 'curriculum-uuid-1']);
+        Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'GetListKurikulum'));
+        $this->assertSame('2026-11-02 08:00:00', $integration->fresh()->last_synced_at->format('Y-m-d H:i:s'));
+        $this->assertSame('failed', $integration->fresh()->last_status);
+    }
+
+    public function test_pddikti_course_sync_skips_when_curriculum_has_not_been_synced(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_mata_kuliah')->firstOrFail();
+        $programStudiId = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => 'TI-NO-KUR',
+            'nama' => 'Teknik Informatika',
+            'jenjang' => 'D3',
+            'id_feeder' => 'prodi-no-curriculum',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fakeSequence('https://feeder.example.test/ws/live2.php')
+            ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => [[
+                'id_kurikulum' => 'not-yet-mapped-curriculum',
+                'nama_kurikulum' => 'Kurikulum belum dimigrasikan',
+                'id_matkul' => 'course-without-curriculum',
+                'kode_mata_kuliah' => 'TI-NOKUR-01',
+                'nama_mata_kuliah' => 'Mata Kuliah Belum Terpetakan',
+                'id_prodi' => 'prodi-no-curriculum',
+                'semester' => 1,
+                'sks_mata_kuliah' => 3,
+                'sks_tatap_muka' => 2,
+                'sks_praktek' => 1,
+                'apakah_wajib' => 1,
+            ]]], 200);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.created', 0)
+            ->assertJsonPath('data.skipped', 1)
+            ->assertJsonPath('data.skipped_items.0.reason', 'Kurikulum PDDIKTI belum dimigrasikan. Jalankan sinkronisasi kurikulum terlebih dahulu.');
+        $this->assertDatabaseMissing('siakad_mata_kuliah', ['kode_mk' => 'TI-NOKUR-01']);
+        $this->assertDatabaseMissing('siakad_kurikulum', ['program_studi_id' => $programStudiId]);
     }
 
     public function test_pddikti_connection_test_uses_neo_feeder_settings_without_exposing_token(): void

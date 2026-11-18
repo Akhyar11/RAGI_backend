@@ -132,6 +132,43 @@ class IamApiIntegrationSeeder extends Seeder
                 'is_active' => true,
             ],
             [
+                'key' => 'siakad_kurikulum',
+                'name' => 'Migrasi Kurikulum SIAKAD',
+                'module' => 'siakad',
+                'http_method' => 'GET',
+                'description' => 'Mengambil master kurikulum PDDIKTI melalui GetListKurikulum. Program studi tujuan harus sudah dipetakan ke UUID Feeder.',
+                'source_type' => 'pddikti',
+                'supported_sources' => ['pddikti'],
+                'source_schemas' => [
+                    'pddikti' => [
+                        'source' => 'Neo Feeder PDDikti',
+                        'action' => 'GetListKurikulum',
+                        'connection_managed' => true,
+                        'target_entity' => 'kurikulum',
+                        'fields' => [
+                            'id_kurikulum' => 'UUID kurikulum PDDIKTI',
+                            'nama_kurikulum' => 'Nama kurikulum',
+                            'id_prodi' => 'UUID program studi PDDIKTI',
+                            'nama_program_studi' => 'Nama program studi sumber',
+                            'id_semester' => 'Kode semester mulai',
+                            'semester_mulai_berlaku' => 'Semester mulai berlaku',
+                            'jumlah_sks_lulus' => 'Total SKS lulus',
+                            'jumlah_sks_wajib' => 'Total SKS wajib',
+                        ],
+                    ],
+                ],
+                'expected_schema' => [
+                    'type' => 'object',
+                    'description' => 'Respons Neo Feeder dari GetListKurikulum.',
+                    'properties' => [
+                        'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                        'error_code' => ['type' => 'integer'],
+                    ],
+                ],
+                'auth_type' => 'bearer',
+                'is_active' => true,
+            ],
+            [
                 'key' => 'siakad_mata_kuliah',
                 'name' => 'Migrasi Mata Kuliah SIAKAD',
                 'module' => 'siakad',

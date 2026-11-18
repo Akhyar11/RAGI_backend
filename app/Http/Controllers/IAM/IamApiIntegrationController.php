@@ -9,6 +9,7 @@ use App\Models\IamApiIntegration;
 use App\Services\AuditLogService;
 use App\Services\IAM\ApiIntegrationService;
 use App\Services\IAM\ApiIntegrationSyncException;
+use App\Services\IAM\KurikulumIntegrationSyncService;
 use App\Services\IAM\MataKuliahIntegrationSyncService;
 use App\Services\IAM\ProgramStudiIntegrationSyncService;
 use App\Services\IAM\SiakadMahasiswaIntegrationSyncService;
@@ -163,7 +164,14 @@ class IamApiIntegrationController extends Controller
         }
 
         if ($requestedSource === 'pddikti') {
-            return $this->testPddiktiConnection($request, $integration, $oldValues);
+            $sourceSchema = $integration->source_schemas[$requestedSource] ?? [];
+            return $this->testPddiktiConnection(
+                $request,
+                $integration,
+                $oldValues,
+                $sourceSchema['action'] ?? null,
+                $sourceSchema['target_entity'] ?? null
+            );
         }
 
         $url = $request->filled('url_api') ? $request->url_api : $integration->url_api;
@@ -270,12 +278,21 @@ class IamApiIntegrationController extends Controller
         }
     }
 
-    private function testPddiktiConnection(TestApiIntegrationRequest $request, IamApiIntegration $integration, array $oldValues)
+    private function testPddiktiConnection(
+        TestApiIntegrationRequest $request,
+        IamApiIntegration $integration,
+        array $oldValues,
+        ?string $action,
+        ?string $targetEntity
+    )
     {
         $startTime = microtime(true);
 
         try {
-            $result = app(MataKuliahIntegrationSyncService::class)->testPddiktiConnection();
+            $result = match ($targetEntity) {
+                'kurikulum' => app(KurikulumIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
+                default => app(MataKuliahIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
+            };
             $this->recordIntegrationTestAudit($request, $integration, $oldValues, ['test_status' => 'success']);
 
             return response()->json([
@@ -322,6 +339,7 @@ class IamApiIntegrationController extends Controller
         int $id,
         ProgramStudiIntegrationSyncService $syncService,
         MataKuliahIntegrationSyncService $mataKuliahSyncService,
+        KurikulumIntegrationSyncService $kurikulumSyncService,
         SikeuIntegrationSyncService $sikeuSyncService,
         SiakadMahasiswaIntegrationSyncService $siakadMahasiswaSyncService
     ) {
@@ -334,6 +352,9 @@ class IamApiIntegrationController extends Controller
             $result = match (true) {
                 $integration->module === 'siakad' && $integration->key === 'siakad_program_studi' => $syncService->sync($integration),
                 $integration->module === 'siakad' && $integration->key === 'siakad_mahasiswa' => $siakadMahasiswaSyncService->sync($integration),
+                $integration->module === 'siakad'
+                    && in_array('pddikti', $integration->supported_sources ?? [], true)
+                    && ($integration->source_schemas[$integration->source_type]['target_entity'] ?? null) === 'kurikulum' => $kurikulumSyncService->sync($integration),
                 $integration->module === 'siakad' && in_array('pddikti', $integration->supported_sources ?? [], true) => $mataKuliahSyncService->sync($integration),
                 $integration->module === 'sikeu' => $sikeuSyncService->sync($integration),
                 default => throw new ApiIntegrationSyncException("Aksi sync belum didukung untuk integrasi '{$integration->key}' (modul '{$integration->module}')."),

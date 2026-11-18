@@ -135,23 +135,23 @@ class MataKuliahIntegrationSyncService
         });
     }
 
-    public function testPddiktiConnection(): array
+    public function testPddiktiConnection(string $action = 'GetMatkulKurikulum'): array
     {
         try {
-            $response = $this->neoFeeder->request('GetMatkulKurikulum', [
+            $response = $this->neoFeeder->request($action, [
                 'limit' => 1,
                 'offset' => 0,
             ]);
         } catch (\Throwable $exception) {
             throw new ApiIntegrationSyncException(
-                'Koneksi Neo Feeder gagal. Periksa konfigurasi Koneksi Neo Feeder PDDikti dan hak akses GetMatkulKurikulum.',
+                "Koneksi Neo Feeder gagal. Periksa konfigurasi Koneksi Neo Feeder PDDikti dan hak akses {$action}.",
                 502
             );
         }
 
         if (($response['error_code'] ?? null) !== 0) {
             throw new ApiIntegrationSyncException(
-                'Neo Feeder menolak permintaan GetMatkulKurikulum. Periksa hak akses akun Feeder.',
+                "Neo Feeder menolak permintaan {$action}. Periksa hak akses akun Feeder.",
                 502
             );
         }
@@ -159,7 +159,7 @@ class MataKuliahIntegrationSyncService
         $data = $response['data'] ?? [];
 
         return [
-            'action' => 'GetMatkulKurikulum',
+            'action' => $action,
             'data_count' => is_array($data) ? count($data) : 0,
         ];
     }
@@ -214,17 +214,8 @@ class MataKuliahIntegrationSyncService
                 }
 
                 if (!$curriculum) {
-                    $matches = Kurikulum::withTrashed()
-                        ->where('program_studi_id', $program->id)
-                        ->where('nama', trim((string) ($row['nama_kurikulum'] ?? '')))
-                        ->get();
-                    if ($matches->count() !== 1) {
-                        $this->skip($result, $index, $row, $matches->isEmpty()
-                            ? 'Kurikulum PDDIKTI tidak ditemukan pada program studi tujuan.'
-                            : 'Nama kurikulum PDDIKTI cocok ke lebih dari satu kurikulum tujuan.');
-                        continue;
-                    }
-                    $curriculum = $matches->first();
+                    $this->skip($result, $index, $row, 'Kurikulum PDDIKTI belum dimigrasikan. Jalankan sinkronisasi kurikulum terlebih dahulu.');
+                    continue;
                 }
                 if ($curriculum->trashed()) {
                     $this->skip($result, $index, $row, 'Kurikulum tujuan sudah dihapus di SIAKAD.');
