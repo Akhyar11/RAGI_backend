@@ -25,7 +25,6 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\IAM\SystemSettingSeeder::class,
             \Database\Seeders\SpmbBerkasRequirementSeeder::class,
             \Database\Seeders\SpmbTemplateSuratSeeder::class,
-            \Database\Seeders\ArsipUnitSeeder::class,
             \Database\Seeders\Simpeg\SimpegPayrollFlexibleSeeder::class,
             \Database\Seeders\IAM\IamApiIntegrationSeeder::class,
             \Database\Seeders\Sikeu\SikeuAkuntansiSeeder::class,
