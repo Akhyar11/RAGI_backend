@@ -183,7 +183,7 @@
 
 ## DELETE /api/arsip/klasifikasi/{id}
 
-> Menghapus data referensi klasifikasi surat (soft delete).
+> Menghapus data referensi klasifikasi surat secara permanen dari sistem.
 
 ### Response Sukses (200 OK)
 

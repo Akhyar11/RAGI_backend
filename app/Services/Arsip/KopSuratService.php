@@ -199,24 +199,32 @@ class KopSuratService
     }
 
     /**
-     * Menghapus kop surat (soft delete).
+     * Menghapus master kop surat secara permanen beserta berkas fisiknya.
      */
     public function destroy(int $id): bool
     {
         $kop = KopSurat::findOrFail($id);
         $oldValues = $kop->toArray();
 
+        if ($kop->file_path) {
+            $this->fileStorage->delete($kop->file_path);
+        }
+
         $deleted = $kop->delete();
 
         if ($deleted) {
-            AuditLogService::record(
-                module: 'ARSIP',
-                action: 'delete',
-                tableName: 'core_arsip_kop_surat',
-                recordId: $id,
-                oldValues: $oldValues,
-                newValues: []
-            );
+            try {
+                AuditLogService::record(
+                    module: 'ARSIP',
+                    action: 'delete',
+                    tableName: 'core_arsip_kop_surat',
+                    recordId: $id,
+                    oldValues: $oldValues,
+                    newValues: []
+                );
+            } catch (\Throwable $e) {
+                \Log::warning('Gagal mencatat audit log hapus kop surat: ' . $e->getMessage());
+            }
         }
 
         return $deleted;

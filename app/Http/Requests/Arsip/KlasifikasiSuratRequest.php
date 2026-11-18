@@ -23,11 +23,17 @@ class KlasifikasiSuratRequest extends FormRequest
                 [
                     'string',
                     'max:50',
-                    Rule::unique('core_arsip_klasifikasi', 'kode')->ignore($id)->whereNull('deleted_at'),
+                    Rule::unique('core_arsip_klasifikasi', 'kode')->ignore($id),
                 ]
             ),
-            'nama' => ($this->isMethod('POST') ? 'required' : 'sometimes|required') . '|string|max:150',
-            'kategori' => ($this->isMethod('POST') ? 'required' : 'sometimes|required') . '|string|max:50',
+            'nama' => array_merge(
+                $this->isMethod('POST') ? ['required'] : ['sometimes', 'required'],
+                ['string', 'max:150']
+            ),
+            'kategori' => array_merge(
+                $this->isMethod('POST') ? ['required'] : ['sometimes', 'required'],
+                ['string', 'max:50']
+            ),
             'keterangan' => 'nullable|string',
             'is_active' => 'nullable|boolean',
         ];
