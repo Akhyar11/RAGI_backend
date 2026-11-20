@@ -116,6 +116,7 @@ Route::prefix('akademik')->group(function () {
     Route::delete('/prodi/{id}', [AkademikController::class, 'destroyProgramStudi']);
 
     // Admin OBE Homebase Prodi CRUD & Role Menu Plotting
+    Route::get('/admin-prodi/eligible-personnel', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'eligiblePersonnel']);
     Route::get('/admin-prodi', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'index']);
     Route::post('/admin-prodi', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'store']);
     Route::get('/admin-prodi/{id}', [\App\Http\Controllers\API\Siakad\AdminProdiController::class, 'show']);

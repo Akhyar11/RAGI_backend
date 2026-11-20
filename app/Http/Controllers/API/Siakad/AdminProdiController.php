@@ -4,12 +4,15 @@ namespace App\Http\Controllers\API\Siakad;
 
 use App\Http\Controllers\Controller;
 use App\Models\Siakad\AdminProdi;
+use App\Models\Siakad\Dosen;
 use App\Models\Siakad\ProgramStudi;
+use App\Models\User;
 use App\Http\Requests\Siakad\AssignAdminProdiRequest;
 use App\Http\Requests\Siakad\UpdateAdminProdiRequest;
 use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
 
 class AdminProdiController extends Controller
 {
@@ -18,10 +21,7 @@ class AdminProdiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $user = $request->user();
-        if (!$user || (!$user->isSuperAdmin() && !$user->hasPermission('siakad.master.manage'))) {
-            return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses.'], 403);
-        }
+        Gate::authorize('siakad.master.manage');
 
         $perPage = min(100, $request->integer('per_page', 15));
         $query = AdminProdi::with([
@@ -96,6 +96,118 @@ class AdminProdiController extends Controller
                 'user_id' => $request->user_id,
                 'sort_by' => $sortBy,
                 'sort_order' => $sortOrder,
+            ],
+        ]);
+    }
+
+    /**
+     * Opsi akun personel aktif yang dapat ditugaskan sebagai Admin OBE Prodi.
+     */
+    public function eligiblePersonnel(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.master.manage');
+
+        $excludedRoleIds = app(\App\Services\IAM\RestrictedRoleService::class)->getExcludedRoleIdsForAssignment();
+        $query = User::query()
+            ->where('core_users.is_active', true)
+            ->where(function ($personnelQuery): void {
+                $personnelQuery
+                    ->whereHas('pegawai', fn ($pegawaiQuery) => $pegawaiQuery->where('is_active', true))
+                    ->orWhereExists(function ($dosenQuery): void {
+                        $dosenQuery->selectRaw('1')
+                            ->from('siakad_dosen')
+                            ->whereColumn('siakad_dosen.user_id', 'core_users.id')
+                            ->whereNull('siakad_dosen.deleted_at')
+                            ->where('siakad_dosen.is_active', true);
+                    });
+            })
+            ->when($excludedRoleIds !== [], function ($query) use ($excludedRoleIds): void {
+                $query->whereDoesntHave('roles', function ($roleQuery) use ($excludedRoleIds): void {
+                    $roleQuery->whereIn('core_roles.id', $excludedRoleIds);
+                });
+            });
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->query('search'));
+            $query->where(function ($searchQuery) use ($search): void {
+                $searchQuery->where('core_users.name', 'like', "%{$search}%")
+                    ->orWhere('core_users.username', 'like', "%{$search}%")
+                    ->orWhere('core_users.email', 'like', "%{$search}%")
+                    ->orWhereHas('pegawai', function ($pegawaiQuery) use ($search): void {
+                        $pegawaiQuery->where('is_active', true)
+                            ->where(function ($identityQuery) use ($search): void {
+                                $identityQuery->where('nama_lengkap', 'like', "%{$search}%")
+                                    ->orWhere('nip', 'like', "%{$search}%")
+                                    ->orWhere('nidn', 'like', "%{$search}%")
+                                    ->orWhere('nuptk', 'like', "%{$search}%");
+                            });
+                    })
+                    ->orWhereExists(function ($dosenQuery) use ($search): void {
+                        $dosenQuery->selectRaw('1')
+                            ->from('siakad_dosen')
+                            ->whereColumn('siakad_dosen.user_id', 'core_users.id')
+                            ->whereNull('siakad_dosen.deleted_at')
+                            ->where('siakad_dosen.is_active', true)
+                            ->where(function ($identityQuery) use ($search): void {
+                                $identityQuery->where('siakad_dosen.nama_lengkap', 'like', "%{$search}%")
+                                    ->orWhere('siakad_dosen.nidn', 'like', "%{$search}%")
+                                    ->orWhere('siakad_dosen.nip', 'like', "%{$search}%")
+                                    ->orWhere('siakad_dosen.nuptk', 'like', "%{$search}%");
+                            });
+                    });
+            });
+        }
+
+        $sortOrder = $request->query('sort_order') === 'desc' ? 'desc' : 'asc';
+        $perPage = min(100, max(1, $request->integer('per_page', 50)));
+        $paginator = $query->with('pegawai:id,user_id,nama_lengkap,nip,nidn,nuptk,is_active')
+            ->orderBy('core_users.name', $sortOrder)
+            ->paginate($perPage);
+        $dosenByUser = Dosen::query()
+            ->with('programStudi:id,nama,kode_prodi')
+            ->whereIn('user_id', $paginator->getCollection()->pluck('id'))
+            ->where('is_active', true)
+            ->get()
+            ->keyBy('user_id');
+
+        $options = $paginator->getCollection()->map(function (User $person) use ($dosenByUser): array {
+            $dosen = $dosenByUser->get($person->id);
+            $pegawai = $person->pegawai;
+            $personnelTypes = array_values(array_filter([
+                $dosen ? 'Dosen' : null,
+                $pegawai?->is_active ? 'Pegawai' : null,
+            ]));
+            $identifiers = array_values(array_filter([
+                $dosen?->nidn,
+                $dosen?->nip,
+                $pegawai?->nidn,
+                $pegawai?->nip,
+                $pegawai?->nuptk,
+            ]));
+            $homebase = $dosen?->programStudi?->nama;
+
+            return [
+                'id' => $person->id,
+                'name' => $person->name ?: $person->username,
+                'username' => $person->username,
+                'email' => $person->email,
+                'personnel_type' => implode(' / ', $personnelTypes),
+                'personnel_identifier' => implode(' / ', array_unique($identifiers)),
+                'homebase' => $homebase,
+            ];
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Opsi personel Admin OBE berhasil diambil',
+            'data' => $options,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
             ],
         ]);
     }

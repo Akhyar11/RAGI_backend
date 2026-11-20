@@ -37,6 +37,23 @@ class RestrictedRoleService
     }
 
     /**
+     * Mengambil ID role yang tidak dapat dipilih sebagai personel Admin OBE.
+     * Daftar menggabungkan role restricted terkonfigurasi dan role superadmin aktif.
+     *
+     * @return int[]
+     */
+    public function getExcludedRoleIdsForAssignment(): array
+    {
+        $roleIds = $this->getRestrictedRoleIds();
+        $superAdminRole = SystemSetting::get('superadmin_role');
+        if ($superAdminRole) {
+            $roleIds = array_merge($roleIds, Role::query()->where('slug', $superAdminRole)->pluck('id')->all());
+        }
+
+        return array_values(array_unique(array_map('intval', $roleIds)));
+    }
+
+    /**
      * Apakah user boleh melihat roles yang direstriksi?
      * Pengelola IAM (superadmin atau pemegang izin kelola roles)
      * selalu melihat semua roles, sesuai kebijakan RolePolicy::create.

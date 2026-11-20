@@ -5,6 +5,7 @@ namespace App\Http\Controllers\IAM;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\IAM\UpdateApiIntegrationRequest;
 use App\Http\Requests\IAM\TestApiIntegrationRequest;
+use App\Jobs\SyncPddiktiMahasiswaJob;
 use App\Models\IamApiIntegration;
 use App\Services\AuditLogService;
 use App\Services\IAM\ApiIntegrationService;
@@ -15,8 +16,11 @@ use App\Services\IAM\ProgramStudiIntegrationSyncService;
 use App\Services\IAM\SiakadMahasiswaIntegrationSyncService;
 use App\Services\IAM\SikeuIntegrationSyncService;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Throwable;
 
 class IamApiIntegrationController extends Controller
@@ -96,24 +100,24 @@ class IamApiIntegrationController extends Controller
         $integration = IamApiIntegration::findOrFail($id);
         $oldValues = $integration->getOriginal();
         $sourceType = $request->input('source_type', $integration->source_type ?? 'custom_api');
+        $sourceSchema = $integration->source_schemas[$sourceType] ?? [];
+        $connectionManaged = ($sourceSchema['connection_managed'] ?? false) === true;
 
         if ($sourceType === 'pddikti' && !in_array('pddikti', $integration->supported_sources ?? [], true)) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Mode PDDIKTI Neo Feeder hanya didukung untuk integrasi mata kuliah SIAKAD.',
+                'message' => 'Mode PDDIKTI Neo Feeder tidak didukung untuk integrasi ini.',
             ], 422);
         }
 
         $integration->fill([
             'source_type' => $sourceType,
-            'url_api' => $sourceType === 'pddikti' ? null : $request->url_api,
+            'url_api' => $connectionManaged ? null : $request->input('url_api', $integration->url_api),
             'auth_type' => $request->auth_type,
             'is_active' => $request->boolean('is_active'),
         ]);
 
-        if ($sourceType === 'pddikti') {
-            $integration->token = null;
-        } elseif ($request->filled('token')) {
+        if ($request->filled('token')) {
             $integration->token = $request->token;
         }
 
@@ -159,7 +163,7 @@ class IamApiIntegrationController extends Controller
         if ($requestedSource === 'pddikti' && !in_array('pddikti', $integration->supported_sources ?? [], true)) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Mode PDDIKTI Neo Feeder hanya didukung untuk integrasi mata kuliah SIAKAD.',
+                'message' => 'Mode PDDIKTI Neo Feeder tidak didukung untuk integrasi ini.',
             ], 422);
         }
 
@@ -292,6 +296,7 @@ class IamApiIntegrationController extends Controller
             $result = match ($targetEntity) {
                 'program_studi' => app(ProgramStudiIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 'kurikulum' => app(KurikulumIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
+                'mahasiswa' => app(SiakadMahasiswaIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 default => app(MataKuliahIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
             };
             $this->recordIntegrationTestAudit($request, $integration, $oldValues, ['test_status' => 'success']);
@@ -349,14 +354,27 @@ class IamApiIntegrationController extends Controller
         $integration = IamApiIntegration::findOrFail($id);
         $oldValues = $integration->only(['last_synced_at', 'last_status']);
 
+        if ($integration->module === 'siakad'
+            && $integration->key === 'siakad_mahasiswa'
+            && $integration->source_type === 'pddikti'
+            && !$request->boolean('preview')) {
+            return $this->startPddiktiMahasiswaSync($request, $integration, $oldValues);
+        }
+
         try {
             $result = match (true) {
                 $integration->module === 'siakad'
+                    && $integration->source_type === 'pddikti'
                     && in_array('pddikti', $integration->supported_sources ?? [], true)
                     && ($integration->source_schemas[$integration->source_type]['target_entity'] ?? null) === 'program_studi' => $syncService->sync($integration),
+                $integration->module === 'siakad'
+                    && $integration->source_type === 'pddikti'
+                    && in_array('pddikti', $integration->supported_sources ?? [], true)
+                    && ($integration->source_schemas[$integration->source_type]['target_entity'] ?? null) === 'mahasiswa' => $siakadMahasiswaSyncService->syncPddikti($integration, $request->boolean('preview')),
                 $integration->module === 'siakad' && $integration->key === 'siakad_program_studi' => $syncService->sync($integration),
                 $integration->module === 'siakad' && $integration->key === 'siakad_mahasiswa' => $siakadMahasiswaSyncService->sync($integration),
                 $integration->module === 'siakad'
+                    && $integration->source_type === 'pddikti'
                     && in_array('pddikti', $integration->supported_sources ?? [], true)
                     && ($integration->source_schemas[$integration->source_type]['target_entity'] ?? null) === 'kurikulum' => $kurikulumSyncService->sync($integration),
                 $integration->module === 'siakad' && in_array('pddikti', $integration->supported_sources ?? [], true) => $mataKuliahSyncService->sync($integration),
@@ -420,5 +438,121 @@ class IamApiIntegrationController extends Controller
                 'message' => $exception->getMessage(),
             ], $exception->statusCode);
         }
+    }
+
+    public function studentSyncProgress(Request $request, string $progressId): JsonResponse
+    {
+        Gate::authorize('iam.api_integration.manage');
+
+        if (!Str::isUuid($progressId)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'ID progres tidak valid.',
+            ], 404);
+        }
+        $progress = Cache::get('siakad-mahasiswa-pddikti-sync:' . $progressId);
+        if (!is_array($progress)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Proses sinkronisasi tidak ditemukan atau sudah kedaluwarsa.',
+            ], 404);
+        }
+        $isOwner = (int) ($progress['requested_by'] ?? 0) === (int) $request->user()?->id;
+        if (!$isOwner && !$request->user()?->isSuperAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki akses ke progres sinkronisasi ini.',
+            ], 403);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Progres sinkronisasi mahasiswa berhasil diambil.',
+            'data' => $progress,
+        ]);
+    }
+
+    private function startPddiktiMahasiswaSync(Request $request, IamApiIntegration $integration, array $oldValues)
+    {
+        if (!$integration->is_active) {
+            throw new ApiIntegrationSyncException('Integrasi sedang dinonaktifkan.');
+        }
+        if (config('queue.default') === 'sync') {
+            throw new ApiIntegrationSyncException('Progress real-time memerlukan queue worker. Atur QUEUE_CONNECTION ke database dan jalankan worker queue default.', 503);
+        }
+
+        $lock = Cache::lock('siakad-mahasiswa-pddikti-sync:lock', 3600);
+        if (!$lock->get()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Sinkronisasi mahasiswa PDDIKTI sedang berjalan. Tunggu hingga selesai.',
+            ], 409);
+        }
+
+        $progressId = (string) Str::uuid();
+        $integration->update([
+            'last_synced_at' => now(),
+            'last_status' => 'processing',
+        ]);
+
+        Cache::put('siakad-mahasiswa-pddikti-sync:' . $progressId, [
+            'progress_id' => $progressId,
+            'integration_id' => $integration->id,
+            'requested_by' => $request->user()?->id,
+            'status' => 'queued',
+            'phase' => 'queued',
+            'progress' => 0,
+            'processed' => 0,
+            'total' => null,
+            'message' => 'Sinkronisasi masuk antrean, menunggu worker.',
+            'started_at' => now()->toISOString(),
+            'result' => [
+                'read_count' => 0,
+                'source_total' => 0,
+                'created' => 0,
+                'updated' => 0,
+                'synced' => 0,
+                'skipped' => 0,
+                'failed' => 0,
+                'skipped_items' => [],
+            ],
+        ], now()->addHours(2));
+
+        try {
+            SyncPddiktiMahasiswaJob::dispatch(
+                $integration->id,
+                $progressId,
+                $lock->owner(),
+                $request->user()?->id,
+            )->afterCommit();
+        } catch (Throwable $exception) {
+            Cache::forget('siakad-mahasiswa-pddikti-sync:' . $progressId);
+            $lock->release();
+            $integration->update([
+                'last_synced_at' => now(),
+                'last_status' => 'failed',
+            ]);
+            throw new ApiIntegrationSyncException('Tidak dapat menjadwalkan sinkronisasi. Periksa queue worker dan coba lagi.', 503);
+        }
+
+        try {
+            AuditLogService::record(
+                module: 'IAM',
+                action: 'sync_queued',
+                tableName: 'iam_api_integrations',
+                recordId: $integration->id,
+                oldValues: $oldValues,
+                newValues: ['progress_id' => $progressId, 'status' => 'queued'],
+                request: $request,
+            );
+        } catch (Throwable $auditError) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit enqueue sync mahasiswa PDDIKTI.');
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Sinkronisasi dijadwalkan. Progres diperbarui selama proses berjalan.',
+            'data' => ['progress_id' => $progressId],
+        ], 202);
     }
 }

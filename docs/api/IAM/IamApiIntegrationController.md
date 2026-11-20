@@ -17,6 +17,7 @@ Controller ini mengelola registrasi integrasi API eksternal tingkat sistem yang 
 | PUT | `/api/api-integrations/{id}` | Update tipe sumber, URL API, Token, Auth Type, dan Status | ✅ Permission `iam.api_integration.manage` |
 | POST | `/api/api-integrations/{id}/test` | Uji koneksi sumber Custom API atau Neo Feeder PDDikti | ✅ Permission `iam.api_integration.manage` |
 | POST | `/api/api-integrations/{id}/sync` | Ambil data sumber dan sinkronkan ke master yang didukung (SIAKAD/SIKEU) | ✅ Permission `iam.api_integration.manage` |
+| GET | `/api/admin/api-integrations/student-sync-progress/{progressId}` | Ambil progres sinkronisasi mahasiswa PDDIKTI milik peminta | ✅ Permission `iam.api_integration.manage` |
 
 ---
 
@@ -271,7 +272,7 @@ Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvali
 - `siakad_program_studi` (Modul `siakad`): sumber dapat dipilih sebagai PDDIKTI Neo Feeder (`GetProdi`) atau Custom API. Mode PDDIKTI menyimpan UUID `id_prodi` ke `siakad_program_studi.id_feeder`, sekaligus `source_id`; mode Custom API memakai validasi referensi jenjang/akreditasi yang sudah ada.
 - `siakad_kurikulum` (Modul `siakad`): mode PDDIKTI menarik `GetListKurikulum`, memetakan `id_prodi` ke UUID Feeder program studi, lalu menyimpan UUID kurikulum di `siakad_kurikulum.id_feeder`.
 - `siakad_mata_kuliah` (Modul `siakad`): sumber dipilih melalui `source_type`. Mode `pddikti` menarik relasi mata kuliah-kurikulum via Neo Feeder `GetMatkulKurikulum`; mode `custom_api` memakai endpoint dan kredensial manual.
-- `siakad_mahasiswa` (Modul `siakad`): disinkronkan ke tabel `siakad_mahasiswa` melalui service sinkronisasi mahasiswa legacy.
+- `siakad_mahasiswa` (Modul `siakad`): sumber dapat dipilih sebagai PDDIKTI Neo Feeder atau Custom API SIAKAD legacy. Mode PDDIKTI memakai action Count untuk total/progres, lalu mengambil `GetListMahasiswa` dan `GetBiodataMahasiswa` dalam batch 500; mode Custom API mempertahankan service legacy.
 - `sikeu_transaksi_kas` (Modul `sikeu`): disinkronkan ke tabel `sikeu_jurnal_umum` dan `sikeu_detail_jurnal_umum` berimbang (Double-Entry) dengan resolusi COA dinamis via `sikeu_mig_akun_mapping`.
 - `sikeu_transaksi_pembayaran` (Modul `sikeu`): disinkronkan ke tabel `sikeu_tagihan_mahasiswa` dan `sikeu_pembayaran` secara idempoten dengan verifikasi NIM mahasiswa di `siakad_mahasiswa`.
 
@@ -284,7 +285,7 @@ Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvali
 
 ### Request Body
 
-Tidak memerlukan body. URL, token, tipe autentikasi, dan status aktif menggunakan konfigurasi integrasi yang tersimpan.
+Umumnya tidak memerlukan body. URL, token, tipe autentikasi, dan status aktif menggunakan konfigurasi integrasi yang tersimpan. Khusus integrasi `siakad_mahasiswa` sumber PDDIKTI, body opsional `{"preview": true}` meminta pratinjau read-only. Tanpa `preview: true`, endpoint menjadwalkan sync tulis pada queue `default` dan merespons `202 Accepted` dengan `data.progress_id`. Pastikan worker memproses queue `default`.
 
 ### Response Sukses (200 OK)
 
@@ -302,6 +303,77 @@ Tidak memerlukan body. URL, token, tipe autentikasi, dan status aktif menggunaka
 }
 ```
 
+Untuk sync tulis mahasiswa PDDIKTI, `202 Accepted` berarti proses sudah masuk antrean, bukan selesai:
+
+```json
+{
+    "status": "success",
+    "message": "Sinkronisasi dijadwalkan. Progres diperbarui selama proses berjalan.",
+    "data": { "progress_id": "2d04ac62-fdd8-4dd5-a07c-1e48d3c264a0" }
+}
+```
+
+### GET /api/admin/api-integrations/student-sync-progress/{progressId}
+
+Poll endpoint ini menggunakan `progress_id` dari respons 202. Hanya peminta yang memulai sinkronisasi atau superadmin yang dapat membaca progres. Status proses adalah `queued`, `running`, `completed`, atau `failed`; fase kerja mencakup `reading`, `biodata`, dan `saving`.
+
+**Path Parameters**:
+
+| Parameter | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `progressId` | UUID | Ya | ID progres yang dikembalikan saat sinkronisasi dijadwalkan. |
+
+**Response Sukses (200 OK)**:
+
+```json
+{
+    "status": "success",
+    "message": "Progres sinkronisasi mahasiswa berhasil diambil.",
+    "data": {
+        "progress_id": "2d04ac62-fdd8-4dd5-a07c-1e48d3c264a0",
+        "integration_id": 12,
+        "status": "running",
+        "phase": "saving",
+        "progress": 73,
+        "processed": 3100,
+        "total": 8405,
+        "work_processed": 19600,
+        "work_total": 26800,
+        "message": "Memproses 3100 dari 8405 record mahasiswa.",
+        "started_at": "2026-11-19T10:00:00.000000Z",
+        "result": {
+            "read_count": 8405,
+            "created": 120,
+            "updated": 2860,
+            "synced": 2980,
+            "skipped": 120,
+            "failed": 0,
+            "skipped_items": []
+        }
+    }
+}
+```
+
+**Response Tidak Ditemukan / ID Tidak Valid (404 Not Found)**:
+
+```json
+{
+    "status": "error",
+    "message": "Proses sinkronisasi tidak ditemukan atau sudah kedaluwarsa."
+}
+```
+
+**Response Tanpa Akses (403 Forbidden)**:
+
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki akses ke progres sinkronisasi ini."
+}
+```
+
+Selama fase `reading`, jumlah total belum diketahui dan field `total`/`work_total` bernilai `null`; UI menampilkan jumlah record yang sudah dibaca tanpa membuat estimasi palsu. Setelah paging selesai, backend menetapkan total kerja dan UI menghitung ETA dari throughput polling aktual. Cache progress tersedia selama dua jam. Jika queue worker tidak aktif, status tetap `queued`.
+
 ### Perilaku dan Batasan
 
 - Respons sumber dapat berupa array JSON, `{ "data": [...] }`, atau respons paginator dengan `meta.last_page`; proses dibatasi sampai 100 halaman.
@@ -318,6 +390,12 @@ Tidak memerlukan body. URL, token, tipe autentikasi, dan status aktif menggunaka
 - `fakultas_id` baru tetap null jika fakultas tidak dikirim. Fakultas yang dikirim harus cocok dengan kode atau nama fakultas aktif; relasi fakultas existing tidak dihapus ketika sumber tidak mengirim fakultas.
 - Program studi yang sudah soft-delete tidak dibuat ulang otomatis.
 - Respons sukses memuat maksimal 100 rincian `skipped_items`; hitungan `skipped` tetap total keseluruhan.
+- Sinkronisasi mahasiswa PDDIKTI memakai `GetCountMahasiswa` untuk total/progres, lalu `GetListMahasiswa` per batch 500 dan menyimpan setiap batch. Setelah daftar selesai, `GetCountBiodataMahasiswa` menghitung total biodata; `GetBiodataMahasiswa` diambil per batch 500.
+- Setelah tiap batch 500 selesai, array batch dilepas dari memori. Cache token, lock, dan progres tidak dihapus agar koneksi efisien, sinkronisasi tetap eksklusif, dan progress bar tetap dapat dipolling.
+- NIM sumber dipertahankan persis. Status `AKTIF` dipetakan ke `aktif` dan `Lulus` ke `lulus`; status lain seperti `Mutasi`, `Mengajukan pengunduran diri`, `Putus Studi`, dan `Dikeluarkan` menunggu persetujuan kamus status dan sementara dilewati.
+- `id_periode` hanya diterima jika berbentuk `YYYY` diikuti digit semester; empat digit tahun menjadi `angkatan`. `id_registrasi_mahasiswa` disimpan pada `id_feeder_riwayat`, sedangkan UUID `id_mahasiswa` disimpan pada `id_feeder` dan `id_feeder_biodata`.
+- `preview: true` mengembalikan jumlah kandidat create/update/skip tanpa menulis tabel mahasiswa dan tanpa meminta biodata. Preview tidak mengunci snapshot; sync berikutnya membaca ulang sumber dan menghitung ulang hasil.
+- Sync tidak membuat atau mengubah akun `core_users`, role, password, atau email login. Field biodata sumber kosong tidak menimpa field lokal. Record tidak dihapus ketika absen dari respons sumber.
 
 ### Contoh Respons dengan Baris Dilewati
 
@@ -341,7 +419,6 @@ Tidak memerlukan body. URL, token, tipe autentikasi, dan status aktif menggunaka
     }
 }
 ```
-
 ### Response Error
 
 **401 Unauthorized**

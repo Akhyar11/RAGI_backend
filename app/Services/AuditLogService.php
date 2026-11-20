@@ -32,17 +32,18 @@ class AuditLogService
         ?int $recordId = null,
         ?array $oldValues = null,
         ?array $newValues = null,
-        ?Request $request = null
+        ?Request $request = null,
+        ?int $actorId = null
     ): void {
         try {
-            $request = $request ?? request();
+            $request = $request ?? (app()->runningInConsole() ? null : request());
 
             // Sembunyikan field sensitif
             $safeOldValues = self::sanitize($oldValues);
             $safeNewValues = self::sanitize($newValues);
 
             AuditLog::create([
-                'user_id'    => auth()->id(), // Bisa null jika belum login (e.g. login failed)
+                'user_id'    => $actorId ?? auth()->id(), // Bisa null jika belum login (e.g. login failed)
                 'module'     => strtoupper($module),
                 'action'     => strtolower($action),
                 'table_name' => $tableName,

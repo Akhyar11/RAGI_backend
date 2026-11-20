@@ -2,16 +2,23 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use App\Models\IamApiIntegration;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\ProgramStudi;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Jobs\SyncPddiktiMahasiswaJob;
+use App\Services\IAM\SiakadMahasiswaIntegrationSyncService;
 use Database\Seeders\IAM\IamApiIntegrationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Http\Client\Request;
 use Tests\TestCase;
 
@@ -153,7 +160,6 @@ class IamApiIntegrationTest extends TestCase
                 'is_active' => false,
             ]
         );
-
         $seeder = app(IamApiIntegrationSeeder::class);
         $seeder->run();
         $seeder->run();
@@ -184,6 +190,15 @@ class IamApiIntegrationTest extends TestCase
         $this->assertSame('header_key', $courseIntegration->auth_type);
         $this->assertFalse($courseIntegration->is_active);
         $this->assertSame('custom_api', $courseIntegration->source_type);
+
+        $studentIntegration = IamApiIntegration::where('key', 'siakad_mahasiswa')->firstOrFail();
+        $this->assertSame(['pddikti', 'custom_api'], $studentIntegration->supported_sources);
+        $this->assertSame('GetCountMahasiswa', $studentIntegration->source_schemas['pddikti']['count_action']);
+        $this->assertSame('GetListMahasiswa', $studentIntegration->source_schemas['pddikti']['action']);
+        $this->assertSame('GetCountBiodataMahasiswa', $studentIntegration->source_schemas['pddikti']['biodata_count_action']);
+        $this->assertSame('GetBiodataMahasiswa', $studentIntegration->source_schemas['pddikti']['detail_action']);
+        $this->assertTrue($studentIntegration->source_schemas['pddikti']['connection_managed']);
+        $this->assertSame('pddikti', $studentIntegration->source_type);
     }
 
     public function test_new_course_integration_defaults_to_pddikti_without_custom_credentials(): void
@@ -502,6 +517,29 @@ class IamApiIntegrationTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertSame($secret, $this->integration->fresh()->token);
+    }
+
+    public function test_managed_pddikti_connection_clears_custom_url_but_preserves_unsent_token(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_mahasiswa')->firstOrFail();
+        $integration->update([
+            'source_type' => 'custom_api',
+            'url_api' => 'https://legacy.example.test/students',
+            'token' => 'existing-legacy-token',
+        ]);
+
+        $this->actingAs($this->admin, 'api')
+            ->putJson("/api/admin/api-integrations/{$integration->id}", [
+                'source_type' => 'pddikti',
+                'auth_type' => 'bearer',
+                'is_active' => true,
+            ])
+            ->assertOk();
+
+        $integration->refresh();
+        $this->assertNull($integration->url_api);
+        $this->assertSame('existing-legacy-token', $integration->token);
     }
 
     public function test_admin_can_test_api_connection_with_http_mock()
@@ -911,6 +949,326 @@ class IamApiIntegrationTest extends TestCase
         $response->assertJsonMissing(['token' => 'runtime-feeder-token']);
     }
 
+    public function test_pddikti_student_preview_does_not_write_and_sync_is_idempotent_without_creating_accounts(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_mahasiswa')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti', 'url_api' => null, 'token' => null]);
+
+        ProgramStudi::query()->updateOrCreate(
+            ['id_feeder' => 'a3323a44-49b3-4e7b-b887-2d89a14b0c61'],
+            [
+                'source_id' => 'a3323a44-49b3-4e7b-b887-2d89a14b0c61',
+                'kode_prodi' => '55201',
+                'nama' => 'Teknik Informatika',
+                'jenjang' => 'S1',
+                'is_active' => true,
+            ]
+        );
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+
+        $student = [
+            'id_mahasiswa' => '5b24f773-988a-49c8-9d44-21f4f9f1de42',
+            'id_registrasi_mahasiswa' => '088adb51-ed04-4609-9aa5-f96201192704',
+            'id_prodi' => 'a3323a44-49b3-4e7b-b887-2d89a14b0c61',
+            'nim' => 'D25011',
+            'nama_mahasiswa' => 'Mahasiswa Uji PDDIKTI',
+            'jenis_kelamin' => 'P',
+            'id_periode' => '20251',
+            'nama_status_mahasiswa' => 'AKTIF',
+        ];
+
+        Http::fake([
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) use ($student) {
+                $payload = json_decode($request->body(), true);
+                return match ($payload['act'] ?? null) {
+                    'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
+                    'GetCountMahasiswa' => Http::response(['error_code' => 0, 'data' => 1], 200),
+                    'GetCountBiodataMahasiswa' => Http::response(['error_code' => 0, 'data' => 2], 200),
+                    'GetListMahasiswa' => Http::response(['error_code' => 0, 'data' => [$student]], 200),
+                    'GetBiodataMahasiswa' => Http::response(['error_code' => 0, 'data' => [[
+                        'id_mahasiswa' => $student['id_mahasiswa'],
+                        'nim' => 'NIM-BERBEDA-DARI-DAFTAR',
+                        'nisn' => '1234567890',
+                        'tanggal_lahir' => '2005-04-03',
+                    ], [
+                        'id_mahasiswa' => '3d2e2352-4379-48f8-93cc-8b62cff559a1',
+                        'nim' => 'NIM-TIDAK-TERDAFTAR',
+                        'nisn' => '9999999999',
+                    ]]], 200),
+                    default => Http::response(['error_code' => 1, 'error_desc' => 'Unexpected action'], 400),
+                };
+            },
+        ]);
+
+        $preview = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync", ['preview' => true]);
+
+        $preview->assertStatus(200)
+            ->assertJsonPath('data.preview', true)
+            ->assertJsonPath('data.read_only', true)
+            ->assertJsonPath('data.read_count', 1)
+            ->assertJsonPath('data.created', 1);
+        $this->assertDatabaseMissing('siakad_mahasiswa', ['nim' => 'D25011']);
+
+        $progressId = '4b44e9e0-1851-4b90-ae1f-f79e21e5ae87';
+        Cache::put('siakad-mahasiswa-pddikti-sync:' . $progressId, [
+            'progress_id' => $progressId,
+            'requested_by' => $this->admin->id,
+            'status' => 'running',
+            'phase' => 'starting',
+            'progress' => 0,
+        ]);
+        $syncService = app(SiakadMahasiswaIntegrationSyncService::class);
+        $sync = $syncService->syncPddikti($integration, progressId: $progressId, actorId: $this->admin->id);
+        $syncService->completeProgress($progressId, $sync);
+        $this->assertFalse($sync['preview']);
+        $this->assertFalse($sync['read_only']);
+        $this->assertSame(1, $sync['read_count']);
+        $this->assertSame(1, $sync['created']);
+        $this->assertSame(1, $sync['synced']);
+        $this->assertSame(0, $sync['skipped']);
+        $this->assertSame(1, $sync['biodata_updated']);
+        $this->assertSame(1, $sync['biodata_updated']);
+        $this->assertSame(1, $sync['biodata_skipped']);
+        Http::assertSent(fn (Request $request): bool => (json_decode($request->body(), true)['act'] ?? null) === 'GetListMahasiswa'
+            && (int) (json_decode($request->body(), true)['limit'] ?? 0) === 500
+            && (int) (json_decode($request->body(), true)['offset'] ?? -1) === 0);
+        Http::assertSent(fn (Request $request): bool => (json_decode($request->body(), true)['act'] ?? null) === 'GetBiodataMahasiswa'
+            && (int) (json_decode($request->body(), true)['limit'] ?? 0) === 500
+            && (int) (json_decode($request->body(), true)['offset'] ?? -1) === 0);
+        Http::assertSent(fn (Request $request): bool => (json_decode($request->body(), true)['act'] ?? null) === 'GetCountMahasiswa');
+        Http::assertSent(fn (Request $request): bool => (json_decode($request->body(), true)['act'] ?? null) === 'GetCountBiodataMahasiswa');
+        $this->assertSame('completed', Cache::get('siakad-mahasiswa-pddikti-sync:' . $progressId)['status']);
+        $this->assertSame(100, Cache::get('siakad-mahasiswa-pddikti-sync:' . $progressId)['progress']);
+        $this->assertSame(
+            Cache::get('siakad-mahasiswa-pddikti-sync:' . $progressId)['work_total'],
+            Cache::get('siakad-mahasiswa-pddikti-sync:' . $progressId)['work_processed']
+        );
+        $this->assertDatabaseHas('siakad_mahasiswa', [
+            'nim' => 'D25011',
+            'id_feeder' => $student['id_mahasiswa'],
+            'id_feeder_biodata' => $student['id_mahasiswa'],
+            'id_feeder_riwayat' => $student['id_registrasi_mahasiswa'],
+            'program_studi_id' => ProgramStudi::where('id_feeder', $student['id_prodi'])->value('id'),
+            'nisn' => '1234567890',
+            'user_id' => null,
+        ]);
+        $studentId = Mahasiswa::where('nim', 'D25011')->value('id');
+        $this->assertDatabaseHas('core_audit_logs', [
+            'user_id' => $this->admin->id,
+            'module' => 'SIAKAD',
+            'table_name' => 'siakad_mahasiswa',
+            'record_id' => $studentId,
+        ]);
+        $this->assertSame(0, User::where('username', 'D25011')->count());
+        $rerun = app(SiakadMahasiswaIntegrationSyncService::class)->syncPddikti($integration);
+        $this->assertSame(0, $rerun['created']);
+        $this->assertSame(1, $rerun['updated']);
+        $this->assertSame(1, Mahasiswa::where('nim', 'D25011')->count());
+    }
+
+    public function test_pddikti_student_sync_skips_status_without_approved_local_mapping(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_mahasiswa')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti']);
+        ProgramStudi::create([
+            'id_feeder' => 'bcd9d6cc-a3b3-45ab-b181-0d253f9bd00e',
+            'source_id' => 'bcd9d6cc-a3b3-45ab-b181-0d253f9bd00e',
+            'kode_prodi' => '55202',
+            'nama' => 'Program Uji',
+            'jenjang' => 'S1',
+            'is_active' => true,
+        ]);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fake([
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) {
+                $payload = json_decode($request->body(), true);
+                return match ($payload['act'] ?? null) {
+                    'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
+                    'GetCountMahasiswa' => Http::response(['error_code' => 0, 'data' => 1], 200),
+                    'GetCountBiodataMahasiswa' => Http::response(['error_code' => 0, 'data' => 0], 200),
+                    'GetListMahasiswa' => Http::response(['error_code' => 0, 'data' => [[
+                        'id_mahasiswa' => '16000127-8e52-44c7-9c6e-7eeeb96c1249',
+                        'id_prodi' => 'bcd9d6cc-a3b3-45ab-b181-0d253f9bd00e',
+                        'nim' => 'MUTASI-001',
+                        'nama_mahasiswa' => 'Status Belum Dipetakan',
+                        'id_periode' => '20251',
+                        'nama_status_mahasiswa' => 'Mutasi',
+                    ]]], 200),
+                    default => Http::response(['error_code' => 1], 400),
+                };
+            },
+        ]);
+
+        $response = app(SiakadMahasiswaIntegrationSyncService::class)->syncPddikti($integration);
+
+        $this->assertSame(0, $response['created']);
+        $this->assertSame(1, $response['skipped']);
+        $this->assertSame('Status PDDIKTI belum memiliki pemetaan yang disetujui ke status mahasiswa lokal.', $response['skipped_items'][0]['reason']);
+        $this->assertDatabaseMissing('siakad_mahasiswa', ['nim' => 'MUTASI-001']);
+    }
+
+    public function test_pddikti_student_sync_is_queued_and_progress_is_private_to_requester(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_mahasiswa')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti']);
+        config(['queue.default' => 'database']);
+        Queue::fake();
+
+        $queued = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+
+        $queued->assertStatus(202)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['data' => ['progress_id']]);
+        $progressId = $queued->json('data.progress_id');
+        Queue::assertPushedOn('default', SyncPddiktiMahasiswaJob::class, fn (SyncPddiktiMahasiswaJob $job): bool => $job->progressId === $progressId
+            && $job->requestedBy === $this->admin->id);
+
+        $this->actingAs($this->admin, 'api')
+            ->getJson("/api/admin/api-integrations/student-sync-progress/{$progressId}")
+            ->assertOk()
+            ->assertJsonPath('data.progress_id', $progressId)
+            ->assertJsonPath('data.status', 'queued')
+            ->assertJsonPath('data.progress', 0);
+
+        $managerRole = Role::create(['name' => 'API Manager', 'slug' => 'api-manager', 'is_active' => true]);
+        $permission = Permission::firstOrCreate(
+            ['slug' => 'iam.api_integration.manage'],
+            ['name' => 'Kelola Pengaturan API', 'module' => 'iam', 'action' => 'update']
+        );
+        $managerRole->permissions()->syncWithoutDetaching([$permission->id]);
+        $this->regularUser->roles()->syncWithoutDetaching([$managerRole->id]);
+        $this->actingAs($this->regularUser, 'api')
+            ->getJson("/api/admin/api-integrations/student-sync-progress/{$progressId}")
+            ->assertForbidden();
+    }
+
+    public function test_pddikti_student_sync_uses_count_and_500_offsets_for_list_and_biodata(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_mahasiswa')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti']);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fake([
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) {
+                $payload = json_decode($request->body(), true);
+                return match ($payload['act'] ?? null) {
+                    'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
+                    'GetCountMahasiswa' => Http::response(['error_code' => 0, 'data' => ['count' => 501]], 200),
+                    'GetCountBiodataMahasiswa' => Http::response(['error_code' => 0, 'data' => ['total' => 501]], 200),
+                    'GetListMahasiswa', 'GetBiodataMahasiswa' => Http::response(['error_code' => 0, 'data' => []], 200),
+                    default => Http::response(['error_code' => 1], 400),
+                };
+            },
+        ]);
+
+        $result = app(SiakadMahasiswaIntegrationSyncService::class)->syncPddikti($integration);
+
+        $this->assertSame(0, $result['created']);
+        $this->assertSame(501, $result['source_total']);
+        $this->assertSame(501, $result['biodata_total']);
+        Http::assertSent(fn (Request $request): bool => in_array((json_decode($request->body(), true)['act'] ?? null), ['GetCountMahasiswa', 'GetCountBiodataMahasiswa'], true));
+        Http::assertSent(fn (Request $request): bool => (json_decode($request->body(), true)['act'] ?? null) === 'GetListMahasiswa'
+            && (int) (json_decode($request->body(), true)['limit'] ?? 0) === 500
+            && (int) (json_decode($request->body(), true)['offset'] ?? -1) === 500);
+        Http::assertSent(fn (Request $request): bool => (json_decode($request->body(), true)['act'] ?? null) === 'GetBiodataMahasiswa'
+            && (int) (json_decode($request->body(), true)['limit'] ?? 0) === 500
+            && (int) (json_decode($request->body(), true)['offset'] ?? -1) === 500);
+    }
+
+    public function test_ineligible_duplicate_does_not_block_later_eligible_student_record(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_mahasiswa')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti']);
+        ProgramStudi::create([
+            'id_feeder' => 'd35f4ec7-9689-4471-99b9-bcf60ea96ac2',
+            'source_id' => 'd35f4ec7-9689-4471-99b9-bcf60ea96ac2',
+            'kode_prodi' => '55203',
+            'nama' => 'Program Regresi',
+            'jenjang' => 'S1',
+            'is_active' => true,
+        ]);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+
+        $ineligibleRow = [
+            'id_mahasiswa' => '3cab7912-3fbf-4d80-bdcb-fac565e72425',
+            'id_prodi' => 'd35f4ec7-9689-4471-99b9-bcf60ea96ac2',
+            'nim' => 'REG-DUP-001',
+            'nama_mahasiswa' => 'Mahasiswa Status Lama',
+            'id_periode' => '20251',
+            'nama_status_mahasiswa' => 'Mutasi',
+        ];
+        $eligibleRow = array_merge($ineligibleRow, [
+            'nama_mahasiswa' => 'Mahasiswa Status Aktif',
+            'nama_status_mahasiswa' => 'AKTIF',
+        ]);
+
+        Http::fake([
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) use ($ineligibleRow, $eligibleRow) {
+                $payload = json_decode($request->body(), true);
+                return match ($payload['act'] ?? null) {
+                    'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
+                    'GetCountMahasiswa' => Http::response(['error_code' => 0, 'data' => 2], 200),
+                    'GetCountBiodataMahasiswa' => Http::response(['error_code' => 0, 'data' => 0], 200),
+                    'GetListMahasiswa' => Http::response(['error_code' => 0, 'data' => [$ineligibleRow, $eligibleRow]], 200),
+                    default => Http::response(['error_code' => 1], 400),
+                };
+            },
+        ]);
+
+        $response = app(SiakadMahasiswaIntegrationSyncService::class)->syncPddikti($integration);
+
+        $this->assertSame(2, $response['source_total']);
+        $this->assertSame(1, $response['created']);
+        $this->assertSame(1, $response['skipped']);
+        $this->assertDatabaseHas('siakad_mahasiswa', [
+            'nim' => 'REG-DUP-001',
+            'nama_lengkap' => 'Mahasiswa Status Aktif',
+            'status' => 'aktif',
+        ]);
+    }
+
+    public function test_pddikti_student_connection_test_checks_list_and_biodata_without_writing_students(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_mahasiswa')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti']);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fake([
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) {
+                $payload = json_decode($request->body(), true);
+                return match ($payload['act'] ?? null) {
+                    'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
+                    'GetListMahasiswa', 'GetBiodataMahasiswa' => Http::response(['error_code' => 0, 'data' => []], 200),
+                    default => Http::response(['error_code' => 1], 400),
+                };
+            },
+        ]);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/test");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.is_success', true)
+            ->assertJsonPath('data.response_sample.action', 'GetListMahasiswa');
+        $this->assertSame(0, Mahasiswa::count());
+    }
+
     public function test_pddikti_curriculum_sync_maps_programs_and_is_idempotent(): void
     {
         $integration = IamApiIntegration::create([
@@ -1169,7 +1527,7 @@ class IamApiIntegrationTest extends TestCase
         $this->assertSame('failed', $integration->fresh()->last_status);
     }
 
-    public function test_switching_course_source_to_pddikti_clears_custom_api_credentials(): void
+    public function test_switching_course_source_to_pddikti_clears_custom_url_and_preserves_unsent_token(): void
     {
         $integration = IamApiIntegration::create([
             'key' => 'siakad_mata_kuliah',
@@ -1197,13 +1555,13 @@ class IamApiIntegrationTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('data.source_type', 'pddikti')
-            ->assertJsonPath('data.token_configured', false);
+            ->assertJsonPath('data.token_configured', true);
         $this->assertDatabaseHas('iam_api_integrations', [
             'id' => $integration->id,
             'source_type' => 'pddikti',
             'url_api' => null,
-            'token' => null,
         ]);
+        $this->assertSame('custom-source-token', $integration->fresh()->token);
     }
 
     public function test_regular_user_without_permission_is_forbidden()
