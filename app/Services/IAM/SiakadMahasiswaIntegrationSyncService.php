@@ -268,7 +268,7 @@ class SiakadMahasiswaIntegrationSyncService
 
             try {
                 DB::transaction(function () use ($row, $sourceId, $nim, $status, $period, $program, $index, $actorId, &$result): void {
-                    $student = $this->resolveExistingStudent($sourceId);
+                    $student = $this->resolveExistingStudent($sourceId, $nim);
                     if ($student === false) {
                         $this->skipPddikti($result, $index, $row, 'UUID id_mahasiswa terhubung ke lebih dari satu record lokal.');
                         return;
@@ -456,7 +456,7 @@ class SiakadMahasiswaIntegrationSyncService
                 continue;
             }
             $seenIds[$sourceId] = true;
-            $existing = $this->resolveExistingStudent($sourceId);
+            $existing = $this->resolveExistingStudent($sourceId, $nim);
             if ($existing === false || $existing?->trashed()) {
                 $this->skipPddikti($result, $index, $row, 'Record lokal dengan UUID id_mahasiswa ini ambigu atau sudah dihapus; perlu rekonsiliasi.');
                 continue;
@@ -587,13 +587,27 @@ class SiakadMahasiswaIntegrationSyncService
         return $matches->count() === 1 ? $matches->first() : null;
     }
 
-    private function resolveExistingStudent(string $sourceId): Mahasiswa|false|null
+    private function resolveExistingStudent(string $sourceId, string $nim): Mahasiswa|false|null
     {
         $matches = Mahasiswa::withTrashed()
             ->where(fn ($query) => $query->where('id_feeder_biodata', $sourceId)->orWhere('id_feeder', $sourceId))
             ->limit(2)
             ->get();
-        return $matches->count() > 1 ? false : $matches->first();
+        if ($matches->count() > 1) {
+            return false;
+        }
+        if ($matches->count() === 1) {
+            return $matches->first();
+        }
+
+        $legacyMatches = Mahasiswa::withTrashed()
+            ->where('nim', $nim)
+            ->whereNull('id_feeder')
+            ->whereNull('id_feeder_biodata')
+            ->limit(2)
+            ->get();
+
+        return $legacyMatches->count() > 1 ? false : $legacyMatches->first();
     }
 
     private function mapPddiktiStatus(mixed $value): ?string

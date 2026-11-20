@@ -1070,6 +1070,72 @@ class IamApiIntegrationTest extends TestCase
         $this->assertSame(1, Mahasiswa::where('nim', 'D25011')->count());
     }
 
+    public function test_pddikti_student_sync_uses_nim_for_legacy_student_without_feeder_ids(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_mahasiswa')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti']);
+        $programId = 'a3323a44-49b3-4e7b-b887-2d89a14b0c61';
+        $sourceId = '5b24f773-988a-49c8-9d44-21f4f9f1de42';
+        ProgramStudi::create([
+            'id_feeder' => $programId,
+            'source_id' => $programId,
+            'kode_prodi' => '55201',
+            'nama' => 'Teknik Informatika',
+            'jenjang' => 'S1',
+            'is_active' => true,
+        ]);
+        $legacyStudent = Mahasiswa::create([
+            'program_studi_id' => ProgramStudi::where('id_feeder', $programId)->value('id'),
+            'nim' => 'LEGACY-001',
+            'nama_lengkap' => 'Nama Lokal Lama',
+            'angkatan' => 2020,
+            'status' => 'aktif',
+        ]);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fake([
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) use ($sourceId, $programId) {
+                $payload = json_decode($request->body(), true);
+                return match ($payload['act'] ?? null) {
+                    'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
+                    'GetCountMahasiswa' => Http::response(['error_code' => 0, 'data' => 1], 200),
+                    'GetCountBiodataMahasiswa' => Http::response(['error_code' => 0, 'data' => 0], 200),
+                    'GetListMahasiswa' => Http::response(['error_code' => 0, 'data' => [[
+                        'id_mahasiswa' => $sourceId,
+                        'id_prodi' => $programId,
+                        'nim' => 'LEGACY-001',
+                        'nama_mahasiswa' => 'Nama dari PDDIKTI',
+                        'id_periode' => '20251',
+                        'nama_status_mahasiswa' => 'AKTIF',
+                    ]]], 200),
+                    default => Http::response(['error_code' => 1], 400),
+                };
+            },
+        ]);
+
+        $service = app(SiakadMahasiswaIntegrationSyncService::class);
+        $preview = $service->syncPddikti($integration, preview: true);
+
+        $this->assertSame(1, $preview['updated']);
+        $this->assertSame(0, $preview['created']);
+        $this->assertNull($legacyStudent->fresh()->id_feeder);
+
+        $result = $service->syncPddikti($integration, actorId: $this->admin->id);
+
+        $this->assertSame(1, $result['updated']);
+        $this->assertSame(0, $result['created']);
+        $this->assertSame(1, Mahasiswa::where('nim', 'LEGACY-001')->count());
+        $this->assertDatabaseHas('siakad_mahasiswa', [
+            'id' => $legacyStudent->id,
+            'nim' => 'LEGACY-001',
+            'nama_lengkap' => 'Nama dari PDDIKTI',
+            'id_feeder' => $sourceId,
+            'id_feeder_biodata' => $sourceId,
+        ]);
+    }
+
     public function test_pddikti_student_sync_skips_status_without_approved_local_mapping(): void
     {
         app(IamApiIntegrationSeeder::class)->run();
