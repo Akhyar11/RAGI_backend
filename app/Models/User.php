@@ -19,6 +19,7 @@ use Laravel\Passport\HasApiTokens;
     'password',
     'phone',
     'referral_code',
+    'avatar_path',
     'is_active',
     'is_verified',
     'last_login_at',

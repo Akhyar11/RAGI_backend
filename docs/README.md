@@ -102,11 +102,12 @@
 | LmsNotifikasiController | Notifikasi in-app LMS (LMS-04): daftar notifikasi personal, tandai sudah dibaca (satu/semua), jumlah belum dibaca. Notifikasi disimpan (idempoten via `dedup_key`) & diisi oleh command terjadwal `lms:notifikasi-deadline` | [docs/api/LMS/LmsNotifikasiController.md](api/LMS/LmsNotifikasiController.md) |
 ---
 
-## 📱 Modul Aplikasi Mobile Mahasiswa (`/api/v1/mobile/mahasiswa`)
+## 📱 Modul Aplikasi Mobile (`/api/v1/mobile`)
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
 | MobileMahasiswaController | Gateway API terpadu khusus Aplikasi Mobile Mahasiswa: Beranda (`/home`), Periode Akademik (default periode aktif), Presensi QR Scanner 30 Detik (`/presensi/scan`, `/presensi/sesi-aktif`, `/presensi/rekap`), LMS (`/lms/*`), SIAKAD (`/siakad/profil`, `/jadwal`, `/krs`, `/khs`, `/transkrip`), & SIKEU (`/sikeu/ringkasan`, `/tagihan`, `/pembayaran`, `/beasiswa`, `/dispensasi`) | [docs/api/MOBILE/MobileMahasiswaController.md](api/MOBILE/MobileMahasiswaController.md) |
+| MobileStaffController | Gateway API terpadu Aplikasi Mobile Staf & Dosen (myInU - Staff): Beranda (`/home`), Jadwal Mengajar Terintegrasi SIAKAD (`/jadwal-mengajar`), & Unggah Foto Profil (`/avatar`) | [docs/api/MOBILE/MobileStaffController.md](api/MOBILE/MobileStaffController.md) |
 
 ---
 

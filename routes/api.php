@@ -1293,6 +1293,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/sikeu/beasiswa', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuBeasiswa']);
             Route::get('/sikeu/dispensasi', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuDispensasi']);
         });
+
+        // Aplikasi Mobile Dosen & Tendik Terpadu (myInU - Staff)
+        Route::prefix('mobile/staff')->group(function () {
+            Route::get('/jadwal-mengajar', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'jadwalMengajar']);
+            Route::get('/home', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'homeSummary']);
+            Route::post('/avatar', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'updateAvatar']);
+        });
     });
 
     // 4. Akses Integrasi Sistem Eksternal (API Key)

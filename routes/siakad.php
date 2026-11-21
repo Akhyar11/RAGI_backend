@@ -151,6 +151,7 @@ Route::prefix('akademik')->group(function () {
 
 // --- Perkuliahan (Kelas, KRS, Nilai, Transkrip) ---
 Route::prefix('perkuliahan')->group(function () {
+    Route::get('/jadwal-mengajar', [\App\Http\Controllers\API\Mobile\MobileStaffController::class, 'jadwalMengajar'])->middleware('auth:api');
     Route::get('/ref/ruangan', [PerkuliahanController::class, 'getRefRuanganSinapra']);
     Route::get('/kelas', [PerkuliahanController::class, 'listKelas']);
     Route::post('/kelas', [PerkuliahanController::class, 'storeKelas']);

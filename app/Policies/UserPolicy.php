@@ -26,6 +26,9 @@ class UserPolicy
         if ($model->isSuperAdmin() && !$user->isSuperAdmin()) {
             return false;
         }
+        if ($user->id === $model->id) {
+            return true;
+        }
         return $user->isSuperAdmin() || $user->hasPermission('iam.users.update') || $user->hasPermission('users.update');
     }
 

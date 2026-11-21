@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class DosenPengampu extends Model
 {
+    public const DEFAULT_PERAN = 'Pengampu Utama';
+
     protected $table = 'siakad_dosen_pengampu';
 
     protected $fillable = [
