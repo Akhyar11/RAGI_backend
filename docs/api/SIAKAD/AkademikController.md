@@ -1,6 +1,6 @@
 # AkademikController
 
-> **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/akademik` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-11-13
+> **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/akademik` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat**: 2026-11-13 / **Diperbarui**: 2026-11-21
 
 Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata kuliah, dan dosen. Sumber program studi kini tabel `siakad_program_studi`.
 
@@ -100,6 +100,7 @@ Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata
 ```json
 {
     "kode": "20261",
+    "id_feeder": "uuid-semester-neofeeder",
     "nama": "2026/2027 Ganjil",
     "tahun_mulai": 2026,
     "tahun_selesai": 2027,
@@ -115,7 +116,7 @@ Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata
 {
     "status": "success",
     "message": "Periode Tahun Akademik berhasil ditambahkan",
-    "data": { "id": 1, "kode": "20261", "nama": "2026/2027 Ganjil", "is_active": true }
+    "data": { "id": 1, "kode": "20261", "id_feeder": "uuid-semester-neofeeder", "nama": "2026/2027 Ganjil", "is_active": true }
 }
 ```
 

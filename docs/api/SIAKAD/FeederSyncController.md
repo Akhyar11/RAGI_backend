@@ -156,11 +156,46 @@
 
 > Menampilkan riwayat log aktivitas sinkronisasi Neo Feeder.
 
+### Headers
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
 ### Query Parameters
+
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `per_page` | integer | ❌ | `10` | Jumlah data per halaman |
-| `page` | integer | ❌ | `1` | Nomor halaman |
+| `page` | integer | ❌ | `1` | Nomor halaman yang ditampilkan |
+| `per_page` | integer | ❌ | `15` | Jumlah entri per halaman |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": [
+        {
+            "id": 1,
+            "entity_type": "pull_dosen",
+            "sync_type": "pull",
+            "total_records": 100,
+            "success_count": 100,
+            "failed_count": 0,
+            "status": "success",
+            "details": [
+                {
+                    "nama_dosen": "Dr. Budi Santoso, M.Kom",
+                    "nidn": "0012345678",
+                    "status": "created"
+                }
+            ]
+        }
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 1 }
+}
+```
 
 ---
 
@@ -169,9 +204,30 @@
 > Menampilkan pemetaan ID entitas lokal SIAKAD dengan ID Feeder PDDikti.
 
 ### Query Parameters
+
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `entity_type` | string | ❌ | — | Filter jenis entitas (dosen, kelas, mahasiswa, dll.) |
-| `sync_status` | string | ❌ | — | Filter status (synced, pending, failed) |
-| `per_page` | integer | ❌ | `15` | Jumlah data per halaman |
-| `page` | integer | ❌ | `1` | Nomor halaman |
+| `entity_type` | string | ❌ | — | Filter jenis entitas, misalnya `dosen`, `kelas`, `mahasiswa`, `mata_kuliah`, `prodi`, atau `semester`. |
+| `sync_status` | string | ❌ | — | Filter status: `synced`, `pending`, atau `failed`. |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman. |
+| `page` | integer | ❌ | `1` | Nomor halaman. |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": [
+        {
+            "id": 1,
+            "entity_type": "semester",
+            "local_id": 3,
+            "feeder_id": "20261",
+            "sync_status": "synced",
+            "last_synced_at": "2026-11-21T10:00:00.000000Z"
+        }
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 1 }
+}
+```

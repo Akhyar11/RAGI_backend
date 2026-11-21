@@ -51,7 +51,7 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 | `search` | string | ❌ | — | Cari `nim`, `nama_lengkap`, `nik`, atau `kelas` |
 | `program_studi_id` | integer | ❌ | — | Filter program studi |
 | `angkatan` | integer | ❌ | — | Filter tahun angkatan (cth. `2025`) |
-| `status` | string | ❌ | — | Filter status akademik (`aktif`, `cuti`, `mangkir`, `lulus`) |
+| `status` | string | ❌ | — | Filter status akademik PDDIKTI: `A`, `C`, `G`, `M`, `N`, `L`, atau `U` |
 | `kelas` | string | ❌ | — | Filter/search kelas mahasiswa (format uppercase, cth. `IF-A`) |
 | `dosen_wali_id` | mixed | ❌ | — | ID dosen PA, atau `unassigned` untuk mahasiswa tanpa PA |
 | `nim_status` | string | ❌ | — | `unassigned` (belum ada NIM), `assigned` (sudah ada NIM) |
@@ -67,7 +67,7 @@ Data mahasiswa, pembuatan NIM, sinkronisasi SPMB/Feeder, konversi transfer, dan 
 {
     "status": "success",
     "data": [
-        { "id": 1, "nim": "20260001", "nama_lengkap": "Budi Santoso", "program_studi_id": 7, "angkatan": 2026, "status": "aktif" }
+        { "id": 1, "nim": "20260001", "nama_lengkap": "Budi Santoso", "program_studi_id": 7, "angkatan": 2026, "status": "A" }
     ],
     "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 }
 }
@@ -785,3 +785,17 @@ Format kolom CSV:
 >   dibiarkan null (tidak dikarang).
 > - Soft delete + restore berlaku pada data mahasiswa.
 > - Password/token tidak pernah dikembalikan pada response.
+
+## Status Akademik PDDIKTI
+
+Nilai `status` pada create, update, update status tunggal/bulk, dan filter daftar mahasiswa menggunakan kode PDDIKTI berikut:
+
+| Kode | Arti |
+|---|---|
+| `A` | Aktif |
+| `C` | Cuti |
+| `G` | Double Degree |
+| `M` | Kampus Merdeka |
+| `N` | Non-Aktif |
+| `L` | Lulus |
+| `U` | Menunggu Ujian |

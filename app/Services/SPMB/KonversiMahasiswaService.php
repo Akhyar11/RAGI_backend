@@ -5,6 +5,7 @@ namespace App\Services\Spmb;
 use App\Models\PendaftaranCalonMhs;
 use App\Models\KonversiMahasiswa;
 use App\Models\Mahasiswa;
+use App\Models\Siakad\MahasiswaStatus;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Exception;
@@ -51,7 +52,7 @@ class KonversiMahasiswaService
                 'alamat' => $pendaftaran->alamat,
                 'angkatan' => date('Y'),
                 'tanggal_masuk' => now(),
-                'status' => 'aktif',
+                'status' => MahasiswaStatus::AKTIF,
             ];
             if ($kelas !== null) {
                 $mahasiswaData['kelas'] = $kelas;

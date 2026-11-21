@@ -3,6 +3,7 @@
 namespace App\Services\Siakad;
 
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\MahasiswaStatus;
 use App\Models\Siakad\ProgramStudi;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -269,29 +270,25 @@ class SiakadMahasiswaSyncService
 
     private function mapStatus(array $akademik, array $raw): string
     {
+        $statusCode = strtoupper(trim((string) ($akademik['id_status_mahasiswa'] ?? $raw['id_status_mahasiswa'] ?? '')));
+        if (in_array($statusCode, MahasiswaStatus::codes(), true)) {
+            return $statusCode;
+        }
+
         $status = strtolower(trim((string) ($akademik['status_mahasiswa'] ?? $raw['status_mahasiswa'] ?? '')));
         $idKeluar = trim((string) ($raw['id_jns_keluar'] ?? ($akademik['kelulusan']['id_jenis_keluar'] ?? '')));
 
-        if ($status === 'lulus' || $idKeluar === '1' || (!empty($akademik['is_alumni']) && $akademik['is_alumni'] === true)) {
-            return 'lulus';
-        }
         if ($status === 'aktif' || (!empty($akademik['is_mahasiswa_aktif']) && $akademik['is_mahasiswa_aktif'] === true)) {
-            return 'aktif';
+            return MahasiswaStatus::AKTIF;
         }
         if ($status === 'cuti' || $idKeluar === '2') {
-            return 'cuti';
+            return MahasiswaStatus::CUTI;
         }
-        if (str_contains($status, 'drop') || $idKeluar === '3' || $idKeluar === '4') {
-            return 'dropout';
-        }
-        if ($status === 'mangkir' || $idKeluar === '5') {
-            return 'mangkir';
-        }
-        if ($status === 'keluar' || $status === 'mutasi' || ($idKeluar !== '' && $idKeluar !== '0')) {
-            return 'dropout';
+        if ($status === 'lulus' || $idKeluar === '1') {
+            return MahasiswaStatus::LULUS;
         }
 
-        return 'aktif';
+        return MahasiswaStatus::NON_AKTIF;
     }
 
     private function mapJenisKelamin($value): ?string

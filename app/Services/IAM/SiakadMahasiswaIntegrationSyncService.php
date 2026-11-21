@@ -4,6 +4,7 @@ namespace App\Services\IAM;
 
 use App\Models\IamApiIntegration;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\MahasiswaStatus;
 use App\Models\Siakad\ProgramStudi;
 use App\Services\AuditLogService;
 use App\Services\Siakad\NeoFeederService;
@@ -246,7 +247,7 @@ class SiakadMahasiswaIntegrationSyncService
 
             $sourceId = trim((string) $row['id_mahasiswa']);
             $nim = $this->studentNim($row);
-            $status = $this->mapPddiktiStatus($row['nama_status_mahasiswa'] ?? null);
+            $status = $this->mapPddiktiStatus($row['id_status_mahasiswa'] ?? null);
             if ($status === null) {
                 $this->skipPddikti($result, $index, $row, 'Status PDDIKTI belum memiliki pemetaan yang disetujui ke status mahasiswa lokal.');
                 continue;
@@ -435,7 +436,7 @@ class SiakadMahasiswaIntegrationSyncService
         $seenIds = [];
         foreach ($students as $index => $row) {
             $reason = $this->validatePddiktiStudent($row);
-            if ($reason === null && $this->mapPddiktiStatus($row['nama_status_mahasiswa'] ?? null) === null) {
+            if ($reason === null && $this->mapPddiktiStatus($row['id_status_mahasiswa'] ?? null) === null) {
                 $reason = 'Status PDDIKTI belum memiliki pemetaan yang disetujui ke status mahasiswa lokal.';
             }
             if ($reason === null && preg_match('/^20\d{2}\d$/D', trim((string) ($row['id_periode'] ?? ''))) !== 1) {
@@ -571,6 +572,10 @@ class SiakadMahasiswaIntegrationSyncService
         if (!Str::isUuid(trim($row['id_mahasiswa'])) || !Str::isUuid(trim($row['id_prodi']))) {
             return 'UUID mahasiswa atau program studi dari PDDIKTI tidak valid.';
         }
+        if (!is_string($row['id_status_mahasiswa'] ?? null)
+            || !in_array(strtoupper(trim($row['id_status_mahasiswa'])), MahasiswaStatus::codes(), true)) {
+            return 'Kode id_status_mahasiswa tidak ditemukan di kamus GetStatusMahasiswa PDDIKTI.';
+        }
         if (isset($row['id_registrasi_mahasiswa']) && $row['id_registrasi_mahasiswa'] !== ''
             && (!is_string($row['id_registrasi_mahasiswa']) || !Str::isUuid($row['id_registrasi_mahasiswa']))) {
             return 'UUID registrasi mahasiswa dari PDDIKTI tidak valid.';
@@ -612,11 +617,9 @@ class SiakadMahasiswaIntegrationSyncService
 
     private function mapPddiktiStatus(mixed $value): ?string
     {
-        return match (mb_strtoupper(trim((string) $value))) {
-            'AKTIF' => 'aktif',
-            'LULUS' => 'lulus',
-            default => null,
-        };
+        $status = strtoupper(trim((string) $value));
+
+        return in_array($status, MahasiswaStatus::codes(), true) ? $status : null;
     }
 
     private function mapPddiktiGender(mixed $value): ?string

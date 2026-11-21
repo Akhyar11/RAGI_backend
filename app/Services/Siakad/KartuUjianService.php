@@ -50,7 +50,7 @@ class KartuUjianService
      */
     public function terbitkan(Mahasiswa $mhs, int $tahunAkademikId, string $tipeUjian, ?string $ip = null, ?string $userAgent = null): KartuUjianToken
     {
-        if ($mhs->status !== 'aktif') {
+        if (!\App\Models\Siakad\MahasiswaStatus::isActive($mhs->status)) {
             abort(response()->json([
                 'status' => 'error',
                 'message' => "Kartu ujian ditolak. Status akademik '{$mhs->status}'.",

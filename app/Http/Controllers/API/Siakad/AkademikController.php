@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\API\Siakad;
 
+use App\Models\Siakad\MahasiswaStatus;
+
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
@@ -57,7 +59,7 @@ class AkademikController extends Controller
     public function dashboardSummary()
     {
         $taAktif = TahunAkademik::where('is_active', true)->first();
-        $totalMhsAktif = Mahasiswa::where('status', 'aktif')->count();
+        $totalMhsAktif = Mahasiswa::where('status', MahasiswaStatus::AKTIF)->count();
         $totalDosen = Dosen::where('is_active', true)->count();
         $totalKelas = Kelas::when($taAktif, fn($q) => $q->where('tahun_akademik_id', $taAktif->id))->count();
         $totalKurikulum = Kurikulum::where('is_active', true)->count();
@@ -168,6 +170,7 @@ class AkademikController extends Controller
 
         $request->validate([
             'nama' => 'required|string|max:255',
+            'id_feeder' => ['nullable', 'string', 'max:100', Rule::unique('siakad_tahun_akademik', 'id_feeder')->ignore($ta->id)],
             'tahun_mulai' => 'nullable|integer',
             'tahun_selesai' => 'nullable|integer',
             'is_active' => 'boolean',

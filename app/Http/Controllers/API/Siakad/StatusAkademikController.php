@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Siakad\CutiMahasiswa;
 use App\Models\Siakad\Khs;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\MahasiswaStatus;
 use App\Models\Siakad\StatusAkademikLog;
 use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\Pertemuan;
@@ -66,7 +67,7 @@ class StatusAkademikController extends Controller
             $cuti = CutiMahasiswa::with('mahasiswa')->findOrFail($id);
             $cuti->update(['status' => $request->status, 'diproses_oleh' => $request->user()?->id]);
             if ($request->status === 'disetujui' && $cuti->mahasiswa) {
-                $cuti->mahasiswa->update(['status' => 'cuti']);
+                $cuti->mahasiswa->update(['status' => MahasiswaStatus::CUTI]);
             }
             return response()->json(['status' => 'success', 'message' => "Pengajuan cuti {$request->status}.", 'data' => $cuti]);
         });

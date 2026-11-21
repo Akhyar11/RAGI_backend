@@ -274,14 +274,44 @@ class SiakadMasterReferensiFlowTest extends TestCase
 
     public function test_alur_ubah_mode_penilaian_tersimpan_ke_database()
     {
+        $masterPermission = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'siakad.master.manage'],
+            ['name' => 'Kelola Master Fakultas & Prodi', 'module' => 'siakad', 'action' => 'update']
+        );
+        $this->admin->roles()->first()->permissions()->syncWithoutDetaching([$masterPermission->id]);
+
         $ta = $this->postJson('/api/v1/siakad/akademik/tahun-akademik', [
             'kode' => '20261',
+            'id_feeder' => '5b24f773-988a-49c8-9d44-21f4f9f1de42',
             'nama' => '2026/2027 Ganjil',
             'tahun_mulai' => 2026,
             'tahun_selesai' => 2027,
         ]);
         $ta->assertStatus(201);
         $taId = $ta->json('data.id');
+        $this->assertDatabaseHas('siakad_tahun_akademik', [
+            'id' => $taId,
+            'id_feeder' => '5b24f773-988a-49c8-9d44-21f4f9f1de42',
+        ]);
+
+        $duplicate = $this->postJson('/api/v1/siakad/akademik/tahun-akademik', [
+            'kode' => '20262',
+            'id_feeder' => '5b24f773-988a-49c8-9d44-21f4f9f1de42',
+            'nama' => '2026/2027 Genap',
+            'tahun_mulai' => 2026,
+            'tahun_selesai' => 2027,
+        ]);
+        $duplicate->assertStatus(422)->assertJsonValidationErrors(['id_feeder']);
+
+        $updatedFeederId = '8f74e072-c0be-4ce4-b92b-8a43c8767211';
+        $this->putJson("/api/v1/siakad/akademik/tahun-akademik/{$taId}", [
+            'nama' => '2026/2027 Ganjil',
+            'id_feeder' => $updatedFeederId,
+        ])->assertStatus(200);
+        $this->assertDatabaseHas('siakad_tahun_akademik', [
+            'id' => $taId,
+            'id_feeder' => $updatedFeederId,
+        ]);
 
         $mode = $this->masterKode('mode_penilaian');
 

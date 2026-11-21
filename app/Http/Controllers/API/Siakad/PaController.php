@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Siakad\RekapPaRequest;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\MahasiswaStatus;
 use App\Models\Siakad\PaBooking;
 use App\Models\Siakad\PaCatatan;
 use App\Models\Siakad\PaInsiden;
@@ -117,7 +118,7 @@ class PaController extends Controller
                 ->where('status_tindak_lanjut', '!=', 'selesai')
                 ->count();
             $kendala = [];
-            if ($m->status !== 'aktif') {
+            if (!\App\Models\Siakad\MahasiswaStatus::isActive($m->status)) {
                 $kendala[] = 'Status: ' . $m->status;
             }
             if ($krsAktif && !in_array($krsAktif->status, ['disetujui', 'dikunci'], true)) {
@@ -612,13 +613,13 @@ class PaController extends Controller
         $keluar = 0;
 
         foreach ($mhsList as $m) {
-            if ($m->status === 'aktif') {
+            if (MahasiswaStatus::isActive($m->status)) {
                 $aktif++;
-            } elseif ($m->status === 'cuti') {
+            } elseif ($m->status === MahasiswaStatus::CUTI) {
                 $cuti++;
-            } elseif ($m->status === 'mangkir') {
+            } elseif ($m->status === MahasiswaStatus::NON_AKTIF) {
                 $nonaktif++;
-            } elseif (in_array($m->status, ['dropout', 'lulus'])) {
+            } elseif ($m->status === MahasiswaStatus::LULUS) {
                 $keluar++;
             }
         }

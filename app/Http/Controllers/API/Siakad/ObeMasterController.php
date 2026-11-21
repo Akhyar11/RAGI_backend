@@ -10,6 +10,7 @@ use App\Models\Siakad\ObeRubrikKriteria;
 use App\Models\Siakad\Kurikulum;
 use App\Models\Siakad\MataKuliah;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\MahasiswaStatus;
 use App\Models\Siakad\MasterKelas;
 use App\Services\AuditLogService;
 use Illuminate\Http\Request;
@@ -1502,7 +1503,7 @@ class ObeMasterController extends Controller
             : ($scopedProdiIds->first() ?: null);
 
         $query = Mahasiswa::with(['programStudi', 'dosenWali'])
-            ->where('status', 'aktif');
+            ->where('status', MahasiswaStatus::AKTIF);
 
         if ($scopedProdiIds->isNotEmpty()) {
             $query->whereIn('program_studi_id', $scopedProdiIds);

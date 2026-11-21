@@ -6,14 +6,16 @@
 > **Dibuat**: 2026-10-14  
 > **Diperbarui**: 2026-10-14
 
-Yudisium/kelulusan (syarat min. IPK 2.00 & 144 SKS; penetapan otomatis mengubah status mahasiswa menjadi `lulus`) dan sensing status bermasalah untuk dashboard BAAK.
+Yudisium/kelulusan (syarat min. IPK 2.00 & 144 SKS; penetapan otomatis mengubah status mahasiswa menjadi `L` = Lulus) dan sensing status bermasalah untuk dashboard BAAK.
+
+Kode status akademik PDDIKTI: `A` Aktif, `C` Cuti, `G` Double Degree, `M` Kampus Merdeka, `N` Non-Aktif, `L` Lulus, `U` Menunggu Ujian.
 
 ## Daftar Endpoint
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
 | GET | `/api/v1/siakad/kelulusan` | Daftar kelulusan | ✅ `siakad.mahasiswa.read` |
-| GET | `/api/v1/siakad/kelulusan/sensing` | Hitung mangkir/cuti/dropout/aktif-tanpa-KRS | ✅ `siakad.mahasiswa.read` |
+| GET | `/api/v1/siakad/kelulusan/sensing` | Hitung nonaktif/cuti/aktif-tanpa-KRS | ✅ `siakad.mahasiswa.read` |
 | GET | `/api/v1/siakad/kelulusan/cek-syarat/{mahasiswaId}` | Cek IPK & SKS vs syarat | ✅ `siakad.mahasiswa.read` |
 | POST | `/api/v1/siakad/kelulusan` | Tetapkan yudisium | ✅ `siakad.mahasiswa.manage` |
 
@@ -90,10 +92,10 @@ Hitung status bermasalah untuk dashboard BAAK (tanpa parameter).
 {
     "status": "success",
     "data": {
-        "mangkir": 3,
+        "non_aktif": 3,
         "cuti": 5,
-        "dropout": 1,
-        "aktif_tanpa_krs_TA_aktif": 12
+        "aktif_tanpa_krs_TA_aktif": 12,
+        "tahun_akademik_aktif": null
     }
 }
 ```

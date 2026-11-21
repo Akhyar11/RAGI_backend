@@ -546,11 +546,11 @@ class PerkuliahanController extends Controller
 
         foreach ($prodis as $prodi) {
             $mhsAktifCount = Mahasiswa::where('program_studi_id', $prodi->id)
-                ->where('status', 'aktif')
+                ->where('status', \App\Models\Siakad\MahasiswaStatus::AKTIF)
                 ->count();
 
             $krsRecords = Krs::whereHas('mahasiswa', function ($q) use ($prodi) {
-                $q->where('program_studi_id', $prodi->id)->where('status', 'aktif');
+                $q->where('program_studi_id', $prodi->id)->where('status', \App\Models\Siakad\MahasiswaStatus::AKTIF);
             })
             ->where('tahun_akademik_id', $taId)
             ->get();

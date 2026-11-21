@@ -65,11 +65,11 @@ class PaService
         return $dosens->map(function ($d) use ($catatanDalamRentang) {
             $base = Mahasiswa::where('dosen_wali_id', $d->id);
             $counts = [
-                'aktif' => (clone $base)->where('status', 'aktif')->count(),
-                'cuti' => (clone $base)->where('status', 'cuti')->count(),
-                'mangkir' => (clone $base)->where('status', 'mangkir')->count(),
-                'keluar' => (clone $base)->whereIn('status', ['dropout'])->count(),
-                'lulus' => (clone $base)->where('status', 'lulus')->count(),
+                'aktif' => (clone $base)->where('status', \App\Models\Siakad\MahasiswaStatus::AKTIF)->count(),
+                'cuti' => (clone $base)->where('status', \App\Models\Siakad\MahasiswaStatus::CUTI)->count(),
+                'mangkir' => 0,
+                'keluar' => (clone $base)->where('status', \App\Models\Siakad\MahasiswaStatus::NON_AKTIF)->count(),
+                'lulus' => (clone $base)->where('status', \App\Models\Siakad\MahasiswaStatus::LULUS)->count(),
             ];
             $counts['total'] = array_sum($counts);
 

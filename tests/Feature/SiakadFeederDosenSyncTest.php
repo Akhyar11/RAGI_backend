@@ -249,6 +249,7 @@ class SiakadFeederDosenSyncTest extends TestCase
             'entity_type' => 'pull_dosen',
         ]);
         $responsePull->assertStatus(200);
+
     }
 
     public function test_sync_batch_dosen_gracefully_skips_lecturers_with_only_nip()

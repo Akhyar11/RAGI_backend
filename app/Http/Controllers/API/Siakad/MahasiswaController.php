@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Siakad;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\MahasiswaStatus;
 use App\Models\Siakad\KonversiTransfer;
 use App\Models\Siakad\KonversiTransferDetail;
 use App\Http\Requests\Siakad\UpdateKonversiTransferRequest;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class MahasiswaController extends Controller
 {
@@ -140,7 +142,7 @@ class MahasiswaController extends Controller
             'jenis_kelamin' => 'required|in:L,P',
             'angkatan' => 'required|integer',
             'dosen_wali_id' => 'nullable|exists:siakad_dosen,id',
-            'status' => 'nullable|in:aktif,cuti,mangkir,dropout,lulus',
+            'status' => ['nullable', Rule::in(MahasiswaStatus::codes())],
             'kelas' => 'nullable|string|max:50',
         ]);
 
@@ -165,7 +167,7 @@ class MahasiswaController extends Controller
 
             $mhs = Mahasiswa::create(array_merge($request->all(), [
                 'user_id' => $user->id,
-                'status' => $request->input('status', 'aktif'),
+                'status' => $request->input('status', MahasiswaStatus::AKTIF),
                 'tanggal_masuk' => now()->toDateString(),
                 'kelas' => $request->filled('kelas') ? strtoupper(trim((string) $request->kelas)) : null,
             ]));
@@ -177,7 +179,6 @@ class MahasiswaController extends Controller
             ], 201);
         });
     }
-
     public function update(Request $request, $id)
     {
         $mhs = Mahasiswa::findOrFail($id);
@@ -189,7 +190,7 @@ class MahasiswaController extends Controller
             'telepon' => 'nullable|string|max:30',
             'alamat' => 'nullable|string',
             'dosen_wali_id' => 'nullable|exists:siakad_dosen,id',
-            'status' => 'nullable|in:aktif,cuti,mangkir,dropout,lulus',
+            'status' => ['nullable', Rule::in(MahasiswaStatus::codes())],
             'kelas' => 'nullable|string|max:50',
             
             // Biodata fields
@@ -236,18 +237,17 @@ class MahasiswaController extends Controller
     }
 
     /**
-     * Ubah status akademik mahasiswa (aktif/cuti/mangkir/dropout/lulus) + catat jejak.
-     * Status 'keluar' dicatat sebagai dropout (DO/mengundurkan diri); kelulusan via Yudisium.
+    * Ubah kode status PDDIKTI mahasiswa dan catat jejak perubahannya.
      */
     public function updateStatus(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:aktif,cuti,mangkir,dropout,lulus',
+            'status' => ['required', Rule::in(MahasiswaStatus::codes())],
             'alasan' => 'nullable|string|max:500',
         ]);
 
         $mhs = Mahasiswa::findOrFail($id);
-        if ($mhs->status !== 'aktif' && $validated['status'] !== 'aktif' && empty($validated['alasan'])) {
+        if (!MahasiswaStatus::isActive($mhs->status) && !MahasiswaStatus::isActive($validated['status']) && empty($validated['alasan'])) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Alasan wajib diisi untuk perubahan status non-aktif.',
@@ -275,19 +275,18 @@ class MahasiswaController extends Controller
     }
 
     /**
-     * Ubah status akademik massal (checklist). Khusus status tanpa alasan personal:
-     * aktif/cuti/lulus. Dropout/mangkir wajib per mahasiswa (butuh alasan individual).
+    * Ubah kode status PDDIKTI secara massal.
      */
     public function bulkUpdateStatus(Request $request)
     {
         $validated = $request->validate([
             'ids' => 'required|array|min:1|max:500',
             'ids.*' => 'exists:siakad_mahasiswa,id',
-            'status' => 'required|in:aktif,cuti,lulus',
+            'status' => ['required', Rule::in(MahasiswaStatus::codes())],
             'alasan' => 'nullable|string|max:500',
         ]);
 
-        if ($validated['status'] !== 'aktif' && empty($validated['alasan'])) {
+        if (!MahasiswaStatus::isActive($validated['status']) && empty($validated['alasan'])) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Alasan wajib diisi untuk perubahan status massal non-aktif.',
@@ -393,7 +392,7 @@ class MahasiswaController extends Controller
                 'angkatan' => $request->angkatan,
                 'kelas' => $request->filled('kelas') ? strtoupper(trim((string) $request->kelas)) : null,
                 'tanggal_masuk' => now()->toDateString(),
-                'status' => 'aktif',
+                'status' => MahasiswaStatus::AKTIF,
             ]);
         }
 
@@ -456,7 +455,7 @@ class MahasiswaController extends Controller
     public function exportNimData(Request $request)
     {
         $query = Mahasiswa::with(['programStudi', 'spmbKonversi.pendaftaranCalonMhs'])
-            ->where('status', 'aktif');
+            ->where('status', MahasiswaStatus::AKTIF);
 
         if ($request->filled('program_studi_id')) {
             $query->where('program_studi_id', $request->program_studi_id);
@@ -506,7 +505,7 @@ class MahasiswaController extends Controller
         $request->validate([
             'program_studi_id' => 'nullable|exists:siakad_program_studi,id',
             'angkatan' => 'nullable|integer|min:2000|max:2100',
-            'status' => 'nullable|in:aktif,cuti,mangkir,dropout,lulus',
+            'status' => ['nullable', Rule::in(MahasiswaStatus::codes())],
         ]);
 
         $query = Mahasiswa::with(['programStudi', 'dosenWali'])
@@ -1097,7 +1096,7 @@ class MahasiswaController extends Controller
 
         $dosen = \App\Models\Siakad\Dosen::findOrFail($validated['dosen_wali_id']);
 
-        $query = Mahasiswa::where('kelas', $kelas)->where('status', 'aktif');
+        $query = Mahasiswa::where('kelas', $kelas)->where('status', MahasiswaStatus::AKTIF);
         if (!empty($validated['program_studi_id'])) {
             $query->where('program_studi_id', $validated['program_studi_id']);
         }
@@ -1159,7 +1158,7 @@ class MahasiswaController extends Controller
         // Plotting PA hanya pemegang permission siakad.pa.manage (BAAK/kaprodi)
         Gate::authorize('siakad.pa.manage');
 
-        $query = Mahasiswa::whereNull('dosen_wali_id')->where('status', 'aktif');
+        $query = Mahasiswa::whereNull('dosen_wali_id')->where('status', MahasiswaStatus::AKTIF);
 
         if ($request->filled('program_studi_id')) {
             $query->where('program_studi_id', $request->program_studi_id);

@@ -68,7 +68,7 @@ class KrsService
 
     public function assertMahasiswaAktif(Mahasiswa $mhs): void
     {
-        if ($mhs->status !== 'aktif') {
+        if (!\App\Models\Siakad\MahasiswaStatus::isActive($mhs->status)) {
             abort(response()->json([
                 'status' => 'error',
                 'message' => "KRS ditolak. Status akademik mahasiswa saat ini '{$mhs->status}'. Hanya mahasiswa aktif yang dapat mengisi KRS (herregistrasi).",

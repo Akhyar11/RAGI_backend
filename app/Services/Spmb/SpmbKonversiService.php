@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\MahasiswaStatus;
 use App\Services\IAM\GoogleWorkspaceService;
 use Illuminate\Support\Facades\Log;
 
@@ -67,7 +68,7 @@ class SpmbKonversiService
                     'telepon' => $pendaftaran->no_hp,
                     'angkatan' => $angkatan,
                     'tanggal_masuk' => now()->toDateString(),
-                    'status' => 'aktif',
+                    'status' => MahasiswaStatus::AKTIF,
                     'kelompok_ukt' => $kelompokUkt,
                     'jalur_masuk' => $jalurKelasNama,
                     'kelas' => $kelas,

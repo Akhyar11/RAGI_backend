@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Siakad;
 use App\Http\Controllers\Controller;
 use App\Models\Siakad\Kelulusan;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\MahasiswaStatus;
 use App\Models\Siakad\Krs;
 use App\Http\Requests\Siakad\StoreKelulusanRequest;
 use Illuminate\Http\Request;
@@ -64,7 +65,7 @@ class KelulusanController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'Syarat yudisium belum terpenuhi (min IPK 2.00 & 144 SKS).'], 422);
             }
             $lulus = Kelulusan::create($validated);
-            Mahasiswa::where('id', $validated['mahasiswa_id'])->update(['status' => 'lulus']);
+            Mahasiswa::where('id', $validated['mahasiswa_id'])->update(['status' => MahasiswaStatus::LULUS]);
             \App\Services\AuditLogService::record(module: 'SIAKAD', action: 'approve', tableName: 'siakad_kelulusan', recordId: $lulus->id, request: $request);
             return response()->json(['status' => 'success', 'message' => 'Yudisium/kelulusan berhasil ditetapkan.', 'data' => $lulus], 201);
         });
@@ -74,19 +75,18 @@ class KelulusanController extends Controller
     public function sensing(Request $request)
     {
         Gate::authorize('siakad.mahasiswa.read');
-        $mangkir = Mahasiswa::where('status', 'mangkir')->count();
-        $cuti = Mahasiswa::where('status', 'cuti')->count();
-        $dropout = Mahasiswa::where('status', 'dropout')->count();
-        // Mahasiswa aktif tanpa KRS di TA aktif = indikasi mangkir
+        $nonAktif = Mahasiswa::where('status', MahasiswaStatus::NON_AKTIF)->count();
+        $cuti = Mahasiswa::where('status', MahasiswaStatus::CUTI)->count();
+        // Mahasiswa aktif tanpa KRS di TA aktif = indikasi perlu ditindaklanjuti.
         $taAktif = \App\Models\Spmb\MasterTahunAkademik::where('is_active', true)->first();
         $tanpaKrs = 0;
         if ($taAktif) {
-            $tanpaKrs = Mahasiswa::where('status', 'aktif')
+            $tanpaKrs = Mahasiswa::where('status', MahasiswaStatus::AKTIF)
                 ->whereNotExists(fn($q) => $q->select(DB::raw(1))->from('siakad_krs')->whereColumn('siakad_krs.mahasiswa_id', 'siakad_mahasiswa.id')->where('tahun_akademik_id', $taAktif->id))
                 ->count();
         }
         return response()->json(['status' => 'success', 'data' => [
-            'mangkir' => $mangkir, 'cuti' => $cuti, 'dropout' => $dropout,
+            'non_aktif' => $nonAktif, 'cuti' => $cuti,
             'aktif_tanpa_krs_TA_aktif' => $tanpaKrs, 'tahun_akademik_aktif' => $taAktif,
         ]]);
     }
