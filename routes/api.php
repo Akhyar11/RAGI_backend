@@ -476,6 +476,10 @@ Route::middleware('auth:api')->prefix('simpeg')->group(function () {
     Route::post('kebijakan-pedoman/{id}', [App\Http\Controllers\Simpeg\KebijakanPedomanController::class, 'update'])->whereNumber('id');
     Route::put('kebijakan-pedoman/{id}', [App\Http\Controllers\Simpeg\KebijakanPedomanController::class, 'update'])->whereNumber('id');
     Route::delete('kebijakan-pedoman/{id}', [App\Http\Controllers\Simpeg\KebijakanPedomanController::class, 'destroy'])->whereNumber('id');
+
+    // Broadcast Pengumuman & Agenda Kampus (Admin SIMPEG)
+    Route::get('announcements', [App\Http\Controllers\API\Simpeg\CampusAnnouncementController::class, 'index']);
+    Route::post('announcements/broadcast', [App\Http\Controllers\API\Simpeg\CampusAnnouncementController::class, 'store']);
 });
 
 /*
@@ -1299,6 +1303,24 @@ Route::prefix('v1')->group(function () {
             Route::get('/jadwal-mengajar', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'jadwalMengajar']);
             Route::get('/home', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'homeSummary']);
             Route::post('/avatar', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'updateAvatar']);
+            Route::get('/agendas', [App\Http\Controllers\API\Simpeg\CampusAnnouncementController::class, 'todayAgendas']);
+
+            // 1. Modul SIAKAD: Input Nilai Mahasiswa (OBE / KHS)
+            Route::prefix('nilai')->group(function () {
+                Route::get('/kelas', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listKelasNilai']);
+                Route::get('/kelas/{kelasId}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'detailKelasNilai'])->whereNumber('kelasId');
+                Route::post('/kelas/{kelasId}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'saveKelasNilai'])->whereNumber('kelasId');
+            });
+
+            // 2. Modul SIAKAD: Bimbingan Akademik (DPA) & Persetujuan KRS
+            Route::prefix('bimbingan-pa')->group(function () {
+                Route::get('/mahasiswa', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listMahasiswaBimbingan']);
+                Route::get('/krs/{krsId}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'detailKrsBimbingan'])->whereNumber('krsId');
+                Route::post('/krs/{krsId}/approve', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'approveKrsBimbingan'])->whereNumber('krsId');
+                Route::post('/krs/{krsId}/reject', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'rejectKrsBimbingan'])->whereNumber('krsId');
+                Route::get('/catatan/{mahasiswaId}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listCatatanBimbingan'])->whereNumber('mahasiswaId');
+                Route::post('/catatan/{mahasiswaId}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeCatatanBimbingan'])->whereNumber('mahasiswaId');
+            });
         });
     });
 

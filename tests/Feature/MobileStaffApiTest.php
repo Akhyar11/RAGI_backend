@@ -9,10 +9,17 @@ use App\Models\Ruangan;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\DosenPengampu;
 use App\Models\Siakad\Kelas;
+use App\Models\Siakad\Krs;
+use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\Kurikulum;
+use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\MataKuliah;
+use App\Models\Siakad\NilaiMahasiswa;
+use App\Models\Siakad\PaCatatan;
 use App\Models\Siakad\ProgramStudi;
+use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\TahunAkademik;
+use App\Models\Simpeg\CampusAnnouncement;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -62,14 +69,32 @@ class MobileStaffApiTest extends TestCase
             'slug' => 'dosen',
             'description' => 'Role dosen pengajar',
         ]);
-        $permissionKelas = Permission::firstOrCreate([
-            'slug' => 'siakad.kelas.read',
-        ], [
-            'name' => 'Lihat Jadwal Kuliah & RPS',
-            'module' => 'siakad',
-            'action' => 'read',
-        ]);
-        $role->permissions()->attach($permissionKelas->id);
+        $perms = [
+            'siakad.kelas.read',
+            'siakad.nilai.read',
+            'siakad.nilai.manage',
+            'siakad.pa.read',
+            'siakad.pa.create',
+            'siakad.krs.read',
+            'siakad.krs.approve',
+            'simpeg.pegawai.read',
+            'simpeg.pegawai.create',
+        ];
+        foreach ($perms as $slug) {
+            $action = match (true) {
+                str_ends_with($slug, '.read') => 'read',
+                str_ends_with($slug, '.create') => 'create',
+                str_ends_with($slug, '.approve') => 'approve',
+                str_ends_with($slug, '.delete') => 'delete',
+                default => 'update',
+            };
+            $p = Permission::firstOrCreate(['slug' => $slug], [
+                'name' => $slug,
+                'module' => str_starts_with($slug, 'siakad') ? 'siakad' : 'simpeg',
+                'action' => $action,
+            ]);
+            $role->permissions()->attach($p->id);
+        }
         $this->dosenUser->roles()->attach($role->id);
         $this->dosenUser->refresh();
 
@@ -242,5 +267,314 @@ class MobileStaffApiTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('status', 'success')
             ->assertJsonPath('data.dosen.id', $this->dosen->id);
+    }
+
+    public function test_list_kelas_nilai_empty_returns_empty_array(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        $response = $this->getJson('/api/v1/mobile/staff/nilai/kelas');
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data', []);
+    }
+
+    public function test_list_and_detail_and_save_kelas_nilai_flow(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        $kurikulum = Kurikulum::create([
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'kode' => 'KUR-TI-OBE',
+            'nama' => 'Kurikulum OBE TI',
+            'tahun_berlaku' => 2026,
+            'total_sks_lulus' => 144,
+            'is_active' => true,
+        ]);
+
+        $mk = MataKuliah::create([
+            'kurikulum_id' => $kurikulum->id,
+            'kode_mk' => 'TI501',
+            'nama' => 'Pemrograman Lanjut',
+            'sks_teori' => 2,
+            'sks_praktik' => 1,
+            'total_sks' => 3,
+            'semester_anjuran' => 5,
+            'tipe' => 'wajib',
+            'is_active' => true,
+        ]);
+
+        $gedung = Gedung::create(['kode' => 'GD-B', 'nama' => 'Gedung B', 'is_active' => true]);
+        $ruangan = Ruangan::create([
+            'gedung_id' => $gedung->id,
+            'kode' => 'LAB-1',
+            'nama' => 'Lab Komputer 1',
+            'kapasitas' => 30,
+            'is_active' => true,
+        ]);
+
+        $kelas = Kelas::create([
+            'tahun_akademik_id' => $this->taAktif->id,
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'mata_kuliah_id' => $mk->id,
+            'ruangan_id' => $ruangan->id,
+            'kode_kelas' => 'TI-5A',
+            'nama_kelas' => 'Pemrograman Lanjut (A)',
+            'hari' => 'rabu',
+            'jam_mulai' => '08:00:00',
+            'jam_selesai' => '10:30:00',
+            'kapasitas' => 30,
+            'status' => 'aktif',
+        ]);
+
+        DosenPengampu::create([
+            'kelas_id' => $kelas->id,
+            'dosen_id' => $this->dosen->id,
+            'peran' => 'Pengampu Utama',
+            'rencana_tatap_muka' => 16,
+        ]);
+
+        // Buat Mahasiswa dan KRS Detail
+        $mhsUser = User::create([
+            'username' => 'mhs.2026001',
+            'email' => 'mhs001@kampus.ac.id',
+            'name' => 'Fulan bin Fulan',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+
+        $mhs = Mahasiswa::create([
+            'user_id' => $mhsUser->id,
+            'nim' => '2026001',
+            'nama' => 'Fulan bin Fulan',
+            'nama_lengkap' => 'Fulan bin Fulan',
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'angkatan' => '2026',
+            'status' => 'A',
+        ]);
+
+        $krs = Krs::create([
+            'mahasiswa_id' => $mhs->id,
+            'tahun_akademik_id' => $this->taAktif->id,
+            'total_sks_diambil' => 3,
+            'status' => 'disetujui',
+        ]);
+
+        $krsDetail = KrsDetail::create([
+            'krs_id' => $krs->id,
+            'kelas_id' => $kelas->id,
+            'status' => 'aktif',
+        ]);
+
+        // Buat Skala Nilai untuk prodi
+        SkalaNilai::create([
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'nilai_huruf' => 'A',
+            'bobot_indeks' => 4.00,
+            'batas_bawah' => 85.00,
+            'batas_atas' => 100.00,
+            'is_lulus' => true,
+            'is_active' => true,
+        ]);
+
+        // 1. List Kelas Nilai
+        $listRes = $this->getJson('/api/v1/mobile/staff/nilai/kelas');
+        $listRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.0.kelas_id', $kelas->id)
+            ->assertJsonPath('data.0.kode_kelas', 'TI-5A')
+            ->assertJsonPath('data.0.total_mahasiswa', 1);
+
+        // 2. Detail Kelas Nilai (Found & 404)
+        $this->getJson('/api/v1/mobile/staff/nilai/kelas/99999')->assertStatus(404);
+
+        $detailRes = $this->getJson("/api/v1/mobile/staff/nilai/kelas/{$kelas->id}");
+        $detailRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.kelas_id', $kelas->id)
+            ->assertJsonPath('data.students.0.nim', '2026001')
+            ->assertJsonPath('data.students.0.nama', 'Fulan bin Fulan');
+
+        // 3. Simpan Nilai & Audit Log
+        $saveRes = $this->postJson("/api/v1/mobile/staff/nilai/kelas/{$kelas->id}", [
+            'grades' => [
+                [
+                    'krs_detail_id' => $krsDetail->id,
+                    'nilai_harian' => 90,
+                    'nilai_uts' => 85,
+                    'nilai_uas' => 90,
+                    'nilai_praktik' => 95,
+                    'is_final' => true,
+                ],
+            ],
+        ]);
+
+        $saveRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.updated_count', 1);
+
+        $this->assertDatabaseHas('siakad_nilai_mahasiswa', [
+            'krs_detail_id' => $krsDetail->id,
+            'nilai_huruf' => 'A',
+            'is_final' => true,
+        ]);
+
+        $this->assertDatabaseHas('core_audit_logs', [
+            'module' => 'SIAKAD',
+            'action' => 'create_nilai_mahasiswa',
+            'table_name' => 'siakad_nilai_mahasiswa',
+        ]);
+    }
+
+    public function test_bimbingan_pa_and_krs_approval_flow(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        $mhsUser = User::create([
+            'username' => 'mhs.pa.001',
+            'email' => 'mhspa@kampus.ac.id',
+            'name' => 'Ahmad Bimbingan',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+
+        $mhs = Mahasiswa::create([
+            'user_id' => $mhsUser->id,
+            'nim' => '2026PA01',
+            'nama' => 'Ahmad Bimbingan',
+            'nama_lengkap' => 'Ahmad Bimbingan',
+            'dosen_wali_id' => $this->dosen->id,
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'angkatan' => '2026',
+            'semester_aktif' => 1,
+            'status' => 'A',
+        ]);
+
+        $krs = Krs::create([
+            'mahasiswa_id' => $mhs->id,
+            'tahun_akademik_id' => $this->taAktif->id,
+            'total_sks_diambil' => 20,
+            'status' => 'diajukan',
+        ]);
+
+        // 1. List Mahasiswa Bimbingan
+        $listRes = $this->getJson('/api/v1/mobile/staff/bimbingan-pa/mahasiswa');
+        $listRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.0.id', $mhs->id)
+            ->assertJsonPath('data.0.nim', '2026PA01')
+            ->assertJsonPath('data.0.krs.status', 'diajukan');
+
+        // 2. Detail KRS Bimbingan
+        $this->getJson('/api/v1/mobile/staff/bimbingan-pa/krs/99999')->assertStatus(404);
+
+        $detailRes = $this->getJson("/api/v1/mobile/staff/bimbingan-pa/krs/{$krs->id}");
+        $detailRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.krs_id', $krs->id)
+            ->assertJsonPath('data.mahasiswa.nim', '2026PA01');
+
+        // 3. Reject / Revisi KRS
+        $rejectRes = $this->postJson("/api/v1/mobile/staff/bimbingan-pa/krs/{$krs->id}/reject", [
+            'alasan' => 'Mata kuliah pilihan semester 3 belum boleh diambil.',
+        ]);
+
+        $rejectRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.status', 'revisi');
+
+        $this->assertDatabaseHas('siakad_krs', [
+            'id' => $krs->id,
+            'status' => 'revisi',
+        ]);
+
+        $this->assertDatabaseHas('siakad_pa_catatan', [
+            'mahasiswa_id' => $mhs->id,
+            'kategori' => 'revisi_krs',
+        ]);
+
+        // 4. Approve KRS
+        $approveRes = $this->postJson("/api/v1/mobile/staff/bimbingan-pa/krs/{$krs->id}/approve");
+        $approveRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.status', 'disetujui');
+
+        $this->assertDatabaseHas('siakad_krs', [
+            'id' => $krs->id,
+            'status' => 'disetujui',
+            'disetujui_oleh' => $this->dosen->id,
+        ]);
+
+        $this->assertDatabaseHas('core_audit_logs', [
+            'module' => 'SIAKAD',
+            'action' => 'approve_krs',
+            'record_id' => (string) $krs->id,
+        ]);
+
+        // 5. Catatan Bimbingan CRUD
+        $storeCatatanRes = $this->postJson("/api/v1/mobile/staff/bimbingan-pa/catatan/{$mhs->id}", [
+            'isi' => 'Konsultasi rencana studi semester 1 berjalan lancar.',
+            'kategori' => 'Konsultasi KRS',
+            'kesimpulan' => 'Setujui pengambilan mata kuliah.',
+        ]);
+
+        $storeCatatanRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.kategori', 'Konsultasi KRS');
+
+        $listCatatanRes = $this->getJson("/api/v1/mobile/staff/bimbingan-pa/catatan/{$mhs->id}");
+        $listCatatanRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonCount(2, 'data'); // 1 from reject revisi, 1 from store
+    }
+
+    public function test_campus_announcement_broadcast_and_today_agendas(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        // 1. Broadcast Pengumuman Seragam Hari Ini
+        $broadcastRes = $this->postJson('/api/simpeg/announcements/broadcast', [
+            'title' => 'Seragam Hari Senin',
+            'category' => 'seragam',
+            'target_role' => 'all_staff',
+            'content' => 'Gunakan kemeja putih dan celana/rok gelap.',
+            'is_agenda' => false,
+            'event_date' => now()->toDateString(),
+        ]);
+
+        $broadcastRes->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.title', 'Seragam Hari Senin');
+
+        $this->assertDatabaseHas('simpeg_campus_announcements', [
+            'title' => 'Seragam Hari Senin',
+            'category' => 'seragam',
+        ]);
+
+        $this->assertDatabaseHas('core_audit_logs', [
+            'module' => 'SIMPEG',
+            'action' => 'broadcast_announcement',
+        ]);
+
+        // 2. Broadcast Agenda Rapat Mendatang
+        $this->postJson('/api/simpeg/announcements/broadcast', [
+            'title' => 'Rapat Koordinasi Akademik Semester Ganjil',
+            'category' => 'rapat',
+            'target_role' => 'dosen',
+            'content' => 'Rapat di Ruang Senat Lt 2.',
+            'is_agenda' => true,
+            'event_date' => now()->addDays(2)->toDateString(),
+            'event_time' => '09:00 WIB',
+            'event_location' => 'Ruang Senat',
+        ])->assertStatus(201);
+
+        // 3. Mobile Staff Agendas Endpoint
+        $agendasRes = $this->getJson('/api/v1/mobile/staff/agendas');
+        $agendasRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.seragam_hari_ini.title', 'Seragam Hari Senin')
+            ->assertJsonCount(1, 'data.upcoming_agendas')
+            ->assertJsonPath('data.upcoming_agendas.0.title', 'Rapat Koordinasi Akademik Semester Ganjil');
     }
 }

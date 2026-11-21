@@ -107,7 +107,7 @@
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
 | MobileMahasiswaController | Gateway API terpadu khusus Aplikasi Mobile Mahasiswa: Beranda (`/home`), Periode Akademik (default periode aktif), Presensi QR Scanner 30 Detik (`/presensi/scan`, `/presensi/sesi-aktif`, `/presensi/rekap`), LMS (`/lms/*`), SIAKAD (`/siakad/profil`, `/jadwal`, `/krs`, `/khs`, `/transkrip`), & SIKEU (`/sikeu/ringkasan`, `/tagihan`, `/pembayaran`, `/beasiswa`, `/dispensasi`) | [docs/api/MOBILE/MobileMahasiswaController.md](api/MOBILE/MobileMahasiswaController.md) |
-| MobileStaffController | Gateway API terpadu Aplikasi Mobile Staf & Dosen (myInU - Staff): Beranda (`/home`), Jadwal Mengajar Terintegrasi SIAKAD (`/jadwal-mengajar`), & Unggah Foto Profil (`/avatar`) | [docs/api/MOBILE/MobileStaffController.md](api/MOBILE/MobileStaffController.md) |
+| MobileStaffController | Gateway API terpadu Aplikasi Mobile Staf & Dosen (myInU - Staff): Beranda (`/home`), Jadwal Mengajar Terintegrasi SIAKAD (`/jadwal-mengajar`), Unggah Foto Profil (`/avatar`), Input Nilai Mahasiswa OBE/KHS (`/nilai/*`), Bimbingan Akademik DPA & Approval KRS (`/bimbingan-pa/*`), serta Agenda Kampus (`/agendas`) | [docs/api/MOBILE/MobileStaffController.md](api/MOBILE/MobileStaffController.md) |
 
 ---
 
@@ -199,6 +199,7 @@
 | SimpegNomorSuratController | Portal mandiri penomoran surat SIMPEG: riwayat nomor surat, permohonan, & unggah scan | [docs/api/SIMPEG/SimpegNomorSuratController.md](api/SIMPEG/SimpegNomorSuratController.md) |
 | AnalitikPegawaiController | Analitik kepegawaian, sebaran TMT Jabatan Akademik Dosen (JAD), & export rekapitulasi Excel | [docs/api/SIMPEG/AnalitikPegawaiController.md](api/SIMPEG/AnalitikPegawaiController.md) |
 | KebijakanPedomanController | Kebijakan, pedoman, standar operasional prosedur (SOP), dan regulasi kepegawaian terintegrasi dua arah dengan modul Arsip | [docs/api/SIMPEG/KebijakanPedomanController.md](api/SIMPEG/KebijakanPedomanController.md) |
+| CampusAnnouncementController | Broadcast pengumuman kampus & agenda kedinasan, distribusi notifikasi ke pegawai, dan info seragam kerja harian | [docs/api/SIMPEG/CampusAnnouncementController.md](api/SIMPEG/CampusAnnouncementController.md) |
 
 
 ## 🏢 Modul SINAPRA (Sarana, Prasarana, & Aset)

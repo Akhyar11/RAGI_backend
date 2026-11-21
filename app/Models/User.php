@@ -73,6 +73,11 @@ class User extends Authenticatable
         return $this->hasOne(\App\Models\Siakad\Mahasiswa::class, 'user_id');
     }
 
+    public function dosen()
+    {
+        return $this->hasOne(\App\Models\Siakad\Dosen::class, 'user_id');
+    }
+
     public function ssoTokens()
     {
         return $this->hasMany(SsoToken::class);

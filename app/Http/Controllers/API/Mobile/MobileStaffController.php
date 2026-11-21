@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\API\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\Siakad\Krs;
+use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\NilaiMahasiswa;
 use App\Services\AuditLogService;
 use App\Services\Mobile\MobileStaffService;
 use App\Services\Storage\FileStorageService;
@@ -170,6 +173,316 @@ class MobileStaffController extends Controller
                 'path' => $path,
                 'updated_at' => now()->toIso8601String(),
             ],
+        ]);
+    }
+
+    // ==========================================
+    // 3. INPUT NILAI MAHASISWA (OBE / KHS)
+    // ==========================================
+
+    /**
+     * GET /api/v1/mobile/staff/nilai/kelas
+     */
+    public function listKelasNilai(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.nilai.read');
+
+        $user = $request->user();
+        $data = $this->staffService->getKelasListForGrading(
+            userId: $user?->id,
+            nidn: $request->query('nidn'),
+            nip: $request->query('nip'),
+            username: $user?->username
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar kelas penilaian berhasil dimuat.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/nilai/kelas/{kelasId}
+     */
+    public function detailKelasNilai(int $kelasId, Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.nilai.read');
+
+        $data = $this->staffService->getKelasGradeDetail($kelasId);
+
+        if (!$data) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Kelas tidak ditemukan.',
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Detail komponen nilai kelas berhasil dimuat.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/nilai/kelas/{kelasId}
+     */
+    public function saveKelasNilai(int $kelasId, Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $request->validate([
+            'grades' => 'required|array',
+            'grades.*.krs_detail_id' => 'required|integer',
+            'grades.*.nilai_harian' => 'nullable|numeric|min:0|max:100',
+            'grades.*.nilai_uts' => 'nullable|numeric|min:0|max:100',
+            'grades.*.nilai_uas' => 'nullable|numeric|min:0|max:100',
+            'grades.*.nilai_praktik' => 'nullable|numeric|min:0|max:100',
+            'grades.*.is_final' => 'nullable|boolean',
+        ]);
+
+        $gradesInput = $request->input('grades', []);
+
+        $result = $this->staffService->saveKelasGrades(
+            kelasId: $kelasId,
+            grades: $gradesInput,
+            userId: $request->user()?->id,
+            request: $request
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $result['message'],
+            'data' => $result,
+        ]);
+    }
+
+    // ==========================================
+    // 4. BIMBINGAN AKADEMIK (DPA) & PERSETUJUAN KRS
+    // ==========================================
+
+    /**
+     * GET /api/v1/mobile/staff/bimbingan-pa/mahasiswa
+     */
+    public function listMahasiswaBimbingan(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $user = $request->user();
+        $data = $this->staffService->getAdviseesList(
+            userId: $user?->id,
+            nidn: $request->query('nidn'),
+            nip: $request->query('nip'),
+            username: $user?->username
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar mahasiswa bimbingan PA berhasil dimuat.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/bimbingan-pa/krs/{krsId}
+     */
+    public function detailKrsBimbingan(int $krsId, Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.krs.read');
+
+        $data = $this->staffService->getKrsDetail($krsId);
+
+        if (!$data) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'KRS mahasiswa tidak ditemukan.',
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Rincian KRS mahasiswa bimbingan berhasil dimuat.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/bimbingan-pa/krs/{krsId}/approve
+     */
+    public function approveKrsBimbingan(int $krsId, Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.krs.approve');
+
+        $krs = Krs::find($krsId);
+        $oldValues = $krs ? [
+            'status' => $krs->status,
+            'disetujui_oleh' => $krs->disetujui_oleh,
+            'disetujui_at' => $krs->disetujui_at?->toIso8601String(),
+        ] : null;
+
+        $success = $this->staffService->approveKrs($krsId, $request->user()?->id);
+
+        if (!$success) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'KRS mahasiswa tidak ditemukan atau gagal disetujui.',
+            ], 404);
+        }
+
+        try {
+            AuditLogService::record(
+                module: 'siakad',
+                action: 'approve_krs',
+                tableName: 'siakad_krs',
+                recordId: $krsId,
+                oldValues: $oldValues,
+                newValues: ['krs_id' => $krsId, 'status' => 'disetujui'],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log approve KRS: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'KRS mahasiswa berhasil disetujui & divalidasi.',
+            'data' => ['krs_id' => $krsId, 'status' => 'disetujui'],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/bimbingan-pa/krs/{krsId}/reject
+     */
+    public function rejectKrsBimbingan(int $krsId, Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.krs.approve');
+
+        $request->validate([
+            'alasan' => 'nullable|string|max:500',
+        ]);
+
+        $krs = Krs::find($krsId);
+        $oldValues = $krs ? [
+            'status' => $krs->status,
+        ] : null;
+
+        $success = $this->staffService->rejectKrs(
+            krsId: $krsId,
+            alasan: $request->input('alasan'),
+            userId: $request->user()?->id
+        );
+
+        if (!$success) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'KRS mahasiswa tidak ditemukan atau gagal diproses.',
+            ], 404);
+        }
+
+        try {
+            AuditLogService::record(
+                module: 'siakad',
+                action: 'reject_krs',
+                tableName: 'siakad_krs',
+                recordId: $krsId,
+                oldValues: $oldValues,
+                newValues: [
+                    'krs_id' => $krsId,
+                    'status' => 'revisi',
+                    'alasan' => $request->input('alasan'),
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log reject KRS: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Permintaan revisi KRS telah dikirim ke mahasiswa.',
+            'data' => ['krs_id' => $krsId, 'status' => 'revisi'],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/bimbingan-pa/catatan/{mahasiswaId}
+     */
+    public function listCatatanBimbingan(int $mahasiswaId, Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.pa.read');
+
+        $data = $this->staffService->getCatatanBimbingan($mahasiswaId);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Riwayat catatan bimbingan berhasil dimuat.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/bimbingan-pa/catatan/{mahasiswaId}
+     */
+    public function storeCatatanBimbingan(int $mahasiswaId, Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.pa.create');
+
+        $request->validate([
+            'isi' => 'required|string|min:5|max:2000',
+            'kategori' => 'nullable|string|max:50',
+            'kesimpulan' => 'nullable|string|max:500',
+            'butuh_penanganan_khusus' => 'nullable|boolean',
+            'tanggal' => 'nullable|date',
+        ]);
+
+        $mahasiswa = Mahasiswa::find($mahasiswaId);
+        if (!$mahasiswa) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Mahasiswa tidak ditemukan.',
+            ], 404);
+        }
+
+        $dosen = $this->staffService->resolveDosen($request->user()?->id);
+        if ($dosen && $mahasiswa->dosen_wali_id && $mahasiswa->dosen_wali_id !== $dosen->id && !$request->user()->can('siakad.pa.manage')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda bukan Dosen Pembimbing Akademik mahasiswa ini.',
+            ], 403);
+        }
+
+        $data = $this->staffService->storeCatatanBimbingan(
+            mahasiswaId: $mahasiswaId,
+            data: $request->only(['isi', 'kategori', 'kesimpulan', 'butuh_penanganan_khusus', 'tanggal']),
+            userId: $request->user()?->id
+        );
+
+        if (!$data) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Mahasiswa tidak ditemukan atau Dosen PA tidak terhubung.',
+            ], 404);
+        }
+
+        try {
+            AuditLogService::record(
+                module: 'siakad',
+                action: 'create_pa_catatan',
+                tableName: 'siakad_pa_catatan',
+                recordId: $data['id'],
+                oldValues: null,
+                newValues: $data,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log catatan PA: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Catatan bimbingan akademik berhasil disimpan.',
+            'data' => $data,
         ]);
     }
 }
