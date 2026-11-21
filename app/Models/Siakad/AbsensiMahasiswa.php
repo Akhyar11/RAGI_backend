@@ -23,6 +23,8 @@ class AbsensiMahasiswa extends Model
         self::STATUS_ALFA,
     ];
 
+    public const VALID_STATUSES = self::STATUSES;
+
     protected $fillable = [
         'pertemuan_id',
         'mahasiswa_id',

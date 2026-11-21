@@ -107,7 +107,7 @@
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
 | MobileMahasiswaController | Gateway API terpadu khusus Aplikasi Mobile Mahasiswa: Beranda (`/home`), Periode Akademik (default periode aktif), Presensi QR Scanner 30 Detik (`/presensi/scan`, `/presensi/sesi-aktif`, `/presensi/rekap`), LMS (`/lms/*`), SIAKAD (`/siakad/profil`, `/jadwal`, `/krs`, `/khs`, `/transkrip`), & SIKEU (`/sikeu/ringkasan`, `/tagihan`, `/pembayaran`, `/beasiswa`, `/dispensasi`) | [docs/api/MOBILE/MobileMahasiswaController.md](api/MOBILE/MobileMahasiswaController.md) |
-| MobileStaffController | Gateway API terpadu Aplikasi Mobile Staf & Dosen (myInU - Staff): Beranda (`/home`), Jadwal Mengajar Terintegrasi SIAKAD (`/jadwal-mengajar`), Unggah Foto Profil (`/avatar`), Input Nilai Mahasiswa OBE/KHS (`/nilai/*`), Bimbingan Akademik DPA & Approval KRS (`/bimbingan-pa/*`), serta Agenda Kampus (`/agendas`) | [docs/api/MOBILE/MobileStaffController.md](api/MOBILE/MobileStaffController.md) |
+| MobileStaffController | Gateway API terpadu Aplikasi Mobile Staf & Dosen (myInU - Staff): Beranda (`/home`), Jadwal Mengajar Terintegrasi SIAKAD (`/jadwal-mengajar`), Unggah Foto Profil (`/avatar`), Input Nilai Mahasiswa OBE/KHS (`/nilai/*`), Bimbingan Akademik DPA & Approval KRS (`/bimbingan-pa/*`), Jurnal Pertemuan Perkuliahan BAP 16 Sesi & Presensi Token Dinamis (`/perkuliahan/*`), serta Agenda Kampus (`/agendas`) | [docs/api/MOBILE/MobileStaffController.md](api/MOBILE/MobileStaffController.md) |
 
 ---
 

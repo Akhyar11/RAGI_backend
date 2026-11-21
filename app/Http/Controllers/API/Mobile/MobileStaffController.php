@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\API\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\Krs;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\NilaiMahasiswa;
+use App\Models\Siakad\Pertemuan;
 use App\Services\AuditLogService;
 use App\Services\Mobile\MobileStaffService;
 use App\Services\Storage\FileStorageService;
@@ -13,6 +15,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class MobileStaffController extends Controller
 {
@@ -30,11 +34,15 @@ class MobileStaffController extends Controller
         Gate::authorize('siakad.kelas.read');
 
         $user = $request->user();
-        $canManage = $user && ($user->isSuperAdmin() || $user->can('siakad.kelas.manage'));
+        if (!$user) {
+            abort(401, 'Unauthenticated.');
+        }
+
+        $canManage = $user->isSuperAdmin() || $user->can('siakad.kelas.manage');
 
         // Pengguna non-admin hanya dapat melihat jadwal mengajarnya sendiri
-        $userId = $user?->id;
-        $username = $canManage ? ($request->query('username') ?? $user?->username) : $user?->username;
+        $userId = $user->id;
+        $username = $canManage ? ($request->query('username') ?? $user->username) : $user->username;
         $nidn = $canManage ? $request->query('nidn') : null;
         $nip = $canManage ? $request->query('nip') : null;
 
@@ -70,6 +78,10 @@ class MobileStaffController extends Controller
         Gate::authorize('siakad.kelas.read');
 
         $user = $request->user();
+        if (!$user) {
+            abort(401, 'Unauthenticated.');
+        }
+
         $user->loadMissing('roles');
         $schedule = $this->staffService->getJadwalMengajar(
             userId: $user->id,
@@ -482,6 +494,217 @@ class MobileStaffController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Catatan bimbingan akademik berhasil disimpan.',
+            'data' => $data,
+        ]);
+    }
+
+    // ================================================================
+    // MODUL PERKULIAHAN: JURNAL PERTEMUAN (BAP) & PRESENSI KELAS
+    // ================================================================
+
+    /**
+     * GET /api/v1/mobile/staff/perkuliahan/kelas
+     * Daftar kelas yang diampu dosen beserta progres pertemuan.
+     */
+    public function listKelasPertemuan(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        $user = $request->user();
+        if (!$user) {
+            abort(401, 'Unauthenticated.');
+        }
+
+        $canManage = $user->isSuperAdmin() || $user->can('siakad.kelas.manage');
+        $nidn = $canManage ? $request->query('nidn') : null;
+        $nip = $canManage ? $request->query('nip') : null;
+        $username = $canManage ? ($request->query('username') ?? $user->username) : $user->username;
+
+        $data = $this->staffService->getKelasListForPertemuan(
+            userId: $user->id,
+            nidn: $nidn,
+            nip: $nip,
+            username: $username
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar kelas perkuliahan berhasil dimuat.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/perkuliahan/kelas/{kelasId}
+     * Rincian kelas dan daftar pertemuan 1 s/d 16.
+     */
+    public function detailPertemuanKelas(Request $request, int $kelasId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        $data = $this->staffService->getPertemuanList($kelasId);
+
+        if (!$data) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Kelas perkuliahan tidak ditemukan.',
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar jurnal pertemuan perkuliahan berhasil dimuat.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/perkuliahan/kelas/{kelasId}/mulai
+     * Memulai sesi perkuliahan & buka token presensi mahasiswa.
+     */
+    public function mulaiSesiPertemuan(Request $request, int $kelasId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $validator = Validator::make($request->all(), [
+            'pertemuan_ke' => 'required|integer|min:1|max:16',
+            'materi' => 'required|string|min:3|max:255',
+            'catatan' => 'nullable|string|max:1000',
+            'tanggal' => 'nullable|date',
+            'jam_mulai' => 'nullable|string|max:10',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validasi data sesi perkuliahan gagal.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $this->staffService->mulaiSesiPertemuan(
+            kelasId: $kelasId,
+            data: $request->only(['pertemuan_ke', 'materi', 'catatan', 'tanggal', 'jam_mulai']),
+            userId: $request->user()?->id
+        );
+
+        if (!$data) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Kelas tidak ditemukan atau gagal membuka sesi perkuliahan.',
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Sesi perkuliahan Pertemuan ' . $data['pertemuan_ke'] . ' berhasil dimulai.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/rotate-token
+     * Putar ulang token absensi dinamis (anti titip-hadir).
+     */
+    public function rotateTokenPertemuan(Request $request, int $pertemuanId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $data = $this->staffService->rotateTokenPertemuan($pertemuanId, $request->user()?->id);
+
+        if (!$data) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Pertemuan tidak ditemukan atau sesi telah ditutup.',
+            ], 400);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Token absensi berhasil diputar ulang.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/selesai
+     * Tutup sesi perkuliahan dan kunci absensi kelas.
+     */
+    public function selesaiSesiPertemuan(Request $request, int $pertemuanId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $data = $this->staffService->selesaiSesiPertemuan($pertemuanId, $request->user()?->id);
+
+        if (!$data) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Pertemuan perkuliahan tidak ditemukan.',
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Sesi perkuliahan Pertemuan ' . $data['pertemuan_ke'] . ' telah ditutup.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/presensi
+     * Daftar absensi mahasiswa di pertemuan kelas.
+     */
+    public function detailPresensiPertemuan(Request $request, int $pertemuanId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        $data = $this->staffService->getPresensiPertemuan($pertemuanId);
+
+        if (!$data) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Pertemuan tidak ditemukan.',
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar presensi mahasiswa berhasil dimuat.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/presensi
+     * Update/override status absensi mahasiswa secara manual oleh dosen.
+     */
+    public function savePresensiPertemuan(Request $request, int $pertemuanId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $validator = Validator::make($request->all(), [
+            'items' => 'required|array',
+            'items.*.mahasiswa_id' => 'required|integer|exists:siakad_mahasiswa,id',
+            'items.*.status' => ['required', 'string', Rule::in(AbsensiMahasiswa::STATUSES)],
+            'items.*.catatan' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validasi data presensi gagal.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $this->staffService->updatePresensiMahasiswa(
+            pertemuanId: $pertemuanId,
+            items: $request->input('items', [])
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Status presensi mahasiswa berhasil diperbarui.',
             'data' => $data,
         ]);
     }

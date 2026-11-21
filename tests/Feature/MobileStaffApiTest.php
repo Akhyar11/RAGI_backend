@@ -16,6 +16,8 @@ use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\MataKuliah;
 use App\Models\Siakad\NilaiMahasiswa;
 use App\Models\Siakad\PaCatatan;
+use App\Models\Siakad\Pertemuan;
+use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\ProgramStudi;
 use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\TahunAkademik;
@@ -71,6 +73,7 @@ class MobileStaffApiTest extends TestCase
         ]);
         $perms = [
             'siakad.kelas.read',
+            'siakad.kelas.manage',
             'siakad.nilai.read',
             'siakad.nilai.manage',
             'siakad.pa.read',
@@ -576,5 +579,207 @@ class MobileStaffApiTest extends TestCase
             ->assertJsonPath('data.seragam_hari_ini.title', 'Seragam Hari Senin')
             ->assertJsonCount(1, 'data.upcoming_agendas')
             ->assertJsonPath('data.upcoming_agendas.0.title', 'Rapat Koordinasi Akademik Semester Ganjil');
+    }
+
+    public function test_perkuliahan_bap_and_presensi_flow(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        $kurikulum = Kurikulum::create([
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'kode' => 'KUR-TI-2026',
+            'nama' => 'Kurikulum TI 2026',
+            'tahun_berlaku' => 2026,
+            'total_sks_lulus' => 144,
+            'is_active' => true,
+        ]);
+
+        $mk = MataKuliah::create([
+            'kurikulum_id' => $kurikulum->id,
+            'kode_mk' => 'TI601',
+            'nama' => 'Cloud Computing Architecture',
+            'sks_teori' => 3,
+            'sks_praktik' => 0,
+            'total_sks' => 3,
+            'semester_anjuran' => 6,
+            'tipe' => 'wajib',
+            'is_active' => true,
+        ]);
+
+        $kelas = Kelas::create([
+            'tahun_akademik_id' => $this->taAktif->id,
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'mata_kuliah_id' => $mk->id,
+            'nama_kelas' => 'Cloud Architecture (TI-6A)',
+            'kode_kelas' => 'TI-6A',
+            'kuota' => 35,
+            'is_active' => true,
+        ]);
+
+        DosenPengampu::create([
+            'kelas_id' => $kelas->id,
+            'dosen_id' => $this->dosen->id,
+            'peran' => 'Pengampu Utama',
+        ]);
+
+        $mhsUser = User::create([
+            'username' => 'mhs.cloud.001',
+            'email' => 'mhscloud@kampus.ac.id',
+            'name' => 'Budi Cloud',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+
+        $mhs = Mahasiswa::create([
+            'user_id' => $mhsUser->id,
+            'nim' => '2026999',
+            'nama' => 'Budi Cloud',
+            'nama_lengkap' => 'Budi Cloud',
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'angkatan' => '2026',
+            'status' => 'A',
+        ]);
+
+        $krs = Krs::create([
+            'mahasiswa_id' => $mhs->id,
+            'tahun_akademik_id' => $this->taAktif->id,
+            'total_sks_diambil' => 3,
+            'status' => 'disetujui',
+        ]);
+
+        KrsDetail::create([
+            'krs_id' => $krs->id,
+            'kelas_id' => $kelas->id,
+            'status' => 'aktif',
+        ]);
+
+        // 1. List Kelas Perkuliahan (BAP)
+        $listRes = $this->getJson('/api/v1/mobile/staff/perkuliahan/kelas');
+        $listRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.0.kelas_id', $kelas->id)
+            ->assertJsonPath('data.0.total_pertemuan', 16)
+            ->assertJsonPath('data.0.total_mahasiswa', 1);
+
+        // 2. Detail Kelas Pertemuan (1 s/d 16) & 404
+        $this->getJson('/api/v1/mobile/staff/perkuliahan/kelas/999999')->assertStatus(404);
+
+        $detailRes = $this->getJson("/api/v1/mobile/staff/perkuliahan/kelas/{$kelas->id}");
+        $detailRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonCount(16, 'data.pertemuan')
+            ->assertJsonPath('data.kelas.id', $kelas->id);
+
+        // 3. Mulai Sesi Perkuliahan (Pertemuan 1) & 422
+        $this->postJson("/api/v1/mobile/staff/perkuliahan/kelas/{$kelas->id}/mulai", [])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['pertemuan_ke', 'materi']);
+
+        $mulaiRes = $this->postJson("/api/v1/mobile/staff/perkuliahan/kelas/{$kelas->id}/mulai", [
+            'pertemuan_ke' => 1,
+            'materi' => 'Pengenalan Cloud Native & Microservices',
+            'catatan' => 'Pertemuan perdana teori.',
+        ]);
+
+        $mulaiRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.pertemuan_ke', 1)
+            ->assertJsonPath('data.status', 'berlangsung');
+
+        $pertemuanId = $mulaiRes->json('data.id');
+        $tokenAwal = $mulaiRes->json('data.token_absensi');
+
+        $this->assertNotEmpty($tokenAwal);
+        $this->assertDatabaseHas('siakad_pertemuan', [
+            'id' => $pertemuanId,
+            'status_pertemuan' => 'berlangsung',
+            'token_absensi' => $tokenAwal,
+        ]);
+
+        $this->assertDatabaseHas('core_audit_logs', [
+            'module' => 'SIAKAD',
+            'action' => 'start_perkuliahan_session',
+            'record_id' => (string) $pertemuanId,
+        ]);
+
+        // 4. Rotate Token Presensi Dinamis
+        $rotateRes = $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/rotate-token");
+        $rotateRes->assertOk()
+            ->assertJsonPath('status', 'success');
+
+        $tokenBaru = $rotateRes->json('data.token_absensi');
+        $this->assertNotEmpty($tokenBaru);
+
+        $this->assertDatabaseHas('core_audit_logs', [
+            'module' => 'SIAKAD',
+            'action' => 'rotate_attendance_token',
+            'record_id' => (string) $pertemuanId,
+        ]);
+
+        // 5. Detail Presensi Mahasiswa & 404
+        $this->getJson('/api/v1/mobile/staff/perkuliahan/pertemuan/999999/presensi')->assertStatus(404);
+
+        $presensiRes = $this->getJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/presensi");
+        $presensiRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.rekap.total', 1)
+            ->assertJsonPath('data.mahasiswa.0.mahasiswa_id', $mhs->id);
+
+        // 6. Update / Override Status Presensi Mahasiswa Manual
+        $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/presensi", [
+            'items' => [
+                [
+                    'mahasiswa_id' => $mhs->id,
+                    'status' => 'status_tidak_valid',
+                ],
+            ],
+        ])->assertStatus(422);
+
+        $updatePresensiRes = $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/presensi", [
+            'items' => [
+                [
+                    'mahasiswa_id' => $mhs->id,
+                    'status' => 'izin',
+                    'catatan' => 'Izin lomba akademik.',
+                ],
+            ],
+        ]);
+
+        $updatePresensiRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.rekap.izin', 1);
+
+        $this->assertDatabaseHas('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $pertemuanId,
+            'mahasiswa_id' => $mhs->id,
+            'status' => 'izin',
+        ]);
+
+        $this->assertDatabaseHas('core_audit_logs', [
+            'module' => 'SIAKAD',
+            'action' => 'batch_update_attendance',
+            'record_id' => (string) $pertemuanId,
+        ]);
+
+        // 7. Selesaikan Sesi Perkuliahan
+        $selesaiRes = $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/selesai");
+        $selesaiRes->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.status', 'selesai');
+
+        $this->assertDatabaseHas('siakad_pertemuan', [
+            'id' => $pertemuanId,
+            'status_pertemuan' => 'selesai',
+        ]);
+
+        $this->assertDatabaseHas('core_audit_logs', [
+            'module' => 'SIAKAD',
+            'action' => 'finish_perkuliahan_session',
+            'record_id' => (string) $pertemuanId,
+        ]);
+
+        // 8. Rotate token pada sesi yang sudah selesai menghasilkan 400 Bad Request
+        $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/rotate-token")
+            ->assertStatus(400);
     }
 }

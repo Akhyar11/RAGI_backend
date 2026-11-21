@@ -10,12 +10,15 @@ use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\NilaiMahasiswa;
 use App\Models\Siakad\PaCatatan;
+use App\Models\Siakad\Pertemuan;
+use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\TahunAkademik;
 use App\Services\AuditLogService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class MobileStaffService
@@ -637,6 +640,500 @@ class MobileStaffService
             'kategori' => $catatan->kategori,
             'isi' => $catatan->isi,
             'kesimpulan' => $catatan->kesimpulan,
+        ];
+    }
+
+    // ================================================================
+    // MODUL PERKULIAHAN: JURNAL PERTEMUAN (BAP) & PRESENSI MAHASISWA
+    // ================================================================
+
+    /**
+     * Daftar kelas yang diampu dosen dengan ringkasan progres pertemuan (BAP).
+     */
+    public function getKelasListForPertemuan(?int $userId = null, ?string $nidn = null, ?string $nip = null, ?string $username = null): array
+    {
+        $dosen = $this->resolveDosen($userId, $nidn, $nip, $username);
+        if (!$dosen) {
+            return [];
+        }
+
+        $tahunAkademik = TahunAkademik::where('is_active', true)->first();
+
+        $query = Kelas::with(['mataKuliah', 'tahunAkademik', 'ruangan'])
+            ->whereHas('dosenPengampu', fn($q) => $q->where('dosen_id', $dosen->id));
+
+        if ($tahunAkademik) {
+            $query->where('tahun_akademik_id', $tahunAkademik->id);
+        }
+
+        $classes = $query->get();
+
+        if ($classes->isEmpty()) {
+            $classes = Kelas::with(['mataKuliah', 'tahunAkademik', 'ruangan'])
+                ->whereHas('dosenPengampu', fn($q) => $q->where('dosen_id', $dosen->id))
+                ->get();
+        }
+
+        return $classes->map(function ($k) {
+            $pertemuanCount = Pertemuan::where('kelas_id', $k->id)->count();
+            $pertemuanSelesai = Pertemuan::where('kelas_id', $k->id)
+                ->where('status_pertemuan', Pertemuan::STATUS_SELESAI)
+                ->count();
+            $pertemuanAktif = Pertemuan::where('kelas_id', $k->id)
+                ->where('status_pertemuan', Pertemuan::STATUS_BERLANGSUNG)
+                ->first();
+
+            $totalMhs = KrsDetail::where('kelas_id', $k->id)->count();
+
+            return [
+                'kelas_id' => $k->id,
+                'kode_kelas' => $k->kode_kelas ?? 'KELAS-' . $k->id,
+                'nama_kelas' => $k->nama_kelas,
+                'kode_mk' => $k->mataKuliah?->kode_mk ?? '-',
+                'nama_mk' => $k->mataKuliah?->nama ?? $k->mataKuliah?->nama_mk ?? '-',
+                'sks' => $k->mataKuliah?->total_sks ?? $k->mataKuliah?->sks_total ?? 3,
+                'ruangan' => $k->ruangan?->nama_ruangan ?? 'Ruang Kuliah',
+                'hari' => $k->hari ?? 'Senin',
+                'jam' => ($k->jam_mulai ? substr($k->jam_mulai, 0, 5) : '08:00') . ' - ' . ($k->jam_selesai ? substr($k->jam_selesai, 0, 5) : '10:30'),
+                'total_mahasiswa' => $totalMhs,
+                'total_pertemuan' => 16,
+                'pertemuan_selesai' => $pertemuanSelesai,
+                'has_active_session' => $pertemuanAktif !== null,
+                'active_session_id' => $pertemuanAktif?->id,
+                'active_session_ke' => $pertemuanAktif?->pertemuan_ke,
+            ];
+        })->values()->toArray();
+    }
+
+    /**
+     * Ambil rincian kelas dan daftar seluruh pertemuan 1 s/d 16.
+     */
+    public function getPertemuanList(int $kelasId): ?array
+    {
+        $kelas = Kelas::with(['mataKuliah', 'tahunAkademik', 'ruangan'])->find($kelasId);
+        if (!$kelas) {
+            return null;
+        }
+
+        $totalMhs = KrsDetail::where('kelas_id', $kelasId)->count();
+
+        // Ambil pertemuan yang sudah tersimpan
+        $existingPertemuan = Pertemuan::where('kelas_id', $kelasId)
+            ->orderBy('pertemuan_ke')
+            ->get()
+            ->keyBy('pertemuan_ke');
+
+        $list = [];
+        for ($i = 1; $i <= 16; $i++) {
+            $p = $existingPertemuan->get($i);
+            if ($p) {
+                // Hitung statistik presensi
+                $hadir = AbsensiMahasiswa::where('pertemuan_id', $p->id)->where('status', AbsensiMahasiswa::STATUS_HADIR)->count();
+                $izin = AbsensiMahasiswa::where('pertemuan_id', $p->id)->where('status', AbsensiMahasiswa::STATUS_IZIN)->count();
+                $sakit = AbsensiMahasiswa::where('pertemuan_id', $p->id)->where('status', AbsensiMahasiswa::STATUS_SAKIT)->count();
+                $alfa = AbsensiMahasiswa::where('pertemuan_id', $p->id)->where('status', AbsensiMahasiswa::STATUS_ALFA)->count();
+
+                $list[] = [
+                    'id' => $p->id,
+                    'pertemuan_ke' => $i,
+                    'tanggal' => $p->tanggal ? Carbon::parse($p->tanggal)->format('d M Y') : null,
+                    'tanggal_raw' => $p->tanggal ? Carbon::parse($p->tanggal)->toDateString() : null,
+                    'jam_mulai' => $p->jam_mulai ? substr($p->jam_mulai, 0, 5) : null,
+                    'jam_selesai' => $p->jam_selesai ? substr($p->jam_selesai, 0, 5) : null,
+                    'materi' => $p->materi,
+                    'catatan' => $p->catatan_pertemuan,
+                    'status' => $p->status_pertemuan ?? 'belum',
+                    'token_absensi' => $p->token_absensi,
+                    'is_active' => $p->status_pertemuan === Pertemuan::STATUS_BERLANGSUNG,
+                    'total_hadir' => $hadir,
+                    'total_izin' => $izin,
+                    'total_sakit' => $sakit,
+                    'total_alfa' => $alfa,
+                    'total_mahasiswa' => $totalMhs,
+                ];
+            } else {
+                // Skeleton pertemuan yang belum pernah dibuka
+                $list[] = [
+                    'id' => null,
+                    'pertemuan_ke' => $i,
+                    'tanggal' => null,
+                    'tanggal_raw' => null,
+                    'jam_mulai' => null,
+                    'jam_selesai' => null,
+                    'materi' => null,
+                    'catatan' => null,
+                    'status' => 'belum',
+                    'token_absensi' => null,
+                    'is_active' => false,
+                    'total_hadir' => 0,
+                    'total_izin' => 0,
+                    'total_sakit' => 0,
+                    'total_alfa' => 0,
+                    'total_mahasiswa' => $totalMhs,
+                ];
+            }
+        }
+
+        $pertemuanSelesai = collect($list)->where('status', 'selesai')->count();
+        $pertemuanAktif = collect($list)->firstWhere('is_active', true);
+
+        return [
+            'kelas' => [
+                'id' => $kelas->id,
+                'kode_kelas' => $kelas->kode_kelas ?? 'KELAS-' . $kelas->id,
+                'nama_kelas' => $kelas->nama_kelas,
+                'kode_mk' => $kelas->mataKuliah?->kode_mk ?? '-',
+                'nama_mk' => $kelas->mataKuliah?->nama ?? $kelas->mataKuliah?->nama_mk ?? '-',
+                'sks' => $kelas->mataKuliah?->total_sks ?? $kelas->mataKuliah?->sks_total ?? 3,
+                'ruangan' => $kelas->ruangan?->nama_ruangan ?? 'Ruang Kuliah',
+                'hari' => $kelas->hari ?? 'Senin',
+                'jam' => ($kelas->jam_mulai ? substr($kelas->jam_mulai, 0, 5) : '08:00') . ' - ' . ($kelas->jam_selesai ? substr($kelas->jam_selesai, 0, 5) : '10:30'),
+                'total_mahasiswa' => $totalMhs,
+                'pertemuan_selesai' => $pertemuanSelesai,
+                'has_active_session' => $pertemuanAktif !== null,
+                'active_session_ke' => $pertemuanAktif['pertemuan_ke'] ?? null,
+            ],
+            'pertemuan' => $list,
+        ];
+    }
+
+    /**
+     * Memulai sesi perkuliahan & buka presensi kelas mahasiswa.
+     */
+    public function mulaiSesiPertemuan(int $kelasId, array $data, ?int $userId = null): ?array
+    {
+        $kelas = Kelas::find($kelasId);
+        if (!$kelas) {
+            return null;
+        }
+
+        $pertemuanKe = (int) ($data['pertemuan_ke'] ?? 1);
+        if ($pertemuanKe < 1 || $pertemuanKe > 16) {
+            $pertemuanKe = 1;
+        }
+
+        // Generate token dinamis 6-digit untuk mahasiswa scan/input
+        $tokenAbsensi = (string) random_int(100000, 999999);
+
+        // Cari atau buat record pertemuan
+        $pertemuan = Pertemuan::firstOrNew([
+            'kelas_id' => $kelasId,
+            'pertemuan_ke' => $pertemuanKe,
+        ]);
+
+        $isNew = !$pertemuan->exists;
+        $oldValues = $pertemuan->exists ? $pertemuan->getOriginal() : null;
+
+        $tanggal = !empty($data['tanggal']) ? Carbon::parse($data['tanggal'])->toDateString() : Carbon::today()->toDateString();
+        $jamMulai = !empty($data['jam_mulai']) ? $data['jam_mulai'] : Carbon::now()->format('H:i');
+
+        $pertemuan->tanggal = $tanggal;
+        $pertemuan->jam_mulai = $jamMulai;
+        $pertemuan->materi = $data['materi'] ?? ('Pertemuan ke-' . $pertemuanKe . ' - ' . ($kelas->mataKuliah?->nama ?? $kelas->mataKuliah?->nama_mk ?? ''));
+        $pertemuan->catatan_pertemuan = $data['catatan'] ?? null;
+        $pertemuan->status_pertemuan = Pertemuan::STATUS_BERLANGSUNG;
+        $pertemuan->token_absensi = $tokenAbsensi;
+        $pertemuan->token_expired_at = Carbon::now()->addHours(2);
+        $pertemuan->window_menit = 120;
+        $pertemuan->presensi_closed_at = null;
+        $pertemuan->save();
+
+        $newValues = $isNew ? $pertemuan->getAttributes() : $pertemuan->getChanges();
+
+        try {
+            AuditLogService::record(
+                module: 'siakad',
+                action: $isNew ? 'start_perkuliahan_session' : 'update_perkuliahan_session',
+                tableName: 'siakad_pertemuan',
+                recordId: $pertemuan->id,
+                oldValues: $oldValues,
+                newValues: $newValues,
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log buka perkuliahan: ' . $e->getMessage());
+        }
+
+        // Inisialisasi entri presensi default untuk semua mahasiswa di kelas ini jika belum ada
+        $peserta = KrsDetail::with('krs')->where('kelas_id', $kelasId)->get();
+        foreach ($peserta as $p) {
+            $mhsId = $p->mahasiswa_id ?? $p->krs?->mahasiswa_id;
+            if (!$mhsId) continue;
+
+            AbsensiMahasiswa::firstOrCreate(
+                [
+                    'pertemuan_id' => $pertemuan->id,
+                    'mahasiswa_id' => $mhsId,
+                ],
+                [
+                    'status' => AbsensiMahasiswa::STATUS_HADIR,
+                    'catatan' => null,
+                    'is_submitted' => false,
+                ]
+            );
+        }
+
+        return [
+            'id' => $pertemuan->id,
+            'kelas_id' => $kelasId,
+            'pertemuan_ke' => $pertemuan->pertemuan_ke,
+            'tanggal' => Carbon::parse($pertemuan->tanggal)->format('d M Y'),
+            'materi' => $pertemuan->materi,
+            'catatan' => $pertemuan->catatan_pertemuan,
+            'status' => $pertemuan->status_pertemuan,
+            'token_absensi' => $pertemuan->token_absensi,
+            'token_expired_at' => $pertemuan->token_expired_at?->toIso8601String(),
+            'jam_mulai' => $pertemuan->jam_mulai,
+            'qr_payload' => json_encode([
+                'type' => 'siakad_presensi',
+                'pertemuan_id' => $pertemuan->id,
+                'kelas_id' => $kelasId,
+                'pertemuan_ke' => $pertemuan->pertemuan_ke,
+                'token' => $tokenAbsensi,
+                'timestamp' => Carbon::now()->timestamp,
+            ]),
+        ];
+    }
+
+    /**
+     * Putar ulang token absensi pertemuan (Dynamic rotating token per 30 detik).
+     */
+    public function rotateTokenPertemuan(int $pertemuanId, ?int $userId = null): ?array
+    {
+        $pertemuan = Pertemuan::find($pertemuanId);
+        if (!$pertemuan) {
+            return null;
+        }
+
+        if ($pertemuan->status_pertemuan === Pertemuan::STATUS_SELESAI || $pertemuan->presensi_closed_at) {
+            return null;
+        }
+
+        // Grace period 10 detik simpan token lama di cache
+        if (!empty($pertemuan->token_absensi)) {
+            \Illuminate\Support\Facades\Cache::put("lms:presensi:prev_token:{$pertemuanId}", (string) $pertemuan->token_absensi, now()->addSeconds(10));
+        }
+
+        $oldValues = $pertemuan->getOriginal();
+        $token = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+        $rotateSeconds = 30;
+        $expiredAt = Carbon::now()->addSeconds($rotateSeconds);
+
+        $pertemuan->token_absensi = $token;
+        $pertemuan->token_expired_at = $expiredAt;
+        $pertemuan->save();
+
+        try {
+            AuditLogService::record(
+                module: 'siakad',
+                action: 'rotate_attendance_token',
+                tableName: 'siakad_pertemuan',
+                recordId: $pertemuan->id,
+                oldValues: $oldValues,
+                newValues: $pertemuan->getChanges(),
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log rotate token: ' . $e->getMessage());
+        }
+
+        return [
+            'pertemuan_id' => $pertemuanId,
+            'kelas_id' => $pertemuan->kelas_id,
+            'token_absensi' => $token,
+            'qr_payload' => "RAG-PRESENSI:{$pertemuanId}:{$token}",
+            'rotate_interval_seconds' => $rotateSeconds,
+            'expired_at' => $expiredAt->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Selesaikan sesi perkuliahan dan tutup absensi kelas.
+     */
+    public function selesaiSesiPertemuan(int $pertemuanId, ?int $userId = null): ?array
+    {
+        $pertemuan = Pertemuan::with('kelas.mataKuliah')->find($pertemuanId);
+        if (!$pertemuan) {
+            return null;
+        }
+
+        $oldValues = $pertemuan->getOriginal();
+
+        $pertemuan->status_pertemuan = Pertemuan::STATUS_SELESAI;
+        $pertemuan->jam_selesai = Carbon::now()->format('H:i');
+        $pertemuan->presensi_closed_at = Carbon::now();
+        $pertemuan->save();
+
+        try {
+            AuditLogService::record(
+                module: 'siakad',
+                action: 'finish_perkuliahan_session',
+                tableName: 'siakad_pertemuan',
+                recordId: $pertemuan->id,
+                oldValues: $oldValues,
+                newValues: $pertemuan->getChanges(),
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log selesai perkuliahan: ' . $e->getMessage());
+        }
+
+        // Rekap akhir presensi
+        $hadir = AbsensiMahasiswa::where('pertemuan_id', $pertemuanId)->where('status', AbsensiMahasiswa::STATUS_HADIR)->count();
+        $izin = AbsensiMahasiswa::where('pertemuan_id', $pertemuanId)->where('status', AbsensiMahasiswa::STATUS_IZIN)->count();
+        $sakit = AbsensiMahasiswa::where('pertemuan_id', $pertemuanId)->where('status', AbsensiMahasiswa::STATUS_SAKIT)->count();
+        $alfa = AbsensiMahasiswa::where('pertemuan_id', $pertemuanId)->where('status', AbsensiMahasiswa::STATUS_ALFA)->count();
+
+        return [
+            'id' => $pertemuan->id,
+            'kelas_id' => $pertemuan->kelas_id,
+            'pertemuan_ke' => $pertemuan->pertemuan_ke,
+            'status' => $pertemuan->status_pertemuan,
+            'materi' => $pertemuan->materi,
+            'jam_mulai' => $pertemuan->jam_mulai,
+            'jam_selesai' => $pertemuan->jam_selesai,
+            'rekap' => [
+                'hadir' => $hadir,
+                'izin' => $izin,
+                'sakit' => $sakit,
+                'alfa' => $alfa,
+            ],
+        ];
+    }
+
+    /**
+     * Ambil daftar presensi mahasiswa untuk pertemuan tertentu.
+     */
+    public function getPresensiPertemuan(int $pertemuanId): ?array
+    {
+        $pertemuan = Pertemuan::with(['kelas.mataKuliah', 'kelas.ruangan'])->find($pertemuanId);
+        if (!$pertemuan) {
+            return null;
+        }
+
+        $peserta = KrsDetail::with(['krs.mahasiswa'])
+            ->where('kelas_id', $pertemuan->kelas_id)
+            ->get();
+
+        $absensiMap = AbsensiMahasiswa::where('pertemuan_id', $pertemuanId)
+            ->get()
+            ->keyBy('mahasiswa_id');
+
+        $mahasiswaList = [];
+        foreach ($peserta as $p) {
+            $m = $p->mahasiswa ?? $p->krs?->mahasiswa;
+            if (!$m) continue;
+
+            $absen = $absensiMap->get($m->id);
+
+            $mahasiswaList[] = [
+                'mahasiswa_id' => $m->id,
+                'nim' => $m->nim ?? '-',
+                'nama' => $m->nama_lengkap ?? $m->nama ?? 'Mahasiswa',
+                'status' => $absen?->status ?? AbsensiMahasiswa::STATUS_HADIR,
+                'catatan' => $absen?->catatan,
+                'is_submitted' => (bool) ($absen?->is_submitted ?? false),
+            ];
+        }
+
+        // Urutkan berdasarkan nama
+        usort($mahasiswaList, fn($a, $b) => strcmp($a['nama'], $b['nama']));
+
+        $hadir = collect($mahasiswaList)->where('status', AbsensiMahasiswa::STATUS_HADIR)->count();
+        $izin = collect($mahasiswaList)->where('status', AbsensiMahasiswa::STATUS_IZIN)->count();
+        $sakit = collect($mahasiswaList)->where('status', AbsensiMahasiswa::STATUS_SAKIT)->count();
+        $alfa = collect($mahasiswaList)->where('status', AbsensiMahasiswa::STATUS_ALFA)->count();
+
+        return [
+            'pertemuan' => [
+                'id' => $pertemuan->id,
+                'kelas_id' => $pertemuan->kelas_id,
+                'pertemuan_ke' => $pertemuan->pertemuan_ke,
+                'materi' => $pertemuan->materi,
+                'catatan' => $pertemuan->catatan_pertemuan,
+                'tanggal' => $pertemuan->tanggal ? Carbon::parse($pertemuan->tanggal)->format('d M Y') : null,
+                'jam_mulai' => $pertemuan->jam_mulai ? substr($pertemuan->jam_mulai, 0, 5) : null,
+                'jam_selesai' => $pertemuan->jam_selesai ? substr($pertemuan->jam_selesai, 0, 5) : null,
+                'status' => $pertemuan->status_pertemuan,
+                'token_absensi' => $pertemuan->token_absensi,
+                'is_active' => $pertemuan->status_pertemuan === Pertemuan::STATUS_BERLANGSUNG,
+                'nama_mk' => $pertemuan->kelas?->mataKuliah?->nama ?? $pertemuan->kelas?->mataKuliah?->nama_mk ?? '-',
+                'nama_kelas' => $pertemuan->kelas?->nama_kelas ?? '-',
+                'ruangan' => $pertemuan->kelas?->ruangan?->nama_ruangan ?? 'Ruang Kuliah',
+            ],
+            'rekap' => [
+                'total' => count($mahasiswaList),
+                'hadir' => $hadir,
+                'izin' => $izin,
+                'sakit' => $sakit,
+                'alfa' => $alfa,
+            ],
+            'mahasiswa' => $mahasiswaList,
+        ];
+    }
+
+    /**
+     * Update presensi mahasiswa per orangan atau batch.
+     */
+    public function updatePresensiMahasiswa(int $pertemuanId, array $items): array
+    {
+        $updated = 0;
+
+        DB::transaction(function () use ($pertemuanId, $items, &$updated) {
+            foreach ($items as $item) {
+                $mhsId = $item['mahasiswa_id'] ?? null;
+                if (!$mhsId) continue;
+
+                $status = $item['status'] ?? AbsensiMahasiswa::STATUS_HADIR;
+                if (!in_array($status, AbsensiMahasiswa::STATUSES, true)) {
+                    $status = AbsensiMahasiswa::STATUS_HADIR;
+                }
+
+                $absen = AbsensiMahasiswa::firstOrNew([
+                    'pertemuan_id' => $pertemuanId,
+                    'mahasiswa_id' => $mhsId,
+                ]);
+
+                $absen->status = $status;
+                $absen->catatan = $item['catatan'] ?? null;
+                $absen->is_submitted = true;
+                $absen->save();
+
+                $updated++;
+            }
+        });
+
+        $hadir = AbsensiMahasiswa::where('pertemuan_id', $pertemuanId)->where('status', AbsensiMahasiswa::STATUS_HADIR)->count();
+        $izin = AbsensiMahasiswa::where('pertemuan_id', $pertemuanId)->where('status', AbsensiMahasiswa::STATUS_IZIN)->count();
+        $sakit = AbsensiMahasiswa::where('pertemuan_id', $pertemuanId)->where('status', AbsensiMahasiswa::STATUS_SAKIT)->count();
+        $alfa = AbsensiMahasiswa::where('pertemuan_id', $pertemuanId)->where('status', AbsensiMahasiswa::STATUS_ALFA)->count();
+
+        try {
+            AuditLogService::record(
+                module: 'siakad',
+                action: 'batch_update_attendance',
+                tableName: 'siakad_absensi_mahasiswa',
+                recordId: $pertemuanId,
+                oldValues: null,
+                newValues: [
+                    'pertemuan_id' => $pertemuanId,
+                    'updated_count' => $updated,
+                    'items' => $items,
+                ],
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log batch absensi: ' . $e->getMessage());
+        }
+
+        return [
+            'updated_count' => $updated,
+            'rekap' => [
+                'hadir' => $hadir,
+                'izin' => $izin,
+                'sakit' => $sakit,
+                'alfa' => $alfa,
+            ],
         ];
     }
 }

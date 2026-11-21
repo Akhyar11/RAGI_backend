@@ -30,6 +30,13 @@
 | POST | `/api/v1/mobile/staff/bimbingan-pa/krs/{krsId}/reject` | Tolak / minta revisi KRS mahasiswa bimbingan | ✅ Bearer Token (`auth:api` / `siakad.krs.approve`) |
 | GET | `/api/v1/mobile/staff/bimbingan-pa/catatan/{mahasiswaId}` | Riwayat catatan bimbingan akademik mahasiswa | ✅ Bearer Token (`auth:api` / `siakad.pa.read`) |
 | POST | `/api/v1/mobile/staff/bimbingan-pa/catatan/{mahasiswaId}` | Tambah catatan bimbingan akademik baru | ✅ Bearer Token (`auth:api` / `siakad.pa.create`) |
+| GET | `/api/v1/mobile/staff/perkuliahan/kelas` | Daftar kelas yang diampu dosen beserta progres pertemuan | ✅ Bearer Token (`auth:api` / `siakad.kelas.read`) |
+| GET | `/api/v1/mobile/staff/perkuliahan/kelas/{kelasId}` | Rincian kelas & daftar 16 sesi jurnal pertemuan (BAP) | ✅ Bearer Token (`auth:api` / `siakad.kelas.read`) |
+| POST | `/api/v1/mobile/staff/perkuliahan/kelas/{kelasId}/mulai` | Mulai sesi perkuliahan & buka token absensi dinamis | ✅ Bearer Token (`auth:api` / `siakad.kelas.manage`) |
+| POST | `/api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/rotate-token` | Putar ulang token absensi dinamis (anti titip-hadir) | ✅ Bearer Token (`auth:api` / `siakad.kelas.manage`) |
+| POST | `/api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/selesai` | Selesaikan sesi perkuliahan & kunci absensi kelas | ✅ Bearer Token (`auth:api` / `siakad.kelas.manage`) |
+| GET | `/api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/presensi` | Rincian presensi mahasiswa & rekap kehadiran kelas | ✅ Bearer Token (`auth:api` / `siakad.kelas.read`) |
+| POST | `/api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/presensi` | Update / override status presensi mahasiswa oleh dosen | ✅ Bearer Token (`auth:api` / `siakad.kelas.manage`) |
 
 ---
 
@@ -993,3 +1000,521 @@ Mencatat hasil konsultasi dan catatan bimbingan akademik mahasiswa.
     }
 }
 ```
+
+---
+
+## 15. GET /api/v1/mobile/staff/perkuliahan/kelas
+
+Daftar kelas perkuliahan aktif yang diampu dosen dengan ringkasan progres pertemuan perkuliahan (BAP), total pertemuan (16 sesi), jumlah pertemuan yang telah selesai, dan indikator sesi yang sedang aktif.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `nidn` | string | ❌ | — | NIDN dosen (opsional untuk override query admin) |
+| `nip` | string | ❌ | — | NIP dosen |
+| `username` | string | ❌ | — | Username akun dosen |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Daftar kelas perkuliahan berhasil dimuat.",
+    "data": [
+        {
+            "kelas_id": 12,
+            "kode_kelas": "TI-3A",
+            "nama_kelas": "Pemrograman Web (TI-3A)",
+            "kode_mk": "TI301",
+            "nama_mk": "Pemrograman Web",
+            "sks": 3,
+            "ruangan": "Lab Komputer 1",
+            "hari": "Senin",
+            "jam": "08:00 - 10:30",
+            "total_mahasiswa": 32,
+            "total_pertemuan": 16,
+            "pertemuan_selesai": 5,
+            "has_active_session": false,
+            "active_session_id": null,
+            "active_session_ke": null
+        }
+    ]
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+---
+
+## 16. GET /api/v1/mobile/staff/perkuliahan/kelas/{kelasId}
+
+Rincian kelas perkuliahan dan daftar lengkap pertemuan ke-1 s/d ke-16 beserta statistik kehadiran mahasiswa (hadir, izin, sakit, alfa).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Daftar jurnal pertemuan perkuliahan berhasil dimuat.",
+    "data": {
+        "kelas": {
+            "id": 12,
+            "kode_kelas": "TI-3A",
+            "nama_kelas": "Pemrograman Web (TI-3A)",
+            "kode_mk": "TI301",
+            "nama_mk": "Pemrograman Web",
+            "sks": 3,
+            "ruangan": "Lab Komputer 1",
+            "hari": "Senin",
+            "jam": "08:00 - 10:30",
+            "total_mahasiswa": 32,
+            "pertemuan_selesai": 5,
+            "has_active_session": true,
+            "active_session_ke": 6
+        },
+        "pertemuan": [
+            {
+                "id": 48,
+                "pertemuan_ke": 1,
+                "tanggal": "02 Okt 2026",
+                "tanggal_raw": "2026-10-02",
+                "jam_mulai": "08:00",
+                "jam_selesai": "10:30",
+                "materi": "Kontrak Perkuliahan & Pengantar Web",
+                "catatan": "Perkuliahan berlangsung tertib.",
+                "status": "selesai",
+                "token_absensi": "847291",
+                "is_active": false,
+                "total_hadir": 30,
+                "total_izin": 1,
+                "total_sakit": 1,
+                "total_alfa": 0,
+                "total_mahasiswa": 32
+            }
+        ]
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Kelas perkuliahan tidak ditemukan."
+}
+```
+
+---
+
+## 17. POST /api/v1/mobile/staff/perkuliahan/kelas/{kelasId}/mulai
+
+Memulai sesi perkuliahan aktif (BAP), mencatat jam mulai perkuliahan, dan mengaktifkan token presensi 6-digit dinamis beserta QR payload untuk mahasiswa.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "pertemuan_ke": 6,
+    "materi": "RESTful API Integration dengan Next.js & Laravel",
+    "catatan": "Praktikum di lab komputer.",
+    "tanggal": "2026-11-22",
+    "jam_mulai": "08:00"
+}
+```
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Sesi perkuliahan Pertemuan 6 berhasil dimulai.",
+    "data": {
+        "id": 55,
+        "kelas_id": 12,
+        "pertemuan_ke": 6,
+        "tanggal": "22 Nov 2026",
+        "materi": "RESTful API Integration dengan Next.js & Laravel",
+        "catatan": "Praktikum di lab komputer.",
+        "status": "berlangsung",
+        "token_absensi": "583921",
+        "token_expired_at": "2026-11-22T10:00:00.000000Z",
+        "jam_mulai": "08:00",
+        "qr_payload": "{\"type\":\"siakad_presensi\",\"pertemuan_id\":55,\"kelas_id\":12,\"pertemuan_ke\":6,\"token\":\"583921\",\"timestamp\":1795305600}"
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Kelas tidak ditemukan atau gagal membuka sesi perkuliahan."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "pertemuan_ke": [
+            "Nomor pertemuan wajib diisi antara 1 sampai 16."
+        ],
+        "materi": [
+            "Materi perkuliahan wajib diisi minimal 3 karakter."
+        ]
+    }
+}
+```
+
+---
+
+## 18. POST /api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/rotate-token
+
+Memutar ulang (refresh) kode token presensi 6-digit dinamis pada sesi perkuliahan yang sedang berlangsung untuk mencegah kecurangan titip presensi.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Token absensi berhasil diputar ulang.",
+    "data": {
+        "pertemuan_id": 55,
+        "kelas_id": 12,
+        "token_absensi": "924817",
+        "qr_payload": "RAG-PRESENSI:55:924817",
+        "rotate_interval_seconds": 30,
+        "expired_at": "2026-11-22T08:00:30.000000Z"
+    }
+}
+```
+
+### Response Error
+
+**400 Bad Request**
+```json
+{
+    "status": "error",
+    "message": "Pertemuan tidak ditemukan atau sesi telah ditutup."
+}
+```
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+---
+
+## 19. POST /api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/selesai
+
+Menyelesaikan sesi perkuliahan aktif, mencatat jam selesai, mengunci penerimaan presensi mahasiswa, dan mengembalikan rekapitulasi akhir absensi kelas.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Sesi perkuliahan Pertemuan 6 telah ditutup.",
+    "data": {
+        "id": 55,
+        "kelas_id": 12,
+        "pertemuan_ke": 6,
+        "status": "selesai",
+        "materi": "RESTful API Integration dengan Next.js & Laravel",
+        "jam_mulai": "08:00",
+        "jam_selesai": "10:30",
+        "rekap": {
+            "hadir": 31,
+            "izin": 1,
+            "sakit": 0,
+            "alfa": 0
+        }
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Pertemuan perkuliahan tidak ditemukan."
+}
+```
+
+---
+
+## 20. GET /api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/presensi
+
+Mengambil rincian data absensi seluruh mahasiswa terdaftar di kelas untuk pertemuan tertentu beserta ringkasan status kehadiran (hadir, izin, sakit, alfa).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Daftar presensi mahasiswa berhasil dimuat.",
+    "data": {
+        "pertemuan": {
+            "id": 55,
+            "kelas_id": 12,
+            "pertemuan_ke": 6,
+            "materi": "RESTful API Integration dengan Next.js & Laravel",
+            "catatan": "Praktikum di lab komputer.",
+            "tanggal": "22 Nov 2026",
+            "jam_mulai": "08:00",
+            "jam_selesai": null,
+            "status": "berlangsung",
+            "token_absensi": "924817",
+            "is_active": true,
+            "nama_mk": "Pemrograman Web",
+            "nama_kelas": "Pemrograman Web (TI-3A)",
+            "ruangan": "Lab Komputer 1"
+        },
+        "rekap": {
+            "total": 32,
+            "hadir": 30,
+            "izin": 1,
+            "sakit": 1,
+            "alfa": 0
+        },
+        "mahasiswa": [
+            {
+                "mahasiswa_id": 45,
+                "nim": "230101001",
+                "nama": "Aditya Pratama",
+                "status": "hadir",
+                "catatan": null,
+                "is_submitted": true
+            }
+        ]
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Pertemuan tidak ditemukan."
+}
+```
+
+---
+
+## 21. POST /api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/presensi
+
+Memperbarui atau meng-override status kehadiran mahasiswa (hadir, izin, sakit, alfa) secara manual oleh dosen pengampu kelas.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "items": [
+        {
+            "mahasiswa_id": 45,
+            "status": "izin",
+            "catatan": "Dispen kegiatan lomba robotika kampus."
+        }
+    ]
+}
+```
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Status presensi mahasiswa berhasil diperbarui.",
+    "data": {
+        "updated_count": 1,
+        "rekap": {
+            "hadir": 29,
+            "izin": 2,
+            "sakit": 1,
+            "alfa": 0
+        }
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "This action is unauthorized."
+}
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "items": [
+            "Data items presensi wajib diisi."
+        ],
+        "items.0.status": [
+            "Status presensi harus salah satu dari: hadir, izin, sakit, alfa."
+        ]
+    }
+}
+```
+

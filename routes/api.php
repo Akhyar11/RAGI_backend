@@ -1321,6 +1321,17 @@ Route::prefix('v1')->group(function () {
                 Route::get('/catatan/{mahasiswaId}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listCatatanBimbingan'])->whereNumber('mahasiswaId');
                 Route::post('/catatan/{mahasiswaId}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeCatatanBimbingan'])->whereNumber('mahasiswaId');
             });
+
+            // 3. Modul SIAKAD: Jurnal Pertemuan (BAP) & Presensi Perkuliahan
+            Route::prefix('perkuliahan')->group(function () {
+                Route::get('/kelas', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listKelasPertemuan']);
+                Route::get('/kelas/{kelasId}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'detailPertemuanKelas'])->whereNumber('kelasId');
+                Route::post('/kelas/{kelasId}/mulai', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'mulaiSesiPertemuan'])->whereNumber('kelasId');
+                Route::post('/pertemuan/{pertemuanId}/rotate-token', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'rotateTokenPertemuan'])->whereNumber('pertemuanId');
+                Route::post('/pertemuan/{pertemuanId}/selesai', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'selesaiSesiPertemuan'])->whereNumber('pertemuanId');
+                Route::get('/pertemuan/{pertemuanId}/presensi', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'detailPresensiPertemuan'])->whereNumber('pertemuanId');
+                Route::post('/pertemuan/{pertemuanId}/presensi', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'savePresensiPertemuan'])->whereNumber('pertemuanId');
+            });
         });
     });
 
