@@ -14,6 +14,7 @@ class TahunAkademik extends Model
 
     protected $fillable = [
         'kode',
+        'id_feeder',
         'nama',
         'tahun_mulai',
         'tahun_selesai',

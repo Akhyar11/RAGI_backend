@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1` (atau `/api`)  
 > **Autentikasi**: Bearer Token (Sanctum / Passport)  
 > **Dibuat**: 2026-10-12  
-> **Diperbarui**: 2026-11-17
+> **Diperbarui**: 2026-11-20
 
 Controller ini mengelola registrasi integrasi API eksternal tingkat sistem yang dikunci oleh developer dan memberikan akses bagi Admin IAM untuk mengonfigurasi URL endpoint, kredensial token, menguji koneksi, serta menjalankan sinkronisasi data yang didukung.
 
@@ -380,6 +380,7 @@ Selama fase `reading`, jumlah total belum diketahui dan field `total`/`work_tota
 - Pada mode PDDIKTI, tarik prodi Neo Feeder terlebih dahulu sehingga `siakad_program_studi.id_feeder` cocok dengan `id_prodi`. Kurikulum dicocokkan memakai `siakad_kurikulum.id_feeder`; jika belum ada mapping, nama kurikulum harus cocok persis dan unik pada prodi tersebut. Kurikulum tidak dibuat otomatis.
 - Program Studi PDDIKTI menggunakan `GetProdi` dengan `id_prodi`, `kode_program_studi`, `nama_program_studi`, `nama_jenjang_pendidikan`, dan `status`. Sinkronisasi mengambil batch 500 (maksimum 100 batch), memvalidasi jenjang terhadap master referensi aktif, dan menyimpan UUID sumber sebagai mapping Feeder. Fakultas tidak diturunkan atau ditebak dari data PDDIKTI.
 - Urutan impor yang dianjurkan adalah prodi → kurikulum (`GetListKurikulum`) → mata kuliah (`GetMatkulKurikulum`). Sync kurikulum membuat kode lokal deterministik `PDDIKTI-{id_kurikulum}`, mengambil tahun dari `semester_mulai_berlaku` (fallback awal `id_semester`), serta menyimpan jumlah SKS lulus.
+- Integrasi `siakad_tahun_akademik` menarik daftar semester melalui `GetSemester`. `id_semester` hanya disimpan ke `siakad_tahun_akademik.id_feeder` jika cocok persis dengan `siakad_tahun_akademik.kode`. Periode baru tidak dibuat otomatis dan nama, kalender, serta status lokal tidak ditimpa. Sync melaporkan jumlah sumber, mapping, dan item yang dilewati; maksimum 100 halaman × 500 baris.
 - `http_method` registry `GET` menjelaskan sumber integrasi; koneksi internal ke Neo Feeder tetap menggunakan POST dengan payload `act=GetListKurikulum`, token runtime, `limit`, dan `offset`.
 - Kurikulum dengan UUID sumber yang sama diperbarui idempoten. Baris tanpa prodi tujuan yang memiliki ID Feeder atau tanpa tahun semester yang dapat dibaca dilewati; kurikulum tidak dihapus otomatis saat tidak lagi ada di respons sumber.
 - PDDIKTI mengirim `id_matkul`, `id_kurikulum`, `id_prodi`, `kode_mata_kuliah`, `nama_mata_kuliah`, `semester`, `sks_mata_kuliah`, `sks_tatap_muka`, `sks_praktek`, dan `apakah_wajib`. ID mata kuliah disimpan pada `source_id`/`id_feeder`; `apakah_wajib = 1` dipetakan ke `wajib`, nilai lainnya ke `pilihan`.

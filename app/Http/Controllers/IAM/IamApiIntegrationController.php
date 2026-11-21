@@ -15,6 +15,7 @@ use App\Services\IAM\MataKuliahIntegrationSyncService;
 use App\Services\IAM\ProgramStudiIntegrationSyncService;
 use App\Services\IAM\SiakadMahasiswaIntegrationSyncService;
 use App\Services\IAM\SikeuIntegrationSyncService;
+use App\Services\IAM\TahunAkademikIntegrationSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
@@ -297,6 +298,7 @@ class IamApiIntegrationController extends Controller
                 'program_studi' => app(ProgramStudiIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 'kurikulum' => app(KurikulumIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 'mahasiswa' => app(SiakadMahasiswaIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
+                'tahun_akademik' => app(TahunAkademikIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 default => app(MataKuliahIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
             };
             $this->recordIntegrationTestAudit($request, $integration, $oldValues, ['test_status' => 'success']);
@@ -347,7 +349,8 @@ class IamApiIntegrationController extends Controller
         MataKuliahIntegrationSyncService $mataKuliahSyncService,
         KurikulumIntegrationSyncService $kurikulumSyncService,
         SikeuIntegrationSyncService $sikeuSyncService,
-        SiakadMahasiswaIntegrationSyncService $siakadMahasiswaSyncService
+        SiakadMahasiswaIntegrationSyncService $siakadMahasiswaSyncService,
+        TahunAkademikIntegrationSyncService $tahunAkademikSyncService
     ) {
         Gate::authorize('iam.api_integration.manage');
 
@@ -363,6 +366,10 @@ class IamApiIntegrationController extends Controller
 
         try {
             $result = match (true) {
+                $integration->module === 'siakad'
+                    && $integration->source_type === 'pddikti'
+                    && in_array('pddikti', $integration->supported_sources ?? [], true)
+                    && ($integration->source_schemas[$integration->source_type]['target_entity'] ?? null) === 'tahun_akademik' => $tahunAkademikSyncService->sync($integration),
                 $integration->module === 'siakad'
                     && $integration->source_type === 'pddikti'
                     && in_array('pddikti', $integration->supported_sources ?? [], true)

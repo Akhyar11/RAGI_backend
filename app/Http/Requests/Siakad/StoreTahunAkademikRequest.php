@@ -15,6 +15,7 @@ class StoreTahunAkademikRequest extends FormRequest
     {
         return [
             'kode' => 'required|string|unique:siakad_tahun_akademik,kode',
+            'id_feeder' => 'nullable|string|max:100|unique:siakad_tahun_akademik,id_feeder',
             'nama' => 'required|string|max:255',
             'tahun_mulai' => 'nullable|integer',
             'tahun_selesai' => 'nullable|integer',

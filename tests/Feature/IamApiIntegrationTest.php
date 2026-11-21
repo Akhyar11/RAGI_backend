@@ -977,7 +977,8 @@ class IamApiIntegrationTest extends TestCase
             'nama_mahasiswa' => 'Mahasiswa Uji PDDIKTI',
             'jenis_kelamin' => 'P',
             'id_periode' => '20251',
-            'nama_status_mahasiswa' => 'AKTIF',
+            'id_status_mahasiswa' => 'A',
+            'nama_status_mahasiswa' => 'Aktif',
         ];
 
         Http::fake([
@@ -1090,7 +1091,7 @@ class IamApiIntegrationTest extends TestCase
             'nim' => 'LEGACY-001',
             'nama_lengkap' => 'Nama Lokal Lama',
             'angkatan' => 2020,
-            'status' => 'aktif',
+            'status' => 'A',
         ]);
         SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
         SystemSetting::set('feeder_username', 'kampus-test');
@@ -1108,7 +1109,9 @@ class IamApiIntegrationTest extends TestCase
                         'nim' => 'LEGACY-001',
                         'nama_mahasiswa' => 'Nama dari PDDIKTI',
                         'id_periode' => '20251',
-                        'nama_status_mahasiswa' => 'AKTIF',
+                        'id_periode' => '20251',
+                        'id_status_mahasiswa' => 'A',
+                        'nama_status_mahasiswa' => 'Aktif',
                     ]]], 200),
                     default => Http::response(['error_code' => 1], 400),
                 };
@@ -1165,7 +1168,9 @@ class IamApiIntegrationTest extends TestCase
                         'nim' => 'MUTASI-001',
                         'nama_mahasiswa' => 'Status Belum Dipetakan',
                         'id_periode' => '20251',
-                        'nama_status_mahasiswa' => 'Mutasi',
+                        'id_periode' => '20251',
+                        'id_status_mahasiswa' => 'INVALID',
+                        'nama_status_mahasiswa' => 'Status Tidak Dikenal',
                     ]]], 200),
                     default => Http::response(['error_code' => 1], 400),
                 };
@@ -1176,7 +1181,7 @@ class IamApiIntegrationTest extends TestCase
 
         $this->assertSame(0, $response['created']);
         $this->assertSame(1, $response['skipped']);
-        $this->assertSame('Status PDDIKTI belum memiliki pemetaan yang disetujui ke status mahasiswa lokal.', $response['skipped_items'][0]['reason']);
+        $this->assertSame('Kode id_status_mahasiswa tidak ditemukan di kamus GetStatusMahasiswa PDDIKTI.', $response['skipped_items'][0]['reason']);
         $this->assertDatabaseMissing('siakad_mahasiswa', ['nim' => 'MUTASI-001']);
     }
 
@@ -1275,11 +1280,13 @@ class IamApiIntegrationTest extends TestCase
             'nim' => 'REG-DUP-001',
             'nama_mahasiswa' => 'Mahasiswa Status Lama',
             'id_periode' => '20251',
-            'nama_status_mahasiswa' => 'Mutasi',
+            'id_status_mahasiswa' => 'U',
+            'nama_status_mahasiswa' => 'Menunggu Ujian',
         ];
         $eligibleRow = array_merge($ineligibleRow, [
             'nama_mahasiswa' => 'Mahasiswa Status Aktif',
-            'nama_status_mahasiswa' => 'AKTIF',
+            'id_status_mahasiswa' => 'A',
+            'nama_status_mahasiswa' => 'Aktif',
         ]);
 
         Http::fake([
@@ -1303,8 +1310,108 @@ class IamApiIntegrationTest extends TestCase
         $this->assertDatabaseHas('siakad_mahasiswa', [
             'nim' => 'REG-DUP-001',
             'nama_lengkap' => 'Mahasiswa Status Aktif',
-            'status' => 'aktif',
+            'status' => 'A',
         ]);
+    }
+
+    public function test_pddikti_semester_integration_is_tested_and_synced_from_api_settings(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_tahun_akademik')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti']);
+
+        DB::table('siakad_tahun_akademik')->insert([
+            'kode' => '20261',
+            'nama' => '2026/2027 Ganjil Lokal',
+            'tahun_mulai' => 2026,
+            'tahun_selesai' => 2027,
+            'is_active' => true,
+            'mode_penilaian' => 'semi_obe',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('siakad_tahun_akademik')->insert([
+            'kode' => '20262',
+            'nama' => '2026/2027 Genap Lokal',
+            'tahun_mulai' => 2026,
+            'tahun_selesai' => 2027,
+            'is_active' => false,
+            'mode_penilaian' => 'semi_obe',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fake([
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) {
+                $payload = json_decode($request->body(), true);
+                return match ($payload['act'] ?? null) {
+                    'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
+                    'GetSemester' => Http::response(['error_code' => 0, 'data' => [
+                        [
+                            'id_semester' => '20261',
+                            'id_tahun_ajaran' => 2027,
+                            'nama_semester' => '2026/2027 Ganjil',
+                            'semester' => 1,
+                            'a_periode_aktif' => 1,
+                            'tanggal_mulai' => '2026-09-01 00:00:00',
+                            'tanggal_selesai' => '2027-01-31 00:00:00',
+                        ],
+                        [
+                            'id_semester' => '20263',
+                            'id_tahun_ajaran' => 2027,
+                            'nama_semester' => '2027/2028 Ganjil',
+                            'semester' => 1,
+                            'a_periode_aktif' => 0,
+                            'tanggal_mulai' => '2027-09-01 00:00:00',
+                            'tanggal_selesai' => '2028-01-31 00:00:00',
+                        ],
+                    ]], 200),
+                    default => Http::response(['error_code' => 1, 'error_desc' => 'Unexpected action'], 400),
+                };
+            },
+        ]);
+
+        $test = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/test");
+        $test->assertStatus(200)
+            ->assertJsonPath('data.is_success', true)
+            ->assertJsonPath('data.response_sample.action', 'GetSemester');
+
+        $sync = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+        $sync->assertStatus(200)
+            ->assertJsonPath('data.source_total', 2)
+            ->assertJsonPath('data.created', 1)
+            ->assertJsonPath('data.updated', 1)
+            ->assertJsonPath('data.synced', 2)
+            ->assertJsonPath('data.skipped', 0);
+
+        $this->assertDatabaseHas('siakad_tahun_akademik', [
+            'kode' => '20261',
+            'id_feeder' => '20261',
+            'nama' => '2026/2027 Ganjil Lokal',
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseHas('siakad_tahun_akademik', [
+            'kode' => '20263',
+            'id_feeder' => '20263',
+            'nama' => '2027/2028 Ganjil',
+            'is_active' => false,
+        ]);
+        Http::assertSent(fn (Request $request): bool => (json_decode($request->body(), true)['act'] ?? null) === 'GetSemester'
+            && (int) (json_decode($request->body(), true)['limit'] ?? 0) === 500
+            && (int) (json_decode($request->body(), true)['offset'] ?? -1) === 0);
+
+        $repeat = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+        $repeat->assertStatus(200)
+            ->assertJsonPath('data.updated', 0)
+            ->assertJsonPath('data.created', 0)
+            ->assertJsonPath('data.synced', 2)
+            ->assertJsonPath('data.skipped', 0);
     }
 
     public function test_pddikti_student_connection_test_checks_list_and_biodata_without_writing_students(): void

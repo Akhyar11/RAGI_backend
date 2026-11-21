@@ -177,6 +177,42 @@ class IamApiIntegrationSeeder extends Seeder
                 'is_active' => true,
             ],
             [
+                'key' => 'siakad_tahun_akademik',
+                'name' => 'Sinkronisasi Semester Neo Feeder SIAKAD',
+                'module' => 'siakad',
+                'http_method' => 'GET',
+                'description' => 'Menarik semester dari Neo Feeder dan menyimpan ID Feeder pada Tahun Akademik lokal dengan kode periode yang sama persis.',
+                'source_type' => 'pddikti',
+                'supported_sources' => ['pddikti'],
+                'source_schemas' => [
+                    'pddikti' => [
+                        'source' => 'Neo Feeder PDDikti',
+                        'action' => 'GetSemester',
+                        'connection_managed' => true,
+                        'target_entity' => 'tahun_akademik',
+                        'fields' => [
+                            'id_semester' => 'ID semester Neo Feeder; hanya dipetakan ke siakad_tahun_akademik.id_feeder jika sama persis dengan kode lokal.',
+                            'id_tahun_ajaran' => 'Tahun ajaran pada data semester Feeder; tidak mengubah rentang tahun lokal.',
+                            'nama_semester' => 'Nama semester Feeder untuk keperluan informasi/log.',
+                            'semester' => 'Nomor semester Feeder untuk informasi/log.',
+                            'a_periode_aktif' => 'Status periode aktif Feeder; tidak menimpa status aktif lokal.',
+                            'tanggal_mulai' => 'Tanggal mulai Feeder; tidak menimpa kalender lokal.',
+                            'tanggal_selesai' => 'Tanggal selesai Feeder; tidak menimpa kalender lokal.',
+                        ],
+                    ],
+                ],
+                'expected_schema' => [
+                    'type' => 'object',
+                    'description' => 'Daftar semester Neo Feeder. Kode id_semester harus cocok persis dengan kode Tahun Akademik lokal.',
+                    'properties' => [
+                        'data' => ['type' => 'array', 'items' => ['type' => 'object']],
+                        'error_code' => ['type' => 'integer'],
+                    ],
+                ],
+                'auth_type' => 'bearer',
+                'is_active' => true,
+            ],
+            [
                 'key' => 'siakad_kurikulum',
                 'name' => 'Migrasi Kurikulum SIAKAD',
                 'module' => 'siakad',
