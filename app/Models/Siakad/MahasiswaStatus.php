@@ -9,7 +9,6 @@ final class MahasiswaStatus
     public const DOUBLE_DEGREE = 'G';
     public const KAMPUS_MERDEKA = 'M';
     public const NON_AKTIF = 'N';
-    public const LULUS = 'L';
     public const MENUNGGU_UJIAN = 'U';
 
     public const LABELS = [
@@ -18,7 +17,6 @@ final class MahasiswaStatus
         self::DOUBLE_DEGREE => 'Sedang Double Degree',
         self::KAMPUS_MERDEKA => 'Kampus Merdeka',
         self::NON_AKTIF => 'Non-Aktif',
-        self::LULUS => 'Lulus',
         self::MENUNGGU_UJIAN => 'Menunggu Ujian',
     ];
 

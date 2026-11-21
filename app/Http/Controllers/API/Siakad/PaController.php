@@ -619,8 +619,6 @@ class PaController extends Controller
                 $cuti++;
             } elseif ($m->status === MahasiswaStatus::NON_AKTIF) {
                 $nonaktif++;
-            } elseif ($m->status === MahasiswaStatus::LULUS) {
-                $keluar++;
             }
         }
 

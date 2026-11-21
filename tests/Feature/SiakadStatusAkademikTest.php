@@ -39,7 +39,7 @@ class SiakadStatusAkademikTest extends TestCase
             'nim' => '2401001',
             'nama_lengkap' => 'Mahasiswa Status',
             'angkatan' => 2024,
-            'status' => 'aktif',
+            'status' => 'A',
         ]);
 
         Passport::actingAs($this->user);
@@ -59,7 +59,7 @@ class SiakadStatusAkademikTest extends TestCase
         $proses = $this->patchJson("/api/v1/siakad/status/cuti/{$id}/proses", ['status' => 'disetujui']);
         $proses->assertStatus(200);
         $this->assertDatabaseHas('siakad_cuti_mahasiswa', ['id' => $id, 'status' => 'disetujui']);
-        $this->assertDatabaseHas('siakad_mahasiswa', ['id' => $this->mhs->id, 'status' => 'cuti']);
+        $this->assertDatabaseHas('siakad_mahasiswa', ['id' => $this->mhs->id, 'status' => 'C']);
 
         $list = $this->getJson('/api/v1/siakad/status/cuti?status=disetujui');
         $list->assertStatus(200);

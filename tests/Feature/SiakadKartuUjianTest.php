@@ -39,7 +39,7 @@ class SiakadKartuUjianTest extends TestCase
             'nim' => '2401001',
             'nama_lengkap' => 'Mahasiswa Ujian',
             'angkatan' => 2024,
-            'status' => 'aktif',
+            'status' => 'A',
         ]);
 
         Passport::actingAs($this->user);

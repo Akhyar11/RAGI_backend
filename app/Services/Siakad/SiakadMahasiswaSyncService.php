@@ -284,10 +284,6 @@ class SiakadMahasiswaSyncService
         if ($status === 'cuti' || $idKeluar === '2') {
             return MahasiswaStatus::CUTI;
         }
-        if ($status === 'lulus' || $idKeluar === '1') {
-            return MahasiswaStatus::LULUS;
-        }
-
         return MahasiswaStatus::NON_AKTIF;
     }
 

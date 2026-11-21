@@ -2,26 +2,37 @@
 # ==============================================================================
 # AUDIT 03 (BE): API Documentation & Database Seeder Integrity (Unified AI Reviewer)
 # ==============================================================================
-# Memeriksa:
+# Memeriksa dengan AI:
 # 1. Kelengkapan Dokumentasi API di docs/api/{Modul}/{Controller}.md & indeks docs/README.md
 # 2. Database Seeder untuk tabel master/referensi baru (firstOrCreate/updateOrCreate)
+# 3. Kontrak sync PDDIKTI: registry/seeder, queue job, count/progress, batch 500, persist per batch, tes, dokumentasi
 # ==============================================================================
 
-echo "📚 [Audit 3/3: Docs & Seeders Integrity] Memeriksa dokumentasi API dan kelengkapan seeder dengan AI..."
+echo "📚 [Audit 3/3: Docs, Seeders & PDDIKTI Sync] Menilai dokumentasi API, seeder, dan kontrak sync PDDIKTI dengan AI..."
 
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:/usr/local/bin:$PATH"
 AI_ENGINE="${AI_ENGINE:-agy}"
 OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
 MODEL="${OPENCODE_MODEL:-opencode/deepseek-v4.1-flash-free}"
 
+DIFF_PATHS=(
+    "app/Http/Controllers/**"
+    "app/Services/**"
+    "app/Jobs/**"
+    "database/seeders/**"
+    "database/migrations/**"
+    "docs/**"
+    "tests/Feature/**"
+    ".agent/skills/**"
+)
 if [ -n "$DIFF_TARGET" ]; then
-    STAGED_DIFF=$(git diff "$DIFF_TARGET" -M -- "app/Http/Controllers/**" "docs/**" "database/migrations/**" "database/seeders/**")
+    STAGED_DIFF=$(git diff "$DIFF_TARGET" -M -- "${DIFF_PATHS[@]}")
 else
-    STAGED_DIFF=$(git diff --cached -M -- "app/Http/Controllers/**" "docs/**" "database/migrations/**" "database/seeders/**")
+    STAGED_DIFF=$(git diff --cached -M -- "${DIFF_PATHS[@]}")
 fi
 
 if [ -z "$STAGED_DIFF" ]; then
-    echo "ℹ️ [Audit 3/3] Tidak ada perubahan controller, docs, migrasi, atau seeder yang diuji. Skip."
+    echo "ℹ️ [Audit 3/3] Tidak ada perubahan backend/API, job, tes, docs, skill, migrasi, atau seeder yang diuji. Skip."
     exit 0
 fi
 
@@ -32,8 +43,8 @@ fi
 PROMPT_FILE=$(mktemp)
 
 cat << 'EOF' > "$PROMPT_FILE"
-Kamu adalah Code Auditor khusus Dokumentasi API dan Database Seeder Laravel (Big Pickle).
-Tugasmu adalah memeriksa FULL Git Diff berikut secara SANGAT KETAT terhadap kelengkapan dokumentasi API dan database seeder.
+Kamu adalah Code Auditor AI khusus Dokumentasi API, Database Seeder, dan integrasi sinkronisasi PDDIKTI Laravel (Big Pickle).
+Tugasmu menilai FULL Git Diff secara kontekstual dan ketat. Gunakan hanya bukti yang terlihat pada diff dan ikuti aturan berikut.
 
 ================================ STANDAR EVALUASI ================================
 
@@ -51,6 +62,19 @@ Tugasmu adalah memeriksa FULL Git Diff berikut secara SANGAT KETAT terhadap kele
    - Data awal / master data pada seeder WAJIB menggunakan `updateOrCreate` atau `firstOrCreate` (DILARANG `::create()` mentah yang gagal jika di-seed ulang).
    - Seeder idempoten (bisa dijalankan berkali-kali tanpa duplicate entry error).
    - Seeder master data baru WAJIB didaftarkan ke `DatabaseSeeder.php` atau koordinator modul terkait.
+
+3. STANDAR SINKRONISASI IMPORT PDDIKTI NEO FEEDER (WAJIB JIKA DIFF MENAMBAH/MENGUBAH INTEGRASI IMPORT PDDIKTI):
+    Gunakan pola `SyncPddiktiMahasiswaJob` dan `SiakadMahasiswaIntegrationSyncService` sebagai referensi arsitektur. Terapkan aturan domain entitas terkait, jangan menyalin mapping mahasiswa.
+    - Registry integrasi tetap WAJIB didaftarkan secara idempoten melalui `IamApiIntegrationSeeder`, dengan action, target_entity, source schema dan metadata count bila action count tersedia. Pertahankan setting koneksi admin saat seeder dijalankan ulang.
+    - Uji Koneksi harus read-only dan mengambil sampel terbatas; ia tidak boleh menulis target atau menjalankan import.
+    - Setiap sync tulis harus masuk queue melalui job yang benar-benar mengimplementasikan `ShouldQueue`. Request hanya validasi, lock, catat progres queued, dispatch setelah commit, lalu merespons ID progres. Import/paging panjang tidak boleh berjalan sinkron di request HTTP.
+    - Periksa ketersediaan dan hak akses action hitung total untuk entitas: variasi nyata mengikuti katalog Feeder, misalnya `GetEntitasCount` atau `GetCountEntitas`. Jangan mengarang action. Bila tersedia, verifikasi responsnya, daftarkan pada registry dan gunakan untuk total/progress. Bila tidak tersedia, diff/docs/tests harus menyatakan keterbatasan dan menunjukkan progress indeterminate tanpa persentase/ETA palsu.
+    - Semua request list memakai `limit` tepat 500, offset deterministik, dan batas halaman eksplisit. Batas maksimum yang tercapai tanpa akhir terverifikasi harus gagal dengan jelas.
+    - Setiap batch harus divalidasi dan dipersist ke database sebelum mengambil batch selanjutnya. Jangan menampung seluruh populasi sumber di memori. Transaksi dan progress dilakukan per batch; progress bertambah setelah commit. Pertahankan idempotensi, validasi relasi eksplisit, jangan tebak relasi, dan jangan hapus record yang absen dari respons sumber.
+    - Job wajib menangani sukses/gagal, status integrasi/progress, lock yang dibersihkan pada semua jalur terminal, log aman, detail error terbatas, dan identitas actor/integrasi.
+    - Feature test wajib membuktikan registry idempoten, Uji Koneksi read-only, dispatch ke queue, limit/offset 500, count atau fallback progress indeterminate, persist per batch sebelum request batch berikutnya, idempotensi, progress setelah persist, serta cleanup lock/upstream failure.
+    - Kontrak `docs/specs/api-contract.md` dan dokumentasi API/indeks harus menjelaskan action count yang diverifikasi atau ketidaktersediaannya, queue/progress, batch 500, persistensi per batch, pagination cap, mapping, idempotensi, skip, dan error upstream.
+    - Rubrik ini berlaku hanya bila diff menambah/mengubah integrasi import PDDIKTI; jangan mewajibkan job/import pada perubahan yang hanya berupa tes koneksi read-only atau dokumentasi yang tidak mengubah sync.
 
 ==================================================================================
 
@@ -90,7 +114,7 @@ fi
 rm -f "$PROMPT_FILE"
 
 if [ $AI_EXIT_CODE -ne 0 ]; then
-    echo "❌ [Audit 3/3: Docs & Seeders Integrity] REJECTED: AI Reviewer gagal/timeout (Exit: $AI_EXIT_CODE)!"
+    echo "❌ [Audit 3/3: Docs, Seeders & PDDIKTI Sync] REJECTED: AI Reviewer gagal/timeout (Exit: $AI_EXIT_CODE)!"
     echo "Detail output: $RESULT"
     exit 1
 fi
@@ -98,17 +122,17 @@ fi
 CLEAN_RESULT=$(echo "$RESULT" | sed -e '/^> build/d' -e '/^Loaded config/d' | awk '/./{p=1} p')
 
 if echo "$RESULT" | grep -qi "REJECTED"; then
-    echo "❌ [Audit 3/3: Docs & Seeders Integrity] REJECTED oleh AI!"
+    echo "❌ [Audit 3/3: Docs, Seeders & PDDIKTI Sync] REJECTED oleh AI!"
     echo "================================ DETAIL TEMUAN AUDIT ================================"
     echo "$CLEAN_RESULT"
     echo "===================================================================================="
     echo "💡 Harap lengkapi dokumentasi API atau seeder di atas sebelum melakukan commit."
     exit 1
 elif ! echo "$RESULT" | grep -qi "PASSED"; then
-    echo "⚠️ [Audit 3/3: Docs & Seeders Integrity] Output AI tidak dikenali:"
+    echo "⚠️ [Audit 3/3: Docs, Seeders & PDDIKTI Sync] Output AI tidak dikenali:"
     echo "$CLEAN_RESULT"
     exit 1
 fi
 
-echo "✅ [Audit 3/3: Docs & Seeders Integrity] PASSED (Divalidasi Gemini 3.8 Flash Low)."
+echo "✅ [Audit 3/3: Docs, Seeders & PDDIKTI Sync] PASSED (Divalidasi AI reviewer)."
 exit 0

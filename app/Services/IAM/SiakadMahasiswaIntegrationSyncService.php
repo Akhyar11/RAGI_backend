@@ -247,7 +247,7 @@ class SiakadMahasiswaIntegrationSyncService
 
             $sourceId = trim((string) $row['id_mahasiswa']);
             $nim = $this->studentNim($row);
-            $status = $this->mapPddiktiStatus($row['id_status_mahasiswa'] ?? null);
+            $status = $this->mapPddiktiStatus($row['id_status_mahasiswa'] ?? null, $row['nama_status_mahasiswa'] ?? null);
             if ($status === null) {
                 $this->skipPddikti($result, $index, $row, 'Status PDDIKTI belum memiliki pemetaan yang disetujui ke status mahasiswa lokal.');
                 continue;
@@ -436,7 +436,7 @@ class SiakadMahasiswaIntegrationSyncService
         $seenIds = [];
         foreach ($students as $index => $row) {
             $reason = $this->validatePddiktiStudent($row);
-            if ($reason === null && $this->mapPddiktiStatus($row['id_status_mahasiswa'] ?? null) === null) {
+            if ($reason === null && $this->mapPddiktiStatus($row['id_status_mahasiswa'] ?? null, $row['nama_status_mahasiswa'] ?? null) === null) {
                 $reason = 'Status PDDIKTI belum memiliki pemetaan yang disetujui ke status mahasiswa lokal.';
             }
             if ($reason === null && preg_match('/^20\d{2}\d$/D', trim((string) ($row['id_periode'] ?? ''))) !== 1) {
@@ -561,7 +561,7 @@ class SiakadMahasiswaIntegrationSyncService
         if (!is_array($row)) {
             return 'Item GetListMahasiswa bukan object data.';
         }
-        foreach (['id_mahasiswa', 'id_prodi', 'nama_mahasiswa', 'id_periode', 'nama_status_mahasiswa'] as $field) {
+        foreach (['id_mahasiswa', 'id_prodi', 'nama_mahasiswa', 'id_periode'] as $field) {
             if (!is_string($row[$field] ?? null) || trim($row[$field]) === '') {
                 return "Field {$field} wajib tersedia dari GetListMahasiswa.";
             }
@@ -572,9 +572,8 @@ class SiakadMahasiswaIntegrationSyncService
         if (!Str::isUuid(trim($row['id_mahasiswa'])) || !Str::isUuid(trim($row['id_prodi']))) {
             return 'UUID mahasiswa atau program studi dari PDDIKTI tidak valid.';
         }
-        if (!is_string($row['id_status_mahasiswa'] ?? null)
-            || !in_array(strtoupper(trim($row['id_status_mahasiswa'])), MahasiswaStatus::codes(), true)) {
-            return 'Kode id_status_mahasiswa tidak ditemukan di kamus GetStatusMahasiswa PDDIKTI.';
+        if ($this->mapPddiktiStatus($row['id_status_mahasiswa'] ?? null, $row['nama_status_mahasiswa'] ?? null) === null) {
+            return 'Kode atau nama id_status_mahasiswa tidak ditemukan di kamus GetStatusMahasiswa PDDIKTI.';
         }
         if (isset($row['id_registrasi_mahasiswa']) && $row['id_registrasi_mahasiswa'] !== ''
             && (!is_string($row['id_registrasi_mahasiswa']) || !Str::isUuid($row['id_registrasi_mahasiswa']))) {
@@ -615,11 +614,27 @@ class SiakadMahasiswaIntegrationSyncService
         return $legacyMatches->count() > 1 ? false : $legacyMatches->first();
     }
 
-    private function mapPddiktiStatus(mixed $value): ?string
+    private function mapPddiktiStatus(mixed $value, mixed $label = null): ?string
     {
         $status = strtoupper(trim((string) $value));
+        if (in_array($status, MahasiswaStatus::codes(), true)) {
+            return $status;
+        }
 
-        return in_array($status, MahasiswaStatus::codes(), true) ? $status : null;
+        $name = mb_strtoupper(trim((string) $label), 'UTF-8');
+        $name = preg_replace('/\s+/', ' ', $name);
+
+        return match ($name) {
+            'AKTIF' => MahasiswaStatus::AKTIF,
+            'CUTI' => MahasiswaStatus::CUTI,
+            'SEDANG DOUBLE DEGREE' => MahasiswaStatus::DOUBLE_DEGREE,
+            'KAMPUS MERDEKA' => MahasiswaStatus::KAMPUS_MERDEKA,
+            'NON-AKTIF', 'NON AKTIF' => MahasiswaStatus::NON_AKTIF,
+            'MENUNGGU UJIAN' => MahasiswaStatus::MENUNGGU_UJIAN,
+            'LULUS', 'MUTASI', 'MENGAJUKAN PENGUNDURAN DIRI', 'DIKELUARKAN',
+            'PUTUS STUDI', 'MENINGGAL DUNIA' => MahasiswaStatus::NON_AKTIF,
+            default => null,
+        };
     }
 
     private function mapPddiktiGender(mixed $value): ?string

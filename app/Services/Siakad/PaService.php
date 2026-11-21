@@ -69,7 +69,7 @@ class PaService
                 'cuti' => (clone $base)->where('status', \App\Models\Siakad\MahasiswaStatus::CUTI)->count(),
                 'mangkir' => 0,
                 'keluar' => (clone $base)->where('status', \App\Models\Siakad\MahasiswaStatus::NON_AKTIF)->count(),
-                'lulus' => (clone $base)->where('status', \App\Models\Siakad\MahasiswaStatus::LULUS)->count(),
+                'lulus' => 0,
             ];
             $counts['total'] = array_sum($counts);
 

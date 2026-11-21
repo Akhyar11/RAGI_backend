@@ -43,7 +43,7 @@ class SiakadMahasiswaImportNimTest extends TestCase
             'kode_prodi' => 'TI',
             'nama' => 'Teknik Informatika',
             'jenjang' => 'S1',
-            'status' => 'aktif',
+            'status' => 'A',
         ]);
     }
 
@@ -59,7 +59,7 @@ class SiakadMahasiswaImportNimTest extends TestCase
             'nama_lengkap' => 'Budi Pratama',
             'tanggal_lahir' => '2004-01-01',
             'jenis_kelamin' => 'L',
-            'status' => 'aktif',
+            'status' => 'A',
             'angkatan' => 2026,
         ]);
 
@@ -92,7 +92,7 @@ class SiakadMahasiswaImportNimTest extends TestCase
             'nama_lengkap' => 'Siti Rahma',
             'tanggal_lahir' => '2004-05-10',
             'jenis_kelamin' => 'P',
-            'status' => 'aktif',
+            'status' => 'A',
             'angkatan' => 2026,
         ]);
 
@@ -123,7 +123,7 @@ class SiakadMahasiswaImportNimTest extends TestCase
             'nim' => 'D25010',
             'nama_lengkap' => 'Mahasiswa Sebelumnya',
             'jenis_kelamin' => 'L',
-            'status' => 'aktif',
+            'status' => 'A',
             'angkatan' => 2025,
         ]);
 

@@ -553,6 +553,9 @@ class SiakadFeederDosenSyncTest extends TestCase
         $mockFeeder->expects($this->any())
             ->method('request')
             ->willReturnCallback(function ($act, $p) {
+                if ($act === 'GetCountDosen') {
+                    return ['error_code' => 0, 'data' => '1'];
+                }
                 if ($act === 'GetListDosen') {
                     return [
                         'error_code' => 0,
@@ -628,6 +631,50 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals('Dosen NUPTK Only Updated', $dosenNuptk->nama_lengkap);
     }
 
+    public function test_pull_dosen_prefers_nidn_match_before_nuptk_or_feeder_id()
+    {
+        $dosenNidn = Dosen::create([
+            'nama_lengkap' => 'Dosen Cocok NIDN',
+            'nidn' => '0677000001',
+            'is_active' => true,
+        ]);
+        $dosenNuptk = Dosen::create([
+            'nama_lengkap' => 'Dosen Cocok NUPTK',
+            'nuptk' => '9876543210123456',
+            'id_feeder' => 'UUID-OLD-FEEDER',
+            'is_active' => true,
+        ]);
+
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->method('request')
+            ->willReturnCallback(function ($act) {
+                if ($act === 'GetListDosen') {
+                    return [
+                        'error_code' => 0,
+                        'data' => [[
+                            'id_dosen' => 'UUID-NEW-FEEDER',
+                            'nama_dosen' => 'Dosen Hasil Matching NIDN',
+                            'nidn' => '0677000001',
+                            'nuptk' => '9876543210123456',
+                            'id_status_aktif' => 'N',
+                            'nama_status_aktif' => 'Tidak Aktif',
+                        ]],
+                    ];
+                }
+
+                return ['error_code' => 0, 'data' => []];
+            });
+
+        $log = (new NeoFeederSyncService($mockFeeder))->pullBatchDosenFromFeeder();
+
+        $this->assertEquals(1, $log->success_count);
+        $this->assertEquals('Dosen Hasil Matching NIDN', $dosenNidn->fresh()->nama_lengkap);
+        $this->assertEquals('UUID-NEW-FEEDER', $dosenNidn->fresh()->id_feeder);
+        $this->assertEquals('Dosen Cocok NUPTK', $dosenNuptk->fresh()->nama_lengkap);
+        $this->assertEquals('UUID-OLD-FEEDER', $dosenNuptk->fresh()->id_feeder);
+        $this->assertSame(1, Dosen::where('id_feeder', 'UUID-NEW-FEEDER')->count());
+    }
+
     public function test_pull_dosen_leaves_prodi_null_when_no_exact_match_found()
     {
         $mockFeeder = $this->createMock(NeoFeederService::class);
@@ -675,18 +722,28 @@ class SiakadFeederDosenSyncTest extends TestCase
 
     public function test_pull_dosen_pagination_loops_beyond_500_records()
     {
+        $listRequests = [];
+        $educationRequests = [];
         $mockFeeder = $this->createMock(NeoFeederService::class);
         $mockFeeder->expects($this->any())
             ->method('request')
-            ->willReturnCallback(function ($act, $p) {
+            ->willReturnCallback(function ($act, $p) use (&$listRequests, &$educationRequests) {
+                if ($act === 'GetCountDosen') {
+                    return ['error_code' => 0, 'data' => '502'];
+                }
+                if ($act === 'GetRiwayatPendidikanDosen') {
+                    $educationRequests[] = $p;
+                    return ['error_code' => 0, 'data' => []];
+                }
                 if ($act === 'GetListDosen') {
+                    $listRequests[] = $p;
                     $offset = $p['offset'] ?? 0;
                     if ($offset === 0) {
                         // Page 1: generate 500 dosen
                         $items = [];
                         for ($i = 1; $i <= 500; $i++) {
                             $items[] = [
-                                'id_dosen' => "UUID-PAGE1-{$i}",
+                                'id_dosen' => sprintf('00000000-0000-4000-8000-%012d', $i),
                                 'nama_dosen' => "Dosen Page 1 No {$i}",
                                 'nidn' => sprintf('061000%04d', $i),
                                 'id_status_aktif' => '1',
@@ -699,13 +756,13 @@ class SiakadFeederDosenSyncTest extends TestCase
                             'error_code' => 0,
                             'data' => [
                                 [
-                                    'id_dosen' => 'UUID-PAGE2-1',
+                                    'id_dosen' => '00000000-0000-4000-8000-000000000501',
                                     'nama_dosen' => 'Dosen Page 2 No 1',
                                     'nidn' => '0620000001',
                                     'id_status_aktif' => '1',
                                 ],
                                 [
-                                    'id_dosen' => 'UUID-PAGE2-2',
+                                    'id_dosen' => '00000000-0000-4000-8000-000000000502',
                                     'nama_dosen' => 'Dosen Page 2 No 2',
                                     'nidn' => '0620000002',
                                     'id_status_aktif' => '1',
@@ -722,10 +779,82 @@ class SiakadFeederDosenSyncTest extends TestCase
         $log = $service->pullBatchDosenFromFeeder();
 
         // Total harus 502 (tidak terpotong di 500)
+        $this->assertSame(2, count($listRequests), 'GetListDosen must be requested at offsets 0 and 500.');
+        $this->assertSame(502, $log->total_records);
         $this->assertEquals(502, $log->total_records);
+        $this->assertSame(0, $log->failed_count, json_encode(array_slice($log->details ?? [], -3)));
         $this->assertEquals(502, $log->success_count);
+        $this->assertCount(2, $listRequests);
+        $this->assertSame([500, 500], array_column($listRequests, 'limit'));
+        $this->assertSame([0, 500], array_column($listRequests, 'offset'));
+        $this->assertCount(2, $educationRequests);
+        $this->assertSame([500, 500], array_column($educationRequests, 'limit'));
+        $this->assertStringContainsString('00000000-0000-4000-8000-000000000001', $educationRequests[0]['filter']);
+        $this->assertStringContainsString('00000000-0000-4000-8000-000000000501', $educationRequests[1]['filter']);
         $this->assertDatabaseHas('siakad_dosen', ['nidn' => '0620000001']);
         $this->assertDatabaseHas('siakad_dosen', ['nidn' => '0620000002']);
+    }
+
+    public function test_pull_dosen_uses_indeterminate_progress_when_count_action_is_unavailable()
+    {
+        $progressId = (string) \Illuminate\Support\Str::uuid();
+        cache()->put('siakad-dosen-pddikti-sync:' . $progressId, [
+            'status' => 'running',
+            'processed' => 0,
+            'total' => null,
+        ], now()->addHour());
+
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->method('request')
+            ->willReturnCallback(function ($action, $payload) {
+                if ($action === 'GetCountDosen') {
+                    return ['error_code' => 1, 'error_desc' => 'Action tidak tersedia'];
+                }
+                if ($action === 'GetListDosen') {
+                    return [
+                        'error_code' => 0,
+                        'data' => [[
+                            'id_dosen' => 'UUID-INDETERMINATE',
+                            'nidn' => '0699000001',
+                            'nama_dosen' => 'Dosen Progress Indeterminate',
+                            'id_status_aktif' => 'N',
+                            'nama_status_aktif' => 'Tidak Aktif',
+                        ]],
+                    ];
+                }
+
+                return ['error_code' => 0, 'data' => []];
+            });
+
+        $log = (new NeoFeederSyncService($mockFeeder))->pullBatchDosenFromFeeder(null, $progressId);
+
+        $progress = cache()->get('siakad-dosen-pddikti-sync:' . $progressId);
+        $this->assertSame('success', $log->status);
+        $this->assertNull($progress['total']);
+        $this->assertNull($progress['progress']);
+        $this->assertSame(1, $progress['processed']);
+    }
+
+    public function test_pull_dosen_fails_when_list_ends_before_verified_count()
+    {
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->method('request')
+            ->willReturnCallback(function ($action) {
+                if ($action === 'GetCountDosen') {
+                    return ['error_code' => 0, 'data' => '2'];
+                }
+                if ($action === 'GetListDosen') {
+                    return ['error_code' => 0, 'data' => []];
+                }
+
+                return ['error_code' => 0, 'data' => []];
+            });
+
+        $log = (new NeoFeederSyncService($mockFeeder))->pullBatchDosenFromFeeder();
+
+        $this->assertSame('failed', $log->status);
+        $this->assertSame(0, $log->success_count);
+        $this->assertStringContainsString('GetCountDosen', $log->details[0]['error']);
     }
 
     public function test_pull_dosen_transaction_isolation_allows_valid_records_to_succeed_even_if_one_fails()
@@ -860,7 +989,7 @@ class SiakadFeederDosenSyncTest extends TestCase
                         'error_code' => 0,
                         'data' => [
                             [
-                                'id_dosen' => 'UUID-DOSEN-MULTIDEGREE',
+                                'id_dosen' => '00000000-0000-4000-8000-000000000777',
                                 'nama_dosen' => 'Dr. Multi Degree, S.Kom., M.Kom., M.M.',
                                 'nidn' => '0677112233',
                                 'id_status_aktif' => '1',
@@ -874,7 +1003,7 @@ class SiakadFeederDosenSyncTest extends TestCase
                         'error_code' => 0,
                         'data' => [
                             [
-                                'id_dosen' => 'UUID-DOSEN-MULTIDEGREE',
+                                'id_dosen' => '00000000-0000-4000-8000-000000000777',
                                 'nama_jenjang_pendidikan' => 'S2',
                                 'nama_perguruan_tinggi' => 'Universitas Indonesia',
                                 'nama_bidang_studi' => 'Ilmu Komputer',
@@ -882,7 +1011,7 @@ class SiakadFeederDosenSyncTest extends TestCase
                                 'tahun_lulus' => '2018',
                             ],
                             [
-                                'id_dosen' => 'UUID-DOSEN-MULTIDEGREE',
+                                'id_dosen' => '00000000-0000-4000-8000-000000000777',
                                 'nama_jenjang_pendidikan' => 'S3',
                                 'nama_perguruan_tinggi' => 'Institut Teknologi Bandung',
                                 'nama_bidang_studi' => 'Informatika',
@@ -890,7 +1019,7 @@ class SiakadFeederDosenSyncTest extends TestCase
                                 'tahun_lulus' => '2024',
                             ],
                             [
-                                'id_dosen' => 'UUID-DOSEN-MULTIDEGREE',
+                                'id_dosen' => '00000000-0000-4000-8000-000000000777',
                                 'nama_jenjang_pendidikan' => 'S2',
                                 'nama_perguruan_tinggi' => 'Universitas Indonesia',
                                 'nama_bidang_studi' => 'Manajemen',
@@ -898,7 +1027,7 @@ class SiakadFeederDosenSyncTest extends TestCase
                                 'tahun_lulus' => '2021',
                             ],
                             [
-                                'id_dosen' => 'UUID-DOSEN-MULTIDEGREE',
+                                'id_dosen' => '00000000-0000-4000-8000-000000000777',
                                 'nama_jenjang_pendidikan' => 'S1',
                                 'nama_perguruan_tinggi' => 'Universitas Gadjah Mada',
                                 'nama_bidang_studi' => 'Ilmu Komputer',

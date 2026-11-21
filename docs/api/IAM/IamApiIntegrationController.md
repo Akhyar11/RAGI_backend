@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1` (atau `/api`)  
 > **Autentikasi**: Bearer Token (Sanctum / Passport)  
 > **Dibuat**: 2026-10-12  
-> **Diperbarui**: 2026-11-20
+> **Diperbarui**: 2026-11-21
 
 Controller ini mengelola registrasi integrasi API eksternal tingkat sistem yang dikunci oleh developer dan memberikan akses bagi Admin IAM untuk mengonfigurasi URL endpoint, kredensial token, menguji koneksi, serta menjalankan sinkronisasi data yang didukung.
 
@@ -273,6 +273,7 @@ Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvali
 - `siakad_kurikulum` (Modul `siakad`): mode PDDIKTI menarik `GetListKurikulum`, memetakan `id_prodi` ke UUID Feeder program studi, lalu menyimpan UUID kurikulum di `siakad_kurikulum.id_feeder`.
 - `siakad_mata_kuliah` (Modul `siakad`): sumber dipilih melalui `source_type`. Mode `pddikti` menarik relasi mata kuliah-kurikulum via Neo Feeder `GetMatkulKurikulum`; mode `custom_api` memakai endpoint dan kredensial manual.
 - `siakad_mahasiswa` (Modul `siakad`): sumber dapat dipilih sebagai PDDIKTI Neo Feeder atau Custom API SIAKAD legacy. Mode PDDIKTI memakai action Count untuk total/progres, lalu mengambil `GetListMahasiswa` dan `GetBiodataMahasiswa` dalam batch 500; mode Custom API mempertahankan service legacy.
+- `siakad_dosen` (Modul `siakad`): mode PDDIKTI menghitung total melalui `GetCountDosen`, kemudian job queue mengambil `GetListDosen` dengan limit 500 dan menyimpan setiap halaman sebelum membaca halaman berikutnya. Sync aktual membalas `202 Accepted` dengan `progress_id`; polling memakai endpoint progress yang sama dengan mahasiswa.
 - `sikeu_transaksi_kas` (Modul `sikeu`): disinkronkan ke tabel `sikeu_jurnal_umum` dan `sikeu_detail_jurnal_umum` berimbang (Double-Entry) dengan resolusi COA dinamis via `sikeu_mig_akun_mapping`.
 - `sikeu_transaksi_pembayaran` (Modul `sikeu`): disinkronkan ke tabel `sikeu_tagihan_mahasiswa` dan `sikeu_pembayaran` secara idempoten dengan verifikasi NIM mahasiswa di `siakad_mahasiswa`.
 
@@ -286,6 +287,8 @@ Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvali
 ### Request Body
 
 Umumnya tidak memerlukan body. URL, token, tipe autentikasi, dan status aktif menggunakan konfigurasi integrasi yang tersimpan. Khusus integrasi `siakad_mahasiswa` sumber PDDIKTI, body opsional `{"preview": true}` meminta pratinjau read-only. Tanpa `preview: true`, endpoint menjadwalkan sync tulis pada queue `default` dan merespons `202 Accepted` dengan `data.progress_id`. Pastikan worker memproses queue `default`.
+
+Untuk `siakad_dosen`, sync aktual dijalankan oleh queue worker dan mengembalikan `202 Accepted` beserta `data.progress_id`. `preview: true` ditolak; gunakan Uji Koneksi untuk pemeriksaan read-only. Proses worker juga memperbarui/membuat data pegawai SIMPEG, menyelaraskan riwayat pendidikan, serta dapat membuat atau menautkan akun SSO untuk dosen aktif. Tinjau cakupan tersebut sebelum menjalankan sync di produksi. Bila `GetCountDosen` tidak tersedia, progres menunjukkan record yang sudah diproses dengan total/persentase indeterminate.
 
 ### Response Sukses (200 OK)
 
@@ -312,6 +315,18 @@ Untuk sync tulis mahasiswa PDDIKTI, `202 Accepted` berarti proses sudah masuk an
     "data": { "progress_id": "2d04ac62-fdd8-4dd5-a07c-1e48d3c264a0" }
 }
 ```
+
+Sync aktual dosen yang berhasil dijadwalkan mengembalikan `202 Accepted`:
+
+```json
+{
+    "status": "success",
+    "message": "Sinkronisasi dosen dijadwalkan. Progres diperbarui selama proses berjalan.",
+    "data": { "progress_id": "e4c35b4d-dfee-49f1-bdc7-537dfd4dc7e4" }
+}
+```
+
+Polling `GET /api/admin/api-integrations/student-sync-progress/{progressId}` menerima progress mahasiswa maupun dosen. Status terminal `completed` memuat ringkasan sinkronisasi dosen di `data.result` (`source_total`, `synced`, `failed`, `status`, dan `sync_log_id`); `failed` memuat pesan aman pada `data.message`.
 
 ### GET /api/admin/api-integrations/student-sync-progress/{progressId}
 
@@ -381,6 +396,7 @@ Selama fase `reading`, jumlah total belum diketahui dan field `total`/`work_tota
 - Program Studi PDDIKTI menggunakan `GetProdi` dengan `id_prodi`, `kode_program_studi`, `nama_program_studi`, `nama_jenjang_pendidikan`, dan `status`. Sinkronisasi mengambil batch 500 (maksimum 100 batch), memvalidasi jenjang terhadap master referensi aktif, dan menyimpan UUID sumber sebagai mapping Feeder. Fakultas tidak diturunkan atau ditebak dari data PDDIKTI.
 - Urutan impor yang dianjurkan adalah prodi → kurikulum (`GetListKurikulum`) → mata kuliah (`GetMatkulKurikulum`). Sync kurikulum membuat kode lokal deterministik `PDDIKTI-{id_kurikulum}`, mengambil tahun dari `semester_mulai_berlaku` (fallback awal `id_semester`), serta menyimpan jumlah SKS lulus.
 - Integrasi `siakad_tahun_akademik` menarik daftar semester melalui `GetSemester`. `id_semester` hanya disimpan ke `siakad_tahun_akademik.id_feeder` jika cocok persis dengan `siakad_tahun_akademik.kode`. Periode baru tidak dibuat otomatis dan nama, kalender, serta status lokal tidak ditimpa. Sync melaporkan jumlah sumber, mapping, dan item yang dilewati; maksimum 100 halaman × 500 baris.
+- Integrasi `siakad_dosen` menguji `GetListDosen` secara read-only dengan limit 1. Registry mendefinisikan count action `GetCountDosen` yang sudah diverifikasi pada Feeder kampus; sync dijalankan melalui `SyncPddiktiDosenJob` pada queue `default`. Worker meminta halaman `GetListDosen` dengan `limit=500`; homebase dan riwayat pendidikan difilter hanya untuk ID dosen pada halaman tersebut. Setiap halaman disimpan dalam satu transaksi dengan savepoint per dosen untuk isolasi baris gagal, lalu log/progres diperbarui setelah commit dan sebelum offset berikutnya. Batas maksimum 100 halaman; overflow/error upstream menandai job gagal. Jika count action gagal/tidak didukung, worker tetap memproses halaman 500 dan progres tidak menampilkan total atau persentase palsu. Proses mempertahankan perilaku pencocokan dosen serta dapat menyelaraskan SIMPEG, riwayat pendidikan, dan akun SSO aktif; review log pada `siakad_feeder_sync_logs`.
 - `http_method` registry `GET` menjelaskan sumber integrasi; koneksi internal ke Neo Feeder tetap menggunakan POST dengan payload `act=GetListKurikulum`, token runtime, `limit`, dan `offset`.
 - Kurikulum dengan UUID sumber yang sama diperbarui idempoten. Baris tanpa prodi tujuan yang memiliki ID Feeder atau tanpa tahun semester yang dapat dibaca dilewati; kurikulum tidak dihapus otomatis saat tidak lagi ada di respons sumber.
 - PDDIKTI mengirim `id_matkul`, `id_kurikulum`, `id_prodi`, `kode_mata_kuliah`, `nama_mata_kuliah`, `semester`, `sks_mata_kuliah`, `sks_tatap_muka`, `sks_praktek`, dan `apakah_wajib`. ID mata kuliah disimpan pada `source_id`/`id_feeder`; `apakah_wajib = 1` dipetakan ke `wajib`, nilai lainnya ke `pilihan`.

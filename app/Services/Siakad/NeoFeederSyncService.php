@@ -20,6 +20,7 @@ use App\Models\Simpeg\RiwayatPendidikanPegawai;
 use App\Services\Simpeg\PegawaiService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class NeoFeederSyncService
 {
@@ -702,10 +703,9 @@ class NeoFeederSyncService
      * Mengambil daftar dosen resmi kampus yang tercatat di PDDikti dan menyimpannya ke database lokal.
      * Jika dosen sudah ada (berdasarkan NIDN), update id_feeder tanpa menimpa NIP lokal yang sudah ada.
      */
-    public function pullBatchDosenFromFeeder($userId = null)
+    public function pullBatchDosenFromFeeder($userId = null, ?string $progressId = null)
     {
-        set_time_limit(120);
-        ini_set('max_execution_time', '120');
+        set_time_limit(0);
 
         $log = FeederSyncLog::create([
             'entity_type' => 'dosen',
@@ -720,31 +720,47 @@ class NeoFeederSyncService
         $details = [];
 
         try {
-            // Looping pagination untuk GetListDosen agar kampus dengan > 500 dosen tidak terpotong
-            $dosenItems = [];
-            $offset = 0;
-            $limit = 500;
-            do {
-                $res = $this->feederService->request('GetListDosen', [
-                    'order' => 'nama_dosen',
-                    'limit' => $limit,
-                    'offset' => $offset,
-                ]);
-
-                $batch = [];
-                if (isset($res['data']) && is_array($res['data'])) {
-                    $batch = isset($res['data'][0]) ? $res['data'] : [$res['data']];
+            $sourceTotal = null;
+            try {
+                $countResponse = $this->feederService->request('GetCountDosen', ['filter' => '']);
+                if ((int) ($countResponse['error_code'] ?? -1) === 0) {
+                    $rawCount = $countResponse['data'] ?? null;
+                    if (is_numeric($rawCount) && (int) $rawCount >= 0) {
+                        $sourceTotal = (int) $rawCount;
+                    } elseif (is_array($rawCount)) {
+                        foreach (['count', 'total', 'jumlah', 'total_data', 'total_records', 'total_count'] as $countKey) {
+                            if (isset($rawCount[$countKey]) && is_numeric($rawCount[$countKey]) && (int) $rawCount[$countKey] >= 0) {
+                                $sourceTotal = (int) $rawCount[$countKey];
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    Log::notice('Neo Feeder menolak GetCountDosen; progress sinkronisasi dosen menggunakan mode indeterminate.');
                 }
+            } catch (\Throwable $countException) {
+                Log::notice('Action GetCountDosen tidak tersedia; progress sinkronisasi dosen menggunakan mode indeterminate.');
+            }
 
-                foreach ($batch as $b) {
-                    $dosenItems[] = $b;
-                }
-
-                $offset += $limit;
-            } while (!empty($batch) && count($batch) >= $limit);
-
-            $log->update(['total_records' => count($dosenItems)]);
-
+            $log->update(['total_records' => $sourceTotal ?? 0]);
+            if ($progressId !== null) {
+                cache()->put('siakad-dosen-pddikti-sync:' . $progressId, array_merge(
+                    cache()->get('siakad-dosen-pddikti-sync:' . $progressId, []),
+                    [
+                        'phase' => 'reading',
+                        'processed' => 0,
+                        'total' => $sourceTotal,
+                        'phase_processed' => 0,
+                        'phase_total' => $sourceTotal,
+                        'work_processed' => 0,
+                        'work_total' => $sourceTotal,
+                        'progress' => $sourceTotal === null ? null : ($sourceTotal === 0 ? 100 : 0),
+                        'message' => $sourceTotal === null
+                            ? 'Membaca daftar dosen dari Neo Feeder; total belum tersedia.'
+                            : "Menyiapkan pembacaan {$sourceTotal} dosen dari PDDIKTI.",
+                    ]
+                ), now()->addHours(2));
+            }
             // 1. Sinkronisasi Program Studi Resmi dari Neo Feeder
             try {
                 $this->syncProgramStudiFromFeeder();
@@ -752,60 +768,50 @@ class NeoFeederSyncService
                 Log::warning("Gagal fetch prodi feeder: " . $e->getMessage());
             }
 
-            // 2. Ambil Peta Homebase Resmi Dosen (a_sp_homebase = '1') dengan looping pagination
-            $homebaseMap = [];
-            try {
-                $offset = 0;
-                $limit = 500;
-                do {
-                    $penugasanRes = $this->feederService->request('GetListPenugasanDosen', [
-                        'filter' => "a_sp_homebase = '1' and tgl_ptk_keluar is null",
-                        'order' => 'id_tahun_ajaran desc',
-                        'limit' => $limit,
-                        'offset' => $offset,
-                    ]);
-                    $pList = [];
-                    if (!empty($penugasanRes['data']) && is_array($penugasanRes['data'])) {
-                        $pList = isset($penugasanRes['data'][0]) ? $penugasanRes['data'] : [$penugasanRes['data']];
-                        foreach ($pList as $pn) {
-                            $dId = $pn['id_dosen'] ?? null;
-                            if ($dId && !isset($homebaseMap[$dId])) {
-                                $homebaseMap[$dId] = $pn;
-                            }
-                        }
-                    }
-                    $offset += $limit;
-                } while (!empty($pList) && count($pList) >= $limit);
-            } catch (\Exception $e) {
-                Log::warning("Gagal fetch homebase penugasan dosen: " . $e->getMessage());
-            }
+            $offset = 0;
+            $limit = 500;
+            $page = 0;
+            $maxPages = 100;
+            $processed = 0;
+            do {
+                if ($sourceTotal === 0) {
+                    $batchCount = 0;
+                    break;
+                }
+                if ($page >= $maxPages) {
+                    throw new \RuntimeException('Daftar dosen PDDIKTI melampaui batas 100 halaman; sinkronisasi dihentikan.');
+                }
 
-            // 3. Ambil Seluruh Riwayat Pendidikan Dosen dari Neo Feeder dengan looping pagination
-            $riwayatByDosen = [];
-            try {
-                $offset = 0;
-                $limit = 1000;
-                do {
-                    $riwayatRes = $this->feederService->request('GetRiwayatPendidikanDosen', [
-                        'limit' => $limit,
-                        'offset' => $offset,
-                    ]);
-                    $rList = [];
-                    if (!empty($riwayatRes['data']) && is_array($riwayatRes['data'])) {
-                        $rList = isset($riwayatRes['data'][0]) ? $riwayatRes['data'] : [$riwayatRes['data']];
-                        foreach ($rList as $rw) {
-                            $dId = $rw['id_dosen'] ?? null;
-                            if ($dId) {
-                                $riwayatByDosen[$dId][] = $rw;
-                            }
-                        }
+                $res = $this->feederService->request('GetListDosen', [
+                    'order' => 'nama_dosen',
+                    'limit' => $limit,
+                    'offset' => $offset,
+                ]);
+                if ((int) ($res['error_code'] ?? -1) !== 0) {
+                    throw new \RuntimeException('Neo Feeder menolak permintaan GetListDosen.');
+                }
+                $dosenItems = $res['data'] ?? [];
+                if (!is_array($dosenItems)) {
+                    throw new \RuntimeException('Respons GetListDosen tidak valid.');
+                }
+                if ($dosenItems !== [] && !array_is_list($dosenItems)) {
+                    $dosenItems = [$dosenItems];
+                }
+                if ($dosenItems === []) {
+                    if ($sourceTotal !== null && $processed < $sourceTotal) {
+                        throw new \RuntimeException('GetListDosen berakhir sebelum seluruh jumlah dari GetCountDosen terbaca. Sinkronisasi tidak dinyatakan selesai.');
                     }
-                    $offset += $limit;
-                } while (!empty($rList) && count($rList) >= $limit);
-            } catch (\Exception $e) {
-                Log::warning("Gagal fetch riwayat pendidikan dosen: " . $e->getMessage());
-            }
+                    break;
+                }
 
+                $dosenIds = array_values(array_filter(array_map(
+                    static fn ($item) => is_array($item) ? ($item['id_dosen'] ?? null) : null,
+                    $dosenItems
+                )));
+                $homebaseMap = $this->fetchDosenHomebaseMap($dosenIds);
+                $riwayatByDosen = $this->fetchDosenEducationMap($dosenIds);
+
+            DB::transaction(function () use ($dosenItems, $homebaseMap, $riwayatByDosen, &$success, &$failed, &$details): void {
             foreach ($dosenItems as $item) {
                 try {
                     DB::transaction(function () use (
@@ -904,22 +910,16 @@ class NeoFeederSyncService
                             throw new \Exception("Record dosen tidak memiliki id_dosen");
                         }
 
-                        // Cari Dosen lokal dengan pencocokan bertingkat: id_feeder -> nidn -> nuptk -> nip -> nik (+ withTrashed()->restore())
+                        // Match by NIDN first, then NUPTK; the Feeder ID only keeps identifier-less rows idempotent.
                         $dosenLokal = null;
-                        if (!empty($idDosen)) {
-                            $dosenLokal = Dosen::withTrashed()->where('id_feeder', $idDosen)->first();
-                        }
                         if (!$dosenLokal && !empty($nidn)) {
                             $dosenLokal = Dosen::withTrashed()->where('nidn', $nidn)->first();
                         }
                         if (!$dosenLokal && !empty($nuptk)) {
                             $dosenLokal = Dosen::withTrashed()->where('nuptk', $nuptk)->first();
                         }
-                        if (!$dosenLokal && !empty($nipDikti)) {
-                            $dosenLokal = Dosen::withTrashed()->where('nip', $nipDikti)->first();
-                        }
-                        if (!$dosenLokal && !empty($nik)) {
-                            $dosenLokal = Dosen::withTrashed()->where('nik', $nik)->first();
+                        if (!$dosenLokal && empty($nidn) && empty($nuptk) && !empty($idDosen)) {
+                            $dosenLokal = Dosen::withTrashed()->where('id_feeder', $idDosen)->first();
                         }
 
                         if ($dosenLokal && $dosenLokal->trashed()) {
@@ -1218,23 +1218,26 @@ class NeoFeederSyncService
                         );
 
                         $success++;
-                        $details[] = [
-                            'nidn' => $nidn ?: '-',
-                            'nama' => $namaDosen,
-                            'status' => 'imported',
-                            'feeder_id' => $idDosen,
-                        ];
+                        if (count($details) < 100) {
+                            $details[] = [
+                                'nidn' => $nidn ?: '-',
+                                'nama' => $namaDosen,
+                                'status' => 'imported',
+                                'feeder_id' => $idDosen,
+                            ];
+                        }
                     });
                 } catch (\Throwable $e) {
                     $failed++;
-                    $details[] = [
-                        'nama' => $item['nama_dosen'] ?? 'N/A',
-                        'status' => 'failed',
-                        'error' => $e->getMessage(),
-                    ];
+                    if (count($details) < 100) {
+                        $details[] = [
+                            'nama' => $item['nama_dosen'] ?? 'N/A',
+                            'status' => 'failed',
+                            'error' => $e->getMessage(),
+                        ];
+                    }
                     try {
                         Log::error("Gagal sinkronisasi data dosen feeder: " . $e->getMessage(), [
-                            'item' => $item,
                             'trace' => $e->getTraceAsString(),
                         ]);
                     } catch (\Throwable $logEx) {
@@ -1242,6 +1245,52 @@ class NeoFeederSyncService
                     }
                 }
             }
+            }, 3);
+
+                $batchCount = count($dosenItems);
+                $processed += $batchCount;
+                $log->update([
+                    'total_records' => $sourceTotal ?? $processed,
+                    'success_count' => $success,
+                    'failed_count' => $failed,
+                    'details' => $details,
+                ]);
+                if ($progressId !== null) {
+                    $progress = cache()->get('siakad-dosen-pddikti-sync:' . $progressId, []);
+                    cache()->put('siakad-dosen-pddikti-sync:' . $progressId, array_merge($progress, [
+                        'status' => 'running',
+                        'phase' => 'reading',
+                        'processed' => $processed,
+                        'total' => $sourceTotal,
+                        'phase_processed' => $processed,
+                        'phase_total' => $sourceTotal,
+                        'work_processed' => $processed,
+                        'work_total' => $sourceTotal,
+                        'progress' => $sourceTotal === null ? null : min(99, (int) floor(($processed / max(1, $sourceTotal)) * 100)),
+                        'message' => $sourceTotal === null
+                            ? "Batch dosen tersimpan; {$processed} record telah diproses."
+                            : "Batch dosen tersimpan: {$processed} dari {$sourceTotal}.",
+                        'result' => [
+                            'source_total' => $sourceTotal ?? $processed,
+                            'synced' => $success,
+                            'failed' => $failed,
+                            'status' => 'processing',
+                            'sync_log_id' => $log->id,
+                        ],
+                    ]), now()->addHours(2));
+                }
+
+                $offset += $limit;
+                $page++;
+                unset($dosenItems, $homebaseMap, $riwayatByDosen, $dosenIds, $res);
+                gc_collect_cycles();
+            } while (($sourceTotal !== null && $offset < $sourceTotal) || ($sourceTotal === null && $batchCount === $limit));
+
+            if ($sourceTotal !== null && $processed !== $sourceTotal) {
+                throw new \RuntimeException('Jumlah GetListDosen tidak sama dengan GetCountDosen; sinkronisasi tidak dinyatakan selesai.');
+            }
+
+            $log->update(['total_records' => $sourceTotal ?? $processed]);
 
             $log->update([
                 'success_count' => $success,
@@ -1254,12 +1303,110 @@ class NeoFeederSyncService
             return $log;
         } catch (\Exception $e) {
             $log->update([
+                'total_records' => $sourceTotal ?? ($success + $failed),
+                'success_count' => $success,
+                'failed_count' => max(1, $failed),
                 'status' => 'failed',
-                'details' => [['error' => $e->getMessage()]],
+                'details' => array_slice(array_merge($details, [['error' => $e->getMessage()]]), 0, 100),
                 'completed_at' => now(),
             ]);
             return $log;
         }
+    }
+
+    private function fetchDosenHomebaseMap(array $dosenIds): array
+    {
+        $validDosenIds = array_values(array_filter(
+            array_map(static fn ($id): string => is_string($id) ? trim($id) : '', $dosenIds),
+            static fn (string $id): bool => Str::isUuid($id)
+        ));
+        $idSet = array_fill_keys($validDosenIds, true);
+        if ($idSet === []) {
+            return [];
+        }
+
+        $homebaseMap = [];
+        $offset = 0;
+        $limit = 500;
+        $quotedIds = array_map(static fn (string $id): string => "'{$id}'", array_keys($idSet));
+        $filter = "a_sp_homebase = '1' and tgl_ptk_keluar is null and id_dosen in (" . implode(',', $quotedIds) . ')';
+        for ($page = 0; $page < 100; $page++) {
+            $response = $this->feederService->request('GetListPenugasanDosen', [
+                'filter' => $filter,
+                'order' => 'id_tahun_ajaran desc',
+                'limit' => $limit,
+                'offset' => $offset,
+            ]);
+            if ((int) ($response['error_code'] ?? -1) !== 0) {
+                throw new \RuntimeException('Neo Feeder menolak permintaan GetListPenugasanDosen.');
+            }
+            $rows = $response['data'] ?? [];
+            if (!is_array($rows)) {
+                throw new \RuntimeException('Respons GetListPenugasanDosen tidak valid.');
+            }
+            if ($rows !== [] && !array_is_list($rows)) {
+                $rows = [$rows];
+            }
+            foreach ($rows as $row) {
+                $dosenId = (string) ($row['id_dosen'] ?? '');
+                if ($dosenId !== '' && isset($idSet[$dosenId]) && !isset($homebaseMap[$dosenId])) {
+                    $homebaseMap[$dosenId] = $row;
+                }
+            }
+            if (count($rows) < $limit || count($homebaseMap) >= count($idSet)) {
+                return $homebaseMap;
+            }
+            $offset += $limit;
+        }
+
+        throw new \RuntimeException('Daftar penugasan dosen melampaui batas 100 halaman.');
+    }
+
+    private function fetchDosenEducationMap(array $dosenIds): array
+    {
+        $dosenIds = array_values(array_unique(array_filter(
+            array_map(static fn ($id): string => is_string($id) ? trim($id) : '', $dosenIds),
+            static fn (string $id): bool => Str::isUuid($id)
+        )));
+        if ($dosenIds === []) {
+            return [];
+        }
+
+        $quotedIds = array_map(static fn (string $id): string => "'{$id}'", $dosenIds);
+        $filter = 'id_dosen in (' . implode(',', $quotedIds) . ')';
+        $educationByDosen = [];
+        $offset = 0;
+        $limit = 500;
+
+        for ($page = 0; $page < 100; $page++) {
+            $response = $this->feederService->request('GetRiwayatPendidikanDosen', [
+                'filter' => $filter,
+                'limit' => $limit,
+                'offset' => $offset,
+            ]);
+            if ((int) ($response['error_code'] ?? -1) !== 0) {
+                throw new \RuntimeException('Neo Feeder menolak permintaan GetRiwayatPendidikanDosen.');
+            }
+            $rows = $response['data'] ?? [];
+            if (!is_array($rows)) {
+                throw new \RuntimeException('Respons GetRiwayatPendidikanDosen tidak valid.');
+            }
+            if ($rows !== [] && !array_is_list($rows)) {
+                $rows = [$rows];
+            }
+            foreach ($rows as $row) {
+                $dosenId = (string) ($row['id_dosen'] ?? '');
+                if ($dosenId !== '') {
+                    $educationByDosen[$dosenId][] = $row;
+                }
+            }
+            if (count($rows) < $limit) {
+                return $educationByDosen;
+            }
+            $offset += $limit;
+        }
+
+        throw new \RuntimeException('Riwayat pendidikan dosen melampaui batas 100 halaman untuk satu batch.');
     }
 
     /**

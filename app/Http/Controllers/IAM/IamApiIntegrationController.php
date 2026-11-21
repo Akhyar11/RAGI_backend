@@ -10,6 +10,7 @@ use App\Models\IamApiIntegration;
 use App\Services\AuditLogService;
 use App\Services\IAM\ApiIntegrationService;
 use App\Services\IAM\ApiIntegrationSyncException;
+use App\Services\IAM\DosenIntegrationSyncService;
 use App\Services\IAM\KurikulumIntegrationSyncService;
 use App\Services\IAM\MataKuliahIntegrationSyncService;
 use App\Services\IAM\ProgramStudiIntegrationSyncService;
@@ -298,6 +299,7 @@ class IamApiIntegrationController extends Controller
                 'program_studi' => app(ProgramStudiIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 'kurikulum' => app(KurikulumIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 'mahasiswa' => app(SiakadMahasiswaIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
+                'dosen' => app(DosenIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 'tahun_akademik' => app(TahunAkademikIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 default => app(MataKuliahIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
             };
@@ -350,7 +352,8 @@ class IamApiIntegrationController extends Controller
         KurikulumIntegrationSyncService $kurikulumSyncService,
         SikeuIntegrationSyncService $sikeuSyncService,
         SiakadMahasiswaIntegrationSyncService $siakadMahasiswaSyncService,
-        TahunAkademikIntegrationSyncService $tahunAkademikSyncService
+        TahunAkademikIntegrationSyncService $tahunAkademikSyncService,
+        DosenIntegrationSyncService $dosenSyncService
     ) {
         Gate::authorize('iam.api_integration.manage');
 
@@ -364,12 +367,22 @@ class IamApiIntegrationController extends Controller
             return $this->startPddiktiMahasiswaSync($request, $integration, $oldValues);
         }
 
+        if ($integration->module === 'siakad'
+            && $integration->source_type === 'pddikti'
+            && ($integration->source_schemas['pddikti']['target_entity'] ?? null) === 'dosen') {
+            return $this->startPddiktiDosenSync($request, $integration, $oldValues, $dosenSyncService);
+        }
+
         try {
             $result = match (true) {
                 $integration->module === 'siakad'
                     && $integration->source_type === 'pddikti'
                     && in_array('pddikti', $integration->supported_sources ?? [], true)
                     && ($integration->source_schemas[$integration->source_type]['target_entity'] ?? null) === 'tahun_akademik' => $tahunAkademikSyncService->sync($integration),
+                $integration->module === 'siakad'
+                    && $integration->source_type === 'pddikti'
+                    && in_array('pddikti', $integration->supported_sources ?? [], true)
+                    && ($integration->source_schemas[$integration->source_type]['target_entity'] ?? null) === 'dosen' => $dosenSyncService->sync($integration, $request->user()?->id),
                 $integration->module === 'siakad'
                     && $integration->source_type === 'pddikti'
                     && in_array('pddikti', $integration->supported_sources ?? [], true)
@@ -457,7 +470,14 @@ class IamApiIntegrationController extends Controller
                 'message' => 'ID progres tidak valid.',
             ], 404);
         }
-        $progress = Cache::get('siakad-mahasiswa-pddikti-sync:' . $progressId);
+        $progress = null;
+        $progressKey = null;
+        foreach (['siakad-mahasiswa-pddikti-sync:', 'siakad-dosen-pddikti-sync:'] as $prefix) {
+            if ($progress = Cache::get($prefix . $progressId)) {
+                $progressKey = $prefix . $progressId;
+                break;
+            }
+        }
         if (!is_array($progress)) {
             return response()->json([
                 'status' => 'error',
@@ -474,9 +494,51 @@ class IamApiIntegrationController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Progres sinkronisasi mahasiswa berhasil diambil.',
+            'message' => str_contains((string) $progressKey, 'dosen')
+                ? 'Progres sinkronisasi dosen berhasil diambil.'
+                : 'Progres sinkronisasi mahasiswa berhasil diambil.',
             'data' => $progress,
         ]);
+    }
+
+    private function startPddiktiDosenSync(
+        Request $request,
+        IamApiIntegration $integration,
+        array $oldValues,
+        DosenIntegrationSyncService $syncService
+    ): JsonResponse {
+        if ($request->boolean('preview')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Pratinjau sinkronisasi dosen belum tersedia; jalankan Uji Koneksi untuk pemeriksaan read-only.',
+            ], 422);
+        }
+
+        try {
+            $result = $syncService->sync($integration, $request->user()?->id);
+        } catch (ApiIntegrationSyncException $exception) {
+            return response()->json(['status' => 'error', 'message' => $exception->getMessage()], $exception->statusCode);
+        }
+
+        try {
+            AuditLogService::record(
+                module: 'IAM',
+                action: 'sync_queued',
+                tableName: 'iam_api_integrations',
+                recordId: $integration->id,
+                oldValues: $oldValues,
+                newValues: ['progress_id' => $result['progress_id'], 'status' => 'queued'],
+                request: $request,
+            );
+        } catch (Throwable $auditError) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit enqueue sync dosen PDDIKTI.');
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Sinkronisasi dosen dijadwalkan. Progres diperbarui selama proses berjalan.',
+            'data' => ['progress_id' => $result['progress_id']],
+        ], 202);
     }
 
     private function startPddiktiMahasiswaSync(Request $request, IamApiIntegration $integration, array $oldValues)

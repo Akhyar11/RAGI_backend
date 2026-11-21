@@ -8,6 +8,14 @@ Dokumen ini berisi panduan teknis terkait pengaturan server untuk backend Sistem
 
 Karena aplikasi kita menggunakan mekanisme *asynchronous* (seperti pengiriman email Reset Password di latar belakang), proses `php artisan queue:work` harus terus berjalan 24/7 di server. 
 
+Sinkronisasi mahasiswa dan dosen PDDIKTI dari Pengaturan Integrasi API masuk ke queue `default`. Sync dosen mengembalikan `202 Accepted` dengan `progress_id`; progress diperbarui setelah setiap batch 500 tersimpan. Untuk pengujian lokal, jalankan worker dari root backend:
+
+```bash
+php artisan queue:work database --queue=default,notifications --sleep=3 --tries=3 --timeout=3600
+```
+
+Jika `QUEUE_CONNECTION=sync`, request sinkronisasi progresif akan ditolak `503` agar import panjang tidak berjalan sinkron pada request HTTP.
+
 Jika server direstart atau terjadi *crash*, proses tersebut akan mati jika hanya dijalankan secara manual. Oleh karena itu, kita **wajib menggunakan Supervisor** pada lingkungan *production* (seperti server VPS dengan panel HestiaCP / Ubuntu).
 
 ### Langkah-Langkah Konfigurasi Supervisor

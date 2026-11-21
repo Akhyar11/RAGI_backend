@@ -29,7 +29,7 @@ class MahasiswaAuditLogTest extends TestCase
             'nama_lengkap' => 'Ahmad Fadhil',
             'nim' => '2201001999',
             'nik' => '3201012345679999',
-            'status' => 'aktif',
+            'status' => 'A',
             'angkatan' => 2024,
             'program_studi_id' => 1
         ]);

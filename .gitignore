@@ -33,6 +33,8 @@ Thumbs.db
 !.agent/skills/api_settings_workflow/
 .agent/skills/api_settings_workflow/*
 !.agent/skills/api_settings_workflow/SKILL.md
+!.agent/skills/pddikti-sync-standard/
+!.agent/skills/pddikti-sync-standard/SKILL.md
 database/seeders/Dummy/
 database/seeders/Dev/
 database/seeders/*Dev*

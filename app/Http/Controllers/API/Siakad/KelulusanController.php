@@ -7,6 +7,7 @@ use App\Models\Siakad\Kelulusan;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\MahasiswaStatus;
 use App\Models\Siakad\Krs;
+use App\Services\AuditLogService;
 use App\Http\Requests\Siakad\StoreKelulusanRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -65,8 +66,33 @@ class KelulusanController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'Syarat yudisium belum terpenuhi (min IPK 2.00 & 144 SKS).'], 422);
             }
             $lulus = Kelulusan::create($validated);
-            Mahasiswa::where('id', $validated['mahasiswa_id'])->update(['status' => MahasiswaStatus::LULUS]);
-            \App\Services\AuditLogService::record(module: 'SIAKAD', action: 'approve', tableName: 'siakad_kelulusan', recordId: $lulus->id, request: $request);
+            $mahasiswa = Mahasiswa::findOrFail($validated['mahasiswa_id']);
+                $oldValues = $mahasiswa->getOriginal();
+            $mahasiswa->update(['status' => MahasiswaStatus::NON_AKTIF]);
+            try {
+                AuditLogService::record(
+                    module: 'SIAKAD',
+                    action: 'update_status_kelulusan',
+                    tableName: 'siakad_mahasiswa',
+                    recordId: $mahasiswa->id,
+                        oldValues: $oldValues,
+                    newValues: $mahasiswa->getChanges(),
+                    request: $request,
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit status kelulusan mahasiswa: ' . $e->getMessage());
+            }
+            try {
+                AuditLogService::record(
+                    module: 'SIAKAD',
+                    action: 'approve',
+                    tableName: 'siakad_kelulusan',
+                    recordId: $lulus->id,
+                    request: $request,
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit approval kelulusan: ' . $e->getMessage());
+            }
             return response()->json(['status' => 'success', 'message' => 'Yudisium/kelulusan berhasil ditetapkan.', 'data' => $lulus], 201);
         });
     }

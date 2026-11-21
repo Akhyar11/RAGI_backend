@@ -7,10 +7,14 @@ use App\Models\IamApiIntegration;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\Siakad\MahasiswaStatus;
 use App\Models\Siakad\ProgramStudi;
+use App\Models\Siakad\FeederSyncLog;
 use App\Models\SystemSetting;
+use App\Services\Siakad\NeoFeederSyncService;
 use App\Models\User;
 use App\Jobs\SyncPddiktiMahasiswaJob;
+use App\Jobs\SyncPddiktiDosenJob;
 use App\Services\IAM\SiakadMahasiswaIntegrationSyncService;
 use Database\Seeders\IAM\IamApiIntegrationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -210,6 +214,162 @@ class IamApiIntegrationTest extends TestCase
         $this->assertSame('pddikti', $integration->source_type);
         $this->assertNull($integration->url_api);
         $this->assertNull($integration->token);
+    }
+
+    public function test_dosen_integration_is_registered_for_pddikti(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        app(IamApiIntegrationSeeder::class)->run();
+
+        $integration = IamApiIntegration::where('key', 'siakad_dosen')->firstOrFail();
+
+        $this->assertSame('pddikti', $integration->source_type);
+        $this->assertSame(['pddikti'], $integration->supported_sources);
+        $this->assertSame('GetListDosen', $integration->source_schemas['pddikti']['action']);
+        $this->assertSame('dosen', $integration->source_schemas['pddikti']['target_entity']);
+        $this->assertTrue($integration->source_schemas['pddikti']['connection_managed']);
+        $this->assertSame(1, IamApiIntegration::where('key', 'siakad_dosen')->count());
+        $this->assertNull($integration->url_api);
+        $this->assertNull($integration->token);
+    }
+
+    public function test_dosen_pddikti_connection_test_calls_get_list_dosen_read_only(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_dosen')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti']);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fake([
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) {
+                $payload = json_decode($request->body(), true);
+                return match ($payload['act'] ?? null) {
+                    'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
+                    'GetListDosen' => Http::response(['error_code' => 0, 'data' => [[
+                        'id_dosen' => 'dosen-uuid-1',
+                        'nidn' => '0011223344',
+                        'nama_dosen' => 'Dosen Uji',
+                    ]]], 200),
+                    default => Http::response(['error_code' => 1], 400),
+                };
+            },
+        ]);
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/test");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.response_sample.action', 'GetListDosen')
+            ->assertJsonPath('data.response_sample.data_count', 1)
+            ->assertJsonMissing(['token' => 'runtime-feeder-token']);
+        $this->assertDatabaseCount('siakad_dosen', 0);
+        Http::assertSent(fn (Request $request): bool => (json_decode($request->body(), true)['act'] ?? null) === 'GetListDosen'
+            && (int) (json_decode($request->body(), true)['limit'] ?? 0) === 1
+            && (int) (json_decode($request->body(), true)['offset'] ?? -1) === 0);
+    }
+
+    public function test_dosen_pddikti_sync_dispatches_to_feeder_dosen_pull(): void
+    {
+        config(['queue.default' => 'database', 'cache.default' => 'array']);
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_dosen')->firstOrFail();
+        $integration->update(['source_type' => 'pddikti']);
+
+        Queue::fake();
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+
+        $response->assertStatus(202)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('message', 'Sinkronisasi dosen dijadwalkan. Progres diperbarui selama proses berjalan.')
+            ->assertJsonStructure(['data' => ['progress_id']]);
+
+        $progressId = $response->json('data.progress_id');
+        $this->assertIsString($progressId);
+        $this->assertSame('processing', $integration->fresh()->last_status);
+        $this->assertSame('queued', cache()->get('siakad-dosen-pddikti-sync:' . $progressId)['status']);
+        Queue::assertPushedOn('default', SyncPddiktiDosenJob::class, fn (SyncPddiktiDosenJob $job): bool =>
+            $job->integrationId === $integration->id
+            && $job->progressId === $progressId
+            && $job->requestedBy === $this->admin->id
+        );
+    }
+
+    public function test_dosen_pddikti_progress_endpoint_returns_progress_to_request_owner(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_dosen')->firstOrFail();
+        $progressId = (string) \Illuminate\Support\Str::uuid();
+        cache()->put('siakad-dosen-pddikti-sync:' . $progressId, [
+            'progress_id' => $progressId,
+            'integration_id' => $integration->id,
+            'requested_by' => $this->admin->id,
+            'status' => 'running',
+            'phase' => 'reading',
+            'progress' => null,
+            'processed' => 500,
+            'total' => null,
+            'message' => 'Menyimpan batch dosen.',
+        ], now()->addHour());
+
+        $this->actingAs($this->admin, 'api')
+            ->getJson("/api/admin/api-integrations/student-sync-progress/{$progressId}")
+            ->assertStatus(200)
+            ->assertJsonPath('data.status', 'running')
+            ->assertJsonPath('data.processed', 500)
+            ->assertJsonPath('data.total', null);
+
+        $this->actingAs($this->regularUser, 'api')
+            ->getJson("/api/admin/api-integrations/student-sync-progress/{$progressId}")
+            ->assertStatus(403);
+    }
+
+    public function test_dosen_sync_job_persists_terminal_progress_updates_status_and_releases_lock(): void
+    {
+        config(['cache.default' => 'array']);
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_dosen')->firstOrFail();
+        $progressId = (string) \Illuminate\Support\Str::uuid();
+        $lock = Cache::lock('siakad-dosen-pddikti-sync:lock', 3600);
+        $this->assertTrue($lock->get());
+        cache()->put('siakad-dosen-pddikti-sync:' . $progressId, [
+            'progress_id' => $progressId,
+            'integration_id' => $integration->id,
+            'requested_by' => $this->admin->id,
+            'status' => 'queued',
+            'phase' => 'queued',
+            'total' => 1,
+            'result' => [],
+        ], now()->addHour());
+
+        $log = new FeederSyncLog([
+            'total_records' => 1,
+            'success_count' => 1,
+            'failed_count' => 0,
+            'status' => 'success',
+        ]);
+        $log->id = 82;
+        $log->exists = true;
+        $syncMock = \Mockery::mock(NeoFeederSyncService::class);
+        $syncMock->shouldReceive('pullBatchDosenFromFeeder')
+            ->once()
+            ->with($this->admin->id, $progressId)
+            ->andReturn($log);
+
+        (new SyncPddiktiDosenJob($integration->id, $progressId, $lock->owner(), $this->admin->id))
+            ->handle($syncMock);
+
+        $progress = cache()->get('siakad-dosen-pddikti-sync:' . $progressId);
+        $this->assertSame('completed', $progress['status']);
+        $this->assertSame(100, $progress['progress']);
+        $this->assertSame(1, $progress['total']);
+        $this->assertSame(82, $progress['result']['sync_log_id']);
+        $this->assertSame('success', $integration->fresh()->last_status);
+        $releasedLock = Cache::lock('siakad-dosen-pddikti-sync:lock', 3600);
+        $this->assertTrue($releasedLock->get());
+        $releasedLock->release();
     }
 
     public function test_program_study_registry_imports_get_prodi_and_stores_feeder_uuid(): void
@@ -895,7 +1055,6 @@ class IamApiIntegrationTest extends TestCase
         DB::table('siakad_kurikulum')->insert([
             'program_studi_id' => $programStudiId,
             'kode' => 'KUR-TI-PDDIKTI',
-            'id_feeder' => 'kurikulum-uuid-1',
             'nama' => 'Kurikulum Teknik Informatika 2024',
             'tahun_berlaku' => 2024,
             'total_sks_lulus' => 144,
@@ -1110,8 +1269,8 @@ class IamApiIntegrationTest extends TestCase
                         'nama_mahasiswa' => 'Nama dari PDDIKTI',
                         'id_periode' => '20251',
                         'id_periode' => '20251',
-                        'id_status_mahasiswa' => 'A',
-                        'nama_status_mahasiswa' => 'Aktif',
+                        'id_status_mahasiswa' => '1',
+                        'nama_status_mahasiswa' => 'Lulus',
                     ]]], 200),
                     default => Http::response(['error_code' => 1], 400),
                 };
@@ -1136,6 +1295,7 @@ class IamApiIntegrationTest extends TestCase
             'nama_lengkap' => 'Nama dari PDDIKTI',
             'id_feeder' => $sourceId,
             'id_feeder_biodata' => $sourceId,
+            'status' => MahasiswaStatus::NON_AKTIF,
         ]);
     }
 
@@ -1181,7 +1341,7 @@ class IamApiIntegrationTest extends TestCase
 
         $this->assertSame(0, $response['created']);
         $this->assertSame(1, $response['skipped']);
-        $this->assertSame('Kode id_status_mahasiswa tidak ditemukan di kamus GetStatusMahasiswa PDDIKTI.', $response['skipped_items'][0]['reason']);
+        $this->assertSame('Kode atau nama id_status_mahasiswa tidak ditemukan di kamus GetStatusMahasiswa PDDIKTI.', $response['skipped_items'][0]['reason']);
         $this->assertDatabaseMissing('siakad_mahasiswa', ['nim' => 'MUTASI-001']);
     }
 
@@ -1391,9 +1551,9 @@ class IamApiIntegrationTest extends TestCase
 
         $this->assertDatabaseHas('siakad_tahun_akademik', [
             'kode' => '20261',
-            'id_feeder' => '20261',
+                                             'id_feeder' => '20261',
             'nama' => '2026/2027 Ganjil Lokal',
-            'is_active' => true,
+                       'is_active' => true,
         ]);
         $this->assertDatabaseHas('siakad_tahun_akademik', [
             'kode' => '20263',

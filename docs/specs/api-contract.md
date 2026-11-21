@@ -1,5 +1,23 @@
 # API Contract: Nomor SK SPMB melalui Arsip
 
+## Sinkronisasi Dosen PDDIKTI
+
+- Integrasi `siakad_dosen` memakai `GetListDosen` dan count action terverifikasi `GetCountDosen`. Sync aktual didispatch ke `SyncPddiktiDosenJob` pada queue `default`, mengembalikan `202 Accepted` dengan `progress_id`, dan dipoll lewat endpoint IAM progress. Uji koneksi tetap read-only; preview dosen belum didukung.
+- Daftar dosen diambil dengan `limit=500`, offset bertambah deterministik, dan batas 100 halaman. Jika `GetCountDosen` tersedia, jumlah list harus mencapai total tersebut; list yang berakhir lebih awal atau cap tercapai menyebabkan kegagalan, bukan sukses parsial. Jika count action tidak tersedia/ditolak, progress `total` dan persentase tetap `null` sampai terminal.
+- Data homebase dan `GetRiwayatPendidikanDosen` diambil untuk ID dosen di halaman saat ini saja; keduanya memakai filter ID batch, limit 500, dan batas 100 halaman. Setiap halaman persist dalam satu transaksi; setiap dosen memakai savepoint agar satu row gagal tidak membatalkan row valid lainnya. Log dan progress diperbarui sesudah transaksi halaman commit dan sebelum halaman berikutnya diminta. Rincian log dibatasi maksimal 100.
+- Match dosen mengikuti NIDN, lalu NUPTK; bila keduanya tidak ada, UUID `id_dosen` hanya fallback idempotensi. NIP, NIK, dan nama tidak menyatukan record secara otomatis. Conflicts dan invalid row dilaporkan; data lokal yang tidak muncul di sumber tidak dihapus.
+- Worker memperbarui status integrasi/progress serta melepaskan lock pada sukses maupun gagal. Proses juga dapat menyelaraskan SIMPEG, riwayat pendidikan, dan akun SSO dosen aktif.
+
+## Integrasi Dosen Neo Feeder melalui IAM
+
+- Integrasi tetap `siakad_dosen` terdaftar pada `IamApiIntegrationSeeder`, memakai `source_type = pddikti`, action `GetListDosen`, dan koneksi Neo Feeder terkelola dari Pengaturan Sistem. Uji koneksi hanya meminta satu record dan tidak mengubah target.
+- Sync aktual membuat lock dan progres queued, mendispatch `SyncPddiktiDosenJob` pada queue `default` setelah commit, dan merespons `202 Accepted` dengan `progress_id`. Progress dibaca melalui `GET /api/admin/api-integrations/student-sync-progress/{progressId}`; akses hanya untuk pemilik request atau superadmin. Driver queue `sync` ditolak agar impor panjang tidak berjalan di request.
+- Action `GetCountDosen` telah diverifikasi read-only pada Feeder kampus dan mengembalikan total `181`. Action ini dipakai untuk total/progress. Jika action gagal atau tak tersedia, sync tetap memproses halaman tetapi progress `total` dan persentase bernilai `null` (indeterminate).
+- `GetListDosen` menggunakan `limit=500`, offset deterministik, dan batas 100 halaman. Setiap halaman diproses sebelum offset berikutnya: homebase dan riwayat pendidikan hanya diminta untuk ID dosen dalam batch tersebut; seluruh persist batch berjalan dalam transaksi database sebelum log/progress diperbarui. Jika response list berakhir sebelum `GetCountDosen` terpenuhi, job gagal dan tidak menandai hasil parsial sebagai sukses.
+- `GetListPenugasanDosen` untuk homebase dan `GetRiwayatPendidikanDosen` juga memakai limit 500 serta batas 100 halaman. Filter `id_dosen in (...)` untuk riwayat telah diverifikasi pada instance Feeder kampus; data relasi tidak dipreload untuk populasi penuh.
+- Matching target lokal: NIDN lebih dulu, NUPTK fallback; bila keduanya tidak tersedia, `id_dosen` dipakai untuk idempotensi. NIP, NIK, dan nama tidak digunakan untuk merge otomatis. Konflik identifier ditangani per-record, dicatat maksimal 100 detail tanpa payload mentah, dan tidak menghapus target yang absen dari sumber.
+- Worker memperbarui `siakad_feeder_sync_logs`, status integrasi, dan progress setelah setiap halaman berhasil disimpan; lock dibersihkan pada sukses maupun gagal. Sync juga dapat menyelaraskan `simpeg_pegawai`, riwayat pendidikan SIMPEG, dan akun SSO dosen aktif, sehingga operator harus meninjau efeknya sebelum run produksi.
+
 ## Kode diskon pendaftaran SPMB (2026-11-16)
 
 - `POST /api/spmb/pendaftaran/biodata` hanya menyimpan/memperbarui draft biodata dan pilihan `kode_diskon`; endpoint ini tidak menerbitkan invoice dan tidak mengklaim kuota kode.
