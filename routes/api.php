@@ -1333,6 +1333,45 @@ Route::prefix('v1')->group(function () {
                 Route::get('/pertemuan/{pertemuanId}/presensi', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'detailPresensiPertemuan'])->whereNumber('pertemuanId');
                 Route::post('/pertemuan/{pertemuanId}/presensi', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'savePresensiPertemuan'])->whereNumber('pertemuanId');
             });
+
+            // 4. Modul SIPPM: Proposal Hibah & Luaran Penelitian
+            Route::prefix('sippm')->group(function () {
+                Route::get('/proposal', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listSippmProposal']);
+                Route::post('/proposal', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeSippmProposal']);
+                Route::get('/luaran', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listSippmLuaran']);
+            });
+
+            // 5. Modul SIKEU: Riwayat Payroll & Pengajuan Keuangan
+            Route::prefix('sikeu')->group(function () {
+                Route::get('/payroll', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listSikeuPayroll']);
+                Route::get('/pengajuan', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listSikeuPengajuan']);
+                Route::post('/pengajuan', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeSikeuPengajuan']);
+            });
+
+            // 6. Modul SINAPRA: Lapor Kerusakan & Peminjaman Fasilitas
+            Route::prefix('sinapra')->group(function () {
+                Route::get('/tiket', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listSinapraTiket']);
+                Route::post('/tiket', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeSinapraTiket']);
+                Route::get('/peminjaman', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listSinapraPeminjaman']);
+            });
+
+            // 7. Modul ARSIP: Dokumen E-File & Persuratan Staf
+            Route::prefix('arsip')->group(function () {
+                Route::get('/e-file', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listArsipEfile']);
+                Route::get('/surat', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listArsipSurat']);
+            });
+
+            // 8. Modul LMS: Bahan Ajar & Pengumuman Kelas Dosen
+            Route::prefix('lms')->group(function () {
+                Route::get('/bahan-ajar', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listLmsBahanAjar']);
+                Route::get('/pengumuman', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listLmsPengumuman']);
+            });
+
+            // 9. Modul SPMB: Referral Mahasiswa Binaan & Bagikan Tautan
+            Route::prefix('spmb')->group(function () {
+                Route::get('/referral', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'getSpmbReferral']);
+                Route::post('/referral', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'generateSpmbReferral']);
+            });
         });
     });
 

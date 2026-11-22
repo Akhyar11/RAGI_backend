@@ -22,6 +22,12 @@ use App\Models\Siakad\ProgramStudi;
 use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\TahunAkademik;
 use App\Models\Simpeg\CampusAnnouncement;
+use App\Models\Simpeg\Pegawai;
+use App\Models\Sippm\SkemaKegiatan;
+use App\Models\Sippm\PeriodeHibah;
+use App\Models\Sippm\ProposalKegiatan;
+use App\Models\Sikeu\PengajuanPencairanKas;
+use App\Models\Sinapra\MaintenanceLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -82,6 +88,19 @@ class MobileStaffApiTest extends TestCase
             'siakad.krs.approve',
             'simpeg.pegawai.read',
             'simpeg.pegawai.create',
+            'sippm.proposal.read',
+            'sippm.proposal.create',
+            'simpeg.payroll.read',
+            'simpeg.dokumen.read',
+            'simpeg.surat_tugas.read',
+            'arsip.nomor_surat.read',
+            'sikeu.pengajuan.read',
+            'sikeu.pengajuan.create',
+            'sinapra.maintenance.read',
+            'sinapra.maintenance.create',
+            'sinapra.peminjaman_ruangan.read',
+            'spmb.pendaftaran.read',
+            'spmb.pendaftaran.create',
         ];
         foreach ($perms as $slug) {
             $action = match (true) {
@@ -781,5 +800,242 @@ class MobileStaffApiTest extends TestCase
         // 8. Rotate token pada sesi yang sudah selesai menghasilkan 400 Bad Request
         $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/rotate-token")
             ->assertStatus(400);
+    }
+
+    public function test_mobile_staff_sippm_endpoints(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        $pegawai = Pegawai::create([
+            'user_id' => $this->dosenUser->id,
+            'nip' => '198801012015011001',
+            'nama_lengkap' => 'Dr. Budi Santoso, M.Kom',
+            'status_kepegawaian' => 'tetap',
+            'status' => 'aktif',
+        ]);
+
+        $periode = PeriodeHibah::create([
+            'tahun_anggaran' => '2026/2027',
+            'nama_gelombang' => 'Hibah Penelitian 2026',
+            'is_active' => true,
+            'tgl_buka_proposal' => '2026-01-01',
+            'tgl_tutup_proposal' => '2026-12-31',
+        ]);
+
+        $skema = SkemaKegiatan::create([
+            'kode' => 'PDP',
+            'nama' => 'Penelitian Dosen Pemula',
+            'tipe' => 'penelitian',
+            'sumber_dana' => 'internal',
+            'maksimal_anggaran' => 25000000,
+            'is_active' => true,
+        ]);
+
+        // 1. GET list proposal awal (kosong)
+        $this->getJson('/api/v1/mobile/staff/sippm/proposal')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['status', 'message', 'data', 'meta' => ['current_page', 'per_page', 'total']])
+            ->assertJsonCount(0, 'data');
+
+        // 2. POST proposal baru
+        $postRes = $this->postJson('/api/v1/mobile/staff/sippm/proposal', [
+            'judul' => 'Pengembangan Sistem Mobile Terpadu Kampus',
+            'abstrak' => 'Abstrak riset mengenai integrasi sistem mobile di lingkungan kampus.',
+            'rumpun_ilmu' => 'Ilmu Komputer',
+            'skema_id' => $skema->id,
+            'periode_id' => $periode->id,
+            'target_tkt' => 3,
+            'anggaran_diajukan' => 15000000,
+            'file_proposal' => UploadedFile::fake()->create('dokumen_proposal.pdf', 500, 'application/pdf'),
+        ]);
+
+        $postRes->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.title', 'Pengembangan Sistem Mobile Terpadu Kampus');
+
+        $this->assertDatabaseHas('sippm_proposal_kegiatan', [
+            'judul' => 'Pengembangan Sistem Mobile Terpadu Kampus',
+            'ketua_pegawai_id' => $pegawai->id,
+        ]);
+
+        // 3. GET list proposal setelah dibuat
+        $this->getJson('/api/v1/mobile/staff/sippm/proposal')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.title', 'Pengembangan Sistem Mobile Terpadu Kampus');
+
+        // 4. GET list luaran
+        $this->getJson('/api/v1/mobile/staff/sippm/luaran')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['status', 'message', 'data', 'meta']);
+    }
+
+    public function test_mobile_staff_sikeu_endpoints(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        Pegawai::firstOrCreate(
+            ['user_id' => $this->dosenUser->id],
+            [
+                'nip' => '198801012015011001',
+                'nama_lengkap' => 'Dr. Budi Santoso, M.Kom',
+                'status_kepegawaian' => 'tetap',
+                'status' => 'aktif',
+            ]
+        );
+
+        // 1. GET riwayat payroll
+        $this->getJson('/api/v1/mobile/staff/sikeu/payroll')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['status', 'message', 'data', 'meta']);
+
+        // 2. GET list pengajuan (awal kosong)
+        $this->getJson('/api/v1/mobile/staff/sikeu/pengajuan')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['status', 'message', 'data', 'meta'])
+            ->assertJsonCount(0, 'data');
+
+        // 3. POST pengajuan keuangan baru
+        $res = $this->postJson('/api/v1/mobile/staff/sikeu/pengajuan', [
+            'judul_pengajuan' => 'Reimbursement Pembelian Perangkat Praktikum',
+            'deskripsi' => 'Penggantian dana pembelian modul Arduino untuk perkuliahan IoT.',
+            'jenis_pengajuan' => 'reimbursement',
+            'nominal_diajukan' => 750000,
+            'nama_bank_penerima' => 'Bank Mandiri',
+            'nomor_rekening_penerima' => '1234567890',
+            'nama_rekening_penerima' => 'Dr. Budi Santoso',
+        ]);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.title', 'Reimbursement Pembelian Perangkat Praktikum');
+
+        $this->assertDatabaseHas('sikeu_pengajuan_pencairan_kas', [
+            'pemohon_id' => $this->dosenUser->id,
+            'judul_pengajuan' => 'Reimbursement Pembelian Perangkat Praktikum',
+        ]);
+
+        // 4. GET list pengajuan setelah create
+        $this->getJson('/api/v1/mobile/staff/sikeu/pengajuan')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonCount(1, 'data');
+    }
+
+    public function test_mobile_staff_sinapra_endpoints(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        // 1. POST laporan kerusakan sarana baru
+        $res = $this->postJson('/api/v1/mobile/staff/sinapra/tiket', [
+            'judul' => 'AC Lab Komputer 1 Rusak',
+            'deskripsi_kerusakan' => 'AC tidak mengeluarkan udara dingin dan meneteskan air.',
+            'prioritas' => 'tinggi',
+        ]);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.title', 'AC Lab Komputer 1 Rusak');
+
+        $this->assertDatabaseHas('sinapra_maintenance_log', [
+            'pelapor_id' => $this->dosenUser->id,
+            'judul' => 'AC Lab Komputer 1 Rusak',
+        ]);
+
+        // 2. GET list tiket sarana
+        $this->getJson('/api/v1/mobile/staff/sinapra/tiket')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['status', 'message', 'data', 'meta'])
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.title', 'AC Lab Komputer 1 Rusak');
+
+        // 3. GET list peminjaman sarana
+        $this->getJson('/api/v1/mobile/staff/sinapra/peminjaman')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['status', 'message', 'data', 'meta']);
+    }
+
+    public function test_mobile_staff_arsip_endpoints(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        $this->getJson('/api/v1/mobile/staff/arsip/e-file')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['status', 'message', 'data', 'meta']);
+
+        $this->getJson('/api/v1/mobile/staff/arsip/surat')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['status', 'message', 'data', 'meta']);
+    }
+
+    public function test_mobile_staff_lms_endpoints(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        $this->getJson('/api/v1/mobile/staff/lms/bahan-ajar')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['status', 'message', 'data', 'meta']);
+
+        $this->getJson('/api/v1/mobile/staff/lms/pengumuman')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure(['status', 'message', 'data', 'meta']);
+    }
+
+    public function test_mobile_staff_spmb_referral_endpoints(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        // 1. GET referral (memastikan kode referral dan format MobileFeatureItem ada)
+        $res = $this->getJson('/api/v1/mobile/staff/spmb/referral');
+        $res->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure([
+                'status',
+                'message',
+                'meta',
+                'data' => [
+                    '*' => [
+                        'id',
+                        'title',
+                        'subtitle',
+                        'status',
+                        'date',
+                        'amount',
+                        'referral_code',
+                        'kode_referral',
+                        'share_url',
+                        'raw',
+                    ],
+                ],
+            ]);
+
+        // 2. POST referral (generate / share)
+        $postRes = $this->postJson('/api/v1/mobile/staff/spmb/referral');
+        $postRes->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonStructure([
+                'status',
+                'message',
+                'data' => [
+                    'referral_code',
+                    'kode_referral',
+                    'share_url',
+                    'qr_payload',
+                    'stats',
+                ],
+            ]);
     }
 }

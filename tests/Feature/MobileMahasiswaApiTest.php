@@ -167,7 +167,7 @@ class MobileMahasiswaApiTest extends TestCase
             'email' => 'mhs.mobile@kampus.ac.id',
             'angkatan' => 2026,
             'kelas' => 'Reguler',
-            'status' => 'aktif',
+            'status' => 'A',
         ]);
 
         $this->kelas = Kelas::create([

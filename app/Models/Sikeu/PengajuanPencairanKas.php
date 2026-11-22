@@ -17,6 +17,20 @@ class PengajuanPencairanKas extends Model
      */
     public const SUMBER_GAJI_SIMPEG = 'gaji_simpeg';
 
+    public const JENIS_OPERASIONAL = 'operasional';
+    public const JENIS_KEGIATAN = 'kegiatan';
+    public const JENIS_REIMBURSEMENT = 'reimbursement';
+    public const JENIS_SARPRAS = 'sarpras';
+    public const JENIS_LAINNYA = 'lainnya';
+
+    public const ALL_JENIS = [
+        self::JENIS_OPERASIONAL,
+        self::JENIS_KEGIATAN,
+        self::JENIS_REIMBURSEMENT,
+        self::JENIS_SARPRAS,
+        self::JENIS_LAINNYA,
+    ];
+
     protected $fillable = [
         'nomor_pengajuan',
         'unit_kerja_id',

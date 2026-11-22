@@ -2,69 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Sinapra\MaintenanceLog as SinapraMaintenanceLog;
 
-class MaintenanceLog extends Model
+class MaintenanceLog extends SinapraMaintenanceLog
 {
-    use HasFactory, SoftDeletes;
-
-    protected $table = 'sinapra_maintenance_log';
-
-    protected $fillable = [
-        'aset_id',
-        'ruangan_id',
-        'judul',
-        'deskripsi_kerusakan',
-        'prioritas',
-        'tanggal_lapor',
-        'tanggal_mulai',
-        'tanggal_selesai',
-        'biaya',
-        'hasil_perbaikan',
-        'status',
-        'teknisi_id',
-    ];
-
-    protected $casts = [
-        'tanggal_lapor' => 'date',
-        'tanggal_mulai' => 'date',
-        'tanggal_selesai' => 'date',
-        'biaya' => 'decimal:2',
-    ];
-
-    protected static function booted(): void
-    {
-        static::creating(function ($model) {
-            if (empty($model->tanggal_lapor)) {
-                $model->tanggal_lapor = now()->toDateString();
-            }
-        });
-    }
-
-    /**
-     * Relasi ke Aset yang dirawat
-     */
-    public function aset(): BelongsTo
-    {
-        return $this->belongsTo(Aset::class, 'aset_id');
-    }
-
-    /**
-     * Relasi ke Ruangan yang dirawat
-     */
-    public function ruangan(): BelongsTo
-    {
-        return $this->belongsTo(Ruangan::class, 'ruangan_id');
-    }
-
-    /**
-     * Relasi ke Teknisi / User penanggung jawab
-     */
-    public function teknisi(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'teknisi_id');
-    }
+    // Alias untuk kompatibilitas mundur
 }

@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\API\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Mobile\StoreMobileProposalRequest;
+use App\Http\Requests\Mobile\StoreMobilePengajuanRequest;
+use App\Http\Requests\Mobile\StoreMobileTiketRequest;
 use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\Krs;
 use App\Models\Siakad\Mahasiswa;
@@ -734,5 +737,309 @@ class MobileStaffController extends Controller
             'message' => 'Status presensi mahasiswa berhasil diperbarui.',
             'data' => $data,
         ]);
+    }
+
+    // =========================================================================
+    // 4. GATEWAY MODUL TERPADU (SIPPM, SIKEU, SINAPRA, ARSIP, LMS, SPMB)
+    // =========================================================================
+
+    /**
+     * GET /api/v1/mobile/staff/sippm/proposal
+     * Daftar proposal kegiatan penelitian & pengabdian milik dosen.
+     */
+    public function listSippmProposal(Request $request): JsonResponse
+    {
+        Gate::authorize('sippm.proposal.read');
+
+        $user = $request->user();
+        $result = $this->staffService->getSippmProposals($user, $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar proposal SIPPM berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/sippm/proposal
+     * Ajukan proposal penelitian / pengabdian baru via aplikasi mobile.
+     */
+    public function storeSippmProposal(StoreMobileProposalRequest $request): JsonResponse
+    {
+        Gate::authorize('sippm.proposal.create');
+
+        $user = $request->user();
+        try {
+            $proposal = $this->staffService->storeSippmProposal(
+                $user,
+                $request->validated(),
+                $request->file('file_proposal')
+            );
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Proposal penelitian/pengabdian berhasil didaftarkan.',
+                'data' => $proposal,
+            ], 201);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/sippm/luaran
+     * Daftar luaran penelitian & publikasi ilmiah / HKI milik dosen.
+     */
+    public function listSippmLuaran(Request $request): JsonResponse
+    {
+        Gate::authorize('sippm.proposal.read');
+
+        $user = $request->user();
+        $result = $this->staffService->getSippmLuaran($user, $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar luaran penelitian berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/sikeu/payroll
+     * Riwayat slip gaji payroll dan potongan bulanan staf.
+     */
+    public function listSikeuPayroll(Request $request): JsonResponse
+    {
+        Gate::authorize('simpeg.payroll.read');
+
+        $user = $request->user();
+        $result = $this->staffService->getSikeuPayroll($user, $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Riwayat slip gaji payroll berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/sikeu/pengajuan
+     * Daftar pengajuan keuangan (reimbursement, uang muka, kas bon) milik staf.
+     */
+    public function listSikeuPengajuan(Request $request): JsonResponse
+    {
+        Gate::authorize('sikeu.pengajuan.read');
+
+        $user = $request->user();
+        $result = $this->staffService->getSikeuPengajuan($user, $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar pengajuan keuangan berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/sikeu/pengajuan
+     * Kirim pengajuan keuangan / reimbursement / operasional baru via mobile.
+     */
+    public function storeSikeuPengajuan(StoreMobilePengajuanRequest $request): JsonResponse
+    {
+        Gate::authorize('sikeu.pengajuan.create');
+
+        $user = $request->user();
+        $pengajuan = $this->staffService->storeSikeuPengajuan(
+            $user,
+            $request->validated(),
+            $request->file('file_lampiran')
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pengajuan keuangan berhasil dikirim.',
+            'data' => $pengajuan,
+        ], 201);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/sinapra/tiket
+     * Daftar tiket laporan kerusakan sarana dan status perbaikan.
+     */
+    public function listSinapraTiket(Request $request): JsonResponse
+    {
+        Gate::authorize('sinapra.maintenance.read');
+
+        $user = $request->user();
+        $result = $this->staffService->getSinapraTiket($user, $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar tiket sarana berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/sinapra/tiket
+     * Laporkan kerusakan sarana / fasilitas kampus baru via mobile.
+     */
+    public function storeSinapraTiket(StoreMobileTiketRequest $request): JsonResponse
+    {
+        Gate::authorize('sinapra.maintenance.create');
+
+        $user = $request->user();
+        $tiket = $this->staffService->storeSinapraTiket(
+            $user,
+            $request->validated(),
+            $request->file('foto')
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Laporan kerusakan berhasil dilaporkan.',
+            'data' => $tiket,
+        ], 201);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/sinapra/peminjaman
+     * Daftar status peminjaman ruangan dan aset sarana milik staf.
+     */
+    public function listSinapraPeminjaman(Request $request): JsonResponse
+    {
+        Gate::authorize('sinapra.peminjaman_ruangan.read');
+
+        $user = $request->user();
+        $result = $this->staffService->getSinapraPeminjaman($user, $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar peminjaman sarana & ruangan berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/arsip/e-file
+     * Dokumen digital e-file kepegawaian pribadi milik staf.
+     */
+    public function listArsipEfile(Request $request): JsonResponse
+    {
+        Gate::authorize('simpeg.dokumen.read');
+
+        $user = $request->user();
+        $result = $this->staffService->getArsipEfile($user, $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar dokumen e-file berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/arsip/surat
+     * Arsip persuratan dan surat tugas terkait staf.
+     */
+    public function listArsipSurat(Request $request): JsonResponse
+    {
+        Gate::authorize('arsip.nomor_surat.read');
+
+        $user = $request->user();
+        $result = $this->staffService->getArsipSurat($user, $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar surat masuk & keluar berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/lms/bahan-ajar
+     * Daftar materi perkuliahan & RPS kelas yang diampu dosen.
+     */
+    public function listLmsBahanAjar(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        $user = $request->user();
+        $result = $this->staffService->getLmsBahanAjar($user, $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar bahan ajar berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/lms/pengumuman
+     * Pengumuman kelas dan notifikasi akademik dosen.
+     */
+    public function listLmsPengumuman(Request $request): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        $user = $request->user();
+        $result = $this->staffService->getLmsPengumuman($user, $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar pengumuman kelas berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/staff/spmb/referral
+     * Kode referral SPMB, statistik, dan daftar calon mahasiswa yang dibawa.
+     */
+    public function getSpmbReferral(Request $request): JsonResponse
+    {
+        Gate::authorize('spmb.pendaftaran.read');
+
+        $user = $request->user();
+        $result = $this->staffService->getSpmbReferral($user, $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data referral SPMB berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/staff/spmb/referral
+     * Generate / perbarui link share referral eksternal & payload QR.
+     */
+    public function generateSpmbReferral(Request $request): JsonResponse
+    {
+        Gate::authorize('spmb.pendaftaran.create');
+
+        $user = $request->user();
+        $data = $this->staffService->generateSpmbReferral($user);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Link referral SPMB berhasil dibuat.',
+            'data' => $data,
+        ], 201);
     }
 }

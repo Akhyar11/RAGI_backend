@@ -14,15 +14,48 @@ use App\Models\Siakad\Pertemuan;
 use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\TahunAkademik;
+use App\Models\User;
+use App\Models\Simpeg\Pegawai;
+use App\Models\Simpeg\GajiPegawai;
+use App\Models\Simpeg\DokumenPegawai;
+use App\Models\Simpeg\SuratTugas;
+use App\Models\Arsip\NomorSurat;
+use App\Models\Sippm\ProposalKegiatan;
+use App\Models\Sippm\PublikasiIlmiah;
+use App\Models\Sippm\HkiDanBuku;
+use App\Models\Sippm\PeriodeHibah;
+use App\Models\Sippm\SkemaKegiatan;
+use App\Models\Sippm\AnggotaKegiatan;
+use App\Models\Sikeu\PengajuanPencairanKas;
+use App\Models\Sinapra\MaintenanceLog;
+use App\Models\PeminjamanRuangan;
+use App\Models\PeminjamanAset;
+use App\Models\Lms\MateriPertemuan;
+use App\Models\Lms\LmsNotifikasi;
+use App\Models\Spmb\ReferralUsage;
 use App\Services\AuditLogService;
+use App\Services\Spmb\SpmbReferralService;
+use App\Services\Sinapra\MaintenanceService;
+use App\Services\Storage\FileStorageService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class MobileStaffService
 {
+    public function __construct(
+        protected ?SpmbReferralService $spmbReferralService = null,
+        protected ?MaintenanceService $maintenanceService = null,
+        protected ?FileStorageService $fileStorageService = null
+    ) {
+        $this->spmbReferralService = $spmbReferralService ?? app(SpmbReferralService::class);
+        $this->maintenanceService = $maintenanceService ?? app(MaintenanceService::class);
+        $this->fileStorageService = $fileStorageService ?? app(FileStorageService::class);
+    }
     /**
      * Resolve Dosen by user ID, NIDN, NIP, or username.
      */
@@ -1143,6 +1176,957 @@ class MobileStaffService
                 'sakit' => $sakit,
                 'alfa' => $alfa,
             ],
+        ];
+    }
+
+    // =========================================================================
+    // MODUL TERPADU MYINU-STAFF (SIPPM, SIKEU, SINAPRA, ARSIP, LMS, SPMB)
+    // =========================================================================
+
+    /**
+     * Format standard meta array dari paginator.
+     */
+    public function formatMeta(\Illuminate\Contracts\Pagination\LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'last_page' => $paginator->lastPage(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
+        ];
+    }
+
+    /**
+     * Helper pagination untuk Collection generik.
+     */
+    public function paginateCollection(Collection $items, int $perPage = 15, int $page = 1, ?string $path = null): array
+    {
+        $page = max(1, $page);
+        $perPage = min(100, max(1, $perPage));
+        $offset = ($page - 1) * $perPage;
+        $sliced = $items->slice($offset, $perPage)->values();
+
+        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            $sliced,
+            $items->count(),
+            $perPage,
+            $page,
+            ['path' => $path ?? request()->url(), 'query' => request()->query()]
+        );
+
+        return [
+            'items' => $sliced->all(),
+            'meta' => $this->formatMeta($paginator),
+        ];
+    }
+
+    /**
+     * SIPPM: Daftar proposal kegiatan penelitian / pengabdian milik dosen.
+     */
+    public function getSippmProposals(User $user, ?Request $request = null): array
+    {
+        $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
+        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if (!$pegawai) {
+            return [
+                'items' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'last_page' => 1,
+                    'from' => null,
+                    'to' => null,
+                ],
+            ];
+        }
+
+        $query = ProposalKegiatan::with(['skema', 'periode', 'ketuaPegawai', 'anggota'])
+            ->where(function ($q) use ($pegawai) {
+                $q->where('ketua_pegawai_id', $pegawai->id)
+                  ->orWhereHas('anggota', fn($sub) => $sub->where('pegawai_id', $pegawai->id));
+            });
+
+        if ($request?->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request?->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('judul', 'like', "%{$search}%")
+                  ->orWhere('rumpun_ilmu', 'like', "%{$search}%");
+            });
+        }
+
+        $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+        $items = $paginator->getCollection()->map(function ($p) {
+            return [
+                'id' => (string) $p->id,
+                'title' => $p->judul,
+                'subtitle' => ($p->skema?->nama_skema ?? 'Skema Hibah') . ' (' . ($p->rumpun_ilmu ?? 'Umum') . ')',
+                'status' => $p->status,
+                'date' => $p->created_at?->format('Y-m-d') ?? '',
+                'amount' => 'Rp ' . number_format((float) $p->anggaran_diajukan, 0, ',', '.'),
+                'kode_proposal' => $p->kode_proposal,
+                'skema' => $p->skema?->nama_skema,
+                'rumpun_ilmu' => $p->rumpun_ilmu,
+                'target_tkt' => $p->target_tkt,
+                'file_proposal_url' => $p->file_proposal ? $this->fileStorageService->signedUrl($p->file_proposal) : null,
+                'raw' => collect($p->toArray())->except(['file_proposal'])->all(),
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $items,
+            'meta' => $this->formatMeta($paginator),
+        ];
+    }
+
+    /**
+     * SIPPM: Ajukan proposal penelitian / pengabdian baru via mobile.
+     */
+    public function storeSippmProposal(User $user, array $data, $file = null): array
+    {
+        $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
+        if (!$pegawai) {
+            throw new \DomainException('Akun Anda belum terhubung dengan data pegawai/dosen.');
+        }
+
+        if ($file instanceof UploadedFile) {
+            $data['file_proposal'] = $this->fileStorageService->store($file, 'sippm/proposal', private: true);
+        }
+
+        if (empty($data['file_proposal'])) {
+            throw new \DomainException('Dokumen usulan proposal penelitian/pengabdian wajib dilampirkan.');
+        }
+
+        $periodeId = $data['periode_id'] ?? PeriodeHibah::where('is_active', true)->first()?->id;
+        if (!$periodeId) {
+            throw new \DomainException('Tidak ada periode hibah penelitian/pengabdian yang sedang dibuka saat ini.');
+        }
+
+        $year = date('Y');
+        $count = ProposalKegiatan::whereYear('created_at', $year)->count() + 1;
+        $kodeProposal = 'PRP-' . $year . '-' . str_pad($count, 3, '0', STR_PAD_LEFT);
+
+        $created = DB::transaction(function () use ($data, $periodeId, $pegawai, $kodeProposal) {
+            $p = ProposalKegiatan::create([
+                'periode_id' => (int) $periodeId,
+                'skema_id' => (int) $data['skema_id'],
+                'ketua_pegawai_id' => $pegawai->id,
+                'mata_kuliah_id' => $data['mata_kuliah_id'] ?? null,
+                'kode_proposal' => $kodeProposal,
+                'judul' => $data['judul'],
+                'abstrak' => $data['abstrak'],
+                'rumpun_ilmu' => $data['rumpun_ilmu'],
+                'target_tkt' => $data['target_tkt'] ?? 1,
+                'anggaran_diajukan' => $data['anggaran_diajukan'],
+                'file_proposal' => $data['file_proposal'],
+                'status' => 'draft',
+            ]);
+
+            $anggota = AnggotaKegiatan::create([
+                'proposal_id' => $p->id,
+                'jenis_tim' => 'dosen',
+                'pegawai_id' => $pegawai->id,
+                'peran_dalam_tim' => 'Ketua Pengusul',
+                'tugas_kegiatan' => 'Ketua Pengusul & Penanggung Jawab Riset',
+            ]);
+
+            return ['proposal' => $p, 'anggota' => $anggota];
+        });
+
+        $proposal = $created['proposal'];
+        $anggota = $created['anggota'];
+
+        try {
+            AuditLogService::record(
+                module: 'SIPPM',
+                action: 'create',
+                tableName: 'sippm_proposal_kegiatan',
+                recordId: $proposal->id,
+                oldValues: null,
+                newValues: $proposal->only([
+                    'periode_id', 'skema_id', 'ketua_pegawai_id', 'kode_proposal',
+                    'judul', 'rumpun_ilmu', 'target_tkt', 'anggaran_diajukan', 'status'
+                ]),
+                request: request()
+            );
+
+            AuditLogService::record(
+                module: 'SIPPM',
+                action: 'create',
+                tableName: 'sippm_anggota_kegiatan',
+                recordId: $anggota->id,
+                oldValues: null,
+                newValues: $anggota->only([
+                    'proposal_id', 'jenis_tim', 'pegawai_id', 'peran_dalam_tim', 'tugas_kegiatan'
+                ]),
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log mobile proposal: ' . $e->getMessage());
+        }
+
+        return [
+            'id' => (string) $proposal->id,
+            'title' => $proposal->judul,
+            'subtitle' => ($proposal->skema?->nama_skema ?? 'Skema Hibah') . ' (' . ($proposal->rumpun_ilmu ?? 'Umum') . ')',
+            'status' => $proposal->status,
+            'date' => $proposal->created_at?->format('Y-m-d') ?? now()->toDateString(),
+            'amount' => 'Rp ' . number_format((float) $proposal->anggaran_diajukan, 0, ',', '.'),
+            'kode_proposal' => $proposal->kode_proposal,
+            'raw' => $proposal->load(['skema', 'periode', 'ketuaPegawai'])->toArray(),
+        ];
+    }
+
+    /**
+     * SIPPM: Daftar luaran penelitian & publikasi / HKI milik dosen.
+     */
+    public function getSippmLuaran(User $user, ?Request $request = null): array
+    {
+        $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
+        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if (!$pegawai) {
+            return [
+                'items' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'last_page' => 1,
+                    'from' => null,
+                    'to' => null,
+                ],
+            ];
+        }
+
+        $jenis = strtolower((string) $request?->query('jenis', 'publikasi'));
+
+        if ($jenis === 'hki') {
+            $query = HkiDanBuku::where('pegawai_id', $pegawai->id);
+            if ($request?->filled('search')) {
+                $search = $request->search;
+                $query->where('judul', 'like', "%{$search}%");
+            }
+
+            $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+            $items = $paginator->getCollection()->map(function ($hki) {
+                return [
+                    'id' => 'HKI-' . $hki->id,
+                    'title' => $hki->judul,
+                    'subtitle' => ($hki->jenis_luaran ?: 'HKI / Buku') . ($hki->nomor_pencatatan_isbn ? ' - ' . $hki->nomor_pencatatan_isbn : ''),
+                    'status' => $hki->is_verified_lppm ? 'terverifikasi' : 'draft',
+                    'date' => $hki->tgl_terbit_catat ? Carbon::parse($hki->tgl_terbit_catat)->format('Y-m-d') : ($hki->created_at?->format('Y-m-d') ?? ''),
+                    'amount' => '',
+                    'raw' => $hki->toArray(),
+                ];
+            })->values()->all();
+
+            return [
+                'items' => $items,
+                'meta' => $this->formatMeta($paginator),
+            ];
+        }
+
+        $query = PublikasiIlmiah::where('pegawai_id', $pegawai->id);
+        if ($request?->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('judul_artikel', 'like', "%{$search}%")
+                  ->orWhere('nama_jurnal_prosiding', 'like', "%{$search}%");
+            });
+        }
+
+        $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+        $items = $paginator->getCollection()->map(function ($pub) {
+            return [
+                'id' => 'PUB-' . $pub->id,
+                'title' => $pub->judul_artikel,
+                'subtitle' => ($pub->nama_jurnal_prosiding ?: 'Publikasi Ilmiah') . ' (' . ($pub->jenis_publikasi ?: 'Jurnal') . ')',
+                'status' => $pub->is_verified_lppm ? 'terverifikasi' : 'draft',
+                'date' => $pub->created_at?->format('Y-m-d') ?? '',
+                'amount' => '',
+                'raw' => $pub->toArray(),
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $items,
+            'meta' => $this->formatMeta($paginator),
+        ];
+    }
+
+    /**
+     * SIKEU: Riwayat slip payroll & gaji staf.
+     */
+    public function getSikeuPayroll(User $user, ?Request $request = null): array
+    {
+        $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
+        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if (!$pegawai) {
+            return [
+                'items' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'last_page' => 1,
+                    'from' => null,
+                    'to' => null,
+                ],
+            ];
+        }
+
+        $query = GajiPegawai::where('pegawai_id', $pegawai->id);
+        $paginator = $query->orderBy('periode_bulan_tahun', $sortOrder)->paginate($perPage);
+
+        $items = $paginator->getCollection()->map(function ($g) {
+            return [
+                'id' => (string) $g->id,
+                'title' => 'Slip Gaji Periode ' . $g->periode_bulan_tahun,
+                'subtitle' => 'Gaji Pokok: Rp ' . number_format((float) $g->gaji_pokok, 0, ',', '.') . ' | Potongan: Rp ' . number_format((float) $g->total_potongan, 0, ',', '.'),
+                'status' => $g->status_transfer ?: 'terbit',
+                'date' => $g->tanggal_transfer ? Carbon::parse($g->tanggal_transfer)->format('Y-m-d') : ($g->created_at?->format('Y-m-d') ?? ''),
+                'amount' => 'Rp ' . number_format((float) $g->gaji_bersih, 0, ',', '.'),
+                'gaji_bersih' => (string) $g->gaji_bersih,
+                'periode' => $g->periode_bulan_tahun,
+                'raw' => $g->toArray(),
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $items,
+            'meta' => $this->formatMeta($paginator),
+        ];
+    }
+
+    /**
+     * SIKEU: Daftar pengajuan keuangan (reimbursement, uang muka, kas bon) milik akun login.
+     */
+    public function getSikeuPengajuan(User $user, ?Request $request = null): array
+    {
+        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        $query = PengajuanPencairanKas::where('pemohon_id', $user->id);
+
+        if ($request?->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request?->filled('jenis_pengajuan')) {
+            $query->where('jenis_pengajuan', $request->jenis_pengajuan);
+        }
+        if ($request?->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('judul_pengajuan', 'like', "%{$search}%")
+                  ->orWhere('nomor_pengajuan', 'like', "%{$search}%")
+                  ->orWhere('deskripsi', 'like', "%{$search}%");
+            });
+        }
+
+        $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+        $items = $paginator->getCollection()->map(function ($p) {
+            return [
+                'id' => (string) $p->id,
+                'title' => $p->judul_pengajuan,
+                'subtitle' => ($p->nomor_pengajuan ?: 'Pengajuan') . ($p->deskripsi ? ' - ' . Str::limit($p->deskripsi, 60) : ''),
+                'status' => $p->status,
+                'date' => $p->created_at?->format('Y-m-d') ?? '',
+                'amount' => 'Rp ' . number_format((float) $p->nominal_diajukan, 0, ',', '.'),
+                'jenis_pengajuan' => $p->jenis_pengajuan,
+                'nomor_pengajuan' => $p->nomor_pengajuan,
+                'raw' => $p->toArray(),
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $items,
+            'meta' => $this->formatMeta($paginator),
+        ];
+    }
+
+    /**
+     * SIKEU: Kirim pengajuan keuangan baru via mobile.
+     */
+    public function storeSikeuPengajuan(User $user, array $data, $file = null): array
+    {
+        if ($file instanceof UploadedFile) {
+            $data['file_lampiran'] = $this->fileStorageService->store($file, 'sikeu/pengajuan', private: true);
+        }
+
+        $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
+        if (!$pegawai) {
+            throw new \DomainException('Akun Anda belum terhubung dengan data kepegawaian.');
+        }
+
+        $unitKasId = $data['unit_kas_id'] ?? null;
+        if ($unitKasId) {
+            $unitKasQuery = DB::table('sikeu_unit_kas')->where('id', $unitKasId);
+            if ($pegawai->unit_kerja_id) {
+                $unitKasQuery->where(function ($q) use ($pegawai) {
+                    $q->where('unit_kerja_id', $pegawai->unit_kerja_id)
+                      ->orWhereNull('unit_kerja_id');
+                });
+            }
+            if (!$unitKasQuery->exists()) {
+                throw new \DomainException('Unit kas yang dipilih tidak valid atau di luar cakupan unit kerja Anda.');
+            }
+        }
+
+        $nomor = 'PK-' . date('Ym') . '-' . str_pad(PengajuanPencairanKas::whereYear('created_at', date('Y'))->count() + 1, 4, '0', STR_PAD_LEFT);
+
+        $pengajuan = PengajuanPencairanKas::create([
+            'nomor_pengajuan' => $nomor,
+            'pemohon_id' => $user->id,
+            'unit_kerja_id' => $pegawai->unit_kerja_id,
+            'unit_kas_id' => $unitKasId,
+            'judul_pengajuan' => $data['judul_pengajuan'],
+            'deskripsi' => $data['deskripsi'] ?? null,
+            'jenis_pengajuan' => $data['jenis_pengajuan'],
+            'nominal_diajukan' => $data['nominal_diajukan'],
+            'nama_bank_penerima' => $data['nama_bank_penerima'] ?? null,
+            'nomor_rekening_penerima' => $data['nomor_rekening_penerima'] ?? null,
+            'nama_rekening_penerima' => $data['nama_rekening_penerima'] ?? null,
+            'file_lampiran' => $data['file_lampiran'] ?? null,
+            'status' => 'pending_keuangan',
+        ]);
+
+        try {
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'create',
+                tableName: 'sikeu_pengajuan_pencairan_kas',
+                recordId: $pengajuan->id,
+                oldValues: null,
+                newValues: $pengajuan->only([
+                    'nomor_pengajuan', 'pemohon_id', 'unit_kerja_id', 'judul_pengajuan',
+                    'jenis_pengajuan', 'nominal_diajukan', 'status'
+                ]),
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log mobile pengajuan: ' . $e->getMessage());
+        }
+
+        return [
+            'id' => (string) $pengajuan->id,
+            'title' => $pengajuan->judul_pengajuan,
+            'subtitle' => ($pengajuan->nomor_pengajuan ?: 'Pengajuan') . ($pengajuan->deskripsi ? ' - ' . Str::limit($pengajuan->deskripsi, 60) : ''),
+            'status' => $pengajuan->status,
+            'date' => $pengajuan->created_at?->format('Y-m-d') ?? now()->toDateString(),
+            'amount' => 'Rp ' . number_format((float) $pengajuan->nominal_diajukan, 0, ',', '.'),
+            'nomor_pengajuan' => $pengajuan->nomor_pengajuan,
+            'raw' => $pengajuan->toArray(),
+        ];
+    }
+
+    /**
+     * SINAPRA: Daftar tiket laporan kerusakan sarana milik akun.
+     */
+    public function getSinapraTiket(User $user, ?Request $request = null): array
+    {
+        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        $query = MaintenanceLog::with(['aset', 'ruangan', 'teknisi'])
+            ->where(function ($q) use ($user) {
+                $q->where('pelapor_id', $user->id)
+                  ->orWhere('teknisi_id', $user->id);
+            });
+
+        if ($request?->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request?->filled('prioritas')) {
+            $query->where('prioritas', $request->prioritas);
+        }
+        if ($request?->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('judul', 'like', "%{$search}%")
+                  ->orWhere('deskripsi_kerusakan', 'like', "%{$search}%");
+            });
+        }
+
+        $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+        $items = $paginator->getCollection()->map(function ($m) {
+            $subtitle = '';
+            if ($m->ruangan?->nama_ruangan) {
+                $subtitle .= 'Ruangan: ' . $m->ruangan->nama_ruangan;
+            }
+            if ($m->aset?->nama_aset) {
+                $subtitle .= ($subtitle ? ' | ' : '') . 'Aset: ' . $m->aset->nama_aset;
+            }
+            if (empty($subtitle)) {
+                $subtitle = $m->deskripsi_kerusakan ? Str::limit($m->deskripsi_kerusakan, 50) : 'Laporan Kerusakan';
+            }
+
+            return [
+                'id' => (string) $m->id,
+                'title' => $m->judul,
+                'subtitle' => $subtitle,
+                'status' => $m->status,
+                'date' => $m->tanggal_lapor?->format('Y-m-d') ?? ($m->created_at?->format('Y-m-d') ?? ''),
+                'amount' => (float) $m->biaya > 0 ? 'Rp ' . number_format((float) $m->biaya, 0, ',', '.') : '',
+                'prioritas' => $m->prioritas,
+                'foto_url' => $m->foto_path ? $this->fileStorageService->signedUrl($m->foto_path) : null,
+                'raw' => $m->toArray(),
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $items,
+            'meta' => $this->formatMeta($paginator),
+        ];
+    }
+
+    /**
+     * SINAPRA: Kirim laporan kerusakan sarana baru via mobile.
+     */
+    public function storeSinapraTiket(User $user, array $data, $foto = null): array
+    {
+        if (!empty($data['aset_id'])) {
+            $asetExists = DB::table('sinapra_aset')->where('id', $data['aset_id'])->exists();
+            if (!$asetExists) {
+                throw new \DomainException('Aset yang dilaporkan tidak ditemukan.');
+            }
+        }
+        if (!empty($data['ruangan_id'])) {
+            $ruanganExists = DB::table('sinapra_ruangan')->where('id', $data['ruangan_id'])->exists();
+            if (!$ruanganExists) {
+                throw new \DomainException('Ruangan yang dilaporkan tidak ditemukan.');
+            }
+        }
+
+        $fotoPath = null;
+        if ($foto instanceof UploadedFile) {
+            $fotoPath = $this->fileStorageService->store($foto, 'sinapra/maintenance', private: true);
+        }
+
+        $log = $this->maintenanceService->createMaintenanceLog([
+            'pelapor_id' => $user->id,
+            'aset_id' => $data['aset_id'] ?? null,
+            'ruangan_id' => $data['ruangan_id'] ?? null,
+            'judul' => $data['judul'],
+            'deskripsi_kerusakan' => $data['deskripsi_kerusakan'],
+            'foto_path' => $fotoPath,
+            'prioritas' => $data['prioritas'] ?? 'sedang',
+            'tanggal_lapor' => now()->toDateString(),
+            'status' => 'dilaporkan',
+        ]);
+
+        try {
+            AuditLogService::record(
+                module: 'SINAPRA',
+                action: 'create',
+                tableName: 'sinapra_maintenance_log',
+                recordId: $log->id,
+                oldValues: null,
+                newValues: $log->only([
+                    'pelapor_id', 'aset_id', 'ruangan_id', 'judul',
+                    'deskripsi_kerusakan', 'prioritas', 'tanggal_lapor', 'status'
+                ]),
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log tiket sarana: ' . $e->getMessage());
+        }
+
+        return [
+            'id' => (string) $log->id,
+            'title' => $log->judul,
+            'subtitle' => $log->deskripsi_kerusakan ? Str::limit($log->deskripsi_kerusakan, 60) : 'Laporan Kerusakan',
+            'status' => $log->status,
+            'date' => $log->tanggal_lapor?->format('Y-m-d') ?? now()->toDateString(),
+            'amount' => '',
+            'prioritas' => $log->prioritas,
+            'foto_url' => $log->foto_path ? $this->fileStorageService->signedUrl($log->foto_path) : null,
+            'raw' => $log->load(['aset', 'ruangan', 'teknisi'])->toArray(),
+        ];
+    }
+
+    /**
+     * SINAPRA: Daftar peminjaman ruangan / fasilitas milik akun.
+     */
+    public function getSinapraPeminjaman(User $user, ?Request $request = null): array
+    {
+        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $jenis = strtolower((string) $request?->query('jenis', 'ruangan'));
+
+        if ($jenis === 'aset') {
+            $query = PeminjamanAset::with('aset')->where('user_id', $user->id);
+            if ($request?->filled('status')) {
+                $query->where('status', $request->status);
+            }
+            if ($request?->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('keperluan', 'like', "%{$search}%")
+                      ->orWhereHas('aset', fn($sub) => $sub->where('nama_aset', 'like', "%{$search}%"));
+                });
+            }
+
+            $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+            $items = $paginator->getCollection()->map(function ($a) {
+                return [
+                    'id' => 'ASET-' . $a->id,
+                    'title' => $a->aset?->nama_aset ?? 'Peminjaman Aset',
+                    'subtitle' => $a->keperluan ?: 'Peminjaman Aset Sarana',
+                    'status' => $a->status,
+                    'date' => $a->tanggal_pinjam?->format('Y-m-d') ?? ($a->created_at?->format('Y-m-d') ?? ''),
+                    'amount' => '',
+                    'raw' => $a->toArray(),
+                ];
+            })->values()->all();
+
+            return [
+                'items' => $items,
+                'meta' => $this->formatMeta($paginator),
+            ];
+        }
+
+        $query = PeminjamanRuangan::with('ruangan')->where('user_id', $user->id);
+        if ($request?->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request?->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('keperluan', 'like', "%{$search}%")
+                  ->orWhereHas('ruangan', fn($sub) => $sub->where('nama_ruangan', 'like', "%{$search}%"));
+            });
+        }
+
+        $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+        $items = $paginator->getCollection()->map(function ($r) {
+            return [
+                'id' => 'RUANG-' . $r->id,
+                'title' => $r->ruangan?->nama_ruangan ?? 'Peminjaman Ruangan',
+                'subtitle' => $r->keperluan ?: 'Peminjaman Ruangan',
+                'status' => $r->status,
+                'date' => $r->tanggal?->format('Y-m-d') ?? ($r->created_at?->format('Y-m-d') ?? ''),
+                'amount' => '',
+                'raw' => $r->toArray(),
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $items,
+            'meta' => $this->formatMeta($paginator),
+        ];
+    }
+
+    /**
+     * ARSIP: Dokumen E-File kepegawaian pribadi staf.
+     */
+    public function getArsipEfile(User $user, ?Request $request = null): array
+    {
+        $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
+        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if (!$pegawai) {
+            return [
+                'items' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'last_page' => 1,
+                    'from' => null,
+                    'to' => null,
+                ],
+            ];
+        }
+
+        $query = DokumenPegawai::where('pegawai_id', $pegawai->id);
+        $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+        $items = $paginator->getCollection()->map(function ($d) {
+            return [
+                'id' => (string) $d->id,
+                'title' => $d->nama_dokumen,
+                'subtitle' => $d->jenis_dokumen . ($d->file_size ? ' (' . round($d->file_size / 1024, 1) . ' KB)' : ''),
+                'status' => $d->status_verifikasi ?: 'tersimpan',
+                'date' => $d->created_at?->format('Y-m-d') ?? '',
+                'amount' => '',
+                'file_url' => $d->file_path ? $this->fileStorageService->signedUrl($d->file_path) : null,
+                'raw' => $d->toArray(),
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $items,
+            'meta' => $this->formatMeta($paginator),
+        ];
+    }
+
+    /**
+     * ARSIP: Dokumen persuratan resmi terkait staf.
+     */
+    public function getArsipSurat(User $user, ?Request $request = null): array
+    {
+        $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
+        $pegawaiId = $pegawai?->id;
+        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $jenis = strtolower((string) $request?->query('jenis', 'surat'));
+
+        if ($jenis === 'tugas' && $pegawaiId) {
+            $query = SuratTugas::where('pegawai_id', $pegawaiId);
+            if ($request?->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('nama_kegiatan', 'like', "%{$search}%")
+                      ->orWhere('nomor_surat', 'like', "%{$search}%")
+                      ->orWhere('tempat_tujuan', 'like', "%{$search}%");
+                });
+            }
+
+            $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+            $items = $paginator->getCollection()->map(function ($t) {
+                return [
+                    'id' => 'TGS-' . $t->id,
+                    'title' => $t->nama_kegiatan ?: 'Surat Tugas',
+                    'subtitle' => ($t->nomor_surat ?: 'Tugas') . ($t->tempat_tujuan ? ' (' . $t->tempat_tujuan . ')' : ''),
+                    'status' => $t->status ?: 'aktif',
+                    'date' => $t->tanggal_mulai?->format('Y-m-d') ?? ($t->created_at?->format('Y-m-d') ?? ''),
+                    'amount' => '',
+                    'raw' => $t->toArray(),
+                ];
+            })->values()->all();
+
+            return [
+                'items' => $items,
+                'meta' => $this->formatMeta($paginator),
+            ];
+        }
+
+        $query = NomorSurat::query()
+            ->where(function ($q) use ($user, $pegawaiId) {
+                $q->where('created_by', $user->id);
+                if ($pegawaiId) {
+                    $q->orWhere('pegawai_id', $pegawaiId);
+                }
+            });
+
+        if ($request?->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('perihal', 'like', "%{$search}%")
+                  ->orWhere('nomor_surat', 'like', "%{$search}%")
+                  ->orWhere('tujuan', 'like', "%{$search}%");
+            });
+        }
+
+        $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+        $items = $paginator->getCollection()->map(function ($s) {
+            return [
+                'id' => 'SRT-' . $s->id,
+                'title' => $s->perihal ?: ($s->nomor_surat ?: 'Surat Resmi'),
+                'subtitle' => ($s->nomor_surat ?: 'Arsip') . ($s->tujuan ? ' | Tujuan: ' . $s->tujuan : ''),
+                'status' => $s->status ?: 'terbit',
+                'date' => $s->tanggal_surat?->format('Y-m-d') ?? ($s->created_at?->format('Y-m-d') ?? ''),
+                'amount' => '',
+                'raw' => $s->toArray(),
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $items,
+            'meta' => $this->formatMeta($paginator),
+        ];
+    }
+
+    /**
+     * LMS: Daftar bahan ajar & RPS kelas yang diampu dosen.
+     */
+    public function getLmsBahanAjar(User $user, ?Request $request = null): array
+    {
+        $dosen = $this->resolveDosen($user->id);
+        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if (!$dosen) {
+            return [
+                'items' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'last_page' => 1,
+                    'from' => null,
+                    'to' => null,
+                ],
+            ];
+        }
+
+        $classes = Kelas::where(function ($q) use ($dosen) {
+            $q->where('dosen_id', $dosen->id)
+              ->orWhereHas('dosenPengampu', fn($dp) => $dp->where('dosen_id', $dosen->id));
+        })->pluck('id');
+
+        $query = MateriPertemuan::with(['pertemuan.kelas.mataKuliah', 'files'])
+            ->whereHas('pertemuan', fn($p) => $p->whereIn('kelas_id', $classes));
+
+        $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+        $items = $paginator->getCollection()->map(function ($m) {
+            $mataKuliah = $m->pertemuan?->kelas?->mataKuliah?->nama_mata_kuliah ?? 'Materi Perkuliahan';
+            $pertemuanKe = $m->pertemuan?->pertemuan_ke ? ' (Pertemuan ke-' . $m->pertemuan->pertemuan_ke . ')' : '';
+
+            return [
+                'id' => (string) $m->id,
+                'title' => $m->judul,
+                'subtitle' => $mataKuliah . $pertemuanKe,
+                'status' => $m->is_published ? 'published' : 'draft',
+                'date' => $m->created_at?->format('Y-m-d') ?? '',
+                'amount' => '',
+                'raw' => $m->toArray(),
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $items,
+            'meta' => $this->formatMeta($paginator),
+        ];
+    }
+
+    /**
+     * LMS: Pengumuman kelas / notifikasi akademik dosen.
+     */
+    public function getLmsPengumuman(User $user, ?Request $request = null): array
+    {
+        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        $query = LmsNotifikasi::where('user_id', $user->id);
+        $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
+
+        $items = $paginator->getCollection()->map(function ($n) {
+            return [
+                'id' => (string) $n->id,
+                'title' => $n->judul,
+                'subtitle' => $n->pesan,
+                'status' => $n->is_read ? 'dibaca' : 'baru',
+                'date' => $n->created_at?->format('Y-m-d') ?? '',
+                'amount' => '',
+                'raw' => $n->toArray(),
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $items,
+            'meta' => $this->formatMeta($paginator),
+        ];
+    }
+
+    /**
+     * SPMB: Data kode referral, statistik, dan daftar calon mahasiswa binaan.
+     */
+    public function getSpmbReferral(User $user, ?Request $request = null): array
+    {
+        $code = $user->referral_code;
+        $stats = $this->spmbReferralService->statsForUser($user);
+        $shareUrl = url('/spmb/daftar?ref=' . $code);
+        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $page = max(1, (int) ($request?->input('page') ?? 1));
+
+        $usages = ReferralUsage::with('pendaftar.prodiPilihan1')
+            ->where('referrer_user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $items = collect();
+
+        // Kartu Utama Referral: Selalu di posisi pertama agar copy button mobile langsung membaca kodenya
+        $items->push([
+            'id' => (string) $user->id,
+            'title' => 'Kode Referral: ' . $code,
+            'subtitle' => 'Bagikan kode atau link referral kepada calon mahasiswa baru',
+            'status' => 'aktif',
+            'date' => now()->format('Y-m-d'),
+            'amount' => 'Total: ' . ($stats['total'] ?? 0) . ' pendaftar',
+            'referral_code' => $code,
+            'kode_referral' => $code,
+            'share_url' => $shareUrl,
+            'stats' => $stats,
+            'raw' => [
+                'referral_code' => $code,
+                'kode_referral' => $code,
+                'share_url' => $shareUrl,
+                'stats' => $stats,
+            ],
+        ]);
+
+        foreach ($usages as $u) {
+            $namaPendaftar = $u->pendaftar?->nama ?? ('Pendaftar #' . $u->id);
+            $prodi = $u->pendaftar?->prodiPilihan1?->nama_prodi ?? 'Prodi Pilihan';
+
+            $items->push([
+                'id' => (string) $u->id,
+                'title' => $namaPendaftar,
+                'subtitle' => $prodi . ' (Kode: ' . $u->referral_code . ')',
+                'status' => $u->status,
+                'date' => $u->created_at?->format('Y-m-d') ?? '',
+                'amount' => (float) $u->reward_amount > 0 ? 'Rp ' . number_format((float) $u->reward_amount, 0, ',', '.') : '',
+                'referral_code' => $code,
+                'kode_referral' => $code,
+                'raw' => $u->toArray(),
+            ]);
+        }
+
+        return $this->paginateCollection($items, $perPage, $page);
+    }
+
+    /**
+     * SPMB: Buat / regenerasi link referral eksternal & QR payload.
+     */
+    public function generateSpmbReferral(User $user): array
+    {
+        $code = $user->referral_code;
+        $shareUrl = url('/spmb/daftar?ref=' . $code);
+
+        try {
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'create',
+                tableName: 'core_users',
+                recordId: $user->id,
+                oldValues: null,
+                newValues: ['referral_code' => $code, 'action' => 'generate_referral_link'],
+                request: request()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log SPMB referral: ' . $e->getMessage());
+        }
+
+        return [
+            'referral_code' => $code,
+            'kode_referral' => $code,
+            'share_url' => $shareUrl,
+            'qr_payload' => $shareUrl,
+            'stats' => $this->spmbReferralService->statsForUser($user),
         ];
     }
 }
