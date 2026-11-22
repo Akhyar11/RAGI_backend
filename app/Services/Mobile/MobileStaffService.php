@@ -697,6 +697,7 @@ class MobileStaffService
                 'jam' => ($k->jam_mulai ? substr($k->jam_mulai, 0, 5) : '08:00') . ' - ' . ($k->jam_selesai ? substr($k->jam_selesai, 0, 5) : '10:30'),
                 'total_mahasiswa' => $totalMhs,
                 'total_pertemuan' => 16,
+                'pertemuan_tercatat' => $pertemuanCount,
                 'pertemuan_selesai' => $pertemuanSelesai,
                 'has_active_session' => $pertemuanAktif !== null,
                 'active_session_id' => $pertemuanAktif?->id,
@@ -780,6 +781,7 @@ class MobileStaffService
         return [
             'kelas' => [
                 'id' => $kelas->id,
+                'kelas_id' => $kelas->id,
                 'kode_kelas' => $kelas->kode_kelas ?? 'KELAS-' . $kelas->id,
                 'nama_kelas' => $kelas->nama_kelas,
                 'kode_mk' => $kelas->mataKuliah?->kode_mk ?? '-',
@@ -921,6 +923,7 @@ class MobileStaffService
 
         $pertemuan->token_absensi = $token;
         $pertemuan->token_expired_at = $expiredAt;
+        $pertemuan->token_rotated_at = Carbon::now();
         $pertemuan->save();
 
         try {
@@ -958,24 +961,30 @@ class MobileStaffService
         }
 
         $oldValues = $pertemuan->getOriginal();
+        $alreadySelesai = $pertemuan->status_pertemuan === Pertemuan::STATUS_SELESAI;
 
-        $pertemuan->status_pertemuan = Pertemuan::STATUS_SELESAI;
-        $pertemuan->jam_selesai = Carbon::now()->format('H:i');
-        $pertemuan->presensi_closed_at = Carbon::now();
-        $pertemuan->save();
+        if (!$alreadySelesai) {
+            $pertemuan->status_pertemuan = Pertemuan::STATUS_SELESAI;
+            $pertemuan->jam_selesai = Carbon::now()->format('H:i');
+            $pertemuan->presensi_closed_at = Carbon::now();
+            // Tutup presensi: hapus token agar tidak bisa dipakai ulang.
+            $pertemuan->token_absensi = null;
+            $pertemuan->token_expired_at = null;
+            $pertemuan->save();
 
-        try {
-            AuditLogService::record(
-                module: 'siakad',
-                action: 'finish_perkuliahan_session',
-                tableName: 'siakad_pertemuan',
-                recordId: $pertemuan->id,
-                oldValues: $oldValues,
-                newValues: $pertemuan->getChanges(),
-                request: request()
-            );
-        } catch (\Throwable $e) {
-            Log::warning('Gagal mencatat audit log selesai perkuliahan: ' . $e->getMessage());
+            try {
+                AuditLogService::record(
+                    module: 'siakad',
+                    action: 'finish_perkuliahan_session',
+                    tableName: 'siakad_pertemuan',
+                    recordId: $pertemuan->id,
+                    oldValues: $oldValues,
+                    newValues: $pertemuan->getChanges(),
+                    request: request()
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log selesai perkuliahan: ' . $e->getMessage());
+            }
         }
 
         // Rekap akhir presensi

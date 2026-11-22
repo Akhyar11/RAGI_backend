@@ -149,7 +149,7 @@ class UserService
                         ['pegawai_id' => $pegawai->id],
                         [
                             'user_id' => $user->id,
-                            'nama' => $pegawai->nama_lengkap,
+                            'nama_lengkap' => $pegawai->nama_lengkap,
                             'nidn' => $pegawai->nip,
                             'is_active' => true,
                         ]

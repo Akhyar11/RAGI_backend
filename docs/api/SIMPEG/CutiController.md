@@ -34,7 +34,7 @@ Modul ini mengelola permohonan cuti pegawai (tahunan, sakit, melahirkan, alasan 
 |---|---|---|---|---|
 | `search` | string | ❌ | — | Cari alasan cuti, nama pegawai, NIP, NIDN, jenis cuti |
 | `master_jenis_cuti_id` | integer | ❌ | — | Filter jenis cuti |
-| `status_approval` | string | ❌ | — | Filter status: `menunggu`, `disetujui`, `ditolak` |
+| `status_approval` | string | ❌ | — | Filter status canonical (`pending`, `approved`, `rejected`) atau alias label UI (`menunggu`, `disetujui`, `ditolak`) |
 | `pegawai_id` | integer | ❌ | — | Filter ID pegawai (khusus admin/approver) |
 | `sort_by` | string | ❌ | `created_at` | Kolom pengurutan (`created_at`, `tanggal_mulai`, `tanggal_selesai`, `jumlah_hari`) |
 | `sort_order` | string | ❌ | `desc` | Arah urutan: `asc` / `desc` |
@@ -201,9 +201,10 @@ Contoh representasi data:
 ```json
 {
     "status": "error",
-    "message": "Anda tidak memiliki hak akses untuk mengajukan cuti."
+    "message": "Akun belum tertaut dengan data pegawai SIMPEG. Hubungi administrator."
 }
 ```
+*(Atau `"Anda tidak memiliki hak akses untuk mengajukan cuti."` jika user tidak memiliki role atau izin pemohon)*
 
 **422 Unprocessable Entity**
 ```json

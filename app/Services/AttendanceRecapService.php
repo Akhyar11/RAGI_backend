@@ -151,6 +151,8 @@ class AttendanceRecapService
                 'scan_pulang' => $scanPulang,
                 'keterangan' => $keterangan,
                 'status_badge' => $statusBadge,
+                'status' => $statusBadge,
+                'status_kehadiran' => $statusBadge,
             ];
         }
 

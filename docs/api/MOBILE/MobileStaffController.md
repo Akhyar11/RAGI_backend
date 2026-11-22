@@ -212,7 +212,7 @@ Mengambil ringkasan beranda staf termasuk profil dasar dan widget jadwal mengaja
 
 ## 3. POST /api/v1/mobile/staff/avatar
 
-Memperbarui foto profil staf ke penyimpanan server backend RAG, baik dalam bentuk string Base64 (`avatar_base64`) atau upload berkas multipart (`avatar`). Sistem hanya mengizinkan pengguna memperbarui avatar akun miliknya sendiri dan mencatat perubahan ke audit log.
+Memperbarui atau menghapus foto profil staf ke penyimpanan server backend RAG. Menerima string Base64 (`avatar_base64`), upload berkas multipart (`avatar`), atau opsi penghapusan avatar (`remove_avatar: true`). Sistem hanya mengizinkan pengguna memperbarui avatar akun miliknya sendiri dan mencatat perubahan ke audit log.
 
 ### Headers
 
@@ -224,6 +224,12 @@ Memperbarui foto profil staf ke penyimpanan server backend RAG, baik dalam bentu
 
 ### Request Body (JSON atau Multipart)
 
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `avatar` | file | ❌ | Berkas gambar (JPEG, PNG, WEBP, maks. 5MB) |
+| `avatar_base64` | string | ❌ | String Base64 gambar (JPEG/PNG/WEBP) |
+| `remove_avatar` | boolean | ❌ | Jika `true`, sistem akan menghapus foto avatar dari server |
+
 **Format JSON Base64:**
 ```json
 {
@@ -231,14 +237,23 @@ Memperbarui foto profil staf ke penyimpanan server backend RAG, baik dalam bentu
 }
 ```
 
+**Format JSON Hapus Avatar:**
+```json
+{
+    "remove_avatar": true
+}
+```
+
 **Format Multipart:**
 - `avatar`: Berkas gambar (JPEG, PNG, WEBP, maks. 5MB)
+- `remove_avatar`: `1` atau `true` (opsional)
 
-### Response Sukses (200 OK)
+### Response Sukses (200 OK - Pembaruan Berhasil)
 
 ```json
 {
     "status": "success",
+    "success": true,
     "message": "Foto profil berhasil diperbarui dan tersimpan di server RAG.",
     "data": {
         "user_id": 15,
@@ -246,6 +261,16 @@ Memperbarui foto profil staf ke penyimpanan server backend RAG, baik dalam bentu
         "path": "avatars/2026/11/4d7159c1-ef90-48e0-bb15-08168bb21389.png",
         "updated_at": "2026-11-21T09:00:00+07:00"
     }
+}
+```
+
+### Response Sukses (200 OK - Hapus Avatar Berhasil)
+
+```json
+{
+    "status": "success",
+    "message": "Foto profil berhasil dihapus dari server RAG.",
+    "data": null
 }
 ```
 

@@ -119,9 +119,36 @@ class MobileStaffController extends Controller
         $request->validate([
             'avatar' => 'nullable|file|image|mimes:jpeg,png,jpg,webp|max:5120',
             'avatar_base64' => 'nullable|string',
+            'remove_avatar' => 'nullable|boolean',
         ]);
 
         $path = null;
+
+        if ($request->boolean('remove_avatar')) {
+            $oldValues = $user->getOriginal();
+            $user->avatar_path = null;
+            $user->save();
+
+            try {
+                AuditLogService::record(
+                    module: 'iam',
+                    action: 'remove_avatar',
+                    tableName: 'core_users',
+                    recordId: $user->id,
+                    oldValues: $oldValues,
+                    newValues: $user->getChanges(),
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log hapus avatar mobile staff: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Foto profil berhasil dihapus dari server RAG.',
+                'data' => null,
+            ]);
+        }
 
         if ($request->hasFile('avatar')) {
             $file = $request->file('avatar');

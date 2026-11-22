@@ -46,7 +46,8 @@ class AttendanceService
         }
 
         // 2. Ambil pengaturan threshold sistem (fallback bila tanpa jadwal/shift)
-        $minFaceScore = (float) SystemSetting::get('face_score_threshold', 0.80);
+        // Samakan dengan threshold engine Python yang aktif (default 0.68).
+        $minFaceScore = (float) config('services.face_service.min_similarity', 0.68);
         $maxGpsAccuracy = (float) SystemSetting::get('gps_accuracy_threshold_meters', 50.0);
         $lateToleranceMinutes = (int) SystemSetting::get('late_tolerance_minutes', 15);
         $maxEarlyClockInMinutes = (int) SystemSetting::get('max_early_clock_in_minutes', 60);
@@ -79,7 +80,9 @@ class AttendanceService
         }
 
         // Aturan C: Geofence radius (multi-lokasi: lolos bila di lokasi mana pun)
-        if ($office && !$isWithinRadius) {
+        if (!$office) {
+            $rejectionReasons[] = 'Lokasi absen untuk pegawai ini belum ditentukan di data SIMPEG. Hubungi administrator.';
+        } elseif (!$isWithinRadius) {
             $rejectionReasons[] = "Di luar area kantor (terdekat: {$nearestOffice->name}, jarak {$nearestDistance}m, radius {$nearestOffice->radius_meters}m; {$checkedCount} lokasi absen diperiksa).";
         }
 
@@ -112,16 +115,15 @@ class AttendanceService
                         $data['face_embedding'] = $verifyResult['live_embedding'];
                     }
                 } else {
-                    // Fallback jika python microservice offline tetapi client mengirim face_score numerik valid
-                    if (isset($data['face_score']) && (float) $data['face_score'] >= $minFaceScore) {
+                    if (app()->environment('testing') && isset($data['face_score']) && (float) $data['face_score'] >= $minFaceScore) {
                         $faceScore = (float) $data['face_score'];
                         $faceMatched = true;
                     } else {
-                        $rejectionReasons[] = $verifyResult['message'] ?? 'Verifikasi biometrik wajah di server gagal.';
+                        $rejectionReasons[] = $verifyResult['message'] ?? 'Verifikasi biometrik wajah di server gagal. Presensi ditolak.';
                     }
                 }
             }
-        } elseif (isset($data['face_score'])) {
+        } elseif (app()->environment('testing') && isset($data['face_score'])) {
             if ($faceScore < $minFaceScore) {
                 $rejectionReasons[] = "Skor pengenalan wajah rendah ({$faceScore}, batas minimal {$minFaceScore}).";
             } else {
@@ -320,7 +322,7 @@ class AttendanceService
         $attendance->save();
 
         // 7. Adaptive Biometric Template Update (EMA)
-        if ($status !== 'ditolak' && $faceScore >= 0.80 && !empty($data['face_embedding'])) {
+        if ($status !== 'ditolak' && $faceScore >= $minFaceScore && !empty($data['face_embedding'])) {
             $this->updateAdaptiveFaceEmbedding($employee, $data['face_embedding']);
         }
 
@@ -341,13 +343,6 @@ class AttendanceService
     protected function resolveOfficeForCoordinates(Pegawai $employee, float $userLat, float $userLon): array
     {
         $candidates = $employee->getAllowedOfficeLocations();
-
-        if ($candidates->isEmpty()) {
-            $fallback = OfficeLocation::where('is_active', true)->first();
-            if ($fallback) {
-                $candidates = collect([$fallback]);
-            }
-        }
 
         $matched = null;
         $matchedDistance = null;
@@ -544,7 +539,8 @@ class AttendanceService
             ]);
         }
 
-        $minFaceScore = (float) SystemSetting::get('face_score_threshold', 0.80);
+        // Samakan dengan threshold engine Python yang aktif (default 0.68).
+        $minFaceScore = (float) config('services.face_service.min_similarity', 0.68);
         $maxGpsAccuracy = (float) SystemSetting::get('gps_accuracy_threshold_meters', 50.0);
 
         $userLat = (float) ($data['latitude'] ?? 0);
@@ -567,7 +563,9 @@ class AttendanceService
         if ($accuracy > $maxGpsAccuracy) {
             $rejectionReasons[] = "Akurasi GPS tidak memadai ({$accuracy}m, batas maksimal {$maxGpsAccuracy}m).";
         }
-        if ($office && !$isWithinRadius) {
+        if (!$office) {
+            $rejectionReasons[] = 'Lokasi absen untuk pegawai ini belum ditentukan di data SIMPEG. Hubungi administrator.';
+        } elseif (!$isWithinRadius) {
             $rejectionReasons[] = "Di luar area kantor (terdekat: {$nearestOffice->name}, jarak {$nearestDistance}m, radius {$nearestOffice->radius_meters}m; {$checkedCount} lokasi absen diperiksa).";
         }
 
@@ -598,20 +596,22 @@ class AttendanceService
                         $data['face_embedding'] = $verifyResult['live_embedding'];
                     }
                 } else {
-                    if (isset($data['face_score']) && (float) $data['face_score'] >= $minFaceScore) {
+                    if (app()->environment('testing') && isset($data['face_score']) && (float) $data['face_score'] >= $minFaceScore) {
                         $faceScore = (float) $data['face_score'];
                         $faceMatched = true;
                     } else {
-                        $rejectionReasons[] = $verifyResult['message'] ?? 'Verifikasi biometrik wajah di server gagal.';
+                        $rejectionReasons[] = $verifyResult['message'] ?? 'Verifikasi biometrik wajah di server gagal. Presensi ditolak.';
                     }
                 }
             }
-        } elseif (isset($data['face_score'])) {
+        } elseif (app()->environment('testing') && isset($data['face_score'])) {
             if ($faceScore < $minFaceScore) {
                 $rejectionReasons[] = "Skor pengenalan wajah rendah ({$faceScore}, batas minimal {$minFaceScore}).";
             } else {
                 $faceMatched = true;
             }
+        } else {
+            $rejectionReasons[] = 'Foto wajah presensi wajib disertakan untuk verifikasi biometrik.';
         }
 
         // Jadwal dihitung dari tanggal dinas record (duty date), bukan tanggal sekarang,
@@ -765,7 +765,7 @@ class AttendanceService
         $attendance->save();
 
         // 7. Adaptive Biometric Template Update (EMA)
-        if ($faceScore >= 0.80 && !empty($data['face_embedding'])) {
+        if ($faceScore >= $minFaceScore && !empty($data['face_embedding'])) {
             $this->updateAdaptiveFaceEmbedding($employee, $data['face_embedding']);
         }
 

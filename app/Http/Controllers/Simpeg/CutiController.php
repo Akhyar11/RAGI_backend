@@ -52,8 +52,17 @@ class CutiController extends Controller
             $query->where('master_jenis_cuti_id', $masterJenisCutiId);
         }
 
-        $allowedStatus = ['menunggu', 'disetujui', 'ditolak'];
-        $statusApproval = in_array($request->status_approval, $allowedStatus, true) ? $request->status_approval : '';
+        // Terima label UI (Indonesia) dan nilai canonical database.
+        $statusAlias = [
+            'menunggu' => 'pending',
+            'disetujui' => 'approved',
+            'ditolak' => 'rejected',
+            'pending' => 'pending',
+            'approved' => 'approved',
+            'rejected' => 'rejected',
+        ];
+        $requestedStatus = is_string($request->status_approval) ? strtolower($request->status_approval) : '';
+        $statusApproval = $statusAlias[$requestedStatus] ?? '';
         if ($statusApproval !== '') {
             $query->where('status_approval', $statusApproval);
         }
@@ -129,30 +138,11 @@ class CutiController extends Controller
                         $userPegawai->update(['user_id' => $user->id]);
                     }
                 }
-                // Jika belum ada record pegawai, buatkan profil dasar untuk user ini
                 if (!$userPegawai) {
-                    $nipAuto = 'PEG-' . str_pad((string)$user->id, 5, '0', STR_PAD_LEFT);
-                    $userPegawai = Pegawai::create([
-                        'user_id' => $user->id,
-                        'nip' => $nipAuto,
-                        'nama_lengkap' => $user->name,
-                        'status' => 'aktif',
-                        'is_active' => true,
-                        'terdampak_absensi' => true,
-                    ]);
-
-                    try {
-                        \App\Services\AuditLogService::record(
-                            'simpeg',
-                            'simpeg.pegawai.create',
-                            'simpeg_pegawai',
-                            $userPegawai->id,
-                            null,
-                            $userPegawai->toArray()
-                        );
-                    } catch (\Throwable $eLog) {
-                        Log::warning('Gagal mencatat audit log auto create pegawai: ' . $eLog->getMessage());
-                    }
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Akun belum tertaut dengan data pegawai SIMPEG. Hubungi administrator.'
+                    ], 403);
                 }
                 $validated['pegawai_id'] = $userPegawai->id;
             } else {

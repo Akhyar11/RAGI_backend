@@ -247,20 +247,28 @@ class Pegawai extends Model
     }
 
     /**
-     * Seluruh lokasi absen yang sah: seluruh lokasi kantor kampus yang aktif
-     * (multi-lokasi otomatis, pegawai dapat absen dari lokasi kantor terdekat mana pun).
+     * Lokasi absen yang sah untuk pegawai ini: lokasi utama dari data SIMPEG
+     * ditambah lokasi tambahan yang memang ditugaskan lewat pivot.
+     * Tidak menggunakan seluruh kantor aktif agar area izin sesuai data pegawai.
      *
      * @return \Illuminate\Support\Collection<int, OfficeLocation>
      */
     public function getAllowedOfficeLocations()
     {
-        $allActive = OfficeLocation::where('is_active', true)->orderBy('name')->get();
-        if ($allActive->isNotEmpty()) {
-            return $allActive;
+        $locations = collect();
+        $primary = $this->officeLocation;
+        if ($primary && $primary->is_active) {
+            $locations->push($primary);
         }
 
-        $primary = $this->officeLocation;
-        return $primary ? collect([$primary]) : collect();
+        $this->loadMissing('additionalOffices');
+        foreach ($this->additionalOffices as $additional) {
+            if ($additional->is_active && !$locations->contains('id', $additional->id)) {
+                $locations->push($additional);
+            }
+        }
+
+        return $locations->sortBy('name')->values();
     }
 
     public function shiftTemplate()

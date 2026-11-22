@@ -1238,8 +1238,9 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [App\Http\Controllers\API\AuthController::class, 'login']);
 
     // 2. Microservice Python Face Recognition (Port 8001)
-    Route::prefix('face')->group(function () {
-        Route::get('/health', [App\Http\Controllers\API\FaceRecognitionController::class, 'health']);
+    // Health tetap publik untuk monitoring; endpoint biometrik wajib auth dan permission.
+    Route::get('/face/health', [App\Http\Controllers\API\FaceRecognitionController::class, 'health']);
+    Route::middleware(['auth:api', 'can:simpeg.presensi.create'])->prefix('face')->group(function () {
         Route::post('/verify', [App\Http\Controllers\API\FaceRecognitionController::class, 'verify']);
         Route::post('/extract', [App\Http\Controllers\API\FaceRecognitionController::class, 'extract']);
         Route::post('/enroll', [App\Http\Controllers\API\FaceRecognitionController::class, 'enroll']);

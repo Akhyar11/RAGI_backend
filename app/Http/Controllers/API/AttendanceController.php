@@ -21,34 +21,29 @@ class AttendanceController extends Controller
     ) {}
 
     /**
-     * Ambil profil pegawai aktif atau inisialisasi default
+     * Ambil profil pegawai SIMPEG yang tertaut dengan akun.
+     * Tidak membuat data pegawai rekaan.
      */
-    protected function getOrCreateEmployee($user): Pegawai
+    protected function getLinkedEmployee($user): Pegawai
     {
-        $employee = Pegawai::with(['officeLocation', 'additionalOffices', 'shiftTemplate.days', 'user'])
-            ->where('user_id', $user->id)
-            ->first();
+        $relations = ['officeLocation', 'additionalOffices', 'shiftTemplate.days', 'user'];
+        $employee = Pegawai::with($relations)->where('user_id', $user->id)->first();
+
+        if (!$employee && !empty($user->email)) {
+            $employee = Pegawai::with($relations)->where('email', $user->email)->first();
+            if ($employee) {
+                $employee->update(['user_id' => $user->id]);
+                $employee->load($relations);
+            }
+        }
 
         if (!$employee) {
-            $defaultOffice = \App\Models\OfficeLocation::where('is_active', true)->first();
-            $defaultShift = \App\Models\ShiftTemplate::where('is_active', true)->first();
-            $unitKerja = \App\Models\Simpeg\UnitKerja::first();
-
-            $employee = Pegawai::firstOrCreate([
-                'user_id' => $user->id,
-            ], [
-                'unit_kerja_id' => $unitKerja?->id,
-                'office_location_id' => $defaultOffice?->id,
-                'shift_template_id' => $defaultShift?->id,
-                'nip' => '19' . date('ymd') . rand(100000, 999999),
-                'nama_lengkap' => $user->name ?: ucfirst($user->username),
-                'jenis_kelamin' => 'L',
-                'jenis_pegawai' => 'dosen',
-                'status_kepegawaian' => 'tetap_yayasan',
-                'status' => 'aktif',
-                'is_active' => true,
-            ]);
-            $employee->load(['officeLocation', 'additionalOffices', 'shiftTemplate.days', 'user']);
+            throw new \Illuminate\Http\Exceptions\HttpResponseException(
+                response()->json([
+                    'status' => 'error',
+                    'message' => 'Akun belum tertaut dengan data pegawai SIMPEG. Hubungi administrator.',
+                ], 403)
+            );
         }
 
         return $employee;
@@ -59,7 +54,7 @@ class AttendanceController extends Controller
      */
     public function todayStatus(Request $request): JsonResponse
     {
-        $employee = $this->getOrCreateEmployee($request->user());
+        $employee = $this->getLinkedEmployee($request->user());
 
         $now = Carbon::now();
         $today = $now->toDateString();
@@ -316,6 +311,11 @@ class AttendanceController extends Controller
         ]);
 
         $validated['is_mock_location'] = (bool) ($validated['is_mock_location'] ?? false);
+        // Cegah injeksi face_score sepihak dari klien. Hanya izinkan di environment testing.
+        unset($validated['face_score']);
+        if (app()->environment('testing') && $request->has('face_score')) {
+            $validated['face_score'] = (float) $request->input('face_score');
+        }
 
         if ($request->hasFile('foto')) {
             $validated['foto'] = $request->file('foto');
@@ -325,7 +325,7 @@ class AttendanceController extends Controller
             $validated['face_image'] = $request->file('face_image');
         }
 
-        $employee = $this->getOrCreateEmployee($request->user());
+        $employee = $this->getLinkedEmployee($request->user());
 
         $attendance = $this->attendanceService->processClockIn($employee, $validated);
 
@@ -369,7 +369,11 @@ class AttendanceController extends Controller
         ]);
 
         $validated['is_mock_location'] = (bool) ($validated['is_mock_location'] ?? false);
-        $validated['face_score'] = (float) ($validated['face_score'] ?? 0.85);
+        // Cegah injeksi face_score sepihak dari klien. Hanya izinkan di environment testing.
+        unset($validated['face_score']);
+        if (app()->environment('testing') && $request->has('face_score')) {
+            $validated['face_score'] = (float) $request->input('face_score');
+        }
 
         if ($request->hasFile('foto')) {
             $validated['foto'] = $request->file('foto');
@@ -379,7 +383,7 @@ class AttendanceController extends Controller
             $validated['face_image'] = $request->file('face_image');
         }
 
-        $employee = $this->getOrCreateEmployee($request->user());
+        $employee = $this->getLinkedEmployee($request->user());
 
         try {
             $attendance = $this->attendanceService->processClockOut($employee, $validated);
@@ -467,7 +471,7 @@ class AttendanceController extends Controller
             'foto' => 'nullable',
         ]);
 
-        $employee = $this->getOrCreateEmployee($request->user());
+        $employee = $this->getLinkedEmployee($request->user());
 
         $existing = Attendance::where('pegawai_id', $employee->id)
             ->whereDate('tanggal', $validated['tanggal'])
@@ -533,7 +537,7 @@ class AttendanceController extends Controller
      */
     public function history(Request $request): JsonResponse
     {
-        $employee = $this->getOrCreateEmployee($request->user());
+        $employee = $this->getLinkedEmployee($request->user());
 
         $query = Attendance::with(['officeLocation', 'employee'])
             ->where('pegawai_id', $employee->id)
@@ -584,7 +588,7 @@ class AttendanceController extends Controller
      */
     public function recap(Request $request): JsonResponse
     {
-        $employee = $this->getOrCreateEmployee($request->user());
+        $employee = $this->getLinkedEmployee($request->user());
 
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $startDate = Carbon::parse($request->input('start_date'))->startOfDay();

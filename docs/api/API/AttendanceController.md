@@ -130,6 +130,14 @@ Tidak memerlukan parameter query khusus.
   }
   ```
 
+- **403 Forbidden (Akun Belum Tertaut SIMPEG)**:
+  ```json
+  {
+    "status": "error",
+    "message": "Akun belum tertaut dengan data pegawai SIMPEG. Hubungi administrator."
+  }
+  ```
+
 ---
 
 ## 2. POST `/api/v1/attendance/clock-in`
@@ -143,8 +151,8 @@ Melakukan presensi masuk pegawai. Apabila waktu scan saat ini telah melebihi bat
 | `latitude` | `numeric` | ✅ | Koordinat latitude perangkat pengguna |
 | `longitude` | `numeric` | ✅ | Koordinat longitude perangkat pengguna |
 | `accuracy` | `numeric` | ✅ | Akurasi GPS dalam meter |
-| `face_score` | `numeric` | ❌ | Nilai kemiripan wajah lokal (opsional) |
-| `foto` / `foto_presensi` | `file` | ❌ | Berkas gambar wajah foto live (jpg/png) |
+| `face_score` | `numeric` | ❌ | Nilai kemiripan wajah (khusus pengujian / testing environment) |
+| `foto` / `foto_presensi` / `face_image` | `file` / `string` | ✅ | Berkas gambar foto wajah live untuk verifikasi biometrik di server |
 | `is_mock_location` | `boolean` | ❌ | Indikator fake GPS / mock provider (default: false) |
 | `device_id` | `string` | ❌ | Identitas perangkat keras / UUID perangkat |
 | `notes` / `catatan` | `string` | ❌ | Catatan opsional dari pegawai (maks 500 karakter) |
@@ -188,6 +196,24 @@ Melakukan presensi masuk pegawai. Apabila waktu scan saat ini telah melebihi bat
   }
 }
 ```
+
+### Response Error
+
+- **401 Unauthorized**:
+  ```json
+  {
+    "status": "error",
+    "message": "Unauthenticated."
+  }
+  ```
+
+- **403 Forbidden (Akun Belum Tertaut SIMPEG)**:
+  ```json
+  {
+    "status": "error",
+    "message": "Akun belum tertaut dengan data pegawai SIMPEG. Hubungi administrator."
+  }
+  ```
 
 ### Response 422 Unprocessable Entity (Verifikasi Biometrik / Radius / Jam)
 
@@ -265,14 +291,31 @@ Melakukan presensi pulang pegawai. Jika pegawai tidak pernah melakukan presensi 
 }
 ```
 
-### Response 422 Unprocessable Entity (Di Luar Jendela Jam Pulang)
+### Response Error
 
-```json
-{
-  "status": "error",
-  "message": "Belum memasuki jendela waktu presensi pulang. Presensi pulang dibuka mulai pukul 15:00:00."
-}
-```
+- **401 Unauthorized**:
+  ```json
+  {
+    "status": "error",
+    "message": "Unauthenticated."
+  }
+  ```
+
+- **403 Forbidden (Akun Belum Tertaut SIMPEG)**:
+  ```json
+  {
+    "status": "error",
+    "message": "Akun belum tertaut dengan data pegawai SIMPEG. Hubungi administrator."
+  }
+  ```
+
+- **422 Unprocessable Entity (Di Luar Jendela Jam Pulang / Cooldown)**:
+  ```json
+  {
+    "status": "error",
+    "message": "Belum memasuki jendela waktu presensi pulang. Presensi pulang dibuka mulai pukul 15:00:00."
+  }
+  ```
 
 ---
 

@@ -12,6 +12,7 @@
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
 | AuthController | Login, register, logout, MFA, verifikasi | [docs/api/IAM/AuthController.md](api/IAM/AuthController.md) |
+| AuthController (Mobile) | Autentikasi mobile staf/dosen, validasi SIMPEG, consent UU PDP & enrollment wajah multi-pose | [docs/api/Auth/AuthController.md](api/Auth/AuthController.md) |
 | UserController | CRUD pengguna, toggle status | [docs/api/IAM/UserController.md](api/IAM/UserController.md) |
 | RoleController | CRUD peran (Role) pengguna | [docs/api/IAM/RoleController.md](api/IAM/RoleController.md) |
 | PermissionController | CRUD hak akses sistem | [docs/api/IAM/PermissionController.md](api/IAM/PermissionController.md) |
@@ -106,6 +107,7 @@
 
 | Controller | Deskripsi | Dokumen |
 |---|---|---|
+| AuthController | Autentikasi mobile staf/dosen, validasi SIMPEG, consent UU PDP, pendaftaran wajah multi-pose & reset biometrik | [docs/api/Auth/AuthController.md](api/Auth/AuthController.md) |
 | MobileMahasiswaController | Gateway API terpadu khusus Aplikasi Mobile Mahasiswa: Beranda (`/home`), Periode Akademik (default periode aktif), Presensi QR Scanner 30 Detik (`/presensi/scan`, `/presensi/sesi-aktif`, `/presensi/rekap`), LMS (`/lms/*`), SIAKAD (`/siakad/profil`, `/jadwal`, `/krs`, `/khs`, `/transkrip`), & SIKEU (`/sikeu/ringkasan`, `/tagihan`, `/pembayaran`, `/beasiswa`, `/dispensasi`) | [docs/api/MOBILE/MobileMahasiswaController.md](api/MOBILE/MobileMahasiswaController.md) |
 | MobileStaffController | Gateway API terpadu Aplikasi Mobile Staf & Dosen (myInU - Staff): Beranda (`/home`), Jadwal Mengajar Terintegrasi SIAKAD (`/jadwal-mengajar`), Unggah Foto Profil (`/avatar`), Input Nilai Mahasiswa OBE/KHS (`/nilai/*`), Bimbingan Akademik DPA & Approval KRS (`/bimbingan-pa/*`), Jurnal Pertemuan Perkuliahan BAP 16 Sesi & Presensi Token Dinamis (`/perkuliahan/*`), serta Agenda Kampus (`/agendas`) | [docs/api/MOBILE/MobileStaffController.md](api/MOBILE/MobileStaffController.md) |
 

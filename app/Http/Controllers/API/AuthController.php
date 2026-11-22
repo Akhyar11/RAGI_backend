@@ -19,6 +19,26 @@ class AuthController extends Controller
     ) {}
 
     /**
+     * Cari pegawai SIMPEG yang benar-benar tertaut dengan akun.
+     * Tidak membuat profil rekaan jika data pegawai belum tersedia.
+     */
+    protected function resolveEmployee($user): ?Pegawai
+    {
+        $relations = ['officeLocation', 'shiftTemplate'];
+        $employee = Pegawai::with($relations)->where('user_id', $user->id)->first();
+
+        if (!$employee && !empty($user->email)) {
+            $employee = Pegawai::with($relations)->where('email', $user->email)->first();
+            if ($employee) {
+                $employee->update(['user_id' => $user->id]);
+                $employee->load($relations);
+            }
+        }
+
+        return $employee;
+    }
+
+    /**
      * Login karyawan untuk Mobile App (Flutter / Android / iOS)
      */
     public function login(Request $request): JsonResponse
@@ -69,41 +89,12 @@ class AuthController extends Controller
             ]);
         }
 
-        // 3. Resolusi Profil Pegawai (SIMPEG)
-        $employee = Pegawai::with(['officeLocation', 'shiftTemplate'])->where('user_id', $user->id)->first();
-
-        // Jika belum tertaut, hubungkan pegawai yang sesuai atau buatkan profil default
+        // 3. Resolusi Profil Pegawai (SIMPEG) dari data nyata.
+        $employee = $this->resolveEmployee($user);
         if (!$employee) {
-            $defaultOffice = \App\Models\OfficeLocation::where('is_active', true)->first();
-            $defaultShift = \App\Models\ShiftTemplate::where('is_active', true)->first();
-            $unitKerja = \App\Models\Simpeg\UnitKerja::first();
-
-            $nip = '19' . date('ymd') . rand(100000, 999999);
-            $nama = match ($user->username) {
-                'admin' => 'Dr. Wasis Utama, M.T.',
-                'dosen' => 'Anisa Rahmawati, M.Kom.',
-                'tendik' => 'Rahmat Hidayat, S.Kom.',
-                'wasis' => 'Dr. Wasis Utama, M.T.',
-                'admin_simpeg' => 'Admin Kepegawaian SIMPEG',
-                default => ($user->name ?: ucfirst($user->username))
-            };
-
-            $employee = Pegawai::create([
-                'user_id' => $user->id,
-                'unit_kerja_id' => $unitKerja?->id,
-                'office_location_id' => $defaultOffice?->id,
-                'shift_template_id' => $defaultShift?->id,
-                'nip' => $nip,
-                'nama_lengkap' => $nama,
-                'jenis_kelamin' => 'L',
-                'jenis_pegawai' => ($user->hasRole('tendik') || str_contains($user->username, 'tendik')) ? 'tendik' : 'dosen',
-                'status_kepegawaian' => 'tetap_yayasan',
-                'status' => 'aktif',
-                'telepon' => $user->phone ?: '081234567890',
-                'alamat' => 'Kampus Terpadu',
-                'is_active' => true,
+            throw ValidationException::withMessages([
+                'login' => ['Akun belum tertaut dengan data pegawai SIMPEG. Hubungi administrator.'],
             ]);
-            $employee->load(['officeLocation', 'shiftTemplate']);
         }
 
         $office = $employee->officeLocation ?? \App\Models\OfficeLocation::where('is_active', true)->first();
@@ -116,7 +107,6 @@ class AuthController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'success' => true,
             'message' => 'Login berhasil',
             'token' => $token,
             'access_token' => $token,
@@ -156,34 +146,14 @@ class AuthController extends Controller
     public function profile(Request $request): JsonResponse
     {
         $user = $request->user();
-        $employee = Pegawai::with(['officeLocation', 'shiftTemplate'])->where('user_id', $user->id)->first();
-
+        $employee = $this->resolveEmployee($user);
         if (!$employee) {
-            $defaultOffice = \App\Models\OfficeLocation::where('is_active', true)->first();
-            $defaultShift = \App\Models\ShiftTemplate::where('is_active', true)->first();
-            $unitKerja = \App\Models\Simpeg\UnitKerja::first();
-
-            $employee = Pegawai::firstOrCreate([
-                'user_id' => $user->id,
-            ], [
-                'unit_kerja_id' => $unitKerja?->id,
-                'office_location_id' => $defaultOffice?->id,
-                'shift_template_id' => $defaultShift?->id,
-                'nip' => '19' . date('ymd') . rand(100000, 999999),
-                'nama_lengkap' => $user->username,
-                'jenis_kelamin' => 'L',
-                'jenis_pegawai' => 'dosen',
-                'status_kepegawaian' => 'tetap_yayasan',
-                'status' => 'aktif',
-                'is_active' => true,
-            ]);
-            $employee->load(['officeLocation', 'shiftTemplate']);
-        }
-
-        $enrolledEmbedding = null;
-        if (!empty($employee->face_embedding)) {
-            $decoded = json_decode($employee->face_embedding, true);
-            $enrolledEmbedding = is_array($decoded) ? $decoded : null;
+            throw new \Illuminate\Http\Exceptions\HttpResponseException(
+                response()->json([
+                    'status' => 'error',
+                    'message' => 'Akun belum tertaut dengan data pegawai SIMPEG. Hubungi administrator.',
+                ], 403)
+            );
         }
 
         $office = $employee->officeLocation ?? \App\Models\OfficeLocation::where('is_active', true)->first();
@@ -191,7 +161,6 @@ class AuthController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'success' => true,
             'data' => [
                 'user' => [
                     'id' => $user->id,
@@ -215,7 +184,6 @@ class AuthController extends Controller
                     'shift' => $shift,
                 ],
                 'has_face_enrolled' => !empty($employee->face_embedding),
-                'face_embedding' => $enrolledEmbedding,
             ],
         ]);
     }
@@ -235,9 +203,11 @@ class AuthController extends Controller
         ]);
 
         return response()->json([
-            'success' => true,
+            'status' => 'success',
             'message' => 'Persetujuan pengumpulan data biometrik (UU PDP) berhasil dicatat.',
-            'consent_pdp_at' => $employee->consent_pdp_at,
+            'data' => [
+                'consent_pdp_at' => $employee->consent_pdp_at,
+            ],
         ]);
     }
 
@@ -246,10 +216,10 @@ class AuthController extends Controller
      */
     public function enrollFace(Request $request): JsonResponse
     {
-        if (!$request->has('photos') && !$request->has('images') && !$request->has('embedding')) {
+        if (!$request->has('photos') && !$request->has('images')) {
             return response()->json([
-                'success' => false,
-                'message' => 'Wajib menyertakan sampel foto (photos) atau data biometrik wajah (embedding).',
+                'status' => 'error',
+                'message' => 'Wajib menyertakan 3 sampel foto wajah (photos) untuk pendaftaran biometrik.',
             ], 422);
         }
 
@@ -257,7 +227,7 @@ class AuthController extends Controller
 
         if (!$employee->consent_pdp_at) {
             return response()->json([
-                'success' => false,
+                'status' => 'error',
                 'message' => 'Wajib menyetujui formulir consent UU PDP sebelum mendaftarkan biometrik wajah.',
             ], 422);
         }
@@ -267,17 +237,17 @@ class AuthController extends Controller
         // Opsi A: Multi-shot foto wajah via microservice Python port 8001
         if ($request->has('photos') || $request->has('images')) {
             $photos = $request->input('photos', $request->input('images'));
-            if (!is_array($photos) || count($photos) < 1) {
+            if (!is_array($photos) || count($photos) < 3) {
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Minimal 1 foto wajah diperlukan untuk pendaftaran biometrik.',
+                    'status' => 'error',
+                    'message' => 'Minimal 3 foto pose wajah diperlukan (tegak, nunduk, mendongak).',
                 ], 422);
             }
 
             $enrollResult = $this->faceService->enrollFromImages($photos);
             if (!$enrollResult['success']) {
                 return response()->json([
-                    'success' => false,
+                    'status' => 'error',
                     'message' => $enrollResult['message'] ?? 'Gagal mengekstraksi wajah di server AI Python.',
                 ], 422);
             }
@@ -294,23 +264,19 @@ class AuthController extends Controller
                 : null;
             if (count($poseEmbeddings) >= 2 && $minPair !== null && $minPair > 0.97) {
                 return response()->json([
-                    'success' => false,
+                    'status' => 'error',
                     'error_code' => 'POSE_NOT_DIVERSE',
                     'message' => 'Foto pendaftaran terlalu mirip (pose tidak bervariasi). Ulangi dengan 3 pose: tegak hadap kamera, nunduk sedikit, dan dongak sedikit.',
                     'pose_diversity' => $poseDiversity,
                 ], 422);
             }
         }
-        // Opsi B: Vektor embedding langsung
-        elseif ($request->has('embedding')) {
-            $embedding = $request->input('embedding');
-            $poseEmbeddings = [];
-            $poseDiversity = [];
-        }
+        // Vektor embedding langsung tidak diterima: semua sampel wajib
+        // diekstrak dan diverifikasi oleh microservice Python.
 
         if (empty($embedding) || !is_array($embedding)) {
             return response()->json([
-                'success' => false,
+                'status' => 'error',
                 'message' => 'Format embedding tidak valid atau gagal diekstrak.',
             ], 422);
         }
@@ -322,7 +288,7 @@ class AuthController extends Controller
         ]);
 
         return response()->json([
-            'success' => true,
+            'status' => 'success',
             'message' => 'Pendaftaran biometrik wajah berhasil disimpan.',
             'data' => [
                 'face_enrolled_at' => $employee->face_enrolled_at,
@@ -346,8 +312,9 @@ class AuthController extends Controller
         ]);
 
         return response()->json([
-            'success' => true,
+            'status' => 'success',
             'message' => 'Data biometrik wajah berhasil direset.',
+            'data' => null,
         ]);
     }
 
@@ -364,8 +331,9 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'success' => true,
+            'status' => 'success',
             'message' => 'Logout berhasil',
+            'data' => null,
         ]);
     }
 }
