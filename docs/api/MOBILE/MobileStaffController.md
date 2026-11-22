@@ -2684,7 +2684,7 @@ Mengambil kode referral unik staf, statistik perolehan calon mahasiswa baru, tau
             "amount": "Total: 5 pendaftar",
             "referral_code": "REF-STAFF123",
             "kode_referral": "REF-STAFF123",
-            "share_url": "http://localhost:8000/spmb/daftar?ref=REF-STAFF123",
+            "share_url": "http://localhost:3000/spmb/daftar?ref=REF-STAFF123",
             "stats": {
                 "total": 5,
                 "claimed": 3,
@@ -2754,8 +2754,8 @@ Membuat atau memperbarui tautan referral eksternal serta muatan QR Code untuk di
     "data": {
         "referral_code": "REF-STAFF123",
         "kode_referral": "REF-STAFF123",
-        "share_url": "http://localhost:8000/spmb/daftar?ref=REF-STAFF123",
-        "qr_payload": "http://localhost:8000/spmb/daftar?ref=REF-STAFF123",
+        "share_url": "http://localhost:3000/spmb/daftar?ref=REF-STAFF123",
+        "qr_payload": "http://localhost:3000/spmb/daftar?ref=REF-STAFF123",
         "stats": {
             "total": 5,
             "claimed": 3,

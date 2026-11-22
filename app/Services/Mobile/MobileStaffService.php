@@ -2048,7 +2048,7 @@ class MobileStaffService
     {
         $code = $user->referral_code;
         $stats = $this->spmbReferralService->statsForUser($user);
-        $shareUrl = url('/spmb/daftar?ref=' . $code);
+        $shareUrl = $this->getSpmbPublicBaseUrl() . '/spmb/daftar?ref=' . $code;
         $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
         $page = max(1, (int) ($request?->input('page') ?? 1));
 
@@ -2105,7 +2105,7 @@ class MobileStaffService
     public function generateSpmbReferral(User $user): array
     {
         $code = $user->referral_code;
-        $shareUrl = url('/spmb/daftar?ref=' . $code);
+        $shareUrl = $this->getSpmbPublicBaseUrl() . '/spmb/daftar?ref=' . $code;
 
         try {
             AuditLogService::record(
@@ -2128,5 +2128,17 @@ class MobileStaffService
             'qr_payload' => $shareUrl,
             'stats' => $this->spmbReferralService->statsForUser($user),
         ];
+    }
+
+    /**
+     * Resolve base URL publik untuk tautan registrasi SPMB dari environment RAG.
+     */
+    protected function getSpmbPublicBaseUrl(): string
+    {
+        $baseUrl = config('spmb.public_url')
+            ?: config('app.frontend_url')
+            ?: config('app.url', 'http://localhost:3000');
+
+        return rtrim((string) $baseUrl, '/');
     }
 }

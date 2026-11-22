@@ -1037,5 +1037,14 @@ class MobileStaffApiTest extends TestCase
                     'stats',
                 ],
             ]);
+
+        $expectedBase = rtrim((string) (config('spmb.public_url') ?: config('app.frontend_url') ?: config('app.url')), '/');
+        $this->assertStringStartsWith($expectedBase . '/spmb/daftar?ref=', $postRes->json('data.share_url'));
+        $this->assertEquals($postRes->json('data.share_url'), $postRes->json('data.qr_payload'));
+
+        // 3. Verifikasi konfigurasi dinamis dari env RAG (FRONTEND_URL / SPMB_PUBLIC_URL)
+        config(['spmb.public_url' => 'https://pmb.poltekindonusa.ac.id']);
+        $customRes = $this->postJson('/api/v1/mobile/staff/spmb/referral');
+        $this->assertStringStartsWith('https://pmb.poltekindonusa.ac.id/spmb/daftar?ref=', $customRes->json('data.share_url'));
     }
 }

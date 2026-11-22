@@ -4,6 +4,8 @@ return [
 
     'timezone' => env('SPMB_TIMEZONE', 'Asia/Jakarta'),
 
+    'public_url' => env('SPMB_PUBLIC_URL', env('FRONTEND_URL')),
+
     /*
     |--------------------------------------------------------------------------
     | SPMB — Pengaturan Referral
