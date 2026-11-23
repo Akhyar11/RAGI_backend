@@ -15,7 +15,8 @@ class UpdateMasterBiayaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'master_tipe_jalur_id' => 'sometimes|required|exists:core_master_tipe_jalur,id',
+            'jalur_masuk_id' => 'sometimes|required|exists:spmb_jalur_masuk,id',
+            'master_tipe_jalur_id' => 'prohibited',
             'program_studi_id' => 'sometimes|required|exists:siakad_program_studi,id',
             'evidence_type' => ['sometimes', 'required', Rule::in(['arsip', 'upload'])],
             'nomor_sk' => 'nullable|prohibited_if:evidence_type,upload|string|max:150',

@@ -4,7 +4,7 @@ namespace Tests\Feature\SPMB;
 
 use App\Models\Arsip\NomorSurat;
 use App\Models\Arsip\RequestNomorSurat;
-use App\Models\MasterTipeJalur;
+use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\MasterKomponenBiaya;
 use App\Models\Spmb\MasterProgramStudi;
 use App\Models\User;
@@ -21,7 +21,7 @@ class MasterBiayaNomorSkTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
-    private MasterTipeJalur $tipeJalur;
+    private JalurMasuk $jalurMasuk;
     private MasterProgramStudi $prodi;
     private MasterKomponenBiaya $komponen;
 
@@ -38,7 +38,7 @@ class MasterBiayaNomorSkTest extends TestCase
         ]);
         Passport::actingAs($this->user);
 
-        $this->tipeJalur = MasterTipeJalur::create([
+        $this->jalurMasuk = JalurMasuk::create([
             'kode' => 'REG',
             'nama' => 'Jalur Reguler',
             'is_active' => true,
@@ -186,7 +186,7 @@ class MasterBiayaNomorSkTest extends TestCase
     public function test_create_master_biaya_with_invalid_sk_rejected(): void
     {
         $payload = [
-            'master_tipe_jalur_id' => $this->tipeJalur->id,
+            'jalur_masuk_id' => $this->jalurMasuk->id,
             'program_studi_id' => $this->prodi->id,
             'nomor_sk' => 'SK-ASAL-ASALAN/999',
             'is_active' => true,
@@ -226,7 +226,7 @@ class MasterBiayaNomorSkTest extends TestCase
         ]);
 
         $payload = [
-            'master_tipe_jalur_id' => $this->tipeJalur->id,
+            'jalur_masuk_id' => $this->jalurMasuk->id,
             'program_studi_id' => $this->prodi->id,
             'nomor_sk' => '15/SK/YAY/X/2026',
             'is_active' => true,
@@ -251,7 +251,7 @@ class MasterBiayaNomorSkTest extends TestCase
             ]);
 
         $this->assertDatabaseHas('spmb_master_biaya', [
-            'master_tipe_jalur_id' => $this->tipeJalur->id,
+            'jalur_masuk_id' => $this->jalurMasuk->id,
             'program_studi_id' => $this->prodi->id,
             'nomor_sk' => '15/SK/YAY/X/2026',
         ]);
@@ -260,8 +260,9 @@ class MasterBiayaNomorSkTest extends TestCase
     public function test_create_master_biaya_without_sk_rejected(): void
     {
         $payload = [
-            'master_tipe_jalur_id' => $this->tipeJalur->id,
+            'jalur_masuk_id' => $this->jalurMasuk->id,
             'program_studi_id' => $this->prodi->id,
+            'evidence_type' => 'arsip',
             'is_active' => true,
             'items' => [
                 [

@@ -5,7 +5,7 @@ namespace App\Models\Spmb;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\MasterTipeJalur;
+use App\Models\Spmb\JalurMasuk;
 
 class MasterBiaya extends Model
 {
@@ -14,7 +14,7 @@ class MasterBiaya extends Model
     protected $table = 'spmb_master_biaya';
 
     protected $fillable = [
-        'master_tipe_jalur_id',
+        'jalur_masuk_id',
         'program_studi_id',
         'nomor_sk',
         'dokumen_pendukung_path',
@@ -47,9 +47,9 @@ class MasterBiaya extends Model
         return $this->hasMany(MasterBiayaItem::class, 'master_biaya_id');
     }
 
-    public function masterTipeJalur()
+    public function jalurMasuk()
     {
-        return $this->belongsTo(MasterTipeJalur::class, 'master_tipe_jalur_id');
+        return $this->belongsTo(JalurMasuk::class, 'jalur_masuk_id');
     }
 
     public function programStudi()

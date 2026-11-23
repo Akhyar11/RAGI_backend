@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\SPMB;
 
-use App\Models\MasterTipeJalur;
 use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\MasterProgramStudi;
@@ -77,7 +76,6 @@ class SpmbFeeSourcePolicyTest extends TestCase
             ->where('id', $wave->id)
             ->update(['biaya_pendaftaran' => 250000]);
 
-        $type = MasterTipeJalur::create(['kode' => 'REG', 'nama' => 'Reguler']);
         $program = MasterProgramStudi::create([
             'kode_prodi' => 'TI01',
             'nama' => 'Teknik Informatika',
@@ -85,14 +83,14 @@ class SpmbFeeSourcePolicyTest extends TestCase
         ]);
 
         try {
-            app(MasterBiayaService::class)->buildDetailBebanPendaftaran($type->id, $program->id, $wave->id);
+            app(MasterBiayaService::class)->buildDetailBebanPendaftaran($jalur->id, $program->id, $wave->id);
             $this->fail('Expected missing Master Biaya registration components to be rejected.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('biaya', $exception->errors());
         }
 
         try {
-            app(MasterBiayaService::class)->buildDetailBebanDaftarUlang($type->id, $program->id);
+            app(MasterBiayaService::class)->buildDetailBebanDaftarUlang($jalur->id, $program->id);
             $this->fail('Expected missing Master Biaya re-enrollment components to be rejected.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('biaya', $exception->errors());

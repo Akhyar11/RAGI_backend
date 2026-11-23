@@ -3,7 +3,6 @@
 namespace Tests\Feature\SPMB;
 
 use App\Models\IamApiIntegration;
-use App\Models\MasterTipeJalur;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Siakad\ProgramStudi;
@@ -26,7 +25,6 @@ class SpmbPendaftaranSyncTest extends TestCase
     protected IamApiIntegration $integration;
     protected ProgramStudi $prodi;
     protected GelombangPenerimaan $gelombang;
-    protected MasterTipeJalur $tipeJalur;
 
     protected function setUp(): void
     {
@@ -118,10 +116,6 @@ class SpmbPendaftaranSyncTest extends TestCase
             ]
         );
 
-        $this->tipeJalur = MasterTipeJalur::firstOrCreate(
-            ['kode' => 'REG'],
-            ['nama' => 'Reguler']
-        );
     }
 
     public function test_unauthorized_user_cannot_sync_external()

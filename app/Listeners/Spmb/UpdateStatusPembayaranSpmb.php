@@ -49,8 +49,6 @@ class UpdateStatusPembayaranSpmb implements ShouldQueue
                 'status' => $newStatus,
             ]);
 
-            // Buat urutan alur pendaftaran (Progress Tracker) untuk mahasiswa ini
-            $this->pendaftaranService->generateProgressAlur($pendaftaran);
         }
     }
 }

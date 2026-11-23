@@ -56,7 +56,6 @@ class SpmbPaymentStatusService
                 foreach ($payments as $payment) {
                     $this->recordAudit($payment->getTable(), (int) $payment->id, $payment->getOriginal(), $paymentChanges);
                 }
-                app(SpmbPendaftaranService::class)->generateProgressAlur($application);
             }
         });
     }

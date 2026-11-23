@@ -204,14 +204,14 @@ class MasterBiayaService
         try {
             $created = DB::transaction(function () use ($data, $evidenceType, $uploadedPath, &$oldPath) {
                 $existing = MasterBiaya::query()
-                    ->where('master_tipe_jalur_id', $data['master_tipe_jalur_id'])
+                    ->where('jalur_masuk_id', $data['jalur_masuk_id'])
                     ->where('program_studi_id', $data['program_studi_id'])
                     ->first();
                 $oldPath = $existing?->dokumen_pendukung_path;
 
                 $masterBiaya = MasterBiaya::updateOrCreate(
                     [
-                        'master_tipe_jalur_id' => $data['master_tipe_jalur_id'],
+                        'jalur_masuk_id' => $data['jalur_masuk_id'],
                         'program_studi_id' => $data['program_studi_id'],
                     ],
                     [
@@ -245,7 +245,7 @@ class MasterBiayaService
 
                 $masterBiaya->update(['total_biaya' => $total]);
 
-                return $masterBiaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat']);
+                return $masterBiaya->load(['items.komponenBiaya', 'programStudi', 'jalurMasuk', 'arsipNomorSurat']);
             });
 
             if ($oldPath && $oldPath !== $uploadedPath) {
@@ -273,7 +273,7 @@ class MasterBiayaService
         try {
             $updated = DB::transaction(function () use ($biaya, $data, $evidenceType, $uploadedPath, &$oldPath) {
                 $changes = [
-                'master_tipe_jalur_id' => $data['master_tipe_jalur_id'] ?? $biaya->master_tipe_jalur_id,
+                'jalur_masuk_id' => $data['jalur_masuk_id'] ?? $biaya->jalur_masuk_id,
                 'program_studi_id' => $data['program_studi_id'] ?? $biaya->program_studi_id,
                 'is_active' => $data['is_active'] ?? $biaya->is_active,
                 'keterangan' => $data['keterangan'] ?? $biaya->keterangan,
@@ -329,7 +329,7 @@ class MasterBiayaService
                 $biaya->recalculateTotal();
             }
 
-                return $biaya->load(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat']);
+                return $biaya->load(['items.komponenBiaya', 'programStudi', 'jalurMasuk', 'arsipNomorSurat']);
             });
 
             if ($oldPath) {
@@ -358,18 +358,18 @@ class MasterBiayaService
 
     /**
      * Ambil komponen biaya berdasarkan tahap beban (pendaftaran / daftar ulang)
-     * untuk tipe jalur masuk + program studi tertentu.
+    * untuk jalur masuk + program studi tertentu.
      *
      * @return Collection<int, MasterBiayaItem>
      */
-    public function getKomponenBeban(?int $masterTipeJalurId, ?int $programStudiId, bool $saatPendaftaran): Collection
+    public function getKomponenBeban(?int $jalurMasukId, ?int $programStudiId, bool $saatPendaftaran): Collection
     {
-        if (! $masterTipeJalurId || ! $programStudiId) {
+        if (! $jalurMasukId || ! $programStudiId) {
             return collect();
         }
 
         $biaya = MasterBiaya::with('items.komponenBiaya')
-            ->where('master_tipe_jalur_id', $masterTipeJalurId)
+            ->where('jalur_masuk_id', $jalurMasukId)
             ->where('program_studi_id', $programStudiId)
             ->where('is_active', true)
             ->first();
@@ -390,9 +390,9 @@ class MasterBiayaService
      *
      * @return array<int, array{master_biaya_kode: string, nominal: float, keterangan: string}>
      */
-    public function buildDetailTagihan(?int $masterTipeJalurId, ?int $programStudiId, bool $saatPendaftaran): array
+    public function buildDetailTagihan(?int $jalurMasukId, ?int $programStudiId, bool $saatPendaftaran): array
     {
-        return $this->getKomponenBeban($masterTipeJalurId, $programStudiId, $saatPendaftaran)
+        return $this->getKomponenBeban($jalurMasukId, $programStudiId, $saatPendaftaran)
             ->map(fn ($item) => [
                 'komponen_biaya_id' => $item->komponen_biaya_id,
                 'payment_gateway_config_id' => $item->komponenBiaya->payment_gateway_config_id,
@@ -406,39 +406,39 @@ class MasterBiayaService
     }
 
     /** Detail biaya pendaftaran hanya dari komponen Master Biaya SPMB. */
-    public function buildDetailBebanPendaftaran(?int $masterTipeJalurId, ?int $programStudiId, ?int $gelombangId = null): array
+    public function buildDetailBebanPendaftaran(?int $jalurMasukId, ?int $programStudiId, ?int $gelombangId = null): array
     {
-        $details = $this->buildDetailTagihan($masterTipeJalurId, $programStudiId, true);
+        $details = $this->buildDetailTagihan($jalurMasukId, $programStudiId, true);
         if (! empty($details)) {
             return $details;
         }
 
         Log::warning('SPMB: Komponen Master Biaya pendaftaran belum dikonfigurasi.', [
-            'master_tipe_jalur_id' => $masterTipeJalurId,
+            'jalur_masuk_id' => $jalurMasukId,
             'program_studi_id' => $programStudiId,
             'gelombang_id' => $gelombangId,
         ]);
 
         throw ValidationException::withMessages([
-            'biaya' => 'Komponen biaya pendaftaran belum dikonfigurasi di Master Biaya SPMB untuk tipe jalur dan program studi ini.',
+            'biaya' => 'Komponen biaya pendaftaran belum dikonfigurasi di Master Biaya SPMB untuk jalur masuk dan program studi ini.',
         ]);
     }
 
     /** Detail biaya daftar ulang hanya dari komponen Master Biaya SPMB. */
-    public function buildDetailBebanDaftarUlang(?int $masterTipeJalurId, ?int $programStudiId): array
+    public function buildDetailBebanDaftarUlang(?int $jalurMasukId, ?int $programStudiId): array
     {
-        $details = $this->buildDetailTagihan($masterTipeJalurId, $programStudiId, false);
+        $details = $this->buildDetailTagihan($jalurMasukId, $programStudiId, false);
         if (! empty($details)) {
             return $details;
         }
 
         Log::warning('SPMB: Komponen Master Biaya daftar ulang belum dikonfigurasi.', [
-            'master_tipe_jalur_id' => $masterTipeJalurId,
+            'jalur_masuk_id' => $jalurMasukId,
             'program_studi_id' => $programStudiId,
         ]);
 
         throw ValidationException::withMessages([
-            'biaya' => 'Komponen biaya daftar ulang belum dikonfigurasi di Master Biaya SPMB untuk tipe jalur dan program studi ini.',
+            'biaya' => 'Komponen biaya daftar ulang belum dikonfigurasi di Master Biaya SPMB untuk jalur masuk dan program studi ini.',
         ]);
     }
 }

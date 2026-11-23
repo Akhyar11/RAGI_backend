@@ -17,7 +17,8 @@ class GetBiayaPendaftaranRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'master_tipe_jalur_id' => 'required|exists:core_master_tipe_jalur,id',
+            'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
+            'master_tipe_jalur_id' => 'prohibited',
             'program_studi_id' => 'required|exists:siakad_program_studi,id',
         ];
     }

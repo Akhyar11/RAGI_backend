@@ -6,7 +6,6 @@ use Illuminate\Database\Seeder;
 use App\Models\Menu;
 use App\Models\Permission;
 use App\Models\Role;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class SpmbMasterBiayaMenuSeeder extends Seeder
@@ -21,20 +20,26 @@ class SpmbMasterBiayaMenuSeeder extends Seeder
             return;
         }
 
-        // 1. Cari parent section "MASTER DATA SPMB"
+        $legacyMenus = Menu::query()
+            ->where('module', 'spmb')
+            ->where('url', '/spmb/master/tipe-jalur')
+            ->get();
+        foreach ($legacyMenus as $legacyMenu) {
+            $legacyMenu->roles()->detach();
+            $legacyMenu->delete();
+        }
+
+        // 1. Cari parent section biaya yang sudah didefinisikan di katalog menu.
         $parent = Menu::where('module', 'spmb')
-            ->where(function ($q) {
-                $q->where('url', '#master_spmb')
-                  ->orWhere('name', 'like', '%MASTER DATA%');
-            })
+            ->where('url', '#master_biaya_referensi')
             ->first();
 
         if (!$parent) {
             // Jika parent belum ada, buat parent section
             $perm = Permission::where('slug', 'spmb.manage')->first();
             $parent = Menu::create([
-                'name' => 'MASTER DATA SPMB',
-                'url' => '#master_spmb',
+                'name' => 'MASTER BIAYA & REFERENSI SPMB',
+                'url' => '#master_biaya_referensi',
                 'icon' => 'FaDatabase',
                 'module' => 'spmb',
                 'permission_id' => $perm ? $perm->id : null,
@@ -46,16 +51,7 @@ class SpmbMasterBiayaMenuSeeder extends Seeder
         $permission = Permission::where('slug', 'spmb.manage')->first();
         $permissionId = $permission ? $permission->id : null;
 
-        // 2. Geser urutan menu Referensi jika ada
-        Menu::where('parent_id', $parent->id)
-            ->where('url', '/spmb/master/referensi')
-            ->update(['order_index' => 8]);
-
-        Menu::where('parent_id', $parent->id)
-            ->where('url', '/spmb/master/tipe-referensi')
-            ->update(['order_index' => 9]);
-
-        // 3. Upsert Menu Master Biaya SPMB
+        // 2. Upsert Menu Master Biaya SPMB sesuai urutan katalog utama.
         $menuBiaya = Menu::updateOrCreate(
             [
                 'parent_id' => $parent->id,
@@ -66,12 +62,12 @@ class SpmbMasterBiayaMenuSeeder extends Seeder
                 'icon' => 'FaCoins',
                 'module' => 'spmb',
                 'permission_id' => $permissionId,
-                'order_index' => 6,
+                'order_index' => 2,
                 'is_active' => true,
             ]
         );
 
-        // 4. Upsert Menu Komponen Biaya
+        // 3. Upsert Menu Komponen Biaya sesuai urutan katalog utama.
         $menuKomponen = Menu::updateOrCreate(
             [
                 'parent_id' => $parent->id,
@@ -82,12 +78,12 @@ class SpmbMasterBiayaMenuSeeder extends Seeder
                 'icon' => 'FaTag',
                 'module' => 'spmb',
                 'permission_id' => $permissionId,
-                'order_index' => 7,
+                'order_index' => 3,
                 'is_active' => true,
             ]
         );
 
-        // 5. Hubungkan ke Role yang berhak (superadmin, admin, admin_spmb)
+        // 4. Hubungkan ke Role yang berhak (superadmin, admin, admin_spmb)
         $newMenuIds = [$menuBiaya->id, $menuKomponen->id];
 
         $targetRoles = Role::whereIn('slug', ['superadmin', 'admin', 'admin_spmb'])->get();

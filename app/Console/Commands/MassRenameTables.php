@@ -65,7 +65,6 @@ class MassRenameTables extends Command
         'tarif_ukt_spmb' => 'spmb_tarif_ukt',
         'berkas_requirement' => 'spmb_berkas_requirement',
         'master_referensi' => 'spmb_master_referensi',
-        'master_tipe_jalur_alur' => 'spmb_master_tipe_jalur_alur',
 
         // SIPPM
         'skema_kegiatan' => 'sippm_skema_kegiatan',
@@ -121,7 +120,6 @@ class MassRenameTables extends Command
         'modules' => 'core_modules',
         'system_settings' => 'core_system_settings',
         'master_biaya_modules' => 'core_master_biaya_modules',
-        'master_tipe_jalur' => 'core_master_tipe_jalur',
         'master_jalur_kelas' => 'core_master_jalur_kelas',
     ];
 

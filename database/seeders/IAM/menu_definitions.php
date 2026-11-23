@@ -578,9 +578,8 @@ return [
         'order_index' => 3,
         'children' => [
             ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 1],
-            ['name' => 'Tipe Jalur Masuk', 'url' => '/spmb/master/tipe-jalur', 'icon' => 'FaTags', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 2],
-            ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 3],
-            ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 4],
+            ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 2],
+            ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'module' => 'spmb', 'permission_slug' => 'spmb.manage', 'order_index' => 3],
         ]
     ],
     [

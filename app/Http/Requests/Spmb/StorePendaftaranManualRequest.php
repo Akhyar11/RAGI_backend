@@ -32,7 +32,8 @@ class StorePendaftaranManualRequest extends FormRequest
         return [
             'email' => ['required', 'email', 'max:255', 'unique:core_users,email'],
             'gelombang_id' => ['required', 'integer', 'exists:spmb_gelombang_penerimaan,id'],
-            'master_tipe_jalur_id' => ['required', 'integer', 'exists:core_master_tipe_jalur,id'],
+            'jalur_masuk_id' => ['required', 'integer', 'exists:spmb_jalur_masuk,id'],
+            'master_tipe_jalur_id' => ['prohibited'],
             'program_studi_id' => [
                 'required',
                 'integer',

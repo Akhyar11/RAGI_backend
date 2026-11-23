@@ -12,8 +12,6 @@ use Illuminate\Support\Facades\DB;
 use App\Events\Spmb\MahasiswaDiterima;
 use Illuminate\Validation\ValidationException;
 
-use App\Models\Spmb\PendaftaranAlur;
-use App\Models\Spmb\MasterTipeJalurAlur;
 use App\Models\Siakad\TahunAkademik;
 use App\Models\Spmb\TemplateSuratSpmb;
 use App\Models\Arsip\RequestNomorSurat;
@@ -130,37 +128,6 @@ class SpmbPendaftaranService
         }
     }
 
-    public function generateProgressAlur(PendaftaranCalonMhs $pendaftaran): void
-    {
-        // Pastikan tidak menduplikasi jika sudah ada
-        if (PendaftaranAlur::where('pendaftaran_id', $pendaftaran->id)->exists()) {
-            return;
-        }
-
-        if (!$pendaftaran->master_tipe_jalur_id) {
-            return;
-        }
-
-        $masterAlurs = MasterTipeJalurAlur::where('master_tipe_jalur_id', $pendaftaran->master_tipe_jalur_id)
-            ->orderBy('urutan', 'asc')
-            ->get();
-
-        $alursData = [];
-        foreach ($masterAlurs as $index => $masterAlur) {
-            $alursData[] = [
-                'pendaftaran_id' => $pendaftaran->id,
-                'master_tipe_jalur_alur_id' => $masterAlur->id,
-                'status' => $index === 0 ? PendaftaranAlur::STATUS_IN_PROGRESS : PendaftaranAlur::STATUS_PENDING,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-        }
-
-        if (!empty($alursData)) {
-            PendaftaranAlur::insert($alursData);
-        }
-    }
-
     /**
      * Menetapkan hasil seleksi kelulusan
      */
@@ -237,6 +204,7 @@ class SpmbPendaftaranService
             if ($existing && ! empty($existing->gelombang_id) && ($hasRegistrationBill || $existing->status !== 'draft')) {
                 $validated['gelombang_id'] = $existing->gelombang_id;
             }
+            unset($validated['jalur_masuk_id']);
 
             // Sanitasi input: jika nik kosong string, jadikan null agar tidak memicu duplikat unique key
             if (array_key_exists('nik', $validated)) {

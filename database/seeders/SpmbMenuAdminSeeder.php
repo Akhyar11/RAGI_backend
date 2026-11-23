@@ -65,9 +65,8 @@ class SpmbMenuAdminSeeder extends Seeder
                 'order_index' => 3,
                 'children' => [
                     ['name' => 'Jalur Masuk', 'url' => '/spmb/master/jalur', 'icon' => 'FaCogs', 'order_index' => 1],
-                    ['name' => 'Tipe Jalur Masuk', 'url' => '/spmb/master/tipe-jalur', 'icon' => 'FaTags', 'order_index' => 2],
-                    ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'order_index' => 3],
-                    ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'order_index' => 4],
+                    ['name' => 'Gelombang Penerimaan', 'url' => '/spmb/master/gelombang', 'icon' => 'FaCalendar', 'order_index' => 2],
+                    ['name' => 'Kuota Program Studi', 'url' => '/spmb/master/kuota', 'icon' => 'FaChartPie', 'order_index' => 3],
                 ],
             ],
             [
@@ -100,6 +99,15 @@ class SpmbMenuAdminSeeder extends Seeder
         ];
 
         $menuIds = [];
+
+        $legacyMenus = Menu::query()
+            ->where('module', 'spmb')
+            ->where('url', '/spmb/master/tipe-jalur')
+            ->get();
+        foreach ($legacyMenus as $legacyMenu) {
+            $legacyMenu->roles()->detach();
+            $legacyMenu->delete();
+        }
 
         foreach ($rootMenus as $root) {
             $menu = Menu::updateOrCreate(

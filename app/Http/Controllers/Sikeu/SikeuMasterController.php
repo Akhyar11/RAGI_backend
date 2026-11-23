@@ -870,14 +870,6 @@ class SikeuMasterController extends Controller
             if (\Illuminate\Support\Facades\Schema::hasColumn('spmb_pendaftaran_calon_mhs', 'kelompok_ukt')) {
                 $updateSpmb['kelompok_ukt'] = $kelompokUkt;
             }
-            if (!empty($jalurKelas)) {
-                $tipeJalur = \App\Models\MasterTipeJalur::where('nama', $jalurKelas)
-                    ->orWhere('kode', strtolower($jalurKelas))
-                    ->first();
-                if ($tipeJalur) {
-                    $updateSpmb['master_tipe_jalur_id'] = $tipeJalur->id;
-                }
-            }
             if (!empty($updateSpmb)) {
                 $pendaftaran->update($updateSpmb);
             }

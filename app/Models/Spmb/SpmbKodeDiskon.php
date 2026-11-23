@@ -4,7 +4,6 @@ namespace App\Models\Spmb;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\MasterTipeJalur;
 use App\Models\Spmb\JalurMasuk;
 
 class SpmbKodeDiskon extends Model
@@ -53,9 +52,4 @@ class SpmbKodeDiskon extends Model
             ->withTimestamps();
     }
 
-    public function jenisPendaftaran()
-    {
-        return $this->belongsToMany(MasterTipeJalur::class, 'spmb_kode_diskon_jenis_pendaftaran', 'kode_diskon_id', 'master_tipe_jalur_id')
-            ->withTimestamps();
-    }
 }

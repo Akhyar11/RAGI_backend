@@ -22,7 +22,6 @@ use App\Http\Controllers\API\Spmb\SpmbKodeDiskonController;
 |*/
 
 // Master Data SPMB
-Route::get('master-tipe-jalur', [MasterSpmbController::class, 'getMasterTipeJalur']);
 Route::get('jalur', [MasterSpmbController::class, 'getJalurMasuk']);
 Route::get('jalur/{id}', [MasterSpmbController::class, 'showJalurMasuk']);
 Route::post('jalur', [MasterSpmbController::class, 'storeJalurMasuk']);

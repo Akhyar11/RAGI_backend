@@ -22,9 +22,10 @@ class StoreBiodataRequest extends FormRequest
 
         return [
             'gelombang_id' => 'sometimes|nullable|exists:spmb_gelombang_penerimaan,id',
+            'jalur_masuk_id' => 'sometimes|nullable|exists:spmb_jalur_masuk,id',
+            'master_tipe_jalur_id' => 'prohibited',
             'program_studi_id' => 'sometimes|nullable|exists:siakad_program_studi,id',
             'program_studi_pilihan2_id' => 'sometimes|nullable|exists:siakad_program_studi,id',
-            'master_tipe_jalur_id' => 'sometimes|nullable|exists:core_master_tipe_jalur,id',
             'nama_lengkap' => 'sometimes|nullable|string|max:255',
             'nik' => [
                 'sometimes', 'nullable', 'string', 'max:20',
@@ -91,6 +92,15 @@ class StoreBiodataRequest extends FormRequest
     public function after(): array
     {
         return [function ($validator): void {
+            if ($this->filled('gelombang_id') && $this->filled('jalur_masuk_id')) {
+                $gelombangJalurId = DB::table('spmb_gelombang_penerimaan')
+                    ->where('id', $this->integer('gelombang_id'))
+                    ->value('jalur_masuk_id');
+                if ((int) $gelombangJalurId !== $this->integer('jalur_masuk_id')) {
+                    $validator->errors()->add('jalur_masuk_id', 'Jalur pendaftaran harus sesuai dengan jalur pada gelombang yang dipilih.');
+                }
+            }
+
             if (!$this->filled('kewarganegaraan_id')) return;
 
             $reference = DB::table('spmb_master_referensi')

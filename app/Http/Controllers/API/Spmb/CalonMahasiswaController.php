@@ -52,7 +52,6 @@ class CalonMahasiswaController extends Controller
             'pembayaranSpmb',
             'hasilSeleksi',
             'dokumenPendaftaran',
-            'progressAlur.masterAlur',
             'referrer:id,username,name,referral_code',
             'kodeDiskonUsage.kodeDiskon',
         ])
@@ -150,7 +149,7 @@ class CalonMahasiswaController extends Controller
             : null;
 
         if ($existingTagihan && $existingPendaftaran) {
-            foreach (['gelombang_id', 'program_studi_id', 'master_tipe_jalur_id'] as $lockedField) {
+            foreach (['gelombang_id', 'program_studi_id'] as $lockedField) {
                 if (array_key_exists($lockedField, $validated)
                     && (int) $validated[$lockedField] !== (int) $existingPendaftaran->{$lockedField}) {
                     throw ValidationException::withMessages([
@@ -247,7 +246,7 @@ class CalonMahasiswaController extends Controller
             }
 
             $details = app(MasterBiayaService::class)->buildDetailBebanPendaftaran(
-                $locked->master_tipe_jalur_id,
+                $locked->gelombangPenerimaan?->jalur_masuk_id,
                 $locked->program_studi_id,
                 $locked->gelombang_id,
             );

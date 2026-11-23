@@ -17,7 +17,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 | POST | `/api/spmb/master/gelombang` | Membuat gelombang penerimaan baru | ✅ Admin / Staff |
 | PUT | `/api/spmb/master/gelombang/{id}` | Memperbarui gelombang penerimaan | ✅ Admin / Staff |
 | DELETE | `/api/spmb/master/gelombang/{id}` | Menghapus gelombang penerimaan | ✅ Admin / Staff |
-| GET | `/api/spmb/biaya-pendaftaran` | Rincian beban awal pendaftaran & daftar ulang per gelombang + prodi | ❌ Publik |
+| GET | `/api/spmb/biaya-pendaftaran` | Rincian beban awal pendaftaran & daftar ulang per jalur masuk + prodi | ❌ Publik |
 | GET | `/api/spmb/master/options` | Mendapatkan seluruh opsi master SPMB secara ringkas | ✅ Admin / Staff |
 
 ---
@@ -520,7 +520,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `master_tipe_jalur_id` | integer | ✅ | — | ID tipe jalur masuk (`core_master_tipe_jalur`) |
+| `jalur_masuk_id` | integer | ✅ | — | ID jalur masuk (`core_jalur_masuk`) |
 | `program_studi_id` | integer | ✅ | — | ID program studi (`siakad_program_studi`) |
 | `search` | string | ❌ | — | Tidak digunakan (endpoint non-paginasi) |
 | `sort_by` | string | ❌ | `created_at` | Tidak digunakan (endpoint non-paginasi) |
@@ -528,7 +528,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 | `per_page` | integer | ❌ | `15` | Tidak digunakan (endpoint non-paginasi) |
 | `page` | integer | ❌ | `1` | Tidak digunakan (endpoint non-paginasi) |
 
-> Catatan: endpoint ini **non-paginasi** (mengembalikan seluruh komponen beban untuk tipe jalur + prodi). Response menyertakan `"meta": null` dan `filters`.
+> Catatan: endpoint ini **non-paginasi** (mengembalikan seluruh komponen beban untuk jalur masuk + prodi). Response menyertakan `"meta": null` dan `filters`.
 
 ### Request Body
 
@@ -557,7 +557,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
         "total_daftar_ulang": 11750000
     },
     "meta": null,
-    "filters": { "master_tipe_jalur_id": 2, "program_studi_id": 7, "search": null, "sort_by": "created_at", "sort_order": "desc" }
+    "filters": { "jalur_masuk_id": 2, "program_studi_id": 7, "search": null, "sort_by": "created_at", "sort_order": "desc" }
 }
 ```
 
@@ -574,7 +574,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 
 **404 Not Found**
 ```json
-{ "status": "error", "message": "No query results for model [App\\Models\\MasterTipeJalur] 99." }
+{ "status": "error", "message": "No query results for model [App\\Models\\Spmb\\JalurMasuk] 99." }
 ```
 
 **422 Unprocessable Entity**
@@ -583,7 +583,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
     "status": "error",
     "message": "Data yang diberikan tidak valid.",
     "errors": {
-        "master_tipe_jalur_id": ["The selected master tipe jalur id is invalid."],
+        "jalur_masuk_id": ["The selected jalur masuk id is invalid."],
         "program_studi_id": ["The selected program studi id is invalid."]
     }
 }

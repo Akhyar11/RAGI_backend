@@ -2,7 +2,6 @@
 
 namespace App\Services\Spmb;
 
-use App\Models\MasterTipeJalur;
 use App\Models\Role;
 use App\Models\Siakad\ProgramStudi;
 use App\Models\Spmb\GelombangPenerimaan;
@@ -185,31 +184,12 @@ class SpmbPendaftaranSyncService
                         throw new InvalidArgumentException("Gelombang penerimaan ('{$labelGelombang}') tidak ditemukan atau tidak ada gelombang aktif.");
                     }
 
-                    // Resolusi Master Tipe Jalur
-                    $tipeJalurId = null;
-                    if (!empty($item['jalur_pendaftaran'])) {
-                        $jalurKey = trim((string) $item['jalur_pendaftaran']);
-                        $matchedTipe = MasterTipeJalur::where('nama', 'like', "%{$jalurKey}%")
-                            ->orWhere('kode', 'like', "%{$jalurKey}%")
-                            ->first();
-                        if ($matchedTipe) {
-                            $tipeJalurId = $matchedTipe->id;
-                        }
-                    }
-
-                    $finalTipeJalurId = $tipeJalurId ?: $existing?->master_tipe_jalur_id;
-                    if (!$finalTipeJalurId) {
-                        $labelJalur = $item['jalur_pendaftaran'] ?? '-';
-                        throw new InvalidArgumentException("Tipe jalur pendaftaran ('{$labelJalur}') tidak valid atau belum terdaftar di master data.");
-                    }
-
                     // 4. Susun Atribut Pendaftaran
                     $attributes = [
                         'user_id'                   => $user->id,
                         'gelombang_id'              => $finalGelombangId,
                         'program_studi_id'          => $finalProdi1Id,
                         'program_studi_pilihan2_id' => $prodi2Id ?: $existing?->program_studi_pilihan2_id,
-                        'master_tipe_jalur_id'      => $finalTipeJalurId,
                         'no_pendaftaran'            => $noPendaftaran ?: ($existing?->no_pendaftaran ?? ('REG-' . date('Ymd') . '-' . rand(1000, 9999))),
                         'nama_lengkap'              => isset($item['nama_lengkap']) ? trim((string) $item['nama_lengkap']) : ($existing?->nama_lengkap ?? '-'),
                         'nik'                       => $nik ?: ($existing?->nik ?? '-'),

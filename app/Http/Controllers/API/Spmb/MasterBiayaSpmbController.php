@@ -185,7 +185,7 @@ class MasterBiayaSpmbController extends Controller
     {
 
 
-        $query = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat']);
+        $query = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'jalurMasuk', 'arsipNomorSurat']);
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -201,8 +201,8 @@ class MasterBiayaSpmbController extends Controller
             $query->where('nomor_sk', 'like', '%' . $request->input('nomor_sk') . '%');
         }
 
-        if ($request->filled('master_tipe_jalur_id')) {
-            $query->where('master_tipe_jalur_id', $request->input('master_tipe_jalur_id'));
+        if ($request->filled('jalur_masuk_id')) {
+            $query->where('jalur_masuk_id', $request->input('jalur_masuk_id'));
         }
 
         if ($request->filled('program_studi_id')) {
@@ -244,7 +244,7 @@ class MasterBiayaSpmbController extends Controller
 
     public function show(Request $request, $id): JsonResponse
     {
-        $biaya = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'masterTipeJalur', 'arsipNomorSurat'])
+        $biaya = MasterBiaya::with(['items.komponenBiaya', 'programStudi', 'jalurMasuk', 'arsipNomorSurat'])
             ->findOrFail($id);
 
         return response()->json([

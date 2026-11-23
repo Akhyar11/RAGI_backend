@@ -44,7 +44,7 @@ class SpmbKonversiService
                     }
                 })->first();
 
-            $jalurKelasNama = $pendaftaran->tipeJalur?->nama ?? $pendaftaran->jalur_masuk ?? 'Reguler';
+            $jalurKelasNama = $pendaftaran->gelombangPenerimaan?->jalurMasuk?->nama ?? $pendaftaran->jalur_masuk ?? 'Reguler';
             $kelompokUkt = $pendaftaran->kelompok_ukt ?? 3;
             $kelas = $this->resolveKelas($pendaftaran);
 

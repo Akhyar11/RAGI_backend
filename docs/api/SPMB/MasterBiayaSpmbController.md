@@ -2,7 +2,7 @@
 
 > **Modul**: SPMB / **Base URL**: `/api/spmb/master` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-10-01
 
-Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `master_tipe_jalur_id` + `program_studi_id`). Scoping memakai **Tipe Jalur Masuk** (`core_master_tipe_jalur`), bukan gelombang, sehingga satu konfigurasi biaya berlaku untuk semua gelombang pada tipe jalur tersebut. Setiap item biaya memiliki dua penanda:
+Mengelola **Master Komponen Biaya** dan **Master Biaya SPMB** (per pasangan `jalur_masuk_id` + `program_studi_id`). Scoping memakai **Jalur Masuk** (`core_jalur_masuk`), bukan gelombang, sehingga satu konfigurasi biaya berlaku untuk semua gelombang pada jalur tersebut. Setiap item biaya memiliki dua penanda:
 - `dibebankan_saat_pendaftaran`: `true` → menjadi **beban awal** pada form pendaftaran online; `false` → dibebankan saat **daftar ulang**.
 - `berlaku_diskon`: `true` → komponen ini **berhak atas diskon/potongan**; `false` → tidak.
 
@@ -55,7 +55,7 @@ Pada master komponen biaya terdapat penanda `is_default_master_biaya`: bila `tru
 {
     "status": "error",
     "message": "Data yang diberikan tidak valid.",
-    "errors": { "master_tipe_jalur_id": ["The master tipe jalur id field is required."] }
+    "errors": { "jalur_masuk_id": ["The jalur masuk id field is required."] }
 }
 ```
 
@@ -283,7 +283,7 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 |---|---|---|---|---|
 | `search` | string | ❌ | — | Cari nama / kode prodi / nomor SK |
 | `nomor_sk` | string | ❌ | — | Filter nomor SK |
-| `master_tipe_jalur_id` | integer | ❌ | — | Filter tipe jalur masuk (`core_master_tipe_jalur`) |
+| `jalur_masuk_id` | integer | ❌ | — | Filter jalur masuk (`core_jalur_masuk`) |
 | `program_studi_id` | integer | ❌ | — | Filter program studi |
 | `is_active` | boolean | ❌ | — | Filter status aktif |
 | `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `total_biaya`, `nomor_sk`, `id` |
@@ -301,13 +301,13 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
     "data": [
         {
             "id": 1,
-            "master_tipe_jalur_id": 2,
+            "jalur_masuk_id": 2,
             "program_studi_id": 7,
             "nomor_sk": "15/SK/YAY/X/2026",
             "total_biaya": "12000000.00",
             "is_active": true,
             "keterangan": null,
-            "master_tipe_jalur": { "id": 2, "kode": "REGULER", "nama": "Reguler" },
+            "jalur_masuk": { "id": 2, "kode": "REGULER", "nama": "Reguler" },
             "program_studi": { "id": 7, "nama": "Teknik Informatika", "kode_prodi": "TI01", "jenjang": "S1" },
             "arsip_nomor_surat": {
                 "id": 5,
@@ -341,7 +341,7 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
     "message": "Detail master biaya berhasil dimuat.",
     "data": {
         "id": 1,
-        "master_tipe_jalur_id": 2,
+        "jalur_masuk_id": 2,
         "program_studi_id": 7,
         "nomor_sk": "15/SK/YAY/X/2026",
         "total_biaya": "12000000.00",
@@ -368,13 +368,13 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 
 ## [POST] /api/spmb/master/biaya
 
-> Idempoten untuk pasangan `(master_tipe_jalur_id, program_studi_id)`.
+> Idempoten untuk pasangan `(jalur_masuk_id, program_studi_id)`.
 
 ### Request Body
 
 ```json
 {
-    "master_tipe_jalur_id": 2,
+    "jalur_masuk_id": 2,
     "program_studi_id": 7,
     "nomor_sk": "15/SK/YAY/X/2026 (string, required, wajib terdaftar di core_arsip_nomor_surat, tidak dibatalkan, dan dokumen fisik SK sudah terunggah)",
     "is_active": true,
@@ -396,12 +396,12 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
     "message": "Master biaya program studi berhasil disimpan.",
     "data": {
         "id": 1,
-        "master_tipe_jalur_id": 2,
+        "jalur_masuk_id": 2,
         "program_studi_id": 7,
         "total_biaya": 12000000,
         "is_active": true,
         "items": [],
-        "master_tipe_jalur": { "id": 2, "kode": "REGULER", "nama": "Reguler" },
+        "jalur_masuk": { "id": 2, "kode": "REGULER", "nama": "Reguler" },
         "program_studi": { "id": 7, "nama": "Teknik Informatika" }
     }
 }
@@ -428,7 +428,7 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 
 ```json
 {
-    "master_tipe_jalur_id": 2,
+    "jalur_masuk_id": 2,
     "program_studi_id": 7,
     "is_active": true,
     "keterangan": "Diperbarui",
@@ -481,8 +481,8 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 
 ### Catatan Tambahan
 
-> - Scoping biaya memakai **Tipe Jalur Masuk** (`core_master_tipe_jalur`), bukan gelombang. Satu konfigurasi berlaku lintas gelombang pada tipe jalur yang sama.
-> - Menghapus tipe jalur akan membuat `master_tipe_jalur_id` pada konfigurasi biaya menjadi `NULL` (null on delete); data biaya tidak ikut terhapus.
+> - Scoping biaya memakai **Jalur Masuk** (`core_jalur_masuk`), bukan gelombang. Satu konfigurasi berlaku lintas gelombang pada jalur yang sama.
+> - Jalur masuk yang dipakai konfigurasi biaya harus tetap tersedia; hapus atau nonaktifkan master hanya setelah memeriksa konfigurasi biaya terkait.
 > - Komponen bernilai `0` **tidak dihitung** sebagai komponen beban pada tagihan pendaftaran/daftar ulang.
 > - `berlaku_diskon` menyimpan penanda apakah komponen berhak atas diskon/potongan; default `false`.
 > - Password/token tidak pernah dikembalikan pada response.

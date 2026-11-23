@@ -20,14 +20,12 @@ class SpmbKodeDiskonService
     {
         $discountCode = DB::transaction(function () use ($data): SpmbKodeDiskon {
             $jalurIds = $data['jalur_masuk_ids'] ?? [];
-            $typeIds = $data['master_tipe_jalur_ids'] ?? [];
-            unset($data['jalur_masuk_ids'], $data['master_tipe_jalur_ids']);
+            unset($data['jalur_masuk_ids']);
 
             $discountCode = SpmbKodeDiskon::create($data);
             $discountCode->jalurMasuk()->sync($jalurIds);
-            $discountCode->jenisPendaftaran()->sync($typeIds);
 
-            return $discountCode->load(['jalurMasuk:id,kode,nama', 'jenisPendaftaran:id,kode,nama']);
+            return $discountCode->load(['jalurMasuk:id,kode,nama']);
         });
 
         try {
@@ -38,7 +36,6 @@ class SpmbKodeDiskonService
                 recordId: $discountCode->id,
                 newValues: array_merge($discountCode->getAttributes(), [
                     'jalur_masuk_ids' => $discountCode->jalurMasuk->pluck('id')->all(),
-                    'master_tipe_jalur_ids' => $discountCode->jenisPendaftaran->pluck('id')->all(),
                 ]),
             );
         } catch (\Throwable $exception) {
@@ -52,34 +49,24 @@ class SpmbKodeDiskonService
     {
         $updated = DB::transaction(function () use ($kodeDiskon, $data): array {
             $jalurIds = $data['jalur_masuk_ids'] ?? null;
-            $typeIds = $data['master_tipe_jalur_ids'] ?? null;
-            unset($data['jalur_masuk_ids'], $data['master_tipe_jalur_ids']);
+            unset($data['jalur_masuk_ids']);
             $oldValues = $kodeDiskon->getOriginal();
             $oldJalurIds = $kodeDiskon->jalurMasuk()->pluck('jalur_masuk_id')->all();
-            $oldTypeIds = $kodeDiskon->jenisPendaftaran()->pluck('master_tipe_jalur_id')->all();
             $kodeDiskon->update($data);
 
             if ($jalurIds !== null) {
                 $kodeDiskon->jalurMasuk()->sync($jalurIds);
             }
-            if ($typeIds !== null) {
-                $kodeDiskon->jenisPendaftaran()->sync($typeIds);
-            }
-
             $newValues = $kodeDiskon->getChanges();
             if ($jalurIds !== null) {
                 $newValues['jalur_masuk_ids'] = array_values($jalurIds);
             }
-            if ($typeIds !== null) {
-                $newValues['master_tipe_jalur_ids'] = array_values($typeIds);
-            }
             if ($newValues !== []) {
                 $oldValues['jalur_masuk_ids'] = $oldJalurIds;
-                $oldValues['master_tipe_jalur_ids'] = $oldTypeIds;
             }
 
             return [
-                $kodeDiskon->fresh()->load(['jalurMasuk:id,kode,nama', 'jenisPendaftaran:id,kode,nama']),
+                $kodeDiskon->fresh()->load(['jalurMasuk:id,kode,nama']),
                 $oldValues,
                 $newValues,
             ];
@@ -88,7 +75,6 @@ class SpmbKodeDiskonService
         [$updatedCode, $oldValues, $newValues] = $updated;
         if ($newValues !== []) {
             $newValues['jalur_masuk_ids'] ??= $updatedCode->jalurMasuk->pluck('id')->all();
-            $newValues['master_tipe_jalur_ids'] ??= $updatedCode->jenisPendaftaran->pluck('id')->all();
             try {
                 AuditLogService::record(
                     module: 'SPMB',
@@ -119,7 +105,7 @@ class SpmbKodeDiskonService
      */
     public function preview(
         string $kode,
-        int $masterTipeJalurId,
+        int $jalurMasukId,
         int $programStudiId,
         int $gelombangId,
         ?PendaftaranCalonMhs $pendaftaran = null,
@@ -158,9 +144,9 @@ class SpmbKodeDiskonService
         }
 
         $this->assertCodeIsUsable($discountCode);
-        $this->assertScopeMatches($discountCode, $masterTipeJalurId, $gelombangId);
+        $this->assertScopeMatches($discountCode, $jalurMasukId, $gelombangId);
 
-        $details = $this->registrationDetails($masterTipeJalurId, $programStudiId);
+        $details = $this->registrationDetails($jalurMasukId, $programStudiId);
         $otherDiscount = $pendaftaran
             ? app(SpmbPotonganCalonService::class)->buildPotonganPayload($pendaftaran, 'pendaftaran', $details)
             : [];
@@ -240,7 +226,7 @@ class SpmbKodeDiskonService
             $this->assertCodeIsUsable($discountCode);
             $this->assertScopeMatches(
                 $discountCode,
-                (int) $lockedApplication->master_tipe_jalur_id,
+                (int) $lockedApplication->gelombangPenerimaan?->jalur_masuk_id,
                 (int) $lockedApplication->gelombang_id,
             );
             $eligibleDetails = array_values(array_filter(
@@ -310,9 +296,9 @@ class SpmbKodeDiskonService
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function registrationDetails(int $masterTipeJalurId, int $programStudiId): array
+    private function registrationDetails(int $jalurMasukId, int $programStudiId): array
     {
-        $details = $this->masterBiayaService->buildDetailTagihan($masterTipeJalurId, $programStudiId, true);
+        $details = $this->masterBiayaService->buildDetailTagihan($jalurMasukId, $programStudiId, true);
         $eligible = array_values(array_filter(
             $details,
             static fn (array $item): bool => ! empty($item['komponen_biaya_id']) && (float) ($item['nominal'] ?? 0) > 0,
@@ -340,20 +326,19 @@ class SpmbKodeDiskonService
         }
     }
 
-    private function assertScopeMatches(SpmbKodeDiskon $discountCode, int $masterTipeJalurId, int $gelombangId): void
+    private function assertScopeMatches(SpmbKodeDiskon $discountCode, int $jalurMasukId, int $gelombangId): void
     {
-        $jalurMasukId = (int) \App\Models\Spmb\GelombangPenerimaan::query()
+        $waveJalurMasukId = (int) \App\Models\Spmb\GelombangPenerimaan::query()
             ->whereKey($gelombangId)
             ->value('jalur_masuk_id');
 
-        if ($discountCode->jalurMasuk()->exists()
-            && ! $discountCode->jalurMasuk()->whereKey($jalurMasukId)->exists()) {
-            $this->invalid('Kode diskon tidak berlaku untuk jalur masuk yang dipilih.');
+        if ($waveJalurMasukId !== $jalurMasukId) {
+            $this->invalid('Jalur pendaftaran tidak sesuai dengan gelombang yang dipilih.');
         }
 
-        if ($discountCode->jenisPendaftaran()->exists()
-            && ! $discountCode->jenisPendaftaran()->whereKey($masterTipeJalurId)->exists()) {
-            $this->invalid('Kode diskon tidak berlaku untuk jenis pendaftaran yang dipilih.');
+        if ($discountCode->jalurMasuk()->exists()
+            && ! $discountCode->jalurMasuk()->whereKey($waveJalurMasukId)->exists()) {
+            $this->invalid('Kode diskon tidak berlaku untuk jalur masuk yang dipilih.');
         }
     }
 

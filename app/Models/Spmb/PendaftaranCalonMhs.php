@@ -41,7 +41,6 @@ class PendaftaranCalonMhs extends Model
         'user_id',
         'program_studi_id',
         'program_studi_pilihan2_id',
-        'master_tipe_jalur_id',
         'info_daftar',
         'ket_info_daftar',
         'used_referral_code',
@@ -201,16 +200,6 @@ class PendaftaranCalonMhs extends Model
         return $this->belongsTo(User::class, 'diverifikasi_oleh');
     }
 
-    public function tipeJalur()
-    {
-        return $this->belongsTo(\App\Models\MasterTipeJalur::class, 'master_tipe_jalur_id');
-    }
-
-    public function tipe_jalur()
-    {
-        return $this->tipeJalur();
-    }
-
     public function dokumenPendaftaran()
     {
         return $this->hasMany(DokumenPendaftaran::class, 'pendaftaran_id');
@@ -246,8 +235,4 @@ class PendaftaranCalonMhs extends Model
         return $this->hasOne(HasilSeleksi::class, 'pendaftaran_id');
     }
 
-    public function progressAlur()
-    {
-        return $this->hasMany(PendaftaranAlur::class, 'pendaftaran_id');
-    }
 }

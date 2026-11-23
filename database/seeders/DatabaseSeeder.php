@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             \Database\Seeders\IAM\MenuApprovalTahapSeeder::class,
             \Database\Seeders\SpmbMenuCalonMahasiswaSeeder::class,
             \Database\Seeders\SpmbMenuAdminSeeder::class,
+            \Database\Seeders\SPMB\JalurMasukSeeder::class,
             \Database\Seeders\IAM\AdminUserSeeder::class,
             \Database\Seeders\IAM\SuperAdminSeeder::class,
             \Database\Seeders\IAM\SystemSettingSeeder::class,

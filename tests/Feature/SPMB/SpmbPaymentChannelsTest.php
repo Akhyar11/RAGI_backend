@@ -4,7 +4,6 @@ namespace Tests\Feature\SPMB;
 
 use App\Events\Spmb\MahasiswaDiterima;
 use App\Models\CoreNotification;
-use App\Models\MasterTipeJalur;
 use App\Models\Menu;
 use App\Models\Permission;
 use App\Models\Role;
@@ -94,26 +93,23 @@ class SpmbPaymentChannelsTest extends TestCase
             ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.is_active', false);
     }
 
-    public function test_discount_code_crud_persists_relational_path_and_registration_type_scopes(): void
+    public function test_discount_code_crud_persists_relational_path_scope(): void
     {
         $this->grant('spmb.manage');
         $path = JalurMasuk::create(['kode' => fake()->unique()->lexify('J????'), 'nama' => fake()->sentence(2)]);
-        $type = MasterTipeJalur::create(['kode' => fake()->unique()->lexify('T????'), 'nama' => fake()->sentence(2)]);
         $payload = [
             'kode' => 'SCOPE17000', 'nama' => 'Target biaya terbatas', 'tipe_diskon' => 'total_tetap',
             'nilai' => 17000, 'maksimum_potongan' => null, 'batas_penggunaan' => 5,
             'berlaku_mulai' => null, 'berlaku_sampai' => null, 'is_active' => true,
-            'jalur_masuk_ids' => [$path->id], 'master_tipe_jalur_ids' => [$type->id],
+            'jalur_masuk_ids' => [$path->id],
         ];
 
         $created = $this->postJson('/api/spmb/master/kode-diskon', $payload)
             ->assertCreated()
             ->assertJsonPath('data.tipe_diskon', 'total_tetap')
-            ->assertJsonPath('data.jalur_masuk.0.id', $path->id)
-            ->assertJsonPath('data.jenis_pendaftaran.0.id', $type->id);
+            ->assertJsonPath('data.jalur_masuk.0.id', $path->id);
         $couponId = $created->json('data.id');
         $this->assertDatabaseHas('spmb_kode_diskon_jalur_masuk', ['kode_diskon_id' => $couponId, 'jalur_masuk_id' => $path->id]);
-        $this->assertDatabaseHas('spmb_kode_diskon_jenis_pendaftaran', ['kode_diskon_id' => $couponId, 'master_tipe_jalur_id' => $type->id]);
         $this->assertDatabaseHas('core_audit_logs', [
             'module' => 'SPMB',
             'action' => 'create',
@@ -123,10 +119,12 @@ class SpmbPaymentChannelsTest extends TestCase
 
         $this->putJson('/api/spmb/master/kode-diskon/'.$couponId, array_merge($payload, [
             'jalur_masuk_ids' => [],
-            'master_tipe_jalur_ids' => [],
-        ]))->assertOk()->assertJsonPath('data.jalur_masuk', [])->assertJsonPath('data.jenis_pendaftaran', []);
+        ]))->assertOk()->assertJsonPath('data.jalur_masuk', []);
         $this->assertDatabaseMissing('spmb_kode_diskon_jalur_masuk', ['kode_diskon_id' => $couponId]);
-        $this->assertDatabaseMissing('spmb_kode_diskon_jenis_pendaftaran', ['kode_diskon_id' => $couponId]);
+        $this->postJson('/api/spmb/master/kode-diskon', array_merge($payload, [
+            'kode' => 'LEGACY_SCOPE',
+            'master_tipe_jalur_ids' => [1],
+        ]))->assertUnprocessable()->assertJsonValidationErrors('master_tipe_jalur_ids');
         $this->assertDatabaseHas('core_audit_logs', [
             'module' => 'SPMB',
             'action' => 'update',
@@ -187,7 +185,6 @@ class SpmbPaymentChannelsTest extends TestCase
     {
         $this->midtrans->update(['is_active' => false]);
         $this->xendit->update(['is_active' => false]);
-        $type = MasterTipeJalur::create(['kode' => fake()->unique()->lexify('T????'), 'nama' => fake()->sentence(2)]);
         $component = MasterKomponenBiaya::create([
             'kode' => fake()->unique()->lexify('C????'),
             'nama' => 'Biaya pendaftaran',
@@ -195,7 +192,7 @@ class SpmbPaymentChannelsTest extends TestCase
             'is_active' => true,
         ]);
         $master = MasterBiaya::create([
-            'master_tipe_jalur_id' => $type->id,
+            'jalur_masuk_id' => $this->application->gelombangPenerimaan->jalur_masuk_id,
             'program_studi_id' => $this->application->program_studi_id,
             'is_active' => true,
         ]);
@@ -206,7 +203,6 @@ class SpmbPaymentChannelsTest extends TestCase
             'dibebankan_saat_pendaftaran' => true,
             'berlaku_diskon' => false,
         ]);
-        $this->application->update(['master_tipe_jalur_id' => $type->id]);
         $role = Role::create(['slug' => fake()->unique()->slug(), 'name' => fake()->sentence(2), 'is_active' => true]);
         $this->owner->roles()->attach($role->id);
         $this->owner->unsetRelation('roles');
@@ -464,9 +460,8 @@ class SpmbPaymentChannelsTest extends TestCase
     public function test_real_registration_and_reenrollment_issuance_include_every_channel(): void
     {
         $this->grant('spmb.pendaftaran.create');
-        $type = MasterTipeJalur::create(['kode' => fake()->unique()->lexify('T????'), 'nama' => fake()->sentence(2)]);
-        $this->application->update(['master_tipe_jalur_id' => $type->id]);
-        $master = MasterBiaya::create(['master_tipe_jalur_id' => $type->id, 'program_studi_id' => $this->application->program_studi_id, 'is_active' => true]);
+        $jalurMasukId = $this->application->gelombangPenerimaan->jalur_masuk_id;
+        $master = MasterBiaya::create(['jalur_masuk_id' => $jalurMasukId, 'program_studi_id' => $this->application->program_studi_id, 'is_active' => true]);
         foreach ([$this->midtrans, $this->xendit] as $gateway) {
             $component = MasterKomponenBiaya::create(['kode' => fake()->unique()->lexify('F?????'), 'nama' => fake()->sentence(2), 'payment_gateway_config_id' => $gateway->id]);
             $master->items()->create(['komponen_biaya_id' => $component->id, 'nominal' => 100000, 'dibebankan_saat_pendaftaran' => true]);
@@ -493,13 +488,12 @@ class SpmbPaymentChannelsTest extends TestCase
 
     public function test_biodata_autosave_keeps_coupon_as_draft_without_claiming_quota_then_invoice_applies_fixed_total(): void
     {
-        $type = MasterTipeJalur::create(['kode' => fake()->unique()->lexify('T????'), 'nama' => fake()->sentence(2)]);
         $component = MasterKomponenBiaya::create([
             'kode' => fake()->unique()->lexify('C????'), 'nama' => 'Biaya pendaftaran',
             'kategori' => 'pendaftaran', 'is_active' => true,
         ]);
         $master = MasterBiaya::create([
-            'master_tipe_jalur_id' => $type->id,
+            'jalur_masuk_id' => $this->application->gelombangPenerimaan->jalur_masuk_id,
             'program_studi_id' => $this->application->program_studi_id,
             'is_active' => true,
         ]);
@@ -507,7 +501,6 @@ class SpmbPaymentChannelsTest extends TestCase
             'master_biaya_id' => $master->id, 'komponen_biaya_id' => $component->id,
             'nominal' => 250000, 'dibebankan_saat_pendaftaran' => true, 'berlaku_diskon' => false,
         ]);
-        $this->application->update(['master_tipe_jalur_id' => $type->id]);
         $coupon = SpmbKodeDiskon::create([
             'kode' => 'TARGET17000', 'nama' => 'Biaya pendaftaran tetap', 'tipe_diskon' => 'total_tetap',
             'nilai' => 17000, 'maksimum_potongan' => null, 'batas_penggunaan' => 1, 'is_active' => true,
@@ -546,24 +539,19 @@ class SpmbPaymentChannelsTest extends TestCase
         $this->assertDatabaseCount('sikeu_tagihan_mahasiswa', 1);
     }
 
-    public function test_code_scope_is_enforced_for_path_and_registration_type(): void
+    public function test_code_scope_is_enforced_for_path_and_matches_selected_wave(): void
     {
-        $type = MasterTipeJalur::create(['kode' => fake()->unique()->lexify('T????'), 'nama' => fake()->sentence(2)]);
-        $otherType = MasterTipeJalur::create(['kode' => fake()->unique()->lexify('T????'), 'nama' => fake()->sentence(2)]);
-        $path = JalurMasuk::create(['kode' => fake()->unique()->lexify('J????'), 'nama' => fake()->sentence(2)]);
+        $path = $this->application->gelombangPenerimaan->jalurMasuk;
         $otherPath = JalurMasuk::create(['kode' => fake()->unique()->lexify('J????'), 'nama' => fake()->sentence(2)]);
-        $this->application->gelombangPenerimaan()->update(['jalur_masuk_id' => $path->id]);
-        $this->application->update(['master_tipe_jalur_id' => $type->id]);
         $coupon = SpmbKodeDiskon::create([
             'kode' => 'SCOPED', 'nama' => 'Kode terbatas', 'tipe_diskon' => 'nominal',
             'nilai' => 1000, 'is_active' => true,
         ]);
         $coupon->jalurMasuk()->attach($otherPath->id);
-        $coupon->jenisPendaftaran()->attach($otherType->id);
 
         $this->grant('spmb.pendaftaran.create');
         $this->postJson('/api/spmb/kode-diskon/validate', [
-            'kode' => 'SCOPED', 'master_tipe_jalur_id' => $type->id,
+            'kode' => 'SCOPED', 'jalur_masuk_id' => $path->id,
             'program_studi_id' => $this->application->program_studi_id,
             'gelombang_id' => $this->application->gelombang_id,
         ])->assertUnprocessable()->assertJsonValidationErrors('kode_diskon');
@@ -571,7 +559,7 @@ class SpmbPaymentChannelsTest extends TestCase
 
         $coupon->jalurMasuk()->sync([$path->id]);
         $this->postJson('/api/spmb/kode-diskon/validate', [
-            'kode' => 'SCOPED', 'master_tipe_jalur_id' => $type->id,
+            'kode' => 'SCOPED', 'jalur_masuk_id' => $otherPath->id,
             'program_studi_id' => $this->application->program_studi_id,
             'gelombang_id' => $this->application->gelombang_id,
         ])->assertUnprocessable()->assertJsonValidationErrors('kode_diskon');
@@ -580,19 +568,17 @@ class SpmbPaymentChannelsTest extends TestCase
 
     public function test_fixed_total_discount_does_not_increase_a_lower_fee(): void
     {
-        $type = MasterTipeJalur::create(['kode' => fake()->unique()->lexify('T????'), 'nama' => fake()->sentence(2)]);
         $component = MasterKomponenBiaya::create([
             'kode' => fake()->unique()->lexify('C????'), 'nama' => 'Biaya pendaftaran',
             'kategori' => 'pendaftaran', 'is_active' => true,
         ]);
         $master = MasterBiaya::create([
-            'master_tipe_jalur_id' => $type->id, 'program_studi_id' => $this->application->program_studi_id, 'is_active' => true,
+            'jalur_masuk_id' => $this->application->gelombangPenerimaan->jalur_masuk_id, 'program_studi_id' => $this->application->program_studi_id, 'is_active' => true,
         ]);
         MasterBiayaItem::create([
             'master_biaya_id' => $master->id, 'komponen_biaya_id' => $component->id,
             'nominal' => 12000, 'dibebankan_saat_pendaftaran' => true, 'berlaku_diskon' => false,
         ]);
-        $this->application->update(['master_tipe_jalur_id' => $type->id]);
         SpmbKodeDiskon::create([
             'kode' => 'TARGET17000', 'nama' => 'Target biaya pendaftaran', 'tipe_diskon' => 'total_tetap',
             'nilai' => 17000, 'is_active' => true,
@@ -610,19 +596,17 @@ class SpmbPaymentChannelsTest extends TestCase
 
     public function test_invoice_validation_failure_rolls_back_the_coupon_claim(): void
     {
-        $type = MasterTipeJalur::create(['kode' => fake()->unique()->lexify('T????'), 'nama' => fake()->sentence(2)]);
         $component = MasterKomponenBiaya::create([
             'kode' => fake()->unique()->lexify('C????'), 'nama' => 'Biaya pendaftaran',
             'kategori' => 'pendaftaran', 'is_active' => true, 'payment_gateway_config_id' => $this->midtrans->id,
         ]);
         $master = MasterBiaya::create([
-            'master_tipe_jalur_id' => $type->id, 'program_studi_id' => $this->application->program_studi_id, 'is_active' => true,
+            'jalur_masuk_id' => $this->application->gelombangPenerimaan->jalur_masuk_id, 'program_studi_id' => $this->application->program_studi_id, 'is_active' => true,
         ]);
         MasterBiayaItem::create([
             'master_biaya_id' => $master->id, 'komponen_biaya_id' => $component->id,
             'nominal' => 250000, 'dibebankan_saat_pendaftaran' => true, 'berlaku_diskon' => false,
         ]);
-        $this->application->update(['master_tipe_jalur_id' => $type->id]);
         $coupon = SpmbKodeDiskon::create([
             'kode' => 'ROLLBACK', 'nama' => 'Rollback invoice', 'tipe_diskon' => 'nominal',
             'nilai' => 10000, 'batas_penggunaan' => 1, 'is_active' => true,
@@ -642,26 +626,31 @@ class SpmbPaymentChannelsTest extends TestCase
 
     public function test_biodata_cannot_change_coupon_or_pricing_scope_after_invoice(): void
     {
-        $type = MasterTipeJalur::create(['kode' => fake()->unique()->lexify('T????'), 'nama' => fake()->sentence(2)]);
-        $otherType = MasterTipeJalur::create(['kode' => fake()->unique()->lexify('T????'), 'nama' => fake()->sentence(2)]);
         $component = MasterKomponenBiaya::create([
             'kode' => fake()->unique()->lexify('C????'), 'nama' => 'Biaya pendaftaran',
             'kategori' => 'pendaftaran', 'is_active' => true,
         ]);
         $master = MasterBiaya::create([
-            'master_tipe_jalur_id' => $type->id, 'program_studi_id' => $this->application->program_studi_id, 'is_active' => true,
+            'jalur_masuk_id' => $this->application->gelombangPenerimaan->jalur_masuk_id, 'program_studi_id' => $this->application->program_studi_id, 'is_active' => true,
         ]);
         MasterBiayaItem::create([
             'master_biaya_id' => $master->id, 'komponen_biaya_id' => $component->id,
             'nominal' => 250000, 'dibebankan_saat_pendaftaran' => true, 'berlaku_diskon' => false,
         ]);
-        $this->application->update(['master_tipe_jalur_id' => $type->id]);
         $this->postJson('/api/spmb/pendaftaran/biodata', ['kode_diskon' => ''])->assertOk();
         $this->postJson('/api/spmb/pendaftaran/terbitkan-tagihan')->assertCreated();
 
+        $otherJalur = JalurMasuk::create(['kode' => fake()->unique()->lexify('J????'), 'nama' => fake()->sentence(2)]);
+        $otherWave = GelombangPenerimaan::create([
+            'jalur_masuk_id' => $otherJalur->id,
+            'nama' => fake()->sentence(2),
+            'tanggal_buka' => '01-01',
+            'tanggal_tutup' => '12-31',
+            'status' => 'aktif',
+        ]);
         $this->postJson('/api/spmb/pendaftaran/biodata', [
-            'master_tipe_jalur_id' => $otherType->id,
-        ])->assertUnprocessable()->assertJsonValidationErrors('master_tipe_jalur_id');
+            'gelombang_id' => $otherWave->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors('gelombang_id');
         $this->postJson('/api/spmb/pendaftaran/biodata', [
             'kode_diskon' => 'LATE_COUPON',
         ])->assertUnprocessable()->assertJsonValidationErrors('kode_diskon');

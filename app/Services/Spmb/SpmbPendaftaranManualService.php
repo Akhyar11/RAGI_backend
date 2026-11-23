@@ -44,6 +44,12 @@ class SpmbPendaftaranManualService
                         'gelombang_id' => 'Pendaftaran manual hanya dapat menggunakan gelombang berstatus aktif.',
                     ]);
                 }
+                if ((int) $gelombang->jalur_masuk_id !== (int) $data['jalur_masuk_id']) {
+                    throw ValidationException::withMessages([
+                        'jalur_masuk_id' => 'Jalur pendaftaran harus sesuai dengan jalur pada gelombang yang dipilih.',
+                    ]);
+                }
+                unset($data['jalur_masuk_id']);
 
                 $calonRole = Role::where('slug', 'calon_mhs')->first();
                 if (! $calonRole) {

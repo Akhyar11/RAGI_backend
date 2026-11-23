@@ -3,7 +3,6 @@
 namespace Tests\Feature\SPMB;
 
 use App\Models\Arsip\NomorSurat;
-use App\Models\MasterTipeJalur;
 use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\MasterKomponenBiaya;
@@ -41,12 +40,6 @@ class PotonganCalonNomorSkTest extends TestCase
             'email' => 'admin_spmb_potongan@kampus.ac.id',
         ]);
         Passport::actingAs($this->user);
-
-        $tipeJalur = MasterTipeJalur::create([
-            'kode' => 'REG',
-            'nama' => 'Jalur Reguler',
-            'is_active' => true,
-        ]);
 
         $jalur = JalurMasuk::create([
             'kode' => 'REG-01',

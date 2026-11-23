@@ -18,7 +18,6 @@ class CheckMenuAccess
         'GET /spmb/jalur',
         'GET /spmb/gelombang',
         'GET /spmb/tahun-akademik',
-        'GET /spmb/master-tipe-jalur',
         'GET /spmb/master-jalur-kelas',
         'GET /spmb/tarif',
         'GET /spmb/sekolah-mitra',

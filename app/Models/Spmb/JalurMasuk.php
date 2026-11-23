@@ -16,8 +16,8 @@ class JalurMasuk extends Model
         'kode',
         'nama',
         'deskripsi',
-        'ada_wawancara',
         'is_active',
+        'ada_wawancara',
     ];
 
     protected $casts = [
@@ -29,4 +29,5 @@ class JalurMasuk extends Model
     {
         return $this->hasMany(GelombangPenerimaan::class, 'jalur_masuk_id');
     }
+
 }

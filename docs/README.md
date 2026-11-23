@@ -43,8 +43,8 @@
 |---|---|---|
 | MasterSpmbController | Master referensi SPMB (Tahun Akademik, Jalur, Gelombang, Opsi, Rincian Beban Pendaftaran) | [docs/api/SPMB/MasterSpmbController.md](api/SPMB/MasterSpmbController.md) |
 | SpmbKuotaProdiController | Manajemen kuota penerimaan calon mahasiswa baru per program studi | [docs/api/SPMB/SpmbKuotaProdiController.md](api/SPMB/SpmbKuotaProdiController.md) |
-| MasterBiayaSpmbController | Master biaya SPMB per gelombang & program studi | [docs/api/SPMB/MasterBiayaSpmbController.md](api/SPMB/MasterBiayaSpmbController.md) |
-| SpmbKodeDiskonController | CRUD kode diskon dengan scope jalur/jenis, target total biaya, dan preview kupon pendaftaran | [docs/api/SPMB/SpmbKodeDiskonController.md](api/SPMB/SpmbKodeDiskonController.md) |
+| MasterBiayaSpmbController | Master biaya SPMB per jalur masuk & program studi | [docs/api/SPMB/MasterBiayaSpmbController.md](api/SPMB/MasterBiayaSpmbController.md) |
+| SpmbKodeDiskonController | CRUD kode diskon dengan scope jalur masuk, target total biaya, dan preview kupon pendaftaran | [docs/api/SPMB/SpmbKodeDiskonController.md](api/SPMB/SpmbKodeDiskonController.md) |
 | TarifUktSpmbController (DIHAPUS) | Pengganti: MasterBiayaSpmbController (beban pendaftaran/daftar ulang) | [docs/api/SPMB/TarifUktSpmbController.md](api/SPMB/TarifUktSpmbController.md) |
 | CalonMahasiswaController | Draft biodata, penerbitan invoice/klaim diskon transaksional, berkas dan status pembayaran calon | [docs/api/SPMB/CalonMahasiswaController.md](api/SPMB/CalonMahasiswaController.md) |
 | PendaftaranController | Data pendaftar admin SPMB: daftar, detail (termasuk ringkasan pembayaran daftar ulang), verifikasi berkas & status, sinkronisasi API eksternal | [docs/api/SPMB/PendaftaranController.md](api/SPMB/PendaftaranController.md) |

@@ -494,7 +494,6 @@ Route::prefix('spmb')->group(function () {
     Route::get('tahun-akademik', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getTahunAkademik']);
     Route::get('tarif', [App\Http\Controllers\Sikeu\SikeuMasterController::class, 'getTarifSpmb']);
     Route::get('biaya-pendaftaran', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getBiayaPendaftaran']);
-    Route::get('master-tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getMasterTipeJalur']);
     Route::get('referensi/{tipe}', [App\Http\Controllers\System\MasterReferensiController::class, 'getByTipe']);
     Route::get('berkas-requirement', [\App\Http\Controllers\API\Spmb\BerkasRequirementController::class, 'index']);
     Route::get('master/berkas-requirement', [\App\Http\Controllers\API\Spmb\BerkasRequirementController::class, 'index']);
@@ -530,9 +529,6 @@ Route::middleware(['auth:api', 'can:spmb.manage'])->prefix('spmb')->group(functi
 
 Route::middleware('auth:api')->prefix('spmb')->group(function () {
     Route::apiResource('master/berkas-requirement', \App\Http\Controllers\API\Spmb\BerkasRequirementController::class)->except(['index']);
-    Route::post('master-tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'storeMasterTipeJalur']);
-    Route::put('master-tipe-jalur/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'updateMasterTipeJalur']);
-    Route::delete('master-tipe-jalur/{id}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'destroyMasterTipeJalur']);
 });
 
 /*
@@ -759,7 +755,6 @@ Route::middleware(['auth:api', \App\Http\Middleware\CheckMenuAccess::class])->pr
 
     // Master Jalur Kelas & Tipe Mahasiswa (Referensi SPMB)
     Route::get('master/referensi/{tipe}', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getReferensi']);
-    Route::get('master/tipe-jalur', [App\Http\Controllers\API\Spmb\MasterSpmbController::class, 'getMasterTipeJalur']);
 
 
     // Master Biaya Pendidikan (sebelumnya Jenis Biaya)

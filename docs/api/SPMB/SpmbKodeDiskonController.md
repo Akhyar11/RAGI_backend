@@ -51,7 +51,7 @@ Mengambil daftar kode diskon terpaginasikan. Permission: spmb.manage.
 | per_page | integer | 15 | Jumlah data per halaman, antara 1–100 |
 | page | integer | 1 | Nomor halaman |
 
-List/detail menyertakan relasi `jalur_masuk[]` dan `jenis_pendaftaran[]`. Scope disimpan dengan ID master; relasi kosong berarti semua jalur/jenis.
+List/detail menyertakan relasi `jalur_masuk[]`. Scope disimpan berdasarkan ID jalur masuk; daftar kosong berarti kode diskon berlaku untuk semua jalur masuk.
 
 ### Response Sukses
 
@@ -119,7 +119,6 @@ Membuat kode diskon. Permission: spmb.manage.
 | nilai | numeric | Ya | Lebih besar dari 0; persentase maksimal 100 |
 | maksimum_potongan | numeric/null | Tidak | Batas potongan `persen`/`nominal`; harus null untuk `total_tetap` |
 | jalur_masuk_ids | integer[] | Tidak | ID jalur masuk. Kosong berarti semua jalur. |
-| master_tipe_jalur_ids | integer[] | Tidak | ID jenis pendaftaran. Kosong berarti semua jenis. |
 | batas_penggunaan | integer/null | Tidak | Kuota total klaim; jika 10, maksimal 10 pendaftaran pertama |
 | berlaku_mulai | date/null | Tidak | Format YYYY-MM-DD |
 | berlaku_sampai | date/null | Tidak | Format YYYY-MM-DD, sama dengan atau setelah tanggal mulai |
@@ -135,7 +134,6 @@ Membuat kode diskon. Permission: spmb.manage.
   "nilai": 17000,
   "maksimum_potongan": null,
   "jalur_masuk_ids": [1],
-  "master_tipe_jalur_ids": [2],
   "batas_penggunaan": 10,
   "berlaku_mulai": "2026-11-01",
   "berlaku_sampai": "2026-12-31",
@@ -270,7 +268,7 @@ Menonaktifkan kode dengan soft delete. Catatan klaim tetap tersedia untuk audit.
 
 ## POST /api/spmb/kode-diskon/validate
 
-Mempratinjau kode diskon untuk pendaftaran milik pengguna yang sedang login. Permission: `spmb.pendaftaran.create`. Preview tidak mengklaim kuota. Scope jalur diperiksa dari jalur yang terkait dengan `gelombang_id`; scope jenis dicocokkan dengan `master_tipe_jalur_id`.
+Mempratinjau kode diskon untuk pendaftaran milik pengguna yang sedang login. Permission: `spmb.pendaftaran.create`. Preview tidak mengklaim kuota. `jalur_masuk_id` diverifikasi terhadap jalur masuk yang terkait dengan `gelombang_id` dan digunakan untuk memeriksa scope kode diskon.
 
 ### Headers
 
@@ -285,7 +283,7 @@ Mempratinjau kode diskon untuk pendaftaran milik pengguna yang sedang login. Per
 | Parameter | Tipe | Wajib | Aturan |
 |---|---|---|---|
 | `kode` | string | Ya | Kode diskon, dinormalisasi menjadi huruf kapital |
-| `master_tipe_jalur_id` | integer | Ya | ID jenis pendaftaran dari master |
+| `jalur_masuk_id` | integer | Ya | ID jalur masuk yang dipilih untuk pendaftaran |
 | `program_studi_id` | integer | Ya | ID program studi |
 | `gelombang_id` | integer | Ya | ID gelombang; jalur diverifikasi server dari gelombang ini |
 
@@ -294,7 +292,7 @@ Mempratinjau kode diskon untuk pendaftaran milik pengguna yang sedang login. Per
 ```json
 {
   "kode": "SPMBHEMAT",
-  "master_tipe_jalur_id": 2,
+  "jalur_masuk_id": 2,
   "program_studi_id": 1,
   "gelombang_id": 1
 }

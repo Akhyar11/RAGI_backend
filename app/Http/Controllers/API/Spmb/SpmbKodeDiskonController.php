@@ -21,7 +21,7 @@ class SpmbKodeDiskonController extends Controller
         abort_unless($request->user()?->hasPermission('spmb.manage'), 403, 'Akses ditolak.');
 
         $query = SpmbKodeDiskon::query()->withCount('penggunaan')
-            ->with(['jalurMasuk:id,kode,nama', 'jenisPendaftaran:id,kode,nama']);
+            ->with(['jalurMasuk:id,kode,nama']);
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -131,7 +131,7 @@ class SpmbKodeDiskonController extends Controller
         abort_unless($request->user()?->hasPermission('spmb.manage'), 403, 'Akses ditolak.');
 
         $discountCode = SpmbKodeDiskon::withCount('penggunaan')
-            ->with(['jalurMasuk:id,kode,nama', 'jenisPendaftaran:id,kode,nama'])
+            ->with(['jalurMasuk:id,kode,nama'])
             ->findOrFail($id);
 
         return response()->json([
@@ -177,7 +177,7 @@ class SpmbKodeDiskonController extends Controller
 
         $preview = $this->service->preview(
             $request->validated('kode'),
-            (int) $request->validated('master_tipe_jalur_id'),
+            (int) $request->validated('jalur_masuk_id'),
             (int) $request->validated('program_studi_id'),
             (int) $request->validated('gelombang_id'),
             $pendaftaran,
