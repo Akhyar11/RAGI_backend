@@ -822,10 +822,10 @@ class NeoFeederSyncService
                         &$details
                     ) {
                         $idDosen = $item['id_dosen'] ?? $item['id_feeder'] ?? null;
-                        $nidn = !empty($item['nidn']) ? trim($item['nidn']) : null;
-                        $nuptk = !empty($item['nuptk']) ? trim($item['nuptk']) : null;
+                        $nidn = $this->normalizeDosenIdentifier($item['nidn'] ?? null);
+                        $nuptk = $this->normalizeDosenIdentifier($item['nuptk'] ?? null);
                         $namaDosen = $item['nama_dosen'] ?? 'Dosen Feeder';
-                        $nipDikti = !empty($item['nip']) ? trim($item['nip']) : null;
+                        $nipDikti = $this->normalizeDosenIdentifier($item['nip'] ?? null);
 
                         // Parse gender: normalisasi 'L'/'P', jangan dipaksa default 'L'
                         $rawJk = !empty($item['jenis_kelamin']) ? strtoupper(trim($item['jenis_kelamin'])) : null;
@@ -910,15 +910,13 @@ class NeoFeederSyncService
                             throw new \Exception("Record dosen tidak memiliki id_dosen");
                         }
 
-                        // Match by NIDN first, then NUPTK; the Feeder ID only keeps identifier-less rows idempotent.
-                        $dosenLokal = null;
-                        if (!$dosenLokal && !empty($nidn)) {
-                            $dosenLokal = Dosen::withTrashed()->where('nidn', $nidn)->first();
-                        }
-                        if (!$dosenLokal && !empty($nuptk)) {
-                            $dosenLokal = Dosen::withTrashed()->where('nuptk', $nuptk)->first();
-                        }
-                        if (!$dosenLokal && empty($nidn) && empty($nuptk) && !empty($idDosen)) {
+                        // Match padded and canonical values; conflicting legacy rows must not create another record.
+                        $dosenLokal = $this->findUniqueRecordByNormalizedIdentifiers(
+                            Dosen::class,
+                            ['nidn' => $nidn, 'nuptk' => $nuptk, 'nip' => $nipDikti],
+                            'dosen'
+                        );
+                        if (!$dosenLokal && empty($nidn) && empty($nuptk) && empty($nipDikti) && !empty($idDosen)) {
                             $dosenLokal = Dosen::withTrashed()->where('id_feeder', $idDosen)->first();
                         }
 
@@ -989,8 +987,9 @@ class NeoFeederSyncService
                             'nama_lengkap' => $namaDosenFinal,
                             'gelar_depan' => $gelarDepanFinal,
                             'gelar_belakang' => $gelarBelakangFinal,
-                            'nidn' => $nidn ?: ($dosenLokal?->nidn ?? null),
-                            'nuptk' => $nuptk ?: ($dosenLokal?->nuptk ?? null),
+                            'nidn' => $nidn ?: $this->normalizeDosenIdentifier($dosenLokal?->nidn),
+                            'nuptk' => $nuptk ?: $this->normalizeDosenIdentifier($dosenLokal?->nuptk),
+                            'nip' => $this->normalizeDosenIdentifier($dosenLokal?->nip) ?? $nipDikti,
                             'tanggal_lahir' => $tanggalLahirFinal,
                             'agama' => $agamaFinal,
                             'status_aktif' => $statusAktif,
@@ -1027,10 +1026,7 @@ class NeoFeederSyncService
                         }
 
                         if ($dosenLokal) {
-                            // Update data dosen lokal (pertahankan NIP lokal jika sudah ada)
-                            if (empty($dosenLokal->nip) && !empty($nipDikti)) {
-                                $dataToSave['nip'] = $nipDikti;
-                            }
+                            // Pertahankan NIP lokal jika tersedia, dalam format kanonis.
                             $dosenLokal->update($dataToSave);
                         } else {
                             // Buat data dosen baru di database lokal
@@ -1038,25 +1034,31 @@ class NeoFeederSyncService
                             $dosenLokal = Dosen::create($dataToSave);
                         }
 
+                        $nipFinal = $this->normalizeDosenIdentifier($dosenLokal->nip) ?? $nipDikti;
+
                         // Sinkronisasi otomatis ke Modul SIMPEG (simpeg_pegawai)
                         $invalidPlaceholders = ['-', '--', '0', 'N/A', 'none', '', ' '];
                         $nipFinal = (!empty($dosenLokal->nip) && !in_array(trim($dosenLokal->nip), $invalidPlaceholders, true)) ? trim($dosenLokal->nip) : (!empty($nipDikti) && !in_array(trim($nipDikti), $invalidPlaceholders, true) ? trim($nipDikti) : null);
                         $nikFinal = (!empty($dosenLokal->nik) && !in_array(trim($dosenLokal->nik), $invalidPlaceholders, true)) ? trim($dosenLokal->nik) : (!empty($nik) && !in_array(trim($nik), $invalidPlaceholders, true) ? trim($nik) : null);
 
-                        // Pencocokan bertingkat Pegawai SIMPEG: pegawai_id -> nidn -> nuptk -> nip -> nik (+ withTrashed()->restore())
-                        $pegawai = null;
+                        // Keep the linked employee when it agrees with identifier matches; reject split identity records.
+                        $pegawaiLinked = null;
                         if (!empty($dosenLokal->pegawai_id)) {
-                            $pegawai = Pegawai::withTrashed()->find($dosenLokal->pegawai_id);
+                            $pegawaiLinked = Pegawai::withTrashed()->find($dosenLokal->pegawai_id);
                         }
-                        if (!$pegawai && !empty($nidn)) {
-                            $pegawai = Pegawai::withTrashed()->where('nidn', $nidn)->first();
+                        $pegawaiByIdentifier = $this->findUniqueRecordByNormalizedIdentifiers(
+                            Pegawai::class,
+                            [
+                                'nidn' => $nidn ?: $this->normalizeDosenIdentifier($dosenLokal->nidn),
+                                'nuptk' => $nuptk ?: $this->normalizeDosenIdentifier($dosenLokal->nuptk),
+                                'nip' => $nipFinal,
+                            ],
+                            'pegawai'
+                        );
+                        if ($pegawaiLinked && $pegawaiByIdentifier && $pegawaiLinked->id !== $pegawaiByIdentifier->id) {
+                            throw new \RuntimeException('Konflik identitas dosen: record SIAKAD terhubung ke pegawai yang berbeda dari hasil pencocokan NIDN/NUPTK/NIP.');
                         }
-                        if (!$pegawai && !empty($nuptk)) {
-                            $pegawai = Pegawai::withTrashed()->where('nuptk', $nuptk)->first();
-                        }
-                        if (!$pegawai && $nipFinal) {
-                            $pegawai = Pegawai::withTrashed()->where('nip', $nipFinal)->first();
-                        }
+                        $pegawai = $pegawaiLinked ?? $pegawaiByIdentifier;
                         if (!$pegawai && $nikFinal) {
                             $pegawai = Pegawai::withTrashed()->where('nik', $nikFinal)->first();
                         }
@@ -1111,9 +1113,9 @@ class NeoFeederSyncService
                             'is_active' => $isActive,
                         ];
                         if ($finalPegawaiGender) $pegawaiData['jenis_kelamin'] = $finalPegawaiGender;
-                        if ($nipFinal) $pegawaiData['nip'] = $nipFinal;
-                        $pegawaiData['nidn'] = $nidn ?: ($pegawai?->nidn ?? null);
-                        $pegawaiData['nuptk'] = $nuptk ?: ($pegawai?->nuptk ?? null);
+                        $pegawaiData['nidn'] = $nidn ?: $this->normalizeDosenIdentifier($pegawai?->nidn);
+                        $pegawaiData['nuptk'] = $nuptk ?: $this->normalizeDosenIdentifier($pegawai?->nuptk);
+                        $pegawaiData['nip'] = $nipFinal ?: $this->normalizeDosenIdentifier($pegawai?->nip);
                         if ($nikFinal) $pegawaiData['nik'] = $nikFinal;
                         if ($tanggalLahirFinal) $pegawaiData['tanggal_lahir'] = $tanggalLahirFinal;
                         if (!empty($tempatLahirFinal)) $pegawaiData['tempat_lahir'] = $tempatLahirFinal;
@@ -1312,6 +1314,47 @@ class NeoFeederSyncService
             ]);
             return $log;
         }
+    }
+
+    private function normalizeDosenIdentifier(?string $value): ?string
+    {
+        return app(PegawaiService::class)->normalizeIdentifier($value);
+    }
+
+    private function findUniqueRecordByNormalizedIdentifiers(string $modelClass, array $identifiers, string $entity)
+    {
+        foreach ($identifiers as $field => $identifier) {
+            if ($identifier === null) {
+                continue;
+            }
+
+            $query = $modelClass::withTrashed()->where(function ($query) use ($field, $identifier) {
+                $query->where($field, $identifier);
+                if (ctype_digit($identifier)) {
+                    $identifierLength = strlen($identifier);
+                    $query->orWhere(function ($query) use ($field, $identifier, $identifierLength) {
+                        $query->whereRaw('LENGTH(' . $field . ') >= ?', [$identifierLength])
+                            ->whereRaw('SUBSTR(' . $field . ', -' . $identifierLength . ') = ?', [$identifier]);
+                    });
+                }
+            });
+
+            $matches = [];
+            foreach ($query->get() as $record) {
+                if ($this->normalizeDosenIdentifier($record->{$field}) === $identifier) {
+                    $matches[$record->getKey()] = $record;
+                }
+            }
+
+            if (count($matches) > 1) {
+                throw new \RuntimeException('Konflik identitas ' . $entity . ': ' . strtoupper($field) . ' yang sama setelah normalisasi ditemukan pada beberapa record lokal. Sinkronisasi record ini dibatalkan agar tidak membuat duplikasi.');
+            }
+            if ($matches !== []) {
+                return reset($matches);
+            }
+        }
+
+        return null;
     }
 
     private function fetchDosenHomebaseMap(array $dosenIds): array

@@ -392,6 +392,17 @@ class PegawaiService
         return $trimmed;
     }
 
+    public function normalizeIdentifier(?string $value): ?string
+    {
+        $value = $this->sanitizeIdentifier($value);
+        if ($value === null || !ctype_digit($value)) {
+            return $value;
+        }
+
+        $normalized = ltrim($value, '0');
+        return $normalized === '' ? null : $normalized;
+    }
+
     /**
      * Menentukan username berdasarkan skala prioritas: NIDN -> NUPTK -> NIP.
      * Jika memiliki ketiganya, gunakan NIDN. Jika hanya NUPTK dan NIP, gunakan NUPTK.
@@ -399,17 +410,17 @@ class PegawaiService
      */
     public function resolveUsernamePriority(?string $nidn, ?string $nuptk, ?string $nip, ?string $nama = null): string
     {
-        $cleanNidn = $this->sanitizeIdentifier($nidn);
+        $cleanNidn = $this->normalizeIdentifier($nidn);
         if ($cleanNidn !== null) {
             return $cleanNidn;
         }
 
-        $cleanNuptk = $this->sanitizeIdentifier($nuptk);
+        $cleanNuptk = $this->normalizeIdentifier($nuptk);
         if ($cleanNuptk !== null) {
             return $cleanNuptk;
         }
 
-        $cleanNip = $this->sanitizeIdentifier($nip);
+        $cleanNip = $this->normalizeIdentifier($nip);
         if ($cleanNip !== null) {
             return $cleanNip;
         }
@@ -451,12 +462,12 @@ class PegawaiService
         }
 
         // 2. Tentukan username berdasarkan skala prioritas: NIDN -> NUPTK -> NIP -> cleanName
-        $username = $options['username'] ?? $this->resolveUsernamePriority(
+        $username = $this->normalizeIdentifier($options['username'] ?? $this->resolveUsernamePriority(
             $pegawai->nidn,
             $pegawai->nuptk,
             $pegawai->nip,
             $pegawai->nama_lengkap
-        );
+        ));
 
         // 3. Tentukan email
         $email = $options['email'] ?? $this->resolveEmail(
@@ -466,7 +477,24 @@ class PegawaiService
         );
 
         // 4. Cari akun user yang cocok secara ketat (HANYA via username, DILARANG membajak akun lain via email rekaan)
-        $user = User::where('username', $username)->first();
+        $userQuery = User::query()->where('username', $username);
+        if (ctype_digit($username)) {
+            $usernameLength = strlen($username);
+            $userQuery->orWhere(function ($query) use ($username, $usernameLength) {
+                $query->whereRaw('LENGTH(username) >= ?', [$usernameLength])
+                    ->whereRaw('SUBSTR(username, -' . $usernameLength . ') = ?', [$username]);
+            });
+        }
+        $matchingUsers = $userQuery->get()
+            ->filter(fn (User $candidate) => $this->normalizeIdentifier($candidate->username) === $username)
+            ->values();
+
+        if ($matchingUsers->count() > 1) {
+            throw ValidationException::withMessages([
+                'username' => ['Ditemukan lebih dari satu akun dengan identifier dosen yang sama setelah normalisasi. Periksa data akun sebelum sinkronisasi.'],
+            ]);
+        }
+        $user = $matchingUsers->first();
 
         // Jika user dengan username ini ditemukan, pastikan akun tersebut belum diklaim oleh pegawai lain
         if ($user) {
@@ -474,12 +502,9 @@ class PegawaiService
                 ->where('id', '!=', $pegawai->id)
                 ->exists();
             if ($isClaimedByOther) {
-                // Username sudah digunakan oleh pegawai lain; jangan bajak, buat username baru unik
-                $user = null;
-                $baseUsername = $username;
-                while (User::where('username', $username)->exists()) {
-                    $username = $baseUsername . '_' . rand(10, 99);
-                }
+                throw ValidationException::withMessages([
+                    'username' => ['Akun dengan identifier dosen ini sudah terhubung ke pegawai lain. Periksa kemungkinan data duplikat sebelum sinkronisasi.'],
+                ]);
             }
         }
 
