@@ -469,9 +469,18 @@ class PegawaiService
             $pegawai->nama_lengkap
         );
 
-        // 1. Cek jika user sudah ada dan terhubung
-        if (!empty($pegawai->user_id)) {
-            $existingUser = User::find($pegawai->user_id);
+        // SIAKAD may already hold the SSO link while SIMPEG has not been linked yet.
+        $dosenRecord = $pegawai->dosen()->withTrashed()->first();
+        if ($pegawai->user_id && $dosenRecord?->user_id && $pegawai->user_id !== $dosenRecord->user_id) {
+            throw ValidationException::withMessages([
+                'username' => ['Data SIMPEG dan SIAKAD tertaut ke akun SSO berbeda; sinkronisasi dibatalkan untuk pemeriksaan manual.'],
+            ]);
+        }
+        $linkedUserId = $pegawai->user_id ?: $dosenRecord?->user_id;
+
+        // 1. Cek user yang sudah terhubung dari SIMPEG atau SIAKAD
+        if (!empty($linkedUserId)) {
+            $existingUser = User::find($linkedUserId);
             if ($existingUser) {
                 if ($existingUser->username !== $username) {
                     $conflictingUsers = $this->findUsersByNormalizedUsername($username, $existingUser->id);
@@ -480,10 +489,23 @@ class PegawaiService
                             'username' => ['Identifier SSO PDDIKTI sudah dipakai akun lain; sinkronisasi dibatalkan agar username tetap persis.'],
                         ]);
                     }
-                    $existingUser->update(['username' => $username]);
+                }
+
+                $userUpdates = [];
+                if ($existingUser->username !== $username) {
+                    $userUpdates['username'] = $username;
                 }
                 if (!empty($pegawai->nama_lengkap) && (empty($existingUser->name) || $existingUser->name !== $pegawai->nama_lengkap)) {
-                    $existingUser->update(['name' => $pegawai->nama_lengkap]);
+                    $userUpdates['name'] = $pegawai->nama_lengkap;
+                }
+                if ($userUpdates !== []) {
+                    $existingUser->update($userUpdates);
+                }
+                if ($pegawai->user_id !== $existingUser->id) {
+                    $pegawai->update(['user_id' => $existingUser->id]);
+                }
+                if ($dosenRecord && $dosenRecord->user_id !== $existingUser->id) {
+                    $dosenRecord->update(['user_id' => $existingUser->id]);
                 }
                 $this->assignRolesToUser($existingUser, $pegawai, $options['role_ids'] ?? []);
                 return $existingUser;
@@ -512,7 +534,11 @@ class PegawaiService
             $isClaimedByOther = Pegawai::where('user_id', $user->id)
                 ->where('id', '!=', $pegawai->id)
                 ->exists();
-            if ($isClaimedByOther) {
+            $isLinkedToAnotherDosen = \App\Models\Siakad\Dosen::query()
+                ->where('user_id', $user->id)
+                ->where('id', '!=', $dosenRecord?->id ?? 0)
+                ->exists();
+            if ($isClaimedByOther || $isLinkedToAnotherDosen) {
                 throw ValidationException::withMessages([
                     'username' => ['Akun dengan identifier dosen ini sudah terhubung ke pegawai lain. Periksa kemungkinan data duplikat sebelum sinkronisasi.'],
                 ]);

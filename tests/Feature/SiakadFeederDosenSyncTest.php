@@ -586,8 +586,8 @@ class SiakadFeederDosenSyncTest extends TestCase
 
         $pegawai->refresh();
         $this->assertFalse($pegawai->trashed());
-        $this->assertEquals(1, Dosen::where('nidn', '677889900')->count());
-        $this->assertEquals(1, \App\Models\Simpeg\Pegawai::where('nidn', '677889900')->count());
+        $this->assertEquals(1, Dosen::where('nidn', '0677889900')->count());
+        $this->assertEquals(1, \App\Models\Simpeg\Pegawai::where('nidn', '0677889900')->count());
     }
 
     public function test_pull_dosen_normalizes_zero_padded_identifiers_and_matches_existing_records()

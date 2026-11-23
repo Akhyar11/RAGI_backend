@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Role;
+use App\Models\Siakad\Dosen;
 use App\Models\Simpeg\Pegawai;
 use App\Models\Simpeg\UnitKerja;
 use App\Models\User;
@@ -267,6 +268,32 @@ class SimpegPegawaiRoleTest extends TestCase
 
         $this->assertSame($user->id, $syncedUser->id);
         $this->assertSame('000401019001', $syncedUser->fresh()->username);
+        $this->assertSame(1, User::where('username', '000401019001')->count());
+    }
+
+    public function test_sso_updates_account_linked_only_from_siakad_dosen(): void
+    {
+        $user = User::factory()->create(['username' => '401019001']);
+        $pegawai = Pegawai::create([
+            'nama_lengkap' => 'Dosen Link SIAKAD Lama',
+            'nidn' => '000401019001',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+        ]);
+        $dosen = Dosen::create([
+            'pegawai_id' => $pegawai->id,
+            'user_id' => $user->id,
+            'nama_lengkap' => 'Dosen Link SIAKAD Lama',
+            'nidn' => '000401019001',
+            'is_active' => true,
+        ]);
+
+        $syncedUser = app(\App\Services\Simpeg\PegawaiService::class)->ensureSsoUserForPegawai($pegawai);
+
+        $this->assertSame($user->id, $syncedUser->id);
+        $this->assertSame('000401019001', $syncedUser->fresh()->username);
+        $this->assertSame($user->id, $pegawai->fresh()->user_id);
+        $this->assertSame($user->id, $dosen->fresh()->user_id);
         $this->assertSame(1, User::where('username', '000401019001')->count());
     }
 
