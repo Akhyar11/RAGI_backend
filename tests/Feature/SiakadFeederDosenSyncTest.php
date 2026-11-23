@@ -341,13 +341,13 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals('dosen', $log->entity_type);
         $this->assertEquals(3, $log->success_count);
 
-        // Verifikasi dosen existing: NIP lokal tetap dipertahankan, id_feeder diperbarui
+        // Verifikasi identitas dosen mengikuti nilai PDDIKTI dan id_feeder diperbarui
         $dosenExisting->refresh();
         $this->assertEquals('UUID-PULL-DOSEN-EXISTING', $dosenExisting->id_feeder);
-        $this->assertEquals('NIP-KAMPUS-TETAP-999', $dosenExisting->nip);
+        $this->assertEquals('NIP-DIKTI-BEDA', $dosenExisting->nip);
 
         // Verifikasi dosen baru dari Feeder berhasil di-create beserta biodatanya
-        $dosenBaru = Dosen::where('nidn', '611223344')->first();
+        $dosenBaru = Dosen::where('nidn', '0611223344')->first();
         $this->assertNotNull($dosenBaru);
         $this->assertEquals('UUID-PULL-DOSEN-BARU', $dosenBaru->id_feeder);
         $this->assertEquals('Dosen Baru Impor Dikti', $dosenBaru->nama_lengkap);
@@ -370,11 +370,11 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals($pegawai->user_id, $dosenBaru->user_id);
         $ssoUser = \App\Models\User::find($pegawai->user_id);
         $this->assertNotNull($ssoUser);
-        $this->assertEquals('611223344', $ssoUser->username); // Prioritas 1: NIDN kanonis
+        $this->assertEquals('0611223344', $ssoUser->username); // Prioritas 1: NIDN persis dari PDDIKTI
         $this->assertTrue($ssoUser->roles->contains('slug', 'dosen'));
 
         // Verifikasi dosen tidak aktif TIDAK dibuatkan akun SSO
-        $dosenInactive = Dosen::where('nidn', '699001122')->first();
+        $dosenInactive = Dosen::where('nidn', '0699001122')->first();
         $this->assertNotNull($dosenInactive);
         $this->assertEquals('Keluar', $dosenInactive->status_aktif);
         $this->assertFalse((bool)$dosenInactive->is_active);
@@ -383,7 +383,7 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertNotNull($pegawaiInactive);
         $this->assertEquals('non_aktif', $pegawaiInactive->status);
         $this->assertNull($pegawaiInactive->user_id);
-        $this->assertDatabaseMissing('core_users', ['username' => '699001122']);
+        $this->assertDatabaseMissing('core_users', ['username' => '0699001122']);
     }
 
     public function test_sync_batch_ajar_dosen_gracefully_handles_non_nidn_lecturers()
@@ -645,6 +645,8 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertSame(0, $log->failed_count);
         $this->assertSame(1, Dosen::where('nidn', '0006788')->count());
         $this->assertSame(1, \App\Models\Simpeg\Pegawai::where('nidn', '0006788')->count());
+        $this->assertSame(1, $log->created_count);
+        $this->assertSame(1, $log->updated_count);
 
         $dosen->refresh();
         $this->assertSame('Dosen Existing Numeric IDs Updated', $dosen->nama_lengkap);
@@ -830,7 +832,7 @@ class SiakadFeederDosenSyncTest extends TestCase
         $log = $service->pullBatchDosenFromFeeder();
 
         $this->assertEquals(1, $log->success_count);
-        $dosen = Dosen::where('nidn', '655443322')->first();
+        $dosen = Dosen::where('nidn', '0655443322')->first();
         $this->assertNotNull($dosen);
         // Harus null dan TIDAK fallback ke MasterProgramStudi::first() atau buat PRODI-DEFAULT
         $this->assertNull($dosen->program_studi_id);
@@ -908,8 +910,8 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertSame([500, 500], array_column($educationRequests, 'limit'));
         $this->assertStringContainsString('00000000-0000-4000-8000-000000000001', $educationRequests[0]['filter']);
         $this->assertStringContainsString('00000000-0000-4000-8000-000000000501', $educationRequests[1]['filter']);
-        $this->assertDatabaseHas('siakad_dosen', ['nidn' => '620000001']);
-                        $this->assertDatabaseHas('siakad_dosen', ['nidn' => '620000002']);
+        $this->assertDatabaseHas('siakad_dosen', ['nidn' => '0620000001']);
+        $this->assertDatabaseHas('siakad_dosen', ['nidn' => '0620000002']);
     }
 
     public function test_pull_dosen_uses_indeterminate_progress_when_count_action_is_unavailable()
@@ -1011,7 +1013,7 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals('partial', $log->status);
 
         $this->assertDatabaseMissing('siakad_dosen', ['nidn' => '0699990001']);
-        $this->assertDatabaseHas('siakad_dosen', ['nidn' => '699990002']);
+        $this->assertDatabaseHas('siakad_dosen', ['nidn' => '0699990002']);
     }
 
     public function test_pull_dosen_maps_real_pddikti_status_and_tanggal_keluar_to_simpeg()
@@ -1063,7 +1065,7 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals(3, $log->success_count);
 
         // 1. Verifikasi Dosen Pensiun
-        $dosenPensiun = Dosen::where('nidn', '633445566')->first();
+        $dosenPensiun = Dosen::where('nidn', '0633445566')->first();
         $this->assertNotNull($dosenPensiun);
         $this->assertEquals('Pensiun', $dosenPensiun->status_aktif);
         $this->assertFalse((bool)$dosenPensiun->is_active);
@@ -1074,7 +1076,7 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals('2025-06-30', $pegawaiPensiun->tanggal_keluar?->format('Y-m-d'));
 
         // 2. Verifikasi Dosen Meninggal
-        $dosenMeninggal = Dosen::where('nidn', '644556677')->first();
+        $dosenMeninggal = Dosen::where('nidn', '0644556677')->first();
         $this->assertNotNull($dosenMeninggal);
         $this->assertEquals('Meninggal', $dosenMeninggal->status_aktif);
         $this->assertFalse((bool)$dosenMeninggal->is_active);
@@ -1085,7 +1087,7 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals('2024-12-15', $pegawaiMeninggal->tanggal_keluar?->format('Y-m-d'));
 
         // 3. Verifikasi Dosen Kontrak Mengundurkan Diri
-        $dosenKeluar = Dosen::where('nidn', '655667788')->first();
+        $dosenKeluar = Dosen::where('nidn', '0655667788')->first();
         $this->assertNotNull($dosenKeluar);
         $this->assertFalse((bool)$dosenKeluar->is_active);
         $pegawaiKeluar = \App\Models\Simpeg\Pegawai::find($dosenKeluar->pegawai_id);
@@ -1093,6 +1095,79 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals('non_aktif', $pegawaiKeluar->status);
         $this->assertEquals('kontrak', $pegawaiKeluar->status_kepegawaian);
         $this->assertEquals('2026-01-10', $pegawaiKeluar->tanggal_keluar?->format('Y-m-d'));
+    }
+
+    public function test_pull_dosen_updates_linked_sso_for_inactive_dosen_without_creating_accounts_for_unlinked_inactive_dosen(): void
+    {
+        $linkedUser = User::factory()->create(['username' => '0612345001']);
+        $pegawaiLinked = \App\Models\Simpeg\Pegawai::create([
+            'nama_lengkap' => 'Dosen Pensiun Tertaut',
+            'nidn' => '000612345001',
+            'user_id' => $linkedUser->id,
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+            'is_active' => true,
+        ]);
+        $dosenLinked = Dosen::create([
+            'pegawai_id' => $pegawaiLinked->id,
+            'user_id' => $linkedUser->id,
+            'nama_lengkap' => 'Dosen Pensiun Tertaut',
+            'nidn' => '000612345001',
+            'is_active' => true,
+        ]);
+
+        $unlinkedPegawai = \App\Models\Simpeg\Pegawai::create([
+            'nama_lengkap' => 'Dosen Pensiun Tanpa Akun',
+            'nidn' => '000612345002',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+            'is_active' => true,
+        ]);
+        $unlinkedDosen = Dosen::create([
+            'pegawai_id' => $unlinkedPegawai->id,
+            'nama_lengkap' => 'Dosen Pensiun Tanpa Akun',
+            'nidn' => '000612345002',
+            'is_active' => true,
+        ]);
+
+        $userCount = User::count();
+        $mockFeeder = $this->createMock(NeoFeederService::class);
+        $mockFeeder->method('request')->willReturnCallback(function ($action) {
+            if ($action === 'GetListDosen') {
+                return [
+                    'error_code' => 0,
+                    'data' => [
+                        [
+                            'id_dosen' => 'UUID-INACTIVE-LINKED',
+                            'nama_dosen' => 'Dosen Pensiun Tertaut',
+                            'nidn' => '000612345001',
+                            'id_status_aktif' => 'P',
+                            'nama_status_aktif' => 'Pensiun',
+                        ],
+                        [
+                            'id_dosen' => 'UUID-INACTIVE-NO-USER',
+                            'nama_dosen' => 'Dosen Pensiun Tanpa Akun',
+                            'nidn' => '000612345002',
+                            'id_status_aktif' => 'P',
+                            'nama_status_aktif' => 'Pensiun',
+                        ],
+                    ],
+                ];
+            }
+            return ['error_code' => 0, 'data' => []];
+        });
+
+        $log = (new NeoFeederSyncService($mockFeeder))->pullBatchDosenFromFeeder();
+
+        $this->assertSame(2, $log->success_count);
+        $this->assertSame(1, $log->sso_updated_count);
+        $this->assertSame(0, $log->sso_created_count);
+        $this->assertSame('000612345001', $linkedUser->fresh()->username);
+        $this->assertSame($linkedUser->id, $pegawaiLinked->fresh()->user_id);
+        $this->assertSame($linkedUser->id, $dosenLinked->fresh()->user_id);
+        $this->assertNull($unlinkedPegawai->fresh()->user_id);
+        $this->assertNull($unlinkedDosen->fresh()->user_id);
+        $this->assertSame($userCount, User::count());
     }
 
     public function test_pull_dosen_preserves_multi_degree_and_determines_highest_education_level()
@@ -1162,7 +1237,7 @@ class SiakadFeederDosenSyncTest extends TestCase
 
         $this->assertEquals(1, $log->success_count);
 
-        $dosen = Dosen::where('nidn', '677112233')->first();
+        $dosen = Dosen::where('nidn', '0677112233')->first();
         $this->assertNotNull($dosen);
         $pegawai = \App\Models\Simpeg\Pegawai::find($dosen->pegawai_id);
         $this->assertNotNull($pegawai);
@@ -1341,7 +1416,7 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertEquals('mahasiswa_lama', $victimUser->username);
 
         // Akun dosen baru dibuat tersendiri dengan username sesuai NIDN
-        $this->assertEquals('699001122', $ssoUser->username);
+        $this->assertEquals('0699001122', $ssoUser->username);
         $this->assertTrue($ssoUser->hasRole('dosen'));
         $this->assertNotEquals($victimUser->email, $ssoUser->email); // Email tidak tabrakan
     }

@@ -712,12 +712,22 @@ class NeoFeederSyncService
             'sync_type' => 'pull',
             'total_records' => 0,
             'status' => 'processing',
+            'created_count' => 0,
+            'updated_count' => 0,
+            'sso_created_count' => 0,
+            'sso_updated_count' => 0,
             'synced_by' => $userId,
         ]);
 
         $success = 0;
         $failed = 0;
+        $created = 0;
+        $updated = 0;
+        $ssoCreated = 0;
+        $ssoUpdated = 0;
         $details = [];
+        $processedDosen = [];
+        $processedSso = [];
 
         try {
             $sourceTotal = null;
@@ -811,7 +821,7 @@ class NeoFeederSyncService
                 $homebaseMap = $this->fetchDosenHomebaseMap($dosenIds);
                 $riwayatByDosen = $this->fetchDosenEducationMap($dosenIds);
 
-            DB::transaction(function () use ($dosenItems, $homebaseMap, $riwayatByDosen, &$success, &$failed, &$details): void {
+            DB::transaction(function () use ($dosenItems, $homebaseMap, $riwayatByDosen, &$success, &$failed, &$created, &$updated, &$ssoCreated, &$ssoUpdated, &$details, &$processedDosen, &$processedSso): void {
             foreach ($dosenItems as $item) {
                 try {
                     DB::transaction(function () use (
@@ -819,7 +829,13 @@ class NeoFeederSyncService
                         $homebaseMap,
                         $riwayatByDosen,
                         &$success,
-                        &$details
+                        &$created,
+                        &$updated,
+                        &$ssoCreated,
+                        &$ssoUpdated,
+                        &$details,
+                        &$processedDosen,
+                        &$processedSso
                     ) {
                         $idDosen = $item['id_dosen'] ?? $item['id_feeder'] ?? null;
                         $nidn = $this->sanitizeDosenIdentifier($item['nidn'] ?? null);
@@ -923,6 +939,7 @@ class NeoFeederSyncService
                             $dosenLokal = Dosen::withTrashed()->where('id_feeder', $idDosen)->first();
                         }
 
+                        $dosenWasExisting = $dosenLokal !== null;
                         if ($dosenLokal && $dosenLokal->trashed()) {
                             $dosenLokal->restore();
                         }
@@ -1036,12 +1053,15 @@ class NeoFeederSyncService
                             $dataToSave['nip'] = $nipDikti;
                             $dosenLokal = Dosen::create($dataToSave);
                         }
-
-                        $nipFinal = $nipDikti ?? $this->sanitizeDosenIdentifier($dosenLokal->nip);
-
-                        // Sinkronisasi otomatis ke Modul SIMPEG (simpeg_pegawai)
+                        // Sinkronisasi otomatis ke Modul SIMPEG menggunakan NIP PDDIKTI jika tersedia.
                         $invalidPlaceholders = ['-', '--', '0', 'N/A', 'none', '', ' '];
-                        $nipFinal = (!empty($dosenLokal->nip) && !in_array(trim($dosenLokal->nip), $invalidPlaceholders, true)) ? trim($dosenLokal->nip) : (!empty($nipDikti) && !in_array(trim($nipDikti), $invalidPlaceholders, true) ? trim($nipDikti) : null);
+                        $localNip = (!empty($dosenLokal->nip) && !in_array(trim($dosenLokal->nip), $invalidPlaceholders, true))
+                            ? trim($dosenLokal->nip)
+                            : null;
+                        $feederNip = (!empty($nipDikti) && !in_array(trim($nipDikti), $invalidPlaceholders, true))
+                            ? trim($nipDikti)
+                            : null;
+                        $nipFinal = $feederNip ?? $localNip;
                         $nikFinal = (!empty($dosenLokal->nik) && !in_array(trim($dosenLokal->nik), $invalidPlaceholders, true)) ? trim($dosenLokal->nik) : (!empty($nik) && !in_array(trim($nik), $invalidPlaceholders, true) ? trim($nik) : null);
 
                         // Keep the linked employee when it agrees with identifier matches; reject split identity records.
@@ -1140,16 +1160,25 @@ class NeoFeederSyncService
                             $dosenLokal->update(['pegawai_id' => $pegawai->id]);
                         }
 
-                        // Otomatis buatkan / hubungkan akun SSO di core_users dengan skala prioritas username: NIDN -> NUPTK -> NIP
-                        // HANYA dibuatkan untuk dosen yang berstatus AKTIF
-                        if ($isActive) {
-                            $user = app(PegawaiService::class)->ensureSsoUserForPegawai($pegawai, [
+                        // Akun baru hanya dibuat untuk dosen aktif; untuk dosen nonaktif hanya cari/perbarui akun lama.
+                        $identifierUsername = $nidn ?? $nuptk ?? $nipDikti;
+                        $pegawaiService = app(PegawaiService::class);
+                        $user = $isActive
+                            ? $pegawaiService->ensureSsoUserForPegawai($pegawai, [
                                 'email' => !empty($item['email']) ? trim($item['email']) : null,
+                                'username' => $identifierUsername,
+                            ])
+                            : $pegawaiService->updateExistingSsoUserForPegawai($pegawai, [
+                                'username' => $identifierUsername,
                             ]);
+                        $ssoStatus = $user === null
+                            ? 'not_created_inactive'
+                            : ($user->wasRecentlyCreated
+                                ? 'created'
+                                : ($user->wasChanged() ? 'updated' : 'unchanged'));
 
-                            if ($dosenLokal->user_id !== $user->id) {
-                                $dosenLokal->update(['user_id' => $user->id]);
-                            }
+                        if ($user !== null && $dosenLokal->user_id !== $user->id) {
+                            $dosenLokal->update(['user_id' => $user->id]);
                         }
 
                         // 3. Masukkan Data Riwayat Sekolah ke SIMPEG (simpeg_riwayat_pendidikan_pegawai)
@@ -1222,12 +1251,27 @@ class NeoFeederSyncService
                             ]
                         );
 
+                        $counterKey = (string) $dosenLokal->id;
+                        if (!isset($processedDosen[$counterKey])) {
+                            $processedDosen[$counterKey] = true;
+                            $dosenWasExisting ? $updated++ : $created++;
+                        }
+                        if (!isset($processedSso[$counterKey])) {
+                            $processedSso[$counterKey] = true;
+                            if ($ssoStatus === 'created') {
+                                $ssoCreated++;
+                            } elseif ($ssoStatus === 'updated') {
+                                $ssoUpdated++;
+                            }
+                        }
                         $success++;
                         if (count($details) < 100) {
                             $details[] = [
                                 'nidn' => $nidn ?: '-',
                                 'nama' => $namaDosen,
-                                'status' => 'imported',
+                                'status' => $dosenWasExisting ? 'updated' : 'created',
+                                'status_sso' => $ssoStatus,
+                                'username_identifier' => $nidn ? 'nidn' : ($nuptk ? 'nuptk' : ($nipDikti ? 'nip' : null)),
                                 'feeder_id' => $idDosen,
                             ];
                         }
@@ -1258,6 +1302,10 @@ class NeoFeederSyncService
                     'total_records' => $sourceTotal ?? $processed,
                     'success_count' => $success,
                     'failed_count' => $failed,
+                    'created_count' => $created,
+                    'updated_count' => $updated,
+                    'sso_created_count' => $ssoCreated,
+                    'sso_updated_count' => $ssoUpdated,
                     'details' => $details,
                 ]);
                 if ($progressId !== null) {
@@ -1279,6 +1327,10 @@ class NeoFeederSyncService
                             'source_total' => $sourceTotal ?? $processed,
                             'synced' => $success,
                             'failed' => $failed,
+                            'created' => $created,
+                            'updated' => $updated,
+                            'sso_created' => $ssoCreated,
+                            'sso_updated' => $ssoUpdated,
                             'status' => 'processing',
                             'sync_log_id' => $log->id,
                         ],
@@ -1300,6 +1352,10 @@ class NeoFeederSyncService
             $log->update([
                 'success_count' => $success,
                 'failed_count' => $failed,
+                'created_count' => $created,
+                'updated_count' => $updated,
+                'sso_created_count' => $ssoCreated,
+                'sso_updated_count' => $ssoUpdated,
                 'status' => $failed === 0 ? 'success' : ($success > 0 ? 'partial' : 'failed'),
                 'details' => $details,
                 'completed_at' => now(),
@@ -1311,6 +1367,10 @@ class NeoFeederSyncService
                 'total_records' => $sourceTotal ?? ($success + $failed),
                 'success_count' => $success,
                 'failed_count' => max(1, $failed),
+                'created_count' => $created,
+                'updated_count' => $updated,
+                'sso_created_count' => $ssoCreated,
+                'sso_updated_count' => $ssoUpdated,
                 'status' => 'failed',
                 'details' => array_slice(array_merge($details, [['error' => $e->getMessage()]]), 0, 100),
                 'completed_at' => now(),

@@ -15,6 +15,10 @@ class FeederSyncLog extends Model
         'total_records',
         'success_count',
         'failed_count',
+        'created_count',
+        'updated_count',
+        'sso_created_count',
+        'sso_updated_count',
         'status',
         'details',
         'synced_by',
@@ -27,6 +31,10 @@ class FeederSyncLog extends Model
         'total_records' => 'integer',
         'success_count' => 'integer',
         'failed_count' => 'integer',
+        'created_count' => 'integer',
+        'updated_count' => 'integer',
+        'sso_created_count' => 'integer',
+        'sso_updated_count' => 'integer',
     ];
 
     public function user()

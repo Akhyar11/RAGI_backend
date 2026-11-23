@@ -45,6 +45,10 @@ class SyncPddiktiDosenJob implements ShouldQueue
                 'source_total' => $log->total_records,
                 'synced' => $log->success_count,
                 'failed' => $log->failed_count,
+                'created' => $log->created_count ?? 0,
+                'updated' => $log->updated_count ?? 0,
+                'sso_created' => $log->sso_created_count ?? 0,
+                'sso_updated' => $log->sso_updated_count ?? 0,
                 'status' => $log->status,
                 'sync_log_id' => $log->id,
             ];

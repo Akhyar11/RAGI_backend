@@ -604,6 +604,74 @@ class PegawaiService
         return $user;
     }
 
+    public function updateExistingSsoUserForPegawai(Pegawai $pegawai, array $options = []): ?User
+    {
+        $identifierUsername = $this->sanitizeIdentifier($options['username'] ?? null)
+            ?? $this->sanitizeIdentifier($pegawai->nidn)
+            ?? $this->sanitizeIdentifier($pegawai->nuptk)
+            ?? $this->sanitizeIdentifier($pegawai->nip);
+        if ($identifierUsername === null) {
+            return null;
+        }
+
+        $dosenRecord = $pegawai->dosen()->withTrashed()->first();
+        if ($pegawai->user_id && $dosenRecord?->user_id && $pegawai->user_id !== $dosenRecord->user_id) {
+            throw ValidationException::withMessages([
+                'username' => ['Data SIMPEG dan SIAKAD tertaut ke akun SSO berbeda; sinkronisasi dibatalkan untuk pemeriksaan manual.'],
+            ]);
+        }
+
+        $linkedUserId = $pegawai->user_id ?: $dosenRecord?->user_id;
+        $existingUser = $linkedUserId ? User::find($linkedUserId) : null;
+        if ($existingUser === null) {
+            $matchingUsers = $this->findUsersByNormalizedUsername($identifierUsername);
+            if ($matchingUsers->count() > 1) {
+                throw ValidationException::withMessages([
+                    'username' => ['Ditemukan lebih dari satu akun yang cocok dengan identifier SSO PDDIKTI setelah normalisasi. Periksa data akun sebelum sinkronisasi.'],
+                ]);
+            }
+            $existingUser = $matchingUsers->first();
+        }
+
+        if ($existingUser === null) {
+            return null;
+        }
+
+        if (Pegawai::query()->where('user_id', $existingUser->id)->where('id', '!=', $pegawai->id)->exists()
+            || \App\Models\Siakad\Dosen::query()->where('user_id', $existingUser->id)->where('id', '!=', $dosenRecord?->id ?? 0)->exists()) {
+            throw ValidationException::withMessages([
+                'username' => ['Akun dengan identifier dosen ini sudah terhubung ke pegawai lain. Periksa kemungkinan data duplikat sebelum sinkronisasi.'],
+            ]);
+        }
+
+        if ($existingUser->username !== $identifierUsername) {
+            if ($this->findUsersByNormalizedUsername($identifierUsername, $existingUser->id)->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'username' => ['Identifier SSO PDDIKTI sudah dipakai akun lain; sinkronisasi dibatalkan agar username tetap persis.'],
+                ]);
+            }
+            $existingUser->username = $identifierUsername;
+        }
+        if (!empty($pegawai->nama_lengkap) && $existingUser->name !== $pegawai->nama_lengkap) {
+            $existingUser->name = $pegawai->nama_lengkap;
+        }
+        if ($existingUser->isDirty()) {
+            $existingUser->save();
+        }
+
+        if ($pegawai->user_id !== $existingUser->id) {
+            $pegawai->user_id = $existingUser->id;
+            $pegawai->save();
+        }
+        if ($dosenRecord && $dosenRecord->user_id !== $existingUser->id) {
+            $dosenRecord->user_id = $existingUser->id;
+            $dosenRecord->save();
+        }
+
+        $this->assignRolesToUser($existingUser, $pegawai, $options['role_ids'] ?? []);
+        return $existingUser;
+    }
+
     private function findUsersByNormalizedUsername(string $username, ?int $excludeUserId = null)
     {
         $normalized = $this->normalizeIdentifier($username);
