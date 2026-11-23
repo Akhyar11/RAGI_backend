@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\OfficeLocation;
 use App\Models\ShiftTemplate;
 use App\Models\Simpeg\Pegawai;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
@@ -98,7 +99,6 @@ class SimpegAttendanceTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJson([
-                'success' => true,
                 'status' => 'success',
                 'message' => 'Login berhasil',
             ])
@@ -122,7 +122,7 @@ class SimpegAttendanceTest extends TestCase
             'password' => 'password123',
         ]);
         $resUsername->assertStatus(200)
-            ->assertJson(['success' => true, 'status' => 'success']);
+            ->assertJson(['status' => 'success']);
 
         // 2. Login with email payload
         $resEmail = $this->postJson('/api/v1/auth/login', [
@@ -130,7 +130,7 @@ class SimpegAttendanceTest extends TestCase
             'password' => 'password123',
         ]);
         $resEmail->assertStatus(200)
-            ->assertJson(['success' => true, 'status' => 'success']);
+            ->assertJson(['status' => 'success']);
 
         // 3. Login with identifier payload
         $resIdentifier = $this->postJson('/api/v1/auth/login', [
@@ -138,7 +138,7 @@ class SimpegAttendanceTest extends TestCase
             'password' => 'password123',
         ]);
         $resIdentifier->assertStatus(200)
-            ->assertJson(['success' => true, 'status' => 'success']);
+            ->assertJson(['status' => 'success']);
     }
 
     public function test_profile_and_me_endpoints(): void
@@ -149,12 +149,12 @@ class SimpegAttendanceTest extends TestCase
         $resProfile = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->getJson('/api/v1/auth/profile');
         $resProfile->assertStatus(200)
-            ->assertJson(['success' => true, 'status' => 'success']);
+            ->assertJson(['status' => 'success']);
 
         $resMe = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->getJson('/api/v1/auth/me');
         $resMe->assertStatus(200)
-            ->assertJson(['success' => true, 'status' => 'success']);
+            ->assertJson(['status' => 'success']);
     }
 
     public function test_submit_keterangan_izin_from_mobile(): void
@@ -227,6 +227,66 @@ class SimpegAttendanceTest extends TestCase
 
         $clockOutRes->assertStatus(200)
             ->assertJson(['status' => 'success']);
+    }
+
+    public function test_attendance_settings_endpoint_uses_saved_face_threshold(): void
+    {
+        SystemSetting::set('face_score_threshold', '0.77');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/attendance/settings');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'face_score_threshold' => 0.77,
+                    'minimum_face_similarity' => 0.77,
+                    'source' => 'database',
+                ],
+            ]);
+    }
+
+    public function test_attendance_settings_falls_back_to_environment_threshold(): void
+    {
+        SystemSetting::where('key', 'face_score_threshold')->delete();
+        config(['services.face_service.min_similarity' => 0.68]);
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/attendance/settings');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'face_score_threshold' => 0.68,
+                    'minimum_face_similarity' => 0.68,
+                    'source' => 'environment',
+                    'updated_at' => null,
+                ],
+            ]);
+    }
+
+    public function test_today_status_includes_active_face_threshold(): void
+    {
+        SystemSetting::set('face_score_threshold', '0.72');
+
+        $tokenResult = $this->user->createToken('test-token');
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/attendance/today');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.face_score_threshold', 0.72)
+            ->assertJsonPath('data.minimum_face_similarity', 0.72)
+            ->assertJsonPath('data.face_similarity_settings.source', 'database');
     }
 
     public function test_integration_attendances_with_api_key(): void

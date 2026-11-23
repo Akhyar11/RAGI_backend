@@ -9,13 +9,21 @@ class PythonFaceService
 {
     protected string $baseUrl;
     protected int $timeout;
-    protected float $defaultThreshold;
 
-    public function __construct()
-    {
+    public function __construct(
+        protected PresensiSettingService $presensiSettingService
+    ) {
         $this->baseUrl = rtrim(config('services.face_service.url', 'http://127.0.0.1:8001'), '/');
         $this->timeout = (int) config('services.face_service.timeout', 15);
-        $this->defaultThreshold = (float) config('services.face_service.min_similarity', 0.68);
+    }
+
+    /**
+     * Batas default verifikasi wajah yang aktif saat request tidak mengirim
+     * threshold eksplisit. Sumbernya sama dengan pengaturan web/mobile.
+     */
+    public function currentDefaultThreshold(): float
+    {
+        return $this->presensiSettingService->getFaceScoreThreshold();
     }
 
     /**
@@ -123,7 +131,7 @@ class PythonFaceService
      */
     public function verifyFace(string $liveBase64Image, array $enrolledEmbedding, ?float $threshold = null, array $enrolledEmbeddings = []): array
     {
-        $thresh = $threshold ?? $this->defaultThreshold;
+        $thresh = $threshold ?? $this->currentDefaultThreshold();
 
         try {
             $payload = [

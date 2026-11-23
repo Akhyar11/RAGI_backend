@@ -11,11 +11,16 @@ use App\Models\SystemSetting;
 use App\Http\Requests\Simpeg\StoreShiftTemplateRequest;
 use App\Http\Requests\Simpeg\UpdatePresensiSettingRequest;
 use App\Http\Requests\Simpeg\UpdateShiftTemplateRequest;
+use App\Services\PresensiSettingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PresensiMasterSettingController extends Controller
 {
+    public function __construct(
+        protected PresensiSettingService $presensiSettingService
+    ) {}
+
     /**
      * Dapatkan seluruh setting presensi
      */
@@ -37,7 +42,7 @@ class PresensiMasterSettingController extends Controller
         return response()->json([
             'status' => 'success',
             'data' => [
-                'face_score_threshold' => (float) ($settings->get('face_score_threshold')?->value ?? 0.80),
+                'face_score_threshold' => $this->presensiSettingService->getFaceScoreThreshold(),
                 'gps_accuracy_threshold_meters' => (float) ($settings->get('gps_accuracy_threshold_meters')?->value ?? 50.0),
                 'late_tolerance_minutes' => (int) ($settings->get('late_tolerance_minutes')?->value ?? 15),
                 'max_early_clock_in_minutes' => (int) ($settings->get('max_early_clock_in_minutes')?->value ?? 60),

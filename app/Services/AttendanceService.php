@@ -13,7 +13,8 @@ class AttendanceService
 {
     public function __construct(
         protected GeofenceService $geofenceService,
-        protected PythonFaceService $faceService
+        protected PythonFaceService $faceService,
+        protected PresensiSettingService $presensiSettingService
     ) {}
 
     /**
@@ -47,7 +48,8 @@ class AttendanceService
 
         // 2. Ambil pengaturan threshold sistem (fallback bila tanpa jadwal/shift)
         // Samakan dengan threshold engine Python yang aktif (default 0.68).
-        $minFaceScore = (float) config('services.face_service.min_similarity', 0.68);
+        // Batas aktif berasal dari pengaturan web RAG (core_system_settings).
+        $minFaceScore = $this->presensiSettingService->getFaceScoreThreshold();
         $maxGpsAccuracy = (float) SystemSetting::get('gps_accuracy_threshold_meters', 50.0);
         $lateToleranceMinutes = (int) SystemSetting::get('late_tolerance_minutes', 15);
         $maxEarlyClockInMinutes = (int) SystemSetting::get('max_early_clock_in_minutes', 60);
@@ -540,7 +542,8 @@ class AttendanceService
         }
 
         // Samakan dengan threshold engine Python yang aktif (default 0.68).
-        $minFaceScore = (float) config('services.face_service.min_similarity', 0.68);
+        // Batas aktif berasal dari pengaturan web RAG (core_system_settings).
+        $minFaceScore = $this->presensiSettingService->getFaceScoreThreshold();
         $maxGpsAccuracy = (float) SystemSetting::get('gps_accuracy_threshold_meters', 50.0);
 
         $userLat = (float) ($data['latitude'] ?? 0);

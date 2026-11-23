@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/attendance`  
 > **Autentikasi**: Bearer Token (Passport / Sanctum)  
 > **Dibuat**: 2026-09-14  
-> **Diperbarui**: 2026-09-26  
+> **Diperbarui**: 2026-11-23  
 
 Dokumentasi endpoint API presensi mobile pegawai untuk aplikasi Flutter dan portal SIMPEG terintegrasi. Menangani status harian presensi, jendela waktu (cutoff) masuk/pulang dinamis, presensi masuk/pulang biometrik wajah, pengajuan izin/keterangan mandiri, riwayat presensi, dan rekapitulasi individu.
 
@@ -14,6 +14,7 @@ Dokumentasi endpoint API presensi mobile pegawai untuk aplikasi Flutter dan port
 
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
+| GET | `/api/v1/attendance/settings` | Pengaturan presensi aktif (batas kemiripan wajah dari web RAG) | ✅ Diperlukan |
 | GET | `/api/v1/attendance/today` | Status presensi hari ini, lokasi kantor, jadwal shift & jendela cutoff | ✅ Diperlukan |
 | POST | `/api/v1/attendance/clock-in` | Presensi masuk (validasi GPS, Anti-Mock GPS, Face Score, auto cutoff) | ✅ Diperlukan |
 | POST | `/api/v1/attendance/clock-out` | Presensi pulang (validasi GPS, Face Score, verifikasi jendela pulang) | ✅ Diperlukan |
@@ -33,7 +34,49 @@ Dokumentasi endpoint API presensi mobile pegawai untuk aplikasi Flutter dan port
 
 ---
 
-## 1. GET `/api/v1/attendance/today`
+## 1. GET `/api/v1/attendance/settings`
+
+Mengambil batas kemiripan wajah yang aktif. Nilai ini disimpan dari halaman web RAG **Master Presensi → Parameter Sistem** (`core_system_settings` → `face_score_threshold`) dan langsung dipakai mesin verifikasi serta aplikasi mobile. Jika belum pernah disimpan, server memakai fallback environment `FACE_SERVICE_MIN_SIMILARITY` (default `0.68`).
+
+### Query Parameters
+
+Tidak memerlukan parameter query khusus.
+
+### Response 200 OK
+
+```json
+{
+  "status": "success",
+  "message": "Pengaturan presensi aktif",
+  "data": {
+    "face_score_threshold": 0.68,
+    "minimum_face_similarity": 0.68,
+    "source": "environment",
+    "updated_at": null
+  }
+}
+```
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| `face_score_threshold` | `number` | Nilai ambang batas wajah aktif (0.1 - 1.0) |
+| `minimum_face_similarity` | `number` | Alias dari `face_score_threshold` untuk klien mobile |
+| `source` | `string` | `database` bila diatur lewat web, `environment` bila memakai fallback |
+| `updated_at` | `string \| null` | Waktu terakhir pengaturan disimpan (ISO 8601), `null` saat fallback |
+
+### Response Error
+
+- **401 Unauthorized**:
+  ```json
+  {
+    "status": "error",
+    "message": "Unauthenticated."
+  }
+  ```
+
+---
+
+## 2. GET `/api/v1/attendance/today`
 
 Mengambil data status presensi hari ini, profil pegawai login, lokasi kantor, serta konfigurasi jadwal shift beserta batas toleransi scan masuk dan scan pulang (`earliest_clock_in`, `latest_clock_in`, `earliest_clock_out`, `latest_clock_out`, `can_clock_in`, `can_clock_out`).
 
@@ -52,6 +95,14 @@ Tidak memerlukan parameter query khusus.
     "server_timestamp": 1790471100,
     "server_date": "2026-09-26",
     "server_time_formatted": "08:05:00",
+    "face_similarity_settings": {
+      "face_score_threshold": 0.68,
+      "minimum_face_similarity": 0.68,
+      "source": "environment",
+      "updated_at": null
+    },
+    "face_score_threshold": 0.68,
+    "minimum_face_similarity": 0.68,
     "can_clock_in": true,
     "can_clock_out": false,
     "is_clocked_in": false,
@@ -140,7 +191,7 @@ Tidak memerlukan parameter query khusus.
 
 ---
 
-## 2. POST `/api/v1/attendance/clock-in`
+## 3. POST `/api/v1/attendance/clock-in`
 
 Melakukan presensi masuk pegawai. Apabila waktu scan saat ini telah melebihi batas toleransi akhir masuk (`latest_clock_in` / batas cutoff), request secara otomatis dialihkan dan diproses sebagai Presensi Pulang (`processClockOut`).
 
@@ -232,7 +283,7 @@ Melakukan presensi masuk pegawai. Apabila waktu scan saat ini telah melebihi bat
 
 ---
 
-## 3. POST `/api/v1/attendance/clock-out`
+## 4. POST `/api/v1/attendance/clock-out`
 
 Melakukan presensi pulang pegawai. Jika pegawai tidak pernah melakukan presensi masuk sebelumnya, presensi pulang tetap dicatat dengan `clock_in` dan `jam_masuk` bernilai `null` serta catatan keterangan khusus.
 
@@ -319,7 +370,7 @@ Melakukan presensi pulang pegawai. Jika pegawai tidak pernah melakukan presensi 
 
 ---
 
-## 4. POST `/api/v1/attendance/keterangan`
+## 5. POST `/api/v1/attendance/keterangan`
 
 Pengajuan izin, sakit, dinas luar, atau cuti mandiri oleh pegawai melalui aplikasi mobile.
 
@@ -356,7 +407,7 @@ Pengajuan izin, sakit, dinas luar, atau cuti mandiri oleh pegawai melalui aplika
 
 ---
 
-## 5. GET `/api/v1/attendance/history`
+## 6. GET `/api/v1/attendance/history`
 
 Mengambil riwayat absensi pegawai login dengan filter tanggal, bulan, tahun, status, dan pagination.
 
@@ -408,7 +459,7 @@ Mengambil riwayat absensi pegawai login dengan filter tanggal, bulan, tahun, sta
 
 ---
 
-## 6. GET `/api/v1/attendance/recap`
+## 7. GET `/api/v1/attendance/recap`
 
 Mengambil rekapitulasi kehadiran individu per bulan (akumulasi kehadiran, terlambat, izin, sakit, alpa, total jam kerja, dan persentase).
 

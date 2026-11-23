@@ -8,6 +8,7 @@ use App\Models\NationalHoliday;
 use App\Models\Simpeg\Pegawai;
 use App\Services\AttendanceRecapService;
 use App\Services\AttendanceService;
+use App\Services\PresensiSettingService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,8 +18,22 @@ class AttendanceController extends Controller
 {
     public function __construct(
         protected AttendanceService $attendanceService,
-        protected AttendanceRecapService $recapService
+        protected AttendanceRecapService $recapService,
+        protected PresensiSettingService $presensiSettingService
     ) {}
+
+    /**
+     * Pengaturan presensi aktif yang dipakai server dan mobile.
+     * GET /api/v1/attendance/settings
+     */
+    public function settings(): JsonResponse
+    {
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pengaturan presensi aktif',
+            'data' => $this->presensiSettingService->getFaceSimilaritySettings(),
+        ]);
+    }
 
     /**
      * Ambil profil pegawai SIMPEG yang tertaut dengan akun.
@@ -55,6 +70,7 @@ class AttendanceController extends Controller
     public function todayStatus(Request $request): JsonResponse
     {
         $employee = $this->getLinkedEmployee($request->user());
+        $faceSettings = $this->presensiSettingService->getFaceSimilaritySettings();
 
         $now = Carbon::now();
         $today = $now->toDateString();
@@ -240,6 +256,9 @@ class AttendanceController extends Controller
                 'server_timestamp' => $now->timestamp,
                 'server_date' => $today,
                 'server_time_formatted' => $now->format('H:i:s'),
+                'face_similarity_settings' => $faceSettings,
+                'face_score_threshold' => $faceSettings['face_score_threshold'],
+                'minimum_face_similarity' => $faceSettings['minimum_face_similarity'],
                 'can_clock_in' => $canClockIn,
                 'can_clock_out' => $canClockOut,
                 'is_clocked_in' => $isClockedIn,

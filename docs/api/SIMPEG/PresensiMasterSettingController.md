@@ -4,9 +4,11 @@
 > **Base URL**: `/api/simpeg/presensi`
 > **Autentikasi**: Bearer Token (Passport) — seluruh endpoint terproteksi `auth:api`
 > **Dibuat**: 2026-09-14
-> **Diperbarui**: 2026-10-14 (parameter global disederhanakan: hanya face + GPS; toleransi waktu & libur dikelola per shift)
+> **Diperbarui**: 2026-11-23 (batas wajah menjadi sumber kebenaran server/mobile; toleransi waktu & libur tetap dikelola per shift)
 
 Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe shift kerja (multi-tipe dengan jadwal 7 hari), dan kalender libur nasional/tanggal merah.
+
+> **Catatan penting:** `face_score_threshold` yang disimpan lewat endpoint ini adalah satu-satunya batas kemiripan wajah yang dipakai mesin verifikasi dan aplikasi mobile. Nilai dibaca dari `core_system_settings`; jika belum ada, server memakai fallback `FACE_SERVICE_MIN_SIMILARITY` (default `0.68`). Mobile dapat membaca nilai aktif melalui `GET /api/v1/attendance/settings`.
 
 ## Daftar Endpoint
 
@@ -56,7 +58,7 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
 {
     "status": "success",
     "data": {
-        "face_score_threshold": 0.8,
+        "face_score_threshold": 0.68,
         "gps_accuracy_threshold_meters": 50,
         "late_tolerance_minutes": 15,
         "max_early_clock_in_minutes": 60,
@@ -106,7 +108,7 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
 
 ```json
 {
-    "face_score_threshold": 0.8,
+    "face_score_threshold": 0.68,
     "gps_accuracy_threshold_meters": 50,
     "max_late_per_month": 3,
     "applies_national_holidays": true,
@@ -127,7 +129,7 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
     "status": "success",
     "message": "Parameter presensi sistem berhasil diperbarui",
     "data": {
-        "face_score_threshold": 0.8,
+        "face_score_threshold": 0.68,
         "gps_accuracy_threshold_meters": 50,
         "max_late_per_month": 3,
         "applies_national_holidays": true

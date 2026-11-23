@@ -1252,6 +1252,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/logout', [App\Http\Controllers\API\AuthController::class, 'logout']);
 
         // Presensi Mobile
+        Route::get('/attendance/settings', [App\Http\Controllers\API\AttendanceController::class, 'settings']);
         Route::get('/attendance/today', [App\Http\Controllers\API\AttendanceController::class, 'todayStatus']);
         Route::post('/attendance/clock-in', [App\Http\Controllers\API\AttendanceController::class, 'clockIn']);
         Route::post('/attendance/clock-out', [App\Http\Controllers\API\AttendanceController::class, 'clockOut']);
