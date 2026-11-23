@@ -822,10 +822,13 @@ class NeoFeederSyncService
                         &$details
                     ) {
                         $idDosen = $item['id_dosen'] ?? $item['id_feeder'] ?? null;
-                        $nidn = $this->normalizeDosenIdentifier($item['nidn'] ?? null);
-                        $nuptk = $this->normalizeDosenIdentifier($item['nuptk'] ?? null);
+                        $nidn = $this->sanitizeDosenIdentifier($item['nidn'] ?? null);
+                        $nuptk = $this->sanitizeDosenIdentifier($item['nuptk'] ?? null);
                         $namaDosen = $item['nama_dosen'] ?? 'Dosen Feeder';
-                        $nipDikti = $this->normalizeDosenIdentifier($item['nip'] ?? null);
+                        $nipDikti = $this->sanitizeDosenIdentifier($item['nip'] ?? null);
+                        $nidnLookup = $this->normalizeDosenIdentifier($nidn);
+                        $nuptkLookup = $this->normalizeDosenIdentifier($nuptk);
+                        $nipLookup = $this->normalizeDosenIdentifier($nipDikti);
 
                         // Parse gender: normalisasi 'L'/'P', jangan dipaksa default 'L'
                         $rawJk = !empty($item['jenis_kelamin']) ? strtoupper(trim($item['jenis_kelamin'])) : null;
@@ -913,10 +916,10 @@ class NeoFeederSyncService
                         // Match padded and canonical values; conflicting legacy rows must not create another record.
                         $dosenLokal = $this->findUniqueRecordByNormalizedIdentifiers(
                             Dosen::class,
-                            ['nidn' => $nidn, 'nuptk' => $nuptk, 'nip' => $nipDikti],
+                            ['nidn' => $nidnLookup, 'nuptk' => $nuptkLookup, 'nip' => $nipLookup],
                             'dosen'
                         );
-                        if (!$dosenLokal && empty($nidn) && empty($nuptk) && empty($nipDikti) && !empty($idDosen)) {
+                        if (!$dosenLokal && empty($nidnLookup) && empty($nuptkLookup) && empty($nipLookup) && !empty($idDosen)) {
                             $dosenLokal = Dosen::withTrashed()->where('id_feeder', $idDosen)->first();
                         }
 
@@ -987,9 +990,9 @@ class NeoFeederSyncService
                             'nama_lengkap' => $namaDosenFinal,
                             'gelar_depan' => $gelarDepanFinal,
                             'gelar_belakang' => $gelarBelakangFinal,
-                            'nidn' => $nidn ?: $this->normalizeDosenIdentifier($dosenLokal?->nidn),
-                            'nuptk' => $nuptk ?: $this->normalizeDosenIdentifier($dosenLokal?->nuptk),
-                            'nip' => $this->normalizeDosenIdentifier($dosenLokal?->nip) ?? $nipDikti,
+                            'nidn' => $nidn ?: $this->sanitizeDosenIdentifier($dosenLokal?->nidn),
+                            'nuptk' => $nuptk ?: $this->sanitizeDosenIdentifier($dosenLokal?->nuptk),
+                            'nip' => $nipDikti ?? $this->sanitizeDosenIdentifier($dosenLokal?->nip),
                             'tanggal_lahir' => $tanggalLahirFinal,
                             'agama' => $agamaFinal,
                             'status_aktif' => $statusAktif,
@@ -1034,7 +1037,7 @@ class NeoFeederSyncService
                             $dosenLokal = Dosen::create($dataToSave);
                         }
 
-                        $nipFinal = $this->normalizeDosenIdentifier($dosenLokal->nip) ?? $nipDikti;
+                        $nipFinal = $nipDikti ?? $this->sanitizeDosenIdentifier($dosenLokal->nip);
 
                         // Sinkronisasi otomatis ke Modul SIMPEG (simpeg_pegawai)
                         $invalidPlaceholders = ['-', '--', '0', 'N/A', 'none', '', ' '];
@@ -1049,9 +1052,9 @@ class NeoFeederSyncService
                         $pegawaiByIdentifier = $this->findUniqueRecordByNormalizedIdentifiers(
                             Pegawai::class,
                             [
-                                'nidn' => $nidn ?: $this->normalizeDosenIdentifier($dosenLokal->nidn),
-                                'nuptk' => $nuptk ?: $this->normalizeDosenIdentifier($dosenLokal->nuptk),
-                                'nip' => $nipFinal,
+                                'nidn' => $this->normalizeDosenIdentifier($nidn ?: $dosenLokal->nidn),
+                                'nuptk' => $this->normalizeDosenIdentifier($nuptk ?: $dosenLokal->nuptk),
+                                'nip' => $this->normalizeDosenIdentifier($nipFinal),
                             ],
                             'pegawai'
                         );
@@ -1113,9 +1116,9 @@ class NeoFeederSyncService
                             'is_active' => $isActive,
                         ];
                         if ($finalPegawaiGender) $pegawaiData['jenis_kelamin'] = $finalPegawaiGender;
-                        $pegawaiData['nidn'] = $nidn ?: $this->normalizeDosenIdentifier($pegawai?->nidn);
-                        $pegawaiData['nuptk'] = $nuptk ?: $this->normalizeDosenIdentifier($pegawai?->nuptk);
-                        $pegawaiData['nip'] = $nipFinal ?: $this->normalizeDosenIdentifier($pegawai?->nip);
+                        $pegawaiData['nidn'] = $nidn ?: $this->sanitizeDosenIdentifier($pegawai?->nidn);
+                        $pegawaiData['nuptk'] = $nuptk ?: $this->sanitizeDosenIdentifier($pegawai?->nuptk);
+                        $pegawaiData['nip'] = $nipFinal ?: $this->sanitizeDosenIdentifier($pegawai?->nip);
                         if ($nikFinal) $pegawaiData['nik'] = $nikFinal;
                         if ($tanggalLahirFinal) $pegawaiData['tanggal_lahir'] = $tanggalLahirFinal;
                         if (!empty($tempatLahirFinal)) $pegawaiData['tempat_lahir'] = $tempatLahirFinal;
@@ -1319,6 +1322,11 @@ class NeoFeederSyncService
     private function normalizeDosenIdentifier(?string $value): ?string
     {
         return app(PegawaiService::class)->normalizeIdentifier($value);
+    }
+
+    private function sanitizeDosenIdentifier(?string $value): ?string
+    {
+        return app(PegawaiService::class)->sanitizeIdentifier($value);
     }
 
     private function findUniqueRecordByNormalizedIdentifiers(string $modelClass, array $identifiers, string $entity)

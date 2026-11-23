@@ -51,6 +51,22 @@ class SpmbPendaftaranService
 
     private function validateIdentitasPendaftar(PendaftaranCalonMhs $pendaftaran): void
     {
+        if (! $pendaftaran->tanggal_lahir || $pendaftaran->tanggal_lahir->isFuture() || $pendaftaran->tanggal_lahir->isToday()) {
+            throw ValidationException::withMessages([
+                'tanggal_lahir' => 'Tanggal lahir wajib diisi dan harus sebelum hari ini.',
+            ]);
+        }
+        if (mb_strlen(trim((string) $pendaftaran->tempat_lahir)) < 2) {
+            throw ValidationException::withMessages([
+                'tempat_lahir' => 'Tempat lahir wajib diisi minimal 2 karakter.',
+            ]);
+        }
+        if (! in_array($pendaftaran->status_sipil, ['menikah', 'belum_menikah'], true)) {
+            throw ValidationException::withMessages([
+                'status_sipil' => 'Status sipil wajib dipilih.',
+            ]);
+        }
+
         $reference = $pendaftaran->kewarganegaraan_id
             ? \App\Models\System\MasterReferensi::query()
                 ->where('tipe', 'kewarganegaraan')

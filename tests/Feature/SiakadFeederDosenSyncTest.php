@@ -643,27 +643,27 @@ class SiakadFeederDosenSyncTest extends TestCase
 
         $this->assertSame(2, $log->success_count);
         $this->assertSame(0, $log->failed_count);
-        $this->assertSame(1, Dosen::where('nidn', '6788')->count());
-        $this->assertSame(1, \App\Models\Simpeg\Pegawai::where('nidn', '6788')->count());
+        $this->assertSame(1, Dosen::where('nidn', '0006788')->count());
+        $this->assertSame(1, \App\Models\Simpeg\Pegawai::where('nidn', '0006788')->count());
 
         $dosen->refresh();
         $this->assertSame('Dosen Existing Numeric IDs Updated', $dosen->nama_lengkap);
-        $this->assertSame('6788', $dosen->nidn);
-        $this->assertSame('4567', $dosen->nuptk);
-        $this->assertSame('1234', $dosen->nip);
+        $this->assertSame('0006788', $dosen->nidn);
+        $this->assertSame('0004567', $dosen->nuptk);
+        $this->assertSame('0001234', $dosen->nip);
 
         $pegawai->refresh();
-        $this->assertSame('6788', $pegawai->nidn);
-        $this->assertSame('4567', $pegawai->nuptk);
-        $this->assertSame('1234', $pegawai->nip);
+        $this->assertSame('0006788', $pegawai->nidn);
+        $this->assertSame('0004567', $pegawai->nuptk);
+        $this->assertSame('0001234', $pegawai->nip);
 
-        $dosenBaru = Dosen::where('nidn', '8111')->firstOrFail();
+        $dosenBaru = Dosen::where('nidn', '0008111')->firstOrFail();
         $pegawaiBaru = \App\Models\Simpeg\Pegawai::findOrFail($dosenBaru->pegawai_id);
-        $this->assertSame('8222', $dosenBaru->nuptk);
-        $this->assertSame('8333', $dosenBaru->nip);
-        $this->assertSame('8111', $pegawaiBaru->nidn);
-        $this->assertSame('8222', $pegawaiBaru->nuptk);
-        $this->assertSame('8333', $pegawaiBaru->nip);
+        $this->assertSame('0008222', $dosenBaru->nuptk);
+        $this->assertSame('0008333', $dosenBaru->nip);
+        $this->assertSame('0008111', $pegawaiBaru->nidn);
+        $this->assertSame('0008222', $pegawaiBaru->nuptk);
+        $this->assertSame('0008333', $pegawaiBaru->nip);
         $this->assertSame('8111', User::findOrFail($dosenBaru->user_id)->username);
     }
 

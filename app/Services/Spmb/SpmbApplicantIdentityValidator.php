@@ -52,7 +52,7 @@ class SpmbApplicantIdentityValidator
         }
 
         $country = strtoupper(trim((string) ($data['negara_domisili'] ?? '')));
-        if (in_array($country, ['', 'ID', 'IDN', 'INDONESIA'], true)) {
+        if ($code === 'WNI' && in_array($country, ['', 'ID', 'IDN', 'INDONESIA'], true)) {
             foreach (['provinsi', 'kota_kabupaten', 'kecamatan'] as $field) {
                 if (empty($data[$field])) {
                     $errors[$field] = 'Provinsi, kota/kabupaten, dan kecamatan wajib diisi untuk domisili Indonesia.';

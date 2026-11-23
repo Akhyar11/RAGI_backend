@@ -44,7 +44,7 @@ class SpmbApplicantIdentityValidatorTest extends TestCase
             'negara_penerbit_paspor' => 'Malaysia',
             'negara_kewarganegaraan' => 'Malaysia',
             'kode_negara_kewarganegaraan' => 'MY',
-            'negara_domisili' => 'Malaysia',
+            'negara_domisili' => null,
             'provinsi' => null,
             'kota_kabupaten' => null,
             'kecamatan' => null,
