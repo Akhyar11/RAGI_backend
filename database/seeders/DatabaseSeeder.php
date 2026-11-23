@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             \Database\Seeders\IAM\RoleSeeder::class,
             \Database\Seeders\IAM\PermissionSeeder::class,
+            \Database\Seeders\IAM\LaboranProdiRoleSeeder::class,
             \Database\Seeders\IAM\ModuleSeeder::class,
             \Database\Seeders\IAM\MenuSeeder::class,
             \Database\Seeders\IAM\MenuValidasiManualSeeder::class,
