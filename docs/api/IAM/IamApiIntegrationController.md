@@ -17,7 +17,7 @@ Controller ini mengelola registrasi integrasi API eksternal tingkat sistem yang 
 | PUT | `/api/api-integrations/{id}` | Update tipe sumber, URL API, Token, Auth Type, dan Status | ✅ Permission `iam.api_integration.manage` |
 | POST | `/api/api-integrations/{id}/test` | Uji koneksi sumber Custom API atau Neo Feeder PDDikti | ✅ Permission `iam.api_integration.manage` |
 | POST | `/api/api-integrations/{id}/sync` | Ambil data sumber dan sinkronkan ke master yang didukung (SIAKAD/SIKEU) | ✅ Permission `iam.api_integration.manage` |
-| GET | `/api/admin/api-integrations/student-sync-progress/{progressId}` | Ambil progres sinkronisasi mahasiswa PDDIKTI milik peminta | ✅ Permission `iam.api_integration.manage` |
+| GET | `/api/admin/api-integrations/student-sync-progress/{progressId}` | Ambil progres sinkronisasi mahasiswa/dosen/kelas PDDIKTI milik peminta | ✅ Permission `iam.api_integration.manage` |
 
 ---
 
@@ -274,6 +274,7 @@ Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvali
 - `siakad_mata_kuliah` (Modul `siakad`): sumber dipilih melalui `source_type`. Mode `pddikti` menarik relasi mata kuliah-kurikulum via Neo Feeder `GetMatkulKurikulum`; mode `custom_api` memakai endpoint dan kredensial manual.
 - `siakad_mahasiswa` (Modul `siakad`): sumber dapat dipilih sebagai PDDIKTI Neo Feeder atau Custom API SIAKAD legacy. Mode PDDIKTI memakai action Count untuk total/progres, lalu mengambil `GetListMahasiswa` dan `GetBiodataMahasiswa` dalam batch 500; mode Custom API mempertahankan service legacy.
 - `siakad_dosen` (Modul `siakad`): mode PDDIKTI menghitung total melalui `GetCountDosen`, kemudian job queue mengambil `GetListDosen` dengan limit 500 dan menyimpan setiap halaman sebelum membaca halaman berikutnya. Sync aktual membalas `202 Accepted` dengan `progress_id`; polling memakai endpoint progress yang sama dengan mahasiswa.
+- `siakad_kelas` (Modul `siakad`): mode PDDIKTI memakai `GetCountKelasKuliahWs` dan `GetListKelasKuliah`. Uji koneksi read-only meminta satu record. Sync aktual masuk `SyncPddiktiKelasJob` pada queue `default`, membalas `202 Accepted`, dan dipoll melalui endpoint progress yang sama. Hanya `siakad_master_kelas` dan `siakad_kelas` yang ditulis; peserta/mahasiswa, KRS, nilai, pengampu, dan pivot peserta tidak diimpor.
 - `sikeu_transaksi_kas` (Modul `sikeu`): disinkronkan ke tabel `sikeu_jurnal_umum` dan `sikeu_detail_jurnal_umum` berimbang (Double-Entry) dengan resolusi COA dinamis via `sikeu_mig_akun_mapping`.
 - `sikeu_transaksi_pembayaran` (Modul `sikeu`): disinkronkan ke tabel `sikeu_tagihan_mahasiswa` dan `sikeu_pembayaran` secara idempoten dengan verifikasi NIM mahasiswa di `siakad_mahasiswa`.
 
@@ -289,6 +290,8 @@ Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvali
 Umumnya tidak memerlukan body. URL, token, tipe autentikasi, dan status aktif menggunakan konfigurasi integrasi yang tersimpan. Khusus integrasi `siakad_mahasiswa` sumber PDDIKTI, body opsional `{"preview": true}` meminta pratinjau read-only. Tanpa `preview: true`, endpoint menjadwalkan sync tulis pada queue `default` dan merespons `202 Accepted` dengan `data.progress_id`. Pastikan worker memproses queue `default`.
 
 Untuk `siakad_dosen`, sync aktual dijalankan oleh queue worker dan mengembalikan `202 Accepted` beserta `data.progress_id`. `preview: true` ditolak; gunakan Uji Koneksi untuk pemeriksaan read-only. Proses worker juga memperbarui/membuat data pegawai SIMPEG, menyelaraskan riwayat pendidikan, serta dapat membuat atau menautkan akun SSO untuk dosen aktif. Tinjau cakupan tersebut sebelum menjalankan sync di produksi. Bila `GetCountDosen` tidak tersedia, progres menunjukkan record yang sudah diproses dengan total/persentase indeterminate.
+
+Untuk `siakad_kelas`, sync aktual dijalankan oleh worker queue `default` dan mengembalikan `202 Accepted` dengan `progress_id`. Tidak ada `preview`; gunakan Uji Koneksi sebagai pemeriksaan read-only. `GetCountKelasKuliahWs` tercantum di User Guide Neo Feeder 2.0 tetapi request live ke Feeder kampus timeout, sehingga worker tidak memanggil action count. Worker membaca `GetListKelasKuliah` sampai batch terakhir kurang dari 500; progress menampilkan jumlah terbaca tanpa total/persentase. Jalankan worker queue default agar status bergerak dari `queued` ke status terminal.
 
 ### Response Sukses (200 OK)
 
@@ -326,7 +329,17 @@ Sync aktual dosen yang berhasil dijadwalkan mengembalikan `202 Accepted`:
 }
 ```
 
-Polling `GET /api/admin/api-integrations/student-sync-progress/{progressId}` menerima progress mahasiswa maupun dosen. Status terminal `completed` memuat ringkasan sinkronisasi dosen di `data.result` (`source_total`, `synced`, `failed`, `status`, dan `sync_log_id`); `failed` memuat pesan aman pada `data.message`.
+Sync aktual kelas yang berhasil dijadwalkan mengembalikan `202 Accepted`:
+
+```json
+{
+    "status": "success",
+    "message": "Sinkronisasi kelas PDDIKTI dijadwalkan. Progres diperbarui selama proses berjalan.",
+    "data": { "progress_id": "f4c2aaf1-5976-4b6d-a602-638e8b8b49e8" }
+}
+```
+
+Polling `GET /api/admin/api-integrations/student-sync-progress/{progressId}` menerima progress mahasiswa, dosen, maupun kelas. Status terminal `completed` memuat ringkasan kelas di `data.result` (`source_total`, `processed`, `created`, `updated`, `synced`, `skipped`, `failed`, `pages`, dan maksimal 100 `skipped_items`); `failed` memuat pesan aman pada `data.message`.
 
 ### GET /api/admin/api-integrations/student-sync-progress/{progressId}
 
@@ -397,6 +410,10 @@ Selama fase `reading`, jumlah total belum diketahui dan field `total`/`work_tota
 - Urutan impor yang dianjurkan adalah prodi → kurikulum (`GetListKurikulum`) → mata kuliah (`GetMatkulKurikulum`). Sync kurikulum membuat kode lokal deterministik `PDDIKTI-{id_kurikulum}`, mengambil tahun dari `semester_mulai_berlaku` (fallback awal `id_semester`), serta menyimpan jumlah SKS lulus.
 - Integrasi `siakad_tahun_akademik` menarik daftar semester melalui `GetSemester`. `id_semester` hanya disimpan ke `siakad_tahun_akademik.id_feeder` jika cocok persis dengan `siakad_tahun_akademik.kode`. Periode baru tidak dibuat otomatis dan nama, kalender, serta status lokal tidak ditimpa. Sync melaporkan jumlah sumber, mapping, dan item yang dilewati; maksimum 100 halaman × 500 baris.
 - Integrasi `siakad_dosen` menguji `GetListDosen` secara read-only dengan limit 1. Registry mendefinisikan count action `GetCountDosen` yang sudah diverifikasi pada Feeder kampus; sync dijalankan melalui `SyncPddiktiDosenJob` pada queue `default`. Worker meminta halaman `GetListDosen` dengan `limit=500`; homebase dan riwayat pendidikan difilter hanya untuk ID dosen pada halaman tersebut. Setiap halaman disimpan dalam satu transaksi dengan savepoint per dosen untuk isolasi baris gagal, lalu log/progres diperbarui setelah commit dan sebelum offset berikutnya. Batas maksimum 100 halaman; overflow/error upstream menandai job gagal. Jika count action gagal/tidak didukung, worker tetap memproses halaman 500 dan progres tidak menampilkan total atau persentase palsu. Proses mempertahankan perilaku pencocokan dosen serta dapat menyelaraskan SIMPEG, riwayat pendidikan, dan akun SSO aktif; review log pada `siakad_feeder_sync_logs`.
+- Integrasi `siakad_kelas` menguji `GetListKelasKuliah` secara read-only dengan limit 1. Karena `GetCountKelasKuliahWs` timeout pada koneksi live, sync hanya membaca `GetListKelasKuliah` dengan `limit=500`, `order=id_kelas_kuliah`, dan offset deterministik sampai batch terakhir kurang dari 500. Progress indeterminate diperbarui setelah setiap commit. Setiap batch disimpan sebelum request berikutnya; setiap row diisolasi dengan transaksi. Batas maksimum 100 batch; overflow/upstream error menandai job gagal.
+- `id_prodi`, `id_semester`, dan `id_matkul` harus cocok unik dan aktif pada `id_feeder` milik `siakad_program_studi`, `siakad_tahun_akademik`, dan `siakad_mata_kuliah`. Mapping kosong, ambigu, soft-deleted, format label kelas tidak valid, dan konflik kunci lokal dilewati dengan alasan; maksimal 100 detail disimpan pada `skipped_items`.
+- `siakad_kelas.id_feeder` menyimpan `id_kelas_kuliah` untuk idempotensi. Jika belum ada, fallback kelas lokal menggunakan mata kuliah + periode + kode kelas. Master Kelas dicari/dibuat berdasarkan prodi + label kelas + angkatan, lintas semester; `26A` menghasilkan angkatan 2026. `dosen_pa_id` Master Kelas baru selalu null.
+- Kelas baru dimulai dengan status `draft`, kapasitas/kuota 40, tanpa jadwal dan ruangan. Jika record kelas sudah ada, field lokal operasional (jadwal, ruangan, kapasitas, kuota, status) dipertahankan. Sync hanya menulis `siakad_master_kelas` dan `siakad_kelas`; tidak mengisi `siakad_kelas_rombel`, pengampu, peserta, mahasiswa, KRS, atau nilai.
 - `http_method` registry `GET` menjelaskan sumber integrasi; koneksi internal ke Neo Feeder tetap menggunakan POST dengan payload `act=GetListKurikulum`, token runtime, `limit`, dan `offset`.
 - Kurikulum dengan UUID sumber yang sama diperbarui idempoten. Baris tanpa prodi tujuan yang memiliki ID Feeder atau tanpa tahun semester yang dapat dibaca dilewati; kurikulum tidak dihapus otomatis saat tidak lagi ada di respons sumber.
 - PDDIKTI mengirim `id_matkul`, `id_kurikulum`, `id_prodi`, `kode_mata_kuliah`, `nama_mata_kuliah`, `semester`, `sks_mata_kuliah`, `sks_tatap_muka`, `sks_praktek`, dan `apakah_wajib`. ID mata kuliah disimpan pada `source_id`/`id_feeder`; `apakah_wajib = 1` dipetakan ke `wajib`, nilai lainnya ke `pilihan`.

@@ -59,7 +59,7 @@ Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata
 | `search` | string | ❌ | — | Cari `kode`, `nama`, `tahun_mulai`, `tahun_selesai` |
 | `status` | string | ❌ | — | `aktif` (hanya periode aktif), `arsip` (non-aktif) |
 | `mode_penilaian` | string | ❌ | — | Filter mode penilaian (`murni_obe`, `semi_obe`, `bebas`) |
-| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `kode`, `nama`, `tahun_mulai`, `id` |
+| `sort_by` | string | ❌ | `tahun_mulai` | Default terbaru dahulu (`tahun_mulai desc`, lalu `kode desc`, `id desc`); opsi eksplisit: `created_at`, `updated_at`, `kode`, `nama`, `tahun_mulai`, `id` |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
 | `per_page` | integer | ❌ | `15` | Maks. 100 (alias: `limit`) |
 | `page` | integer | ❌ | `1` | Halaman |
@@ -74,7 +74,7 @@ Master akademik SIAKAD: tahun akademik, fakultas, program studi, kurikulum, mata
         { "id": 1, "kode": "20261", "nama": "2026/2027 Ganjil", "tahun_mulai": 2026, "tahun_selesai": 2027, "is_active": true, "mode_penilaian": "semi_obe" }
     ],
     "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 },
-    "filters": { "search": null, "sort_by": "created_at", "sort_order": "desc" }
+    "filters": { "search": null, "sort_by": "tahun_mulai", "sort_order": "desc" }
 }
 ```
 

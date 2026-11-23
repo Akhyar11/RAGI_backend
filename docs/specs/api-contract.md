@@ -20,6 +20,16 @@
 - Progress terminal dan `siakad_feeder_sync_logs` melaporkan `created`, `updated`, `sso_created`, dan `sso_updated` sebagai hitungan record/akun unik yang berhasil diproses. `synced` tetap berarti jumlah row sumber yang berhasil, bukan jumlah row yang berubah. Empat kolom counter pada log memerlukan migration `2026_11_23_130000_add_record_and_sso_counts_to_feeder_sync_logs` sebelum deployment.
 - Worker memperbarui `siakad_feeder_sync_logs`, status integrasi, dan progress setelah setiap halaman berhasil disimpan; lock dibersihkan pada sukses maupun gagal. Sync juga dapat menyelaraskan `simpeg_pegawai`, riwayat pendidikan SIMPEG, dan akun SSO dosen aktif, sehingga operator harus meninjau efeknya sebelum run produksi.
 
+## Integrasi Kelas Kuliah PDDIKTI
+
+- Integrasi tetap `siakad_kelas` memakai `GetListKelasKuliah`. `GetCountKelasKuliahWs` tercatat di User Guide Neo Feeder 2.0, tetapi request live pada koneksi kampus timeout; worker tidak memanggilnya dan menggunakan progress indeterminate tanpa total/persentase palsu.
+- Sync tulis berjalan melalui `SyncPddiktiKelasJob` pada queue `default`, mengembalikan `202 Accepted` dan `progress_id`. Uji koneksi mengambil maksimal satu record secara read-only dan tidak mengubah status target. Progress dapat dipoll lewat endpoint progress IAM oleh pemilik request atau superadmin.
+- `GetListKelasKuliah` dipanggil dengan `limit=500`, `order=id_kelas_kuliah`, dan offset deterministik. Setiap batch dipersist dalam transaksi sebelum batch berikutnya diminta; progress jumlah terbaca diperbarui setelah commit. Batch terakhir yang kurang dari 500 menandai akhir. Jika 100 batch (50.000 record) penuh tanpa batch akhir, job gagal eksplisit.
+- `id_prodi`, `id_semester`, dan `id_matkul` harus cocok unik dan aktif dengan `id_feeder` pada `siakad_program_studi`, `siakad_tahun_akademik`, dan `siakad_mata_kuliah`. Mapping yang hilang/ambigu/terhapus, label kelas yang tidak valid, duplikasi, atau konflik identifier menjadi item skip dengan alasan (maksimal 100 detail); sistem tidak menebak relasi atau menghapus target yang tidak ada di sumber.
+- Satu `siakad_master_kelas` dicari/dibuat berdasarkan program studi + label + angkatan, lintas semester; contoh `26A` menjadi tahun angkatan 2026 dan `dosen_pa_id` null. Satu `siakad_kelas` dibuat per `id_kelas_kuliah`; ID tersebut disimpan pada `siakad_kelas.id_feeder`. Fallback hanya mencari kombinasi mata kuliah + tahun akademik + kode kelas. Jika ID Feeder yang sama bertentangan dengan relasi lokal, record dilewati tanpa memindahkan data kelas yang sudah ada.
+- Kelas baru memakai status `draft`, kapasitas/kuota awal 40, tanpa jadwal dan ruangan. Saat sync ulang, atribut operasional lokal kelas yang sudah ada dipertahankan. Cakupan penulisan hanya `siakad_master_kelas` dan `siakad_kelas`; peserta, mahasiswa, KRS, nilai, dosen pengampu, dan pivot kelas-rombel tidak diimpor.
+- Ringkasan progress/hasil memuat jumlah baris dibaca, created, updated, synced, skipped, pages, dan maksimal 100 alasan skip. Kegagalan upstream menandai job/progress failed dan melepaskan lock.
+
 ## Kode diskon pendaftaran SPMB (2026-11-16)
 
 - `POST /api/spmb/pendaftaran/biodata` hanya menyimpan/memperbarui draft biodata dan pilihan `kode_diskon`; endpoint ini tidak menerbitkan invoice dan tidak mengklaim kuota kode.

@@ -45,7 +45,11 @@ class SiakadMasterReferensiFlowTest extends TestCase
             ['slug' => 'siakad.kelas.manage'],
             ['name' => 'Kelola Buka Kelas & Ruang', 'module' => 'siakad', 'action' => 'update']
         );
-        $role->permissions()->attach($perm->id);
+        $masterPermission = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'siakad.master.manage'],
+            ['name' => 'Kelola Master Fakultas & Prodi', 'module' => 'siakad', 'action' => 'update']
+        );
+        $role->permissions()->attach([$perm->id, $masterPermission->id]);
         $this->admin->roles()->attach($role->id);
         Passport::actingAs($this->admin);
     }
@@ -348,6 +352,13 @@ class SiakadMasterReferensiFlowTest extends TestCase
             'tahun_selesai' => 2026,
         ])->assertStatus(201);
 
+        $this->postJson('/api/v1/siakad/akademik/tahun-akademik', [
+            'kode' => '20261',
+            'nama' => '2026/2027 Ganjil',
+            'tahun_mulai' => 2026,
+            'tahun_selesai' => 2027,
+        ])->assertStatus(201);
+
         // Test pagination response structure & meta
         $res = $this->getJson('/api/v1/siakad/akademik/tahun-akademik?page=1&per_page=1');
         $res->assertStatus(200)
@@ -369,6 +380,10 @@ class SiakadMasterReferensiFlowTest extends TestCase
         $noPageRes->assertStatus(200)
             ->assertJsonStructure(['status', 'data']);
         $this->assertIsArray($noPageRes->json('data'));
+        $this->assertSame(
+            ['20261', '20252', '20251'],
+            collect($noPageRes->json('data'))->pluck('kode')->all()
+        );
     }
 
     public function test_alur_buka_kelas_menyimpan_hari_dari_master()

@@ -124,9 +124,12 @@ class AkademikController extends Controller
         }
 
         $allowedSort = ['kode', 'nama', 'tahun_mulai', 'created_at', 'id'];
-        $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'created_at';
+        $sortBy = in_array($request->sort_by, $allowedSort) ? $request->sort_by : 'tahun_mulai';
         $sortOrder = $request->sort_order === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $sortOrder);
+        if ($sortBy === 'tahun_mulai') {
+            $query->orderBy('kode', $sortOrder)->orderBy('id', $sortOrder);
+        }
 
         if ($request->has('page') || $request->has('per_page') || $request->has('limit')) {
             $perPage = min(100, $request->integer('per_page', $request->integer('limit', 15)));
