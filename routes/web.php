@@ -35,3 +35,17 @@ Route::get('/storage/{path}', function ($path) {
     }
     return response()->file($filePath);
 })->where('path', '.*');
+
+/*
+|--------------------------------------------------------------------------
+| Privacy Policy Routes (Kebijakan Privasi Google Play Store)
+|--------------------------------------------------------------------------
+| Halaman kebijakan privasi publik resmi untuk aplikasi mobile myIn-U Staff.
+*/
+Route::get('/privacy-policy', function () {
+    return view('privacy-policy');
+})->name('privacy.policy');
+
+Route::get('/kebijakan-privasi', function () {
+    return view('privacy-policy');
+})->name('privacy.policy.id');
