@@ -664,7 +664,7 @@ class SiakadFeederDosenSyncTest extends TestCase
         $this->assertSame('0008111', $pegawaiBaru->nidn);
         $this->assertSame('0008222', $pegawaiBaru->nuptk);
         $this->assertSame('0008333', $pegawaiBaru->nip);
-        $this->assertSame('8111', User::findOrFail($dosenBaru->user_id)->username);
+        $this->assertSame('0008111', User::findOrFail($dosenBaru->user_id)->username);
     }
 
     public function test_pull_dosen_rejects_ambiguous_zero_padded_identifier_without_creating_duplicates()

@@ -415,17 +415,17 @@ class PegawaiService
      */
     public function resolveUsernamePriority(?string $nidn, ?string $nuptk, ?string $nip, ?string $nama = null): string
     {
-        $cleanNidn = $this->normalizeIdentifier($nidn);
+        $cleanNidn = $this->sanitizeIdentifier($nidn);
         if ($cleanNidn !== null) {
             return $cleanNidn;
         }
 
-        $cleanNuptk = $this->normalizeIdentifier($nuptk);
+        $cleanNuptk = $this->sanitizeIdentifier($nuptk);
         if ($cleanNuptk !== null) {
             return $cleanNuptk;
         }
 
-        $cleanNip = $this->normalizeIdentifier($nip);
+        $cleanNip = $this->sanitizeIdentifier($nip);
         if ($cleanNip !== null) {
             return $cleanNip;
         }
@@ -457,10 +457,31 @@ class PegawaiService
      */
     public function ensureSsoUserForPegawai(Pegawai $pegawai, array $options = []): User
     {
+        $identifierUsername = $this->sanitizeIdentifier($options['username'] ?? null)
+            ?? $this->sanitizeIdentifier($pegawai->nidn)
+            ?? $this->sanitizeIdentifier($pegawai->nuptk)
+            ?? $this->sanitizeIdentifier($pegawai->nip);
+        $preserveUsernameExactly = $identifierUsername !== null;
+        $username = $identifierUsername ?? $this->resolveUsernamePriority(
+            $pegawai->nidn,
+            $pegawai->nuptk,
+            $pegawai->nip,
+            $pegawai->nama_lengkap
+        );
+
         // 1. Cek jika user sudah ada dan terhubung
         if (!empty($pegawai->user_id)) {
             $existingUser = User::find($pegawai->user_id);
             if ($existingUser) {
+                if ($existingUser->username !== $username) {
+                    $conflictingUsers = $this->findUsersByNormalizedUsername($username, $existingUser->id);
+                    if ($conflictingUsers->isNotEmpty()) {
+                        throw ValidationException::withMessages([
+                            'username' => ['Identifier SSO PDDIKTI sudah dipakai akun lain; sinkronisasi dibatalkan agar username tetap persis.'],
+                        ]);
+                    }
+                    $existingUser->update(['username' => $username]);
+                }
                 if (!empty($pegawai->nama_lengkap) && (empty($existingUser->name) || $existingUser->name !== $pegawai->nama_lengkap)) {
                     $existingUser->update(['name' => $pegawai->nama_lengkap]);
                 }
@@ -468,14 +489,6 @@ class PegawaiService
                 return $existingUser;
             }
         }
-
-        // 2. Tentukan username berdasarkan skala prioritas: NIDN -> NUPTK -> NIP -> cleanName
-        $username = $this->normalizeIdentifier($options['username'] ?? $this->resolveUsernamePriority(
-            $pegawai->nidn,
-            $pegawai->nuptk,
-            $pegawai->nip,
-            $pegawai->nama_lengkap
-        ));
 
         // 3. Tentukan email
         $email = $options['email'] ?? $this->resolveEmail(
@@ -485,21 +498,11 @@ class PegawaiService
         );
 
         // 4. Cari akun user yang cocok secara ketat (HANYA via username, DILARANG membajak akun lain via email rekaan)
-        $userQuery = User::query()->where('username', $username);
-        if (ctype_digit($username)) {
-            $usernameLength = strlen($username);
-            $userQuery->orWhere(function ($query) use ($username, $usernameLength) {
-                $query->whereRaw('LENGTH(username) >= ?', [$usernameLength])
-                    ->whereRaw('SUBSTR(username, -' . $usernameLength . ') = ?', [$username]);
-            });
-        }
-        $matchingUsers = $userQuery->get()
-            ->filter(fn (User $candidate) => $this->normalizeIdentifier($candidate->username) === $username)
-            ->values();
+        $matchingUsers = $this->findUsersByNormalizedUsername($username);
 
         if ($matchingUsers->count() > 1) {
             throw ValidationException::withMessages([
-                'username' => ['Ditemukan lebih dari satu akun dengan identifier dosen yang sama setelah normalisasi. Periksa data akun sebelum sinkronisasi.'],
+                'username' => ['Ditemukan lebih dari satu akun yang cocok dengan identifier SSO PDDIKTI setelah normalisasi. Periksa data akun sebelum sinkronisasi.'],
             ]);
         }
         $user = $matchingUsers->first();
@@ -514,6 +517,9 @@ class PegawaiService
                     'username' => ['Akun dengan identifier dosen ini sudah terhubung ke pegawai lain. Periksa kemungkinan data duplikat sebelum sinkronisasi.'],
                 ]);
             } else {
+                if ($user->username !== $username) {
+                    $user->update(['username' => $username]);
+                }
                 if (!empty($pegawai->nama_lengkap) && (empty($user->name) || $user->name !== $pegawai->nama_lengkap)) {
                     $user->update(['name' => $pegawai->nama_lengkap]);
                 }
@@ -521,7 +527,12 @@ class PegawaiService
         }
 
         if (!$user) {
-            // Pastikan username benar-benar unik
+            if (User::where('username', $username)->exists() && $preserveUsernameExactly) {
+                throw ValidationException::withMessages([
+                    'username' => ['Username identifier PDDIKTI sudah dipakai akun lain; sinkronisasi dibatalkan agar username tidak diubah.'],
+                ]);
+            }
+
             $baseUsername = $username;
             while (User::where('username', $username)->exists()) {
                 $username = $baseUsername . '_' . rand(10, 99);
@@ -565,6 +576,36 @@ class PegawaiService
         $this->assignRolesToUser($user, $pegawai, $options['role_ids'] ?? []);
 
         return $user;
+    }
+
+    private function findUsersByNormalizedUsername(string $username, ?int $excludeUserId = null)
+    {
+        $normalized = $this->normalizeIdentifier($username);
+        $query = User::query()->where(function ($query) use ($username, $normalized) {
+            $query->where('username', $username);
+            if ($normalized !== null) {
+                $normalizedLength = strlen($normalized);
+                $query->orWhere('username', $normalized)
+                    ->orWhere(function ($query) use ($normalized, $normalizedLength) {
+                        $query->whereRaw('LENGTH(username) >= ?', [$normalizedLength])
+                            ->whereRaw('SUBSTR(username, -' . $normalizedLength . ') = ?', [$normalized]);
+                    });
+            }
+        });
+
+        if ($excludeUserId !== null) {
+            $query->where('id', '!=', $excludeUserId);
+        }
+
+        return $query->get()
+            ->filter(function (User $candidate) use ($username, $normalized): bool {
+                if ($normalized === null) {
+                    return $this->sanitizeIdentifier($candidate->username) === $username;
+                }
+
+                return $this->normalizeIdentifier($candidate->username) === $normalized;
+            })
+            ->values();
     }
 
     /**

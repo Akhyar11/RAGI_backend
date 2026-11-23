@@ -216,4 +216,85 @@ class SimpegPegawaiRoleTest extends TestCase
         $this->assertNotNull($userC);
         $this->assertEquals('199505052020011003', $userC->username); // Prioritas 3: NIP
     }
+
+    public function test_sso_username_preserves_leading_zeroes_from_pddikti_identifiers(): void
+    {
+        $pegawai = \App\Models\Simpeg\Pegawai::create([
+            'nama_lengkap' => 'Dosen Identifier Padded',
+            'nidn' => '000401019001',
+            'nuptk' => '0008888777766665555',
+            'nip' => '00199001012015011001',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+        ]);
+
+        $user = app(\App\Services\Simpeg\PegawaiService::class)->ensureSsoUserForPegawai($pegawai);
+
+        $this->assertSame('000401019001', $user->username);
+
+        $pegawaiNuptk = Pegawai::create([
+            'nama_lengkap' => 'Dosen NUPTK Padded',
+            'nuptk' => '0007777666655554444',
+            'nip' => '00199001012015011003',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+        ]);
+        $userNuptk = app(\App\Services\Simpeg\PegawaiService::class)->ensureSsoUserForPegawai($pegawaiNuptk);
+        $this->assertSame('0007777666655554444', $userNuptk->username);
+
+        $pegawaiNip = Pegawai::create([
+            'nama_lengkap' => 'Pegawai NIP Padded',
+            'nip' => '00199001012015011002',
+            'jenis_pegawai' => 'tendik',
+            'status' => 'aktif',
+        ]);
+        $userNip = app(\App\Services\Simpeg\PegawaiService::class)->ensureSsoUserForPegawai($pegawaiNip);
+        $this->assertSame('00199001012015011002', $userNip->username);
+    }
+
+    public function test_sso_updates_linked_legacy_username_to_exact_pddikti_identifier(): void
+    {
+        $user = User::factory()->create(['username' => '401019001']);
+        $pegawai = \App\Models\Simpeg\Pegawai::create([
+            'user_id' => $user->id,
+            'nama_lengkap' => 'Dosen Existing SSO',
+            'nidn' => '000401019001',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+        ]);
+
+        $syncedUser = app(\App\Services\Simpeg\PegawaiService::class)->ensureSsoUserForPegawai($pegawai);
+
+        $this->assertSame($user->id, $syncedUser->id);
+        $this->assertSame('000401019001', $syncedUser->fresh()->username);
+        $this->assertSame(1, User::where('username', '000401019001')->count());
+    }
+
+    public function test_sso_username_conflict_does_not_add_suffix_to_pddikti_identifier(): void
+    {
+        $existingUser = User::factory()->create(['username' => '000401019001']);
+        Pegawai::create([
+            'user_id' => $existingUser->id,
+            'nama_lengkap' => 'Pegawai Pemilik Identifier',
+            'nidn' => '009900110022',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+        ]);
+        $userCount = User::count();
+        $pegawai = \App\Models\Simpeg\Pegawai::create([
+            'nama_lengkap' => 'Dosen Identifier Conflict',
+            'nidn' => '000401019001',
+            'jenis_pegawai' => 'dosen',
+            'status' => 'aktif',
+        ]);
+
+        try {
+            app(\App\Services\Simpeg\PegawaiService::class)->ensureSsoUserForPegawai($pegawai);
+            $this->fail('Username conflict harus menghentikan pembuatan akun SSO.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('username', $exception->errors());
+        }
+
+        $this->assertSame($userCount, User::count());
+    }
 }
