@@ -56,4 +56,30 @@ class LaboranProdiRoleSeederTest extends TestCase
         $count = Role::where('slug', 'like', 'laboran%')->count();
         $this->assertEquals(10, $count);
     }
+
+    public function test_laboran_prodi_roles_only_get_operational_menus_excluding_master_and_pengadaan()
+    {
+        $this->seed(PermissionSeeder::class);
+
+        // Buat menu simulasi SINAPRA
+        \App\Models\Menu::create(['name' => 'Dashboard', 'url' => '/sinapra', 'module' => 'sinapra', 'order' => 1]);
+        \App\Models\Menu::create(['name' => 'Inventaris Aset', 'url' => '/sinapra/aset', 'module' => 'sinapra', 'order' => 2]);
+        \App\Models\Menu::create(['name' => 'Pengadaan', 'url' => '/sinapra/pengadaan', 'module' => 'sinapra', 'order' => 3]);
+        \App\Models\Menu::create(['name' => 'Master Vendor', 'url' => '/sinapra/master/vendor', 'module' => 'sinapra', 'order' => 4]);
+
+        $this->seed(LaboranProdiRoleSeeder::class);
+
+        $role = Role::where('slug', 'laboran_d4_trpl')->first();
+        $this->assertNotNull($role);
+
+        $attachedUrls = $role->menus()->pluck('url')->toArray();
+
+        // Operasional harus ada
+        $this->assertContains('/sinapra', $attachedUrls);
+        $this->assertContains('/sinapra/aset', $attachedUrls);
+
+        // Master data dan pengadaan DILARANG ada
+        $this->assertNotContains('/sinapra/pengadaan', $attachedUrls);
+        $this->assertNotContains('/sinapra/master/vendor', $attachedUrls);
+    }
 }

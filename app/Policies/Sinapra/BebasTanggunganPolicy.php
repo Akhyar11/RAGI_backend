@@ -14,7 +14,7 @@ class BebasTanggunganPolicy
 
     public function view(User $user, BebasTanggungan $bebasTanggungan): bool
     {
-        if ($user->hasRole('superadmin') || $user->hasRole('admin') || $user->hasRole('admin_sarpras') || $user->hasRole('admin_laboratorium')) {
+        if ($user->hasPermission('sinapra.bebas_tanggungan.read') || $user->hasPermission('sinapra.bebas_tanggungan.approve')) {
             return true;
         }
 

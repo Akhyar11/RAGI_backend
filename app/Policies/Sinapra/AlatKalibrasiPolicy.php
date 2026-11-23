@@ -19,14 +19,8 @@ class AlatKalibrasiPolicy
             return false;
         }
 
-        if ($user->hasRole('superadmin') || $user->hasRole('admin') || $user->hasRole('admin_sarpras')) {
-            return true;
-        }
-
-        if ($user->hasRole('admin_laboratorium')) {
-            return LaboranRuangan::where('user_id', $user->id)
-                ->where('ruangan_id', $kalibrasi->aset?->ruangan_id)
-                ->exists();
+        if ($user->isSinapraLaboranRestricted()) {
+            return $user->getSinapraAccessibleRuanganIds()->contains($kalibrasi->aset?->ruangan_id);
         }
 
         return true;
@@ -43,14 +37,8 @@ class AlatKalibrasiPolicy
             return false;
         }
 
-        if ($user->hasRole('superadmin') || $user->hasRole('admin') || $user->hasRole('admin_sarpras')) {
-            return true;
-        }
-
-        if ($user->hasRole('admin_laboratorium')) {
-            return LaboranRuangan::where('user_id', $user->id)
-                ->where('ruangan_id', $kalibrasi->aset?->ruangan_id)
-                ->exists();
+        if ($user->isSinapraLaboranRestricted()) {
+            return $user->getSinapraAccessibleRuanganIds()->contains($kalibrasi->aset?->ruangan_id);
         }
 
         return true;

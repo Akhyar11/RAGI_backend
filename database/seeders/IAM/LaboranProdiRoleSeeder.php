@@ -121,10 +121,26 @@ class LaboranProdiRoleSeeder extends Seeder
 
         $laboranPermissions = Permission::whereIn('slug', $laboranPermissionSlugs)->get();
 
-        // Menu-menu SINAPRA untuk role laboran
+        // Menu-menu SINAPRA khusus operasional Laboran (mengecualikan Pengadaan & Master Data)
+        $laboranMenuUrls = [
+            '/sinapra',
+            '#fasilitas_sinapra',
+            '/sinapra/gedung-ruangan',
+            '/sinapra/aset',
+            '/sinapra/peminjaman',
+            '/sinapra/maintenance',
+            '/sinapra/kalender',
+            '#operasional_sinapra',
+            '/sinapra/laboratorium',
+            '/sinapra/audit-mutasi',
+        ];
+
         $sinapraMenuIds = [];
         if (Schema::hasTable('core_menus')) {
-            $sinapraMenuIds = Menu::where('module', 'sinapra')->pluck('id')->toArray();
+            $sinapraMenuIds = Menu::where('module', 'sinapra')
+                ->whereIn('url', $laboranMenuUrls)
+                ->pluck('id')
+                ->toArray();
         }
 
         foreach ($rolesData as $data) {
@@ -146,9 +162,9 @@ class LaboranProdiRoleSeeder extends Seeder
                 ]);
             }
 
-            // 3. Hubungkan Menu SINAPRA
+            // 3. Hubungkan Menu SINAPRA khusus operasional (sync agar menu master terlepas)
             if (!empty($sinapraMenuIds)) {
-                $role->menus()->syncWithoutDetaching($sinapraMenuIds);
+                $role->menus()->sync($sinapraMenuIds);
             }
 
             // 4. Hubungkan role ke user contoh jika user ada di database

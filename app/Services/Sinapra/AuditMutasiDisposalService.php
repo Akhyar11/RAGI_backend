@@ -20,9 +20,12 @@ class AuditMutasiDisposalService
      */
     public function isLaboranAssigned(int $userId, int $ruanganId): bool
     {
-        return LaboranRuangan::where('user_id', $userId)
-            ->where('ruangan_id', $ruanganId)
-            ->exists();
+        $user = User::find($userId);
+        if (!$user) {
+            return false;
+        }
+
+        return $user->getSinapraAccessibleRuanganIds()->contains($ruanganId);
     }
 
     /**
@@ -30,7 +33,12 @@ class AuditMutasiDisposalService
      */
     public function getAssignedRuanganIds(int $userId): array
     {
-        return LaboranRuangan::where('user_id', $userId)->pluck('ruangan_id')->toArray();
+        $user = User::find($userId);
+        if (!$user) {
+            return [];
+        }
+
+        return $user->getSinapraAccessibleRuanganIds()->toArray();
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -42,7 +50,7 @@ class AuditMutasiDisposalService
         $query = StockOpname::with(['ruangan.gedung', 'petugas']);
 
         // Scoping role laboran
-        $isLaboran = $user->hasRole('admin_laboratorium') && !$user->hasRole('admin_sarpras') && !$user->hasRole('superadmin');
+        $isLaboran = $user->isSinapraLaboranRestricted();
         if ($isLaboran) {
             $assignedIds = $this->getAssignedRuanganIds($user->id);
             $query->whereIn('ruangan_id', $assignedIds);
@@ -84,7 +92,7 @@ class AuditMutasiDisposalService
     {
         $opname = StockOpname::with(['ruangan.gedung', 'petugas', 'items.aset'])->findOrFail($id);
 
-        $isLaboran = $user->hasRole('admin_laboratorium') && !$user->hasRole('admin_sarpras') && !$user->hasRole('superadmin');
+        $isLaboran = $user->isSinapraLaboranRestricted();
         if ($isLaboran && !$this->isLaboranAssigned($user->id, $opname->ruangan_id)) {
             throw new HttpException(403, 'Anda tidak memiliki wewenang untuk melihat audit laboratorium ini.');
         }
@@ -96,7 +104,7 @@ class AuditMutasiDisposalService
     {
         $ruanganId = (int) $data['ruangan_id'];
 
-        $isLaboran = $user->hasRole('admin_laboratorium') && !$user->hasRole('admin_sarpras') && !$user->hasRole('superadmin');
+        $isLaboran = $user->isSinapraLaboranRestricted();
         if ($isLaboran && !$this->isLaboranAssigned($user->id, $ruanganId)) {
             throw new HttpException(403, 'Anda hanya dapat membuat stock opname untuk laboratorium yang Anda kelola.');
         }
@@ -138,7 +146,7 @@ class AuditMutasiDisposalService
     {
         $opname = StockOpname::findOrFail($opnameId);
 
-        $isLaboran = $user->hasRole('admin_laboratorium') && !$user->hasRole('admin_sarpras') && !$user->hasRole('superadmin');
+        $isLaboran = $user->isSinapraLaboranRestricted();
         if ($isLaboran && !$this->isLaboranAssigned($user->id, $opname->ruangan_id)) {
             throw new HttpException(403, 'Anda tidak memiliki wewenang untuk mengubah data audit opname lab ini.');
         }
@@ -161,7 +169,7 @@ class AuditMutasiDisposalService
     {
         $opname = StockOpname::with('items')->findOrFail($opnameId);
 
-        $isLaboran = $user->hasRole('admin_laboratorium') && !$user->hasRole('admin_sarpras') && !$user->hasRole('superadmin');
+        $isLaboran = $user->isSinapraLaboranRestricted();
         if ($isLaboran && !$this->isLaboranAssigned($user->id, $opname->ruangan_id)) {
             throw new HttpException(403, 'Anda tidak memiliki wewenang untuk menutup stock opname ini.');
         }
@@ -205,7 +213,7 @@ class AuditMutasiDisposalService
     {
         $query = MutasiAset::with(['aset', 'ruanganAsal.gedung', 'ruanganTujuan.gedung', 'pemohon', 'approver']);
 
-        $isLaboran = $user->hasRole('admin_laboratorium') && !$user->hasRole('admin_sarpras') && !$user->hasRole('superadmin');
+        $isLaboran = $user->isSinapraLaboranRestricted();
         if ($isLaboran) {
             $assignedIds = $this->getAssignedRuanganIds($user->id);
             $query->where(function ($q) use ($assignedIds) {
@@ -260,7 +268,7 @@ class AuditMutasiDisposalService
             throw new HttpException(422, 'Ruangan tujuan mutasi tidak boleh sama dengan ruangan asal aset.');
         }
 
-        $isLaboran = $user->hasRole('admin_laboratorium') && !$user->hasRole('admin_sarpras') && !$user->hasRole('superadmin');
+        $isLaboran = $user->isSinapraLaboranRestricted();
         if ($isLaboran && !$this->isLaboranAssigned($user->id, $ruanganAsalId)) {
             throw new HttpException(403, 'Anda hanya dapat mengajukan mutasi untuk aset yang berada di laboratorium binaan Anda.');
         }
@@ -285,7 +293,7 @@ class AuditMutasiDisposalService
             throw new HttpException(422, 'Permohonan mutasi ini sudah diproses sebelumnya.');
         }
 
-        $isLaboran = $user->hasRole('admin_laboratorium') && !$user->hasRole('admin_sarpras') && !$user->hasRole('superadmin');
+        $isLaboran = $user->isSinapraLaboranRestricted();
         // Laboran tujuan atau admin sarpras yang bisa menyetujui penerimaan barang
         if ($isLaboran && !$this->isLaboranAssigned($user->id, $mutasi->ruangan_tujuan_id)) {
             throw new HttpException(403, 'Hanya penanggung jawab ruangan/laboratorium tujuan atau Admin Sarpras yang dapat memproses penerimaan mutasi.');

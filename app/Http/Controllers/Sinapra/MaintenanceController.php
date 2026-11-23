@@ -37,11 +37,29 @@ class MaintenanceController extends Controller
         }
 
         $user = $request->user();
-        if ($user && $user->hasRole('admin_laboratorium') && !$user->isSuperAdmin() && !$user->hasRole('admin_sarpras')) {
-            $ruanganIds = $user->laboranRuangan()->pluck('sinapra_ruangan.id');
-            $query->where(function ($q) use ($ruanganIds) {
-                $q->whereIn('ruangan_id', $ruanganIds)
-                  ->orWhereHas('aset', fn($a) => $a->whereIn('ruangan_id', $ruanganIds));
+        if ($user && $user->isSinapraLaboranRestricted()) {
+            $ruanganIds = $user->getSinapraAccessibleRuanganIds();
+            $prodiIds = $user->getSinapraProdiIds();
+            $query->where(function ($q) use ($ruanganIds, $prodiIds) {
+                $hasCondition = false;
+                if ($ruanganIds->isNotEmpty()) {
+                    $q->whereIn('ruangan_id', $ruanganIds)
+                      ->orWhereHas('aset', fn($a) => $a->whereIn('ruangan_id', $ruanganIds));
+                    $hasCondition = true;
+                }
+                if ($prodiIds->isNotEmpty()) {
+                    if ($hasCondition) {
+                        $q->orWhereHas('ruangan', fn($rq) => $rq->whereIn('program_studi_id', $prodiIds))
+                          ->orWhereHas('aset', fn($a) => $a->whereIn('program_studi_id', $prodiIds));
+                    } else {
+                        $q->whereHas('ruangan', fn($rq) => $rq->whereIn('program_studi_id', $prodiIds))
+                          ->orWhereHas('aset', fn($a) => $a->whereIn('program_studi_id', $prodiIds));
+                    }
+                    $hasCondition = true;
+                }
+                if (!$hasCondition) {
+                    $q->whereRaw('1 = 0');
+                }
             });
         }
 
