@@ -364,6 +364,11 @@ class SimpegPegawaiImportTest extends TestCase
         $this->assertNotNull($user);
         $this->assertTrue($user->hasRole('tendik'));
         $this->assertFalse($user->hasRole('dosen'));
+        $this->assertEquals('Bambang Supriyanto', $user->name);
+        $this->assertDatabaseHas('core_users', [
+            'id' => $user->id,
+            'name' => 'Bambang Supriyanto',
+        ]);
     }
 
     public function test_import_pegawai_rejects_duplicate_nidn_and_nuptk_in_file_and_against_db()
@@ -452,6 +457,48 @@ class SimpegPegawaiImportTest extends TestCase
         $this->assertNull($staf2->nidn);
         $this->assertNull($staf2->nuptk);
         $this->assertNull($staf2->nip);
+    }
+
+    public function test_ensure_sso_user_populates_and_syncs_core_users_name_with_pegawai_nama_lengkap()
+    {
+        $pegawaiService = app(\App\Services\Simpeg\PegawaiService::class);
+        $shift = \App\Models\ShiftTemplate::first();
+
+        // 1. Tambah Pegawai baru
+        $pegawai = $pegawaiService->create([
+            'nama_lengkap' => 'Prof. Ir. Hendra Gunawan, Ph.D.',
+            'nip' => '198701012015011001',
+            'nidn' => '0401018701',
+            'nuptk' => '1234567890123456',
+            'jenis_pegawai' => 'dosen',
+            'tanggal_masuk' => '2020-01-01',
+            'shift_template_id' => $shift->id,
+            'status' => 'aktif',
+        ]);
+
+        $this->assertNotNull($pegawai->user_id);
+        $user = User::find($pegawai->user_id);
+        $this->assertNotNull($user);
+
+        // Verifikasi fisik di database bahwa kolom 'name' tidak null dan terisi nama_lengkap
+        $this->assertEquals('Prof. Ir. Hendra Gunawan, Ph.D.', $user->name);
+        $this->assertDatabaseHas('core_users', [
+            'id' => $user->id,
+            'name' => 'Prof. Ir. Hendra Gunawan, Ph.D.',
+            'username' => '0401018701',
+        ]);
+
+        // 2. Update nama_lengkap pegawai, pastikan core_users.name juga tersinkronisasi
+        $pegawaiService->update($pegawai, [
+            'nama_lengkap' => 'Prof. Dr. Ir. Hendra Gunawan, M.Sc., Ph.D.',
+        ]);
+
+        $user->refresh();
+        $this->assertEquals('Prof. Dr. Ir. Hendra Gunawan, M.Sc., Ph.D.', $user->name);
+        $this->assertDatabaseHas('core_users', [
+            'id' => $user->id,
+            'name' => 'Prof. Dr. Ir. Hendra Gunawan, M.Sc., Ph.D.',
+        ]);
     }
 }
 

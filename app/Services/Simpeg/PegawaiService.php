@@ -167,7 +167,12 @@ class PegawaiService
             }
 
             $pegawai->update($data);
-            $pegawai->load(['roles']);
+            $pegawai->load(['roles', 'user']);
+
+            // Pastikan nama SSO user juga sinkron dengan nama_lengkap pegawai terbaru
+            if ($pegawai->user && !empty($pegawai->nama_lengkap) && $pegawai->user->name !== $pegawai->nama_lengkap) {
+                $pegawai->user->update(['name' => $pegawai->nama_lengkap]);
+            }
 
             // Pastikan akun SSO tetap ada dan sinkron dengan perannya
             $this->ensureSsoUserForPegawai($pegawai, [
@@ -456,6 +461,9 @@ class PegawaiService
         if (!empty($pegawai->user_id)) {
             $existingUser = User::find($pegawai->user_id);
             if ($existingUser) {
+                if (!empty($pegawai->nama_lengkap) && (empty($existingUser->name) || $existingUser->name !== $pegawai->nama_lengkap)) {
+                    $existingUser->update(['name' => $pegawai->nama_lengkap]);
+                }
                 $this->assignRolesToUser($existingUser, $pegawai, $options['role_ids'] ?? []);
                 return $existingUser;
             }
@@ -505,6 +513,10 @@ class PegawaiService
                 throw ValidationException::withMessages([
                     'username' => ['Akun dengan identifier dosen ini sudah terhubung ke pegawai lain. Periksa kemungkinan data duplikat sebelum sinkronisasi.'],
                 ]);
+            } else {
+                if (!empty($pegawai->nama_lengkap) && (empty($user->name) || $user->name !== $pegawai->nama_lengkap)) {
+                    $user->update(['name' => $pegawai->nama_lengkap]);
+                }
             }
         }
 
@@ -530,6 +542,7 @@ class PegawaiService
 
             $user = User::create([
                 'username' => $username,
+                'name' => $pegawai->nama_lengkap,
                 'email' => $email,
                 'password' => $passwordVal,
                 'phone' => $pegawai->telepon ?? null,
