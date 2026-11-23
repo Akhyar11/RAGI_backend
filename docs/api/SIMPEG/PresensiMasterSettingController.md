@@ -4,7 +4,7 @@
 > **Base URL**: `/api/simpeg/presensi`
 > **Autentikasi**: Bearer Token (Passport) — seluruh endpoint terproteksi `auth:api`
 > **Dibuat**: 2026-09-14
-> **Diperbarui**: 2026-11-23 (batas wajah menjadi sumber kebenaran server/mobile; toleransi waktu & libur tetap dikelola per shift)
+> **Diperbarui**: 2026-11-23 (batas wajah sumber kebenaran server/mobile, presensi lintas kampus, radius_meters kantor opsional/default 50, dan unlink relasi pegawai saat hapus kantor)
 
 Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe shift kerja (multi-tipe dengan jadwal 7 hari), dan kalender libur nasional/tanggal merah.
 
@@ -16,10 +16,10 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
 |---|---|---|---|
 | GET | `/api/simpeg/presensi/settings` | Baca parameter sistem presensi | ✅ Bearer |
 | PUT | `/api/simpeg/presensi/settings` | Perbarui parameter sistem presensi | ✅ Bearer |
-| GET | `/api/simpeg/presensi/office-locations` | Daftar lokasi kantor + jumlah pegawai | ✅ Bearer |
-| POST | `/api/simpeg/presensi/office-locations` | Tambah lokasi kantor | ✅ Bearer |
-| PUT | `/api/simpeg/presensi/office-locations/{id}` | Ubah lokasi kantor | ✅ Bearer |
-| DELETE | `/api/simpeg/presensi/office-locations/{id}` | Hapus lokasi kantor (ditolak bila dipakai pegawai) | ✅ Bearer |
+| GET | `/api/simpeg/presensi/office-locations` | Daftar lokasi kantor | ✅ Bearer |
+| POST | `/api/simpeg/presensi/office-locations` | Tambah lokasi kantor (radius_meters opsional, default 50) | ✅ Bearer |
+| PUT | `/api/simpeg/presensi/office-locations/{id}` | Ubah lokasi kantor (radius_meters opsional) | ✅ Bearer |
+| DELETE | `/api/simpeg/presensi/office-locations/{id}` | Hapus lokasi kantor (otomatis reset relasi pegawai ke null) | ✅ Bearer |
 | GET | `/api/simpeg/presensi/shift-templates` | Daftar tipe shift + jadwal 7 hari (auto-seed default bila kosong) | ✅ Bearer |
 | POST | `/api/simpeg/presensi/shift-templates` | Tambah tipe shift baru (jam bisa beda per tipe) | ✅ Bearer |
 | PUT | `/api/simpeg/presensi/shift-templates/{id}` | Ubah info tipe shift + jadwal harian | ✅ Bearer |
@@ -163,6 +163,284 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
     "errors": {
         "max_late_per_month": ["Batas maksimal terlambat per bulan harus diisi."]
     }
+}
+```
+
+---
+
+## GET /api/simpeg/presensi/office-locations
+
+> Mengambil daftar seluruh lokasi kantor/kampus aktif maupun nonaktif beserta koordinat GPS dan status keaktifan.
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "data": [
+        {
+            "id": 1,
+            "name": "Kampus Utama Politeknik Indonusa Surakarta",
+            "address": "Jl. KH Samanhudi No.84, Surakarta",
+            "latitude": -7.5675,
+            "longitude": 110.8036,
+            "radius_meters": 50,
+            "is_active": true,
+            "employees_count": 0
+        }
+    ]
+}
+```
+
+### Response Error
+
+**400 Bad Request**
+```json
+{
+    "status": "error",
+    "message": "Permintaan tidak dapat diproses."
+}
+```
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk membaca master lokasi kantor presensi."
+}
+```
+
+---
+
+## POST /api/simpeg/presensi/office-locations
+
+> Menambahkan data lokasi kantor / kampus baru. Field `radius_meters` bersifat opsional (default bernilai 50 atau mengikuti toleransi akurasi GPS global bila tidak disertakan).
+
+### Request Body
+
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `name` | string | ✅ | Nama lokasi / gedung kantor (maksimal 255 karakter) |
+| `address` | string | ❌ | Alamat lengkap kantor |
+| `latitude` | numeric | ✅ | Titik koordinat lintang (-90 s.d 90) |
+| `longitude` | numeric | ✅ | Titik koordinat bujur (-180 s.d 180) |
+| `radius_meters` | integer | ❌ | Radius geofence dalam meter (10 - 5000, default: 50) |
+| `is_active` | boolean | ✅ | Status keaktifan lokasi presensi |
+
+```json
+{
+    "name": "Kampus 2 Pajang",
+    "address": "Jl. Pajang No. 12 Surakarta",
+    "latitude": -7.5750,
+    "longitude": 110.7900,
+    "radius_meters": 50,
+    "is_active": true
+}
+```
+
+### Response Sukses
+
+**201 Created**
+```json
+{
+    "status": "success",
+    "message": "Lokasi kantor berhasil ditambahkan",
+    "data": {
+        "id": 2,
+        "name": "Kampus 2 Pajang",
+        "address": "Jl. Pajang No. 12 Surakarta",
+        "latitude": -7.575,
+        "longitude": 110.79,
+        "radius_meters": 50,
+        "is_active": true
+    }
+}
+```
+
+### Response Error
+
+**400 Bad Request**
+```json
+{
+    "status": "error",
+    "message": "Format request tidak valid."
+}
+```
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk menambah lokasi kantor presensi."
+}
+```
+
+**422 Unprocessable Content**
+```json
+{
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "name": ["Nama lokasi kantor wajib diisi."],
+        "latitude": ["Titik latitude wajib diisi."],
+        "longitude": ["Titik longitude wajib diisi."],
+        "radius_meters": ["The radius meters field must be between 10 and 5000."]
+    }
+}
+```
+
+---
+
+## PUT /api/simpeg/presensi/office-locations/{id}
+
+> Memperbarui konfigurasi lokasi kantor. Jika `radius_meters` tidak dikirim, nilai radius lama akan dipertahankan.
+
+### Request Body
+
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `name` | string | ✅ | Nama lokasi / gedung kantor |
+| `address` | string | ❌ | Alamat lengkap kantor |
+| `latitude` | numeric | ✅ | Titik koordinat lintang |
+| `longitude` | numeric | ✅ | Titik koordinat bujur |
+| `radius_meters` | integer | ❌ | Radius geofence dalam meter (10 - 5000, default: mempertahankan radius lama atau 50) |
+| `is_active` | boolean | ✅ | Status keaktifan lokasi presensi |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Lokasi kantor berhasil diperbarui",
+    "data": {
+        "id": 2,
+        "name": "Kampus 2 Pajang",
+        "address": "Jl. Pajang No. 12 Surakarta",
+        "latitude": -7.575,
+        "longitude": 110.79,
+        "radius_meters": 50,
+        "is_active": true
+    }
+}
+```
+
+### Response Error
+
+**400 Bad Request**
+```json
+{
+    "status": "error",
+    "message": "Format request tidak valid."
+}
+```
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk mengubah lokasi kantor presensi."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Lokasi kantor tidak ditemukan."
+}
+```
+
+**422 Unprocessable Content**
+```json
+{
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "radius_meters": ["The radius meters field must be between 10 and 5000."]
+    }
+}
+```
+
+---
+
+## DELETE /api/simpeg/presensi/office-locations/{id}
+
+> Menghapus lokasi kantor. Sistem secara otomatis mereset relasi `office_location_id` pada seluruh pegawai yang sebelumnya terhubung menjadi `null` dengan pencatatan audit log `unlink_office_locations`, lalu menghapus lokasi kantor dengan pencatatan audit log `delete_office_location`.
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Lokasi kantor berhasil dihapus",
+    "data": null
+}
+```
+
+### Response Error
+
+**400 Bad Request**
+```json
+{
+    "status": "error",
+    "message": "Permintaan penghapusan tidak valid."
+}
+```
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Unauthenticated."
+}
+```
+
+**403 Forbidden**
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk menghapus lokasi kantor presensi."
+}
+```
+
+**404 Not Found**
+```json
+{
+    "status": "error",
+    "message": "Lokasi kantor tidak ditemukan."
+}
+```
+
+**422 Unprocessable Content**
+```json
+{
+    "status": "error",
+    "message": "Lokasi kantor tidak dapat dihapus."
 }
 ```
 
@@ -402,7 +680,7 @@ Master pengaturan presensi: parameter sistem, lokasi kantor (geofencing), tipe s
 > - `GET shift-templates` tidak pernah mengembalikan kosong: selalu ada minimal 1 template default (auto-seed).
 > - Parameter global `PUT settings` kini hanya wajib `face_score_threshold` + `gps_accuracy_threshold_meters`; toleransi waktu & `applies_national_holidays` bersifat opsional (fallback bila pegawai tanpa shift) dan dikelola utama per shift template via UI Master Presensi.
 > - Field `applies_national_holidays = false` cocok untuk shift satpam/operasional yang tetap wajib masuk saat tanggal merah.
-> - Penghapusan shift/lokasi yang masih dipakai pegawai ditolak (`422`) demi integritas referensi `simpeg_pegawai.shift_template_id`.
+> - Penghapusan shift yang masih dipakai pegawai ditolak (`422`) demi integritas referensi `simpeg_pegawai.shift_template_id`. Penghapusan lokasi kantor otomatis mereset `office_location_id` pegawai terkait menjadi `null` dengan audit log transaksional.
 > - Jendela clock-in: `[start - max_early, start + max_late]`. Keterlambatan dalam jendela tercatat `terlambat` + `late_minutes` + notes audit. `max_late = 0` berarti tanpa batas atas. Override per-hari via `days[].max_late_clock_in_minutes` / `days[].max_early_clock_in_minutes` (PUT).
 > - Shift lintas hari: isi `end_time` lebih kecil dari `start_time` (misal `22:00-06:00`, sudah dipakai Shift Satpam Malam). Sistem otomatis +1 hari untuk jam pulang, punch 00:xx diatribusikan ke tanggal dinas kemarin, dan clock-out pagi menutup record dinas kemarin. Cut-off menunda Alfa sampai shift selesai.
 > - Multi-lokasi absen: setiap pegawai punya 1 lokasi utama (`office_location_id`) + N lokasi tambahan (pivot `simpeg_pegawai_office_locations`). Clock-in/out sah bila masuk radius lokasi mana pun; lokasi yang cocok dicatat di `office_location_id` + notes audit. Cocok untuk dosen mengajar di gedung/kampus lain.

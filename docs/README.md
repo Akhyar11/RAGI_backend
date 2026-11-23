@@ -173,7 +173,7 @@
 | PresensiController | Presensi biometrik mobile (Android Flutter), validasi wajah Python, bundle siklus 26 - 25 & matriks harian | [docs/api/SIMPEG/PresensiController.md](api/SIMPEG/PresensiController.md) |
 | PresensiPengajaranController | Monitoring bulanan pertemuan/presensi dosen berbasis penugasan SIAKAD, cut-off, dan izin khusus | [docs/api/SIMPEG/PresensiPengajaranController.md](api/SIMPEG/PresensiPengajaranController.md) |
 | AttendanceController | Endpoint mobile presensi: status harian, scan masuk/pulang, toleransi cutoff, izin & rekap | [docs/api/API/AttendanceController.md](api/API/AttendanceController.md) |
-| PresensiMasterSettingController | Master pengaturan presensi: parameter sistem, lokasi kantor, multi-tipe shift, & kalender libur | [docs/api/SIMPEG/PresensiMasterSettingController.md](api/SIMPEG/PresensiMasterSettingController.md) |
+| PresensiMasterSettingController | Master pengaturan presensi: parameter sistem, lokasi kantor lintas kampus, multi-tipe shift, & kalender libur | [docs/api/SIMPEG/PresensiMasterSettingController.md](api/SIMPEG/PresensiMasterSettingController.md) |
 | AttendanceDataApi | Spesifikasi API integrasi data absensi & rekapitulasi kehadiran | [docs/api/SIMPEG/ATTENDANCE_DATA_API.md](api/SIMPEG/ATTENDANCE_DATA_API.md) |
 | AttendanceApi | Spesifikasi teknis integrasi & sinkronisasi SIMPEG | [docs/api/SIMPEG/ATTENDANCE_API.md](api/SIMPEG/ATTENDANCE_API.md) |
 | KompetensiController | Kompetensi dosen: Sertifikasi dosen, riwayat tes kemampuan, & pelatihan/diklat | [docs/api/SIMPEG/KompetensiController.md](api/SIMPEG/KompetensiController.md) |

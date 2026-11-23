@@ -14,6 +14,8 @@ use App\Http\Requests\Simpeg\UpdateShiftTemplateRequest;
 use App\Services\PresensiSettingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Services\AuditLogService;
+use Illuminate\Support\Facades\Log;
 
 class PresensiMasterSettingController extends Controller
 {
@@ -99,11 +101,25 @@ class PresensiMasterSettingController extends Controller
             'address' => 'nullable|string',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
-            'radius_meters' => 'required|integer|min:10|max:5000',
+            'radius_meters' => 'nullable|integer|min:10|max:5000',
             'is_active' => 'required|boolean',
         ]);
 
+        $validated['radius_meters'] = (int) ($validated['radius_meters'] ?? 50);
+
         $office = OfficeLocation::create($validated);
+
+        try {
+            AuditLogService::record(
+                action: 'create_office_location',
+                module: 'simpeg',
+                description: "Menambahkan lokasi kantor baru {$office->name} (ID: {$office->id})",
+                oldValues: null,
+                newValues: $office->toArray()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log tambah lokasi kantor: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
@@ -124,11 +140,28 @@ class PresensiMasterSettingController extends Controller
             'address' => 'nullable|string',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
-            'radius_meters' => 'required|integer|min:10|max:5000',
+            'radius_meters' => 'nullable|integer|min:10|max:5000',
             'is_active' => 'required|boolean',
         ]);
 
+        if (!isset($validated['radius_meters'])) {
+            $validated['radius_meters'] = $office->radius_meters ?: 50;
+        }
+
+        $oldValues = $office->getOriginal();
         $office->update($validated);
+
+        try {
+            AuditLogService::record(
+                action: 'update_office_location',
+                module: 'simpeg',
+                description: "Memperbarui lokasi kantor {$office->name} (ID: {$office->id})",
+                oldValues: $oldValues,
+                newValues: $office->getChanges()
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log update lokasi kantor: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
@@ -142,20 +175,43 @@ class PresensiMasterSettingController extends Controller
      */
     public function destroyOfficeLocation(int $id): JsonResponse
     {
-        $office = OfficeLocation::withCount('employees')->findOrFail($id);
+        $office = OfficeLocation::findOrFail($id);
 
-        if ($office->employees_count > 0) {
-            return response()->json([
-                'status' => 'error',
-                'message' => "Lokasi kantor '{$office->name}' tidak dapat dihapus karena masih digunakan oleh {$office->employees_count} pegawai.",
-            ], 422);
+        $affectedEmployeeIds = \App\Models\Simpeg\Pegawai::where('office_location_id', $office->id)->pluck('id')->toArray();
+        if (!empty($affectedEmployeeIds)) {
+            \App\Models\Simpeg\Pegawai::where('office_location_id', $office->id)->update(['office_location_id' => null]);
+            try {
+                AuditLogService::record(
+                    action: 'unlink_office_locations',
+                    module: 'simpeg',
+                    description: "Mereset lokasi kantor id {$office->id} pada pegawai: " . implode(', ', $affectedEmployeeIds),
+                    oldValues: ['office_location_id' => $office->id],
+                    newValues: ['office_location_id' => null]
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log reset lokasi kantor pegawai: ' . $e->getMessage());
+            }
         }
 
+        $oldOfficeValues = $office->getOriginal();
         $office->delete();
+
+        try {
+            AuditLogService::record(
+                action: 'delete_office_location',
+                module: 'simpeg',
+                description: "Menghapus lokasi kantor {$office->name} (ID: {$office->id})",
+                oldValues: $oldOfficeValues,
+                newValues: null
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log hapus lokasi kantor: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',
             'message' => 'Lokasi kantor berhasil dihapus',
+            'data' => null,
         ]);
     }
 

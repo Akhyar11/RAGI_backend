@@ -81,11 +81,12 @@ class AttendanceService
             $rejectionReasons[] = "Akurasi GPS tidak memadai ({$accuracy}m, batas maksimal {$maxGpsAccuracy}m).";
         }
 
-        // Aturan C: Geofence radius (multi-lokasi: lolos bila di lokasi mana pun)
+        // Aturan C: Geofence radius (seluruh kampus aktif: lolos bila di dalam radius kampus mana pun)
         if (!$office) {
-            $rejectionReasons[] = 'Lokasi absen untuk pegawai ini belum ditentukan di data SIMPEG. Hubungi administrator.';
+            $rejectionReasons[] = 'Belum ada lokasi kantor/kampus aktif yang terdaftar di SIMPEG. Hubungi administrator.';
         } elseif (!$isWithinRadius) {
-            $rejectionReasons[] = "Di luar area kantor (terdekat: {$nearestOffice->name}, jarak {$nearestDistance}m, radius {$nearestOffice->radius_meters}m; {$checkedCount} lokasi absen diperiksa).";
+            $nearestRadius = (float) ($nearestOffice->radius_meters ?: 50.0);
+            $rejectionReasons[] = "Di luar area kantor (terdekat: {$nearestOffice->name}, jarak " . round($nearestDistance, 1) . "m, radius {$nearestRadius}m; {$checkedCount} lokasi absen diperiksa).";
         }
 
         // Aturan D: Face match score & Server-Side Biometric Verification ke Python port 8001
@@ -364,7 +365,10 @@ class AttendanceService
                 $nearestDistance = $d;
             }
 
-            if ($d <= $candidate->radius_meters
+            // Gunakan radius dinamis dari entitas database office_location
+            $officeRadius = (float) ($candidate->radius_meters ?: 50.0);
+
+            if ($d <= $officeRadius
                 && ($matchedDistance === null || $d < $matchedDistance)) {
                 $matched = $candidate;
                 $matchedDistance = $d;
@@ -567,9 +571,10 @@ class AttendanceService
             $rejectionReasons[] = "Akurasi GPS tidak memadai ({$accuracy}m, batas maksimal {$maxGpsAccuracy}m).";
         }
         if (!$office) {
-            $rejectionReasons[] = 'Lokasi absen untuk pegawai ini belum ditentukan di data SIMPEG. Hubungi administrator.';
+            $rejectionReasons[] = 'Belum ada lokasi kantor/kampus aktif yang terdaftar di SIMPEG. Hubungi administrator.';
         } elseif (!$isWithinRadius) {
-            $rejectionReasons[] = "Di luar area kantor (terdekat: {$nearestOffice->name}, jarak {$nearestDistance}m, radius {$nearestOffice->radius_meters}m; {$checkedCount} lokasi absen diperiksa).";
+            $nearestRadius = (float) ($nearestOffice->radius_meters ?: 50.0);
+            $rejectionReasons[] = "Di luar area kantor (terdekat: {$nearestOffice->name}, jarak " . round($nearestDistance, 1) . "m, radius {$nearestRadius}m; {$checkedCount} lokasi absen diperiksa).";
         }
 
         // Verifikasi Biometrik Wajah ke Python Face Microservice
