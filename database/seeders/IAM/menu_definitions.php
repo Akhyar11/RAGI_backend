@@ -444,7 +444,9 @@ return [
                 'url' => '/lms/forum',
                 'icon' => 'FaUsers',
                 'module' => 'lms',
-                'permission_slug' => 'siakad.kelas.read',
+                // Sama dengan middleware route forum (`lms.forum.*`), bukan
+                // `siakad.kelas.read` yang dipakai menu pembelajaran lainnya.
+                'permission_slug' => 'lms.forum.read',
                 'order_index' => 3,
                 'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
             ],

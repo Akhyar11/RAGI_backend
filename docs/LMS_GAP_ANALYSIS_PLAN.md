@@ -4,7 +4,7 @@
 | | |
 |---|---|
 | **Tanggal** | 22 Oktober 2026 |
-| **Status** | Dokumen rencana historis. LMS PresensiV2 yang dahulu direncanakan/diimplementasikan kini dinonaktifkan; lihat catatan arsitektur terbaru di bagian 4.A. |
+| **Status** | Dokumen rencana historis. Integrasi PresensiV2 **dibatalkan**; presensi dan jurnal memakai data lokal RAG (`siakad_pertemuan`). Lihat bagian 4.A dan [`LMS_CAPABILITY_MATRIX_QA.md`](LMS_CAPABILITY_MATRIX_QA.md). |
 | **Sumber (donor)** | `/Users/it/Project/lms` (Laravel 13.8 API + Next.js 16 web + microservice AI Node) |
 | **Target (penerima)** | `/Users/it/Project/RAG` (Laravel 13.8 backend + Next.js 16 frontend) |
 | **Ruang lingkup** | Modul LMS RAG (prefix `/api/v1/lms`, 57 route, 14 tabel `lms_*`, 14 halaman FE) |
@@ -13,10 +13,12 @@
 > (tidak ada tabel/kolom AI grading, tidak ada service, tidak ada toggle FE).
 > Semua fase lain tetap sesuai rencana.
 
-> **Catatan pembaruan arsitektur (2026-11-09)**: rencana integrasi PresensiV2 pada dokumen historis ini
-> tidak berlaku lagi. Modul presensi LMS hanya memakai data SIAKAD RAG; tidak ada koneksi, API,
-> scheduler retry, atau aksi UI ke sistem legacy. Kolom/tabel sinkronisasi historis dipertahankan
-> tanpa digunakan agar data lama tidak terhapus.
+> **Catatan arsitektur final (2026-11-24)**: rencana integrasi PresensiV2 dalam dokumen historis ini
+> **dibatalkan**. Data presensi/laporan RAG dan sistem legacy berbeda, sehingga tidak ada koneksi,
+> API, scheduler retry, service, endpoint sync/tarik, command retry, maupun panel UI ke sistem legacy.
+> Jurnal presensi terintegrasi LMS disimpan dengan **memperpanjang `siakad_pertemuan`** (satu sumber
+> jurnal), bukan tabel baru dan bukan sync ke jurnal PresensiV2. Kolom/tabel sinkronisasi historis
+> yang sudah ada tetap dipertahankan agar data lama tidak terhapus, tetapi tidak dipakai atau ditampilkan.
 >
 > **Keputusan teknis yang sudah diambil saat eksekusi:**
 >
@@ -28,7 +30,7 @@
 > | TD-4 | Definisi menu LMS dipindah ke `database/seeders/IAM/menu_definitions.php` + key baru `is_active` & `role_slugs` (menggantikan blok hardcode "semua menu LMS → dosen + mahasiswa"). |
 > | TD-5 | `PermissionSeeder` jadi sumber kebenaran tunggal; grant `siakad.kelas.*`, `siakad.nilai.*`, `lms.forum.*` untuk `kaprodi` & `wakil_prodi` di dalamnya. |
 > | TD-7 | Export laporan: satu `LmsExportService` (writer + data builder); format dipilih `?format=csv\|xlsx` (default CSV); CSV memakai BOM UTF-8 + `\r\n`; XLSX kolom angka ditulis numerik; setiap export dicatat di `core_audit_logs` (`module=LMS`, `action=export`). |
-> | TD-22 | Mapping skema donor → RAG: `LmsPresensiSesi` → `siakad_pertemuan`; `LmsPresensiRekap` → `siakad_absensi_mahasiswa`; `lms_kelas.siakad_xid_kls` → `siakad_jadwal_kelas.kode_kelas`; `id_ptk` → `siakad_dosen.nidn`; `lms_kelas_dosen` → `siakad_dosen_pengampu`; `lms_kelas_mahasiswa` → KRS (`siakad_krs` + `siakad_krs_detail`). |
+> | TD-22 | Mapping skema donor → RAG (catatan historis): `LmsPresensiSesi` → `siakad_pertemuan`; `LmsPresensiRekap` → `siakad_absensi_mahasiswa`; `lms_kelas.siakad_xid_kls` → `siakad_jadwal_kelas.kode_kelas`; `id_ptk` → `siakad_dosen.nidn`; `lms_kelas_dosen` → `siakad_dosen_pengampu`; `lms_kelas_mahasiswa` → KRS (`siakad_krs` + `siakad_krs_detail`). |
 > | TD-23 | RAG **tidak** membuat tabel `lms_presensi_sesi`/`lms_presensi_rekap`; cukup tabel `lms_presensi_sync_log` + kolom sync (`sync_status`, `sync_error`, `synced_at`, `id_jurnal_presensiv2`) pada `siakad_pertemuan` & `siakad_absensi_mahasiswa`. |
 > | TD-24 | `sync_status` adalah *closed-set domain* dinormalisasi di trait `App\Models\Concerns\HasPresensiSyncStatus`: `local` (default), `pending`, `synced`, `failed`. Default `local` (bukan `pending`) agar perintah retry tidak mencoba ribuan record yang memang tidak pernah diintegrasikan. |
 > | TD-25 | Integrasi bersifat **opt-in & fail-safe**: `PresensiV2SyncService::isConfigured()` false bila `PRESENSI_API_URL` kosong **dan** koneksi `presensiv2` tidak dikonfigurasi → seluruh aksi sync berstatus "skipped" tanpa mengubah data lokal. |
@@ -36,6 +38,9 @@
 > | TD-27 | Sumber `id_ptk` dikonfigurabel via `PRESENSI_ID_PTK_SOURCE` (`nidn` default \| `nip`); `id_smt` = `siakad_tahun_akademik.kode`; `id_prodi` = `siakad_program_studi.kode_prodi`; `ruang` = `siakad_jadwal_kelas.ruangan.nama` atau `PRESENSI_RUANG_DEFAULT`. |
 > | TD-28 | Feature flag disimpan di `core_system_settings` key `lms_fitur_presensi` (default aktif), dibaca via `App\Models\Lms\LmsSetting::fiturPresensiAktif()` (cache 120 detik). Non-admin → `403` saat flag off; admin (pemegang `lms.presensi.manage`) tetap boleh. |
 > | TD-29 | Penentuan mahasiswa terdaftar pada kelas untuk tarik riwayat memakai `siakad_krs_detail` JOIN `siakad_krs` → `siakad_krs.mahasiswa_id` (model `Mahasiswa` **tidak** punya relasi `krsDetails`). |
+> | TD-61 | Jurnal presensi terintegrasi LMS **memperpanjang `siakad_pertemuan`**: materi, tanggal, jam, kegiatan, ruang dari master, dan bukti pembelajaran privat. Tidak ada tabel jurnal baru, tidak ada sync ke sistem legacy, dan tidak ada perubahan pada kolom historis `id_jurnal_presensiv2`. |
+>
+> **Catatan:** TD-22–TD-29 adalah keputusan historis pada masa integrasi PresensiV2 yang telah **dibatalkan** (lihat pernyataan pembatalan di atas). Implementasi final mengikuti TD-61 dan seluruh data presensi/jurnal tetap lokal di RAG.
 > | TD-41 | Notifikasi LMS **disimpan** pada tabel `lms_notifikasi` (in-app inbox), bukan dihitung on-the-fly seperti donor — supaya status baca konsisten antar perangkat. `core_users` **tidak** punya kolom notifikasi (sudah diverifikasi), jadi tidak ada duplikasi dengan mekanisme global. |
 > | TD-42 | Notifikasi bersifat **personal** (per `user_id`) → endpoint **tidak** memakai permission modul terpisah; setiap user hanya bisa baca & menandai notifikasi miliknya sendiri (notifikasi orang lain → `404`). |
 > | TD-43 | Pengingat deadline bersifat **idempoten** lewat kolom `dedup_key` (unique per user) berisi `deadline_tugas:{id}:{YYYYMMDD}` / `deadline_quiz:{id}:{YYYYMMDD}` → command harian aman dijalankan berkali-kali. Kanal outbound (email/WA) **opsional** (`config/lms.php`, default nonaktif) dan memakai `CampusNotificationService` yang sudah ada — tanpa membuat kanal baru. |
@@ -84,18 +89,16 @@
 
 ### 1.3 Verdict
 
-> **Modul LMS di RAG sudah ~70% setara secara fungsional inti** — CRUD meet, materi, tugas, absensi token, izin, quiz/tryout, forum, bank soal, ketercapaian OBE semuanya **sudah ada dan matang**. Yang **belum ada** secara spesifik:
+> **Modul LMS di RAG sudah setara secara fungsional inti** — CRUD meet, materi, tugas, absensi token, izin, quiz/tryout, forum, bank soal, ketercapaian OBE, notifikasi, dashboard, dan pengaturan modul sudah tersedia.
 >
-> 1. **Integrasi PresensiV2** (donor sudah read-only mirror ke PresensiV2 dengan retry) — **P0**
-> 2. **AI grading esai** (cosine similarity + mikroservice embedding) — **P0**
-> 3. **Export/Import laporan & bank soal** (CSV/XLSX) — **P0**
-> 4. **Notifikasi & deadline reminder** — **P1**
-> 5. **Forum lanjutan** (edit, balasan bertingkat, @"mention") — **P1**
-> 6. **Bulk operation bank soal + import XLSX** — **P1**
-> 7. **Dashboard analitik LMS + halaman pengaturan modul** — **P2**
-> 8. **Penyempurnaan tryout** (copy peserta, publish lifecycle, passing score) — **P1/P2**
+> Status tindak lanjut:
 >
-> Plus **12 item tech debt** di RAG yang sebaiknya dibereskan lebih dulu (Fase 0).
+> 1. **Integrasi PresensiV2** — **DIBATALKAN**. Presensi memakai data lokal RAG; jurnal terintegrasi LMS memperpanjang `siakad_pertemuan` (lihat 4.A).
+> 2. **AI grading esai** — **DIHAPUS** atas instruksi user (tidak ada tabel, service, atau toggle).
+> 3. **Export/Import laporan & bank soal** (CSV/XLSX), notifikasi, forum lanjutan, dashboard, pengaturan, dan penyempurnaan tryout — **sudah dikerjakan** di Fase 1/3–5.
+> 4. **Sisa pekerjaan**: hardening + test + docs untuk 6 area, jurnal presensi lokal, dan cetak PDF kehadiran/rekap (lihat `docs/LMS_CAPABILITY_MATRIX_QA.md`).
+>
+> Catatan historis: 12 item tech debt di Fase 0 sudah dibereskan sebelum fase berikutnya.
 
 ---
 
@@ -109,7 +112,7 @@ Ini poin **paling penting** sebelum porting: ketiga area berikut di donor **tida
 | **Autentikasi** | Sanctum + `AuthController` (login NIM/NIDN, admin-login terpisah, Google OAuth via Socialite) | Passport + SSO IAM (`SsoController`, `core_users`, `core_roles`, `core_permissions`, `Gate::before`) + 2FA | ⛔ **Jangan port.** Donor's `lms_users` + `role` string = anti-pattern RBAC di RAG |
 | **Storage** | S3/MinIO sendiri + `StorageProxyController` (Range 206 manual, 8KB chunk) | R2 + `FileStorageService` (signed URL, disk privat/publik terpisah, `GET /api/files/view`) | ⛔ Jangan buat proxy baru. ⚠️ Verifikasi Range di `FileStreamController` |
 | **OBE** | REST read (`get_cpmk.php`, `get_sesi.php` + `X-Api-Key`) + tulis **langsung ke DB OBE** (`mengajar/makul/rps/sesi/cpmk/dosen/mhs/nilai_cpmk_detail`) | Native `siakad_obe_*` + `ObeController` + `syncNilaiKeOBE()` | 🟡 **Partial port**: yang perlu di-port adalah *Two-way sync Pertemuan↔RPS Mingguan*, bukan mechanism-nya |
-| **Presensi** | Milik sendiri (`lms_presensi_sesi`, `lms_presensi_rekap`) → **read-only mirror** PresensiV2 (dual transport `api|db`) | Token sendiri + `siakad_absensi_mahasiswa` | 🔴 **Gap utama.** RAG belum punya integrasi PresensiV2 sama sekali |
+| **Presensi & jurnal** | Milik sendiri (`lms_presensi_sesi`, `lms_presensi_rekap`) + mirror ke sistem legacy | Token lokal + `siakad_pertemuan` + `siakad_absensi_mahasiswa` | ⛔ **Jangan port.** Jurnal cukup memperpanjang `siakad_pertemuan`; tidak ada integrasi legacy |
 | **Standar proyek** | Tidak ada AGENTS.md,(api CRUD seen adhoc) | `AGENTS.md` + 17 skill wajib + auditor git hook | ⚠️ Semua kode baru **wajib** follow skill RAG |
 
 ### 2.1 Konsekuensi untuk Skema Data
@@ -125,7 +128,7 @@ Ini poin **paling penting** sebelum porting: ketiga area berikut di donor **tida
 
 | # | Domain | Donor | RAG | Status | Prioritas | Fase |
 |---|---|---|---|---|---|---|
-| A | **Presensi → PresensiV2** | `PresensivSyncService` (917 baris), dual `api\|db`, jurnal+rekap, retry | Token + bulk manual + tutup + izin | 🔴 **Hilang** | **P0** | 1 |
+| A | **Jurnal presensi terintegrasi LMS** | Mirror jurnal+rekap ke sistem legacy (tidak di-port) | Token + bulk manual + tutup + izin; jurnal belum terpusat | 🔄 **LMS-11** | P1 | 1 |
 | B | **AI grading esai** | `calculateCosineSimilarity` + `finalizeAttempt` (`scale`/`threshold`) + mikroservice USE/ChromaDB | Manual penuh | 🔴 **Hilang** | **P0** | 2 |
 | C | **Export laporan** | CSV: tugas, quiz, presensi rekap (BOM) | — | 🔴 **Hilang** | **P0** | 1 |
 | C2 | **Import XLSX bank soal** | `SoalImportService` + template + bulk delete/move | — (CRUD di `ObeController`) | 🔴 **Hilang** | **P0** | 1 |
@@ -134,7 +137,7 @@ Ini poin **paling penting** sebelum porting: ketiga area berikut di donor **tida
 | F | **Tryout lifecycle** | publish/archive, copy peserta, bulk hapus soal, `passing_score`, `tipe_peserta`, AI grade | `tipe`, `kode_akses`, `is_archived`, peserta | 🟡 Parsial | P1 | 4 |
 | G | **Dashboard analitik LMS** | `LmsDashboardController@getOverviewStats` + admin console (api/tryout/presensi/system/health) | `/lms` = daftar kelas saja | 🔴 **Hilang** | P2 | 5 |
 | H | **Pengaturan modul LMS** | `lms_settings` 14 key + admin CRUD + logo + public settings + cache | 9 key `lms_*` di `core_system_settings` (tanpa halaman LMS khusus) | 🟡 Parsial | P2 | 5 |
-| I | **Feature flag** | `fitur_presensi` (cache 120s, gate 403 non-admin) | — | 🔴 **Hilang** | P1 | 1 |
+| I | **Feature flag presensi lokal** | `fitur_presensi` (cache 120s, gate 403 non-admin) | `lms_fitur_presensi` di `core_system_settings` (presensi lokal) | ✅ Lengkap | — | — |
 | J | **Video/materi** | `link_url`, `file_name`, video embed, Range streaming | `tipe_konten_id` master referensi (teks/file/link/video_embed) ✅, `MateriFile` ✅ | 🟡 Parsial (minor) | P3 | 6 |
 | K | **OBE ↔ RPS two-way** | `syncToObe` + baca topic RPS per pertemuan | `siakad_rps_mingguan` native, `syncNilaiKeOBE` | 🟡 Parsial | P1 | 4 |
 | L | **SIAKAD master sync** | REST + SSE + KRS pruning | Native DB | ⛔ N/A | — | — |
@@ -148,26 +151,23 @@ Ini poin **paling penting** sebelum porting: ketiga area berikut di donor **tida
 
 ## 4. Detail Gap & Desain Solusi
 
-### 4.A 🔴 P0-1 — Integrasi PresensiV2
+### 4.A 🔄 — Jurnal Presensi Terintegrasi LMS (lokal)
 
-**Kondisi donor**
-- `api/app/Services/PresensivSyncService.php` (917 baris) — dual transport via `config/lms_integration.php` `presensi.mode = auto|api|db`:
-  - `api` → REST ke app PresensiV2
-  - `db` → koneksi MySQL `presensiv2` (read-write)
-- Sync **jurnal** (sesi) + **rekap** (kehadiran mahasiswa), retry on failure, bookkeeping ke `lms_sync_log`.
-- `api/app/Console/Commands/RetryPresensiSync.php` + schedule `->hourly()->withoutOverlapping()`.
-- `PresensiController::ensureAbsenViaPresensiV2()` → **403 non-admin** di semua write endpoint.
-- Feature flag `fitur_presensi` → `LmsSetting::fiturPresensiAktif()` (cache 120s), non-admin dapat 403 saat flag off.
-- `PresensiDevController` — rekap JSON + **export CSV 13 kolom dengan UTF-8 BOM**.
+**Keputusan**: mekanisme mirror jurnal/rekap ke sistem legacy tidak di-port. Jurnal presensi menjadi bagian dari alur pertemuan LMS dan satu-satunya sumber kebenaran adalah `siakad_pertemuan`.
 
 **Kondisi implementasi saat ini**
 - Absensi token 6-digit, bulk-absensi manual, penutupan sesi otomatis, pengajuan izin, monitoring keaktifan, dan export berjalan memakai tabel lokal RAG.
-- Integrasi PresensiV2 telah dinonaktifkan dan dihapus dari jalur runtime: tidak ada koneksi/config, service, endpoint sync/tarik, command retry, atau panel UI untuk sistem legacy.
-- Tabel log dan kolom sync lama yang sudah pernah dibuat tetap dipertahankan agar perubahan ini tidak menghapus data historis. Kolom tersebut tidak lagi digunakan atau ditampilkan.
-- Feature flag `lms_fitur_presensi` tetap mengatur aktif/tidaknya fitur presensi lokal.
+- `lms_fitur_presensi` mengatur aktif/tidaknya fitur presensi lokal.
 - Monitoring tersedia melalui `lms.presensi.read`; export lokal melalui `lms.presensi.manage`. Laporan hanya indikator monitoring dan tidak memengaruhi payroll.
+- Tabel log dan kolom sync historis yang sudah dibuat tetap dipertahankan agar data lama tidak terhapus, tetapi tidak dipakai atau ditampilkan.
 
-Detail endpoint aktif ada di [`docs/api/LMS/LmsPresensiController.md`](api/LMS/LmsPresensiController.md); pengujian ada di `tests/Feature/SiakadLmsPresensiTest.php` dan `tests/Feature/SiakadLmsE2ETest.php`.
+**Desain LMS-11**
+- Perpanjang `siakad_pertemuan` dengan: kegiatan/jenis pertemuan, ruang yang diambil dari master SIAKAD (`ruangan_id`/relasi `ruangan()`), dan bukti pembelajaran privat (`bukti_pembelajaran_path`, `_path` relatif, UUID, lewat `FileStorageService` + signed URL).
+- Satu form pada halaman pertemuan LMS mengisi jurnal sekaligus materi agar dosen tidak mengisi dua kali. Dosen pengampu menulis; admin/kaprodi memantau; mahasiswa hanya membaca ringkasan.
+- Gunakan `siakad_rps_referensi`/`jenis_pertemuan` RPS mingguan atau konstanta terpusat untuk daftar kegiatan — bukan hardcode opsi entitas master.
+- Setiap perubahan jurnal dicatat di `core_audit_logs` (`module=LMS`). Tidak membuat tabel jurnal baru dan tidak menyentuh kolom historis `id_jurnal_presensiv2`.
+
+Detail endpoint presensi lokal ada di [`docs/api/LMS/LmsPresensiController.md`](api/LMS/LmsPresensiController.md); pengujian ada di `tests/Feature/SiakadLmsPresensiTest.php` dan `tests/Feature/SiakadLmsE2ETest.php`. Rencana jurnal tercatat di `.agent/unfinished_todo/TODO.md` entri `[LMS-11]`.
 
 ---
 
@@ -308,7 +308,7 @@ Tabel: lms_notifikasi  (in-app inbox)  — migrasi 2026_10_22_000003_create_lms_
 - Mahasiswa: jumlah kelas, tryout aktif, kuis tersedia
 - Dosen/Admin: jumlah kelas, tryout, bank soal
 
-Plus admin console dengan tab `api | tryout | presensi | system | health` (cek koneksi DB, statistik sync).
+Plus admin console dengan tab `api | tryout | presensi | system | health` (cek koneksi DB, statistik penggunaan).
 
 **Kondisi RAG**: `/lms` hanya daftar kelas. `/lms/[kelasId]` punya tab rekap & ketercapaian (sudah baik).
 
@@ -328,7 +328,7 @@ Plus admin console dengan tab `api | tryout | presensi | system | health` (cek k
 **Desain**
 - Halaman FE `/lms/pengaturan/modul` (permission `lms.kelas.manage` / `siakad.kelas.manage`).
 - Backend: `GET/PUT /api/v1/lms/pengaturan/modul` yang membaca/menulis key berawalan `lms_` di `core_system_settings` (jangan buat tabel `lms_settings` baru).
-- Tambahkan key yang hilang dari donor: `lms_max_soal_import`, `lms_upload_max_size_mb`, `lms_video_max_size_mb`, `lms_fitur_presensi`, `lms_system_name`, `lms_system_logo`.
+- Tambahkan key yang hilang dari donor: `lms_max_soal_import`, `lms_upload_max_size_mb`, `lms_video_max_size_mb`, `lms_system_name`, `lms_system_logo`. (`lms_fitur_presensi` sudah ada untuk presensi lokal.)
 - `GET /api/v1/lms/public/settings` — endpoint publik untuk branding (cache 24h), ditembak `useSettings()` di FE.
 
 ---
@@ -408,23 +408,23 @@ Estimasi dalam **hari kerja** (1 dev). Jalur kritis ditandai ⛔.
 
 ---
 
-### Fase 1 — PresensiV2 + Export/Import (5–7 hari) ⛔ *P0* — ✅ **1A/1B/1C SELESAI**
+### Fase 1 — Export/Import + Jurnal Presensi Lokal (5–7 hari) — ✅ **1B/1C SELESAI**, 🔄 **1A = LMS-11**
 
-**Objective**: Tutup gap P0-A dan P0-C.
+**Objective**: Tutup gap export/import dan sediakan jurnal presensi lokal yang terintegrasi dengan alur LMS. Integrasi PresensiV2 **tidak termasuk** ruang lingkup.
 
-**1A — Integrasi PresensiV2** (3 hari) — ✅ **SELESAI**
-- [x] `config/lms_integration.php` → blok `presensi`
-- [x] `config/database.php` → koneksi `presensiv2`
-- [x] Migrasi `lms_presensi_sync_log` + kolom sync status di `siakad_pertemuan` & `siakad_absensi_mahasiswa`
-- [x] `app/Services/Siakad/PresensiV2SyncService.php` (dual transport `api`/`db`, mode `auto`)
-- [x] `app/Services/Siakad/LmsPresensiService.php` (panel administrasi: status, kelas, rekap, log, sinkron, tarik)
-- [x] `app/Console/Commands/LmsRetryPresensiSync.php` + schedule hourly (`--limit`, `--dry-run`)
-- [x] `LmsService::assertPresensiFiturAktif()` + flag `lms_fitur_presensi` (cache 120 detik)
-- [x] `GET /lms/admin/presensi/status|kelas|rekap|log|export` + `POST /lms/admin/presensi/sync|tarik`
+**1A — Jurnal presensi terintegrasi LMS** — 🔄 **LMS-11**
+- [ ] Migrasi perluasan `siakad_pertemuan`: kegiatan/jenis pertemuan, `ruangan_id`, `bukti_pembelajaran_path` privat (tanpa tabel jurnal baru)
+- [ ] Satu form pada halaman pertemuan LMS mengisi jurnal + materi + bukti (tanpa input ulang)
+- [ ] Upload bukti via `FileStorageService` (UUID, path relatif `_path`, signed URL) + audit `module=LMS`
+- [ ] RBAC: dosen pengampu menulis, admin/kaprodi memantau, mahasiswa read-only
+- [ ] Test `SiakadLmsJurnalTest.php` + dokumentasi API
+
+**Presensi lokal yang sudah aktif** (bukan integrasi legacy)
+- [x] `lms_fitur_presensi` mengatur fitur presensi lokal (cache 120 detik)
+- [x] `GET /lms/admin/presensi/kelas|rekap|keaktifan-dosen|export` memakai tabel RAG
 - [x] Permission `lms.presensi.read` / `lms.presensi.manage` + menu `/lms/presensi`
-- [x] FE: `/lms/presensi` — panel status integrasi + rekap + tombol sinkron ulang/tarik riwayat + export
 - [x] Docs: `docs/api/LMS/LmsPresensiController.md` + indeks `docs/README.md`
-- [x] Test: `tests/Feature/SiakadLmsPresensiTest.php` (14 test)
+- [x] Test: `tests/Feature/SiakadLmsPresensiTest.php`
 
 **1B — Export & Import** (3–4 hari) — ✅ **SELESAI** (export laporan + import/bulk bank soal)
 - [x] `app/Services/Siakad/LmsExportService.php` (CSV + XLSX writer, BOM) — plus data builder `rekapNilaiKelas`, `rekapPresensiKelas`, `rekapIzinKelas`, `hasilQuiz`, `pengumpulanTugas`
@@ -436,11 +436,10 @@ Estimasi dalam **hari kerja** (1 dev). Jalur kritis ditandai ⛔.
 - [x] Audit log (`module = LMS`) untuk aksi export — ✅ `action=export`; import/bulk bank soal → `core_audit_logs` module `SIAKAD`
 
 **Acceptance**
-- Export CSV presensi dibuka di Excel Windows tanpa Character Acak (BOM ✅)
+- Export CSV presensi dibuka di Excel Windows tanpa karakter acak (BOM ✅)
 - Import 100 soal XLSX berhasil, 1 soal salah → laporan baris error
-- `lms:retry-presensi-sync` idempotent, tidak duplikasi rekap ✅
-- Alur presensi LMS tetap normal saat PresensiV2 belum dikonfigurasi (fail-safe) ✅
-- Test feature: `SiakadLmsExportTest.php` (10 test) + `SiakadLmsPresensiTest.php` (14 test) ✅
+- Jurnal pertemuan terisi sekali dari halaman LMS dan tampil konsisten di rekap lokal (LMS-11)
+- Test feature: `SiakadLmsExportTest.php` + `SiakadLmsPresensiTest.php` + `SiakadLmsJurnalTest.php` (LMS-11)
 
 ---
 
@@ -511,7 +510,7 @@ Estimasi dalam **hari kerja** (1 dev). Jalur kritis ditandai ⛔.
 - [x] `GET/PUT /lms/pengaturan/modul` (key `lms_*` di `core_system_settings`) — ✅ `LmsModuleSettingService` + `UpdatePengaturanLmsRequest` (TD-59)
 - [x] FE `/lms/pengaturan/modul` — form pengaturan LMS — ✅ halaman admin (toggle fitur + 3 batas angka)
 - [x] `GET /lms/public/settings` (publik, cache 24h) + hook `useSettings` di FE — ✅ `routes/lms_public.php` (tanpa auth) + `hooks/useLmsSettings.ts` (TD-60)
-- [x] Tambah key setting baru: `lms_max_soal_import`, `lms_upload_max_size_mb`, `lms_video_max_size_mb` (key `lms_fitur_presensi` **sudah ada** — dibuat di Fase 1C) — ✅ definisi terpusat `LmsModuleSettingService::definitions()`
+- [x] Tambah key setting baru: `lms_max_soal_import`, `lms_upload_max_size_mb`, `lms_video_max_size_mb` (key `lms_fitur_presensi` sudah ada untuk presensi lokal) — ✅ definisi terpusat `LmsModuleSettingService::definitions()`
 - [x] Permission & menu — ✅ `lms.pengaturan.read/manage` (admin/superadmin) + menu `/lms/dashboard` & `/lms/pengaturan/modul` (migration `2026_10_23_000002`)
 - [x] Dokumentasi API — ✅ `docs/api/LMS/LmsController.md` (section 8)
 - [x] Test — ✅ `tests/Feature/SiakadLmsDashboardSettingTest.php` (7 test / 70 assertions)
@@ -520,13 +519,14 @@ Estimasi dalam **hari kerja** (1 dev). Jalur kritis ditandai ⛔.
 
 ### Fase 6 — Penyempurnaan, Dokumentasi & Hardening (3 hari)
 
-- [ ] Verifikasi Range streaming video 500MB (TD/4.J)
+- [x] Audit keamanan: DTO whitelist submit quiz, permission gate, regresi kebocoran `is_benar` (LMS-10)
+- [x] Dokumentasi API + matriks kapabilitas/QA per role (LMS-10)
+- [x] Unit test `LmsNotificationServiceTest` dan `LmsExportServiceTest` (LMS-10)
+- [x] Checklist QA manual dosen/mahasiswa/admin/kaprodi → `docs/LMS_CAPABILITY_MATRIX_QA.md`
+- [ ] Verifikasi Range streaming video 500MB (4.J)
 - [ ] `MateriFile` — pastikan `nama_file_asli` tersimpan
-- [ ] Audit keamanan: semua endpoint LMS punya permission gate; tidak ada kebocoran `is_benar` ke mahasiswa (regression test)
-- [ ] Dokumentasi API lengkap `docs/api/LMS/*.md` (skill `api-documentation`)
 - [ ] Update `plan_lms_absensi.md` → status implementasi
-- [ ] Unit test: `LmsNotificationServiceTest`, `AiGradingServiceTest`, `LmsExportServiceTest`
-- [ ] Checklist QA manual (dosen / mahasiswa / admin / kaprodi)
+- [ ] Jurnal presensi terintegrasi LMS (LMS-11) dan cetak PDF kehadiran/rekap (LMS-12)
 
 ---
 
@@ -534,12 +534,12 @@ Estimasi dalam **hari kerja** (1 dev). Jalur kritis ditandai ⛔.
 
 ```
 Fase 0  Rekondisi          ██ 2-3h   ⛔ prasyarat   ✅ DONE
-Fase 1  PresensiV2+Export  █████ 5-7h ⛔ P0         ✅ DONE (1A/1B/1C)
+Fase 1  Export+Jurnal Lokal  █████ 5-7h            ✅ 1B/1C DONE, 1A → LMS-11
 Fase 2  AI Grading         ████ 4-5h  ⛔ P0         ⛔ DIHAPUS (per instruksi user)
-Fase 3  Notifikasi+Forum   ████ 4-5h  (3A ✅ DONE, 3B pending)
-Fase 4  Bank Soal+Tryout   ████ 4-5h
-Fase 5  Dashboard+Setting  ███ 3-4h
-Fase 6  Polish+Dok         ███ 3h
+Fase 3  Notifikasi+Forum   ████ 4-5h  ✅ DONE (3A/3B)
+Fase 4  Bank Soal+Tryout   ████ 4-5h  ✅ DONE
+Fase 5  Dashboard+Setting  ███ 3-4h  ✅ DONE
+Fase 6  Hardening+Dok      ███ 3h    ✅ LMS-10; 🔄 LMS-11/12
                         ─────────
                    Total  25-32 hari kerja
 ```
@@ -550,7 +550,7 @@ Fase 6  Polish+Dok         ███ 3h
 
 | Fase | Endpoint | Method |
 |---|---|---|
-| 1 | `/api/v1/lms/admin/presensi/kelas` · `/rekap` · `/sync` | GET/POST |
+| 1 | `/api/v1/lms/admin/presensi/kelas` · `/rekap` (monitoring lokal) · `/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal` (LMS-11) | GET/PUT |
 | 1 | `/api/v1/lms/kelas/{id}/export/{nilai\|presensi\|izin}` | GET |
 | 1 | `/api/v1/lms/quiz/{id}/export/hasil` · `/tugas/{id}/export/pengumpulan` | GET |
 | 1 | `/api/v1/siakad/obe/soal/import` · `/import/template` · `/bulk-delete` · `/bulk-move` · `PUT /{id}` | POST/GET/PUT |
@@ -566,7 +566,7 @@ Fase 6  Polish+Dok         ███ 3h
 
 | # | Risk | Dampak | Mitigasi |
 |---|---|---|---|
-| R1 | PresensiV2 tidak stabil / schema berubah | Sync gagal, data absensi kosong | Dual transport `api\|db` + retry + **fallback ke bulk manual RAG** (tetap berfungsi tanpa PresensiV2) |
+| R1 | Jurnal presensi diisi dua kali (LMS dan rekap terpisah) | Data ganda/inkonsisten | Satu form pada halaman pertemuan; `siakad_pertemuan` sebagai satu sumber kebenaran; audit perubahan (`module=LMS`) |
 | R2 | AI grading salah menilai esaiSimilar | Nilai mahasiswa tidak adil | `scale`/`threshold` + **always simpan `similarity_score`** + dosen bisa override manual + audit log |
 | R3 | Migrasi `siakad_bank_soal`bentrok dengan data OBE existing | Data hilang | Semua kolom baru **nullable/default**; `down()` aman; backup sebelum migrate |
 | R4 | Export data sensitif (nilai) bocor | Kebocoran data | Permission gate `siakad.nilai.manage`; **tanpa cache**; audit log tiap export; tidak disimpan di disk publik |
@@ -606,8 +606,7 @@ Fase 6  Polish+Dok         ███ 3h
 
 | Fitur | File Donor |
 |---|---|
-| PresensiV2 sync | `api/app/Services/PresensivSyncService.php` |
-| Retry sync | `api/app/Console/Commands/RetryPresensiSync.php` + `routes/console.php:13` |
+| Presensi & jurnal legacy | Tidak di-port — lihat keputusan 4.A (jurnal lokal di `siakad_pertemuan`) |
 | Admin presensi rekap | `api/app/Http/Controllers/Api/Admin/PresensiDevController.php` |
 | AI grading | `api/app/Http/Controllers/Api/TryoutController.php:1094` (`calculateCosineSimilarity`), `:1163` (`finalizeAttempt`) |
 | Mikroservice AI | `api-pencocokan-jawabab-isai/ai.js`, `db.js`, `index.js` |

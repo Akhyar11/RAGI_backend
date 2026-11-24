@@ -37,6 +37,7 @@ use App\Services\AuditLogService;
 use App\Services\Spmb\SpmbReferralService;
 use App\Services\Sinapra\MaintenanceService;
 use App\Services\Storage\FileStorageService;
+use App\Services\Simpeg\PresensiPengajaranService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -863,6 +864,14 @@ class MobileStaffService
         $jamMulai = !empty($data['jam_mulai']) ? $data['jam_mulai'] : Carbon::now()->format('H:i');
 
         $pertemuan->tanggal = $tanggal;
+
+        // Membuka sesi mobile juga menulis entri absensi awal mahasiswa,
+        // sehingga tetap tunduk pada cut-off penulisan presensi.
+        app(PresensiPengajaranService::class)->assertWriteAllowed(
+            $pertemuan,
+            (int) ($userId ?? auth()->id())
+        );
+
         $pertemuan->jam_mulai = $jamMulai;
         $pertemuan->materi = $data['materi'] ?? ('Pertemuan ke-' . $pertemuanKe . ' - ' . ($kelas->mataKuliah?->nama ?? $kelas->mataKuliah?->nama_mk ?? ''));
         $pertemuan->catatan_pertemuan = $data['catatan'] ?? null;
@@ -1117,8 +1126,14 @@ class MobileStaffService
     /**
      * Update presensi mahasiswa per orangan atau batch.
      */
-    public function updatePresensiMahasiswa(int $pertemuanId, array $items): array
+    public function updatePresensiMahasiswa(int $pertemuanId, array $items, ?int $userId = null): array
     {
+        $pertemuan = Pertemuan::findOrFail($pertemuanId);
+        app(PresensiPengajaranService::class)->assertWriteAllowed(
+            $pertemuan,
+            (int) ($userId ?? auth()->id())
+        );
+
         $updated = 0;
 
         DB::transaction(function () use ($pertemuanId, $items, &$updated) {

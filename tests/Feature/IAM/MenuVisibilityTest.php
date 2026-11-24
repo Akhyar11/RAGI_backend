@@ -170,4 +170,16 @@ class MenuVisibilityTest extends TestCase
             '/lms/notifikasi' => 'Notifikasi',
         ], $menus->all());
     }
+
+    public function test_diskusi_menu_permission_matches_forum_api_permission(): void
+    {
+        $slug = Menu::where('module', 'lms')
+            ->where('url', '/lms/forum')
+            ->with('permission')
+            ->firstOrFail()
+            ->permission
+            ?->slug;
+
+        $this->assertSame('lms.forum.read', $slug);
+    }
 }

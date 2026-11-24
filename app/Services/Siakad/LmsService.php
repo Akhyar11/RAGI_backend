@@ -660,6 +660,162 @@ class LmsService
     }
 
     /**
+     * Ambil jurnal presensi satu pertemuan melalui resource bersarang
+     * kelas → pertemuan. Pertemuan dari kelas lain tidak boleh dibaca
+     * meskipun ID-nya diketahui (otentikasi + otorisasi tetap berlaku).
+     */
+    public function getJurnalPertemuan(int $kelasId, int $pertemuanId, ?int $userId = null): array
+    {
+        $pertemuan = $this->findPertemuanInKelas($kelasId, $pertemuanId);
+        $context = $userId !== null
+            ? $this->assertCanViewKelas($kelasId, $userId)
+            : $this->resolveKelasViewerContext($kelasId, null);
+
+        // Penulisan jurnal hanya untuk Dosen Pengampu. Admin/Kaprodi hanya
+        // memantau (read-only); mahasiswa melihat ringkasan tanpa bukti privat.
+        $canEdit = $userId !== null && $this->isDosenPengampuKelas($userId, $kelasId);
+        $canSeeBukti = $canEdit || (bool) ($context['is_pengelola'] ?? false);
+
+        return [
+            'jurnal' => $this->serializeJurnal($pertemuan, $canSeeBukti),
+            'can_edit' => $canEdit,
+            'jenis_kegiatan_options' => collect(Pertemuan::jenisKegiatanOptions())
+                ->map(fn (string $label, string $value): array => [
+                    'value' => $value,
+                    'label' => $label,
+                ])
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * Simpan jurnal presensi (perpanjangan `siakad_pertemuan`).
+     *
+     * Satu form "Isian" mencakup data pertemuan + jurnal + bukti privat, jadi
+     * dosen tidak mengisi dua kali. Bukti disimpan lewat FileStorageService
+     * pada disk privat dengan path relatif UUID; URL yang dikembalikan adalah
+     * Signed URL (bukan URL storage langsung).
+     *
+     * @return array{jurnal: array, old_values: array, new_values: array}
+     */
+    public function updateJurnalPertemuan(
+        int $kelasId,
+        int $pertemuanId,
+        array $data,
+        ?UploadedFile $bukti = null,
+        ?int $userId = null
+    ): array {
+        $pertemuan = $this->findPertemuanInKelas($kelasId, $pertemuanId);
+        $actorUserId = (int) ($userId ?? auth()->id());
+        $this->assertDosenPengampuKelas($kelasId, $actorUserId);
+
+        $oldValues = $this->sanitizeJournalAudit($pertemuan->getOriginal());
+        $oldPath = $pertemuan->bukti_pembelajaran_path;
+        $oldDisk = $pertemuan->bukti_pembelajaran_disk;
+
+        $attributes = [];
+        $editableFields = [
+            'materi', 'catatan_pertemuan', 'tanggal', 'jam_mulai', 'jam_selesai',
+            'status_pertemuan', 'jenis_kegiatan', 'ruangan_id',
+        ];
+        foreach ($editableFields as $field) {
+            if (! array_key_exists($field, $data)) {
+                continue;
+            }
+            $value = $data[$field];
+            // AsyncSelect yang dikosongkan mengirim string kosong → normalisasi
+            // ke null agar FK Optional tidak melanggar constraint.
+            $attributes[$field] = is_string($value) && trim($value) === '' ? null : $value;
+        }
+
+        $newPath = null;
+        if ($bukti !== null) {
+            $newPath = $this->files->store($bukti, 'lms/bukti_pembelajaran', private: true);
+            $attributes['bukti_pembelajaran_path'] = $newPath;
+            $attributes['bukti_pembelajaran_disk'] = $this->files->privateDiskName();
+        }
+
+        $pertemuan = DB::transaction(function () use ($pertemuan, $attributes): Pertemuan {
+            $pertemuan->update($attributes);
+
+            return $pertemuan;
+        });
+
+        $newValues = $this->sanitizeJournalAudit($pertemuan->getChanges());
+        $pertemuan->load('ruangan');
+
+        // Bersihkan berkas lama hanya setelah transaksi DB berhasil.
+        if ($newPath !== null && $oldPath && $oldPath !== $newPath) {
+            $this->files->delete($oldPath, $oldDisk, true);
+        }
+
+        return [
+            'jurnal' => $this->serializeJurnal($pertemuan, true),
+            'old_values' => $oldValues,
+            'new_values' => $newValues,
+        ];
+    }
+
+    /**
+     * Pertemuan harus benar-benar milik kelas pada URL (nested resource).
+     */
+    protected function findPertemuanInKelas(int $kelasId, int $pertemuanId): Pertemuan
+    {
+        return Pertemuan::with('ruangan')
+            ->where('id', $pertemuanId)
+            ->where('kelas_id', $kelasId)
+            ->firstOrFail();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function serializeJurnal(Pertemuan $pertemuan, bool $includeBukti): array
+    {
+        $jenis = $pertemuan->jenis_kegiatan;
+        $labels = Pertemuan::jenisKegiatanOptions();
+
+        return [
+            'pertemuan_id' => (int) $pertemuan->id,
+            'kelas_id' => (int) $pertemuan->kelas_id,
+            'pertemuan_ke' => (int) $pertemuan->pertemuan_ke,
+            'tanggal' => $pertemuan->tanggal,
+            'materi' => $pertemuan->materi,
+            'catatan_pertemuan' => $pertemuan->catatan_pertemuan,
+            'jenis_kegiatan' => $jenis,
+            'jenis_kegiatan_label' => $jenis ? ($labels[$jenis] ?? $jenis) : null,
+            'ruangan_id' => $pertemuan->ruangan_id !== null ? (int) $pertemuan->ruangan_id : null,
+            'ruangan_nama' => $pertemuan->ruangan?->nama,
+            'jam_mulai' => $pertemuan->jam_mulai,
+            'jam_selesai' => $pertemuan->jam_selesai,
+            'status_pertemuan' => $pertemuan->status_pertemuan,
+            'bukti_pembelajaran_path' => $includeBukti ? $pertemuan->bukti_pembelajaran_path : null,
+            'bukti_pembelajaran_disk' => $includeBukti ? $pertemuan->bukti_pembelajaran_disk : null,
+            'bukti_pembelajaran_url' => $includeBukti && $pertemuan->bukti_pembelajaran_path
+                ? $this->files->signedUrl($pertemuan->bukti_pembelajaran_path)
+                : null,
+            'updated_at' => $pertemuan->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Token absensi tidak boleh ikut tersimpan di audit log (AuditLogService
+     * menyensor `token`, tetapi bukan `token_absensi`).
+     *
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    protected function sanitizeJournalAudit(array $values): array
+    {
+        foreach (['token_absensi', 'token_expired_at', 'token_rotated_at', 'password', 'remember_token'] as $sensitive) {
+            unset($values[$sensitive]);
+        }
+
+        return $values;
+    }
+
+    /**
      * Snapshot roster presensi untuk refresh ringan pada layar dosen.
      */
     public function getPertemuanAbsensiRoster(int $pertemuanId, int $userId): array

@@ -1863,6 +1863,11 @@ persis, case-insensitive); soal uraian menunggu dosen dan ditandai
 Bila quiz punya `komponen_penilaian_id`, nilai otomatis tersinkron ke OBE
 (`siakad_nilai_komponen_mhs`).
 
+> **Hardening (2026-11-24):** response endpoint ini memakai DTO whitelist attempt.
+> Field `kunci_jawaban`, `pembahasan`, `is_benar` opsi, serta nested `jawaban`,
+> `quizSoal`, `bankSoal`, dan `opsi` **tidak dikembalikan** kepada mahasiswa.
+> Dosen tetap bisa membaca kunci/pembahasan lewat endpoint manajemen/koreksi.
+
 ### Path Parameters
 
 | Parameter | Tipe | Required | Deskripsi |
@@ -1885,38 +1890,14 @@ Bila quiz punya `komponen_penilaian_id`, nilai otomatis tersinkron ke OBE
         "disubmit_at": "2026-10-05T09:12:44.000000Z",
         "nilai_akhir": "50.00",
         "is_lulus": false,
-        "butuh_penilaian_manual": false,
-        "dinilai_oleh": null,
-        "dinilai_at": null,
-        "created_at": "2026-10-05T08:44:08.000000Z",
-        "updated_at": "2026-10-05T09:12:44.000000Z",
-        "jawaban": [
-            {
-                "id": 88,
-                "attempt_id": 7,
-                "quiz_soal_id": 31,
-                "bank_opsi_id": 101,
-                "jawaban_teks": null,
-                "is_benar": true,
-                "poin_didapat": "50.00",
-                "quiz_soal": {
-                    "id": 31,
-                    "bank_soal_id": 45,
-                    "urutan": 1,
-                    "poin": "50.00",
-                    "bank_soal": {
-                        "id": 45,
-                        "pertanyaan": "Apa kepanjangan dari OOP?",
-                        "tipe_soal": "pilihan_ganda",
-                        "bobot": "10.00"
-                    }
-                }
-            }
-        ],
-        "quiz": { "id": 1, "judul": "Tryout UTS (revisi)", "kelas_id": 14, "tipe": "tryout" }
+        "butuh_penilaian_manual": false
     }
 }
 ```
+
+`nilai_akhir` mempertahankan cast `decimal:2` Eloquent (contoh `"50.00"`).
+Response sengaja tidak memuat `created_at`/`updated_at`, `feedback_dosen`,
+`dinilai_oleh`, maupun data soal agar tidak membuka vektor kebocoran kunci.
 
 ### Response Error
 

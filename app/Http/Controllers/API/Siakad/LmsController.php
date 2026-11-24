@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Siakad;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Siakad\Lms\CetakRekapProdiRequest;
 use App\Http\Requests\Siakad\Lms\StoreMateriRequest;
 use App\Http\Requests\Siakad\Lms\UpdateMateriRequest;
 use App\Http\Requests\Siakad\Lms\UploadMateriFileRequest;
@@ -17,6 +18,7 @@ use App\Http\Requests\Siakad\Lms\GenerateTokenRequest;
 use App\Http\Requests\Siakad\Lms\AjukanIzinRequest;
 use App\Http\Requests\Siakad\Lms\ProsesIzinRequest;
 use App\Http\Requests\Siakad\Lms\UpdateKelasLmsSettingRequest;
+use App\Http\Requests\Siakad\Lms\UpdateJurnalPertemuanRequest;
 use App\Http\Requests\Siakad\Lms\UpdatePertemuanRequest;
 use App\Http\Requests\Siakad\Lms\UpdatePengaturanLmsRequest;
 use App\Http\Requests\Siakad\Lms\ExportLmsRequest;
@@ -26,9 +28,11 @@ use App\Models\Siakad\Pertemuan;
 use App\Services\AuditLogService;
 use App\Services\Siakad\LmsExportService;
 use App\Services\Siakad\LmsModuleSettingService;
+use App\Services\Siakad\LmsPdfReportService;
 use App\Services\Siakad\LmsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -38,7 +42,8 @@ class LmsController extends Controller
     public function __construct(
         protected LmsService $lmsService,
         protected LmsExportService $lmsExportService,
-        protected LmsModuleSettingService $lmsModuleSettingService
+        protected LmsModuleSettingService $lmsModuleSettingService,
+        protected LmsPdfReportService $lmsPdfReportService
     ) {}
 
     /**
@@ -206,6 +211,66 @@ class LmsController extends Controller
             'status'  => 'success',
             'message' => 'Pertemuan berhasil diperbarui.',
             'data'    => $detail,
+        ]);
+    }
+
+    /**
+     * Baca jurnal presensi pertemuan. Mahasiswa mendapat ringkasan tanpa
+     * bukti privat; dosen pengampu & pengelola mendapat Signed URL bukti.
+     */
+    public function getJurnal(Request $request, int $kelasId, int $pertemuanId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.read');
+
+        $data = $this->lmsService->getJurnalPertemuan(
+            $kelasId,
+            $pertemuanId,
+            $request->user() ? (int) $request->user()->id : null
+        );
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Jurnal pertemuan berhasil dimuat.',
+            'data'    => $data,
+        ]);
+    }
+
+    /**
+     * Simpan jurnal presensi dari form "Isian" yang sama dengan data pertemuan.
+     * Penulisan tetap dibatasi Dosen Pengampu di layer service.
+     */
+    public function updateJurnal(UpdateJurnalPertemuanRequest $request, int $kelasId, int $pertemuanId): JsonResponse
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $result = $this->lmsService->updateJurnalPertemuan(
+            $kelasId,
+            $pertemuanId,
+            $request->validated(),
+            $request->file('bukti_pembelajaran'),
+            (int) $request->user()->id
+        );
+
+        try {
+            AuditLogService::record(
+                module: 'LMS',
+                action: 'update',
+                tableName: 'siakad_pertemuan',
+                recordId: $pertemuanId,
+                oldValues: $result['old_values'],
+                newValues: $result['new_values']
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log jurnal pertemuan: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Jurnal pertemuan berhasil disimpan.',
+            'data'    => [
+                'jurnal'   => $result['jurnal'],
+                'can_edit' => true,
+            ],
         ]);
     }
 
@@ -1068,6 +1133,74 @@ class LmsController extends Controller
      | ------------------------------------------------------------------ */
 
     /**
+     * Cetak PDF rekap kehadiran satu kelas (inline, bukan download CSV/XLSX).
+     */
+    public function cetakKehadiranKelas(Request $request, int $kelasId): Response
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $userId = (int) $request->user()->id;
+        $this->lmsExportService->assertKelasAccess($kelasId, $userId);
+
+        $laporan = $this->lmsPdfReportService->cetakKehadiranKelas($kelasId);
+
+        $this->catatExport(
+            $request,
+            'siakad_kelas',
+            $kelasId,
+            'cetak_kehadiran_kelas',
+            'pdf',
+            $laporan['jumlah_baris']
+        );
+
+        return $this->pdfResponse($laporan['pdf'], $laporan['filename']);
+    }
+
+    /**
+     * Cetak PDF rekap kehadiran per program studi pada satu tahun akademik.
+     *
+     * Tanpa `program_studi_id`, laporan dikelompokkan untuk seluruh prodi yang
+     * dapat diakses user (scope kelas tetap diterapkan di service).
+     */
+    public function cetakRekapProdi(CetakRekapProdiRequest $request): Response
+    {
+        Gate::authorize('siakad.kelas.manage');
+
+        $userId = (int) $request->user()->id;
+        $programStudiId = $request->programStudiId();
+        $tahunAkademikId = $request->tahunAkademikId();
+
+        $laporan = $this->lmsPdfReportService->cetakRekapProdi(
+            $programStudiId,
+            $tahunAkademikId,
+            $userId
+        );
+
+        $this->catatExport(
+            $request,
+            $programStudiId ? 'siakad_program_studi' : 'siakad_tahun_akademik',
+            $programStudiId ?? $tahunAkademikId,
+            'rekap_kehadiran_prodi',
+            'pdf',
+            $laporan['jumlah_baris']
+        );
+
+        return $this->pdfResponse($laporan['pdf'], $laporan['filename']);
+    }
+
+    /**
+     * Response PDF inline dengan nama berkas dari service.
+     */
+    protected function pdfResponse(string $pdf, string $filename): Response
+    {
+        return response($pdf, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
+            'Cache-Control'       => 'no-store, private',
+        ]);
+    }
+
+    /**
      * Export rekap nilai (tugas + quiz) kelas dalam format CSV/XLSX.
      */
     public function exportNilai(ExportLmsRequest $request, int $kelasId): StreamedResponse
@@ -1143,7 +1276,7 @@ class LmsController extends Controller
      * Catat jejak audit untuk setiap aksi export laporan LMS.
      */
     protected function catatExport(
-        ExportLmsRequest $request,
+        Request $request,
         string $tableName,
         int $recordId,
         string $jenisLaporan,

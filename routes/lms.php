@@ -30,6 +30,8 @@ Route::middleware(['can:siakad.kelas.read'])->group(function () {
     Route::get('/kelas/{kelasId}/overview', [LmsController::class, 'getOverview']);
     Route::get('/kelas/{kelasId}/setting', [LmsController::class, 'getSetting']);
     Route::get('/kelas/{kelasId}/rekap-absensi', [LmsController::class, 'getRekapAbsensi']);
+    // Jurnal presensi lokal: baca (mahasiswa read-only ringkasan).
+    Route::get('/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal', [LmsController::class, 'getJurnal']);
     Route::get('/pertemuan/{id}', [LmsController::class, 'getPertemuan']);
     Route::get('/pertemuan/{id}/absensi', [LmsController::class, 'getPertemuanAbsensi']);
     Route::get('/download/{type}/{id}', [LmsController::class, 'downloadFile']);
@@ -111,6 +113,8 @@ Route::middleware(['can:lms.forum.manage'])->group(function () {
 // Hak Akses Kelola Kelas & Pembelajaran (Dosen Pengajar / Kaprodi / Admin)
 Route::middleware(['can:siakad.kelas.manage'])->group(function () {
     Route::put('/kelas/{kelasId}/setting', [LmsController::class, 'updateSetting']);
+    // Jurnal presensi lokal: tulis hanya Dosen Pengampu (ditegakkan service).
+    Route::put('/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal', [LmsController::class, 'updateJurnal']);
     Route::post('/pertemuan/{pertemuanId}/materi', [LmsController::class, 'storeMateri']);
     Route::put('/materi/{materiId}', [LmsController::class, 'updateMateri']);
     Route::delete('/materi/{materiId}', [LmsController::class, 'destroyMateri']);
@@ -157,6 +161,9 @@ Route::middleware(['can:siakad.kelas.manage'])->group(function () {
     // Export laporan kelas (CSV/XLSX) — rekap absensi & pengajuan izin.
     Route::get('/kelas/{kelasId}/export/presensi', [LmsController::class, 'exportPresensi']);
     Route::get('/kelas/{kelasId}/export/absensi-izin', [LmsController::class, 'exportIzin']);
+    // Cetak laporan PDF (Dompdf) memakai route tersendiri, bukan format pada LmsExportService.
+    Route::get('/kelas/{kelasId}/cetak/kehadiran', [LmsController::class, 'cetakKehadiranKelas']);
+    Route::get('/cetak/rekap-prodi', [LmsController::class, 'cetakRekapProdi']);
 });
 
 // --- Notifikasi In-App LMS ---

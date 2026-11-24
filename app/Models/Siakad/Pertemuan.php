@@ -28,12 +28,34 @@ class Pertemuan extends Model
         self::STATUS_SELESAI,
     ];
 
+    /**
+     * Jenis kegiatan jurnal. Bukan entitas master (tidak ada tabel/ID), jadi
+     * dideklarasikan sekali di sini sebagai closed-set domain. Sama seperti
+     * `status_pertemuan`, daftar ini dipakai ulang oleh validasi request dan
+     * API options agar tidak ada string literal yang tersebar.
+     */
+    public const JENIS_KEGIATAN_TEORI = 'teori';
+    public const JENIS_KEGIATAN_PRAKTIKUM = 'praktikum';
+    public const JENIS_KEGIATAN_SEMINAR = 'seminar';
+    public const JENIS_KEGIATAN_LAINNYA = 'lainnya';
+
+    public const JENIS_KEGIATAN = [
+        self::JENIS_KEGIATAN_TEORI,
+        self::JENIS_KEGIATAN_PRAKTIKUM,
+        self::JENIS_KEGIATAN_SEMINAR,
+        self::JENIS_KEGIATAN_LAINNYA,
+    ];
+
     protected $fillable = [
         'kelas_id',
         'pertemuan_ke',
         'tanggal',
         'materi',
         'catatan_pertemuan',
+        'jenis_kegiatan',
+        'ruangan_id',
+        'bukti_pembelajaran_path',
+        'bukti_pembelajaran_disk',
         'status_pertemuan',
         'token_absensi',
         'token_expired_at',
@@ -64,9 +86,32 @@ class Pertemuan extends Model
         ];
     }
 
+    /**
+     * Opsi jenis kegiatan untuk form jurnal (value => label).
+     *
+     * @return array<string, string>
+     */
+    public static function jenisKegiatanOptions(): array
+    {
+        return [
+            self::JENIS_KEGIATAN_TEORI => 'Teori',
+            self::JENIS_KEGIATAN_PRAKTIKUM => 'Praktikum',
+            self::JENIS_KEGIATAN_SEMINAR => 'Seminar / Diskusi',
+            self::JENIS_KEGIATAN_LAINNYA => 'Lainnya',
+        ];
+    }
+
     public function kelas()
     {
         return $this->belongsTo(Kelas::class, 'kelas_id');
+    }
+
+    /**
+     * Ruangan pelaksanaan pertemuan (master SINAPRA), bukan teks bebas.
+     */
+    public function ruangan()
+    {
+        return $this->belongsTo(\App\Models\Ruangan::class, 'ruangan_id');
     }
 
     public function absensi()

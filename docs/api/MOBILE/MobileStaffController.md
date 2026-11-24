@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/mobile/staff`  
 > **Autentikasi**: Bearer Token (`auth:api`)  
 > **Dibuat**: 2026-11-21  
-> **Diperbarui**: 2026-11-22  
+> **Diperbarui**: 2026-11-24  
 
 ## Deskripsi Singkat
 
@@ -1195,7 +1195,7 @@ Rincian kelas perkuliahan dan daftar lengkap pertemuan ke-1 s/d ke-16 beserta st
 
 ## 17. POST /api/v1/mobile/staff/perkuliahan/kelas/{kelasId}/mulai
 
-Memulai sesi perkuliahan aktif (BAP), mencatat jam mulai perkuliahan, dan mengaktifkan token presensi 6-digit dinamis beserta QR payload untuk mahasiswa.
+Memulai sesi perkuliahan aktif (BAP), mencatat jam mulai perkuliahan, dan mengaktifkan token presensi 6-digit dinamis beserta QR payload untuk mahasiswa. Endpoint ini juga menginisialisasi entri absensi awal seluruh peserta kelas, sehingga tunduk pada cut-off penulisan presensi SIMPEG.
 
 ### Headers
 
@@ -1279,6 +1279,21 @@ Memulai sesi perkuliahan aktif (BAP), mencatat jam mulai perkuliahan, dan mengak
     }
 }
 ```
+
+**422 Unprocessable Entity — cut-off presensi tercapai**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "presensi": [
+            "Batas waktu pengisian presensi periode ini telah berakhir. Hubungi Admin SIMPEG jika memerlukan izin khusus."
+        ]
+    }
+}
+```
+
+> Periode ditentukan dari `tanggal` pada body (default: hari ini). Cut-off diatur Admin SIMPEG melalui `PUT /api/simpeg/presensi/pengajaran/cutoff`; izin khusus dapat diberikan per dosen dan periode.
 
 ---
 
@@ -1483,7 +1498,7 @@ Mengambil rincian data absensi seluruh mahasiswa terdaftar di kelas untuk pertem
 
 ## 21. POST /api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/presensi
 
-Memperbarui atau meng-override status kehadiran mahasiswa (hadir, izin, sakit, alfa) secara manual oleh dosen pengampu kelas.
+Memperbarui atau meng-override status kehadiran mahasiswa (hadir, izin, sakit, alfa) secara manual oleh dosen pengampu kelas. Periode pertemuan yang sudah melewati cut-off SIMPEG menolak seluruh penulisan di endpoint ini (`422`), kecuali dosen memiliki izin khusus aktif untuk periode tersebut.
 
 ### Headers
 
@@ -1553,6 +1568,19 @@ Memperbarui atau meng-override status kehadiran mahasiswa (hadir, izin, sakit, a
         ],
         "items.0.status": [
             "Status presensi harus salah satu dari: hadir, izin, sakit, alfa."
+        ]
+    }
+}
+```
+
+**422 Unprocessable Entity — cut-off presensi tercapai**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "presensi": [
+            "Batas waktu pengisian presensi periode ini telah berakhir. Hubungi Admin SIMPEG jika memerlukan izin khusus."
         ]
     }
 }

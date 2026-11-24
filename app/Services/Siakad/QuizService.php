@@ -428,7 +428,7 @@ class QuizService
 
             $query = Mahasiswa::query()
                 ->where(function ($q) {
-                    $q->where('status', 'aktif')
+                    $q->where('status', Mahasiswa::STATUS_AKTIF)
                         ->orWhereNull('status');
                 })
                 ->when($normalizedKelas !== null, fn ($q) => $q->where('kelas', $normalizedKelas))
@@ -1151,14 +1151,45 @@ class QuizService
         });
     }
 
-    public function submitAttempt(int $attemptId, int $userId): QuizAttempt
+    /**
+     * Finalisasi attempt dan kembalikan DTO aman untuk mahasiswa.
+     *
+     * Model attempt sengaja TIDAK dikembalikan langsung: relasi
+     * `jawaban.quizSoal.bankSoal` mengandung `kunci_jawaban`/`pembahasan`,
+     * sedangkan `bankSoal.opsi` mengandung `is_benar`. Field tersebut hanya
+     * boleh dipakai dosen (lihat endpoint koreksi), bukan response submit.
+     *
+     * @return array<string, mixed>
+     */
+    public function submitAttempt(int $attemptId, int $userId): array
     {
         return DB::transaction(function () use ($attemptId, $userId) {
             $attempt = $this->resolveActiveAttempt($attemptId, $userId);
             $attempt->load('quiz.soal.bankSoal.opsi');
 
-            return $this->finalizeAttempt($attempt);
+            return $this->serializeSubmittedAttempt($this->finalizeAttempt($attempt));
         });
+    }
+
+    /**
+     * Whitelist field attempt yang boleh dikonsumsi mahasiswa setelah submit.
+     *
+     * @return array<string, mixed>
+     */
+    protected function serializeSubmittedAttempt(QuizAttempt $attempt): array
+    {
+        return [
+            'id' => (int) $attempt->id,
+            'quiz_id' => (int) $attempt->quiz_id,
+            'mahasiswa_id' => (int) $attempt->mahasiswa_id,
+            'attempt_ke' => (int) $attempt->attempt_ke,
+            'status' => $attempt->status,
+            'dimulai_at' => optional($attempt->dimulai_at)->toISOString(),
+            'disubmit_at' => optional($attempt->disubmit_at)->toISOString(),
+            'nilai_akhir' => $attempt->nilai_akhir,
+            'is_lulus' => $attempt->is_lulus,
+            'butuh_penilaian_manual' => (bool) $attempt->butuh_penilaian_manual,
+        ];
     }
 
     /**

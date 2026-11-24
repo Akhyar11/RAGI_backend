@@ -729,7 +729,8 @@ class MobileStaffController extends Controller
 
         $data = $this->staffService->updatePresensiMahasiswa(
             pertemuanId: $pertemuanId,
-            items: $request->input('items', [])
+            items: $request->input('items', []),
+            userId: $request->user()?->id
         );
 
         return response()->json([

@@ -892,6 +892,11 @@ memiliki balasan ikut menghapus balasannya (cascade).
 > - Permission forum (`lms.forum.*`) didefinisikan di `PermissionSeeder` dan
 >   disinkronkan ke database oleh migrasi `2026_10_05_073000_add_lms_forum_permissions`
 >   agar database lama tanpa seeding ulang tetap konsisten.
+> - Menu **Diskusi** (`/lms/forum`) memakai permission `lms.forum.read`, sama
+>   dengan endpoint baca forum. Definisi di `menu_definitions.php` dan migrasi
+>   `2026_11_24_000001_fix_lms_forum_menu_permission.php` menyelaraskan database
+>   lama yang sebelumnya masih memakai `siakad.kelas.read` atau `permission_id`
+>   NULL. Pengujian: `tests/Feature/IAM/MenuVisibilityTest.php`.
 > - Topik default ditandai lewat kolom `slug` (`diskusi-umum`) dengan batasan
 >   unique `(kelas_id, slug)`. Topik buatan pengguna bernilai `slug = NULL` —
 >   MySQL & SQLite mengizinkan banyak NULL pada unique index. Frontend dapat

@@ -242,7 +242,7 @@ class SiakadLmsPresensiTest extends TestCase
             ->where('pertemuan_id', $this->pertemuan->id)
             ->where('mahasiswa_id', $this->mahasiswa->id)
             ->value('id');
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('core_audit_logs', [
             'module' => 'LMS',
             'action' => 'update',
             'table_name' => 'siakad_absensi_mahasiswa',

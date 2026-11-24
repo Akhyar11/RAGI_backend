@@ -11,6 +11,13 @@ class Mahasiswa extends Model
 {
     use SoftDeletes;
 
+    /**
+     * Kode status akademik PDDIKTI/Neo Feeder (closed-set domain, bukan entitas master).
+     * Sumber kebenaran skema: migrasi 2026_11_20_120000_align_siakad_mahasiswa_status_to_pddikti.
+     */
+    public const STATUS_AKTIF = 'A';
+    public const STATUS_CODES = ['A', 'C', 'G', 'M', 'N', 'U'];
+
     protected $table = 'siakad_mahasiswa';
 
     protected $fillable = [

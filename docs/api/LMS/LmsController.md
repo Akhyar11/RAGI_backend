@@ -5,7 +5,7 @@
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-25
-> **Diperbarui**: 2026-11-10 (roster presensi realtime dan status dari master SIAKAD)
+> **Diperbarui**: 2026-11-24 (jurnal presensi terintegrasi pada `siakad_pertemuan`, bukti privat, cetak PDF kehadiran & rekap prodi)
 
 Controller untuk menangani seluruh aktivitas Learning Management System (LMS) dan Absensi Terintegrasi Perkuliahan. Meliputi manajemen materi perkuliahan multi-file, penugasan mahasiswa dengan auto-sync ke sistem penilaian OBE (`siakad_nilai_komponen_mhs`), absensi token 6-digit dengan masa aktif dinamis, rekapitulasi kehadiran kelas, pengajuan dan persetujuan izin/sakit mahasiswa, serta pengaturan media penyimpanan (Cloudflare R2 atau storage lokal).
 
@@ -25,6 +25,8 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | GET | `/api/v1/lms/tugas/my` | Seluruh daftar tugas mahasiswa di semester aktif | ✅ |
 | GET | `/api/v1/lms/kelas/{kelasId}/overview` | Ringkasan 16 pertemuan kelas, silabus, & progres perkuliahan | ✅ |
 | GET | `/api/v1/lms/kelas/{kelasId}/rekap-absensi` | Rekap kehadiran (dosen: sekelas; mahasiswa: miliknya saja) | ✅ |
+| GET | `/api/v1/lms/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal` | Baca jurnal presensi (mahasiswa ringkasan tanpa bukti; pengelola read-only) | ✅ `siakad.kelas.read` |
+| PUT | `/api/v1/lms/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal` | Simpan jurnal + bukti privat (Dosen Pengampu saja) | ✅ `siakad.kelas.manage` |
 | POST | `/api/v1/lms/kelas/{kelasId}/import-materi` | Salin materi dari kelas sumber (pasangan `pertemuan_ke` sama) | ✅ kelola |
 | GET | `/api/v1/lms/kelas/{kelasId}/rekap-matrix` | Matriks kehadiran + peta status per pertemuan | ✅ |
 | GET | `/api/v1/lms/kelas/{kelasId}/ketercapaian` | Ketercapaian MK per komponen OBE (mahasiswa: miliknya saja) | ✅ |
@@ -67,6 +69,8 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | GET | `/api/v1/lms/kelas/{kelasId}/export/absensi-izin` | Export rekap pengajuan izin absensi kelas (CSV/XLSX) | ✅ kelola |
 | GET | `/api/v1/lms/kelas/{kelasId}/export/nilai` | Export rekap nilai (tugas + quiz) kelas (CSV/XLSX) | ✅ nilai |
 | GET | `/api/v1/lms/tugas/{tugasId}/export/pengumpulan` | Export status & nilai pengumpulan tugas (CSV/XLSX) | ✅ nilai |
+| GET | `/api/v1/lms/kelas/{kelasId}/cetak/kehadiran` | Cetak PDF rekap kehadiran satu kelas (inline) | ✅ `siakad.kelas.manage` |
+| GET | `/api/v1/lms/cetak/rekap-prodi` | Cetak PDF rekap kehadiran per program studi (inline) | ✅ `siakad.kelas.manage` |
 
 > **Feature flag `lms_fitur_presensi`**: seluruh endpoint presensi (rekap absensi, token absensi,
 > roster, input token, bulk absensi, tutup presensi) menolak permintaan dengan `403` bila flag dimatikan
@@ -1443,6 +1447,178 @@ Tugas 1: Framework MVC,2026001001,Mahasiswa LMS Testing,Terkumpul,-,tugas_mvc_20
 
 ---
 
+## 7A. Cetak Laporan PDF (Dompdf)
+
+Dua endpoint di bawah menghasilkan **PDF inline** (bukan unduhan CSV/XLSX) dan
+memakai `LmsPdfReportService`. Keduanya dilindungi Gate `siakad.kelas.manage`,
+mencatat `core_audit_logs` (`module = LMS`, `action = export`, `format = pdf`),
+serta membatasi data menurut `LmsService::resolveAccessibleKelasIds()`.
+
+| Endpoint | `jenis_laporan` di audit | Scope |
+|---|---|---|
+| `GET /api/v1/lms/kelas/{kelasId}/cetak/kehadiran` | `cetak_kehadiran_kelas` | Dosen hanya kelas yang diampu; admin/kaprodi sesuai hak akses |
+| `GET /api/v1/lms/cetak/rekap-prodi` | `rekap_kehadiran_prodi` | Tanpa prodi → digrup per prodi yang terjangkau user |
+
+> **Catatan**
+> - Response memakai `Content-Disposition: inline; filename="…pdf"` dan
+>   `Cache-Control: no-store, private`.
+> - PDF A4 portrait, font DejaVu Sans, tanpa memuat resource eksternal.
+> - Dosen di luar kelas mendapat `422` (bukan `403`) karena lolos Gate tetapi
+>   gagal pada pembatasan scope kelas.
+
+### [GET] `/api/v1/lms/kelas/{kelasId}/cetak/kehadiran`
+
+Menghasilkan rekapitulasi mahasiswa (NIM, nama, jumlah hadir/sakit/izin/alfa,
+persentase, keterangan memenuhi syarat) dan ringkasan pertemuan untuk satu kelas.
+
+#### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `kelasId` | integer | ✅ | ID kelas LMS |
+
+#### Response Sukses (200 OK)
+
+```
+Content-Type: application/pdf
+Content-Disposition: inline; filename="Kehadiran_Kelas_IF-LMS-A_20261124_101112.pdf"
+Cache-Control: no-store, private
+
+%PDF-1.4 ...
+```
+
+#### Response Error
+
+**400 Bad Request** — `kelasId` bukan integer yang valid.
+
+```json
+{
+    "status": "error",
+    "message": "Permintaan tidak valid."
+}
+```
+
+**401 Unauthorized** — token tidak valid atau sesi telah berakhir.
+
+```json
+{
+    "status": "error",
+    "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+**403 Forbidden** — role tidak memegang `siakad.kelas.manage`.
+
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+}
+```
+
+**404 Not Found** — kelas tidak ditemukan.
+
+```json
+{
+    "status": "error",
+    "message": "Data kelas tidak ditemukan."
+}
+```
+
+**422 Unprocessable Entity** — dosen berada di luar scope kelas yang diampu.
+
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "kelas": ["Anda tidak berhak mengakses data kelas ini."]
+    }
+}
+```
+
+### [GET] `/api/v1/lms/cetak/rekap-prodi`
+
+Menghasilkan rekap per program studinya. `program_studi_id` opsional; bila
+diisi, hanya kelas pada prodi tersebut yang dicetak (termasuk kelas gabungan
+melalui relasi `programStudis`).
+
+#### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `program_studi_id` | integer | ❌ | — | ID master `siakad_program_studi` |
+| `tahun_akademik_id` | integer | ✅ | — | ID master `siakad_tahun_akademik` |
+
+#### Response Sukses (200 OK)
+
+```
+Content-Type: application/pdf
+Content-Disposition: inline; filename="Rekap_Kehadiran_Prodi_IF-LMS_20261124_101112.pdf"
+Cache-Control: no-store, private
+
+%PDF-1.4 ...
+```
+
+#### Response Error
+
+**400 Bad Request** — `tahun_akademik_id` atau `program_studi_id` bukan integer yang valid.
+
+```json
+{
+    "status": "error",
+    "message": "Permintaan tidak valid."
+}
+```
+
+**401 Unauthorized** — token tidak valid atau sesi telah berakhir.
+
+```json
+{
+    "status": "error",
+    "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+**403 Forbidden** — role tidak memegang `siakad.kelas.manage`.
+
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+}
+```
+
+**404 Not Found** — tahun akademik atau program studi tidak ditemukan.
+
+```json
+{
+    "status": "error",
+    "message": "Data tahun akademik tidak ditemukan."
+}
+```
+
+```json
+{
+    "status": "error",
+    "message": "Data program studi tidak ditemukan."
+}
+```
+
+**422 Unprocessable Entity** — validasi parameter gagal.
+
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "tahun_akademik_id": ["Tahun akademik wajib diisi."]
+    }
+}
+```
+
+---
+
 ## 8. Dashboard & Pengaturan Level Modul
 
 ### [GET] `/api/v1/lms/dashboard/overview`
@@ -1838,6 +2014,161 @@ Menampilkan daftar sesi presensi yang sedang dibuka oleh dosen pada kelas-kelas 
 
 ---
 
+## GET `/api/v1/lms/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal`
+
+> Membaca jurnal presensi lokal yang disimpan langsung pada baris `siakad_pertemuan` (bukan tabel baru, bukan integrasi PresensiV2).
+> Dosen pengampu dan pengelola mendapat bukti pembelajaran berupa Signed URL; mahasiswa hanya menerima ringkasan tanpa path maupun tautan bukti.
+> Pertemuan yang `kelas_id`-nya tidak cocok dengan `{kelasId}` menghasilkan `404`.
+
+### Request Headers
+
+| Header | Wajib | Keterangan |
+|---|---|---|
+| `Authorization` | ✅ | `Bearer <token>` |
+| `Accept` | ✅ | `application/json` |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `kelasId` | integer | ✅ | ID kelas LMS (resource induk) |
+| `pertemuanId` | integer | ✅ | ID pertemuan pada kelas tersebut |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Jurnal pertemuan berhasil dimuat.",
+    "data": {
+        "jurnal": {
+            "pertemuan_id": 12,
+            "kelas_id": 3,
+            "pertemuan_ke": 1,
+            "tanggal": "2026-11-02",
+            "materi": "Sistem Terdistribusi",
+            "catatan_pertemuan": "Materi tersampaikan.",
+            "jenis_kegiatan": "praktikum",
+            "jenis_kegiatan_label": "Praktikum",
+            "ruangan_id": 7,
+            "ruangan_nama": "Ruang Jurnal A",
+            "jam_mulai": "08:00",
+            "jam_selesai": "10:30",
+            "status_pertemuan": "selesai",
+            "bukti_pembelajaran_path": "lms/bukti_pembelajaran/2026/11/<uuid>.pdf",
+            "bukti_pembelajaran_disk": "r2-private",
+            "bukti_pembelajaran_url": "http://localhost/api/files/view?expires=...&path=...&signature=...",
+            "updated_at": "2026-11-24T04:38:28+00:00"
+        },
+        "can_edit": true,
+        "jenis_kegiatan_options": [
+            { "value": "teori", "label": "Teori" },
+            { "value": "praktikum", "label": "Praktikum" },
+            { "value": "seminar", "label": "Seminar / Diskusi" },
+            { "value": "lainnya", "label": "Lainnya" }
+        ]
+    }
+}
+```
+
+> Untuk mahasiswa, `can_edit: false`, `bukti_pembelajaran_path`/`_disk`/`_url` bernilai `null`.
+> `jenis_kegiatan` adalah closed-set domain (bukan tabel master), dideklarasikan sekali di `Pertemuan::JENIS_KEGIATAN` dan dikembalikan melalui `jenis_kegiatan_options`.
+
+---
+
+## PUT `/api/v1/lms/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal`
+
+> Menyimpan data pertemuan **dan** jurnal dalam satu permintaan, sehingga dosen tidak mengisi dua kali.
+> `Content-Type: multipart/form-data` wajib karena bukti dikirim sebagai berkas.
+> Penulisan dibatasi **Dosen Pengampu kelas** di layer service. Admin/kaprodi bisa memantau lewat GET, tetapi tetap ditolak `403` saat PUT meskipun memiliki `siakad.kelas.manage`.
+
+### Request Headers
+
+| Header | Wajib | Keterangan |
+|---|---|---|
+| `Authorization` | ✅ | `Bearer <token>` |
+| `Accept` | ✅ | `application/json` |
+| `Content-Type` | ✅ | `multipart/form-data` |
+
+### Request Body (multipart/form-data)
+
+| Field | Type | Required | Aturan |
+|---|---|---|---|
+| `pertemuan_ke` | integer | ✅ | 1–16 |
+| `tanggal` | date | ✅ | Tanggal pertemuan |
+| `materi` | string | ⚠️ | Maks. 255 karakter; wajib saat membuka sesi presensi |
+| `catatan_pertemuan` | string | ❌ | Catatan jurnal |
+| `jam_mulai` | `H:i` | ❌ | — |
+| `jam_selesai` | `H:i` | ❌ | Harus setelah `jam_mulai` |
+| `status_pertemuan` | string | ❌ | `belum` / `berlangsung` / `selesai` |
+| `jenis_kegiatan` | string | ❌ | `teori` / `praktikum` / `seminar` / `lainnya` |
+| `ruangan_id` | integer | ❌ | `exists:sinapra_ruangan,id` — ID master ruangan, bukan label |
+| `bukti_pembelajaran` | file | ❌ | PDF/JPG/PNG, maks. 5 MB; disimpan privat dengan nama UUID |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Jurnal pertemuan berhasil disimpan.",
+    "data": {
+        "jurnal": { "pertemuan_id": 12, "jenis_kegiatan": "praktikum", "bukti_pembelajaran_url": "http://localhost/api/files/view?...&signature=..." },
+        "can_edit": true
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized** — token tidak valid atau sesi telah berakhir.
+
+```json
+{
+    "status": "error",
+    "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+**403 Forbidden** — user bukan Dosen Pengampu kelas:
+
+```json
+{
+    "status": "error",
+    "message": "Anda tidak memiliki hak akses untuk mengelola perkuliahan ini."
+}
+```
+
+**404 Not Found** — pertemuan tidak ada di kelas yang diminta:
+
+```json
+{
+    "status": "error",
+    "message": "Data pertemuan tidak ditemukan."
+}
+```
+
+**422 Unprocessable Entity** — validasi gagal:
+
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "jenis_kegiatan": ["Jenis kegiatan tidak valid. Pilihan: Teori (teori), Praktikum (praktikum), ..."],
+        "ruangan_id": ["Ruangan yang dipilih tidak ditemukan."],
+        "bukti_pembelajaran": ["Bukti pembelajaran harus berformat PDF, JPG, atau PNG."]
+    }
+}
+```
+
+### Catatan
+
+- Bukti pembelajaran disimpan via `FileStorageService` pada disk privat dengan path relatif `lms/bukti_pembelajaran/YYYY/MM/<uuid>.<ext>`; hanya Signed URL 15 menit (`/api/files/view?...&signature=...`) yang dikembalikan.
+- Bukti lama dihapus setelah transaksi database berhasil.
+- Perubahan dicatat di `core_audit_logs` (`module=LMS`, `action=update`, `table_name=siakad_pertemuan`) tanpa `token_absensi`.
+
+---
+
 ## Catatan Tambahan
 
 - **Penyimpanan Berkas (Cloudflare R2 & Lokal)**: Pemilihan disk penyimpanan disesuaikan secara dinamis melalui pengaturan sistem dan kelas (`lms_storage_disk`), tanpa melakukan *hardcoding* jalur berkas. Bila disk cloud (r2/r2-private/s3) terpilih namun belum dikonfigurasi (bucket/endpoint kosong, mis. env lokal), sistem otomatis fallback ke disk lokal agar upload tetap berjalan.
@@ -1848,3 +2179,5 @@ Menampilkan daftar sesi presensi yang sedang dibuka oleh dosen pada kelas-kelas 
 - **Cakupan Daftar Kelas (`kelas/my`)**: dosen hanya melihat kelas yang diampunya (`dosen_pengampu`), mahasiswa hanya kelas di KRS-nya. Akun tanpa relasi dosen/mahasiswa tidak menerima data apa pun kecuali istimewa (admin/kaprodi). Tanpa parameter `tahun_akademik_id`, daftar dibatasi ke periode aktif (`is_active`); kirim ID periode lain untuk melihat riwayat semester lalu.
 - **Kerahasiaan Data**: Field sensitif seperti token akses storage, credential S3, dan password pengguna tidak akan dikembalikan dalam response API apapun.
 - **Penghapusan Berkas**: Saat materi atau tugas dihapus, berkas fisik yang tersimpan di disk storage akan dibersihkan secara otomatis.
+- **Jurnal Presensi**: Satu baris `siakad_pertemuan` adalah satu-satunya sumber jurnal. Dosen pengampu menulis lewat `PUT .../jurnal`, admin/kaprodi memantau read-only, mahasiswa melihat ringkasan tanpa bukti. Tidak ada tabel jurnal terpisah dan tidak ada sinkronisasi ke PresensiV2.
+- **Bukti Pembelajaran Privat**: Berkas jurnal tidak pernah diekspos sebagai URL publik/storage langsung. Akses hanya lewat Signed URL 15 menit dari `FileStorageService`.

@@ -3,7 +3,7 @@
 > **Modul**: SIMPEG (monitoring sumber data LMS/SIAKAD)
 > **Base URL**: `/api/simpeg`
 > **Autentikasi**: Bearer token (Passport/Sanctum-compatible API guard)
-> **Diperbarui**: 2026-11-09
+> **Diperbarui**: 2026-11-24
 
 Controller untuk memantau pertemuan pengajaran dosen berdasarkan relasi aktual SIAKAD `DosenPengampu → Dosen → User`, mengatur cut-off pengisian presensi per periode, dan mengelola izin khusus dosen setelah cut-off. Data ini hanya menjadi indikator/laporan dan tidak masuk ke perhitungan nominal gaji atau proses payroll.
 
@@ -144,8 +144,14 @@ Contoh cut-off sebelum diatur:
 
 ## Aturan Penguncian
 
-- Setelah waktu cut-off tercapai, penambahan/perubahan presensi untuk periode itu ditolak, termasuk input token mahasiswa, input manual dosen, dan persetujuan izin yang mengubah rekap. Data presensi dikelola lokal di RAG.
-- Admin SIMPEG dapat memberi pengecualian untuk satu dosen dan satu periode dengan batas kedaluwarsa. Pengecualian tidak memperluas kelas yang boleh diakses dosen.
+- Cut-off dihitung per `periode` (`YYYY-MM`) dari `tanggal` pertemuan. Perubahan cut-off berlaku segera bagi seluruh kanal tulis absensi: LMS (`input-token`, `buka-sesi`, `bulk-absensi`, `proses izin`) dan mobile staff (`/mulai`, `/presensi`). Data presensi tetap dikelola lokal di RAG.
+- Yang dikunci hanya **penulisan absensi**. Generate/rotasi token, tutup sesi, dan penulisan jurnal presensi tidak dikenai guard cut-off.
+- Saat cut-off tercapai, jalur tulis absensi mengembalikan `422` dengan `errors.presensi`: `Batas waktu pengisian presensi periode ini telah berakhir. Hubungi Admin SIMPEG jika memerlukan izin khusus.`
+- Admin SIMPEG dapat memberi pengecualian untuk satu dosen dan satu periode dengan batas kedaluwarsa. Pengecualian tidak memperluas kelas yang boleh diakses dosen dan diverifikasi dari relasi `DosenPengampu`.
 - Pengingat in-app dikirim harian untuk pertemuan berstatus selesai yang belum memiliki data absensi; pengingat berhenti saat terisi atau cut-off tercapai.
 - Tanpa pengaturan cut-off untuk suatu periode, pengingat untuk periode tersebut tidak dikirim dan input presensi tidak ditutup.
 - Tidak ada pengaruh terhadap perhitungan payroll.
+
+## Audit
+
+Setiap pembuatan atau perubahan cut-off dicatat otomatis di `core_audit_logs` oleh `PresensiPengajaranCutoffObserver` dengan `module = SIMPEG`, `action = create|update`, `table_name = simpeg_presensi_pengajaran_cutoffs`, serta `old_values`/`new_values` berisi field yang berubah (`periode`, `cutoff_at`, `set_by`). Pencatatan izin khusus dan pencabutannya juga mengikuti jalur SIMPEG yang sama. Audit bersifat best-effort: kegagalan penulisan log tidak membatalkan perubahan cut-off.

@@ -8,7 +8,13 @@ use Illuminate\Support\Facades\Log;
 
 class PresensiPengajaranCutoffObserver
 {
-    private array $oldValues = [];
+    /**
+     * Observer dibuat ulang untuk setiap event oleh container, jadi state
+     * antar-event harus disimpan statis dan dibersihkan setelah dipakai.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    private static array $oldValues = [];
 
     public function created(PresensiPengajaranCutoff $model): void
     {
@@ -18,17 +24,18 @@ class PresensiPengajaranCutoffObserver
     public function updating(PresensiPengajaranCutoff $model): void
     {
         $dirty = array_keys($model->getDirty());
-        $this->oldValues[spl_object_id($model)] = collect($model->getOriginal())->only($dirty)->all();
+        self::$oldValues[spl_object_id($model)] = collect($model->getRawOriginal())->only($dirty)->all();
     }
 
     public function updated(PresensiPengajaranCutoff $model): void
     {
+        $old = self::$oldValues[spl_object_id($model)] ?? [];
+        unset(self::$oldValues[spl_object_id($model)]);
+
         if (!$model->wasChanged()) {
             return;
         }
 
-        $old = $this->oldValues[spl_object_id($model)] ?? [];
-        unset($this->oldValues[spl_object_id($model)]);
         $this->record('update', $model, $old, $model->getChanges());
     }
 

@@ -194,6 +194,18 @@ class SiakadTryoutTest extends TestCase
         $submit = $this->postJson("/api/v1/lms/attempt/{$attemptId}/submit");
         $submit->assertStatus(200)->assertJsonPath('data.nilai_akhir', '50.00');
 
+        // REGRESI: response submit tidak boleh membocorkan kunci / pembahasan /
+        // penanda opsi benar, baik di root maupun di nested jawaban.
+        $submitPayload = json_encode($submit->json('data'));
+        $this->assertStringNotContainsStringIgnoringCase('kunci_jawaban', $submitPayload);
+        $this->assertStringNotContainsStringIgnoringCase('pembahasan', $submitPayload);
+        $this->assertStringNotContainsStringIgnoringCase('is_benar', $submitPayload);
+        $this->assertStringNotContainsStringIgnoringCase('bank_soal', $submitPayload);
+        $submit->assertJsonStructure([
+            'status', 'message',
+            'data' => ['id', 'quiz_id', 'attempt_ke', 'status', 'nilai_akhir', 'is_lulus'],
+        ]);
+
         // OBE sync ke komponen tryout
         $krsDetailId = KrsDetail::where('kelas_id', $this->kelas->id)->first()->id;
         $this->assertDatabaseHas('siakad_nilai_komponen_mhs', [
@@ -388,11 +400,12 @@ class SiakadTryoutTest extends TestCase
             'urutan' => 2,
         ]);
 
-        // Set kelas & angkatan pada mahasiswaLuar agar bisa ditarik via batch filter
+        // Set kelas & angkatan pada mahasiswaLuar agar bisa ditarik via batch filter.
+        // Status memakai kode PDDIKTI aktif ("A"), bukan nilai legacy "aktif".
         $this->mahasiswaLuar->update([
             'kelas' => '25A',
             'angkatan' => 2025,
-            'status' => 'aktif',
+            'status' => Mahasiswa::STATUS_AKTIF,
         ]);
 
         // 1. Dosen 1 membuat Tryout Ujian Khusus (di luar mata kuliah, kelas_id = null) + melibatkan Dosen 2
