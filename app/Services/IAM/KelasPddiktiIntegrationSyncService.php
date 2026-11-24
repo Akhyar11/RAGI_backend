@@ -6,7 +6,6 @@ use App\Jobs\SyncPddiktiKelasJob;
 use App\Models\IamApiIntegration;
 use App\Models\Siakad\DistribusiMengajar;
 use App\Models\Siakad\Dosen;
-use App\Models\Siakad\DosenPenugasan;
 use App\Models\Siakad\MasterKelas;
 use App\Models\Siakad\MataKuliah;
 use App\Models\Siakad\ProgramStudi;
@@ -292,6 +291,7 @@ class KelasPddiktiIntegrationSyncService
                         'dosen_nidn' => $resolved['lecturer']->nidn,
                         'sks_by_class' => [],
                         'kelas_ids' => [],
+                        'registrasi_ids' => [],
                     ];
                     $masterClassId = (int) $resolved['master_class']->id;
                     $teacher['sks_by_class'][$masterClassId] = max(
@@ -301,6 +301,9 @@ class KelasPddiktiIntegrationSyncService
                     $teacher['sks'] = array_sum($teacher['sks_by_class']);
                     $teacher['kelas_ids'][] = $masterClassId;
                     $teacher['kelas_ids'] = array_values(array_unique($teacher['kelas_ids']));
+                    if ($resolved['registration_id'] !== '') {
+                        $teacher['registrasi_ids'] = array_values(array_unique(array_merge($teacher['registrasi_ids'], [$resolved['registration_id']])));
+                    }
                     $groups[$key]['teachers'][$teacherId] = $teacher;
                 }
 
@@ -349,10 +352,33 @@ class KelasPddiktiIntegrationSyncService
         throw new ApiIntegrationSyncException('Data dosen pengajar kelas PDDIKTI mencapai batas ' . self::MAX_PAGES . ' batch (' . number_format(self::PAGE_SIZE * self::MAX_PAGES, 0, ',', '.') . ' record) tanpa penanda akhir.', 422);
     }
 
+    /**
+     * Request list ke Feeder dengan retry untuk kegagalan jaringan/timeout saja (halaman ~300 KB bisa lambat).
+     * Respons error_code != 0 tidak diulang; ditangani pemanggil. Batch tetap 500 dan offset tidak berubah.
+     */
+    private function requestWithRetry(string $action, array $params): array
+    {
+        $delaysSeconds = app()->environment('testing') ? [0, 0] : [3, 10];
+        $attempt = 0;
+        while (true) {
+            try {
+                return $this->neoFeeder->request($action, $params);
+            } catch (\Throwable $e) {
+                if ($attempt >= count($delaysSeconds)) {
+                    throw $e;
+                }
+                if ($delaysSeconds[$attempt] > 0) {
+                    sleep($delaysSeconds[$attempt]);
+                }
+                $attempt++;
+            }
+        }
+    }
+
     private function fetchTeachingAssignmentBatch(int $offset): array
     {
         try {
-            $response = $this->neoFeeder->request('GetDosenPengajarKelasKuliah', [
+            $response = $this->requestWithRetry('GetDosenPengajarKelasKuliah', [
                 'filter' => '',
                 'order' => 'id_kelas_kuliah',
                 'limit' => self::PAGE_SIZE,
@@ -376,7 +402,7 @@ class KelasPddiktiIntegrationSyncService
         if (!is_array($row)) {
             return 'Item dosen pengajar Neo Feeder bukan object data.';
         }
-        foreach (['id_kelas_kuliah', 'id_dosen', 'id_registrasi_dosen', 'sks_substansi_total'] as $field) {
+        foreach (['id_kelas_kuliah', 'id_dosen', 'sks_substansi_total'] as $field) {
             if (!isset($row[$field]) || trim((string) $row[$field]) === '') {
                 return "Field {$field} wajib tersedia dari GetDosenPengajarKelasKuliah.";
             }
@@ -405,20 +431,11 @@ class KelasPddiktiIntegrationSyncService
         }
         $lecturer = $lecturerMatches->first();
 
-        $assignmentMatches = \App\Models\Siakad\DosenPenugasan::query()
-            ->where('id_feeder', trim((string) $row['id_registrasi_dosen']))
-            ->where('dosen_id', $lecturer->id)
-            ->where('program_studi_id', $program->id)
-            ->where('tahun_akademik_id', $semesterModel->id)
-            ->limit(2)
-            ->get();
-        if ($assignmentMatches->count() !== 1) {
-            return $assignmentMatches->isEmpty()
-                ? 'Registrasi penugasan dosen Feeder belum dipetakan ke siakad_dosen_penugasan untuk prodi dan periode kelas ini.'
-                : 'Registrasi penugasan dosen Feeder terduplikasi pada prodi dan periode kelas ini.';
-        }
-        if ($assignmentMatches->first()->id_feeder !== trim((string) $row['id_registrasi_dosen'])) {
-            return 'ID registrasi dosen Feeder tidak cocok dengan mapping penugasan lokal.';
+        // id_registrasi_dosen tidak lagi dicocokkan ke siakad_dosen_penugasan (tabel itu tidak diisi sync PDDIKTI);
+        // dosen cukup dikenali lewat id_dosen -> siakad_dosen.id_feeder. Registrasi hanya disimpan sebagai data tambahan.
+        $registrationId = isset($row['id_registrasi_dosen']) ? trim((string) $row['id_registrasi_dosen']) : '';
+        if (mb_strlen($registrationId) > 100) {
+            $registrationId = '';
         }
 
         $sks = $this->normalizeSks($row['sks_substansi_total']);
@@ -433,6 +450,7 @@ class KelasPddiktiIntegrationSyncService
             'lecturer' => $lecturer,
             'master_class' => $masterClass,
             'sks' => $sks,
+            'registration_id' => $registrationId,
         ];
     }
 
@@ -483,6 +501,7 @@ class KelasPddiktiIntegrationSyncService
                     ? (float) ($teacher['sks'] ?? 0)
                     : ($existing['sks'] ?? $teacher['sks']),
                 'kelas_ids' => array_values(array_unique(array_merge($existingClasses, $teacher['kelas_ids']))),
+                'registrasi_ids' => array_values(array_unique(array_merge($existing['registrasi_ids'] ?? [], $teacher['registrasi_ids'] ?? []))),
                 'source' => ($existing['source'] ?? null) === 'manual' ? 'manual' : 'pddikti',
             ]));
         }
@@ -538,7 +557,7 @@ class KelasPddiktiIntegrationSyncService
     private function fetchBatch(int $offset): array
     {
         try {
-            $response = $this->neoFeeder->request('GetListKelasKuliah', [
+            $response = $this->requestWithRetry('GetListKelasKuliah', [
                 'filter' => '',
                 'order' => 'id_kelas_kuliah',
                 'limit' => self::PAGE_SIZE,

@@ -602,6 +602,39 @@ class IamApiIntegrationTest extends TestCase
         $this->assertSame(0, DB::table('siakad_jadwal_kelas')->count());
     }
 
+    public function test_pddikti_kelas_fetch_retries_transport_timeout_but_not_feeder_error_codes(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_kelas')->firstOrFail();
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        $classCalls = 0;
+        Http::fake([
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) use (&$classCalls) {
+                $payload = json_decode($request->body(), true);
+                if (($payload['act'] ?? null) === 'GetListKelasKuliah') {
+                    $classCalls++;
+                    if ($classCalls === 1) {
+                        throw new \Illuminate\Http\Client\ConnectionException('cURL error 28: Operation timed out');
+                    }
+                }
+                return match ($payload['act'] ?? null) {
+                    'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
+                    'GetListKelasKuliah' => Http::response(['error_code' => 0, 'data' => []], 200),
+                    'GetDosenPengajarKelasKuliah' => Http::response(['error_code' => 0, 'data' => []], 200),
+                    default => Http::response(['error_code' => 1], 400),
+                };
+            },
+        ]);
+        Cache::put('siakad-kelas-pddikti-sync:retry', ['status' => 'running'], now()->addHour());
+
+        $result = app(\App\Services\IAM\KelasPddiktiIntegrationSyncService::class)->process($integration, 'retry');
+
+        $this->assertSame(2, $classCalls, 'Timeout pertama harus diulang tepat sekali pada offset yang sama.');
+        $this->assertSame(0, $result['processed']);
+    }
+
     public function test_pddikti_class_teaching_assignments_fill_distribution_without_inventing_coordinator(): void
     {
         app(IamApiIntegrationSeeder::class)->run();
@@ -654,16 +687,6 @@ class IamApiIntegrationTest extends TestCase
             'nama_lengkap' => 'Dosen Distribusi',
             'id_feeder' => 'lecturer-dist-uuid',
             'is_active' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        $assignmentId = DB::table('siakad_dosen_penugasan')->insertGetId([
-            'dosen_id' => $lecturerId,
-            'program_studi_id' => $programId,
-            'tahun_akademik_id' => $semesterId,
-            'id_feeder' => 'registration-dist-uuid',
-            'is_homebase' => true,
-            'sync_status' => 'synced',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -724,7 +747,8 @@ class IamApiIntegrationTest extends TestCase
         $this->assertSame($lecturerId, $details[0]['dosen_id']);
         $this->assertSame(2.0, (float) $details[0]['sks']);
         $this->assertSame('pddikti', $details[0]['source']);
-        $this->assertSame($assignmentId, DB::table('siakad_dosen_penugasan')->where('id_feeder', 'registration-dist-uuid')->value('id'));
+        $this->assertSame(['registration-dist-uuid'], $details[0]['registrasi_ids']);
+        $this->assertSame(0, DB::table('siakad_dosen_penugasan')->count(), 'Sync distribusi tidak boleh bergantung pada atau menulis siakad_dosen_penugasan.');
 
         $secondProgress = 'distribution-repeat';
         $manualLecturerId = DB::table('siakad_dosen')->insertGetId([
@@ -755,7 +779,7 @@ class IamApiIntegrationTest extends TestCase
         $this->assertEqualsCanonicalizing([$lecturerId, $manualLecturerId], json_decode($updatedDistribution->dosen_anggota_ids, true));
     }
 
-    public function test_pddikti_class_teaching_assignment_with_unmapped_registration_is_skipped(): void
+    public function test_pddikti_class_teaching_assignment_with_unmapped_lecturer_is_skipped(): void
     {
         app(IamApiIntegrationSeeder::class)->run();
         $integration = IamApiIntegration::where('key', 'siakad_kelas')->firstOrFail();
@@ -802,8 +826,8 @@ class IamApiIntegrationTest extends TestCase
                     'GetDosenPengajarKelasKuliah' => Http::response(['error_code' => 0, 'data' => [[
                         'id_aktivitas_mengajar' => 'teaching-skip-uuid',
                         'id_kelas_kuliah' => 'class-skip-uuid',
-                        'id_dosen' => 'lecturer-skip-uuid',
-                        'id_registrasi_dosen' => 'unmapped-registration-uuid',
+                        'id_dosen' => 'unmapped-lecturer-uuid',
+                        'id_registrasi_dosen' => 'registration-skip-uuid',
                         'nama_kelas_kuliah' => '26A',
                         'sks_substansi_total' => 2,
                     ]]], 200),
@@ -817,7 +841,7 @@ class IamApiIntegrationTest extends TestCase
             ->process($integration, 'assignment-skip');
 
         $this->assertSame(1, $result['assignment_skipped']);
-        $this->assertStringContainsString('Registrasi penugasan dosen Feeder belum dipetakan', $result['assignment_skipped_items'][0]['reason']);
+        $this->assertStringContainsString('Dosen Feeder belum dipetakan ke siakad_dosen', $result['assignment_skipped_items'][0]['reason']);
         $this->assertSame(0, DB::table('siakad_distribusi_mengajar')->where('mata_kuliah_id', $courseId)->count());
         $this->assertSame(1, $lecturerId);
         $this->assertSame(1, $masterClassId);

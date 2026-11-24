@@ -277,7 +277,7 @@ class IamApiIntegrationSeeder extends Seeder
                             'jumlah_mahasiswa' => 'Tidak diimpor; peserta/mahasiswa berada di luar cakupan sinkronisasi ini.',
                             'assignment.id_kelas_kuliah' => 'Menghubungkan assignment dosen ke kelas Feeder yang telah diimpor.',
                             'assignment.id_dosen' => 'UUID dosen; wajib cocok dengan siakad_dosen.id_feeder.',
-                            'assignment.id_registrasi_dosen' => 'UUID penugasan dosen; wajib cocok dengan siakad_dosen_penugasan.id_feeder untuk prodi/periode kelas.',
+                            'assignment.id_registrasi_dosen' => 'UUID registrasi/penugasan dosen; opsional, tidak dicocokkan ke siakad_dosen_penugasan, disimpan sebagai registrasi_ids pada dosen_anggota_details.',
                             'assignment.sks_substansi_total' => 'Beban SKS dosen pada kelas; disimpan sebagai detail anggota distribusi.',
                             'assignment.id_aktivitas_mengajar' => 'ID aktivitas mengajar sumber; tidak digunakan untuk menebak koordinator OBE.',
                             'assignment.rencana_minggu_pertemuan' => 'Rencana minggu pertemuan dari Feeder; belum disalin ke distribusi karena field target tidak tersedia.',
