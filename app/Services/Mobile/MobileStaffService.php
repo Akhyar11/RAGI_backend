@@ -24,7 +24,6 @@ use App\Models\Arsip\NomorSurat;
 use App\Models\Sippm\ProposalKegiatan;
 use App\Models\Sippm\PublikasiIlmiah;
 use App\Models\Sippm\HkiDanBuku;
-use App\Models\Sippm\PeriodeHibah;
 use App\Models\Sippm\SkemaKegiatan;
 use App\Models\Sippm\AnggotaKegiatan;
 use App\Models\Sikeu\PengajuanPencairanKas;
@@ -41,6 +40,7 @@ use App\Services\Sinapra\MaintenanceService;
 use App\Services\Storage\FileStorageService;
 use App\Services\Simpeg\PresensiPengajaranService;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -1198,14 +1198,28 @@ class MobileStaffService
 
         $updated = 0;
 
-        DB::transaction(function () use ($pertemuanId, $items, &$updated) {
-            foreach ($items as $item) {
+        DB::transaction(function () use ($pertemuanId, $pertemuan, $items, &$updated) {
+            foreach ($items as $index => $item) {
                 $mhsId = $item['mahasiswa_id'] ?? null;
                 if (!$mhsId) continue;
 
-                $status = $item['status'] ?? AbsensiMahasiswa::STATUS_HADIR;
+                // Cegah dosen mengubah presensi mahasiswa dari kelas lain.
+                if (!app(LmsService::class)->isMahasiswaEnrolledInKelas(
+                    (int) $mhsId,
+                    (int) $pertemuan->kelas_id
+                )) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "items.{$index}.mahasiswa_id" => [
+                            'Mahasiswa bukan peserta KRS yang valid untuk kelas pertemuan ini.',
+                        ],
+                    ]);
+                }
+
+                $status = $item['status'] ?? null;
                 if (!in_array($status, AbsensiMahasiswa::STATUSES, true)) {
-                    $status = AbsensiMahasiswa::STATUS_HADIR;
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "items.{$index}.status" => ['Status absensi tidak valid.'],
+                    ]);
                 }
 
                 $absen = AbsensiMahasiswa::firstOrNew([
@@ -1305,7 +1319,7 @@ class MobileStaffService
     public function getSippmProposals(User $user, ?Request $request = null): array
     {
         $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
-        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $perPage = min(100, max(1, (int) ($request?->integer('per_page', 15) ?? 15)));
         $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         if (!$pegawai) {
@@ -1382,10 +1396,9 @@ class MobileStaffService
             throw new \DomainException('Dokumen usulan proposal penelitian/pengabdian wajib dilampirkan.');
         }
 
-        $periodeId = $data['periode_id'] ?? PeriodeHibah::where('is_active', true)->first()?->id;
-        if (!$periodeId) {
-            throw new \DomainException('Tidak ada periode hibah penelitian/pengabdian yang sedang dibuka saat ini.');
-        }
+        // `periode_id` diwajibkan oleh StoreMobileProposalRequest; tidak ada
+        // fallback ke periode aktif agar proposal selalu terkait periode pilihan user.
+        $periodeId = (int) $data['periode_id'];
 
         $year = date('Y');
         $count = ProposalKegiatan::whereYear('created_at', $year)->count() + 1;
@@ -1468,7 +1481,7 @@ class MobileStaffService
     public function getSippmLuaran(User $user, ?Request $request = null): array
     {
         $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
-        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $perPage = min(100, max(1, (int) ($request?->integer('per_page', 15) ?? 15)));
         $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         if (!$pegawai) {
@@ -1549,7 +1562,7 @@ class MobileStaffService
     public function getSikeuPayroll(User $user, ?Request $request = null): array
     {
         $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
-        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $perPage = min(100, max(1, (int) ($request?->integer('per_page', 15) ?? 15)));
         $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         if (!$pegawai) {
@@ -1594,7 +1607,7 @@ class MobileStaffService
      */
     public function getSikeuPengajuan(User $user, ?Request $request = null): array
     {
-        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $perPage = min(100, max(1, (int) ($request?->integer('per_page', 15) ?? 15)));
         $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         $query = PengajuanPencairanKas::where('pemohon_id', $user->id);
@@ -1716,7 +1729,7 @@ class MobileStaffService
      */
     public function getSinapraTiket(User $user, ?Request $request = null): array
     {
-        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $perPage = min(100, max(1, (int) ($request?->integer('per_page', 15) ?? 15)));
         $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         $query = MaintenanceLog::with(['aset', 'ruangan', 'teknisi'])
@@ -1842,7 +1855,7 @@ class MobileStaffService
      */
     public function getSinapraPeminjaman(User $user, ?Request $request = null): array
     {
-        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $perPage = min(100, max(1, (int) ($request?->integer('per_page', 15) ?? 15)));
         $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
         $jenis = strtolower((string) $request?->query('jenis', 'ruangan'));
 
@@ -1917,7 +1930,7 @@ class MobileStaffService
     public function getArsipEfile(User $user, ?Request $request = null): array
     {
         $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
-        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $perPage = min(100, max(1, (int) ($request?->integer('per_page', 15) ?? 15)));
         $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         if (!$pegawai) {
@@ -1935,13 +1948,20 @@ class MobileStaffService
         }
 
         $query = DokumenPegawai::where('pegawai_id', $pegawai->id);
+        if ($request?->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('nama_dokumen', 'like', "%{$search}%")
+                  ->orWhere('jenis_dokumen', 'like', "%{$search}%");
+            });
+        }
         $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
 
         $items = $paginator->getCollection()->map(function ($d) {
             return [
                 'id' => (string) $d->id,
                 'title' => $d->nama_dokumen,
-                'subtitle' => $d->jenis_dokumen . ($d->file_size ? ' (' . round($d->file_size / 1024, 1) . ' KB)' : ''),
+                'subtitle' => $d->jenis_dokumen . ($d->file_size ? ' (' . $d->file_size . ')' : ''),
                 'status' => $d->status_verifikasi ?: 'tersimpan',
                 'date' => $d->created_at?->format('Y-m-d') ?? '',
                 'amount' => '',
@@ -1963,7 +1983,7 @@ class MobileStaffService
     {
         $pegawai = $user->pegawai ?? Pegawai::where('user_id', $user->id)->first();
         $pegawaiId = $pegawai?->id;
-        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $perPage = min(100, max(1, (int) ($request?->integer('per_page', 15) ?? 15)));
         $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
         $jenis = strtolower((string) $request?->query('jenis', 'surat'));
 
@@ -2041,7 +2061,7 @@ class MobileStaffService
     public function getLmsBahanAjar(User $user, ?Request $request = null): array
     {
         $dosen = $this->resolveDosen($user->id);
-        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $perPage = min(100, max(1, (int) ($request?->integer('per_page', 15) ?? 15)));
         $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         if (!$dosen) {
@@ -2065,6 +2085,14 @@ class MobileStaffService
 
         $query = MateriPertemuan::with(['pertemuan.kelas.mataKuliah', 'files'])
             ->whereHas('pertemuan', fn($p) => $p->whereIn('kelas_id', $classes));
+
+        if ($request?->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('judul', 'like', "%{$search}%")
+                  ->orWhereHas('pertemuan.kelas.mataKuliah', fn($sub) => $sub->where('nama_mata_kuliah', 'like', "%{$search}%"));
+            });
+        }
 
         $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
 
@@ -2094,10 +2122,17 @@ class MobileStaffService
      */
     public function getLmsPengumuman(User $user, ?Request $request = null): array
     {
-        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $perPage = min(100, max(1, (int) ($request?->integer('per_page', 15) ?? 15)));
         $sortOrder = strtolower($request?->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         $query = LmsNotifikasi::where('user_id', $user->id);
+        if ($request?->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('judul', 'like', "%{$search}%")
+                  ->orWhere('pesan', 'like', "%{$search}%");
+            });
+        }
         $paginator = $query->orderBy('created_at', $sortOrder)->paginate($perPage);
 
         $items = $paginator->getCollection()->map(function ($n) {
@@ -2126,10 +2161,10 @@ class MobileStaffService
         $code = $user->referral_code;
         $stats = $this->spmbReferralService->statsForUser($user);
         $shareUrl = $this->getSpmbPublicBaseUrl() . '/spmb/daftar?ref=' . $code;
-        $perPage = min(100, max(1, (int) ($request?->input('per_page') ?? 15)));
+        $perPage = min(100, max(1, (int) ($request?->integer('per_page', 15) ?? 15)));
         $page = max(1, (int) ($request?->input('page') ?? 1));
 
-        $usages = ReferralUsage::with('pendaftar.prodiPilihan1')
+        $usages = ReferralUsage::with('pendaftaran.programStudi')
             ->where('referrer_user_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -2157,8 +2192,8 @@ class MobileStaffService
         ]);
 
         foreach ($usages as $u) {
-            $namaPendaftar = $u->pendaftar?->nama ?? ('Pendaftar #' . $u->id);
-            $prodi = $u->pendaftar?->prodiPilihan1?->nama_prodi ?? 'Prodi Pilihan';
+            $namaPendaftar = $u->pendaftaran?->nama_lengkap ?? ('Pendaftar #' . $u->id);
+            $prodi = $u->pendaftaran?->programStudi?->nama ?? 'Prodi Pilihan';
 
             $items->push([
                 'id' => (string) $u->id,

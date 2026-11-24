@@ -15,10 +15,10 @@ class StoreMobileProposalRequest extends FormRequest
     {
         return [
             'judul' => 'required|string|max:255',
-            'abstrak' => 'required|string',
+            'abstrak' => 'nullable|string',
             'rumpun_ilmu' => 'required|string|max:150',
             'skema_id' => 'required|exists:sippm_skema_kegiatan,id',
-            'periode_id' => 'nullable|exists:sippm_periode_hibah,id',
+            'periode_id' => 'required|exists:sippm_periode_hibah,id',
             'target_tkt' => 'nullable|integer|min:1|max:9',
             'anggaran_diajukan' => 'required|numeric|min:0',
             'file_proposal' => 'required|file|mimes:pdf|max:10240',
@@ -30,10 +30,11 @@ class StoreMobileProposalRequest extends FormRequest
     {
         return [
             'judul.required' => 'Judul proposal wajib diisi.',
-            'abstrak.required' => 'Abstrak proposal wajib diisi.',
             'rumpun_ilmu.required' => 'Rumpun ilmu wajib diisi.',
             'skema_id.required' => 'Skema hibah penelitian/pengabdian wajib dipilih.',
             'skema_id.exists' => 'Skema hibah yang dipilih tidak valid.',
+            'periode_id.required' => 'Periode hibah wajib dipilih.',
+            'periode_id.exists' => 'Periode hibah yang dipilih tidak valid.',
             'anggaran_diajukan.required' => 'Nominal anggaran yang diajukan wajib diisi.',
             'anggaran_diajukan.numeric' => 'Nominal anggaran harus berupa angka.',
             'anggaran_diajukan.min' => 'Nominal anggaran tidak boleh bernilai negatif.',

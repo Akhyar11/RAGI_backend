@@ -24,15 +24,31 @@ use App\Models\Siakad\SkalaNilai;
 use App\Models\Siakad\TahunAkademik;
 use App\Models\Simpeg\CampusAnnouncement;
 use App\Models\Simpeg\Pegawai;
+use App\Models\Simpeg\DokumenPegawai;
+use App\Models\Simpeg\GajiDetail;
+use App\Models\Simpeg\GajiPegawai;
+use App\Models\Simpeg\IzinJamKerja;
+use App\Models\Simpeg\MasterJenisCuti;
+use App\Models\Simpeg\MasterJenisIzinJamKerja;
+use App\Models\Simpeg\MasterJenisSertifikasi;
+use App\Models\Simpeg\MasterJenisTransportasi;
+use App\Models\Simpeg\MasterKategoriKegiatanTugas;
+use App\Models\Simpeg\MasterKategoriSk;
+use App\Models\Simpeg\PengajuanCuti;
+use App\Models\Simpeg\SertifikasiDosen;
+use App\Models\Simpeg\SkPegawai;
+use App\Models\Simpeg\SuratTugas;
 use App\Models\Sippm\SkemaKegiatan;
 use App\Models\Sippm\PeriodeHibah;
 use App\Models\Sippm\ProposalKegiatan;
 use App\Models\Sikeu\PengajuanPencairanKas;
 use App\Models\Sinapra\MaintenanceLog;
+use App\Models\Spmb\ReferralUsage;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
@@ -94,7 +110,17 @@ class MobileStaffApiTest extends TestCase
             'sippm.proposal.create',
             'simpeg.payroll.read',
             'simpeg.dokumen.read',
+            'simpeg.dokumen.create',
+            'simpeg.cuti.read',
+            'simpeg.cuti.create',
+            'simpeg.izin_kerja.read',
+            'simpeg.izin_kerja.create',
             'simpeg.surat_tugas.read',
+            'simpeg.surat_tugas.create',
+            'simpeg.surat_tugas.update',
+            'simpeg.sk_pegawai.read',
+            'simpeg.sk_pegawai.create',
+            'simpeg.kompetensi.read',
             'arsip.nomor_surat.read',
             'sikeu.pengajuan.read',
             'sikeu.pengajuan.create',
@@ -1159,6 +1185,484 @@ class MobileStaffApiTest extends TestCase
         config(['spmb.public_url' => 'https://pmb.poltekindonusa.ac.id']);
         $customRes = $this->postJson('/api/v1/mobile/staff/spmb/referral');
         $this->assertStringStartsWith('https://pmb.poltekindonusa.ac.id/spmb/daftar?ref=', $customRes->json('data.share_url'));
+    }
+
+    public function test_mobile_staff_simpeg_self_service_gateway(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        $pegawai = Pegawai::create([
+            'user_id' => $this->dosenUser->id,
+            'nip' => '198801012015011001',
+            'nama_lengkap' => 'Dr. Budi Santoso, M.Kom',
+            'status_kepegawaian' => 'tetap',
+            'status' => 'aktif',
+        ]);
+
+        $jenisCuti = MasterJenisCuti::firstOrCreate(
+            ['kode' => 'CUTI_TAHUNAN'],
+            ['nama' => 'Cuti Tahunan', 'tipe_durasi' => 'fleksibel', 'is_active' => true]
+        );
+        $jenisIzin = MasterJenisIzinJamKerja::firstOrCreate(
+            ['kode' => 'PRIBADI'],
+            ['nama' => 'Keperluan Pribadi', 'is_active' => true]
+        );
+        $kategori = MasterKategoriKegiatanTugas::firstOrCreate(
+            ['nama' => 'Kegiatan Dinas'],
+            ['is_active' => true]
+        );
+        $transportasi = MasterJenisTransportasi::firstOrCreate(
+            ['kode' => 'PRIBADI'],
+            ['nama' => 'Kendaraan Pribadi', 'is_active' => true]
+        );
+        $kategoriSk = MasterKategoriSk::firstOrCreate(
+            ['kode' => 'PENUGASAN'],
+            ['nama' => 'SK Penugasan', 'is_active' => true]
+        );
+
+        // 1. Cuti: daftar, pengajuan berkas privat, dan filter.
+        $this->getJson('/api/v1/mobile/staff/simpeg/cuti')
+            ->assertOk()
+            ->assertJsonStructure(['status', 'message', 'data', 'meta']);
+
+        $cutiRes = $this->postJson('/api/v1/mobile/staff/simpeg/cuti', [
+            'master_jenis_cuti_id' => $jenisCuti->id,
+            'tanggal_mulai' => '2026-12-01',
+            'tanggal_selesai' => '2026-12-03',
+            'alasan' => 'Keperluan keluarga mendesak',
+            'file_pendukung' => UploadedFile::fake()->create('pendukung.pdf', 100, 'application/pdf'),
+        ]);
+        $cutiRes->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.raw.jumlah_hari', 3);
+        $this->assertStringContainsString('/api/files/view?', (string) $cutiRes->json('data.file_url'));
+        $this->assertDatabaseHas('simpeg_pengajuan_cuti', [
+            'pegawai_id' => $pegawai->id,
+            'master_jenis_cuti_id' => $jenisCuti->id,
+            'jenis_cuti' => 'tahunan',
+            'status_approval' => 'pending',
+        ]);
+        $cutiPath = (string) PengajuanCuti::where('pegawai_id', $pegawai->id)->value('file_pendukung');
+        $this->assertStringStartsWith('simpeg/cuti/', $cutiPath);
+        $this->assertStringNotContainsString('storage/', $cutiPath);
+
+        $this->getJson('/api/v1/mobile/staff/simpeg/cuti?status=pending&search=keluarga')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.status', 'pending');
+
+        // 2. Izin jam kerja.
+        $izinRes = $this->postJson('/api/v1/mobile/staff/simpeg/izin-kerja', [
+            'master_jenis_izin_id' => $jenisIzin->id,
+            'tanggal' => '2026-12-04',
+            'jam_mulai' => '08:00',
+            'jam_selesai' => '11:00',
+            'alasan' => 'Mengurus urusan pribadi di luar kampus',
+        ]);
+        $izinRes->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.status', 'menunggu');
+        $this->assertDatabaseHas('simpeg_izin_jam_kerja', [
+            'pegawai_id' => $pegawai->id,
+            'master_jenis_izin_id' => $jenisIzin->id,
+            'status' => 'menunggu',
+        ]);
+        $this->getJson('/api/v1/mobile/staff/simpeg/izin-kerja?search=pribadi')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        // 3. Surat tugas + unggah LPJ (hanya setelah disetujui).
+        $suratRes = $this->postJson('/api/v1/mobile/staff/simpeg/surat-tugas', [
+            'kategori_kegiatan_id' => $kategori->id,
+            'jenis_transportasi_id' => $transportasi->id,
+            'nama_kegiatan' => 'Koordinasi program dengan kampus mitra',
+            'tempat_berangkat' => 'Kampus',
+            'lokasi_tujuan' => 'Bandung',
+            'tanggal_berangkat' => '2026-12-10',
+            'tanggal_kembali' => '2026-12-11',
+            'tanggal_mulai' => '2026-12-10',
+            'tanggal_selesai' => '2026-12-11',
+            'maksud_tujuan' => 'Koordinasi implementasi kurikulum',
+            'estimasi_biaya' => 750000,
+            'file_surat_tugas' => UploadedFile::fake()->create('surat-tugas.pdf', 100, 'application/pdf'),
+        ]);
+        $suratRes->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.status', 'diajukan');
+        $suratId = (int) $suratRes->json('data.id');
+        $this->assertDatabaseHas('simpeg_surat_tugas', [
+            'id' => $suratId,
+            'pegawai_id' => $pegawai->id,
+            'status' => 'diajukan',
+        ]);
+
+        $this->postJson("/api/v1/mobile/staff/simpeg/surat-tugas/{$suratId}/lpj", [
+            'file_lpj' => UploadedFile::fake()->create('lpj.pdf', 100, 'application/pdf'),
+        ])->assertStatus(422)->assertJsonPath('status', 'error');
+
+        SuratTugas::whereKey($suratId)->update(['status' => 'disetujui']);
+        $lpjRes = $this->postJson("/api/v1/mobile/staff/simpeg/surat-tugas/{$suratId}/lpj", [
+            'file_lpj' => UploadedFile::fake()->create('lpj.pdf', 100, 'application/pdf'),
+            'laporan_kegiatan' => 'Kegiatan koordinasi selesai dilaksanakan.',
+            'biaya_realisasi' => 700000,
+        ]);
+        $lpjRes->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.status', 'disetujui');
+        $this->assertStringContainsString('/api/files/view?', (string) $lpjRes->json('data.file_lpj_url'));
+        $this->assertDatabaseHas('simpeg_surat_tugas', [
+            'id' => $suratId,
+            'status_pencairan' => 'lpj_diunggah',
+        ]);
+        $this->getJson('/api/v1/mobile/staff/simpeg/surat-tugas?search=kampus+mitra')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        // 4. SK pegawai.
+        $skRes = $this->postJson('/api/v1/mobile/staff/simpeg/sk-pegawai', [
+            'kategori_sk_id' => $kategoriSk->id,
+            'nomor_sk' => 'SK/123/2026',
+            'judul_sk' => 'SK Penugasan Dosen',
+            'tanggal_sk' => '2026-12-01',
+            'tmt_sk' => '2026-12-01',
+            'pejabat_penetap' => 'Rektor',
+            'file_sk' => UploadedFile::fake()->create('sk.pdf', 100, 'application/pdf'),
+        ]);
+        $skRes->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.status', 'pending');
+        $this->assertDatabaseHas('simpeg_sk_pegawai', [
+            'pegawai_id' => $pegawai->id,
+            'kategori_sk_id' => $kategoriSk->id,
+            'nomor_sk' => 'SK/123/2026',
+            'status_verifikasi' => 'pending',
+        ]);
+        $this->getJson('/api/v1/mobile/staff/simpeg/sk-pegawai?search=SK%2F123')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        // 5. Kompetensi: sertifikasi / tes / pelatihan milik pegawai login.
+        $jenisSertifikasi = MasterJenisSertifikasi::firstOrCreate(
+            ['kode' => 'SERDOS'],
+            ['nama' => 'Sertifikasi Dosen', 'is_active' => true]
+        );
+        SertifikasiDosen::create([
+            'pegawai_id' => $pegawai->id,
+            'jenis_sertifikasi_id' => $jenisSertifikasi->id,
+            'nama_sertifikat' => 'Sertifikasi Dosen Alexander',
+            'bidang_studi' => 'Ilmu Komputer',
+            'penyelenggara' => 'Kementerian Pendidikan',
+            'tahun_sertifikasi' => 2025,
+            'file_path' => 'simpeg/kompetensi/alexander.pdf',
+        ]);
+        $this->getJson('/api/v1/mobile/staff/simpeg/kompetensi?jenis=sertifikasi&search=Alexander')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.title', 'Sertifikasi Dosen Alexander');
+        $this->getJson('/api/v1/mobile/staff/simpeg/kompetensi?jenis=tes')
+            ->assertOk()
+            ->assertJsonStructure(['status', 'message', 'data', 'meta']);
+        $this->getJson('/api/v1/mobile/staff/simpeg/kompetensi?jenis=pelatihan')
+            ->assertOk()
+            ->assertJsonStructure(['status', 'message', 'data', 'meta']);
+    }
+
+    public function test_mobile_staff_simpeg_scope_and_rbac(): void
+    {
+        $otherUser = User::create([
+            'username' => 'staff.lain',
+            'email' => 'staff.lain@kampus.ac.id',
+            'name' => 'Staff Lain',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+        $otherPegawai = Pegawai::create([
+            'user_id' => $otherUser->id,
+            'nip' => '199002022018012002',
+            'nama_lengkap' => 'Staff Lain',
+            'status_kepegawaian' => 'tetap',
+            'status' => 'aktif',
+        ]);
+        $jenisCuti = MasterJenisCuti::firstOrCreate(
+            ['kode' => 'CUTI_TAHUNAN'],
+            ['nama' => 'Cuti Tahunan', 'is_active' => true]
+        );
+        $otherCuti = PengajuanCuti::create([
+            'pegawai_id' => $otherPegawai->id,
+            'master_jenis_cuti_id' => $jenisCuti->id,
+            'jenis_cuti' => 'tahunan',
+            'tanggal_mulai' => '2026-12-01',
+            'tanggal_selesai' => '2026-12-02',
+            'jumlah_hari' => 2,
+            'alasan' => 'Cuti pegawai lain',
+        ]);
+
+        // Pengajuan pegawai lain tidak boleh muncul pada daftar milik dosen.
+        Passport::actingAs($this->dosenUser);
+        $cutiList = $this->getJson('/api/v1/mobile/staff/simpeg/cuti')->assertOk();
+        $this->assertFalse(collect($cutiList->json('data'))->contains('id', (string) $otherCuti->id));
+
+        // LPJ milik pegawai lain tidak boleh diakses penanggung jawab lain.
+        $kategori = MasterKategoriKegiatanTugas::firstOrCreate(
+            ['nama' => 'Dinas'],
+            ['is_active' => true]
+        );
+        $transportasi = MasterJenisTransportasi::firstOrCreate(
+            ['kode' => 'PRIBADI'],
+            ['nama' => 'Pribadi', 'is_active' => true]
+        );
+        $otherSurat = SuratTugas::create([
+            'pegawai_id' => $otherPegawai->id,
+            'kategori_kegiatan_id' => $kategori->id,
+            'jenis_transportasi_id' => $transportasi->id,
+            'nama_kegiatan' => 'Kegiatan pegawai lain',
+            'tempat_berangkat' => 'Kampus',
+            'lokasi_tujuan' => 'Surabaya',
+            'tanggal_berangkat' => '2026-12-10',
+            'tanggal_kembali' => '2026-12-11',
+            'tanggal_mulai' => '2026-12-10',
+            'tanggal_selesai' => '2026-12-11',
+            'status' => 'disetujui',
+        ]);
+        $this->postJson("/api/v1/mobile/staff/simpeg/surat-tugas/{$otherSurat->id}/lpj", [
+            'file_lpj' => UploadedFile::fake()->create('lpj.pdf', 100, 'application/pdf'),
+        ])->assertStatus(403)->assertJsonPath('status', 'error');
+
+        // Akun tanpa permission ditolak untuk seluruh gateway baru.
+        $outsider = User::create([
+            'username' => 'tanpa.akses',
+            'email' => 'tanpa.akses@kampus.ac.id',
+            'name' => 'Tanpa Akses',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+        Passport::actingAs($outsider);
+
+        foreach ([
+            '/api/v1/mobile/staff/simpeg/cuti',
+            '/api/v1/mobile/staff/simpeg/izin-kerja',
+            '/api/v1/mobile/staff/simpeg/surat-tugas',
+            '/api/v1/mobile/staff/simpeg/sk-pegawai',
+            '/api/v1/mobile/staff/simpeg/kompetensi',
+            '/api/v1/mobile/staff/sikeu/payroll/1',
+            '/api/v1/mobile/staff/arsip/e-file/1',
+        ] as $endpoint) {
+            $this->getJson($endpoint)->assertStatus(403)->assertJsonPath('status', 'error');
+        }
+        $this->postJson('/api/v1/mobile/staff/simpeg/cuti', [])->assertStatus(403);
+        $this->postJson('/api/v1/mobile/staff/arsip/e-file', [])->assertStatus(403);
+    }
+
+    public function test_mobile_staff_payroll_detail_and_pdf_slip(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        $pegawai = Pegawai::create([
+            'user_id' => $this->dosenUser->id,
+            'nip' => '198801012015011001',
+            'nama_lengkap' => 'Dr. Budi Santoso, M.Kom',
+            'status_kepegawaian' => 'tetap',
+            'status' => 'aktif',
+        ]);
+        $gaji = GajiPegawai::create([
+            'pegawai_id' => $pegawai->id,
+            'periode_bulan_tahun' => '2026-11',
+            'gaji_pokok' => 5000000,
+            'total_tunjangan' => 1000000,
+            'total_potongan' => 500000,
+            'gaji_bersih' => 5500000,
+            'status_transfer' => 'paid',
+        ]);
+        GajiDetail::create([
+            'gaji_pegawai_id' => $gaji->id,
+            'nama_komponen' => 'Tunjangan Fungsional',
+            'jenis' => 'pendapatan',
+            'nominal' => 1000000,
+        ]);
+        GajiDetail::create([
+            'gaji_pegawai_id' => $gaji->id,
+            'nama_komponen' => 'BPJS Kesehatan',
+            'jenis' => 'potongan',
+            'nominal' => 500000,
+        ]);
+
+        $detail = $this->getJson("/api/v1/mobile/staff/sikeu/payroll/{$gaji->id}");
+        $detail->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.id', (string) $gaji->id)
+            ->assertJsonPath('data.amount', 'Rp 5.500.000')
+            ->assertJsonPath('data.status', 'paid')
+            ->assertJsonPath('data.pendapatan.0.komponen', 'Tunjangan Fungsional')
+            ->assertJsonPath('data.potongan.0.komponen', 'BPJS Kesehatan');
+
+        $slip = $this->get("/api/v1/mobile/staff/sikeu/payroll/{$gaji->id}/slip");
+        $slip->assertOk();
+        $this->assertStringContainsString('application/pdf', (string) $slip->headers->get('Content-Type'));
+        $this->assertStringStartsWith('%PDF', (string) $slip->getContent());
+        $this->assertStringContainsString('attachment', (string) $slip->headers->get('Content-Disposition'));
+
+        // Gaji milik pegawai lain tidak boleh diakses.
+        $otherUser = User::create([
+            'username' => 'pegawai.lain',
+            'email' => 'pegawai.lain@kampus.ac.id',
+            'name' => 'Pegawai Lain',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+        $otherPegawai = Pegawai::create([
+            'user_id' => $otherUser->id,
+            'nip' => '199002022018012003',
+            'nama_lengkap' => 'Pegawai Lain',
+            'status_kepegawaian' => 'tetap',
+            'status' => 'aktif',
+        ]);
+        $otherGaji = GajiPegawai::create([
+            'pegawai_id' => $otherPegawai->id,
+            'periode_bulan_tahun' => '2026-11',
+            'gaji_bersih' => 4000000,
+        ]);
+        $this->getJson("/api/v1/mobile/staff/sikeu/payroll/{$otherGaji->id}")->assertNotFound();
+        $this->get("/api/v1/mobile/staff/sikeu/payroll/{$otherGaji->id}/slip")->assertNotFound();
+    }
+
+    public function test_mobile_staff_arsip_efile_detail_download_upload(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        $pegawai = Pegawai::create([
+            'user_id' => $this->dosenUser->id,
+            'nip' => '198801012015011001',
+            'nama_lengkap' => 'Dr. Budi Santoso, M.Kom',
+            'status_kepegawaian' => 'tetap',
+            'status' => 'aktif',
+        ]);
+
+        $this->postJson('/api/v1/mobile/staff/arsip/e-file', [
+            'nama_dokumen' => 'KTP Pegawai',
+            'jenis_dokumen' => 'ktp',
+        ])->assertStatus(422)->assertJsonPath('status', 'error');
+
+        $upload = $this->postJson('/api/v1/mobile/staff/arsip/e-file', [
+            'nama_dokumen' => 'KTP Pegawai',
+            'jenis_dokumen' => 'ktp',
+            'file' => UploadedFile::fake()->create('ktp.pdf', 100, 'application/pdf'),
+        ]);
+        $upload->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.jenis_dokumen', 'ktp')
+            ->assertJsonPath('data.status', 'pending');
+        $this->assertStringContainsString('/api/files/view?', (string) $upload->json('data.file_url'));
+
+        $dokumenId = (int) $upload->json('data.id');
+        $this->assertDatabaseHas('simpeg_dokumen_pegawai', [
+            'id' => $dokumenId,
+            'pegawai_id' => $pegawai->id,
+            'nama_dokumen' => 'KTP Pegawai',
+            'jenis_dokumen' => 'ktp',
+            'status_verifikasi' => 'pending',
+        ]);
+        $filePath = (string) DokumenPegawai::findOrFail($dokumenId)->file_path;
+        $this->assertStringStartsWith('simpeg/e-file/', $filePath);
+        $this->assertStringNotContainsString('storage/', $filePath);
+        $this->assertStringNotContainsString('http', $filePath);
+
+        $this->getJson("/api/v1/mobile/staff/arsip/e-file/{$dokumenId}")
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.id', (string) $dokumenId);
+
+        $download = $this->getJson("/api/v1/mobile/staff/arsip/e-file/{$dokumenId}/download");
+        $download->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.id', (string) $dokumenId)
+            ->assertJsonPath('data.expires_in_seconds', 900);
+        $this->assertStringContainsString('/api/files/view?', (string) $download->json('data.file_url'));
+
+        $otherUser = User::create([
+            'username' => 'arsip.lain',
+            'email' => 'arsip.lain@kampus.ac.id',
+            'name' => 'Arsip Lain',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+        $otherPegawai = Pegawai::create([
+            'user_id' => $otherUser->id,
+            'nip' => '199002022018012004',
+            'nama_lengkap' => 'Arsip Lain',
+            'status_kepegawaian' => 'tetap',
+            'status' => 'aktif',
+        ]);
+        $otherDokumen = DokumenPegawai::create([
+            'pegawai_id' => $otherPegawai->id,
+            'nama_dokumen' => 'Ijazah Lain',
+            'jenis_dokumen' => 'ijazah',
+            'file_path' => 'simpeg/e-file/2026/11/lain.pdf',
+        ]);
+        $this->getJson("/api/v1/mobile/staff/arsip/e-file/{$otherDokumen->id}")->assertNotFound();
+        $this->getJson("/api/v1/mobile/staff/arsip/e-file/{$otherDokumen->id}/download")->assertNotFound();
+    }
+
+    public function test_mobile_staff_spmb_referral_count_aliases(): void
+    {
+        Passport::actingAs($this->dosenUser);
+
+        // Data pendaftar riil dibutuhkan karena spmb_referral_usages.pendaftaran_id wajib.
+        $jalurId = DB::table('spmb_jalur_masuk')->insertGetId([
+            'kode' => 'REG',
+            'nama' => 'Reguler',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $gelombangId = DB::table('spmb_gelombang_penerimaan')->insertGetId([
+            'jalur_masuk_id' => $jalurId,
+            'nama' => 'Gelombang Reguler 2026',
+            'tanggal_buka' => '2026-01-01',
+            'tanggal_tutup' => '2026-12-31',
+            'status' => 'aktif',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ([
+            ReferralUsage::STATUS_CLAIMED,
+            ReferralUsage::STATUS_QUALIFIED,
+            ReferralUsage::STATUS_QUALIFIED,
+            ReferralUsage::STATUS_REWARDED,
+            ReferralUsage::STATUS_CANCELLED,
+        ] as $index => $status) {
+            $sequence = $index + 1;
+            $pendaftaranId = DB::table('spmb_pendaftaran_calon_mhs')->insertGetId([
+                'gelombang_id' => $gelombangId,
+                'user_id' => $this->dosenUser->id,
+                'program_studi_id' => $this->dosen->program_studi_id,
+                'no_pendaftaran' => 'SPMB-REF-' . $sequence,
+                'nama_lengkap' => 'Calon Mahasiswa ' . $sequence,
+                'nik' => '1234567890123' . $sequence,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            ReferralUsage::create([
+                'pendaftaran_id' => $pendaftaranId,
+                'referee_user_id' => $this->dosenUser->id,
+                'referrer_user_id' => $this->dosenUser->id,
+                'referral_code' => $this->dosenUser->referral_code,
+                'status' => $status,
+            ]);
+        }
+
+        $stats = $this->postJson('/api/v1/mobile/staff/spmb/referral')
+            ->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->json('data.stats');
+
+        $this->assertEquals(5, $stats['total']);
+        $this->assertEquals(5, $stats['mahasiswa_baru']);
+        $this->assertEquals(2, $stats['qualified']);
+        $this->assertEquals(2, $stats['dapat_direimburse']);
+        $this->assertEquals(1, $stats['rewarded']);
+        $this->assertEquals(1, $stats['sudah_direimburse']);
     }
 
     private function buatKelasDanMulaiSesi(string $kode): int

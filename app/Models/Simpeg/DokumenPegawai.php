@@ -12,6 +12,9 @@ class DokumenPegawai extends Model
 
     protected $table = 'simpeg_dokumen_pegawai';
 
+    /** Jenis dokumen e-file: nilai tetap domain sesuai enum kolom `jenis_dokumen`. */
+    public const JENIS_DOKUMEN = ['ktp', 'kk', 'ijazah', 'sk', 'serdos', 'sertifikat', 'lainnya'];
+
     protected $fillable = [
         'pegawai_id',
         'nama_dokumen',

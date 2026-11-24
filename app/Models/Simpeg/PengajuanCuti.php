@@ -11,6 +11,12 @@ class PengajuanCuti extends Model
 {
     use HasFactory;
 
+    /**
+     * Nilai tetap (closed-set) sesuai enum kolom `simpeg_pengajuan_cuti.jenis_cuti`.
+     * Dipakai untuk memvalidasi turunan kode master sebelum ditulis ke kolom legacy.
+     */
+    public const JENIS_CUTI = ['tahunan', 'sakit', 'melahirkan', 'alasan_penting', 'besar'];
+
     protected $table = 'simpeg_pengajuan_cuti';
 
     protected $fillable = [

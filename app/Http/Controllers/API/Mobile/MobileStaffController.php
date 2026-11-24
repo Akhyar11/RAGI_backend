@@ -6,6 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Mobile\StoreMobileProposalRequest;
 use App\Http\Requests\Mobile\StoreMobilePengajuanRequest;
 use App\Http\Requests\Mobile\StoreMobileTiketRequest;
+use App\Http\Requests\Mobile\StoreMobileCutiRequest;
+use App\Http\Requests\Mobile\StoreMobileIzinKerjaRequest;
+use App\Http\Requests\Mobile\StoreMobileSuratTugasRequest;
+use App\Http\Requests\Mobile\StoreMobileLpjRequest;
+use App\Http\Requests\Mobile\StoreMobileSkPegawaiRequest;
+use App\Http\Requests\Mobile\StoreMobileEfileRequest;
 use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\Krs;
 use App\Models\Siakad\Mahasiswa;
@@ -13,6 +19,7 @@ use App\Models\Siakad\NilaiMahasiswa;
 use App\Models\Siakad\Pertemuan;
 use App\Services\AuditLogService;
 use App\Services\Mobile\MobileStaffService;
+use App\Services\Mobile\MobileStaffSimpegService;
 use App\Services\Siakad\LmsService;
 use App\Services\Storage\FileStorageService;
 use Illuminate\Http\JsonResponse;
@@ -26,6 +33,7 @@ class MobileStaffController extends Controller
 {
     public function __construct(
         private MobileStaffService $staffService,
+        private MobileStaffSimpegService $simpegService,
         private FileStorageService $fileStorageService
     ) {}
 
@@ -803,6 +811,7 @@ class MobileStaffController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => $e->getMessage(),
+                'errors' => ['error' => [$e->getMessage()]],
             ], 422);
         }
     }
@@ -1057,5 +1066,434 @@ class MobileStaffController extends Controller
             'message' => 'Link referral SPMB berhasil dibuat.',
             'data' => $data,
         ], 201);
+    }
+
+    // =========================================================================
+    // SIMPEG SELF-SERVICE, PAYROLL DETAIL & ARSIP E-FILE (myInU-Staff)
+    // =========================================================================
+
+    /** GET /api/v1/mobile/staff/simpeg/cuti */
+    public function listMobileCuti(Request $request): JsonResponse
+    {
+        Gate::authorize('simpeg.cuti.read');
+
+        $result = $this->simpegService->getMobileCuti($request->user(), $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar pengajuan cuti berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /** POST /api/v1/mobile/staff/simpeg/cuti */
+    public function storeMobileCuti(StoreMobileCutiRequest $request): JsonResponse
+    {
+        Gate::authorize('simpeg.cuti.create');
+
+        try {
+            $cuti = $this->simpegService->storeMobileCuti(
+                $request->user(),
+                $request->validated(),
+                $request->file('file_pendukung')
+            );
+            $audit = $cuti['audit'];
+            unset($cuti['audit']);
+
+            try {
+                AuditLogService::record(
+                    module: $audit['module'],
+                    action: $audit['action'],
+                    tableName: $audit['table_name'],
+                    recordId: (int) $audit['record_id'],
+                    oldValues: $audit['old_values'],
+                    newValues: $audit['new_values'],
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log cuti mobile: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Pengajuan cuti berhasil dikirim.',
+                'data' => $cuti,
+            ], 201);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'errors' => ['error' => [$e->getMessage()]],
+            ], 422);
+        }
+    }
+
+    /** GET /api/v1/mobile/staff/simpeg/izin-kerja */
+    public function listMobileIzinKerja(Request $request): JsonResponse
+    {
+        Gate::authorize('simpeg.izin_kerja.read');
+
+        $result = $this->simpegService->getMobileIzinKerja($request->user(), $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar izin jam kerja berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /** POST /api/v1/mobile/staff/simpeg/izin-kerja */
+    public function storeMobileIzinKerja(StoreMobileIzinKerjaRequest $request): JsonResponse
+    {
+        Gate::authorize('simpeg.izin_kerja.create');
+
+        try {
+            $izin = $this->simpegService->storeMobileIzinKerja(
+                $request->user(),
+                $request->validated(),
+                $request->file('file_bukti')
+            );
+            $audit = $izin['audit'];
+            unset($izin['audit']);
+
+            try {
+                AuditLogService::record(
+                    module: $audit['module'],
+                    action: $audit['action'],
+                    tableName: $audit['table_name'],
+                    recordId: (int) $audit['record_id'],
+                    oldValues: $audit['old_values'],
+                    newValues: $audit['new_values'],
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log izin jam kerja mobile: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Pengajuan izin jam kerja berhasil dikirim.',
+                'data' => $izin,
+            ], 201);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'errors' => ['error' => [$e->getMessage()]],
+            ], 422);
+        }
+    }
+
+    /** GET /api/v1/mobile/staff/simpeg/surat-tugas */
+    public function listMobileSuratTugas(Request $request): JsonResponse
+    {
+        Gate::authorize('simpeg.surat_tugas.read');
+
+        $result = $this->simpegService->getMobileSuratTugas($request->user(), $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar surat tugas berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /** POST /api/v1/mobile/staff/simpeg/surat-tugas */
+    public function storeMobileSuratTugas(StoreMobileSuratTugasRequest $request): JsonResponse
+    {
+        Gate::authorize('simpeg.surat_tugas.create');
+
+        try {
+            $surat = $this->simpegService->storeMobileSuratTugas(
+                $request->user(),
+                $request->validated(),
+                $request->file('file_surat_tugas')
+            );
+            $audit = $surat['audit'];
+            unset($surat['audit']);
+
+            try {
+                AuditLogService::record(
+                    module: $audit['module'],
+                    action: $audit['action'],
+                    tableName: $audit['table_name'],
+                    recordId: (int) $audit['record_id'],
+                    oldValues: $audit['old_values'],
+                    newValues: $audit['new_values'],
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log surat tugas mobile: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Surat tugas berhasil diajukan.',
+                'data' => $surat,
+            ], 201);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'errors' => ['error' => [$e->getMessage()]],
+            ], 422);
+        }
+    }
+
+    /** POST /api/v1/mobile/staff/simpeg/surat-tugas/{id}/lpj */
+    public function uploadMobileLpj(StoreMobileLpjRequest $request, int $id): JsonResponse
+    {
+        Gate::authorize('simpeg.surat_tugas.update');
+
+        try {
+            $lpj = $this->simpegService->uploadMobileLpj(
+                $request->user(),
+                $id,
+                $request->validated(),
+                $request->file('file_lpj')
+            );
+            $audit = $lpj['audit'];
+            unset($lpj['audit']);
+
+            try {
+                AuditLogService::record(
+                    module: $audit['module'],
+                    action: $audit['action'],
+                    tableName: $audit['table_name'],
+                    recordId: (int) $audit['record_id'],
+                    oldValues: $audit['old_values'],
+                    newValues: $audit['new_values'],
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log LPJ mobile: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Berkas LPJ berhasil diunggah.',
+                'data' => $lpj,
+            ], 201);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'errors' => ['error' => [$e->getMessage()]],
+            ], 422);
+        }
+    }
+
+    /** GET /api/v1/mobile/staff/simpeg/sk-pegawai */
+    public function listMobileSkPegawai(Request $request): JsonResponse
+    {
+        Gate::authorize('simpeg.sk_pegawai.read');
+
+        $result = $this->simpegService->getMobileSkPegawai($request->user(), $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar SK pegawai berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /** POST /api/v1/mobile/staff/simpeg/sk-pegawai */
+    public function storeMobileSkPegawai(StoreMobileSkPegawaiRequest $request): JsonResponse
+    {
+        Gate::authorize('simpeg.sk_pegawai.create');
+
+        try {
+            $sk = $this->simpegService->storeMobileSkPegawai(
+                $request->user(),
+                $request->validated(),
+                $request->file('file_sk')
+            );
+            $audit = $sk['audit'];
+            unset($sk['audit']);
+
+            try {
+                AuditLogService::record(
+                    module: $audit['module'],
+                    action: $audit['action'],
+                    tableName: $audit['table_name'],
+                    recordId: (int) $audit['record_id'],
+                    oldValues: $audit['old_values'],
+                    newValues: $audit['new_values'],
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log SK pegawai mobile: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'SK pegawai berhasil disimpan.',
+                'data' => $sk,
+            ], 201);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'errors' => ['error' => [$e->getMessage()]],
+            ], 422);
+        }
+    }
+
+    /** GET /api/v1/mobile/staff/simpeg/kompetensi */
+    public function listMobileKompetensi(Request $request): JsonResponse
+    {
+        Gate::authorize('simpeg.kompetensi.read');
+
+        $result = $this->simpegService->getMobileKompetensi($request->user(), $request);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar kompetensi pegawai berhasil dimuat.',
+            'data' => $result['items'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    /** GET /api/v1/mobile/staff/sikeu/payroll/{id} */
+    public function showSikeuPayroll(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('simpeg.payroll.read');
+
+        $payroll = $this->simpegService->getSikeuPayrollDetail($request->user(), $id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Detail slip gaji berhasil dimuat.',
+            'data' => $payroll,
+        ]);
+    }
+
+    /** GET /api/v1/mobile/staff/sikeu/payroll/{id}/slip — stream PDF on demand */
+    public function downloadSikeuPayrollSlip(Request $request, int $id): \Illuminate\Http\Response
+    {
+        Gate::authorize('simpeg.payroll.read');
+
+        $pdf = $this->simpegService->generateSikeuPayrollSlipPdf($request->user(), $id);
+
+        // Audit unduh tidak boleh menggagalkan response PDF.
+        try {
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'download_slip_gaji',
+                tableName: 'simpeg_gaji_pegawai',
+                recordId: $id,
+                oldValues: null,
+                newValues: ['id' => $id, 'keterangan' => 'Unduh slip gaji PDF via mobile'],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log unduh slip gaji mobile: ' . $e->getMessage());
+        }
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="slip-gaji-' . $id . '.pdf"',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    /** GET /api/v1/mobile/staff/arsip/e-file/{id} */
+    public function showArsipEfile(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('simpeg.dokumen.read');
+
+        $dokumen = $this->simpegService->getArsipEfileDetail($request->user(), $id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Detail dokumen e-file berhasil dimuat.',
+            'data' => $dokumen,
+        ]);
+    }
+
+    /** GET /api/v1/mobile/staff/arsip/e-file/{id}/download — signed URL 15 menit */
+    public function downloadArsipEfile(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('simpeg.dokumen.read');
+
+        try {
+            $download = $this->simpegService->getArsipEfileDownload($request->user(), $id);
+
+            // Audit unduh tidak boleh menggagalkan request.
+            try {
+                AuditLogService::record(
+                    module: 'SIMPEG',
+                    action: 'download_efile',
+                    tableName: 'simpeg_dokumen_pegawai',
+                    recordId: $id,
+                    oldValues: null,
+                    newValues: [
+                        'id' => $id,
+                        'nama_dokumen' => $download['nama_dokumen'],
+                    ],
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log unduh e-file mobile: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Tautan unduh dokumen berhasil dibuat.',
+                'data' => $download,
+            ]);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'errors' => ['error' => [$e->getMessage()]],
+            ], 422);
+        }
+    }
+
+    /** POST /api/v1/mobile/staff/arsip/e-file */
+    public function storeArsipEfile(StoreMobileEfileRequest $request): JsonResponse
+    {
+        Gate::authorize('simpeg.dokumen.create');
+
+        try {
+            $dokumen = $this->simpegService->storeArsipEfile(
+                $request->user(),
+                $request->validated(),
+                $request->file('file')
+            );
+            $audit = $dokumen['audit'];
+            unset($dokumen['audit']);
+
+            try {
+                AuditLogService::record(
+                    module: $audit['module'],
+                    action: $audit['action'],
+                    tableName: $audit['table_name'],
+                    recordId: (int) $audit['record_id'],
+                    oldValues: $audit['old_values'],
+                    newValues: $audit['new_values'],
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log e-file mobile: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Dokumen e-file berhasil diunggah.',
+                'data' => $dokumen,
+            ], 201);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'errors' => ['error' => [$e->getMessage()]],
+            ], 422);
+        }
     }
 }

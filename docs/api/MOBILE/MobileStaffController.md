@@ -6,6 +6,21 @@
 > **Dibuat**: 2026-11-21  
 > **Diperbarui**: 2026-11-24  
 
+## Ringkasan Endpoint Baru (§37–51)
+
+Header: `Authorization: Bearer {token}`, `Accept: application/json`. Endpoint daftar menerima `search`, `status`, `sort_order=asc|desc` (default `desc`), `per_page=15` (maks. 100), `page=1`; respons `{status,message,data,meta}` dengan meta `current_page/per_page/total/last_page/from/to`.
+
+| Endpoint | Permission | Request utama | Sukses |
+|---|---|---|---|
+| `GET,POST /api/v1/mobile/staff/simpeg/cuti` | `simpeg.cuti.read/create` | `master_jenis_cuti_id`, `tanggal_mulai`, `tanggal_selesai`, `alasan`, opsional `file_pendukung` PDF/JPG/PNG ≤5MB | 200/201 JSON |
+| `GET,POST /simpeg/izin-kerja` | `simpeg.izin_kerja.read/create` | `master_jenis_izin_id`, `tanggal`, `jam_mulai`, `jam_selesai`, `alasan` | 200/201 JSON |
+| `GET,POST /simpeg/surat-tugas`, `POST /simpeg/surat-tugas/{id}/lpj` | `simpeg.surat_tugas.read/create/update` | `*_id` master + tanggal; LPJ `file_lpj` PDF ≤10MB | 200/201 JSON |
+| `GET,POST /simpeg/sk-pegawai`, `GET /simpeg/kompetensi` | `simpeg.sk_pegawai.read/create`, `simpeg.kompetensi.read` | `kategori_sk_id`, `nomor_sk`, `file_sk`; `?jenis=sertifikasi|tes|pelatihan` | 200/201 JSON |
+| `GET /sikeu/payroll/{id}`, `GET /sikeu/payroll/{id}/slip` | `simpeg.payroll.read` | — | 200 JSON / `application/pdf` |
+| `POST,GET /arsip/e-file`, `GET /arsip/e-file/{id}`, `GET /arsip/e-file/{id}/download` | `simpeg.dokumen.create/read` | `nama_dokumen`, `jenis_dokumen`, `file`; download → signed URL 900 detik | 200/201 JSON |
+
+Error: 400/401/403/404/422 `{status:"error",message:"...",errors:{...}}` (`errors` hanya pada 422). Berkas privat hanya via signed URL `FileStorageService`. Rincian tiap endpoint ada di §37–51.
+
 ## Deskripsi Singkat
 
 `MobileStaffController` menyediakan gateway API backend terpadu untuk aplikasi mobile dosen dan tenaga kependidikan (myInU - Staff). Modul ini menyajikan informasi ringkasan beranda staf, pelacakan jadwal mengajar harian & semester berjalan yang tersinkronisasi dengan SIAKAD, sinkronisasi foto profil (avatar) staf, penilaian mata kuliah berbasis OBE/KHS, bimbingan akademik DPA, persetujuan KRS mahasiswa bimbingan, serta kurasi fitur modul terpadu kampus (SIPPM, SIKEU, SINAPRA, ARSIP, LMS, dan SPMB Referral).
@@ -41,17 +56,32 @@
 | POST | `/api/v1/mobile/staff/sippm/proposal` | Ajukan proposal penelitian / pengabdian baru via mobile | ✅ Bearer Token (`auth:api`) |
 | GET | `/api/v1/mobile/staff/sippm/luaran` | Daftar luaran publikasi & HKI penelitian milik dosen | ✅ Bearer Token (`auth:api`) |
 | GET | `/api/v1/mobile/staff/sikeu/payroll` | Riwayat slip payroll & rincian potongan bulanan staf | ✅ Bearer Token (`auth:api`) |
+| GET | `/api/v1/mobile/staff/sikeu/payroll/{id}` | Detail slip gaji satu periode (rincian pendapatan & potongan) | ✅ Bearer Token (`auth:api` / `simpeg.payroll.read`) |
+| GET | `/api/v1/mobile/staff/sikeu/payroll/{id}/slip` | Unduh slip gaji sebagai PDF yang dihasilkan on demand | ✅ Bearer Token (`auth:api` / `simpeg.payroll.read`) |
 | GET | `/api/v1/mobile/staff/sikeu/pengajuan` | Daftar pengajuan keuangan (reimbursement, uang muka) milik akun | ✅ Bearer Token (`auth:api`) |
 | POST | `/api/v1/mobile/staff/sikeu/pengajuan` | Kirim pengajuan keuangan / reimbursement baru via mobile | ✅ Bearer Token (`auth:api`) |
 | GET | `/api/v1/mobile/staff/sinapra/tiket` | Daftar tiket laporan kerusakan sarana & status perbaikan | ✅ Bearer Token (`auth:api`) |
 | POST | `/api/v1/mobile/staff/sinapra/tiket` | Laporkan kerusakan sarana / fasilitas baru via mobile | ✅ Bearer Token (`auth:api`) |
 | GET | `/api/v1/mobile/staff/sinapra/peminjaman` | Status peminjaman ruangan & fasilitas milik staf | ✅ Bearer Token (`auth:api`) |
 | GET | `/api/v1/mobile/staff/arsip/e-file` | Dokumen e-file kepegawaian pribadi staf | ✅ Bearer Token (`auth:api`) |
+| POST | `/api/v1/mobile/staff/arsip/e-file` | Unggah dokumen e-file pribadi ke penyimpanan privat | ✅ Bearer Token (`auth:api` / `simpeg.dokumen.create`) |
+| GET | `/api/v1/mobile/staff/arsip/e-file/{id}` | Detail satu dokumen e-file milik pegawai login | ✅ Bearer Token (`auth:api` / `simpeg.dokumen.read`) |
+| GET | `/api/v1/mobile/staff/arsip/e-file/{id}/download` | Tautan unduh signed URL (15 menit) untuk e-file privat | ✅ Bearer Token (`auth:api` / `simpeg.dokumen.read`) |
 | GET | `/api/v1/mobile/staff/arsip/surat` | Arsip persuratan dan surat tugas terkait staf | ✅ Bearer Token (`auth:api`) |
 | GET | `/api/v1/mobile/staff/lms/bahan-ajar` | Daftar bahan ajar perkuliahan & RPS kelas dosen | ✅ Bearer Token (`auth:api`) |
 | GET | `/api/v1/mobile/staff/lms/pengumuman` | Pengumuman kelas & notifikasi akademik dosen | ✅ Bearer Token (`auth:api`) |
 | GET | `/api/v1/mobile/staff/spmb/referral` | Kode referral SPMB, statistik reward, & mahasiswa binaan | ✅ Bearer Token (`auth:api`) |
 | POST | `/api/v1/mobile/staff/spmb/referral` | Buat / perbarui link share referral eksternal & QR | ✅ Bearer Token (`auth:api`) |
+| GET | `/api/v1/mobile/staff/simpeg/cuti` | Riwayat pengajuan cuti milik pegawai login (scoped) | ✅ Bearer Token (`auth:api` / `simpeg.cuti.read`) |
+| POST | `/api/v1/mobile/staff/simpeg/cuti` | Ajukan cuti baru dengan lampiran privat opsional | ✅ Bearer Token (`auth:api` / `simpeg.cuti.create`) |
+| GET | `/api/v1/mobile/staff/simpeg/izin-kerja` | Riwayat izin jam kerja milik pegawai login (scoped) | ✅ Bearer Token (`auth:api` / `simpeg.izin_kerja.read`) |
+| POST | `/api/v1/mobile/staff/simpeg/izin-kerja` | Ajukan izin jam kerja baru | ✅ Bearer Token (`auth:api` / `simpeg.izin_kerja.create`) |
+| GET | `/api/v1/mobile/staff/simpeg/surat-tugas` | Riwayat surat tugas milik pegawai login (scoped) | ✅ Bearer Token (`auth:api` / `simpeg.surat_tugas.read`) |
+| POST | `/api/v1/mobile/staff/simpeg/surat-tugas` | Ajukan surat tugas baru via mobile | ✅ Bearer Token (`auth:api` / `simpeg.surat_tugas.create`) |
+| POST | `/api/v1/mobile/staff/simpeg/surat-tugas/{id}/lpj` | Unggah LPJ untuk surat tugas yang telah disetujui | ✅ Bearer Token (`auth:api` / `simpeg.surat_tugas.update`) |
+| GET | `/api/v1/mobile/staff/simpeg/sk-pegawai` | Riwayat SK pegawai milik pegawai login (scoped) | ✅ Bearer Token (`auth:api` / `simpeg.sk_pegawai.read`) |
+| POST | `/api/v1/mobile/staff/simpeg/sk-pegawai` | Simpan SK pegawai baru dengan berkas privat | ✅ Bearer Token (`auth:api` / `simpeg.sk_pegawai.create`) |
+| GET | `/api/v1/mobile/staff/simpeg/kompetensi` | Kompetensi pegawai: sertifikasi / tes / pelatihan (scoped) | ✅ Bearer Token (`auth:api` / `simpeg.kompetensi.read`) |
 
 ---
 
@@ -2749,9 +2779,12 @@ Mengambil kode referral unik staf, statistik perolehan calon mahasiswa baru, tau
             "share_url": "http://localhost:3000/spmb/daftar?ref=REF-STAFF123",
             "stats": {
                 "total": 5,
+                "mahasiswa_baru": 5,
                 "claimed": 3,
                 "qualified": 2,
+                "dapat_direimburse": 2,
                 "rewarded": 1,
+                "sudah_direimburse": 1,
                 "cancelled": 0
             },
             "raw": {}
@@ -2794,6 +2827,10 @@ Mengambil kode referral unik staf, statistik perolehan calon mahasiswa baru, tau
 }
 ```
 
+### Catatan Tambahan
+
+> Statistik menyediakan alias yang ramah mobile: `mahasiswa_baru` = `total` (jumlah mahasiswa baru yang dibawa staf), `dapat_direimburse` = `qualified` (yang memenuhi syarat reimbursement), dan `sudah_direimburse` = `rewarded` (yang sudah dibayar). Endpoint ini hanya **melihat** hasil referral; tidak ada submit/data-diri/info-spmb di gateway mobile.
+
 ---
 
 ## 36. POST /api/v1/mobile/staff/spmb/referral
@@ -2820,9 +2857,12 @@ Membuat atau memperbarui tautan referral eksternal serta muatan QR Code untuk di
         "qr_payload": "http://localhost:3000/spmb/daftar?ref=REF-STAFF123",
         "stats": {
             "total": 5,
+            "mahasiswa_baru": 5,
             "claimed": 3,
             "qualified": 2,
+            "dapat_direimburse": 2,
             "rewarded": 1,
+            "sudah_direimburse": 1,
             "cancelled": 0
         }
     }
@@ -2867,5 +2907,1100 @@ Membuat atau memperbarui tautan referral eksternal serta muatan QR Code untuk di
     }
 }
 ```
+
+---
+
+## 37. GET /api/v1/mobile/staff/simpeg/cuti
+
+> Riwayat pengajuan cuti milik pegawai yang terhubung dengan akun login. Data pegawai lain tidak pernah dikembalikan (scope `pegawai_id`). Akun tanpa data pegawai mendapat daftar kosong.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `status` | string | ❌ | — | Filter status approval (`pending`, `approved`, `rejected`) |
+| `search` | string | ❌ | — | Cari alasan atau nama jenis cuti |
+| `sort_order` | string | ❌ | `desc` | Arah urutan berdasarkan `created_at` (`asc` / `desc`) |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+| `page` | integer | ❌ | `1` | Halaman yang diminta |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Daftar pengajuan cuti berhasil dimuat.",
+    "data": [
+        {
+            "id": "1",
+            "title": "Cuti Tahunan",
+            "subtitle": "2026-12-01 s/d 2026-12-03",
+            "status": "pending",
+            "date": "2026-11-24",
+            "amount": "",
+            "jenis_cuti": "Cuti Tahunan",
+            "tanggal_mulai": "2026-12-01",
+            "tanggal_selesai": "2026-12-03",
+            "jumlah_hari": 3,
+            "alasan": "Keperluan keluarga mendesak",
+            "catatan_approval": null,
+            "file_url": "http://localhost:8000/api/files/view?path=simpeg%2Fcuti%2F2026%2F11%2Fuuid.pdf&signature=abc123",
+            "raw": {}
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**422 Unprocessable Entity**
+```json
+{ "status": "error", "message": "Data yang diberikan tidak valid.", "errors": { "per_page": ["Per page tidak valid."] } }
+```
+
+### Catatan Tambahan
+
+> `file_url` adalah Signed URL privat (15 menit) dari `FileStorageService`, bukan URL storage langsung.
+
+---
+
+## 38. POST /api/v1/mobile/staff/simpeg/cuti
+
+> Mengajukan cuti baru. Jenis cuti diambil dari master data (`master_jenis_cuti_id`) dan kolom legacy `jenis_cuti` diturunkan dari kode master tersebut.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `multipart/form-data` | ✅ |
+
+### Request Body
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `master_jenis_cuti_id` | integer | ✅ | ID master jenis cuti (exists: `simpeg_master_jenis_cuti.id`) |
+| `tanggal_mulai` | date | ✅ | Tanggal mulai cuti (`Y-m-d`) |
+| `tanggal_selesai` | date | ✅ | Tanggal selesai (≥ `tanggal_mulai`) |
+| `jumlah_hari` | integer | ❌ | Jumlah hari; default dihitung otomatis inklusif |
+| `alasan` | string | ✅ | Alasan cuti (min. 5 karakter) |
+| `file_pendukung` | file | ❌ | PDF/JPG/PNG, maks. 5 MB (disimpan privat) |
+
+```json
+{
+    "master_jenis_cuti_id": 1,
+    "tanggal_mulai": "2026-12-01",
+    "tanggal_selesai": "2026-12-03",
+    "alasan": "Keperluan keluarga mendesak",
+    "file_pendukung": "(binary PDF file)"
+}
+```
+
+### Response Sukses (201 Created)
+
+```json
+{
+    "status": "success",
+    "message": "Pengajuan cuti berhasil dikirim.",
+    "data": {
+        "id": "1",
+        "title": "Cuti Tahunan",
+        "subtitle": "2026-12-01 s/d 2026-12-03",
+        "status": "pending",
+        "date": "2026-11-24",
+        "amount": "",
+        "file_url": "http://localhost:8000/api/files/view?path=simpeg%2Fcuti%2Fuuid.pdf&signature=abc123",
+        "raw": {}
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "master_jenis_cuti_id": ["Jenis cuti tidak valid."],
+        "alasan": ["Alasan cuti minimal 5 karakter."]
+    }
+}
+```
+
+### Catatan Tambahan
+
+> Akun yang belum terhubung dengan data pegawai nyata ditolak dengan 422: `Akun Anda belum terhubung dengan data pegawai.`
+
+---
+
+## 39. GET /api/v1/mobile/staff/simpeg/izin-kerja
+
+> Riwayat izin jam kerja milik pegawai login, ter-scope pada `pegawai_id`.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `status` | string | ❌ | — | Filter status (`menunggu`, `disetujui`, `ditolak`) |
+| `search` | string | ❌ | — | Cari alasan atau nama jenis izin |
+| `sort_order` | string | ❌ | `desc` | Arah urutan `created_at` (`asc` / `desc`) |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+| `page` | integer | ❌ | `1` | Halaman yang diminta |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Daftar izin jam kerja berhasil dimuat.",
+    "data": [
+        {
+            "id": "1",
+            "title": "Keperluan Pribadi",
+            "subtitle": "2026-12-04 (08:00 - 11:00)",
+            "status": "menunggu",
+            "date": "2026-11-24",
+            "amount": "",
+            "alasan": "Mengurus urusan pribadi di luar kampus",
+            "catatan_approval": null,
+            "file_url": null,
+            "raw": {}
+        }
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**422 Unprocessable Entity**
+```json
+{ "status": "error", "message": "Data yang diberikan tidak valid.", "errors": { "per_page": ["Per page tidak valid."] } }
+```
+
+---
+
+## 40. POST /api/v1/mobile/staff/simpeg/izin-kerja
+
+> Mengajukan izin jam kerja baru dengan waktu mulai/selesai dan bukti opsional.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `multipart/form-data` | ✅ |
+
+### Request Body
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `master_jenis_izin_id` | integer | ✅ | ID master jenis izin (exists: `simpeg_master_jenis_izin_jam_kerja.id`) |
+| `tanggal` | date | ✅ | Tanggal izin (`Y-m-d`) |
+| `jam_mulai` | string | ✅ | Format `H:i` |
+| `jam_selesai` | string | ✅ | Format `H:i`, harus setelah `jam_mulai` |
+| `alasan` | string | ✅ | Alasan izin (min. 5 karakter) |
+| `file_bukti` | file | ❌ | PDF/JPG/PNG, maks. 5 MB (disimpan privat) |
+
+```json
+{
+    "master_jenis_izin_id": 1,
+    "tanggal": "2026-12-04",
+    "jam_mulai": "08:00",
+    "jam_selesai": "11:00",
+    "alasan": "Mengurus urusan pribadi di luar kampus"
+}
+```
+
+### Response Sukses (201 Created)
+
+```json
+{
+    "status": "success",
+    "message": "Pengajuan izin jam kerja berhasil dikirim.",
+    "data": {
+        "id": "1",
+        "title": "Keperluan Pribadi",
+        "subtitle": "2026-12-04 (08:00 - 11:00)",
+        "status": "menunggu",
+        "date": "2026-11-24",
+        "amount": "",
+        "file_url": null,
+        "raw": {}
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": { "jam_selesai": ["Jam selesai harus setelah jam mulai."] }
+}
+```
+
+### Catatan Tambahan
+
+> Data rekening dan identitas pegawai tidak diambil dari request, melainkan dari `User::pegawai()` yang valid.
+
+---
+
+## 41. GET /api/v1/mobile/staff/simpeg/surat-tugas
+
+> Riwayat surat tugas milik pegawai login beserta tautan berkas surat dan LPJ (signed URL privat).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `status` | string | ❌ | — | Filter status (`diajukan`, `disetujui`, `selesai`, `ditolak`) |
+| `search` | string | ❌ | — | Cari nama kegiatan, nomor surat, atau lokasi tujuan |
+| `sort_order` | string | ❌ | `desc` | Arah urutan `created_at` (`asc` / `desc`) |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+| `page` | integer | ❌ | `1` | Halaman yang diminta |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Daftar surat tugas berhasil dimuat.",
+    "data": [
+        {
+            "id": "1",
+            "title": "Koordinasi program dengan kampus mitra",
+            "subtitle": "Draft | Bandung",
+            "status": "diajukan",
+            "date": "2026-12-10",
+            "amount": "Rp 750.000",
+            "nomor_surat": null,
+            "file_surat_tugas_url": "http://localhost:8000/api/files/view?path=simpeg%2Fsurat-tugas%2Fuuid.pdf&signature=abc123",
+            "file_lpj_url": null,
+            "raw": {}
+        }
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**422 Unprocessable Entity**
+```json
+{ "status": "error", "message": "Data yang diberikan tidak valid.", "errors": { "per_page": ["Per page tidak valid."] } }
+```
+
+---
+
+## 42. POST /api/v1/mobile/staff/simpeg/surat-tugas
+
+> Mengajukan surat tugas baru. Kategori kegiatan dan transportasi wajib berupa ID master data (bukan label teks).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `multipart/form-data` | ✅ |
+
+### Request Body
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `kategori_kegiatan_id` | integer | ✅ | ID master kategori kegiatan (exists: `simpeg_master_kategori_kegiatan_tugas.id`) |
+| `jenis_transportasi_id` | integer | ✅ | ID master transportasi (exists: `simpeg_master_jenis_transportasi.id`) |
+| `nama_kegiatan` | string | ✅ | Nama kegiatan (maks. 255) |
+| `jam_pelaksanaan` | string | ❌ | Keterangan jam pelaksanaan |
+| `penyelenggara` | string | ❌ | Nama penyelenggara |
+| `tempat_berangkat` | string | ✅ | Titik berangkat |
+| `lokasi_tujuan` | string | ✅ | Tujuan kegiatan |
+| `tanggal_berangkat` | date | ✅ | `Y-m-d` |
+| `tanggal_kembali` | date | ✅ | ≥ `tanggal_berangkat` |
+| `tanggal_mulai` | date | ✅ | Mulai pelaksanaan |
+| `tanggal_selesai` | date | ✅ | ≥ `tanggal_mulai` |
+| `maksud_tujuan` | string | ✅ | Maksud dan tujuan kegiatan |
+| `estimasi_biaya` | numeric | ❌ | Estimasi biaya (≥ 0) |
+| `keterangan` | string | ❌ | Keterangan tambahan |
+| `file_surat_tugas` | file | ❌ | PDF, maks. 10 MB (disimpan privat) |
+
+```json
+{
+    "kategori_kegiatan_id": 1,
+    "jenis_transportasi_id": 1,
+    "nama_kegiatan": "Koordinasi program dengan kampus mitra",
+    "tempat_berangkat": "Kampus",
+    "lokasi_tujuan": "Bandung",
+    "tanggal_berangkat": "2026-12-10",
+    "tanggal_kembali": "2026-12-11",
+    "tanggal_mulai": "2026-12-10",
+    "tanggal_selesai": "2026-12-11",
+    "maksud_tujuan": "Koordinasi implementasi kurikulum",
+    "estimasi_biaya": 750000
+}
+```
+
+### Response Sukses (201 Created)
+
+```json
+{
+    "status": "success",
+    "message": "Surat tugas berhasil diajukan.",
+    "data": {
+        "id": "1",
+        "title": "Koordinasi program dengan kampus mitra",
+        "subtitle": "Draft | Bandung",
+        "status": "diajukan",
+        "date": "2026-11-24",
+        "amount": "Rp 750.000",
+        "file_surat_tugas_url": null,
+        "raw": {}
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": { "kategori_kegiatan_id": ["Kategori kegiatan tidak valid."] }
+}
+```
+
+### Catatan Tambahan
+
+> Nomor rekening, nama bank, dan nama pemilik rekening diambil dari data pegawai login, bukan dari payload.
+
+---
+
+## 43. POST /api/v1/mobile/staff/simpeg/surat-tugas/{id}/lpj
+
+> Mengunggah Laporan Pertanggungjawaban (LPJ). Hak akses endpoint diverifikasi via Gate `simpeg.surat_tugas.update`, sedangkan kepemilikan baris membatasi unggah hanya kepada penanggung jawab surat tugas bersangkutan dan hanya untuk status `disetujui` atau `selesai`.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `multipart/form-data` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID surat tugas (numeric) |
+
+### Request Body
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `file_lpj` | file | ✅ | PDF, maks. 10 MB (disimpan privat) |
+| `laporan_kegiatan` | string | ❌ | Ringkasan laporan kegiatan |
+| `biaya_realisasi` | numeric | ❌ | Biaya realisasi (≥ 0) |
+
+```json
+{
+    "file_lpj": "(binary PDF file)",
+    "laporan_kegiatan": "Kegiatan koordinasi selesai dilaksanakan.",
+    "biaya_realisasi": 700000
+}
+```
+
+### Response Sukses (201 Created)
+
+```json
+{
+    "status": "success",
+    "message": "Berkas LPJ berhasil diunggah.",
+    "data": {
+        "id": "1",
+        "title": "Koordinasi program dengan kampus mitra",
+        "subtitle": "Draft - LPJ",
+        "status": "disetujui",
+        "date": "2026-11-24",
+        "amount": "Rp 700.000",
+        "file_lpj_url": "http://localhost:8000/api/files/view?path=simpeg%2Fsurat-tugas%2Flpj%2Fuuid.pdf&signature=abc123",
+        "raw": {}
+    }
+}
+```
+
+### Response Error
+
+**400 Bad Request**
+```json
+{ "status": "error", "message": "Data yang diberikan tidak valid." }
+```
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Hanya penanggung jawab kegiatan yang berhak mengunggah berkas LPJ." }
+```
+
+**404 Not Found**
+```json
+{ "status": "error", "message": "Surat tugas tidak ditemukan." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "LPJ hanya dapat diunggah untuk surat tugas yang telah disetujui.",
+    "errors": { "file_lpj": ["Berkas LPJ wajib diunggah dalam format PDF."] }
+}
+```
+
+### Catatan Tambahan
+
+> Setelah unggah berhasil, `status_pencairan` menjadi `lpj_diunggah` dan dicatat ke audit log `SIMPEG/create`.
+
+---
+
+## 44. GET /api/v1/mobile/staff/simpeg/sk-pegawai
+
+> Riwayat SK pegawai milik akun login ter-scope pada data pegawai bersangkutan.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `status` | string | ❌ | — | Filter status verifikasi (`pending`, `verified`, `rejected`) |
+| `search` | string | ❌ | — | Cari judul atau nomor SK |
+| `sort_order` | string | ❌ | `desc` | Arah urutan `created_at` (`asc` / `desc`) |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+| `page` | integer | ❌ | `1` | Halaman yang diminta |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Daftar SK pegawai berhasil dimuat.",
+    "data": [
+        {
+            "id": "1",
+            "title": "SK Penugasan Dosen",
+            "subtitle": "SK/123/2026 | SK Penugasan",
+            "status": "pending",
+            "date": "2026-12-01",
+            "amount": "",
+            "file_url": "http://localhost:8000/api/files/view?path=simpeg%2Fsk-pegawai%2Fuuid.pdf&signature=abc123",
+            "raw": {}
+        }
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**422 Unprocessable Entity**
+```json
+{ "status": "error", "message": "Data yang diberikan tidak valid.", "errors": { "per_page": ["Per page tidak valid."] } }
+```
+
+---
+
+## 45. POST /api/v1/mobile/staff/simpeg/sk-pegawai
+
+> Menyimpan SK pegawai baru dengan berkas PDF pada penyimpanan privat.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `multipart/form-data` | ✅ |
+
+### Request Body
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `kategori_sk_id` | integer | ✅ | ID master kategori SK (exists: `simpeg_master_kategori_sk.id`) |
+| `nomor_sk` | string | ✅ | Nomor SK (maks. 100) |
+| `judul_sk` | string | ✅ | Judul SK (maks. 255) |
+| `tanggal_sk` | date | ✅ | Tanggal SK (`Y-m-d`) |
+| `tmt_sk` | date | ✅ | Tanggal mulai berlaku |
+| `tmt_selesai` | date | ❌ | Tanggal berakhir berlaku (≥ `tmt_sk`) |
+| `pejabat_penetap` | string | ✅ | Pejabat yang menetapkan (maks. 150) |
+| `file_sk` | file | ✅ | PDF, maks. 10 MB (disimpan privat) |
+| `keterangan` | string | ❌ | Keterangan tambahan |
+
+```json
+{
+    "kategori_sk_id": 1,
+    "nomor_sk": "SK/123/2026",
+    "judul_sk": "SK Penugasan Dosen",
+    "tanggal_sk": "2026-12-01",
+    "tmt_sk": "2026-12-01",
+    "pejabat_penetap": "Rektor"
+}
+```
+
+### Response Sukses (201 Created)
+
+```json
+{
+    "status": "success",
+    "message": "SK pegawai berhasil disimpan.",
+    "data": {
+        "id": "1",
+        "title": "SK Penugasan Dosen",
+        "subtitle": "SK/123/2026 | SK Penugasan",
+        "status": "pending",
+        "date": "2026-12-01",
+        "amount": "",
+        "file_url": "http://localhost:8000/api/files/view?path=simpeg%2Fsk-pegawai%2Fuuid.pdf&signature=abc123",
+        "raw": {}
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": { "file_sk": ["Berkas SK wajib diunggah dalam format PDF."] }
+}
+```
+
+### Catatan Tambahan
+
+> Status awal `status_verifikasi` adalah `pending` dan akan diverifikasi oleh admin SIMPEG.
+
+---
+
+## 46. GET /api/v1/mobile/staff/simpeg/kompetensi
+
+> Daftar kompetensi pegawai login. Parameter `jenis` memilih sumber data: sertifikasi (default), tes, atau pelatihan.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `jenis` | string | ❌ | `sertifikasi` | Sumber data: `sertifikasi`, `tes`, `pelatihan` |
+| `search` | string | ❌ | — | Cari nama/nomor sertifikat, tes, atau pelatihan |
+| `sort_order` | string | ❌ | `desc` | Arah urutan `created_at` (`asc` / `desc`) |
+| `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
+| `page` | integer | ❌ | `1` | Halaman yang diminta |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Daftar kompetensi pegawai berhasil dimuat.",
+    "data": [
+        {
+            "id": "SER-1",
+            "title": "Sertifikasi Dosen Alexander",
+            "subtitle": "Sertifikasi Dosen | Ilmu Komputer",
+            "status": "terdokumentasi",
+            "date": "2025",
+            "amount": "",
+            "file_url": "http://localhost:8000/api/files/view?path=simpeg%2Fkompetensi%2Fuuid.pdf&signature=abc123",
+            "raw": {}
+        }
+    ],
+    "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**422 Unprocessable Entity**
+```json
+{ "status": "error", "message": "Data yang diberikan tidak valid.", "errors": { "per_page": ["Per page tidak valid."] } }
+```
+
+### Catatan Tambahan
+
+> Prefix `id` (`SER-`, `TES-`, `PEL-`) membedakan sumber tanpa tabrakan antar tabel kompetensi.
+
+---
+
+## 47. GET /api/v1/mobile/staff/sikeu/payroll/{id}
+
+> Detail satu slip gaji milik pegawai login, lengkap dengan komponen pendapatan dan potongan.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID data gaji pegawai (numeric) |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Detail slip gaji berhasil dimuat.",
+    "data": {
+        "id": "1",
+        "title": "Slip Gaji Periode 2026-11",
+        "subtitle": "Gaji Pokok: Rp 5.000.000 | Potongan: Rp 500.000",
+        "status": "paid",
+        "date": "2026-11-30",
+        "amount": "Rp 5.500.000",
+        "periode": "2026-11",
+        "gaji_pokok": "5000000.00",
+        "total_tunjangan": "1000000.00",
+        "total_potongan": "500000.00",
+        "gaji_bersih": "5500000.00",
+        "pendapatan": [
+            { "komponen": "Tunjangan Fungsional", "nominal": "1000000.00", "keterangan": null }
+        ],
+        "potongan": [
+            { "komponen": "BPJS Kesehatan", "nominal": "500000.00", "keterangan": null }
+        ],
+        "raw": {}
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**404 Not Found**
+```json
+{ "status": "error", "message": "Data gaji tidak ditemukan." }
+```
+
+**422 Unprocessable Entity**
+```json
+{ "status": "error", "message": "Data yang diberikan tidak valid.", "errors": { "id": ["ID payroll tidak valid."] } }
+```
+
+### Catatan Tambahan
+
+> Data gaji pegawai lain menghasilkan 404 (bukan 403) agar keberadaan record tidak bocor.
+
+---
+
+## 48. GET /api/v1/mobile/staff/sikeu/payroll/{id}/slip
+
+> Menghasilkan dan mengunduh slip gaji sebagai PDF secara on demand. `GajiPegawai` tidak menyimpan path berkas, sehingga PDF dibuat setiap permintaan.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/pdf` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID data gaji pegawai (numeric) |
+
+### Response Sukses (200 OK)
+
+Response berupa biner PDF (bukan JSON):
+
+| Header | Nilai |
+|---|---|
+| `Content-Type` | `application/pdf` |
+| `Content-Disposition` | `attachment; filename="slip-gaji-{id}.pdf"` |
+| `Cache-Control` | `no-store` |
+
+```
+%PDF-1.4 ... (binary PDF stream)
+```
+
+### Response Error
+
+**401 Unauthorized** (JSON)
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden** (JSON)
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**404 Not Found** (JSON)
+```json
+{ "status": "error", "message": "Data gaji tidak ditemukan." }
+```
+
+### Catatan Tambahan
+
+> Dompdf dijalankan dengan `isRemoteEnabled=false` dan kertas A4 portrait. Seluruh nilai dinyatakan dalam Rupiah.
+
+---
+
+## 49. POST /api/v1/mobile/staff/arsip/e-file
+
+> Mengunggah dokumen e-file pribadi ke disk privat melalui `FileStorageService` dan menyimpan path relatif (tanpa domain/prefix `storage/`).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `multipart/form-data` | ✅ |
+
+### Request Body
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `nama_dokumen` | string | ✅ | Nama dokumen (maks. 255) |
+| `jenis_dokumen` | string | ✅ | `ktp`, `kk`, `ijazah`, `sk`, `serdos`, `sertifikat`, `lainnya` |
+| `file` | file | ✅ | PDF/JPG/PNG, maks. 5 MB |
+
+```json
+{
+    "nama_dokumen": "KTP Pegawai",
+    "jenis_dokumen": "ktp",
+    "file": "(binary PDF file)"
+}
+```
+
+### Response Sukses (201 Created)
+
+```json
+{
+    "status": "success",
+    "message": "Dokumen e-file berhasil diunggah.",
+    "data": {
+        "id": "1",
+        "title": "KTP Pegawai",
+        "subtitle": "ktp (100.00 KB)",
+        "status": "pending",
+        "date": "2026-11-24",
+        "amount": "",
+        "jenis_dokumen": "ktp",
+        "file_size": "100.00 KB",
+        "catatan_verifikasi": null,
+        "file_url": "http://localhost:8000/api/files/view?path=simpeg%2Fe-file%2Fuuid.pdf&signature=abc123",
+        "raw": {}
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": { "file": ["Berkas wajib diunggah."], "jenis_dokumen": ["Jenis dokumen tidak valid."] }
+}
+```
+
+### Catatan Tambahan
+
+> Akun tanpa data pegawai ditolak dengan 422: `Akun Anda belum terhubung dengan data pegawai.`
+
+---
+
+## 50. GET /api/v1/mobile/staff/arsip/e-file/{id}
+
+> Detail satu dokumen e-file milik pegawai login, termasuk signed URL privat dan ukuran berkas yang ditampilkan dalam format manusia.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID dokumen pegawai (numeric) |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Detail dokumen e-file berhasil dimuat.",
+    "data": {
+        "id": "1",
+        "title": "KTP Pegawai",
+        "subtitle": "ktp (100.00 KB)",
+        "status": "pending",
+        "date": "2026-11-24",
+        "amount": "",
+        "jenis_dokumen": "ktp",
+        "file_size": "100.00 KB",
+        "catatan_verifikasi": null,
+        "file_url": "http://localhost:8000/api/files/view?path=simpeg%2Fe-file%2Fuuid.pdf&signature=abc123",
+        "raw": {}
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**404 Not Found**
+```json
+{ "status": "error", "message": "Dokumen tidak ditemukan." }
+```
+
+**422 Unprocessable Entity**
+```json
+{ "status": "error", "message": "Data yang diberikan tidak valid.", "errors": { "id": ["ID dokumen tidak valid."] } }
+```
+
+### Catatan Tambahan
+
+> Dokumen milik pegawai lain tidak dapat diakses dan menghasilkan 404.
+
+---
+
+## 51. GET /api/v1/mobile/staff/arsip/e-file/{id}/download
+
+> Membuat Signed URL (berlaku 15 menit) untuk mengunduh berkas e-file privat. Response berupa JSON metadata, bukan biner.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Path Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID dokumen pegawai (numeric) |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Tautan unduh dokumen berhasil dibuat.",
+    "data": {
+        "id": "1",
+        "nama_dokumen": "KTP Pegawai",
+        "file_url": "http://localhost:8000/api/files/view?path=simpeg%2Fe-file%2Fuuid.pdf&signature=abc123",
+        "expires_in_seconds": 900
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Token tidak valid atau sesi telah berakhir." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki izin untuk melakukan aksi ini." }
+```
+
+**404 Not Found**
+```json
+{ "status": "error", "message": "Dokumen tidak ditemukan." }
+```
+
+**422 Unprocessable Entity**
+```json
+{ "status": "error", "message": "Berkas dokumen belum tersedia." }
+```
+
+### Catatan Tambahan
+
+> Gunakan `file_url` tepat sebelum mengunduh; tautan kedaluwarsa setelah 900 detik dan tidak memerlukan Bearer token karena sudah bertanda-tangan.
 
 

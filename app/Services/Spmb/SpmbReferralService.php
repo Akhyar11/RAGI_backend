@@ -435,13 +435,23 @@ class SpmbReferralService
     {
         $base = ReferralUsage::where('referrer_user_id', $user->id);
 
+        $total = (clone $base)->count();
+        $claimed = (clone $base)->where('status', ReferralUsage::STATUS_CLAIMED)->count();
+        $qualified = (clone $base)->where('status', ReferralUsage::STATUS_QUALIFIED)->count();
+        $rewarded = (clone $base)->where('status', ReferralUsage::STATUS_REWARDED)->count();
+        $cancelled = (clone $base)->where('status', ReferralUsage::STATUS_CANCELLED)->count();
+
         return [
             'referral_code' => $user->referral_code,
-            'total' => (clone $base)->count(),
-            'claimed' => (clone $base)->where('status', ReferralUsage::STATUS_CLAIMED)->count(),
-            'qualified' => (clone $base)->where('status', ReferralUsage::STATUS_QUALIFIED)->count(),
-            'rewarded' => (clone $base)->where('status', ReferralUsage::STATUS_REWARDED)->count(),
-            'cancelled' => (clone $base)->where('status', ReferralUsage::STATUS_CANCELLED)->count(),
+            'total' => $total,
+            'claimed' => $claimed,
+            'qualified' => $qualified,
+            'rewarded' => $rewarded,
+            'cancelled' => $cancelled,
+            // Alias fiber-friendly: "mahasiswa baru dibawa" dan "dapat/sudah direimburse".
+            'mahasiswa_baru' => $total,
+            'dapat_direimburse' => $qualified,
+            'sudah_direimburse' => $rewarded,
         ];
     }
 }

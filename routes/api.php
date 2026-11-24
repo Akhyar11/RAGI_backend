@@ -1342,8 +1342,24 @@ Route::prefix('v1')->group(function () {
             // 5. Modul SIKEU: Riwayat Payroll & Pengajuan Keuangan
             Route::prefix('sikeu')->group(function () {
                 Route::get('/payroll', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listSikeuPayroll']);
+                Route::get('/payroll/{id}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'showSikeuPayroll'])->whereNumber('id');
+                Route::get('/payroll/{id}/slip', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'downloadSikeuPayrollSlip'])->whereNumber('id');
                 Route::get('/pengajuan', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listSikeuPengajuan']);
                 Route::post('/pengajuan', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeSikeuPengajuan']);
+            });
+
+            // 5a. Modul SIMPEG: Self-service cuti, izin kerja, surat tugas & LPJ, SK, kompetensi
+            Route::prefix('simpeg')->group(function () {
+                Route::get('/cuti', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listMobileCuti']);
+                Route::post('/cuti', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeMobileCuti']);
+                Route::get('/izin-kerja', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listMobileIzinKerja']);
+                Route::post('/izin-kerja', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeMobileIzinKerja']);
+                Route::get('/surat-tugas', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listMobileSuratTugas']);
+                Route::post('/surat-tugas', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeMobileSuratTugas']);
+                Route::post('/surat-tugas/{id}/lpj', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'uploadMobileLpj'])->whereNumber('id');
+                Route::get('/sk-pegawai', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listMobileSkPegawai']);
+                Route::post('/sk-pegawai', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeMobileSkPegawai']);
+                Route::get('/kompetensi', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listMobileKompetensi']);
             });
 
             // 6. Modul SINAPRA: Lapor Kerusakan & Peminjaman Fasilitas
@@ -1356,6 +1372,9 @@ Route::prefix('v1')->group(function () {
             // 7. Modul ARSIP: Dokumen E-File & Persuratan Staf
             Route::prefix('arsip')->group(function () {
                 Route::get('/e-file', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listArsipEfile']);
+                Route::post('/e-file', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeArsipEfile']);
+                Route::get('/e-file/{id}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'showArsipEfile'])->whereNumber('id');
+                Route::get('/e-file/{id}/download', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'downloadArsipEfile'])->whereNumber('id');
                 Route::get('/surat', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listArsipSurat']);
             });
 

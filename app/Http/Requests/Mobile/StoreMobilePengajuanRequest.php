@@ -24,7 +24,7 @@ class StoreMobilePengajuanRequest extends FormRequest
             'nomor_rekening_penerima' => 'nullable|string|max:50',
             'nama_rekening_penerima' => 'nullable|string|max:150',
             'unit_kas_id' => 'nullable|exists:sikeu_unit_kas,id',
-            'file_lampiran' => 'nullable|file|mimes:pdf,jpeg,png,jpg,webp|max:10240',
+            'file_lampiran' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ];
     }
 
