@@ -29,6 +29,17 @@ class Pertemuan extends Model
     ];
 
     /**
+     * Mode presensi. Default online => geofence tidak dipaksa (kelas Zoom).
+     */
+    public const MODE_PRESENSI_ONLINE = 'online';
+    public const MODE_PRESENSI_OFFLINE = 'offline';
+
+    public const MODES_PRESENSI = [
+        self::MODE_PRESENSI_ONLINE,
+        self::MODE_PRESENSI_OFFLINE,
+    ];
+
+    /**
      * Jenis kegiatan jurnal. Bukan entitas master (tidak ada tabel/ID), jadi
      * dideklarasikan sekali di sini sebagai closed-set domain. Sama seperti
      * `status_pertemuan`, daftar ini dipakai ulang oleh validasi request dan
@@ -62,6 +73,7 @@ class Pertemuan extends Model
         'window_menit',
         'token_rotated_at',
         'presensi_closed_at',
+        'mode_presensi',
         'jam_mulai',
         'jam_selesai',
     ];

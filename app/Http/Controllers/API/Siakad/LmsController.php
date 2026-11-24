@@ -35,6 +35,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LmsController extends Controller
@@ -550,6 +551,7 @@ class LmsController extends Controller
             'jam_mulai'         => ['nullable', 'string', 'max:10'],
             'jam_selesai'       => ['nullable', 'string', 'max:10'],
             'window_menit'      => ['nullable', 'integer', 'min:5', 'max:180'],
+            'mode_presensi'     => ['nullable', Rule::in(\App\Models\Siakad\Pertemuan::MODES_PRESENSI)],
         ]);
 
         $existing = Pertemuan::findOrFail($pertemuanId);

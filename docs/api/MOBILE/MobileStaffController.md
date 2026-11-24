@@ -1213,9 +1213,16 @@ Memulai sesi perkuliahan aktif (BAP), mencatat jam mulai perkuliahan, dan mengak
     "materi": "RESTful API Integration dengan Next.js & Laravel",
     "catatan": "Praktikum di lab komputer.",
     "tanggal": "2026-11-22",
-    "jam_mulai": "08:00"
+    "jam_mulai": "08:00",
+    "mode_presensi": "online"
 }
 ```
+
+#### Parameter `mode_presensi`
+
+| Field | Tipe | Wajib | Nilai | Deskripsi |
+|---|---|---|---|---|
+| `mode_presensi` | string | ❌ | `online` (default) / `offline` | `online` untuk Zoom/daring (tanpa geofence); `offline` untuk tatap muka. Nilai lain menghasilkan 422. |
 
 ### Response Sukses (200 OK)
 
@@ -1232,9 +1239,13 @@ Memulai sesi perkuliahan aktif (BAP), mencatat jam mulai perkuliahan, dan mengak
         "catatan": "Praktikum di lab komputer.",
         "status": "berlangsung",
         "token_absensi": "583921",
-        "token_expired_at": "2026-11-22T10:00:00.000000Z",
+        "token_expired_at": "2026-11-22T08:01:00.000000Z",
+        "expired_at": "2026-11-22T08:01:00.000000Z",
+        "rotate_interval_seconds": 30,
+        "window_menit": 120,
+        "mode_presensi": "online",
         "jam_mulai": "08:00",
-        "qr_payload": "{\"type\":\"siakad_presensi\",\"pertemuan_id\":55,\"kelas_id\":12,\"pertemuan_ke\":6,\"token\":\"583921\",\"timestamp\":1795305600}"
+        "qr_payload": "RAG-PRESENSI:55:583921"
     }
 }
 ```
@@ -1295,6 +1306,18 @@ Memulai sesi perkuliahan aktif (BAP), mencatat jam mulai perkuliahan, dan mengak
 
 > Periode ditentukan dari `tanggal` pada body (default: hari ini). Cut-off diatur Admin SIMPEG melalui `PUT /api/simpeg/presensi/pengajaran/cutoff`; izin khusus dapat diberikan per dosen dan periode.
 
+**Kontrak presensi (sama dengan jalur web LMS):**
+
+| Field/Aturan | Perilaku |
+|---|---|
+| `qr_payload` | Format `RAG-PRESENSI:{pertemuan_id}:{token}` — identik dengan endpoint rotate-token dan web. |
+| `token_absensi` | Hanya dikirim ke **Dosen Pengampu** kelas. Dosen non-pengampu/admin tanpa `lms.presensi.manage` ditolak 403. |
+| TTL token | Maksimal `max(60, rotate_interval_seconds * 2)` detik dihitung dari `token_rotated_at`; token lama gugur setelah rotasi (grace 10 detik). |
+| Jendela scan | `token_rotated_at + window_menit`, bukan tanggal jadwal. Lewat jendela → 422; command `lms:tutup-presensi-otomatis` menutup sesi otomatis. |
+| Geofence | Hanya dipaksa bila `mode_presensi=offline` **dan** `lms_presensi_geofence_wajib=true` **dan** ada `OfficeLocation` aktif. Default `online` (Zoom/daring) tanpa geofence. |
+| Feature flag | `lms_fitur_presensi=false` menolak endpoint ini dengan 403, kecuali akun memiliki `lms.presensi.manage`. |
+| KRS | Peserta diambil hanya dari KRS berstatus valid dan belum dihapus. |
+
 ---
 
 ## 18. POST /api/v1/mobile/staff/perkuliahan/pertemuan/{pertemuanId}/rotate-token
@@ -1349,6 +1372,17 @@ Memutar ulang (refresh) kode token presensi 6-digit dinamis pada sesi perkuliaha
     "message": "This action is unauthorized."
 }
 ```
+
+**429 Too Many Requests**
+```json
+{
+    "status": "error",
+    "message": "Terlalu banyak rotasi token. Silakan tunggu beberapa saat.",
+    "retry_after": 60
+}
+```
+
+> Rotasi dibatasi maksimal 15 kali per menit per dosen per pertemuan (`throttle:lms-token-rotate`). Rotasi normal 30 detik (2x/menit), jadi batas ini memberi ruang retry tanpa membuka celah brute-force token.
 
 ---
 

@@ -13,6 +13,7 @@ use App\Models\Siakad\NilaiMahasiswa;
 use App\Models\Siakad\Pertemuan;
 use App\Services\AuditLogService;
 use App\Services\Mobile\MobileStaffService;
+use App\Services\Siakad\LmsService;
 use App\Services\Storage\FileStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,14 @@ class MobileStaffController extends Controller
         private MobileStaffService $staffService,
         private FileStorageService $fileStorageService
     ) {}
+
+    /**
+     * Samakan feature flag presensi mobile dengan jalur web.
+     */
+    private function assertPresensiFiturAktif(Request $request): void
+    {
+        app(LmsService::class)->assertPresensiFiturAktif($request->user());
+    }
 
     /**
      * GET /api/v1/mobile/staff/jadwal-mengajar
@@ -572,7 +581,7 @@ class MobileStaffController extends Controller
     {
         Gate::authorize('siakad.kelas.read');
 
-        $data = $this->staffService->getPertemuanList($kelasId);
+        $data = $this->staffService->getPertemuanList($kelasId, $request->user()?->id);
 
         if (!$data) {
             return response()->json([
@@ -595,6 +604,7 @@ class MobileStaffController extends Controller
     public function mulaiSesiPertemuan(Request $request, int $kelasId): JsonResponse
     {
         Gate::authorize('siakad.kelas.manage');
+        $this->assertPresensiFiturAktif($request);
 
         $validator = Validator::make($request->all(), [
             'pertemuan_ke' => 'required|integer|min:1|max:16',
@@ -602,6 +612,7 @@ class MobileStaffController extends Controller
             'catatan' => 'nullable|string|max:1000',
             'tanggal' => 'nullable|date',
             'jam_mulai' => 'nullable|string|max:10',
+            'mode_presensi' => ['nullable', Rule::in(\App\Models\Siakad\Pertemuan::MODES_PRESENSI)],
         ]);
 
         if ($validator->fails()) {
@@ -614,7 +625,7 @@ class MobileStaffController extends Controller
 
         $data = $this->staffService->mulaiSesiPertemuan(
             kelasId: $kelasId,
-            data: $request->only(['pertemuan_ke', 'materi', 'catatan', 'tanggal', 'jam_mulai']),
+            data: $request->only(['pertemuan_ke', 'materi', 'catatan', 'tanggal', 'jam_mulai', 'mode_presensi']),
             userId: $request->user()?->id
         );
 
@@ -639,6 +650,7 @@ class MobileStaffController extends Controller
     public function rotateTokenPertemuan(Request $request, int $pertemuanId): JsonResponse
     {
         Gate::authorize('siakad.kelas.manage');
+        $this->assertPresensiFiturAktif($request);
 
         $data = $this->staffService->rotateTokenPertemuan($pertemuanId, $request->user()?->id);
 
@@ -663,6 +675,7 @@ class MobileStaffController extends Controller
     public function selesaiSesiPertemuan(Request $request, int $pertemuanId): JsonResponse
     {
         Gate::authorize('siakad.kelas.manage');
+        $this->assertPresensiFiturAktif($request);
 
         $data = $this->staffService->selesaiSesiPertemuan($pertemuanId, $request->user()?->id);
 
@@ -687,8 +700,9 @@ class MobileStaffController extends Controller
     public function detailPresensiPertemuan(Request $request, int $pertemuanId): JsonResponse
     {
         Gate::authorize('siakad.kelas.read');
+        $this->assertPresensiFiturAktif($request);
 
-        $data = $this->staffService->getPresensiPertemuan($pertemuanId);
+        $data = $this->staffService->getPresensiPertemuan($pertemuanId, $request->user()?->id);
 
         if (!$data) {
             return response()->json([
@@ -711,6 +725,7 @@ class MobileStaffController extends Controller
     public function savePresensiPertemuan(Request $request, int $pertemuanId): JsonResponse
     {
         Gate::authorize('siakad.kelas.manage');
+        $this->assertPresensiFiturAktif($request);
 
         $validator = Validator::make($request->all(), [
             'items' => 'required|array',

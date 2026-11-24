@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Lms\MateriPertemuan;
 use App\Models\Lms\Tugas;
+use App\Models\OfficeLocation;
 use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\Dosen;
 use App\Models\Siakad\DosenPengampu;
@@ -18,9 +19,11 @@ use App\Models\Siakad\NilaiKomponenMahasiswa;
 use App\Models\Siakad\Pertemuan;
 use App\Models\Siakad\ProgramStudi;
 use App\Models\Siakad\TahunAkademik;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
@@ -431,6 +434,39 @@ class SiakadLmsTest extends TestCase
         $responseInvalid->assertStatus(422);
     }
 
+    public function test_token_absensi_tidak_bocor_ke_mahasiswa_melalui_endpoint_baca(): void
+    {
+        Passport::actingAs($this->userDosen);
+        $tokenRes = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token")->assertOk();
+        $token = $tokenRes->json('data.token');
+        $this->assertNotEmpty($token);
+
+        // Dosen pengampu tetap memerlukan kode token di layar sesi.
+        $dosenDetail = $this->getJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}")->assertOk();
+        $this->assertSame($token, $dosenDetail->json('data.pertemuan.token_absensi'));
+
+        Passport::actingAs($this->userMhs);
+
+        $overview = $this->getJson("/api/v1/lms/kelas/{$this->kelas->id}/overview")->assertOk();
+        foreach ($overview->json('data.pertemuan_list', []) as $item) {
+            $this->assertArrayHasKey('token_absensi', $item);
+            $this->assertNull($item['token_absensi']);
+            $this->assertArrayHasKey('token_expired_at', $item);
+            $this->assertNull($item['token_expired_at']);
+        }
+
+        $detail = $this->getJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}")->assertOk();
+        $this->assertNull($detail->json('data.pertemuan.token_absensi'));
+        $this->assertNull($detail->json('data.pertemuan.token_expired_at'));
+        $this->assertTrue((bool) $detail->json('data.token_aktif'));
+
+        $list = $this->getJson('/api/v1/lms/pertemuan')->assertOk();
+        foreach ($list->json('data', []) as $item) {
+            $this->assertArrayHasKey('token_absensi', $item);
+            $this->assertNull($item['token_absensi']);
+        }
+    }
+
     public function test_pengajuan_izin_dan_persetujuan_dosen(): void
     {
         // 1. Mahasiswa mengajukan izin sakit
@@ -700,5 +736,168 @@ class SiakadLmsTest extends TestCase
         $resAktifAfter->assertStatus(200)
             ->assertJsonPath('data.0.sudah_absen', true)
             ->assertJsonPath('data.0.status_absensi', 'hadir');
+    }
+
+    private function beriIzinScanPresensiMahasiswa(): void
+    {
+        $permission = \App\Models\Permission::firstOrCreate(
+            ['slug' => 'lms.presensi.create'],
+            ['name' => 'Scan QR / Input Presensi & Izin LMS', 'module' => 'lms', 'action' => 'create']
+        );
+        $role = \App\Models\Role::where('slug', 'mahasiswa')->first();
+        $role?->permissions()->syncWithoutDetaching([$permission->id]);
+    }
+
+    public function test_scan_online_tidak_memaksa_geofence_walaupun_flag_geofence_aktif(): void
+    {
+        $this->beriIzinScanPresensiMahasiswa();
+        SystemSetting::set('lms_presensi_geofence_wajib', 'true');
+        OfficeLocation::create([
+            'name' => 'Kampus Utama',
+            'address' => 'Jl. Kampus No. 1',
+            'latitude' => -6.3,
+            'longitude' => 106.8,
+            'radius_meters' => 50,
+            'is_active' => true,
+        ]);
+
+        Passport::actingAs($this->userDosen);
+        $resBuka = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/buka-sesi", [
+            'materi' => 'Pertemuan online via Zoom',
+            'mode_presensi' => 'online',
+        ])->assertOk();
+
+        $this->assertSame('online', $resBuka->json('data.mode_presensi'));
+
+        // Mahasiswa Zoom/daring tidak mengirim lokasi sama sekali.
+        Passport::actingAs($this->userMhs);
+        $this->postJson('/api/v1/lms/presensi/scan', [
+            'qr_payload' => $resBuka->json('data.qr_payload'),
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'hadir');
+
+        $this->assertDatabaseHas('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status' => 'hadir',
+        ]);
+    }
+
+    public function test_geofence_hanya_dipaksa_untuk_sesi_offline_yang_diaktifkan(): void
+    {
+        $this->beriIzinScanPresensiMahasiswa();
+        OfficeLocation::create([
+            'name' => 'Gedung A',
+            'address' => 'Kampus',
+            'latitude' => -6.2,
+            'longitude' => 106.8,
+            'radius_meters' => 100,
+            'is_active' => true,
+        ]);
+
+        // Flag matikan: sesi offline tetap bisa scan tanpa lokasi.
+        SystemSetting::set('lms_presensi_geofence_wajib', 'false');
+        Passport::actingAs($this->userDosen);
+        $resBuka = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/buka-sesi", [
+            'materi' => 'Pertemuan tatap muka',
+            'mode_presensi' => 'offline',
+        ])->assertOk();
+        $qr = $resBuka->json('data.qr_payload');
+
+        Passport::actingAs($this->userMhs);
+        $this->postJson('/api/v1/lms/presensi/scan', ['qr_payload' => $qr])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'hadir');
+
+        // Flag aktif: lokasi wajib dan harus berada di radius kampus.
+        SystemSetting::set('lms_presensi_geofence_wajib', 'true');
+        Passport::actingAs($this->userDosen);
+        $resBuka2 = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/buka-sesi", [
+            'materi' => 'Pertemuan tatap muka dengan geofence',
+            'mode_presensi' => 'offline',
+        ])->assertOk();
+        $qr2 = $resBuka2->json('data.qr_payload');
+
+        Passport::actingAs($this->userMhs);
+        $this->postJson('/api/v1/lms/presensi/scan', ['qr_payload' => $qr2])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['latitude']);
+        $this->postJson('/api/v1/lms/presensi/scan', [
+            'qr_payload' => $qr2,
+            'latitude' => -7.0,
+            'longitude' => 107.0,
+        ])->assertStatus(422)->assertJsonValidationErrors(['latitude']);
+        $this->postJson('/api/v1/lms/presensi/scan', [
+            'qr_payload' => $qr2,
+            'latitude' => -6.2,
+            'longitude' => 106.8,
+        ])->assertOk()->assertJsonPath('data.status', 'hadir');
+    }
+
+    public function test_jendela_scan_berakhir_dan_auto_close_menutup_sesi(): void
+    {
+        $this->beriIzinScanPresensiMahasiswa();
+
+        Passport::actingAs($this->userDosen);
+        $resBuka = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/buka-sesi", [
+            'materi' => 'Sesi dengan jendela pendek',
+            'mode_presensi' => 'online',
+            'window_menit' => 5,
+        ])->assertOk();
+        $qr = $resBuka->json('data.qr_payload');
+
+        // Simulasikan dosen berhenti memutar token 10 menit lalu.
+        $this->pertemuan->update(['token_rotated_at' => now()->subMinutes(10)]);
+
+        Passport::actingAs($this->userMhs);
+        $this->postJson('/api/v1/lms/presensi/scan', ['qr_payload' => $qr])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['token']);
+
+        Passport::actingAs($this->userDosen);
+        $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token/rotate")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['pertemuan']);
+
+        $this->artisan('lms:tutup-presensi-otomatis')->assertExitCode(0);
+        $closed = Pertemuan::findOrFail($this->pertemuan->id);
+        $this->assertNotNull($closed->presensi_closed_at);
+        $this->assertNull($closed->token_absensi);
+        $this->assertSame('selesai', $closed->status_pertemuan);
+    }
+
+    public function test_rotasi_token_dibatasi_15_kali_per_menit(): void
+    {
+        $kunci = md5('lms-token-rotate' . $this->userDosen->id . ':' . $this->pertemuan->id);
+        RateLimiter::clear($kunci);
+
+        $this->pertemuan->update([
+            'token_absensi' => '123456',
+            'token_expired_at' => now()->addSeconds(30),
+            'token_rotated_at' => now(),
+            'status_pertemuan' => 'berlangsung',
+        ]);
+
+        Passport::actingAs($this->userDosen);
+        for ($i = 0; $i < 15; $i++) {
+            $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token/rotate")
+                ->assertOk();
+        }
+
+        $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token/rotate")
+            ->assertStatus(429)
+            ->assertJsonPath('status', 'error');
+    }
+
+    public function test_feature_flag_presensi_menolak_scan_mahasiswa(): void
+    {
+        $this->beriIzinScanPresensiMahasiswa();
+        SystemSetting::set('lms_fitur_presensi', '0');
+        \App\Models\Lms\LmsSetting::flushCache();
+
+        Passport::actingAs($this->userMhs);
+        $this->postJson('/api/v1/lms/presensi/scan', [
+            'qr_payload' => "RAG-PRESENSI:{$this->pertemuan->id}:123456",
+        ])->assertForbidden();
     }
 }

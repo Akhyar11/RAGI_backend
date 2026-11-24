@@ -24,12 +24,15 @@ use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\NilaiKomponenMahasiswa;
 use App\Models\Siakad\ProgramStudi;
 use App\Models\Siakad\TahunAkademik;
+use App\Models\OfficeLocation;
 use App\Models\System\MasterReferensi;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\GeofenceService;
 use App\Services\Storage\FileStorageService;
 use App\Services\Simpeg\PresensiPengajaranService;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -302,6 +305,118 @@ class LmsService
     }
 
     /**
+     * Jendela scan dihitung sejak token terakhir dibuka/diputar dosen.
+     *
+     * Memakai `token_rotated_at` (bukan tanggal jadwal) agar sesi yang dibuka
+     * lewat API tetap punya jendela valid walaupun data jurnal pertemuannya
+     * bertanggal lampau. Selama dosen aktif memutar token, jendela ikut
+     * diperpanjang; bila rotasi berhenti, presensi otomatis gugur setelah
+     * `window_menit` (default 30 menit).
+     */
+    public function assertWindowPresensiMasihBuka(Pertemuan $pertemuan, string $field = 'pertemuan'): void
+    {
+        if (!$pertemuan->token_rotated_at) {
+            return;
+        }
+
+        $defaultWindow = max(5, (int) SystemSetting::get('lms_presensi_window_menit', 30));
+        $window = max(5, min(180, (int) ($pertemuan->window_menit ?: $defaultWindow)));
+        $deadline = Carbon::parse($pertemuan->token_rotated_at)->addMinutes($window);
+
+        if (now()->gt($deadline)) {
+            throw ValidationException::withMessages([
+                $field => ['Jendela presensi sudah berakhir. Silakan minta dosen membuka ulang sesi.'],
+            ]);
+        }
+    }
+
+    /**
+     * Penjaga penuh untuk aksi presensi: sesi belum ditutup dan jendela masih buka.
+     */
+    public function assertSesiPresensiMasihBuka(Pertemuan $pertemuan, string $field = 'pertemuan'): void
+    {
+        if ($pertemuan->presensi_closed_at || $pertemuan->status_pertemuan === Pertemuan::STATUS_SELESAI) {
+            throw ValidationException::withMessages([
+                $field => ['Sesi presensi sudah ditutup dosen.'],
+            ]);
+        }
+
+        $this->assertWindowPresensiMasihBuka($pertemuan, $field);
+    }
+
+    /**
+     * Geofence mahasiswa BERSIFAT OPSIONAL.
+     *
+     * Aktif hanya bila semua kondisi terpenuhi:
+     * - pertemuan ditandai `offline` (bukan Zoom/daring), DAN
+     * - admin mengaktifkan `lms_presensi_geofence_wajib`, DAN
+     * - ada lokasi kampus aktif di `simpeg_office_locations`.
+     *
+     * Jika salah satu tidak terpenuhi, scan tetap diterima tanpa lokasi.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public function assertGeofenceAbsensi(Pertemuan $pertemuan, array $payload = []): void
+    {
+        if ($pertemuan->mode_presensi !== Pertemuan::MODE_PRESENSI_OFFLINE) {
+            return;
+        }
+
+        $flag = strtolower(trim((string) SystemSetting::get('lms_presensi_geofence_wajib', 'false')));
+        if (!in_array($flag, ['1', 'true', 'yes', 'on'], true)) {
+            return;
+        }
+
+        $locations = OfficeLocation::where('is_active', true)->get();
+        if ($locations->isEmpty()) {
+            return;
+        }
+
+        $lat = $payload['latitude'] ?? null;
+        $lon = $payload['longitude'] ?? null;
+        if (!is_numeric($lat) || !is_numeric($lon)) {
+            throw ValidationException::withMessages([
+                'latitude' => ['Lokasi wajib dikirim untuk presensi tatap muka pada kelas ini.'],
+            ]);
+        }
+
+        $geofence = app(GeofenceService::class);
+        $nearest = null;
+        $nearestDistance = PHP_FLOAT_MAX;
+
+        foreach ($locations as $location) {
+            if ($location->latitude === null || $location->longitude === null) {
+                continue;
+            }
+
+            $radius = (float) ($location->radius_meters ?: 100);
+            $distance = $geofence->calculateDistance(
+                (float) $lat,
+                (float) $lon,
+                (float) $location->latitude,
+                (float) $location->longitude
+            );
+
+            if ($distance <= $radius) {
+                return;
+            }
+
+            if ($distance < $nearestDistance) {
+                $nearestDistance = $distance;
+                $nearest = $location;
+            }
+        }
+
+        $detail = $nearest
+            ? ' Lokasi terdekat: ' . $nearest->name . ' (~' . (int) round($nearestDistance) . ' m).'
+            : '';
+
+        throw ValidationException::withMessages([
+            'latitude' => ['Anda berada di luar area presensi kampus yang diizinkan.' . $detail],
+        ]);
+    }
+
+    /**
      * Simpan berkas unggahan lewat `FileStorageService`.
      *
      * Penolakan ekstensi executable oleh FileStorageService diubah menjadi
@@ -453,8 +568,12 @@ class LmsService
         $totalIzinPending = IzinAbsensi::whereIn('pertemuan_id', $pertemuanIds)
             ->where('status', 'pending')->count();
 
+        // Token absensi hanya boleh diketahui Dosen Pengampu. Mahasiswa/Pengelola
+        // tetap melihat status aktif, tetapi tidak menerima kode rahasianya.
+        $bolehLihatToken = ($viewerContext['viewer_mode'] ?? null) === 'dosen';
+
         // Daftar pertemuan untuk tab Perkuliahan (kontrak frontend: pertemuan_list).
-        $pertemuanList = $kelas->pertemuans->map(function ($p) {
+        $pertemuanList = $kelas->pertemuans->map(function ($p) use ($bolehLihatToken) {
             $tokenAktif = !empty($p->token_absensi)
                 && $p->token_expired_at
                 && !$p->presensi_closed_at
@@ -470,8 +589,8 @@ class LmsService
                 'jam_mulai' => $p->jam_mulai,
                 'jam_selesai' => $p->jam_selesai,
                 'status_pertemuan' => $p->status_pertemuan,
-                'token_absensi' => $p->token_absensi,
-                'token_expired_at' => $p->token_expired_at,
+                'token_absensi' => $bolehLihatToken ? $p->token_absensi : null,
+                'token_expired_at' => $bolehLihatToken ? $p->token_expired_at : null,
                 'is_token_active' => (bool) $tokenAktif,
                 'materi_list_count' => $p->materi_list_count ?? 0,
                 'tugas_list_count' => $p->tugas_list_count ?? 0,
@@ -634,6 +753,15 @@ class LmsService
                     $tugas->pengumpulan->where('mahasiswa_id', $mahasiswaModel->id)->values()
                 );
             }
+        }
+
+        // Kode token hanya untuk Dosen Pengampu. Mahasiswa/Pengelola tetap
+        // menerima status `token_aktif` dan sisa detik tanpa mengetahui kodenya,
+        // sehingga tidak bisa melakukan presensi tanpa memindai QR di layar dosen.
+        if (($viewerContext['viewer_mode'] ?? null) !== 'dosen') {
+            $pertemuan->token_absensi = null;
+            $pertemuan->token_expired_at = null;
+            $pertemuan->token_rotated_at = null;
         }
 
         return [
@@ -1308,6 +1436,9 @@ class LmsService
         if ($rotateSeconds < 10) {
             $rotateSeconds = 30;
         }
+        // Token tidak boleh bertahan lama setelah rotasi terlewat: beri
+        // toleransi maksimal dua interval rotasi (minimal 60 detik).
+        $ttlSeconds = min($ttlMinutes * 60, max(60, $rotateSeconds * 2));
 
         $defaultWindow = (int) SystemSetting::get('lms_presensi_window_menit', 30);
         if ($defaultWindow < 5) {
@@ -1321,7 +1452,7 @@ class LmsService
 
         // Generate 6 digit angka acak
         $token = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
-        $expiredAt = now()->addMinutes($ttlMinutes);
+        $expiredAt = now()->addSeconds($ttlSeconds);
 
         $pertemuan->update([
             'token_absensi'      => $token,
@@ -1339,9 +1470,10 @@ class LmsService
             'qr_payload'              => $this->buildPresensiQrPayload($pertemuanId, $token),
             'rotate_interval_seconds' => $rotateSeconds,
             'ttl_menit'               => $ttlMinutes,
+            'ttl_detik'               => $ttlSeconds,
             'window_menit'            => $window,
             'expired_at'              => $expiredAt->toIso8601String(),
-            'sisa_detik'              => $ttlMinutes * 60,
+            'sisa_detik'              => $ttlSeconds,
         ];
     }
 
@@ -1353,15 +1485,19 @@ class LmsService
     public function rotateTokenAbsensi(int $pertemuanId, ?int $userId = null): array
     {
         $pertemuan = Pertemuan::findOrFail($pertemuanId);
-        if ($actorUserId = $userId ?? auth()->id()) {
-            $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, (int) $actorUserId);
+        $actorUserId = (int) ($userId ?? auth()->id());
+        if ($actorUserId) {
+            $this->assertDosenPengampuKelas((int) $pertemuan->kelas_id, $actorUserId);
+            app(PresensiPengajaranService::class)->assertWriteAllowed($pertemuan, $actorUserId);
         }
 
-        if ($pertemuan->presensi_closed_at) {
+        if ($pertemuan->presensi_closed_at || $pertemuan->status_pertemuan === Pertemuan::STATUS_SELESAI) {
             throw ValidationException::withMessages([
                 'pertemuan' => ['Sesi presensi sudah ditutup. Token tidak dapat diputar ulang.'],
             ]);
         }
+
+        $this->assertWindowPresensiMasihBuka($pertemuan);
 
         $rotateSeconds = (int) SystemSetting::get('lms_token_rotate_seconds', 30);
         if ($rotateSeconds < 10) {
@@ -1417,7 +1553,13 @@ class LmsService
             'tanggal'            => !empty($data['tanggal']) ? $data['tanggal'] : ($pertemuan->tanggal ?: now()->toDateString()),
             'jam_mulai'          => array_key_exists('jam_mulai', $data) ? $data['jam_mulai'] : ($pertemuan->jam_mulai ?: now()->format('H:i')),
             'jam_selesai'        => array_key_exists('jam_selesai', $data) ? $data['jam_selesai'] : $pertemuan->jam_selesai,
+            'mode_presensi'      => in_array($data['mode_presensi'] ?? null, Pertemuan::MODES_PRESENSI, true)
+                ? $data['mode_presensi']
+                : Pertemuan::MODE_PRESENSI_ONLINE,
             'presensi_closed_at' => null,
+            // Buka sesi = mulai jendela baru; jangan warisi jendela lama.
+            'token_rotated_at'   => null,
+            'token_expired_at'   => null,
             'status_pertemuan'   => Pertemuan::STATUS_BERLANGSUNG,
         ]);
 
@@ -1428,6 +1570,7 @@ class LmsService
         }
 
         return array_merge($tokenData, [
+            'mode_presensi' => $pertemuan->mode_presensi,
             'pertemuan' => $pertemuan,
         ]);
     }
@@ -1455,11 +1598,19 @@ class LmsService
 
     /**
      * Mahasiswa menginputkan token absensi untuk mencatatkan kehadiran.
-     * Syarat: sesi belum ditutup + token cocok (timing-safe, termasuk toleransi rotasi 10d) + belum kedaluwarsa
-     * + mahasiswa terdaftar di kelas via KRS.
+     * Syarat: sesi belum ditutup + jendela scan masih buka + token cocok
+     * (timing-safe, termasuk toleransi rotasi 10d) + belum kedaluwarsa
+     * + mahasiswa terdaftar di kelas via KRS + geofence opsional terpenuhi.
+     *
+     * @param array<string, mixed>|null $payload
      */
-    public function inputTokenAbsensi(int $pertemuanId, int $userId, string $token, ?string $catatan = null): AbsensiMahasiswa
-    {
+    public function inputTokenAbsensi(
+        int $pertemuanId,
+        int $userId,
+        string $token,
+        ?string $catatan = null,
+        ?array $payload = null
+    ): AbsensiMahasiswa {
         $mahasiswa = Mahasiswa::where('user_id', $userId)->first();
         if (!$mahasiswa) {
             abort(403, 'Fitur presensi token mandiri hanya dapat digunakan oleh Mahasiswa.');
@@ -1469,11 +1620,7 @@ class LmsService
         $pertemuan = Pertemuan::with('kelas')->findOrFail($pertemuanId);
         app(PresensiPengajaranService::class)->assertWriteAllowed($pertemuan, $userId);
 
-        if ($pertemuan->presensi_closed_at || $pertemuan->status_pertemuan === 'selesai') {
-            throw ValidationException::withMessages([
-                'token' => ['Sesi presensi sudah ditutup dosen.'],
-            ]);
-        }
+        $this->assertSesiPresensiMasihBuka($pertemuan, 'token');
 
         $cleanToken = trim($token);
         $currentMatches = !empty($pertemuan->token_absensi) && hash_equals((string) $pertemuan->token_absensi, $cleanToken);
@@ -1498,6 +1645,9 @@ class LmsService
                 'token' => ['Anda tidak terdaftar pada kelas perkuliahan ini.'],
             ]);
         }
+
+        // Geofence hanya dipaksa untuk sesi offline yang diaktifkan admin.
+        $this->assertGeofenceAbsensi($pertemuan, $payload ?? []);
 
         return AbsensiMahasiswa::updateOrCreate(
             [
@@ -1551,7 +1701,7 @@ class LmsService
             $catatan .= ' (' . mb_substr(trim((string) $payload['device_info']), 0, 80) . ')';
         }
 
-        $absensi = $this->inputTokenAbsensi($pertemuanId, $userId, $token, $catatan);
+        $absensi = $this->inputTokenAbsensi($pertemuanId, $userId, $token, $catatan, $payload);
         $pertemuan = Pertemuan::with(['kelas.mataKuliah', 'kelas.dosenPengampu.dosen'])->findOrFail($pertemuanId);
 
         return [
@@ -2469,7 +2619,17 @@ class LmsService
         $sortField = in_array($sortBy, $allowedSorts, true) ? $sortBy : 'tanggal';
         $direction = strtolower($sortOrder) === 'asc' ? 'asc' : 'desc';
 
-        return $query->orderBy($sortField, $direction)->paginate($perPage);
+        $paginator = $query->orderBy($sortField, $direction)->paginate($perPage);
+
+        // Daftar pertemuan bersifat ringkas; kode token tidak perlu ikut terkirim.
+        // Token tetap tersedia lewat detail pertemuan untuk Dosen Pengampu.
+        foreach ($paginator->items() as $pertemuan) {
+            $pertemuan->token_absensi = null;
+            $pertemuan->token_expired_at = null;
+            $pertemuan->token_rotated_at = null;
+        }
+
+        return $paginator;
     }
 
     /**

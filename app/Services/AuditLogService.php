@@ -20,6 +20,10 @@ class AuditLogService
         'access_token',
         'refresh_token',
         'sso_token',
+        // Token presensi perkuliahan bersifat rahasia & berputar; jangan simpan
+        // nilai aslinya di audit log (termasuk payload QR turunannya).
+        'token_absensi',
+        'qr_payload',
     ];
 
     /**

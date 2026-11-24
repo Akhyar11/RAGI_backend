@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Gedung;
+use App\Models\Lms\LmsSetting;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Ruangan;
@@ -28,6 +29,7 @@ use App\Models\Sippm\PeriodeHibah;
 use App\Models\Sippm\ProposalKegiatan;
 use App\Models\Sikeu\PengajuanPencairanKas;
 use App\Models\Sinapra\MaintenanceLog;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -709,6 +711,8 @@ class MobileStaffApiTest extends TestCase
         $tokenAwal = $mulaiRes->json('data.token_absensi');
 
         $this->assertNotEmpty($tokenAwal);
+        $this->assertSame("RAG-PRESENSI:{$pertemuanId}:{$tokenAwal}", $mulaiRes->json('data.qr_payload'));
+        $this->assertSame(30, $mulaiRes->json('data.rotate_interval_seconds'));
         $this->assertDatabaseHas('siakad_pertemuan', [
             'id' => $pertemuanId,
             'status_pertemuan' => 'berlangsung',
@@ -734,6 +738,8 @@ class MobileStaffApiTest extends TestCase
             'action' => 'rotate_attendance_token',
             'record_id' => (string) $pertemuanId,
         ]);
+        $rotateAudit = \App\Models\AuditLog::where('action', 'rotate_attendance_token')->firstOrFail();
+        $this->assertSame('********', $rotateAudit->new_values['token_absensi'] ?? null);
 
         // 5. Detail Presensi Mahasiswa & 404
         $this->getJson('/api/v1/mobile/staff/perkuliahan/pertemuan/999999/presensi')->assertStatus(404);
@@ -800,6 +806,113 @@ class MobileStaffApiTest extends TestCase
         // 8. Rotate token pada sesi yang sudah selesai menghasilkan 400 Bad Request
         $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/rotate-token")
             ->assertStatus(400);
+    }
+
+    public function test_perkuliahan_mobile_menolak_dosen_bukan_pengampu(): void
+    {
+        $kurikulum = Kurikulum::create([
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'kode' => 'KUR-TI-OTORITAS',
+            'nama' => 'Kurikulum Uji Otorisasi',
+            'tahun_berlaku' => 2026,
+            'total_sks_lulus' => 144,
+            'is_active' => true,
+        ]);
+
+        $mk = MataKuliah::create([
+            'kurikulum_id' => $kurikulum->id,
+            'kode_mk' => 'TI602',
+            'nama' => 'Keamanan Sesi Perkuliahan',
+            'sks_teori' => 3,
+            'sks_praktik' => 0,
+            'total_sks' => 3,
+            'semester_anjuran' => 6,
+            'tipe' => 'wajib',
+            'is_active' => true,
+        ]);
+
+        $kelas = Kelas::create([
+            'tahun_akademik_id' => $this->taAktif->id,
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'mata_kuliah_id' => $mk->id,
+            'nama_kelas' => 'Keamanan (TI-6B)',
+            'kode_kelas' => 'TI-6B',
+            'kuota' => 35,
+            'is_active' => true,
+        ]);
+
+        DosenPengampu::create([
+            'kelas_id' => $kelas->id,
+            'dosen_id' => $this->dosen->id,
+            'peran' => 'Pengampu Utama',
+        ]);
+
+        Passport::actingAs($this->dosenUser);
+        $mulaiRes = $this->postJson("/api/v1/mobile/staff/perkuliahan/kelas/{$kelas->id}/mulai", [
+            'pertemuan_ke' => 1,
+            'materi' => 'Sesi yang hanya boleh diakses pengampu',
+        ])->assertOk();
+
+        $pertemuanId = $mulaiRes->json('data.id');
+        $tokenAwal = $mulaiRes->json('data.token_absensi');
+
+        $mhsUser = User::create([
+            'username' => 'mhs.otoritas.001',
+            'email' => 'mhs.otoritas@kampus.ac.id',
+            'name' => 'Mahasiswa Uji Otorisasi',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+        $mhs = Mahasiswa::create([
+            'user_id' => $mhsUser->id,
+            'nim' => '2026998',
+            'nama' => 'Mahasiswa Uji Otorisasi',
+            'nama_lengkap' => 'Mahasiswa Uji Otorisasi',
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'angkatan' => '2026',
+            'status' => 'A',
+        ]);
+
+        // Dosen lain tetap memiliki permission siakad.kelas.manage, tetapi bukan pengampu kelas ini.
+        $dosenRole = Role::where('slug', 'dosen')->firstOrFail();
+        $otherUser = User::create([
+            'username' => 'dosen.asing',
+            'email' => 'dosen.asing@kampus.ac.id',
+            'name' => 'Dr. Siti Aminah, M.Kom',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+        $otherUser->roles()->attach($dosenRole->id);
+        Dosen::create([
+            'user_id' => $otherUser->id,
+            'nidn' => '0620018802',
+            'nip' => '198801012015011002',
+            'nama_lengkap' => 'Dr. Siti Aminah, M.Kom',
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'is_active' => true,
+        ]);
+
+        Passport::actingAs($otherUser);
+
+        $this->getJson("/api/v1/mobile/staff/perkuliahan/kelas/{$kelas->id}")->assertForbidden();
+        $this->getJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/presensi")->assertForbidden();
+        $this->postJson("/api/v1/mobile/staff/perkuliahan/kelas/{$kelas->id}/mulai", [
+            'pertemuan_ke' => 1,
+            'materi' => 'Upaya pembukaan oleh dosen asing',
+        ])->assertForbidden();
+        $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/rotate-token")->assertForbidden();
+        $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/selesai")->assertForbidden();
+        $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/presensi", [
+            'items' => [
+                ['mahasiswa_id' => $mhs->id, 'status' => 'alfa'],
+            ],
+        ])->assertForbidden();
+
+        $this->assertDatabaseHas('siakad_pertemuan', [
+            'id' => $pertemuanId,
+            'status_pertemuan' => 'berlangsung',
+            'token_absensi' => $tokenAwal,
+        ]);
     }
 
     public function test_mobile_staff_sippm_endpoints(): void
@@ -1046,5 +1159,105 @@ class MobileStaffApiTest extends TestCase
         config(['spmb.public_url' => 'https://pmb.poltekindonusa.ac.id']);
         $customRes = $this->postJson('/api/v1/mobile/staff/spmb/referral');
         $this->assertStringStartsWith('https://pmb.poltekindonusa.ac.id/spmb/daftar?ref=', $customRes->json('data.share_url'));
+    }
+
+    private function buatKelasDanMulaiSesi(string $kode): int
+    {
+        $kurikulum = Kurikulum::create([
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'kode' => 'KUR-' . $kode,
+            'nama' => 'Kurikulum Uji ' . $kode,
+            'tahun_berlaku' => 2026,
+            'total_sks_lulus' => 144,
+            'is_active' => true,
+        ]);
+
+        $mk = MataKuliah::create([
+            'kurikulum_id' => $kurikulum->id,
+            'kode_mk' => 'MK-' . $kode,
+            'nama' => 'Mata Kuliah Uji ' . $kode,
+            'sks_teori' => 3,
+            'sks_praktik' => 0,
+            'total_sks' => 3,
+            'semester_anjuran' => 6,
+            'tipe' => 'wajib',
+            'is_active' => true,
+        ]);
+
+        $kelas = Kelas::create([
+            'tahun_akademik_id' => $this->taAktif->id,
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'mata_kuliah_id' => $mk->id,
+            'nama_kelas' => 'Kelas Uji ' . $kode,
+            'kode_kelas' => $kode,
+            'kuota' => 35,
+            'is_active' => true,
+        ]);
+
+        DosenPengampu::create([
+            'kelas_id' => $kelas->id,
+            'dosen_id' => $this->dosen->id,
+            'peran' => 'Pengampu Utama',
+        ]);
+
+        Passport::actingAs($this->dosenUser);
+        $res = $this->postJson("/api/v1/mobile/staff/perkuliahan/kelas/{$kelas->id}/mulai", [
+            'pertemuan_ke' => 1,
+            'materi' => 'Sesi uji validasi presensi',
+        ])->assertOk();
+
+        return (int) $res->json('data.id');
+    }
+
+    public function test_presensi_manual_menolak_mahasiswa_dari_kelas_lain(): void
+    {
+        $pertemuanId = $this->buatKelasDanMulaiSesi('TI-PRES-LINTAS');
+
+        $mhsUser = User::create([
+            'username' => 'mhs.lintas.kelas',
+            'email' => 'mhs.lintas@kampus.ac.id',
+            'name' => 'Mahasiswa Kelas Lain',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+        $mhs = Mahasiswa::create([
+            'user_id' => $mhsUser->id,
+            'nim' => '2026997',
+            'nama' => 'Mahasiswa Kelas Lain',
+            'nama_lengkap' => 'Mahasiswa Kelas Lain',
+            'program_studi_id' => $this->dosen->program_studi_id,
+            'angkatan' => '2026',
+            'status' => 'A',
+        ]);
+
+        $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/presensi", [
+            'items' => [
+                ['mahasiswa_id' => $mhs->id, 'status' => 'hadir'],
+            ],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['items.0.mahasiswa_id']);
+
+        $this->assertDatabaseMissing('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $pertemuanId,
+            'mahasiswa_id' => $mhs->id,
+        ]);
+    }
+
+    public function test_feature_flag_presensi_menolak_endpoint_mobile_staff(): void
+    {
+        $pertemuanId = $this->buatKelasDanMulaiSesi('TI-PRES-FLAG');
+
+        SystemSetting::set('lms_fitur_presensi', '0');
+        LmsSetting::flushCache();
+
+        $this->getJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/presensi")
+            ->assertForbidden();
+        $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/presensi", [
+            'items' => [],
+        ])->assertForbidden();
+        $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/rotate-token")
+            ->assertForbidden();
+        $this->postJson("/api/v1/mobile/staff/perkuliahan/pertemuan/{$pertemuanId}/selesai")
+            ->assertForbidden();
     }
 }

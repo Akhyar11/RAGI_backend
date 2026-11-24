@@ -8,6 +8,7 @@ use App\Models\Siakad\Kelas;
 use App\Models\Siakad\Krs;
 use App\Models\Siakad\KrsDetail;
 use App\Models\Siakad\Mahasiswa;
+use App\Models\SystemSetting;
 use App\Models\Siakad\NilaiMahasiswa;
 use App\Models\Siakad\PaCatatan;
 use App\Models\Siakad\Pertemuan;
@@ -34,6 +35,7 @@ use App\Models\Lms\MateriPertemuan;
 use App\Models\Lms\LmsNotifikasi;
 use App\Models\Spmb\ReferralUsage;
 use App\Services\AuditLogService;
+use App\Services\Siakad\LmsService;
 use App\Services\Spmb\SpmbReferralService;
 use App\Services\Sinapra\MaintenanceService;
 use App\Services\Storage\FileStorageService;
@@ -92,6 +94,33 @@ class MobileStaffService
         }
 
         return null;
+    }
+
+    /**
+     * Batasi aksi perkuliahan mobile pada Dosen Pengampu kelas terkait.
+     *
+     * Permission `siakad.kelas.manage` bersifat global. Tanpa pemeriksaan ini,
+     * dosen lain (atau admin non-pengampu) bisa memutar token, menutup sesi,
+     * dan mengubah presensi kelas yang tidak diampunya. Aturan ini sengaja
+     * disamakan dengan LmsService::assertDosenPengampuKelas() di jalur web.
+     */
+    protected function assertDosenPengampuKelasMobile(int $kelasId, ?int $userId): void
+    {
+        if (!$userId) {
+            abort(403, 'Aksi akademik ini hanya dapat dilakukan oleh Dosen Pengampu kelas terkait.');
+        }
+
+        app(LmsService::class)->assertDosenPengampuKelas($kelasId, $userId);
+    }
+
+    /**
+     * Interval rotasi token mengikuti pengaturan LMS yang sama dengan jalur web.
+     * Default 30 detik; beri toleransi satu rotasi terlewat sebelum token gugur.
+     */
+    protected function lmsTokenRotateSeconds(): int
+    {
+        $seconds = (int) SystemSetting::get('lms_token_rotate_seconds', 30);
+        return $seconds < 10 ? 30 : $seconds;
     }
 
     /**
@@ -743,12 +772,14 @@ class MobileStaffService
     /**
      * Ambil rincian kelas dan daftar seluruh pertemuan 1 s/d 16.
      */
-    public function getPertemuanList(int $kelasId): ?array
+    public function getPertemuanList(int $kelasId, ?int $userId = null): ?array
     {
         $kelas = Kelas::with(['mataKuliah', 'tahunAkademik', 'ruangan'])->find($kelasId);
         if (!$kelas) {
             return null;
         }
+
+        $this->assertDosenPengampuKelasMobile($kelasId, $userId);
 
         $totalMhs = KrsDetail::where('kelas_id', $kelasId)->count();
 
@@ -843,6 +874,8 @@ class MobileStaffService
             return null;
         }
 
+        $this->assertDosenPengampuKelasMobile($kelasId, $userId);
+
         $pertemuanKe = (int) ($data['pertemuan_ke'] ?? 1);
         if ($pertemuanKe < 1 || $pertemuanKe > 16) {
             $pertemuanKe = 1;
@@ -872,13 +905,21 @@ class MobileStaffService
             (int) ($userId ?? auth()->id())
         );
 
+        $rotateSeconds = $this->lmsTokenRotateSeconds();
+        $tokenExpiredAt = Carbon::now()->addSeconds(max(60, $rotateSeconds * 2));
+
         $pertemuan->jam_mulai = $jamMulai;
         $pertemuan->materi = $data['materi'] ?? ('Pertemuan ke-' . $pertemuanKe . ' - ' . ($kelas->mataKuliah?->nama ?? $kelas->mataKuliah?->nama_mk ?? ''));
         $pertemuan->catatan_pertemuan = $data['catatan'] ?? null;
         $pertemuan->status_pertemuan = Pertemuan::STATUS_BERLANGSUNG;
         $pertemuan->token_absensi = $tokenAbsensi;
-        $pertemuan->token_expired_at = Carbon::now()->addHours(2);
+        $pertemuan->token_expired_at = $tokenExpiredAt;
+        $pertemuan->token_rotated_at = Carbon::now();
         $pertemuan->window_menit = 120;
+        // Default online: tidak ada geofence untuk kelas Zoom/daring.
+        $pertemuan->mode_presensi = in_array($data['mode_presensi'] ?? null, Pertemuan::MODES_PRESENSI, true)
+            ? $data['mode_presensi']
+            : Pertemuan::MODE_PRESENSI_ONLINE;
         $pertemuan->presensi_closed_at = null;
         $pertemuan->save();
 
@@ -899,7 +940,12 @@ class MobileStaffService
         }
 
         // Inisialisasi entri presensi default untuk semua mahasiswa di kelas ini jika belum ada
-        $peserta = KrsDetail::with('krs')->where('kelas_id', $kelasId)->get();
+        $peserta = KrsDetail::with('krs')
+            ->where('kelas_id', $kelasId)
+            ->whereHas('krs', fn ($q) => $q
+                ->whereIn('status', LmsService::VALID_KRS_STATUSES)
+                ->whereNull('deleted_at'))
+            ->get();
         foreach ($peserta as $p) {
             $mhsId = $p->mahasiswa_id ?? $p->krs?->mahasiswa_id;
             if (!$mhsId) continue;
@@ -927,15 +973,14 @@ class MobileStaffService
             'status' => $pertemuan->status_pertemuan,
             'token_absensi' => $pertemuan->token_absensi,
             'token_expired_at' => $pertemuan->token_expired_at?->toIso8601String(),
+            'expired_at' => $tokenExpiredAt->toIso8601String(),
+            'rotate_interval_seconds' => $rotateSeconds,
+            'window_menit' => $pertemuan->window_menit,
+            'mode_presensi' => $pertemuan->mode_presensi,
             'jam_mulai' => $pertemuan->jam_mulai,
-            'qr_payload' => json_encode([
-                'type' => 'siakad_presensi',
-                'pertemuan_id' => $pertemuan->id,
-                'kelas_id' => $kelasId,
-                'pertemuan_ke' => $pertemuan->pertemuan_ke,
-                'token' => $tokenAbsensi,
-                'timestamp' => Carbon::now()->timestamp,
-            ]),
+            // Samakan dengan format rotate-token & jalur LMS web agar QR
+            // yang dipindai mahasiswa selalu dikenali.
+            'qr_payload' => "RAG-PRESENSI:{$pertemuan->id}:{$tokenAbsensi}",
         ];
     }
 
@@ -949,9 +994,17 @@ class MobileStaffService
             return null;
         }
 
+        $this->assertDosenPengampuKelasMobile((int) $pertemuan->kelas_id, $userId);
+
         if ($pertemuan->status_pertemuan === Pertemuan::STATUS_SELESAI || $pertemuan->presensi_closed_at) {
             return null;
         }
+
+        $actorUserId = (int) ($userId ?? auth()->id());
+        if ($actorUserId) {
+            app(PresensiPengajaranService::class)->assertWriteAllowed($pertemuan, $actorUserId);
+        }
+        app(LmsService::class)->assertWindowPresensiMasihBuka($pertemuan);
 
         // Grace period 10 detik simpan token lama di cache
         if (!empty($pertemuan->token_absensi)) {
@@ -960,7 +1013,7 @@ class MobileStaffService
 
         $oldValues = $pertemuan->getOriginal();
         $token = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
-        $rotateSeconds = 30;
+        $rotateSeconds = $this->lmsTokenRotateSeconds();
         $expiredAt = Carbon::now()->addSeconds($rotateSeconds);
 
         $pertemuan->token_absensi = $token;
@@ -1002,6 +1055,8 @@ class MobileStaffService
             return null;
         }
 
+        $this->assertDosenPengampuKelasMobile((int) $pertemuan->kelas_id, $userId);
+
         $oldValues = $pertemuan->getOriginal();
         $alreadySelesai = $pertemuan->status_pertemuan === Pertemuan::STATUS_SELESAI;
 
@@ -1012,6 +1067,7 @@ class MobileStaffService
             // Tutup presensi: hapus token agar tidak bisa dipakai ulang.
             $pertemuan->token_absensi = null;
             $pertemuan->token_expired_at = null;
+            $pertemuan->token_rotated_at = null;
             $pertemuan->save();
 
             try {
@@ -1055,15 +1111,20 @@ class MobileStaffService
     /**
      * Ambil daftar presensi mahasiswa untuk pertemuan tertentu.
      */
-    public function getPresensiPertemuan(int $pertemuanId): ?array
+    public function getPresensiPertemuan(int $pertemuanId, ?int $userId = null): ?array
     {
         $pertemuan = Pertemuan::with(['kelas.mataKuliah', 'kelas.ruangan'])->find($pertemuanId);
         if (!$pertemuan) {
             return null;
         }
 
+        $this->assertDosenPengampuKelasMobile((int) $pertemuan->kelas_id, $userId);
+
         $peserta = KrsDetail::with(['krs.mahasiswa'])
             ->where('kelas_id', $pertemuan->kelas_id)
+            ->whereHas('krs', fn ($q) => $q
+                ->whereIn('status', LmsService::VALID_KRS_STATUSES)
+                ->whereNull('deleted_at'))
             ->get();
 
         $absensiMap = AbsensiMahasiswa::where('pertemuan_id', $pertemuanId)
@@ -1129,6 +1190,7 @@ class MobileStaffService
     public function updatePresensiMahasiswa(int $pertemuanId, array $items, ?int $userId = null): array
     {
         $pertemuan = Pertemuan::findOrFail($pertemuanId);
+        $this->assertDosenPengampuKelasMobile((int) $pertemuan->kelas_id, $userId);
         app(PresensiPengajaranService::class)->assertWriteAllowed(
             $pertemuan,
             (int) ($userId ?? auth()->id())

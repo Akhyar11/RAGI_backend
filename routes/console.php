@@ -46,8 +46,8 @@ Schedule::command('sippm:sync-publikasi')->weekly()->onSuccess(function () {
 // Polling pembayaran H2H BTN Syariah yang terbayar di bridge Go
 Schedule::command('sikeu:sync-h2h')->everyFiveMinutes()->withoutOverlapping();
 
-// Tutup otomatis sesi presensi LMS yang jam selesainya sudah lewat
-Schedule::command('lms:tutup-presensi-otomatis')->hourly()->withoutOverlapping();
+// Tutup otomatis sesi presensi LMS yang jendela waktunya sudah lewat
+Schedule::command('lms:tutup-presensi-otomatis')->everyFiveMinutes()->withoutOverlapping();
 
 // Pengingat deadline tugas & kuis ke mahasiswa (notifikasi in-app LMS)
 Schedule::command('lms:notifikasi-deadline')->dailyAt('07:00')->withoutOverlapping();

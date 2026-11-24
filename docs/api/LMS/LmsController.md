@@ -5,7 +5,7 @@
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-25
-> **Diperbarui**: 2026-11-24 (jurnal presensi terintegrasi pada `siakad_pertemuan`, bukti privat, cetak PDF kehadiran & rekap prodi)
+> **Diperbarui**: 2026-11-24 (jurnal presensi terintegrasi pada `siakad_pertemuan`, bukti privat, cetak PDF kehadiran & rekap prodi, mode presensi online/offline, QR `RAG-PRESENSI`, TTL rotasi & geofence opsional)
 
 Controller untuk menangani seluruh aktivitas Learning Management System (LMS) dan Absensi Terintegrasi Perkuliahan. Meliputi manajemen materi perkuliahan multi-file, penugasan mahasiswa dengan auto-sync ke sistem penilaian OBE (`siakad_nilai_komponen_mhs`), absensi token 6-digit dengan masa aktif dinamis, rekapitulasi kehadiran kelas, pengajuan dan persetujuan izin/sakit mahasiswa, serta pengaturan media penyimpanan (Cloudflare R2 atau storage lokal).
 
@@ -991,7 +991,7 @@ Menghasilkan 6-digit token acak numerik untuk mahasiswa melakukan presensi mandi
     "window_menit": 45
 }
 ```
-`window_menit` 5–180; kosong = `lms_presensi_window_menit` (default 30).
+`window_menit` 5–180; kosong = `lms_presensi_window_menit` (default 30). Jendela scan dihitung dari `token_rotated_at + window_menit`, bukan dari tanggal jadwal. Token berlaku maksimal `min(lms_token_ttl_minutes * 60, max(60, lms_token_rotate_seconds * 2))` detik; `ttl_detik` dan `sisa_detik` pada respons memakai nilai ini.
 
 #### Response Sukses (200 OK)
 ```json
@@ -1001,17 +1001,20 @@ Menghasilkan 6-digit token acak numerik untuk mahasiswa melakukan presensi mandi
     "data": {
         "pertemuan_id": 101,
         "token": "729140",
+        "qr_payload": "RAG-PRESENSI:101:729140",
+        "rotate_interval_seconds": 30,
         "ttl_menit": 15,
+        "ttl_detik": 60,
         "window_menit": 45,
-        "expired_at": "2026-10-05T10:15:00+07:00",
-        "sisa_detik": 900
+        "expired_at": "2026-10-05T10:01:00+07:00",
+        "sisa_detik": 60
     }
 }
 ```
 
 ### [POST] `/api/v1/lms/pertemuan/{pertemuanId}/token/rotate`
 
-> Anti titip-hadir (ala Project/lms): putar ulang token dengan umur pendek (`lms_token_rotate_seconds`, default 120 detik) selama dashboard dosen terbuka. Token lama langsung gugur.
+> Anti titip-hadir (ala Project/lms): putar ulang token dengan umur pendek (`lms_token_rotate_seconds`, default **30 detik**) selama dashboard dosen terbuka. Token lama langsung gugur setelah grace 10 detik. Rotasi dibatasi 15 kali/menit per dosen per pertemuan; kelebihan kuota menghasilkan 429 dengan `retry_after: 60`.
 
 Wajib permission `siakad.kelas.manage`. Tidak ada request body.
 
@@ -1878,9 +1881,15 @@ Dosen pengampu mengisi jurnal pertemuan (`materi`, `catatan_pertemuan`, `tanggal
     "catatan_pertemuan": "Pembahasan komunikasi sinkron vs asinkron antar layanan.",
     "tanggal": "2026-11-09",
     "jam_mulai": "08:00",
-    "jam_selesai": "10:30"
+    "jam_selesai": "10:30",
+    "mode_presensi": "online"
 }
 ```
+
+| Field | Tipe | Wajib | Nilai | Deskripsi |
+|---|---|---|---|---|
+| `window_menit` | integer | ❌ | 5–180 | Kosong = `lms_presensi_window_menit` (default 30). |
+| `mode_presensi` | string | ❌ | `online` (default) / `offline` | `online` untuk Zoom/daring tanpa geofence; `offline` untuk tatap muka. Nilai lain → 422. |
 
 #### Response Sukses (200 OK)
 ```json
@@ -1896,11 +1905,35 @@ Dosen pengampu mengisi jurnal pertemuan (`materi`, `catatan_pertemuan`, `tanggal
         "token": "482910",
         "qr_payload": "RAG-PRESENSI:14:482910",
         "expired_at": "2026-11-09T08:00:30+07:00",
-        "ttl_detik": 30,
+        "ttl_detik": 60,
         "rotate_interval_seconds": 30,
-        "window_menit": 15
+        "window_menit": 30,
+        "mode_presensi": "online"
     }
 }
+```
+
+#### Kontrak mode presensi & keamanan token (update 2026-11-24)
+
+| Aturan | Perilaku |
+|---|---|
+| Otorisasi | Hanya **Dosen Pengampu** kelas yang boleh membuka/memutar/menutup sesi. Permission `lms.presensi.manage` dikecualikan dari feature flag. |
+| Format QR | `qr_payload = RAG-PRESENSI:{pertemuan_id}:{token}` — sama persis di web dan mobile. |
+| TTL token | `min(lms_token_ttl_minutes * 60, max(60, lms_token_rotate_seconds * 2))` detik sejak rotasi terakhir. |
+| Jendela scan | Diukur dari `token_rotated_at + window_menit`. Sesi yang melewati jendela ditolak dan ditutup oleh `lms:tutup-presensi-otomatis` (tiap 5 menit). |
+| Geofence | Mahasiswa hanya diwajibkan kirim `latitude`/`longitude` bila `mode_presensi=offline` **dan** `lms_presensi_geofence_wajib=true` **dan** ada `OfficeLocation` aktif. Pertemuan `online`/Zoom tidak memaksa lokasi. |
+| Token ke mahasiswa | Endpoint baca milik mahasiswa mengembalikan `token_absensi: null`, `qr_payload: null`, serta status `token_aktif` dan `token_sisa_detik`; token hanya tampil di layar dosen. |
+| KRS | Hanya mahasiswa dengan KRS berstatus valid (dan belum dihapus) yang menjadi peserta scan/presensi manual. |
+| Feature flag | `lms_fitur_presensi=false` → 403 untuk endpoint presensi, kecuali pemegang `lms.presensi.manage`. |
+
+Contoh error:
+
+```json
+{"status":"error","message":"Fitur presensi LMS sedang dinonaktifkan."}
+```
+
+```json
+{"status":"error","message":"Aksi akademik ini hanya dapat dilakukan oleh Dosen Pengampu kelas terkait."}
 ```
 
 ### [POST] `/api/v1/lms/presensi/scan`
@@ -2047,6 +2080,8 @@ Menampilkan daftar sesi presensi yang sedang dibuka oleh dosen pada kelas-kelas 
     ]
 }
 ```
+
+> Endpoint baca ini **tidak pernah mengirim kode token**: `token_absensi` dan `qr_payload` selalu `null` untuk mahasiswa. Detail pertemuan mahasiswa hanya memberi status `token_aktif` dan `token_sisa_detik` agar UI bisa menampilkan indikator tanpa membocorkan token.
 
 ---
 

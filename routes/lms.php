@@ -127,7 +127,7 @@ Route::middleware(['can:siakad.kelas.manage'])->group(function () {
     Route::delete('/tugas/{tugasId}', [LmsController::class, 'destroyTugas']);
     Route::post('/pertemuan/{pertemuanId}/token', [LmsController::class, 'generateToken']);
     Route::post('/pertemuan/{pertemuanId}/buka-sesi', [LmsController::class, 'bukaSesiPresensi']);
-    Route::post('/pertemuan/{pertemuanId}/token/rotate', [LmsController::class, 'rotateToken']);
+    Route::post('/pertemuan/{pertemuanId}/token/rotate', [LmsController::class, 'rotateToken'])->middleware('throttle:lms-token-rotate');
     Route::post('/pertemuan/{pertemuanId}/tutup-presensi', [LmsController::class, 'tutupPresensi']);
     // Quiz — sisi dosen pengelola
     Route::post('/pertemuan/{pertemuanId}/quiz', [QuizController::class, 'store']);

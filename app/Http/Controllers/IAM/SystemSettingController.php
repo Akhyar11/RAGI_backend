@@ -114,8 +114,11 @@ class SystemSettingController extends Controller
             'lms_max_file_tugas_mb'     => (string) SystemSetting::get('lms_max_file_tugas_mb', '50'),
             'lms_allow_token_absensi'   => (string) SystemSetting::get('lms_allow_token_absensi', 'true'),
             'lms_token_ttl_minutes'     => (string) SystemSetting::get('lms_token_ttl_minutes', '15'),
-            'lms_token_rotate_seconds'  => (string) SystemSetting::get('lms_token_rotate_seconds', '120'),
+            'lms_token_rotate_seconds'  => (string) SystemSetting::get('lms_token_rotate_seconds', '30'),
             'lms_presensi_window_menit' => (string) SystemSetting::get('lms_presensi_window_menit', '30'),
+            // Geofence mahasiswa bersifat opsional. Default false karena ada
+            // pertemuan online/Zoom; aktif hanya untuk sesi tatap muka.
+            'lms_presensi_geofence_wajib' => (string) SystemSetting::get('lms_presensi_geofence_wajib', 'false'),
             'lms_quiz_batch_size'       => (string) SystemSetting::get('lms_quiz_batch_size', '10'),
         ];
 

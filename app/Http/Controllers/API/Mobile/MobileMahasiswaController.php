@@ -68,6 +68,7 @@ class MobileMahasiswaController extends Controller
     public function sesiPresensiAktif(Request $request): JsonResponse
     {
         Gate::authorize('siakad.kelas.read');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
         $this->mobileService->resolveAuthenticatedMahasiswa($request->user()->id);
         $tahunAkademikId = $request->filled('tahun_akademik_id') ? (int) $request->tahun_akademik_id : null;
         $data = $this->lmsService->listSesiPresensiAktifMahasiswa($request->user()->id, $tahunAkademikId);
@@ -85,6 +86,7 @@ class MobileMahasiswaController extends Controller
     public function scanPresensi(Request $request): JsonResponse
     {
         Gate::authorize('lms.presensi.create');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
         $this->mobileService->resolveAuthenticatedMahasiswa($request->user()->id);
         $validated = $request->validate([
             'qr_payload' => ['nullable', 'string', 'max:255'],
@@ -134,6 +136,7 @@ class MobileMahasiswaController extends Controller
     public function ajukanIzin(AjukanIzinRequest $request, int $pertemuanId): JsonResponse
     {
         Gate::authorize('lms.presensi.create');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
         $this->mobileService->resolveAuthenticatedMahasiswa($request->user()->id);
         // Berkas file_surat disimpan ke private storage (private: true) di dalam LmsService::ajukanIzin via FileStorageService
         $izin = $this->lmsService->ajukanIzin(
@@ -169,6 +172,7 @@ class MobileMahasiswaController extends Controller
     public function rekapPresensi(Request $request): JsonResponse
     {
         Gate::authorize('siakad.kelas.read');
+        $this->lmsService->assertPresensiFiturAktif($request->user());
         $tahunAkademikId = $request->filled('tahun_akademik_id') ? (int) $request->tahun_akademik_id : null;
         $data = $this->mobileService->getRekapPresensiMahasiswa($request->user()->id, $tahunAkademikId);
 

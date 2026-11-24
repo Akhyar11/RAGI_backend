@@ -58,5 +58,22 @@ class RateLimiterServiceProvider extends ServiceProvider
             return Limit::perMinute(60)
                 ->by($request->user()?->id ?: $request->ip());
         });
+
+        /*
+         * Rotasi token presensi: maksimal 15 kali per menit per dosen per
+         * pertemuan. Rotasi normal adalah 30 detik (2x/menit), jadi batas ini
+         * memberi ruang retry tanpa membuka celah brute-force token.
+         */
+        RateLimiter::for('lms-token-rotate', function (Request $request) {
+            return Limit::perMinute(15)
+                ->by(($request->user()?->id ?: $request->ip()) . ':' . $request->route('pertemuanId'))
+                ->response(function () {
+                    return response()->json([
+                        'status'  => 'error',
+                        'message' => 'Terlalu banyak rotasi token. Silakan tunggu beberapa saat.',
+                        'retry_after' => 60,
+                    ], 429);
+                });
+        });
     }
 }

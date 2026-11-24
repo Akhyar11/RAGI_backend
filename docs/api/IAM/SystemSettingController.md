@@ -3,7 +3,7 @@
 > **Modul**: IAM  
 > **Base URL**: `/api/admin/system-settings`  
 > **Autentikasi**: Bearer Token (Passport)
-> **Dibuat/Diperbarui**: 2026-11-11
+> **Dibuat/Diperbarui**: 2026-11-24 (menambah `lms_presensi_geofence_wajib`, rotasi token default 30 detik, dan jendela presensi)
 
 Dokumentasi API untuk pengelolaan konfigurasi sistem terpusat (System Settings), mencakup konfigurasi SMTP Mailer, Cloudflare R2 Object Storage, Neo Feeder PDDikti, LMS & Absensi Perkuliahan, pembatasan peran akun (Restricted Roles), serta mapping penerima admin SPMB. Baca/simpan pengaturan dan opsi akun admin SPMB memerlukan kewenangan IAM `iam.settings.update` (termasuk akses superadmin melalui Gate). Akses pengelola role untuk request yang hanya memperbarui `restricted_role_ids` tetap mengikuti policy role yang sudah ada.
 
@@ -140,6 +140,24 @@ Respons merupakan dictionary konfigurasi, bukan list terpaginasikan. Key `spmb_a
             "key": "lms_token_ttl_minutes",
             "value": "15",
             "description": "Konfigurasi LMS & Absensi Perkuliahan"
+        },
+        "lms_token_rotate_seconds": {
+            "id": 12,
+            "key": "lms_token_rotate_seconds",
+            "value": "30",
+            "description": "Interval rotasi token QR presensi (detik); minimum efektif 10 detik"
+        },
+        "lms_presensi_window_menit": {
+            "id": 13,
+            "key": "lms_presensi_window_menit",
+            "value": "30",
+            "description": "Jendela scan dihitung dari waktu rotasi token terakhir (menit)"
+        },
+        "lms_presensi_geofence_wajib": {
+            "id": 14,
+            "key": "lms_presensi_geofence_wajib",
+            "value": "false",
+            "description": "Geofence mahasiswa opsional; hanya dipaksa untuk mode_presensi=offline dengan OfficeLocation aktif"
         }
     }
 }
@@ -162,6 +180,18 @@ Respons merupakan dictionary konfigurasi, bukan list terpaginasikan. Key `spmb_a
     "message": "Anda tidak memiliki wewenang untuk mengakses pengaturan sistem."
 }
 ```
+
+### Pengaturan presensi LMS pada endpoint ini
+
+| Key | Nilai/default | Arti |
+|---|---|---|
+| `lms_allow_token_absensi` | `"true"` | Mengizinkan sesi token/QR presensi. |
+| `lms_token_ttl_minutes` | `"15"` | Batas atas umur token (menit). Umur efektif dibatasi `max(60, lms_token_rotate_seconds * 2)` detik. |
+| `lms_token_rotate_seconds` | `"30"` | Interval rotasi token. Nilai < 10 detik diabaikan menjadi 30. |
+| `lms_presensi_window_menit` | `"30"` | Jendela scan sejak `token_rotated_at`, bukan sejak tanggal jadwal. |
+| `lms_presensi_geofence_wajib` | `"false"` | Default false karena ada kelas online/Zoom. True hanya berlaku untuk `mode_presensi=offline` dan bila ada `OfficeLocation` aktif. |
+
+Semua nilai di-response berupa **string**. Endpoint ini hanya mengembalikan konfigurasi (bukan token/secret mentah); field token yang dikirim kosong/null mempertahankan kredensial tersimpan. Perubahan dicatat di `core_audit_logs` tanpa nilai token sensitif.
 
 ---
 
@@ -235,6 +265,18 @@ Contoh error mapping:
         {
             "key": "lms_token_ttl_minutes",
             "value": "15"
+        },
+        {
+            "key": "lms_token_rotate_seconds",
+            "value": "30"
+        },
+        {
+            "key": "lms_presensi_window_menit",
+            "value": "30"
+        },
+        {
+            "key": "lms_presensi_geofence_wajib",
+            "value": "false"
         }
     ]
 }
