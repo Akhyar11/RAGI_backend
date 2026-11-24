@@ -37,7 +37,7 @@ class PresensiPengajaranService
                             'total_mahasiswa' => KrsDetail::query()
                                 ->join('siakad_krs', 'siakad_krs.id', '=', 'siakad_krs_detail.krs_id')
                                 ->selectRaw('COUNT(DISTINCT siakad_krs.mahasiswa_id)')
-                                ->whereColumn('siakad_krs_detail.kelas_id', 'siakad_kelas.id')
+                                ->whereColumn('siakad_krs_detail.kelas_id', 'siakad_jadwal_kelas.id')
                                 ->whereIn('siakad_krs.status', ['disetujui', 'diajukan'])
                                 ->whereNull('siakad_krs.deleted_at'),
                         ])

@@ -170,8 +170,8 @@ class GedungRuanganService
             return false;
         }
 
-        // 2. Cek bentrok dengan jadwal kelas perkuliahan reguler modul SIAKAD (jika tabel siakad_kelas tersedia)
-        if (Schema::hasTable('siakad_kelas')) {
+        // 2. Cek bentrok dengan jadwal kelas perkuliahan reguler modul SIAKAD (jika tabel siakad_jadwal_kelas tersedia)
+        if (Schema::hasTable('siakad_jadwal_kelas')) {
             $dayOfWeek = Carbon::parse($tanggal)->dayOfWeek;
             $daysMap = [
                 0 => 'minggu',
@@ -184,7 +184,7 @@ class GedungRuanganService
             ];
             $hari = $daysMap[$dayOfWeek] ?? 'senin';
 
-            $conflictSiakad = DB::table('siakad_kelas')
+            $conflictSiakad = DB::table('siakad_jadwal_kelas')
                 ->where('ruangan_id', $ruanganId)
                 ->where('status', 'aktif')
                 ->where('hari', $hari)

@@ -28,12 +28,12 @@
 > | TD-4 | Definisi menu LMS dipindah ke `database/seeders/IAM/menu_definitions.php` + key baru `is_active` & `role_slugs` (menggantikan blok hardcode "semua menu LMS → dosen + mahasiswa"). |
 > | TD-5 | `PermissionSeeder` jadi sumber kebenaran tunggal; grant `siakad.kelas.*`, `siakad.nilai.*`, `lms.forum.*` untuk `kaprodi` & `wakil_prodi` di dalamnya. |
 > | TD-7 | Export laporan: satu `LmsExportService` (writer + data builder); format dipilih `?format=csv\|xlsx` (default CSV); CSV memakai BOM UTF-8 + `\r\n`; XLSX kolom angka ditulis numerik; setiap export dicatat di `core_audit_logs` (`module=LMS`, `action=export`). |
-> | TD-22 | Mapping skema donor → RAG: `LmsPresensiSesi` → `siakad_pertemuan`; `LmsPresensiRekap` → `siakad_absensi_mahasiswa`; `lms_kelas.siakad_xid_kls` → `siakad_kelas.kode_kelas`; `id_ptk` → `siakad_dosen.nidn`; `lms_kelas_dosen` → `siakad_dosen_pengampu`; `lms_kelas_mahasiswa` → KRS (`siakad_krs` + `siakad_krs_detail`). |
+> | TD-22 | Mapping skema donor → RAG: `LmsPresensiSesi` → `siakad_pertemuan`; `LmsPresensiRekap` → `siakad_absensi_mahasiswa`; `lms_kelas.siakad_xid_kls` → `siakad_jadwal_kelas.kode_kelas`; `id_ptk` → `siakad_dosen.nidn`; `lms_kelas_dosen` → `siakad_dosen_pengampu`; `lms_kelas_mahasiswa` → KRS (`siakad_krs` + `siakad_krs_detail`). |
 > | TD-23 | RAG **tidak** membuat tabel `lms_presensi_sesi`/`lms_presensi_rekap`; cukup tabel `lms_presensi_sync_log` + kolom sync (`sync_status`, `sync_error`, `synced_at`, `id_jurnal_presensiv2`) pada `siakad_pertemuan` & `siakad_absensi_mahasiswa`. |
 > | TD-24 | `sync_status` adalah *closed-set domain* dinormalisasi di trait `App\Models\Concerns\HasPresensiSyncStatus`: `local` (default), `pending`, `synced`, `failed`. Default `local` (bukan `pending`) agar perintah retry tidak mencoba ribuan record yang memang tidak pernah diintegrasikan. |
 > | TD-25 | Integrasi bersifat **opt-in & fail-safe**: `PresensiV2SyncService::isConfigured()` false bila `PRESENSI_API_URL` kosong **dan** koneksi `presensiv2` tidak dikonfigurasi → seluruh aksi sync berstatus "skipped" tanpa mengubah data lokal. |
 > | TD-26 | Transport `auto\|api\|db`. `api` → `POST {PRESENSI_API_URL}/api/sync.php` header `X-Api-Key`, body `action` ∈ `buka_jurnal\|hadir\|hapus\|reset\|tarik`. `db` → koneksi MySQL `presensiv2`, tabel `presensi_jurnal_perkuliahan` (kunci `id_jurnal`) & `presensi_rekap` (hadir = row ada, **tidak ada** kolom `status`). |
-> | TD-27 | Sumber `id_ptk` dikonfigurabel via `PRESENSI_ID_PTK_SOURCE` (`nidn` default \| `nip`); `id_smt` = `siakad_tahun_akademik.kode`; `id_prodi` = `siakad_program_studi.kode_prodi`; `ruang` = `siakad_kelas.ruangan.nama` atau `PRESENSI_RUANG_DEFAULT`. |
+> | TD-27 | Sumber `id_ptk` dikonfigurabel via `PRESENSI_ID_PTK_SOURCE` (`nidn` default \| `nip`); `id_smt` = `siakad_tahun_akademik.kode`; `id_prodi` = `siakad_program_studi.kode_prodi`; `ruang` = `siakad_jadwal_kelas.ruangan.nama` atau `PRESENSI_RUANG_DEFAULT`. |
 > | TD-28 | Feature flag disimpan di `core_system_settings` key `lms_fitur_presensi` (default aktif), dibaca via `App\Models\Lms\LmsSetting::fiturPresensiAktif()` (cache 120 detik). Non-admin → `403` saat flag off; admin (pemegang `lms.presensi.manage`) tetap boleh. |
 > | TD-29 | Penentuan mahasiswa terdaftar pada kelas untuk tarik riwayat memakai `siakad_krs_detail` JOIN `siakad_krs` → `siakad_krs.mahasiswa_id` (model `Mahasiswa` **tidak** punya relasi `krsDetails`). |
 > | TD-41 | Notifikasi LMS **disimpan** pada tabel `lms_notifikasi` (in-app inbox), bukan dihitung on-the-fly seperti donor — supaya status baca konsisten antar perangkat. `core_users` **tidak** punya kolom notifikasi (sudah diverifikasi), jadi tidak ada duplikasi dengan mekanisme global. |
@@ -105,7 +105,7 @@ Ini poin **paling penting** sebelum porting: ketiga area berikut di donor **tida
 
 | Aspek | `Project/lms` (donor) | RAG (target) | Dampak Porting |
 |---|---|---|---|
-| **Master data** | Milik sendiri (`lms_users`, `lms_kelas`, `lms_kelas_mahasiswa`, `lms_kelas_dosen`) + sync dari SIAKAD REST via SSE (`SiakadSyncService`, `SyncController`, `siakad:sync` cmd) + pruning KRS | SIAKAD native di DB yang sama (`siakad_kelas`, `siakad_dosen_pengampu`, `siakad_krs_detail`) | ⛔ **Jangan port.** Justru perlu *cleanup*: donor menyimpan user/role sendiri — RAG memakai `core_users` + `core_roles` |
+| **Master data** | Milik sendiri (`lms_users`, `lms_kelas`, `lms_kelas_mahasiswa`, `lms_kelas_dosen`) + sync dari SIAKAD REST via SSE (`SiakadSyncService`, `SyncController`, `siakad:sync` cmd) + pruning KRS | SIAKAD native di DB yang sama (`siakad_jadwal_kelas`, `siakad_dosen_pengampu`, `siakad_krs_detail`) | ⛔ **Jangan port.** Justru perlu *cleanup*: donor menyimpan user/role sendiri — RAG memakai `core_users` + `core_roles` |
 | **Autentikasi** | Sanctum + `AuthController` (login NIM/NIDN, admin-login terpisah, Google OAuth via Socialite) | Passport + SSO IAM (`SsoController`, `core_users`, `core_roles`, `core_permissions`, `Gate::before`) + 2FA | ⛔ **Jangan port.** Donor's `lms_users` + `role` string = anti-pattern RBAC di RAG |
 | **Storage** | S3/MinIO sendiri + `StorageProxyController` (Range 206 manual, 8KB chunk) | R2 + `FileStorageService` (signed URL, disk privat/publik terpisah, `GET /api/files/view`) | ⛔ Jangan buat proxy baru. ⚠️ Verifikasi Range di `FileStreamController` |
 | **OBE** | REST read (`get_cpmk.php`, `get_sesi.php` + `X-Api-Key`) + tulis **langsung ke DB OBE** (`mengajar/makul/rps/sesi/cpmk/dosen/mhs/nilai_cpmk_detail`) | Native `siakad_obe_*` + `ObeController` + `syncNilaiKeOBE()` | 🟡 **Partial port**: yang perlu di-port adalah *Two-way sync Pertemuan↔RPS Mingguan*, bukan mechanism-nya |
@@ -245,7 +245,7 @@ Detail endpoint aktif ada di [`docs/api/LMS/LmsPresensiController.md`](api/LMS/L
 ```
 Tabel: lms_notifikasi  (in-app inbox)  — migrasi 2026_10_22_000003_create_lms_notifikasi_table.php
   id, user_id (core_users), jenis (deadline_tugas|deadline_quiz|tugas_baru|quiz_baru|forum|info),
-  judul, pesan, rute (route FE), kelas_id (siakad_kelas), entitas_type, entitas_id,
+  judul, pesan, rute (route FE), kelas_id (siakad_jadwal_kelas), entitas_type, entitas_id,
   prioritas (rendah|normal|tinggi), is_read, read_at, dedup_key, timestamps
   index(user_id, is_read), index(user_id, created_at), unique(user_id, dedup_key)
 ```

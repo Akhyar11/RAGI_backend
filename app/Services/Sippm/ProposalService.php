@@ -192,8 +192,8 @@ class ProposalService
         if (DB::getSchemaBuilder()->hasTable('siakad_krs') && DB::getSchemaBuilder()->hasTable('siakad_krs_detail') && DB::getSchemaBuilder()->hasTable('siakad_mata_kuliah')) {
             $courses = DB::table('siakad_krs_detail')
                 ->join('siakad_krs', 'siakad_krs_detail.krs_id', '=', 'siakad_krs.id')
-                ->join('siakad_kelas', 'siakad_krs_detail.kelas_id', '=', 'siakad_kelas.id')
-                ->join('siakad_mata_kuliah', 'siakad_kelas.mata_kuliah_id', '=', 'siakad_mata_kuliah.id')
+                ->join('siakad_jadwal_kelas', 'siakad_krs_detail.kelas_id', '=', 'siakad_jadwal_kelas.id')
+                ->join('siakad_mata_kuliah', 'siakad_jadwal_kelas.mata_kuliah_id', '=', 'siakad_mata_kuliah.id')
                 ->where('siakad_krs.mahasiswa_id', $mahasiswaId)
                 ->where('siakad_krs_detail.status', 'aktif')
                 ->select(
@@ -201,7 +201,7 @@ class ProposalService
                     'siakad_mata_kuliah.kode_mk',
                     'siakad_mata_kuliah.nama as nama_mk',
                     'siakad_mata_kuliah.total_sks',
-                    'siakad_kelas.nama_kelas'
+                    'siakad_jadwal_kelas.nama_kelas'
                 )
                 ->get();
 

@@ -2338,7 +2338,7 @@ class LmsService
                 'krsDetails as mahasiswa_count',
             ]);
 
-        // Query ini berakar di tabel siakad_kelas, jadi kolomnya primary key 'id'.
+        // Query ini berakar di tabel siakad_jadwal_kelas, jadi kolomnya primary key 'id'.
         $this->applyKelasScope($query, $userId, 'id');
 
         $effectiveTahunAkademikId = $tahunAkademikId ?? TahunAkademik::where('is_active', true)->value('id');

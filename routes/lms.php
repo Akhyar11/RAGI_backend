@@ -14,7 +14,7 @@ use App\Http\Controllers\API\Siakad\QuizController;
 | Prefix: /api/v1/lms (didaftarkan di bootstrap/app.php)
 |
 | Modul LMS dipisah dari SIAKAD agar menu tidak menumpuk. Tabel lms_*
-| tetap berelasi ke siakad_kelas / siakad_pertemuan / KRS / OBE.
+| tetap berelasi ke siakad_jadwal_kelas / siakad_pertemuan / KRS / OBE.
 | Otorisasi memakai Gate siakad.kelas.* & siakad.nilai.manage agar role
 | dosen/mahasiswa existing tidak putus akses. Pengecualian: Forum Diskusi memakai
 | permission miliknya sendiri (lms.forum.*) karena aksi baca dan aksi tulisnya

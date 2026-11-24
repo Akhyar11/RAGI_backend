@@ -977,7 +977,7 @@ class LmsController extends Controller
         Gate::authorize('siakad.kelas.manage');
 
         $validated = $request->validate([
-            'sumber_kelas_id' => 'required|integer|exists:siakad_kelas,id',
+            'sumber_kelas_id' => 'required|integer|exists:siakad_jadwal_kelas,id',
             'copy_materi'     => 'sometimes|boolean',
             'copy_deskripsi'  => 'sometimes|boolean',
         ]);
@@ -1080,7 +1080,7 @@ class LmsController extends Controller
         $data = $this->lmsExportService->rekapNilaiKelas($kelasId);
         $format = $request->exportFormat();
 
-        $this->catatExport($request, 'siakad_kelas', $kelasId, 'rekap_nilai', $format, count($data['rows']));
+        $this->catatExport($request, 'siakad_jadwal_kelas', $kelasId, 'rekap_nilai', $format, count($data['rows']));
 
         return $this->lmsExportService->download($data['filename'], $data['headers'], $data['rows'], $format);
     }
@@ -1098,7 +1098,7 @@ class LmsController extends Controller
         $data = $this->lmsExportService->rekapPresensiKelas($kelasId);
         $format = $request->exportFormat();
 
-        $this->catatExport($request, 'siakad_kelas', $kelasId, 'rekap_absensi', $format, count($data['rows']));
+        $this->catatExport($request, 'siakad_jadwal_kelas', $kelasId, 'rekap_absensi', $format, count($data['rows']));
 
         return $this->lmsExportService->download($data['filename'], $data['headers'], $data['rows'], $format);
     }
@@ -1116,7 +1116,7 @@ class LmsController extends Controller
         $data = $this->lmsExportService->rekapIzinKelas($kelasId);
         $format = $request->exportFormat();
 
-        $this->catatExport($request, 'siakad_kelas', $kelasId, 'rekap_izin_absensi', $format, count($data['rows']));
+        $this->catatExport($request, 'siakad_jadwal_kelas', $kelasId, 'rekap_izin_absensi', $format, count($data['rows']));
 
         return $this->lmsExportService->download($data['filename'], $data['headers'], $data['rows'], $format);
     }

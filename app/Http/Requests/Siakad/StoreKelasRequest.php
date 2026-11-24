@@ -34,7 +34,7 @@ class StoreKelasRequest extends FormRequest
             'is_gabungan' => 'nullable|boolean',
             'gabungan_program_studi_ids' => 'nullable|array',
             'gabungan_program_studi_ids.*' => 'exists:siakad_program_studi,id',
-            'parent_kelas_id' => 'nullable|exists:siakad_kelas,id',
+            'parent_kelas_id' => 'nullable|exists:siakad_jadwal_kelas,id',
             'tipe_sesi' => ['nullable', Rule::in(Kelas::TIPE_SESI)],
             'rombel_ids' => 'nullable|array',
             'rombel_ids.*' => 'exists:siakad_master_kelas,id',

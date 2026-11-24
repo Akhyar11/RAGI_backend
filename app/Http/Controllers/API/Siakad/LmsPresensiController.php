@@ -207,7 +207,7 @@ class LmsPresensiController extends Controller
             AuditLogService::record(
                 module: 'LMS',
                 action: 'export_keaktifan_dosen',
-                tableName: 'siakad_kelas',
+                tableName: 'siakad_jadwal_kelas',
                 recordId: null,
                 newValues: ['format' => $format, 'total_baris' => count($payload['rows'])],
                 request: $request

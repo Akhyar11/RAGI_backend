@@ -14,7 +14,7 @@ class StoreQuizRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'kelas_id' => 'nullable|integer|exists:siakad_kelas,id',
+            'kelas_id' => 'nullable|integer|exists:siakad_jadwal_kelas,id',
             'komponen_penilaian_id' => 'nullable|exists:siakad_komponen_penilaian,id',
             'judul' => 'required|string|max:255',
             'deskripsi' => 'nullable|string',

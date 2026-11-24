@@ -438,7 +438,7 @@ class SiakadMasterReferensiFlowTest extends TestCase
         ]);
 
         $response->assertStatus(201);
-        $this->assertDatabaseHas('siakad_kelas', [
+        $this->assertDatabaseHas('siakad_jadwal_kelas', [
             'kode_kelas' => 'IF2101-A',
             'hari' => $hari,
         ]);

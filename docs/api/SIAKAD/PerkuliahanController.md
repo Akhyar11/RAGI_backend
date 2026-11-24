@@ -107,7 +107,7 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
     "nama_kelas": "TI-1A",
     "kapasitas": 40,
     "tipe_sesi": "gabungan | teori | praktik",
-    "parent_kelas_id": "integer, nullable, exists:siakad_kelas,id — wajib untuk tipe praktik (1 level, satu periode dengan induk; MK boleh beda)",
+    "parent_kelas_id": "integer, nullable, exists:siakad_jadwal_kelas,id — wajib untuk tipe praktik (1 level, satu periode dengan induk; MK boleh beda)",
     "rombel_ids": "array, nullable — ID siakad_master_kelas peserta (cth. 24A/24B); praktik cukup 1 rombel, teori gabungan bisa banyak"
 }
 ```

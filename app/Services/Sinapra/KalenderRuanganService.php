@@ -131,7 +131,7 @@ class KalenderRuanganService
      */
     private function getSiakadPerkuliahanEvents(Carbon $startDate, Carbon $endDate, ?int $ruanganId, ?int $gedungId, ?\App\Models\User $user = null): array
     {
-        if (!Schema::hasTable('siakad_kelas')) {
+        if (!Schema::hasTable('siakad_jadwal_kelas')) {
             return [];
         }
 
@@ -140,26 +140,26 @@ class KalenderRuanganService
             ? 'siakad_program_studi'
             : (Schema::hasTable('spmb_master_program_studi') ? 'spmb_master_program_studi' : null);
 
-        $kelasQuery = DB::table('siakad_kelas')
-            ->leftJoin('sinapra_ruangan', 'siakad_kelas.ruangan_id', '=', 'sinapra_ruangan.id')
+        $kelasQuery = DB::table('siakad_jadwal_kelas')
+            ->leftJoin('sinapra_ruangan', 'siakad_jadwal_kelas.ruangan_id', '=', 'sinapra_ruangan.id')
             ->leftJoin('sinapra_gedung', 'sinapra_ruangan.gedung_id', '=', 'sinapra_gedung.id');
 
         if ($hasMataKuliah) {
-            $kelasQuery->leftJoin('siakad_mata_kuliah', 'siakad_kelas.mata_kuliah_id', '=', 'siakad_mata_kuliah.id');
+            $kelasQuery->leftJoin('siakad_mata_kuliah', 'siakad_jadwal_kelas.mata_kuliah_id', '=', 'siakad_mata_kuliah.id');
         }
 
         if ($prodiTable) {
-            $kelasQuery->leftJoin($prodiTable, 'siakad_kelas.program_studi_id', '=', "{$prodiTable}.id");
+            $kelasQuery->leftJoin($prodiTable, 'siakad_jadwal_kelas.program_studi_id', '=', "{$prodiTable}.id");
         }
 
         $selects = [
-            'siakad_kelas.id',
-            'siakad_kelas.nama_kelas',
-            'siakad_kelas.kode_kelas',
-            'siakad_kelas.ruangan_id',
-            'siakad_kelas.hari',
-            'siakad_kelas.jam_mulai',
-            'siakad_kelas.jam_selesai',
+            'siakad_jadwal_kelas.id',
+            'siakad_jadwal_kelas.nama_kelas',
+            'siakad_jadwal_kelas.kode_kelas',
+            'siakad_jadwal_kelas.ruangan_id',
+            'siakad_jadwal_kelas.hari',
+            'siakad_jadwal_kelas.jam_mulai',
+            'siakad_jadwal_kelas.jam_selesai',
             'sinapra_ruangan.nama as ruangan_nama',
             'sinapra_gedung.nama as gedung_nama',
             'sinapra_gedung.id as gedung_id',
@@ -169,17 +169,17 @@ class KalenderRuanganService
         $selects[] = $prodiTable ? "{$prodiTable}.nama as prodi_nama" : DB::raw('NULL as prodi_nama');
 
         $kelasQuery->select($selects)
-            ->whereNull('siakad_kelas.deleted_at')
-            ->whereNotNull('siakad_kelas.ruangan_id')
-            ->whereNotNull('siakad_kelas.hari');
+            ->whereNull('siakad_jadwal_kelas.deleted_at')
+            ->whereNotNull('siakad_jadwal_kelas.ruangan_id')
+            ->whereNotNull('siakad_jadwal_kelas.hari');
 
         if ($user && $user->isSinapraLaboranRestricted()) {
             $accessibleRuanganIds = $user->getSinapraAccessibleRuanganIds();
-            $kelasQuery->whereIn('siakad_kelas.ruangan_id', $accessibleRuanganIds);
+            $kelasQuery->whereIn('siakad_jadwal_kelas.ruangan_id', $accessibleRuanganIds);
         }
 
         if ($ruanganId) {
-            $kelasQuery->where('siakad_kelas.ruangan_id', $ruanganId);
+            $kelasQuery->where('siakad_jadwal_kelas.ruangan_id', $ruanganId);
         }
 
         if ($gedungId) {

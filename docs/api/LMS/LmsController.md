@@ -540,7 +540,7 @@ perlu menangani kasus `null`.
 
 | Parameter | Type | Wajib | Deskripsi |
 |---|---|---|---|
-| `kelasId` | integer | ✅ | ID kelas pada `siakad_kelas` |
+| `kelasId` | integer | ✅ | ID kelas pada `siakad_jadwal_kelas` |
 
 #### Response Sukses (200 OK)
 
@@ -1229,7 +1229,7 @@ tanpa duplikat fisik). Wajib permission `siakad.kelas.manage`; tercatat pada `au
 
 | Field | Type | Wajib | Validasi |
 |---|---|---|---|
-| `sumber_kelas_id` | integer | ✅ | `exists:siakad_kelas,id` |
+| `sumber_kelas_id` | integer | ✅ | `exists:siakad_jadwal_kelas,id` |
 | `copy_materi` | boolean | ❌ | default `true` |
 | `copy_deskripsi` | boolean | ❌ | default `true` |
 

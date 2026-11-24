@@ -908,7 +908,7 @@ class PerkuliahanController extends Controller
     public function addClassToKrs(Request $request)
     {
         $request->validate([
-            'kelas_id' => 'required|exists:siakad_kelas,id',
+            'kelas_id' => 'required|exists:siakad_jadwal_kelas,id',
             'mahasiswa_id' => 'nullable|exists:siakad_mahasiswa,id',
             'tahun_akademik_id' => 'nullable|exists:siakad_tahun_akademik,id',
         ]);

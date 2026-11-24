@@ -12,7 +12,7 @@ class Kelas extends Model
 {
     use SoftDeletes;
 
-    protected $table = 'siakad_kelas';
+    protected $table = 'siakad_jadwal_kelas';
 
     protected $fillable = [
         'mata_kuliah_id',

@@ -38,7 +38,7 @@ class LmsPresensiService
                     ->whereIn('siakad_absensi_mahasiswa.pertemuan_id', function ($sub) {
                         $sub->select('id')
                             ->from('siakad_pertemuan')
-                            ->whereColumn('siakad_pertemuan.kelas_id', 'siakad_kelas.id');
+                            ->whereColumn('siakad_pertemuan.kelas_id', 'siakad_jadwal_kelas.id');
                     }),
                 'jumlah_hadir' => AbsensiMahasiswa::query()
                     ->selectRaw('COUNT(*)')
@@ -47,7 +47,7 @@ class LmsPresensiService
                     ->whereIn('siakad_absensi_mahasiswa.pertemuan_id', function ($sub) {
                         $sub->select('id')
                             ->from('siakad_pertemuan')
-                            ->whereColumn('siakad_pertemuan.kelas_id', 'siakad_kelas.id');
+                            ->whereColumn('siakad_pertemuan.kelas_id', 'siakad_jadwal_kelas.id');
                     }),
             ]);
 
@@ -126,7 +126,7 @@ class LmsPresensiService
         ];
 
         $rows = [];
-        $query->orderBy('siakad_kelas.kode_kelas')
+        $query->orderBy('siakad_jadwal_kelas.kode_kelas')
             ->orderBy('siakad_pertemuan.pertemuan_ke')
             ->orderBy('siakad_mahasiswa.nim')
             ->chunk(500, function ($chunk) use (&$rows, $headers) {
@@ -161,8 +161,8 @@ class LmsPresensiService
         return AbsensiMahasiswa::query()
             ->from('siakad_absensi_mahasiswa')
             ->join('siakad_pertemuan', 'siakad_pertemuan.id', '=', 'siakad_absensi_mahasiswa.pertemuan_id')
-            ->join('siakad_kelas', 'siakad_kelas.id', '=', 'siakad_pertemuan.kelas_id')
-            ->leftJoin('siakad_mata_kuliah', 'siakad_mata_kuliah.id', '=', 'siakad_kelas.mata_kuliah_id')
+            ->join('siakad_jadwal_kelas', 'siakad_jadwal_kelas.id', '=', 'siakad_pertemuan.kelas_id')
+            ->leftJoin('siakad_mata_kuliah', 'siakad_mata_kuliah.id', '=', 'siakad_jadwal_kelas.mata_kuliah_id')
             ->join('siakad_mahasiswa', 'siakad_mahasiswa.id', '=', 'siakad_absensi_mahasiswa.mahasiswa_id')
             ->whereNull('siakad_mahasiswa.deleted_at')
             ->where('siakad_absensi_mahasiswa.is_submitted', true)
@@ -175,8 +175,8 @@ class LmsPresensiService
                 'siakad_pertemuan.tanggal',
                 'siakad_pertemuan.materi',
                 'siakad_pertemuan.kelas_id',
-                'siakad_kelas.kode_kelas',
-                'siakad_kelas.nama_kelas',
+                'siakad_jadwal_kelas.kode_kelas',
+                'siakad_jadwal_kelas.nama_kelas',
                 'siakad_mata_kuliah.nama as nama_mk',
                 'siakad_mahasiswa.nim',
                 'siakad_mahasiswa.nama_lengkap',
@@ -193,7 +193,7 @@ class LmsPresensiService
             : (empty($filters['kelas_id']) ? \App\Models\Siakad\TahunAkademik::where('is_active', true)->value('id') : null);
 
         if ($tahunAkademikId) {
-            $query->where('siakad_kelas.tahun_akademik_id', (int) $tahunAkademikId);
+            $query->where('siakad_jadwal_kelas.tahun_akademik_id', (int) $tahunAkademikId);
         }
 
         if (! empty($filters['kelas_id'])) {

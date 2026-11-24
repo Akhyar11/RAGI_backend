@@ -519,7 +519,7 @@ class QuizController extends Controller
             'kelas' => 'nullable|string|max:20|regex:/^[0-9]{2}[A-Za-z0-9\-]{1,10}$/',
             'program_studi_id' => 'nullable|integer|exists:siakad_program_studi,id',
             'angkatan' => 'nullable|integer|min:2000|max:2100',
-            'kelas_perkuliahan_id' => 'nullable|integer|exists:siakad_kelas,id',
+            'kelas_perkuliahan_id' => 'nullable|integer|exists:siakad_jadwal_kelas,id',
         ]);
 
         $result = $this->quizService->addTryoutPesertaByKelas(

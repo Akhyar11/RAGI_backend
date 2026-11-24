@@ -223,7 +223,7 @@ tryout berkode hanya bisa dimulai bila mahasiswa mengirim kode yang cocok.
 | Field | Tipe | Required | Validasi |
 |---|---|---|---|
 | `judul` | string | ✅ | `max:255` |
-| `kelas_id` | integer \| null | ❌ | `nullable`, `exists:siakad_kelas,id` (pada `POST /api/v1/lms/tryout`) |
+| `kelas_id` | integer \| null | ❌ | `nullable`, `exists:siakad_jadwal_kelas,id` (pada `POST /api/v1/lms/tryout`) |
 | `deskripsi` | string | ❌ | — |
 | `durasi_menit` | integer | ❌ | `min:1`, `max:1440` |
 | `max_attempt` | integer | ❌ | `min:1`, `max:10` |
@@ -1359,7 +1359,7 @@ Tambah batch peserta tryout berdasarkan kombinasi **kelas rombel** (`siakad_maha
 | `kelas` | string \| null | ❌* | `max:10`, `regex:/^[0-9]{2}[A-Z]{1,3}$/` (dinormalisasi uppercase + trim) |
 | `program_studi_id` | integer \| null | ❌* | `exists:siakad_program_studi,id` |
 | `angkatan` | integer \| null | ❌* | `min:2000`, `max:2100` |
-| `kelas_perkuliahan_id` | integer \| null | ❌* | `exists:siakad_kelas,id` (mengambil mahasiswa yang memiliki status KRS valid dan detail KRS aktif pada kelas tersebut) |
+| `kelas_perkuliahan_id` | integer \| null | ❌* | `exists:siakad_jadwal_kelas,id` (mengambil mahasiswa yang memiliki status KRS valid dan detail KRS aktif pada kelas tersebut) |
 
 *\*Minimal salah satu dari keempat filter di atas wajib diisi.*
 

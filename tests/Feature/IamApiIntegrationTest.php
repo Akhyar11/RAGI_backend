@@ -248,6 +248,7 @@ class IamApiIntegrationTest extends TestCase
 
         $this->assertSame(1, IamApiIntegration::where('key', 'siakad_kelas')->count());
         $this->assertSame('GetListKelasKuliah', $integration->source_schemas['pddikti']['action']);
+        $this->assertSame('GetDosenPengajarKelasKuliah', $integration->source_schemas['pddikti']['assignment_action']);
         $this->assertSame('GetCountKelasKuliahWs', $integration->source_schemas['pddikti']['count_action']);
         $this->assertSame('kelas', $integration->source_schemas['pddikti']['target_entity']);
         $this->assertTrue($integration->source_schemas['pddikti']['connection_managed']);
@@ -305,7 +306,7 @@ class IamApiIntegrationTest extends TestCase
             ->assertJsonPath('data.response_sample.action', 'GetListKelasKuliah')
             ->assertJsonPath('data.response_sample.read_only', true);
         $this->assertSame(0, DB::table('siakad_master_kelas')->count());
-        $this->assertSame(0, DB::table('siakad_kelas')->count());
+        $this->assertSame(0, DB::table('siakad_jadwal_kelas')->count());
         $this->assertSame('failed', $integration->fresh()->last_status);
     }
 
@@ -329,6 +330,7 @@ class IamApiIntegrationTest extends TestCase
                 return match ($payload['act'] ?? null) {
                     'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
                     'GetListKelasKuliah' => Http::response(['error_code' => 0, 'data' => array_fill(0, (int) $payload['offset'] === 0 ? 500 : 1, $sourceRow)], 200),
+                    'GetDosenPengajarKelasKuliah' => Http::response(['error_code' => 0, 'data' => []], 200),
                     default => Http::response(['error_code' => 1, 'error_desc' => 'Unexpected action'], 400),
                 };
             },
@@ -415,11 +417,13 @@ class IamApiIntegrationTest extends TestCase
         SystemSetting::set('feeder_username', 'kampus-test');
         SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
         Http::fake([
-            'https://feeder.example.test/ws/live2.php' => function (Request $request) use ($validRow, $invalidRow, &$firstBatchPersistedBeforeNextRequest) {
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) use ($validRow, $invalidRow, $programId, &$firstBatchPersistedBeforeNextRequest) {
                 $payload = json_decode($request->body(), true);
                 if (($payload['act'] ?? null) === 'GetListKelasKuliah' && (int) ($payload['offset'] ?? -1) === 500) {
-                    $firstBatchPersistedBeforeNextRequest = DB::table('siakad_kelas')
-                        ->where('id_feeder', 'class-first-batch-uuid')
+                    $firstBatchPersistedBeforeNextRequest = DB::table('siakad_master_kelas')
+                        ->where('program_studi_id', $programId)
+                        ->where('nama_kelas', '26A')
+                        ->where('tahun_angkatan', 2026)
                         ->exists();
                     return Http::response(['error_code' => 0, 'data' => [$invalidRow]], 200);
                 }
@@ -427,6 +431,7 @@ class IamApiIntegrationTest extends TestCase
                 return match ($payload['act'] ?? null) {
                     'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
                     'GetListKelasKuliah' => Http::response(['error_code' => 0, 'data' => array_merge([$validRow], array_fill(0, 499, $invalidRow))], 200),
+                    'GetDosenPengajarKelasKuliah' => Http::response(['error_code' => 0, 'data' => []], 200),
                     default => Http::response(['error_code' => 1, 'error_desc' => 'Unexpected action'], 400),
                 };
             },
@@ -439,11 +444,7 @@ class IamApiIntegrationTest extends TestCase
         $this->assertTrue($firstBatchPersistedBeforeNextRequest);
         $this->assertSame(501, $result['processed']);
         $this->assertSame(1, $result['created']);
-        $this->assertDatabaseHas('siakad_kelas', [
-            'id_feeder' => 'class-first-batch-uuid',
-            'mata_kuliah_id' => $courseId,
-            'tahun_akademik_id' => $semesterId,
-        ]);
+        $this->assertSame(0, DB::table('siakad_jadwal_kelas')->count(), 'siakad_jadwal_kelas adalah tabel penjadwalan dan tidak boleh diisi sync.');
     }
 
     public function test_pddikti_kelas_job_marks_upstream_failure_and_releases_lock(): void
@@ -459,7 +460,8 @@ class IamApiIntegrationTest extends TestCase
                 $payload = json_decode($request->body(), true);
                 return match ($payload['act'] ?? null) {
                     'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
-                    'GetListKelasKuliah' => Http::response(['error_code' => 1, 'error_desc' => 'Feeder unavailable'], 500),
+                    'GetListKelasKuliah' => Http::response(['error_code' => 0, 'data' => []], 200),
+                    'GetDosenPengajarKelasKuliah' => Http::response(['error_code' => 1, 'error_desc' => 'Assignment unavailable'], 500),
                     default => Http::response(['error_code' => 1], 500),
                 };
             },
@@ -555,6 +557,9 @@ class IamApiIntegrationTest extends TestCase
             ['id_kelas_kuliah' => 'class-feeder-uuid-1', 'id_prodi' => 'prodi-class-uuid', 'id_semester' => '20261', 'id_matkul' => 'course-class-uuid-1', 'nama_kelas_kuliah' => '26A', 'sks' => 2, 'jumlah_mahasiswa' => 0],
             ['id_kelas_kuliah' => 'class-feeder-uuid-2', 'id_prodi' => 'prodi-class-uuid', 'id_semester' => '20261', 'id_matkul' => 'course-class-uuid-2', 'nama_kelas_kuliah' => '26A', 'sks' => 2, 'jumlah_mahasiswa' => 0],
             ['id_kelas_kuliah' => 'class-feeder-uuid-3', 'id_prodi' => 'prodi-class-uuid', 'id_semester' => '20262', 'id_matkul' => 'course-class-uuid-1', 'nama_kelas_kuliah' => '26A', 'sks' => 2, 'jumlah_mahasiswa' => 0],
+            // Label non-format rombel diterima; angkatan null dan tetap unik per prodi (b/B dinormalisasi).
+            ['id_kelas_kuliah' => 'class-feeder-uuid-4', 'id_prodi' => 'prodi-class-uuid', 'id_semester' => '20261', 'id_matkul' => 'course-class-uuid-1', 'nama_kelas_kuliah' => ' b ', 'sks' => 2, 'jumlah_mahasiswa' => 0],
+            ['id_kelas_kuliah' => 'class-feeder-uuid-5', 'id_prodi' => 'prodi-class-uuid', 'id_semester' => '20261', 'id_matkul' => 'course-class-uuid-2', 'nama_kelas_kuliah' => 'B', 'sks' => 2, 'jumlah_mahasiswa' => 0],
         ];
         SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
         SystemSetting::set('feeder_username', 'kampus-test');
@@ -565,6 +570,7 @@ class IamApiIntegrationTest extends TestCase
                 return match ($payload['act'] ?? null) {
                     'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
                     'GetListKelasKuliah' => Http::response(['error_code' => 0, 'data' => $rows], 200),
+                    'GetDosenPengajarKelasKuliah' => Http::response(['error_code' => 0, 'data' => []], 200),
                     default => Http::response(['error_code' => 1, 'error_desc' => 'Unexpected action'], 400),
                 };
             },
@@ -574,13 +580,14 @@ class IamApiIntegrationTest extends TestCase
         Cache::put('siakad-kelas-pddikti-sync:test-progress', ['status' => 'running'], now()->addHour());
         $first = $service->process($integration, 'test-progress');
 
-        $this->assertSame(3, $first['source_total']);
-        $this->assertSame(3, $first['created']);
+        $this->assertSame(5, $first['source_total']);
+        $this->assertSame(2, $first['created']);
+        $this->assertSame(3, $first['updated']);
         $this->assertSame(0, $first['skipped']);
         $this->assertSame(1, DB::table('siakad_master_kelas')->where('program_studi_id', $programId)->where('nama_kelas', '26A')->where('tahun_angkatan', 2026)->count());
         $this->assertDatabaseHas('siakad_master_kelas', ['program_studi_id' => $programId, 'nama_kelas' => '26A', 'tahun_angkatan' => 2026, 'dosen_pa_id' => null]);
-        $this->assertSame(3, DB::table('siakad_kelas')->whereIn('id_feeder', ['class-feeder-uuid-1', 'class-feeder-uuid-2', 'class-feeder-uuid-3'])->count());
-        $this->assertDatabaseHas('siakad_kelas', ['mata_kuliah_id' => $courseOneId, 'tahun_akademik_id' => $semesterGenapId, 'program_studi_id' => $programId, 'kode_kelas' => '26A', 'id_feeder' => 'class-feeder-uuid-3', 'status' => 'draft']);
+        $this->assertSame(1, DB::table('siakad_master_kelas')->where('program_studi_id', $programId)->where('nama_kelas', 'B')->whereNull('tahun_angkatan')->count());
+        $this->assertSame(0, DB::table('siakad_jadwal_kelas')->count());
         $this->assertSame(0, DB::table('siakad_mahasiswa')->count());
         $this->assertSame(0, DB::table('siakad_kelas_rombel')->count());
         Http::assertSent(fn (Request $request): bool => (json_decode($request->body(), true)['act'] ?? null) === 'GetListKelasKuliah'
@@ -590,9 +597,230 @@ class IamApiIntegrationTest extends TestCase
         Cache::put('siakad-kelas-pddikti-sync:test-progress-2', ['status' => 'running'], now()->addHour());
         $second = $service->process($integration, 'test-progress-2');
         $this->assertSame(0, $second['created']);
-        $this->assertSame(3, $second['updated']);
+        $this->assertSame(5, $second['updated']);
         $this->assertSame(1, DB::table('siakad_master_kelas')->where('program_studi_id', $programId)->where('nama_kelas', '26A')->where('tahun_angkatan', 2026)->count());
-        $this->assertSame(3, DB::table('siakad_kelas')->whereIn('id_feeder', ['class-feeder-uuid-1', 'class-feeder-uuid-2', 'class-feeder-uuid-3'])->count());
+        $this->assertSame(0, DB::table('siakad_jadwal_kelas')->count());
+    }
+
+    public function test_pddikti_class_teaching_assignments_fill_distribution_without_inventing_coordinator(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_kelas')->firstOrFail();
+        $programId = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => 'FAR-DIST',
+            'nama' => 'D3 Farmasi Distribusi',
+            'jenjang' => 'D3',
+            'id_feeder' => 'prodi-dist-uuid',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $semesterId = DB::table('siakad_tahun_akademik')->insertGetId([
+            'kode' => '20261',
+            'nama' => '2026/2027 Ganjil',
+            'tahun_mulai' => 2026,
+            'tahun_selesai' => 2027,
+            'id_feeder' => '20261',
+            'is_active' => true,
+            'mode_penilaian' => 'persentase',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $curriculumId = DB::table('siakad_kurikulum')->insertGetId([
+            'program_studi_id' => $programId,
+            'kode' => 'FAR-DIST-2026',
+            'nama' => 'Kurikulum Farmasi Distribusi',
+            'tahun_berlaku' => 2026,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $courseId = DB::table('siakad_mata_kuliah')->insertGetId([
+            'kurikulum_id' => $curriculumId,
+            'kode_mk' => 'FARDIST1',
+            'nama' => 'Anatomi Distribusi',
+            'id_feeder' => 'course-dist-uuid',
+            'sks_teori' => 2,
+            'sks_praktik' => 0,
+            'total_sks' => 2,
+            'semester_anjuran' => 1,
+            'tipe' => 'wajib',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $lecturerId = DB::table('siakad_dosen')->insertGetId([
+            'nidn' => '0012345678',
+            'nama_lengkap' => 'Dosen Distribusi',
+            'id_feeder' => 'lecturer-dist-uuid',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $assignmentId = DB::table('siakad_dosen_penugasan')->insertGetId([
+            'dosen_id' => $lecturerId,
+            'program_studi_id' => $programId,
+            'tahun_akademik_id' => $semesterId,
+            'id_feeder' => 'registration-dist-uuid',
+            'is_homebase' => true,
+            'sync_status' => 'synced',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $masterClassId = DB::table('siakad_master_kelas')->insertGetId([
+            'program_studi_id' => $programId,
+            'nama_kelas' => '26A',
+            'tahun_angkatan' => 2026,
+            'dosen_pa_id' => null,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $classRow = [
+            'id_kelas_kuliah' => 'class-dist-uuid',
+            'id_prodi' => 'prodi-dist-uuid',
+            'id_semester' => '20261',
+            'id_matkul' => 'course-dist-uuid',
+            'nama_kelas_kuliah' => '26A',
+        ];
+        $teacherRow = [
+            'id_aktivitas_mengajar' => 'teaching-dist-uuid',
+            'id_kelas_kuliah' => 'class-dist-uuid',
+            'nama_kelas_kuliah' => '26A',
+            'id_dosen' => 'lecturer-dist-uuid',
+            'id_registrasi_dosen' => 'registration-dist-uuid',
+            'nidn' => '0012345678',
+            'nama_dosen' => 'Dosen Distribusi',
+            'sks_substansi_total' => 2,
+        ];
+        Http::fake([
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) use ($classRow, $teacherRow) {
+                $payload = json_decode($request->body(), true);
+                return match ($payload['act'] ?? null) {
+                    'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
+                    'GetListKelasKuliah' => Http::response(['error_code' => 0, 'data' => [$classRow]], 200),
+                    'GetDosenPengajarKelasKuliah' => Http::response(['error_code' => 0, 'data' => [$teacherRow]], 200),
+                    default => Http::response(['error_code' => 1, 'error_desc' => 'Unexpected action'], 400),
+                };
+            },
+        ]);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Cache::put('siakad-kelas-pddikti-sync:distribution', ['status' => 'running'], now()->addHour());
+
+        $result = app(\App\Services\IAM\KelasPddiktiIntegrationSyncService::class)
+            ->process($integration, 'distribution');
+
+        $this->assertSame(1, $result['distributions_created']);
+        $this->assertSame(1, $result['assignments_synced']);
+        $this->assertSame(0, $result['assignment_skipped']);
+        $distribution = DB::table('siakad_distribusi_mengajar')->where('mata_kuliah_id', $courseId)->first();
+        $this->assertNotNull($distribution);
+        $this->assertNull($distribution->dosen_koordinator_id);
+        $this->assertSame([$lecturerId], json_decode($distribution->dosen_anggota_ids, true));
+        $this->assertSame([$masterClassId], json_decode($distribution->kelas_ids, true));
+        $details = json_decode($distribution->dosen_anggota_details, true);
+        $this->assertSame($lecturerId, $details[0]['dosen_id']);
+        $this->assertSame(2.0, (float) $details[0]['sks']);
+        $this->assertSame('pddikti', $details[0]['source']);
+        $this->assertSame($assignmentId, DB::table('siakad_dosen_penugasan')->where('id_feeder', 'registration-dist-uuid')->value('id'));
+
+        $secondProgress = 'distribution-repeat';
+        $manualLecturerId = DB::table('siakad_dosen')->insertGetId([
+            'nidn' => '0098765432', 'nama_lengkap' => 'Dosen Manual', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $existingDetails = $details;
+        $existingDetails[] = [
+            'dosen_id' => $manualLecturerId,
+            'dosen_nama' => 'Dosen Manual',
+            'sks' => 1,
+            'kelas_ids' => [$masterClassId],
+            'source' => 'manual',
+        ];
+        DB::table('siakad_distribusi_mengajar')->where('id', $distribution->id)->update([
+            'dosen_koordinator_id' => $lecturerId,
+            'dosen_anggota_ids' => json_encode([$lecturerId, $manualLecturerId]),
+            'dosen_anggota_details' => json_encode($existingDetails),
+            'updated_at' => now(),
+        ]);
+        Cache::put('siakad-kelas-pddikti-sync:' . $secondProgress, ['status' => 'running'], now()->addHour());
+        $repeat = app(\App\Services\IAM\KelasPddiktiIntegrationSyncService::class)->process($integration, $secondProgress);
+        $this->assertSame(1, $repeat['distributions_updated']);
+        $this->assertSame(1, $repeat['assignments_synced']);
+        $this->assertSame(1, DB::table('siakad_distribusi_mengajar')->where('mata_kuliah_id', $courseId)->count());
+        $updatedDistribution = DB::table('siakad_distribusi_mengajar')->where('mata_kuliah_id', $courseId)->first();
+        $this->assertSame($lecturerId, $updatedDistribution->dosen_koordinator_id);
+        $this->assertEqualsCanonicalizing([$lecturerId, $manualLecturerId], json_decode($updatedDistribution->dosen_anggota_ids, true));
+    }
+
+    public function test_pddikti_class_teaching_assignment_with_unmapped_registration_is_skipped(): void
+    {
+        app(IamApiIntegrationSeeder::class)->run();
+        $integration = IamApiIntegration::where('key', 'siakad_kelas')->firstOrFail();
+        $programId = DB::table('siakad_program_studi')->insertGetId([
+            'kode_prodi' => 'FAR-SKIP', 'nama' => 'D3 Farmasi Skip', 'jenjang' => 'D3',
+            'id_feeder' => 'prodi-skip-uuid', 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $semesterId = DB::table('siakad_tahun_akademik')->insertGetId([
+            'kode' => '20261', 'nama' => '2026/2027 Ganjil', 'tahun_mulai' => 2026, 'tahun_selesai' => 2027,
+            'id_feeder' => '20261', 'is_active' => true, 'mode_penilaian' => 'persentase', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $curriculumId = DB::table('siakad_kurikulum')->insertGetId([
+            'program_studi_id' => $programId, 'kode' => 'FAR-SKIP-2026', 'nama' => 'Kurikulum Farmasi Skip',
+            'tahun_berlaku' => 2026, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $courseId = DB::table('siakad_mata_kuliah')->insertGetId([
+            'kurikulum_id' => $curriculumId, 'kode_mk' => 'FARSKIP1', 'nama' => 'Kimia Skip',
+            'id_feeder' => 'course-skip-uuid', 'sks_teori' => 2, 'sks_praktik' => 0, 'total_sks' => 2,
+            'semester_anjuran' => 1, 'tipe' => 'wajib', 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $masterClassId = DB::table('siakad_master_kelas')->insertGetId([
+            'program_studi_id' => $programId, 'nama_kelas' => '26A', 'tahun_angkatan' => 2026,
+            'dosen_pa_id' => null, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $lecturerId = DB::table('siakad_dosen')->insertGetId([
+            'nidn' => '0011112222', 'nama_lengkap' => 'Dosen Skip', 'id_feeder' => 'lecturer-skip-uuid',
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        SystemSetting::set('feeder_url', 'https://feeder.example.test/ws/live2.php');
+        SystemSetting::set('feeder_username', 'kampus-test');
+        SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
+        Http::fake([
+            'https://feeder.example.test/ws/live2.php' => function (Request $request) {
+                $payload = json_decode($request->body(), true);
+                return match ($payload['act'] ?? null) {
+                    'GetToken' => Http::response(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200),
+                    'GetListKelasKuliah' => Http::response(['error_code' => 0, 'data' => [[
+                        'id_kelas_kuliah' => 'class-skip-uuid',
+                        'id_prodi' => 'prodi-skip-uuid',
+                        'id_semester' => '20261',
+                        'id_matkul' => 'course-skip-uuid',
+                        'nama_kelas_kuliah' => '26A',
+                    ]]], 200),
+                    'GetDosenPengajarKelasKuliah' => Http::response(['error_code' => 0, 'data' => [[
+                        'id_aktivitas_mengajar' => 'teaching-skip-uuid',
+                        'id_kelas_kuliah' => 'class-skip-uuid',
+                        'id_dosen' => 'lecturer-skip-uuid',
+                        'id_registrasi_dosen' => 'unmapped-registration-uuid',
+                        'nama_kelas_kuliah' => '26A',
+                        'sks_substansi_total' => 2,
+                    ]]], 200),
+                    default => Http::response(['error_code' => 1], 400),
+                };
+            },
+        ]);
+        Cache::put('siakad-kelas-pddikti-sync:assignment-skip', ['status' => 'running'], now()->addHour());
+
+        $result = app(\App\Services\IAM\KelasPddiktiIntegrationSyncService::class)
+            ->process($integration, 'assignment-skip');
+
+        $this->assertSame(1, $result['assignment_skipped']);
+        $this->assertStringContainsString('Registrasi penugasan dosen Feeder belum dipetakan', $result['assignment_skipped_items'][0]['reason']);
+        $this->assertSame(0, DB::table('siakad_distribusi_mengajar')->where('mata_kuliah_id', $courseId)->count());
+        $this->assertSame(1, $lecturerId);
+        $this->assertSame(1, $masterClassId);
     }
 
     public function test_dosen_pddikti_connection_test_calls_get_list_dosen_read_only(): void

@@ -366,7 +366,7 @@ class SiakadLmsExportTest extends TestCase
             'user_id'    => $this->userDosen->id,
             'module'     => 'LMS',
             'action'     => 'export',
-            'table_name' => 'siakad_kelas',
+            'table_name' => 'siakad_jadwal_kelas',
             'record_id'  => $this->kelas->id,
         ]);
     }
