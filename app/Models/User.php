@@ -300,6 +300,24 @@ class User extends Authenticatable
             || $this->laboranProdi()->exists();
     }
 
+    /**
+     * Dosen aktif menurut data SIAKAD (dipakai fitur self-service staf).
+     */
+    public function isDosenAktif(): bool
+    {
+        return $this->dosen()->where('is_active', true)->exists();
+    }
+
+    /**
+     * Tenaga kependidikan aktif menurut data SIMPEG.
+     */
+    public function isPegawaiAktif(): bool
+    {
+        return $this->pegawai()
+            ->where('status', \App\Models\Simpeg\Pegawai::STATUS_AKTIF)
+            ->exists();
+    }
+
     protected $appends = ['is_superadmin', 'is_admin', 'referral_code'];
 
     public function getNameAttribute($value): ?string

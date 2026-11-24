@@ -70,8 +70,8 @@ Error: 400/401/403/404/422 `{status:"error",message:"...",errors:{...}}` (`error
 | GET | `/api/v1/mobile/staff/arsip/surat` | Arsip persuratan dan surat tugas terkait staf | ✅ Bearer Token (`auth:api`) |
 | GET | `/api/v1/mobile/staff/lms/bahan-ajar` | Daftar bahan ajar perkuliahan & RPS kelas dosen | ✅ Bearer Token (`auth:api`) |
 | GET | `/api/v1/mobile/staff/lms/pengumuman` | Pengumuman kelas & notifikasi akademik dosen | ✅ Bearer Token (`auth:api`) |
-| GET | `/api/v1/mobile/staff/spmb/referral` | Kode referral SPMB, statistik reward, & mahasiswa binaan | ✅ Bearer Token (`auth:api`) |
-| POST | `/api/v1/mobile/staff/spmb/referral` | Buat / perbarui link share referral eksternal & QR | ✅ Bearer Token (`auth:api`) |
+| GET | `/api/v1/mobile/staff/spmb/referral` | Kode referral SPMB, statistik reward, & mahasiswa binaan milik sendiri | ✅ Bearer Token (`auth:api`, dosen/tendik aktif) |
+| POST | `/api/v1/mobile/staff/spmb/referral` | Buat / perbarui link share referral eksternal & QR milik sendiri | ✅ Bearer Token (`auth:api`, dosen/tendik aktif) |
 | GET | `/api/v1/mobile/staff/simpeg/cuti` | Riwayat pengajuan cuti milik pegawai login (scoped) | ✅ Bearer Token (`auth:api` / `simpeg.cuti.read`) |
 | POST | `/api/v1/mobile/staff/simpeg/cuti` | Ajukan cuti baru dengan lampiran privat opsional | ✅ Bearer Token (`auth:api` / `simpeg.cuti.create`) |
 | GET | `/api/v1/mobile/staff/simpeg/izin-kerja` | Riwayat izin jam kerja milik pegawai login (scoped) | ✅ Bearer Token (`auth:api` / `simpeg.izin_kerja.read`) |
@@ -2746,6 +2746,8 @@ Mengambil notifikasi dan pengumuman kelas perkuliahan terkini dosen.
 
 Mengambil kode referral unik staf, statistik perolehan calon mahasiswa baru, tautan pendaftaran, dan daftar pendaftar binaan.
 
+> **Akses:** permission resmi `spmb.pendaftaran.read` / `spmb.pendaftaran.create`, atau status staf aktif lewat helper domain `User::isDosenAktif()` (`siakad_dosen.is_active = true`) / `User::isPegawaiAktif()` (`simpeg_pegawai.status = 'aktif'`). Dosen & tendik aktif tidak perlu permission admin SPMB. Data selalu dibatasi pada akun yang login.
+
 ### Headers
 
 | Key | Value | Required |
@@ -2815,7 +2817,7 @@ Mengambil kode referral unik staf, statistik perolehan calon mahasiswa baru, tau
 ```json
 {
     "status": "error",
-    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+    "message": "Referral SPMB hanya tersedia untuk dosen dan tenaga kependidikan aktif."
 }
 ```
 
@@ -2836,6 +2838,8 @@ Mengambil kode referral unik staf, statistik perolehan calon mahasiswa baru, tau
 ## 36. POST /api/v1/mobile/staff/spmb/referral
 
 Membuat atau memperbarui tautan referral eksternal serta muatan QR Code untuk dibagikan ke calon mahasiswa baru.
+
+> **Akses:** self-service untuk dosen/tendik aktif seperti endpoint GET. Kode referral selalu diambil dari akun yang login, bukan dari parameter request.
 
 ### Headers
 
@@ -2891,7 +2895,7 @@ Membuat atau memperbarui tautan referral eksternal serta muatan QR Code untuk di
 ```json
 {
     "status": "error",
-    "message": "Anda tidak memiliki izin untuk melakukan aksi ini."
+    "message": "Referral SPMB hanya tersedia untuk dosen dan tenaga kependidikan aktif."
 }
 ```
 

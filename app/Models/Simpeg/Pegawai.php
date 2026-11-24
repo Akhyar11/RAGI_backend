@@ -14,6 +14,8 @@ class Pegawai extends Model
 {
     use HasFactory, SoftDeletes;
 
+    public const STATUS_AKTIF = 'aktif';
+
     protected $table = 'simpeg_pegawai';
 
     protected $fillable = [

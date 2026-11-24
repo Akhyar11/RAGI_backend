@@ -17,6 +17,7 @@ use App\Models\Siakad\Krs;
 use App\Models\Siakad\Mahasiswa;
 use App\Models\Siakad\NilaiMahasiswa;
 use App\Models\Siakad\Pertemuan;
+use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\Mobile\MobileStaffService;
 use App\Services\Mobile\MobileStaffSimpegService;
@@ -1032,14 +1033,35 @@ class MobileStaffController extends Controller
     }
 
     /**
+     * Otorisasi referral SPMB: permission SPMB resmi atau status staf aktif
+     * (dosen/tendik) dari domain User. Envelope 403 dikirim eksplisit agar
+     * konsisten dengan response API lain.
+     */
+    private function denySpmbReferralIfUnauthorized(User $user, string $permissionSlug): ?JsonResponse
+    {
+        if ($user->hasPermission($permissionSlug)
+            || $user->isDosenAktif()
+            || $user->isPegawaiAktif()) {
+            return null;
+        }
+
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Referral SPMB hanya tersedia untuk dosen dan tenaga kependidikan aktif.',
+        ], 403);
+    }
+
+    /**
      * GET /api/v1/mobile/staff/spmb/referral
      * Kode referral SPMB, statistik, dan daftar calon mahasiswa yang dibawa.
      */
     public function getSpmbReferral(Request $request): JsonResponse
     {
-        Gate::authorize('spmb.pendaftaran.read');
-
         $user = $request->user();
+        if ($denied = $this->denySpmbReferralIfUnauthorized($user, 'spmb.pendaftaran.read')) {
+            return $denied;
+        }
+
         $result = $this->staffService->getSpmbReferral($user, $request);
 
         return response()->json([
@@ -1056,10 +1078,27 @@ class MobileStaffController extends Controller
      */
     public function generateSpmbReferral(Request $request): JsonResponse
     {
-        Gate::authorize('spmb.pendaftaran.create');
-
         $user = $request->user();
+        if ($denied = $this->denySpmbReferralIfUnauthorized($user, 'spmb.pendaftaran.create')) {
+            return $denied;
+        }
+
+        $oldValues = ['referral_code' => $user->referral_code];
         $data = $this->staffService->generateSpmbReferral($user);
+
+        try {
+            AuditLogService::record(
+                module: 'spmb',
+                action: 'generate_referral',
+                tableName: 'core_users',
+                recordId: $user->id,
+                oldValues: $oldValues,
+                newValues: ['referral_code' => $data['referral_code'] ?? null],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log generate referral SPMB: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',

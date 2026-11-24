@@ -1187,6 +1187,60 @@ class MobileStaffApiTest extends TestCase
         $this->assertStringStartsWith('https://pmb.poltekindonusa.ac.id/spmb/daftar?ref=', $customRes->json('data.share_url'));
     }
 
+    public function test_mobile_staff_spmb_referral_is_self_service_for_tendik(): void
+    {
+        $tendikUser = User::create([
+            'username' => 'tendik.referral',
+            'email' => 'tendik.referral@kampus.ac.id',
+            'name' => 'Anisa Rahmawati',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+
+        Pegawai::create([
+            'user_id' => $tendikUser->id,
+            'nip' => '199008152015122001',
+            'nama_lengkap' => 'Anisa Rahmawati',
+            'status_kepegawaian' => 'tetap',
+            'status' => 'aktif',
+        ]);
+
+        // Tendik aktif tidak perlu permission admin SPMB untuk referral sendiri.
+        $this->assertFalse($tendikUser->can('spmb.pendaftaran.read'));
+        $this->assertFalse($tendikUser->can('spmb.pendaftaran.create'));
+
+        Passport::actingAs($tendikUser);
+
+        $this->getJson('/api/v1/mobile/staff/spmb/referral')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.0.referral_code', $tendikUser->referral_code);
+
+        $this->postJson('/api/v1/mobile/staff/spmb/referral')
+            ->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.referral_code', $tendikUser->referral_code);
+    }
+
+    public function test_mobile_staff_spmb_referral_rejects_non_staff(): void
+    {
+        $nonStaff = User::create([
+            'username' => 'nonstaff.referral',
+            'email' => 'nonstaff.referral@kampus.ac.id',
+            'name' => 'Bukan Dosen atau Tendik',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+
+        Passport::actingAs($nonStaff);
+
+        $this->getJson('/api/v1/mobile/staff/spmb/referral')
+            ->assertForbidden()
+            ->assertJsonPath('status', 'error')
+            ->assertJsonPath('message', 'Referral SPMB hanya tersedia untuk dosen dan tenaga kependidikan aktif.');
+        $this->postJson('/api/v1/mobile/staff/spmb/referral')->assertForbidden();
+    }
+
     public function test_mobile_staff_simpeg_self_service_gateway(): void
     {
         Passport::actingAs($this->dosenUser);
