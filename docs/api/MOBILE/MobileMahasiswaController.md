@@ -19,6 +19,7 @@
 | GET | `/api/v1/mobile/mahasiswa/periode` | Daftar seluruh periode akademik + penanda periode aktif (`active_periode_id`) | ✅ `siakad.kelas.read` |
 | GET | `/api/v1/mobile/mahasiswa/presensi/sesi-aktif` | Daftar sesi presensi kelas yang sedang dibuka dosen pada hari ini | ✅ `siakad.kelas.read` |
 | POST | `/api/v1/mobile/mahasiswa/presensi/scan` | Scan QR (`RAG-PRESENSI:{pertemuan_id}:{token}`) atau input token 6 digit (rotasi 30 detik) | ✅ `lms.presensi.create` |
+| POST | `/api/v1/mobile/mahasiswa/presensi/check-in` | Alias self check-in mahasiswa (kontrak identik dengan `/presensi/scan`) | ✅ `lms.presensi.create` |
 | POST | `/api/v1/mobile/mahasiswa/presensi/pertemuan/{pertemuanId}/izin` | Ajukan permohonan izin/sakit beserta unggah surat bukti (private storage) | ✅ `lms.presensi.create` |
 | GET | `/api/v1/mobile/mahasiswa/presensi/rekap` | Rekapitulasi kehadiran per mata kuliah beserta status kelayakan UAS (`eligible_uas`) | ✅ `siakad.kelas.read` |
 | GET | `/api/v1/mobile/mahasiswa/lms/overview` | Ringkasan dashboard LMS mahasiswa pada periode terpilih | ✅ `siakad.kelas.read` |
@@ -258,6 +259,83 @@ Tidak ada query parameter.
         "nama_mahasiswa": "Mahasiswa Mobile Satu",
         "is_present": true,
         "waktu_scan": "2026-11-09T08:12:10+07:00"
+    }
+}
+```
+
+---
+
+### Alias: `POST /api/v1/mobile/mahasiswa/presensi/check-in`
+
+> Disediakan untuk aplikasi mobile yang ingin memakai nama aksi `check-in` yang eksplisit. **Kontrak, permission (`lms.presensi.create`), validasi, cutoff SIMPEG, audit, dan response identik dengan `/presensi/scan` pada bagian 4** — keduanya memanggil `LmsService::scanTokenAbsensi()` yang sama, tanpa duplikasi logika presensi. Pasangan API LMS-nya adalah `POST /api/v1/lms/presensi/check-in`.
+
+#### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` (Passport) | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+#### Request Body
+
+```json
+{
+    "qr_payload": "RAG-PRESENSI:88:849201",
+    "device_info": "Android 15 - Pixel 8",
+    "latitude": -6.914744,
+    "longitude": 107.609810
+}
+```
+
+Atau kirim `pertemuan_id` beserta `token` 6 digit. Tidak ada query parameter pagination pada endpoint aksi ini.
+
+#### Response Sukses (`200 OK`)
+
+```json
+{
+    "status": "success",
+    "message": "Presensi berhasil dicatat melalui QR/Token scanner.",
+    "data": {
+        "pertemuan_id": 88,
+        "pertemuan_ke": 1,
+        "tanggal": "2026-11-09",
+        "materi": "Pemrograman Mobile Terpadu",
+        "kelas_id": 15,
+        "kode_kelas": "IF-MOB-A",
+        "nama_kelas": "Kelas Mobile A",
+        "mata_kuliah": "Pemrograman Mobile Terpadu",
+        "status": "hadir",
+        "waktu_absen": "2026-11-09T08:12:10.000000Z"
+    }
+}
+```
+
+#### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+**403 Forbidden** (tanpa izin `lms.presensi.create` atau akun tanpa profil Mahasiswa aktif)
+```json
+{
+    "status": "error",
+    "message": "Endpoint aplikasi mobile mahasiswa hanya dapat diakses oleh akun dengan profil Mahasiswa aktif."
+}
+```
+
+**422 Unprocessable Entity** (QR/token tidak cocok, kedaluwarsa, sesi ditutup, Mahasiswa di luar KRS, atau cutoff SIMPEG)
+```json
+{
+    "status": "error",
+    "message": "Token absensi tidak cocok atau tidak valid.",
+    "errors": {
+        "token": ["Token absensi tidak cocok atau tidak valid."]
     }
 }
 ```

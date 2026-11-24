@@ -41,6 +41,8 @@ Route::middleware(['can:siakad.kelas.read'])->group(function () {
     Route::delete('/tugas/{tugasId}/kumpulan', [LmsController::class, 'hapusPengumpulan']);
     Route::post('/pertemuan/{pertemuanId}/input-token', [LmsController::class, 'inputToken']);
     Route::post('/presensi/scan', [LmsController::class, 'scanPresensi']);
+    // Alias self check-in (kontrak & otorisasi identik dengan /presensi/scan) untuk aplikasi mobile.
+    Route::post('/presensi/check-in', [LmsController::class, 'checkInPresensi']);
     Route::get('/presensi/sesi-aktif', [LmsController::class, 'sesiPresensiAktif']);
     Route::post('/pertemuan/{pertemuanId}/izin', [LmsController::class, 'ajukanIzin']);
     // Quiz — sisi mahasiswa

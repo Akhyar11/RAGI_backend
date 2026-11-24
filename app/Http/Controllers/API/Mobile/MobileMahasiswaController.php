@@ -118,6 +118,16 @@ class MobileMahasiswaController extends Controller
     }
 
     /**
+     * POST /api/v1/mobile/mahasiswa/presensi/check-in
+     * Alias self check-in mahasiswa untuk aplikasi mobile.
+     * Kontrak, otorisasi, validasi, audit, dan logika identik dengan scanPresensi().
+     */
+    public function checkInPresensi(Request $request): JsonResponse
+    {
+        return $this->scanPresensi($request);
+    }
+
+    /**
      * POST /api/v1/mobile/mahasiswa/presensi/pertemuan/{pertemuanId}/izin
      * Berkas surat izin/sakit disimpan di private disk (local / r2-private) via FileStorageService::store(..., private: true).
      */

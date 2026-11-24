@@ -1268,6 +1268,8 @@ Route::prefix('v1')->group(function () {
             // Presensi Perkuliahan (QR/Token 30 Detik, Izin/Sakit, & Rekap)
             Route::get('/presensi/sesi-aktif', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sesiPresensiAktif']);
             Route::post('/presensi/scan', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'scanPresensi']);
+            // Alias self check-in (kontrak & otorisasi identik dengan /presensi/scan) untuk aplikasi mobile.
+            Route::post('/presensi/check-in', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'checkInPresensi']);
             Route::post('/presensi/pertemuan/{pertemuanId}/izin', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'ajukanIzin'])->whereNumber('pertemuanId');
             Route::get('/presensi/rekap', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'rekapPresensi']);
 

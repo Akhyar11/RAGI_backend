@@ -60,6 +60,7 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/tutup-presensi` | Tutup sesi presensi (input token ditolak setelah ini) | ✅ |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/input-token` | Mahasiswa input token absensi untuk mencatat kehadiran | ✅ |
 | POST | `/api/v1/lms/presensi/scan` | Mahasiswa scan QR presensi (`RAG-PRESENSI:{pertemuan_id}:{token}`) via web/mobile scanner | ✅ |
+| POST | `/api/v1/lms/presensi/check-in` | Alias self check-in mahasiswa untuk aplikasi mobile (kontrak identik dengan `/presensi/scan`) | ✅ `lms.presensi.create` |
 | GET | `/api/v1/lms/presensi/sesi-aktif` | Daftar sesi presensi yang sedang dibuka pada kelas KRS mahasiswa aktif | ✅ |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/bulk-absensi` | Dosen menyimpan presensi mahasiswa secara massal/manual | ✅ |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/izin` | Mahasiswa mengajukan permohonan izin/sakit dengan bukti surat | ✅ |
@@ -1933,6 +1934,81 @@ Digunakan oleh **Scanner Web** maupun **Aplikasi Mobile Mahasiswa** untuk memind
     }
 }
 ```
+
+### [POST] `/api/v1/lms/presensi/check-in`
+
+Alias self check-in mahasiswa yang dipakai aplikasi mobile melalui API LMS. **Kontrak request, otorisasi (`lms.presensi.create`), validasi, cutoff SIMPEG, pencatatan audit, dan response identik dengan endpoint `/api/v1/lms/presensi/scan` di atas** — yang berbeda hanya nama endpointnya. Keduanya mendelegasikan ke `LmsService::scanTokenAbsensi()` yang sama, sehingga tidak ada duplikasi logika token/KRS/cutoff.
+
+#### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` (Passport) | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+#### Request Body
+
+```json
+{
+    "qr_payload": "RAG-PRESENSI:14:482910",
+    "device_info": "RAG-Mobile/2.0"
+}
+```
+
+Atau kirim `pertemuan_id` beserta `token` 6 digit (token berputar tiap 30 detik, dengan toleransi 10 detik saat pergantian). Tidak ada query parameter pagination pada endpoint aksi ini.
+
+#### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Presensi berhasil dicatat.",
+    "data": {
+        "pertemuan_id": 14,
+        "pertemuan_ke": 3,
+        "tanggal": "2026-11-09",
+        "materi": "Integrasi API LMS dan Mobile",
+        "kelas_id": 12,
+        "kode_kelas": "IF-A",
+        "nama_kelas": "Kelas A",
+        "mata_kuliah": "Pemrograman Mobile",
+        "status": "hadir",
+        "waktu_absen": "2026-11-09T08:00:12.000000Z"
+    }
+}
+```
+
+#### Response Error
+
+**401 Unauthorized**
+```json
+{
+    "status": "error",
+    "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+**403 Forbidden** (tanpa izin `lms.presensi.create` atau akun tanpa profil Mahasiswa)
+```json
+{
+    "status": "error",
+    "message": "Fitur presensi token mandiri hanya dapat digunakan oleh Mahasiswa."
+}
+```
+
+**422 Unprocessable Entity** (QR/token tidak cocok, kedaluwarsa, sesi ditutup, Mahasiswa di luar KRS, atau cutoff SIMPEG)
+```json
+{
+    "status": "error",
+    "message": "Token absensi tidak cocok atau tidak valid.",
+    "errors": {
+        "token": ["Token absensi tidak cocok atau tidak valid."]
+    }
+}
+```
+
+---
 
 ### [GET] `/api/v1/lms/presensi/sesi-aktif`
 

@@ -627,6 +627,15 @@ class LmsController extends Controller
     }
 
     /**
+     * Alias self check-in mahasiswa pada API LMS (dipakai aplikasi mobile).
+     * Kontrak, otorisasi, validasi, audit, dan logika identik dengan scanPresensi().
+     */
+    public function checkInPresensi(Request $request): JsonResponse
+    {
+        return $this->scanPresensi($request);
+    }
+
+    /**
      * Daftar sesi presensi kelas yang sedang aktif dibuka oleh dosen (untuk beranda/scanner mahasiswa).
      */
     public function sesiPresensiAktif(Request $request): JsonResponse

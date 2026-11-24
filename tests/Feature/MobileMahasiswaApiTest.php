@@ -21,6 +21,7 @@ use App\Models\Sikeu\Beasiswa;
 use App\Models\Sikeu\DispensasiTagihan;
 use App\Models\Sikeu\MahasiswaBeasiswa;
 use App\Models\Sikeu\TagihanMahasiswa;
+use App\Models\Simpeg\PresensiPengajaranCutoff;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -388,5 +389,169 @@ class MobileMahasiswaApiTest extends TestCase
 
         $this->getJson('/api/v1/mobile/mahasiswa/home')
             ->assertStatus(403);
+    }
+
+    /**
+     * Buka sesi presensi oleh dosen pengampu, lalu kembalikan payload QR dan token aktifnya.
+     */
+    private function bukaSesiCheckIn(string $materi): array
+    {
+        Passport::actingAs($this->dosenUser);
+        $response = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/buka-sesi", [
+            'materi' => $materi,
+            'catatan_pertemuan' => 'Simulasi self check-in mahasiswa.',
+        ]);
+        $response->assertOk();
+
+        $qrPayload = (string) $response->json('data.qr_payload');
+
+        return [
+            'qr_payload' => $qrPayload,
+            'token' => explode(':', $qrPayload)[2] ?? null,
+        ];
+    }
+
+    public function test_alias_check_in_mobile_mencatat_hadir_dari_qr_payload(): void
+    {
+        $sesi = $this->bukaSesiCheckIn('Self check-in via alias mobile');
+
+        Passport::actingAs($this->mahasiswaUser);
+        $this->postJson('/api/v1/mobile/mahasiswa/presensi/check-in', [
+            'qr_payload' => $sesi['qr_payload'],
+            'device_info' => 'RAG-Mobile/2.0 (check-in alias)',
+            'latitude' => -6.200000,
+            'longitude' => 106.816666,
+        ])->assertOk()
+            ->assertJsonStructure([
+                'status',
+                'message',
+                'data' => ['pertemuan_id', 'pertemuan_ke', 'tanggal', 'kelas_id', 'status', 'waktu_absen'],
+            ])
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.pertemuan_id', $this->pertemuan->id)
+            ->assertJsonPath('data.status', 'hadir');
+
+        $this->assertDatabaseHas('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status' => 'hadir',
+            'is_submitted' => true,
+        ]);
+    }
+
+    public function test_alias_check_in_lms_mencatat_hadir_dari_pertemuan_id_dan_token(): void
+    {
+        $sesi = $this->bukaSesiCheckIn('Self check-in via alias LMS');
+
+        Passport::actingAs($this->mahasiswaUser);
+        $this->postJson('/api/v1/lms/presensi/check-in', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'token' => $sesi['token'],
+        ])->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.pertemuan_id', $this->pertemuan->id)
+            ->assertJsonPath('data.kelas_id', $this->kelas->id)
+            ->assertJsonPath('data.status', 'hadir');
+
+        $this->assertDatabaseHas('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status' => 'hadir',
+            'is_submitted' => true,
+        ]);
+    }
+
+    public function test_alias_check_in_menolak_token_salah_dan_mahasiswa_di_luar_krs(): void
+    {
+        $sesi = $this->bukaSesiCheckIn('Uji penolakan check-in');
+        $tokenSalah = $sesi['token'] === '000000' ? '111111' : '000000';
+
+        Passport::actingAs($this->mahasiswaUser);
+
+        $this->postJson('/api/v1/mobile/mahasiswa/presensi/check-in', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'token' => $tokenSalah,
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.token.0', 'Token absensi tidak cocok atau tidak valid.');
+
+        KrsDetail::query()->where('kelas_id', $this->kelas->id)->delete();
+
+        $this->postJson('/api/v1/mobile/mahasiswa/presensi/check-in', [
+            'qr_payload' => $sesi['qr_payload'],
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.token.0', 'Anda tidak terdaftar pada kelas perkuliahan ini.');
+
+        $this->assertDatabaseMissing('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status' => 'hadir',
+        ]);
+    }
+
+    public function test_alias_check_in_menolak_akun_tanpa_profil_mahasiswa(): void
+    {
+        $sesi = $this->bukaSesiCheckIn('Uji akun non-mahasiswa');
+
+        $role = Role::firstOrCreate(['slug' => 'staff-presensi-check-in'], ['name' => 'Staff Presensi Check-in']);
+        $role->permissions()->syncWithoutDetaching([
+            Permission::where('slug', 'lms.presensi.create')->firstOrFail()->id,
+            Permission::where('slug', 'siakad.kelas.read')->firstOrFail()->id,
+        ]);
+        $staff = User::factory()->create([
+            'username' => 'staff.checkin',
+            'email' => 'staff.checkin@kampus.ac.id',
+        ]);
+        $staff->roles()->sync([$role->id]);
+
+        Passport::actingAs($staff);
+
+        $this->postJson('/api/v1/mobile/mahasiswa/presensi/check-in', [
+            'qr_payload' => $sesi['qr_payload'],
+        ])->assertStatus(403)
+            ->assertJsonPath('message', 'Endpoint aplikasi mobile mahasiswa hanya dapat diakses oleh akun dengan profil Mahasiswa aktif.');
+
+        $this->postJson('/api/v1/lms/presensi/check-in', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'token' => $sesi['token'],
+        ])->assertStatus(403)
+            ->assertJsonPath('message', 'Fitur presensi token mandiri hanya dapat digunakan oleh Mahasiswa.');
+
+        $this->assertDatabaseMissing('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status' => 'hadir',
+        ]);
+    }
+
+    public function test_alias_check_in_diblokir_oleh_cutoff_presensi_simpeg(): void
+    {
+        $sesi = $this->bukaSesiCheckIn('Uji cutoff presensi');
+
+        PresensiPengajaranCutoff::updateOrCreate(
+            ['periode' => '2026-10'],
+            [
+                'cutoff_at' => now()->subDay(),
+                'set_by' => $this->superAdminUser->id,
+            ]
+        );
+
+        $pesanCutoff = 'Batas waktu pengisian presensi periode ini telah berakhir. Hubungi Admin SIMPEG jika memerlukan izin khusus.';
+
+        Passport::actingAs($this->mahasiswaUser);
+
+        $this->postJson('/api/v1/mobile/mahasiswa/presensi/check-in', [
+            'qr_payload' => $sesi['qr_payload'],
+        ])->assertUnprocessable()->assertJsonPath('errors.presensi.0', $pesanCutoff);
+
+        $this->postJson('/api/v1/lms/presensi/check-in', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'token' => $sesi['token'],
+        ])->assertUnprocessable()->assertJsonPath('errors.presensi.0', $pesanCutoff);
+
+        $this->assertDatabaseMissing('siakad_absensi_mahasiswa', [
+            'pertemuan_id' => $this->pertemuan->id,
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'status' => 'hadir',
+        ]);
     }
 }
