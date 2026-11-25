@@ -511,7 +511,7 @@ class PerkuliahanController extends Controller
 
         $request->validate([
             'tahun_akademik_id' => ['nullable', 'integer', 'exists:siakad_tahun_akademik,id'],
-            'program_studi_id' => ['nullable', 'integer', 'exists:spmb_master_program_studi,id'],
+            'program_studi_id' => ['nullable', 'integer', 'exists:siakad_program_studi,id'],
             'status_krs' => ['nullable', 'string', \Illuminate\Validation\Rule::in([self::STATUS_KRS_LENGKAP, self::STATUS_KRS_ADA_BELUM])],
             'status_keuangan' => ['nullable', 'string', \Illuminate\Validation\Rule::in([self::STATUS_KEUANGAN_ADA_TERKUNCI, self::STATUS_KEUANGAN_LUNAS])],
             'progres_krs' => ['nullable', 'string', \Illuminate\Validation\Rule::in([self::PROGRES_KRS_TINGGI, self::PROGRES_KRS_SEDANG, self::PROGRES_KRS_RENDAH])],
