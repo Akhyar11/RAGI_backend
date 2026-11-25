@@ -4,7 +4,14 @@
 > **Base URL**: `/api/v1/sikeu/pengajuan-operasional`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-25  
-> **Diperbarui**: 2026-10-12    
+> **Diperbarui**: 2026-11-25  
+>
+> **Otorisasi RBAC**:
+> - `GET index` / `show`: `sikeu.pengajuan.read`, `sikeu.pengajuan.create`, `sikeu.pengajuan.approve`, atau `sikeu.kas.manage` (atau Super Admin / Admin).
+> - `POST store`: `sikeu.pengajuan.create` (atau Super Admin / Admin).
+> - `POST approve` / `pencairan` / `setujui-panjar-simpeg` / `tutup-lpj-simpeg` / `lpj/{id}/verifikasi`: `sikeu.pengajuan.approve` atau `sikeu.kas.manage` (atau Super Admin / Admin).
+> - `POST lpj`: pemilik pengajuan (`pemohon_id`) atau permission `sikeu.pengajuan.create` / `sikeu.pengajuan.approve` / `sikeu.kas.manage`.
+> - Request tanpa izin mengembalikan HTTP `403 Forbidden` (`{"status":"error","message":"Anda tidak memiliki hak akses..."}`).
 
 ## Daftar Endpoint
 

@@ -8,7 +8,13 @@ class StorePengajuanOperasionalRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $user = $this->user();
+
+        return $user && (
+            $user->isSuperAdmin() ||
+            $user->isAdmin() ||
+            $user->hasPermission('sikeu.pengajuan.create')
+        );
     }
 
     public function rules(): array

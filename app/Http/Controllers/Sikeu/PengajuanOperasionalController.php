@@ -14,11 +14,32 @@ class PengajuanOperasionalController extends Controller
 {
     public function __construct(private PengajuanOperasionalService $service) {}
 
+    private function authorizeAnyPermission(Request $request, array $permissions, string $message = 'Anda tidak memiliki hak akses untuk fitur pengajuan operasional.'): ?\Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['status' => 'error', 'message' => 'Token tidak valid atau sesi telah berakhir.'], 401);
+        }
+        if ($user->isSuperAdmin() || $user->isAdmin()) {
+            return null;
+        }
+        foreach ($permissions as $perm) {
+            if ($user->hasPermission($perm)) {
+                return null;
+            }
+        }
+
+        return response()->json(['status' => 'error', 'message' => $message], 403);
+    }
+
     /**
      * GET /api/v1/sikeu/pengajuan-operasional
      */
     public function index(Request $request)
     {
+        if ($denied = $this->authorizeAnyPermission($request, ['sikeu.pengajuan.read', 'sikeu.pengajuan.create', 'sikeu.pengajuan.approve', 'sikeu.kas.manage'])) {
+            return $denied;
+        }
         $query = PengajuanPencairanKas::with([
             'items',
             'fakultas',
@@ -149,8 +170,11 @@ class PengajuanOperasionalController extends Controller
     /**
      * GET /api/v1/sikeu/pengajuan-operasional/{id}
      */
-    public function show($id)
+    public function show(Request $request, $id)
     {
+        if ($denied = $this->authorizeAnyPermission($request, ['sikeu.pengajuan.read', 'sikeu.pengajuan.create', 'sikeu.pengajuan.approve', 'sikeu.kas.manage'])) {
+            return $denied;
+        }
         $item = PengajuanPencairanKas::with(['items', 'items.gajiPegawai.pegawai', 'fakultas', 'ruangan', 'unitKas', 'historyApproval', 'lpj.details', 'parent', 'reimbursements.unitKas'])->findOrFail($id);
 
         // Ref akuntansi: semua jurnal yang merujuk pengajuan ini maupun
@@ -183,6 +207,10 @@ class PengajuanOperasionalController extends Controller
             'catatan' => 'nullable|string|max:1000',
         ]);
 
+        if ($denied = $this->authorizeAnyPermission($request, ['sikeu.pengajuan.approve', 'sikeu.kas.manage'], 'Anda tidak memiliki hak akses untuk memproses persetujuan pengajuan.')) {
+            return $denied;
+        }
+
         try {
             $pengajuan = PengajuanPencairanKas::findOrFail($id);
             $result = $this->service->approve($pengajuan, $request->aksi, $request->catatan, $request);
@@ -204,6 +232,10 @@ class PengajuanOperasionalController extends Controller
      */
     public function pencairan(Request $request, $id)
     {
+        if ($denied = $this->authorizeAnyPermission($request, ['sikeu.pengajuan.approve', 'sikeu.kas.manage'], 'Anda tidak memiliki hak akses untuk mencairkan dana pengajuan.')) {
+            return $denied;
+        }
+
         $request->validate([
             'nominal_cair' => 'nullable|numeric|min:1',
             'tanggal_pencairan' => 'nullable|date',
@@ -238,6 +270,11 @@ class PengajuanOperasionalController extends Controller
     {
         try {
             $pengajuan = PengajuanPencairanKas::findOrFail($id);
+            $user = $request->user();
+            $isOwner = $user && (int) $pengajuan->pemohon_id === (int) $user->id;
+            if (!$isOwner && ($denied = $this->authorizeAnyPermission($request, ['sikeu.pengajuan.create', 'sikeu.pengajuan.approve', 'sikeu.kas.manage'], 'Anda tidak memiliki hak akses untuk mengirim LPJ pengajuan ini.'))) {
+                return $denied;
+            }
             $payload = $request->validated();
             // Normalisasi tambahan dari multipart (tambahan[0][keterangan] dst.)
             if ($request->has('tambahan')) {
@@ -310,6 +347,10 @@ class PengajuanOperasionalController extends Controller
      */
     public function verifikasiLpj(Request $request, $id)
     {
+        if ($denied = $this->authorizeAnyPermission($request, ['sikeu.pengajuan.approve', 'sikeu.kas.manage'], 'Anda tidak memiliki hak akses untuk memverifikasi LPJ.')) {
+            return $denied;
+        }
+
         $request->validate([
             'aksi' => 'required|in:approve,reject',
             'catatan' => 'nullable|string|max:1000',
@@ -324,6 +365,8 @@ class PengajuanOperasionalController extends Controller
                 'message' => $request->aksi === 'approve' ? 'LPJ disetujui dan jurnal realisasi otomatis diterbitkan' : 'LPJ ditolak, pengaju perlu revisi',
                 'data' => $result,
             ]);
+        } catch (\InvalidArgumentException | \RuntimeException $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
         } catch (\Exception $e) {
             return response()->json(['status' => 'error', 'message' => 'Gagal verifikasi LPJ: ' . $e->getMessage()], 500);
         }
@@ -346,8 +389,12 @@ class PengajuanOperasionalController extends Controller
         return response()->json(['status' => 'success', 'data' => $data]);
     }
 
-    public function listKategoriPengajuan()
+    public function listKategoriPengajuan(Request $request)
     {
+        if ($denied = $this->authorizeAnyPermission($request, ['sikeu.pengajuan.read', 'sikeu.pengajuan.create', 'sikeu.pengajuan.approve', 'sikeu.kas.manage'])) {
+            return $denied;
+        }
+
         $data = [
             ['id' => 'pengadaan_barang', 'nama' => 'Pengadaan Barang'],
             ['id' => 'non_barang', 'nama' => 'Non-Barang'],
@@ -361,6 +408,10 @@ class PengajuanOperasionalController extends Controller
      */
     public function setujuiPanjarSimpeg(Request $request, $id)
     {
+        if ($denied = $this->authorizeAnyPermission($request, ['sikeu.pengajuan.approve', 'sikeu.kas.manage'], 'Anda tidak memiliki hak akses untuk menyetujui panjar dinas.')) {
+            return $denied;
+        }
+
         $request->validate([
             'unit_kas_id' => 'required|integer|exists:sikeu_unit_kas,id',
             'nominal_disetujui' => 'required|numeric|min:1',
@@ -388,6 +439,10 @@ class PengajuanOperasionalController extends Controller
      */
     public function tutupLpjSimpeg(Request $request, $id)
     {
+        if ($denied = $this->authorizeAnyPermission($request, ['sikeu.pengajuan.approve', 'sikeu.kas.manage'], 'Anda tidak memiliki hak akses untuk menutup LPJ dinas.')) {
+            return $denied;
+        }
+
         $request->validate([
             'catatan' => 'nullable|string|max:1000',
             'nominal_pelunasan' => 'nullable|numeric|min:0',
@@ -403,6 +458,8 @@ class PengajuanOperasionalController extends Controller
                 'message' => 'Transaksi perjalanan dinas berhasil diverifikasi dan diselesaikan',
                 'data' => $result,
             ]);
+        } catch (\InvalidArgumentException | \RuntimeException $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
         } catch (\Exception $e) {
             return response()->json(['status' => 'error', 'message' => 'Gagal menutup LPJ: ' . $e->getMessage()], 500);
         }

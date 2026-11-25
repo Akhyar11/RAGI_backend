@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Sikeu;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Sikeu\StoreExternalTagihanRequest;
 use App\Models\Sikeu\Pembayaran;
+use App\Models\Sikeu\TagihanMahasiswa;
 use App\Services\Sikeu\ExternalTagihanService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -70,8 +71,10 @@ class ExternalTagihanController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('kode_transaksi', 'like', "%{$search}%")
                     ->orWhere('kode_unik', 'like', "%{$search}%")
+                    ->orWhere('catatan', 'like', "%{$search}%")
                     ->orWhereHas('tagihan', function ($tq) use ($search) {
                         $tq->where('nomor_tagihan', 'like', "%{$search}%")
+                            ->orWhere('h2h_custid', 'like', "%{$search}%")
                             ->orWhere('mahasiswa_id', 'like', "%{$search}%")
                             ->orWhere('calon_mahasiswa_id', 'like', "%{$search}%")
                             ->orWhereHas('mahasiswa', fn ($m) => $m->where('nim', 'like', "%{$search}%")->orWhere('nama_lengkap', 'like', "%{$search}%")->orWhere('nik', 'like', "%{$search}%"))
@@ -91,13 +94,11 @@ class ExternalTagihanController extends Controller
 
         $mappedItems = collect($pembayaran->items())->map(function ($p) {
             $t = $p->tagihan;
-            $mhs = $t?->mahasiswa;
-            $tipeMhs = $t?->tipeTagihanMahasiswa;
             $calon = $t?->calonMahasiswa;
-
-            $nim = $mhs?->nim ?? $tipeMhs?->nim ?? $calon?->nim ?? ($calon?->no_pendaftaran ?: ($t?->mahasiswa_id ? (string) $t->mahasiswa_id : '-'));
-            $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? $calon?->nama_lengkap ?? ('Mahasiswa #'.($t?->mahasiswa_id ?? $t?->calon_mahasiswa_id ?? '-'));
-            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? $calon?->programStudi?->nama ?? '-';
+            $identitas = TagihanMahasiswa::resolveIdentitasDisplay($t, $p->catatan);
+            $nim = $identitas['nim'];
+            $nama = $identitas['nama'];
+            $prodi = $identitas['prodi'];
 
             $rincian = $t?->details?->map(function ($d) {
                 return $d->keterangan ?: ($d->masterBiaya->nama ?? 'Komponen Biaya');
@@ -194,12 +195,11 @@ class ExternalTagihanController extends Controller
 
         $t = $pembayaran->tagihan;
         $mhs = $t?->mahasiswa;
-        $tipeMhs = $t?->tipeTagihanMahasiswa;
         $calon = $t?->calonMahasiswa;
-
-        $nim = $mhs?->nim ?? $tipeMhs?->nim ?? $calon?->nim ?? ($calon?->no_pendaftaran ?: ($t?->mahasiswa_id ? (string) $t->mahasiswa_id : '-'));
-        $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? $calon?->nama_lengkap ?? ('Mahasiswa #'.($t?->mahasiswa_id ?? $t?->calon_mahasiswa_id ?? '-'));
-        $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? $calon?->programStudi?->nama ?? '-';
+        $identitas = TagihanMahasiswa::resolveIdentitasDisplay($t, $pembayaran->catatan);
+        $nim = $identitas['nim'];
+        $nama = $identitas['nama'];
+        $prodi = $identitas['prodi'];
         $angkatan = $mhs?->tahun_angkatan ?? $mhs?->angkatan ?? $calon?->tahun_akademik ?? null;
 
         $rincian = $t?->details?->map(function ($d) {
@@ -210,11 +210,15 @@ class ExternalTagihanController extends Controller
         $channelName = match ($pembayaran->channel_bayar) {
             'LOKET_TUNAI' => 'Tunai di Loket Kasir Kampus',
             'LOKET_TRANSFER' => 'Transfer Manual Rekening Resmi Kampus',
-            default => 'Virtual Account Online (Xendit)',
+            'TRANSFER_BANK', 'MIGRASI', 'LEGACY' => 'Transfer Bank (Migrasi / Manual)',
+            default => str_contains(strtoupper((string) $pembayaran->channel_bayar), 'XENDIT') || str_contains(strtoupper((string) $pembayaran->channel_bayar), 'VA')
+                ? 'Virtual Account Online (Xendit)'
+                : ($pembayaran->channel_bayar ?: 'Transfer Bank'),
         };
 
         $kasirName = match ($pembayaran->channel_bayar) {
             'LOKET_TUNAI', 'LOKET_TRANSFER' => 'Petugas Administrasi Keuangan (Loket Kasir Kampus)',
+            'TRANSFER_BANK', 'MIGRASI', 'LEGACY' => 'Data Migrasi / Transfer Bank',
             default => 'Sistem Payment Gateway (Xendit)',
         };
 

@@ -22,6 +22,11 @@ class PengajuanKasController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+        if (!$user || (!$user->isSuperAdmin() && !$user->isAdmin() && !$user->hasPermission('sikeu.pengajuan.read') && !$user->hasPermission('sikeu.pengajuan.create') && !$user->hasPermission('sikeu.pengajuan.approve') && !$user->hasPermission('sikeu.kas.manage'))) {
+            return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki hak akses untuk melihat pengajuan kas.'], 403);
+        }
+
         $perPage = min(100, $request->integer('per_page', 15));
         $query = PengajuanPencairanKas::with(['unitKas', 'pemohon', 'suratTugas.pegawai']);
 

@@ -1,8 +1,8 @@
 # PengajuanKasController
 
-> **Modul**: SIKEU / **Base URL**: /api/v1/sikeu / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-19 / 2026-10-12
+> **Modul**: SIKEU / **Base URL**: /api/v1/sikeu / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-19 / 2026-11-25
 >
-> > Otorisasi `POST pengajuan-kas` memakai permission `sikeu.pengajuan.create` (atau role superadmin/admin) karena slug `sikeu.pengajuan_kas.*` belum ada di master permission. `nominal_disetujui` terisi `0` saat dibuat dan ditetapkan keuangan saat approve.
+> > Otorisasi `GET pengajuan-kas` memakai permission `sikeu.pengajuan.read` / `create` / `approve` / `sikeu.kas.manage` (atau Super Admin / Admin). `POST pengajuan-kas` memakai `sikeu.pengajuan.create` (atau Super Admin / Admin). `POST approve` & `POST reject` memakai `sikeu.pengajuan.approve` atau `sikeu.kas.manage` (atau Super Admin / Admin). Request tanpa izin mengembalikan HTTP `403 Forbidden`. `nominal_disetujui` terisi `0` saat dibuat dan ditetapkan keuangan saat approve.
 
 Modul ini mengelola siklus permohonan pencairan kas unit operasional dan panjar perjalanan dinas luar (SIMPEG), proses verifikasi dan persetujuan oleh bagian keuangan/pimpinan, pencairan saldo kas, pembuatan mutasi pengeluaran kampus, serta penolakan pengajuan.
 

@@ -4,6 +4,7 @@ namespace App\Observers\Spmb;
 
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Services\AuditLogService;
+use App\Services\Sikeu\LegacyTagihanLinkerService;
 use Illuminate\Support\Facades\Log;
 
 class PendaftaranCalonMhsObserver
@@ -29,6 +30,8 @@ class PendaftaranCalonMhsObserver
         } catch (\Exception $e) {
             Log::error("Failed to log creation for PendaftaranCalonMhs ID {$pendaftaranCalonMhs->id}: " . $e->getMessage());
         }
+
+        app(LegacyTagihanLinkerService::class)->linkForCalon($pendaftaranCalonMhs);
     }
 
     public function updated(PendaftaranCalonMhs $pendaftaranCalonMhs): void
@@ -44,6 +47,10 @@ class PendaftaranCalonMhsObserver
             );
         } catch (\Exception $e) {
             Log::error("Failed to log update for PendaftaranCalonMhs ID {$pendaftaranCalonMhs->id}: " . $e->getMessage());
+        }
+
+        if ($pendaftaranCalonMhs->wasChanged(['no_pendaftaran', 'nim'])) {
+            app(LegacyTagihanLinkerService::class)->linkForCalon($pendaftaranCalonMhs);
         }
     }
 

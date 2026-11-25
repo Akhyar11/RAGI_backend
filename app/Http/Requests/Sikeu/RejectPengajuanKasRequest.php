@@ -8,9 +8,14 @@ class RejectPengajuanKasRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('sikeu.pengajuan_kas.reject') ||
-               $this->user()?->hasPermission('sikeu.pengajuan_kas.approve') ||
-               $this->user()?->hasPermission('sikeu.pengajuan_kas.manage');
+        $user = $this->user();
+
+        return $user && (
+            $user->isSuperAdmin() ||
+            $user->isAdmin() ||
+            $user->hasPermission('sikeu.pengajuan.approve') ||
+            $user->hasPermission('sikeu.kas.manage')
+        );
     }
 
     public function rules(): array

@@ -14,6 +14,7 @@ class PiutangMahasiswaController extends Controller
      */
     public function index(Request $request)
     {
+        $groupBy = $request->query('group_by', 'tagihan'); // 'tagihan' (default) | 'mahasiswa'
         $perPage = min(100, $request->integer('per_page', 15));
         $status = $request->query('status', 'piutang'); // 'piutang' (default: belum lunas), 'belum_bayar', 'sebagian', 'dispensasi', 'lunas', 'all'
         $angkatan = $request->query('angkatan');
@@ -64,7 +65,32 @@ class PiutangMahasiswaController extends Controller
         $summaryQuery = TagihanMahasiswa::query();
         $this->applyFilters($summaryQuery, $status, $tahunAkademikId, $angkatan, $programStudiId, $search, $cutoffDate);
 
-        $allTagihans = $summaryQuery->with(['pembayarans'])->get();
+        $withRelations = $groupBy === 'mahasiswa'
+            ? ['mahasiswa.programStudi', 'tipeTagihanMahasiswa', 'calonMahasiswa.programStudi', 'pembayarans', 'dispensasis' => fn ($q) => $q->where('status', 'approved')]
+            : ['pembayarans'];
+        $allTagihans = $summaryQuery->with($withRelations)->get();
+
+        // Preload catatan pembayaran berdasarkan h2h_custid untuk tagihan yang belum punya mahasiswa_id/calon_mahasiswa_id
+        $orphanCustIds = ($groupBy === 'mahasiswa' ? $allTagihans : collect($paginated->items()))
+            ->filter(fn ($t) => !$t->mahasiswa_id && !$t->calon_mahasiswa_id && !empty($t->h2h_custid))
+            ->pluck('h2h_custid')
+            ->unique()
+            ->values()
+            ->all();
+        $catatanByCustid = [];
+        if (!empty($orphanCustIds)) {
+            $rowsCatatan = \Illuminate\Support\Facades\DB::table('sikeu_pembayaran as p')
+                ->join('sikeu_tagihan_mahasiswa as t', 't.id', '=', 'p.tagihan_id')
+                ->whereIn('t.h2h_custid', $orphanCustIds)
+                ->whereNotNull('p.catatan')
+                ->select('t.h2h_custid', 'p.catatan')
+                ->get();
+            foreach ($rowsCatatan as $rc) {
+                if (!isset($catatanByCustid[$rc->h2h_custid]) && preg_match('/(?:AN\s+PENGR?I+M|NAMA\s*[:\-])/i', (string) $rc->catatan)) {
+                    $catatanByCustid[$rc->h2h_custid] = $rc->catatan;
+                }
+            }
+        }
         $totalTagihan = (float)$allTagihans->sum('total_tagihan');
         $totalPotongan = (float)$allTagihans->sum('total_potongan');
         $totalDenda = (float)$allTagihans->sum('total_denda');
@@ -126,16 +152,130 @@ class PiutangMahasiswaController extends Controller
             }
         }
 
+        if ($groupBy === 'mahasiswa') {
+            $grouped = $allTagihans->groupBy(function ($t) {
+                if ($t->mahasiswa_id) {
+                    return 'mhs:' . $t->mahasiswa_id;
+                }
+                if ($t->calon_mahasiswa_id) {
+                    return 'calon:' . $t->calon_mahasiswa_id;
+                }
+                if (!empty($t->h2h_custid)) {
+                    return 'cust:' . trim((string) $t->h2h_custid);
+                }
+
+                return 'tagihan:' . $t->id;
+            })->map(function ($items) use ($cutoffDate, $catatanByCustid) {
+                $first = $items->first();
+                $fallbackCatatan = $first->h2h_custid ? ($catatanByCustid[$first->h2h_custid] ?? null) : null;
+                $identitas = TagihanMahasiswa::resolveIdentitasDisplay($first, $fallbackCatatan);
+                $mhs = $first->mahasiswa;
+                $tipeMhs = $first->tipeTagihanMahasiswa;
+                $calon = $first->calonMahasiswa;
+                $angkatanVal = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? ($calon ? date('Y') : null);
+
+                $sumTagihan = (float) $items->sum('total_tagihan');
+                $sumPotongan = (float) $items->sum('total_potongan');
+                $sumDenda = (float) $items->sum('total_denda');
+                $sumBayar = (float) $items->sum(function ($t) use ($cutoffDate) {
+                    if ($cutoffDate) {
+                        return (float) $t->pembayarans->where('status', 'success')->filter(function ($p) use ($cutoffDate) {
+                            $tgl = $p->waktu_bayar ? $p->waktu_bayar->toDateString() : ($p->created_at ? $p->created_at->toDateString() : null);
+
+                            return $tgl && $tgl <= $cutoffDate;
+                        })->sum('jumlah_bayar');
+                    }
+
+                    return (float) $t->total_bayar;
+                });
+                $sisa = max(0, ($sumTagihan + $sumDenda - $sumPotongan) - $sumBayar);
+                $hasDispensasi = $items->contains(fn ($t) => $t->dispensasis->isNotEmpty() || $t->status === 'dispensasi');
+                $statusRow = $sisa <= 0 ? 'lunas' : ($hasDispensasi ? 'dispensasi' : ($sumBayar > 0 ? 'sebagian' : 'belum_bayar'));
+
+                return [
+                    'id' => $first->id,
+                    'mahasiswa_id' => $first->mahasiswa_id,
+                    'calon_mahasiswa_id' => $first->calon_mahasiswa_id,
+                    'no_pendaftaran' => $calon?->no_pendaftaran,
+                    'is_calon_mahasiswa' => (bool) $calon,
+                    'nim' => $identitas['nim'],
+                    'nama_mahasiswa' => $identitas['nama'],
+                    'angkatan' => (int) $angkatanVal,
+                    'program_studi' => $identitas['prodi'],
+                    'jumlah_tagihan' => $items->count(),
+                    'nomor_tagihan_list' => $items->pluck('nomor_tagihan')->values()->all(),
+                    'nomor_tagihan' => $items->count() . ' Tagihan',
+                    'total_tagihan' => $sumTagihan,
+                    'total_potongan' => $sumPotongan,
+                    'total_denda' => $sumDenda,
+                    'total_bayar' => $sumBayar,
+                    'sisa_piutang' => $sisa,
+                    'status' => $statusRow,
+                    'has_dispensasi' => $hasDispensasi,
+                ];
+            })->values();
+
+            $groupedSortOrder = strtolower((string) $request->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+            $groupedSortBy = in_array($request->query('sort_by'), ['nama_mahasiswa', 'nim', 'sisa_piutang'], true)
+                ? $request->query('sort_by')
+                : 'sisa_piutang';
+
+            $grouped = $groupedSortOrder === 'asc'
+                ? $grouped->sortBy($groupedSortBy)->values()
+                : $grouped->sortByDesc($groupedSortBy)->values();
+
+            $currentPage = $request->integer('page', 1);
+            $totalGrouped = $grouped->count();
+            $sliced = $grouped->slice(($currentPage - 1) * $perPage, $perPage)->values();
+            $lastPage = max(1, (int) ceil($totalGrouped / $perPage));
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Rekap piutang per mahasiswa berhasil dimuat',
+                'data' => $sliced,
+                'meta' => [
+                    'current_page' => $currentPage,
+                    'per_page' => $perPage,
+                    'total' => $totalGrouped,
+                    'last_page' => $lastPage,
+                    'from' => $totalGrouped > 0 ? (($currentPage - 1) * $perPage) + 1 : null,
+                    'to' => $totalGrouped > 0 ? min($totalGrouped, $currentPage * $perPage) : null,
+                ],
+                'summary' => [
+                    'total_tagihan' => $totalTagihan,
+                    'total_potongan' => $totalPotongan,
+                    'total_denda' => $totalDenda,
+                    'total_bayar' => $totalBayar,
+                    'total_piutang' => $totalPiutang,
+                    'total_mahasiswa_tunggakan' => $totalMahasiswaTunggakan,
+                    'total_record_dispensasi' => $totalRecordDispensasi,
+                    'aging' => $aging,
+                ],
+                'filters' => [
+                    'search' => $search,
+                    'angkatan' => $angkatan,
+                    'tahun_akademik_id' => $tahunAkademikId,
+                    'program_studi_id' => $programStudiId,
+                    'cutoff_date' => $cutoffDate,
+                    'status' => $status,
+                    'group_by' => 'mahasiswa',
+                    'sort_by' => $sortBy,
+                    'sort_order' => $sortOrder,
+                ],
+            ]);
+        }
+
         // Transform data output
-        $formattedData = collect($paginated->items())->map(function ($t) use ($cutoffDate) {
+        $formattedData = collect($paginated->items())->map(function ($t) use ($cutoffDate, $catatanByCustid) {
             $mhs = $t->mahasiswa;
             $tipeMhs = $t->tipeTagihanMahasiswa;
             $calon = $t->calonMahasiswa;
-
-            $nim = $mhs?->nim ?? $tipeMhs?->nim ?? $calon?->nim ?? ($calon?->no_pendaftaran ?: '-');
-            $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? $calon?->nama_lengkap ?? ('Mahasiswa #' . ($t->mahasiswa_id ?? $t->calon_mahasiswa_id ?? '-'));
+            $fallbackCatatan = $t->h2h_custid ? ($catatanByCustid[$t->h2h_custid] ?? null) : null;
+            $identitas = TagihanMahasiswa::resolveIdentitasDisplay($t, $fallbackCatatan);
+            $nim = $identitas['nim'];
+            $nama = $identitas['nama'];
             $angkatanVal = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? ($calon ? date('Y') : null);
-            $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? $calon?->programStudi?->nama ?? '-';
+            $prodi = $identitas['prodi'];
 
             $totalBayarRow = $cutoffDate
                 ? (float)$t->pembayarans->where('status', 'success')->filter(function ($p) use ($cutoffDate) {
@@ -249,6 +389,23 @@ class PiutangMahasiswaController extends Controller
 
         $tagihans = $query->orderBy('id', 'desc')->get();
 
+        try {
+            \App\Services\AuditLogService::record(
+                module: 'SIKEU',
+                action: 'export',
+                tableName: 'sikeu_tagihan_mahasiswa',
+                recordId: 0,
+                oldValues: null,
+                newValues: [
+                    'format' => 'excel',
+                    'filters' => $request->only(['status', 'tahun_akademik_id', 'angkatan', 'program_studi_id', 'search']),
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log export piutang: ' . $e->getMessage());
+        }
+
         $filename = 'Laporan_Piutang_Mahasiswa_' . ($cutoffDate ? 'Cutoff_' . str_replace('-', '', $cutoffDate) . '_' : '') . date('Ymd_His') . '.xls';
 
         $headers = [
@@ -337,11 +494,11 @@ class PiutangMahasiswaController extends Controller
                 $mhs = $t->mahasiswa;
                 $tipeMhs = $t->tipeTagihanMahasiswa;
                 $calon = $t->calonMahasiswa;
-
-                $nim = $mhs?->nim ?? $tipeMhs?->nim ?? $calon?->nim ?? ($calon?->no_pendaftaran ?: ($t->mahasiswa_id ? (string)$t->mahasiswa_id : '-'));
-                $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? $calon?->nama_lengkap ?? ('Mahasiswa #' . ($t->mahasiswa_id ?? $t->calon_mahasiswa_id ?? '-'));
+                $identitas = TagihanMahasiswa::resolveIdentitasDisplay($t);
+                $nim = $identitas['nim'];
+                $nama = $identitas['nama'];
                 $angkatanVal = $mhs?->angkatan ?? $tipeMhs?->tahun_angkatan ?? ($calon ? date('Y') : '-');
-                $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? $calon?->programStudi?->nama ?? '-';
+                $prodi = $identitas['prodi'];
                 $taNama = $t->tahunAkademik?->nama ?? ($t->tahun_akademik_id ? ('TA #' . $t->tahun_akademik_id) : '-');
 
                 $totalBayarRow = $cutoffDate
@@ -459,8 +616,20 @@ class PiutangMahasiswaController extends Controller
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
                 $q->where('nomor_tagihan', 'like', "%{$search}%")
+                  ->orWhere('h2h_custid', 'like', "%{$search}%")
                   ->orWhere('mahasiswa_id', 'like', "%{$search}%")
                   ->orWhere('calon_mahasiswa_id', 'like', "%{$search}%")
+                  ->orWhereHas('pembayarans', function ($p) use ($search) {
+                      $p->where('catatan', 'like', "%{$search}%")
+                        ->orWhere('kode_transaksi', 'like', "%{$search}%");
+                  })
+                  ->orWhereIn('h2h_custid', function ($sub) use ($search) {
+                      $sub->select('t2.h2h_custid')
+                          ->from('sikeu_tagihan_mahasiswa as t2')
+                          ->join('sikeu_pembayaran as p2', 'p2.tagihan_id', '=', 't2.id')
+                          ->whereNotNull('t2.h2h_custid')
+                          ->where('p2.catatan', 'like', "%{$search}%");
+                  })
                   ->orWhereHas('mahasiswa', function ($m) use ($search) {
                       $m->where('nim', 'like', "%{$search}%")
                         ->orWhere('nama_lengkap', 'like', "%{$search}%")

@@ -145,4 +145,52 @@ class TagihanMahasiswa extends Model
     {
         return $this->hasMany(DispensasiTagihan::class, 'tagihan_id');
     }
+
+    /**
+     * Resolve NIM, nama, dan prodi tampilan dengan fallback ke h2h_custid & catatan pembayaran
+     * apabila mahasiswa_id / calon_mahasiswa_id belum tertaut (mis. data migrasi legacy).
+     *
+     * @return array{nim: string, nama: string, prodi: string}
+     */
+    public static function resolveIdentitasDisplay(?self $tagihan, ?string $catatan = null): array
+    {
+        $mhs = $tagihan?->mahasiswa;
+        $tipeMhs = $tagihan?->tipeTagihanMahasiswa;
+        $calon = $tagihan?->calonMahasiswa;
+
+        $nim = $mhs?->nim ?? $tipeMhs?->nim ?? $calon?->nim ?? ($calon?->no_pendaftaran ?: null);
+        $nama = $mhs?->nama_lengkap ?? $tipeMhs?->nama_mahasiswa ?? $calon?->nama_lengkap;
+        $prodi = $mhs?->programStudi?->nama ?? $mhs?->programStudi?->nama_prodi ?? $calon?->programStudi?->nama ?? '-';
+
+        if (!$nim || !$nama) {
+            $catatanText = $catatan ?? ($tagihan?->pembayarans?->pluck('catatan')->filter()->first());
+            if (!$nim) {
+                if (!empty($tagihan?->h2h_custid)) {
+                    $nim = trim((string) $tagihan->h2h_custid);
+                } elseif ($catatanText && preg_match('/\bNIM\s*[:\-]?\s*([A-Za-z0-9.\-]+)/i', (string) $catatanText, $m)) {
+                    $nim = trim($m[1]);
+                } elseif ($tagihan?->mahasiswa_id) {
+                    $nim = (string) $tagihan->mahasiswa_id;
+                }
+            }
+
+            if (!$nama) {
+                if ($catatanText && preg_match('/(?:AN\s+PENGR?I+M|NAMA\s*[:\-])\s*([A-Za-z.\'\s]{3,80})/i', (string) $catatanText, $m)) {
+                    $namaCatatan = trim(preg_replace('/\s+/', ' ', $m[1]));
+                    if ($namaCatatan !== '') {
+                        $nama = $namaCatatan . ' (Catatan)';
+                    }
+                }
+                if (!$nama) {
+                    $nama = $nim ? "Mahasiswa ({$nim})" : ('Mahasiswa #' . ($tagihan?->mahasiswa_id ?? $tagihan?->calon_mahasiswa_id ?? '-'));
+                }
+            }
+        }
+
+        return [
+            'nim' => $nim ?: '-',
+            'nama' => $nama,
+            'prodi' => $prodi ?: '-',
+        ];
+    }
 }

@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\Siakad\Mahasiswa;
 use App\Services\AuditLogService;
+use App\Services\Sikeu\LegacyTagihanLinkerService;
 
 class MahasiswaObserver
 {
@@ -19,6 +20,8 @@ class MahasiswaObserver
             recordId: $mahasiswa->id,
             newValues: $mahasiswa->toArray()
         );
+
+        app(LegacyTagihanLinkerService::class)->linkForMahasiswa($mahasiswa);
     }
 
     /**
@@ -35,6 +38,10 @@ class MahasiswaObserver
                 oldValues: $mahasiswa->getOriginal(),
                 newValues: $mahasiswa->getChanges()
             );
+
+            if ($mahasiswa->wasChanged('nim')) {
+                app(LegacyTagihanLinkerService::class)->linkForMahasiswa($mahasiswa);
+            }
 
             // Jejak status akademik BAAK (cuti/mangkir/dropout/lulus)
             if ($mahasiswa->wasChanged('status')) {

@@ -353,7 +353,7 @@ class PengajuanOperasionalService
         $role = $roleMap[$tahapSaatIni];
 
         $pengajuan = DB::transaction(function () use ($pengajuan, $aksi, $catatan, $tahapSaatIni, $role) {
-            $userId = auth()->id() ?? 1;
+            $userId = auth()->id();
 
             ApprovalHistoryPencairan::create([
                 'pengajuan_id' => $pengajuan->id,
@@ -711,8 +711,8 @@ class PengajuanOperasionalService
             ApprovalHistoryPencairan::create([
                 'pengajuan_id' => $pengajuan->id,
                 'user_id' => $userId,
-                'tahap' => 'keuangan',
-                'aksi' => 'approve',
+                'role_approver' => 'keuangan',
+                'status_action' => 'approved',
                 'catatan' => $data['catatan'] ?? 'Panjar disetujui dari kas: ' . $unitKas->nama_kas . ' sebesar Rp ' . number_format($nominal, 0, ',', '.'),
             ]);
 
@@ -754,6 +754,10 @@ class PengajuanOperasionalService
      */
     public function tutupLpjSimpeg(PengajuanPencairanKas $pengajuan, array $data, ?Request $request = null): PengajuanPencairanKas
     {
+        if (in_array($pengajuan->status, ['selesai', 'ditolak'], true)) {
+            throw new \RuntimeException("Pengajuan berstatus '{$pengajuan->status}' tidak dapat ditutup ulang.");
+        }
+
         $pengajuan = DB::transaction(function () use ($pengajuan, $data, $request) {
             $userId = auth()->id();
 
@@ -795,8 +799,8 @@ class PengajuanOperasionalService
             ApprovalHistoryPencairan::create([
                 'pengajuan_id' => $pengajuan->id,
                 'user_id' => $userId,
-                'tahap' => 'keuangan',
-                'aksi' => 'approve',
+                'role_approver' => 'keuangan',
+                'status_action' => 'approved',
                 'catatan' => $data['catatan'] ?? 'LPJ perjalanan dinas telah diverifikasi dan kasbon ditutup (selesai).',
             ]);
 
@@ -892,7 +896,7 @@ class PengajuanOperasionalService
                     'sisa_nominal' => $sisa,
                     'metode_sisa' => $metode,
                     'file_nota_kuitansi' => $notaPath ?? LaporanBuktiPelaksanaan::where('pengajuan_id', $pengajuan->id)->value('file_nota_kuitansi'),
-                    'bukti_pengembalian_path' => $kembaliPath,
+                    'bukti_pengembalian_path' => $kembaliPath ?? LaporanBuktiPelaksanaan::where('pengajuan_id', $pengajuan->id)->value('bukti_pengembalian_path'),
                     'nomor_rekening_tujuan' => $data['nomor_rekening_tujuan'] ?? null,
                     'rincian_keterangan' => $data['rincian_keterangan'] ?? null,
                     'status_verifikasi' => 'pending',

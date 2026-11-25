@@ -4,6 +4,7 @@
 > **Base URL**: `/api/v1/sikeu/piutang`  
 > **Autentikasi**: Bearer Token (Sanctum / OAuth2)  
 > **Dibuat**: 2026-08-27  
+> **Diperbarui**: 2026-11-25  
 
 ## Daftar Endpoint
 
@@ -22,7 +23,8 @@
 
 | Parameter | Type | Required | Default | Deskripsi |
 |---|---|---|---|---|
-| `search` | string | ❌ | — | Cari NIM atau Nama Mahasiswa |
+| `search` | string | ❌ | — | Cari NIM, Nama Mahasiswa, `h2h_custid`, nomor tagihan, atau catatan pembayaran |
+| `group_by` | string | ❌ | `tagihan` | Mode tampilan: `tagihan` (per faktur/tagihan) atau `mahasiswa` (rekap agregat per mahasiswa/calon) |
 | `angkatan` | integer | ❌ | — | Filter tahun angkatan mahasiswa (misal 2024) |
 | `tahun_akademik_id` | integer | ❌ | — | Filter ID Tahun Akademik / Periode |
 | `program_studi_id` | integer | ❌ | — | Filter ID Program Studi |
@@ -84,6 +86,62 @@
         "program_studi_id": null,
         "status": "piutang",
         "sort_by": "id",
+        "sort_order": "desc"
+    }
+}
+```
+
+### Response Sukses (`group_by=mahasiswa`)
+
+```json
+{
+    "status": "success",
+    "message": "Rekap piutang per mahasiswa berhasil dimuat",
+    "data": [
+        {
+            "id": 1,
+            "mahasiswa_id": 5,
+            "calon_mahasiswa_id": null,
+            "no_pendaftaran": null,
+            "is_calon_mahasiswa": false,
+            "nim": "B24059",
+            "nama_mahasiswa": "MUHAMMAD TAQIYYAN ULIN NUHA",
+            "angkatan": 2024,
+            "program_studi": "Teknologi Rekayasa Perangkat Lunak",
+            "jumlah_tagihan": 11,
+            "nomor_tagihan_list": ["TGH-LEG-AAF5D229B4BB81E1"],
+            "nomor_tagihan": "11 Tagihan",
+            "total_tagihan": 36700000,
+            "total_potongan": 0,
+            "total_denda": 0,
+            "total_bayar": 13750000,
+            "sisa_piutang": 22950000,
+            "status": "dispensasi",
+            "has_dispensasi": true
+        }
+    ],
+    "meta": {
+        "current_page": 1,
+        "per_page": 15,
+        "total": 1,
+        "last_page": 1,
+        "from": 1,
+        "to": 1
+    },
+    "summary": {
+        "total_tagihan": 36700000,
+        "total_potongan": 0,
+        "total_denda": 0,
+        "total_bayar": 13750000,
+        "total_piutang": 22950000,
+        "total_mahasiswa_tunggakan": 1,
+        "total_record_dispensasi": 1
+    },
+    "filters": {
+        "search": "B24059",
+        "group_by": "mahasiswa",
+        "status": "piutang",
+        "sort_by": "sisa_piutang",
         "sort_order": "desc"
     }
 }

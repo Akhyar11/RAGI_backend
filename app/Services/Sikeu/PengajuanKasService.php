@@ -7,8 +7,11 @@ use App\Models\Sikeu\TransaksiKasUnit;
 use App\Models\Sikeu\UnitKas;
 use App\Models\Sikeu\PengeluaranKampus;
 use App\Models\Simpeg\SuratTugas;
+use App\Services\AuditLogService;
 use App\Services\Sikeu\AutoJournalService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class PengajuanKasService
@@ -97,10 +100,10 @@ class PengajuanKasService
                     $saldoUtamaSebelum = (float) $kasUtama->saldo_saat_ini;
                     $kasUtama->decrement('saldo_saat_ini', (float) $pengajuan->nominal_disetujui);
 
-                    TransaksiKasUnit::create([
+                    $trxUtama = TransaksiKasUnit::create([
                         'unit_kas_id' => $kasUtama->id,
                         'pengajuan_pencairan_id' => $pengajuan->id,
-                        'kode_transaksi' => 'TRX-' . time(),
+                        'kode_transaksi' => 'TRX-' . date('YmdHis') . '-' . strtoupper(Str::random(4)),
                         'jenis_transaksi' => 'kredit_pengeluaran',
                         'nominal' => $pengajuan->nominal_disetujui,
                         'saldo_sebelum' => $saldoUtamaSebelum,
@@ -108,16 +111,28 @@ class PengajuanKasService
                         'keterangan' => 'Penyaluran ke unit: ' . $pengajuan->judul_pengajuan,
                         'tanggal_transaksi' => now()->toDateString(),
                     ]);
+                    try {
+                        AuditLogService::record(
+                            module: 'SIKEU',
+                            action: 'create',
+                            tableName: 'sikeu_transaksi_kas_unit',
+                            recordId: (int) $trxUtama->id,
+                            oldValues: null,
+                            newValues: $trxUtama->toArray()
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning("Gagal mencatat audit log transaksi kas utama #{$trxUtama->id}: " . $e->getMessage());
+                    }
                 }
 
                 $saldoSebelum = $unitKas->saldo_saat_ini;
                 $unitKas->saldo_saat_ini += $pengajuan->nominal_disetujui;
                 $unitKas->save();
 
-                TransaksiKasUnit::create([
+                $trxUnit = TransaksiKasUnit::create([
                     'unit_kas_id' => $unitKas->id,
                     'pengajuan_pencairan_id' => $pengajuan->id,
-                    'kode_transaksi' => 'TRX-' . time(),
+                    'kode_transaksi' => 'TRX-' . date('YmdHis') . '-' . strtoupper(Str::random(4)),
                     'jenis_transaksi' => 'debet_pemasukan',
                     'nominal' => $pengajuan->nominal_disetujui,
                     'saldo_sebelum' => $saldoSebelum,
@@ -125,6 +140,18 @@ class PengajuanKasService
                     'keterangan' => 'Pencairan: ' . $pengajuan->judul_pengajuan,
                     'tanggal_transaksi' => now()->toDateString(),
                 ]);
+                try {
+                    AuditLogService::record(
+                        module: 'SIKEU',
+                        action: 'create',
+                        tableName: 'sikeu_transaksi_kas_unit',
+                        recordId: (int) $trxUnit->id,
+                        oldValues: null,
+                        newValues: $trxUnit->toArray()
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning("Gagal mencatat audit log transaksi kas unit #{$trxUnit->id}: " . $e->getMessage());
+                }
 
                 // Trigger Auto Journal (Debet Beban Operasional Unit, Kredit Kas Utama Rektorat)
                 AutoJournalService::recordDisbursementJournal(

@@ -133,8 +133,14 @@ class SinapraSikeuIntegrationTest extends TestCase
             'status' => 'disetujui',
         ]);
 
+        $akunKas = \App\Models\Sikeu\AkunKeuangan::firstOrCreate(
+            ['kode_akun' => '102.01'],
+            ['nama_akun' => 'Bank Operasional Kampus', 'kelompok' => 'aset', 'saldo_normal' => 'debet']
+        );
+
         $unitKas = UnitKas::create([
             'nama_kas' => 'Kas Operasional Rektorat',
+            'akun_keuangan_id' => $akunKas->id,
             'saldo_saat_ini' => 200000000,
             'status' => true,
         ]);
