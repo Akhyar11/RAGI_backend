@@ -39,7 +39,7 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 | PUT | `/api/v1/siakad/perkuliahan/nilai/{id}` | Perbarui nilai | ✅ |
 | GET | `/api/v1/siakad/perkuliahan/transkrip` | Transkrip mahasiswa | ✅ |
 | GET | `/api/v1/siakad/perkuliahan/kelas/{kelasId}/pertemuan` | Daftar pertemuan | ✅ |
-| POST | `/api/v1/siakad/perkuliahan/kelas/{kelasId}/pertemuan` | Tambah pertemuan | ✅ |
+| POST | `/api/v1/siakad/perkuliahan/kelas/{kelasId}/pertemuan` | Tambah pertemuan (Super Admin saja; dipanggil UI LMS) | ✅ `lms.manage-perkuliahan` |
 | GET | `/api/v1/siakad/perkuliahan/pertemuan/{pertemuanId}/absensi` | Daftar absensi | ✅ |
 | POST | `/api/v1/siakad/perkuliahan/pertemuan/{pertemuanId}/absensi` | Simpan absensi | ✅ |
 
@@ -686,6 +686,7 @@ Monitoring dan rekapitulasi progres pengisian KRS mahasiswa per program studi de
 > - Aksi tulis nilai/KRS/kelas tercatat pada audit log SIAKAD.
 > - Password/token tidak pernah dikembalikan pada response.
 > - Peserta untuk daftar presensi bersumber dari KRS berstatus `disetujui` atau `diajukan`; membuat pertemuan tidak otomatis mencatat status hadir.
+> - `POST /kelas/{kelasId}/pertemuan` kini dilindungi Gate `lms.manage-perkuliahan`: hanya Super Admin yang boleh menambah/mengubah pertemuan. Dosen pengampu dan pengelola mendapat `403`. Endpoint baca `GET /kelas/{kelasId}/pertemuan` tetap terbuka sesuai `siakad.kelas.read`.
 > - Absensi yang belum disimpan dikembalikan dengan `status: null` dan `is_submitted: false`. Status kosong bukan kehadiran.
 
 ## Presensi Pertemuan

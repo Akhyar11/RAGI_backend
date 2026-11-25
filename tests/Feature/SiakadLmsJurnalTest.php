@@ -27,13 +27,18 @@ use Tests\TestCase;
 
 /**
  * Jurnal presensi lokal: satu sumber data pada `siakad_pertemuan`,
- * bukti privat via FileStorageService, dan RBAC dosen pengampu.
+ * bukti privat via FileStorageService, dan RBAC per kelas.
+ *
+ * Jurnal/presensi boleh ditulis oleh Dosen Pengampu kelasnya atau Super Admin.
+ * Pengelola non-pengampu, mahasiswa, dan dosen non-pengampu hanya memantau;
+ * mutasi perkuliahan lainnya tetap dibatasi Gate `lms.manage-perkuliahan`.
  */
 class SiakadLmsJurnalTest extends TestCase
 {
     use RefreshDatabase;
 
     protected User $userAdmin;
+    protected User $superAdmin;
     protected User $userDosen;
     protected User $userMhs;
     protected User $userDosenLain;
@@ -51,6 +56,7 @@ class SiakadLmsJurnalTest extends TestCase
         $this->privateDisk = (string) config('filesystems.private_disk', 'public');
 
         $this->userAdmin = User::factory()->create(['username' => 'admin.jurnal', 'email' => 'admin.jurnal@test.ac.id']);
+        $this->superAdmin = User::factory()->create(['username' => 'superadmin.jurnal', 'email' => 'superadmin.jurnal@test.ac.id']);
         $this->userDosen = User::factory()->create(['username' => 'dosen.jurnal', 'email' => 'dosen.jurnal@test.ac.id']);
         $this->userMhs = User::factory()->create(['username' => 'mhs.jurnal', 'email' => 'mhs.jurnal@test.ac.id']);
         $this->userDosenLain = User::factory()->create(['username' => 'dosen.lain', 'email' => 'dosen.lain@test.ac.id']);
@@ -130,6 +136,10 @@ class SiakadLmsJurnalTest extends TestCase
             'kode_kelas' => 'IF-JUR-A',
             'nama_kelas' => 'Kelas Jurnal A',
             'kapasitas' => 30,
+            'hari' => 'senin',
+            'jam_mulai' => '08:00:00',
+            'jam_selesai' => '10:30:00',
+            'ruangan_id' => $this->ruangan->id,
         ]);
         $this->kelasLain = Kelas::create([
             'program_studi_id' => $prodi->id,
@@ -180,6 +190,7 @@ class SiakadLmsJurnalTest extends TestCase
         ]);
 
         // ── RBAC ──────────────────────────────────────────────────────
+        $roleSuperAdmin = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin']);
         $roleAdmin = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin']);
         $roleMhs = Role::firstOrCreate(['slug' => 'mahasiswa'], ['name' => 'Mahasiswa']);
         $roleDosen = Role::firstOrCreate(['slug' => 'dosen_pengajar'], ['name' => 'Dosen Pengajar']);
@@ -191,6 +202,7 @@ class SiakadLmsJurnalTest extends TestCase
         $roleDosen->permissions()->syncWithoutDetaching([$permKelasRead->id, $permKelasManage->id]);
         $roleMhs->permissions()->syncWithoutDetaching([$permKelasRead->id]);
 
+        $this->superAdmin->roles()->attach($roleSuperAdmin->id);
         $this->userAdmin->roles()->attach($roleAdmin->id);
         $this->userDosen->roles()->attach($roleDosen->id);
         $this->userDosenLain->roles()->attach($roleDosen->id);
@@ -221,19 +233,37 @@ class SiakadLmsJurnalTest extends TestCase
         ], $overrides);
     }
 
-    public function test_dosen_pengampu_dapat_membaca_dan_menyimpan_jurnal_dengan_bukti_privat(): void
+    public function test_superadmin_dapat_menyimpan_jurnal_dengan_bukti_privat(): void
     {
-        Passport::actingAs($this->userDosen);
+        // Super Admin boleh menulis jurnal kelas mana pun.
+        Passport::actingAs($this->superAdmin);
 
         $get = $this->getJson($this->jurnalUrl())->assertStatus(200)->assertJsonStructure([
             'status',
             'data' => [
                 'jurnal' => ['pertemuan_id', 'kelas_id', 'jenis_kegiatan', 'ruangan_id', 'bukti_pembelajaran_url'],
                 'can_edit',
+                'plotting' => [
+                    'hari',
+                    'jam_mulai',
+                    'jam_selesai',
+                    'ruangan_id',
+                    'ruangan_nama',
+                    'ruangan_kode',
+                    'tanggal_default',
+                    'jenis_kegiatan_default',
+                ],
                 'jenis_kegiatan_options',
             ],
         ]);
         $this->assertTrue($get->json('data.can_edit'));
+        $this->assertSame('senin', $get->json('data.plotting.hari'));
+        $this->assertSame('08:00', $get->json('data.plotting.jam_mulai'));
+        $this->assertSame('10:30', $get->json('data.plotting.jam_selesai'));
+        $this->assertSame($this->ruangan->id, $get->json('data.plotting.ruangan_id'));
+        $this->assertSame('R-JUR-01', $get->json('data.plotting.ruangan_kode'));
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', (string) $get->json('data.plotting.tanggal_default'));
+        $this->assertSame(Pertemuan::JENIS_KEGIATAN_TEORI, $get->json('data.plotting.jenis_kegiatan_default'));
 
         $response = $this->put($this->jurnalUrl(), array_merge($this->validPayload(), [
             'bukti_pembelajaran' => UploadedFile::fake()->create('bukti-jurnal.pdf', 120, 'application/pdf'),
@@ -271,6 +301,34 @@ class SiakadLmsJurnalTest extends TestCase
         $this->assertArrayNotHasKey('token_absensi', $record->new_values ?? []);
     }
 
+    public function test_dosen_pengampu_dapat_membaca_dan_menulis_jurnal_kelasnya(): void
+    {
+        // Siapkan bukti oleh Super Admin, lalu verifikasi dosen pengampu tetap
+        // bisa membacanya dan kini memiliki hak mutasi jurnal kelasnya sendiri.
+        Passport::actingAs($this->superAdmin);
+        $this->put($this->jurnalUrl(), array_merge($this->validPayload(), [
+            'bukti_pembelajaran' => UploadedFile::fake()->create('bukti-baca.pdf', 80, 'application/pdf'),
+        ]), ['Accept' => 'application/json'])->assertStatus(200);
+
+        Passport::actingAs($this->userDosen);
+
+        $response = $this->getJson($this->jurnalUrl())->assertStatus(200);
+        $this->assertTrue($response->json('data.can_edit'));
+        $this->assertNotNull($response->json('data.jurnal.bukti_pembelajaran_url'));
+        $this->assertSame($this->ruangan->id, $response->json('data.plotting.ruangan_id'));
+
+        $this->put($this->jurnalUrl(), $this->validPayload(), ['Accept' => 'application/json'])
+            ->assertStatus(200)
+            ->assertJsonPath('status', 'success');
+
+        $this->assertDatabaseHas('siakad_pertemuan', [
+            'id' => $this->pertemuan->id,
+            'jenis_kegiatan' => Pertemuan::JENIS_KEGIATAN_PRAKTIKUM,
+            'ruangan_id' => $this->ruangan->id,
+            'status_pertemuan' => Pertemuan::STATUS_SELESAI,
+        ]);
+    }
+
     public function test_mahasiswa_melihat_ringkasan_tanpa_bukti_dan_tidak_bisa_menulis(): void
     {
         Passport::actingAs($this->userMhs);
@@ -292,8 +350,8 @@ class SiakadLmsJurnalTest extends TestCase
         $response = $this->getJson($this->jurnalUrl())->assertStatus(200);
         $this->assertFalse($response->json('data.can_edit'));
 
-        // Lolos gate route (punya siakad.kelas.manage), tapi ditolak service
-        // karena bukan Dosen Pengampu kelas.
+        // Lolos permission `siakad.kelas.manage`, tetapi ditolak karena bukan
+        // dosen pengampu kelas ini dan bukan Super Admin.
         $this->put($this->jurnalUrl(), $this->validPayload(), ['Accept' => 'application/json'])
             ->assertStatus(403);
     }
@@ -308,7 +366,7 @@ class SiakadLmsJurnalTest extends TestCase
 
     public function test_pertemuan_dari_kelas_lain_ditolak(): void
     {
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         $pertemuanLain = Pertemuan::create([
             'kelas_id' => $this->kelasLain->id,
             'pertemuan_ke' => 2,
@@ -326,7 +384,7 @@ class SiakadLmsJurnalTest extends TestCase
 
     public function test_validasi_menolak_jenis_kegiatan_dan_ruangan_tidak_valid(): void
     {
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
 
         $this->put($this->jurnalUrl(), $this->validPayload([
             'jenis_kegiatan' => 'tidak-terdaftar',
@@ -343,7 +401,7 @@ class SiakadLmsJurnalTest extends TestCase
 
     public function test_upload_bukti_baru_menghapus_bukti_lama(): void
     {
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
 
         $first = $this->put($this->jurnalUrl(), array_merge($this->validPayload(), [
             'bukti_pembelajaran' => UploadedFile::fake()->create('bukti-pertama.pdf', 80, 'application/pdf'),

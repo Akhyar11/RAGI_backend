@@ -5,7 +5,19 @@
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-25
-> **Diperbarui**: 2026-11-24 (jurnal presensi terintegrasi pada `siakad_pertemuan`, bukti privat, cetak PDF kehadiran & rekap prodi, mode presensi online/offline, QR `RAG-PRESENSI`, TTL rotasi & geofence opsional)
+> **Diperbarui**: 2026-11-25 (mutasi perkuliahan Super Admin-only via Gate `lms.manage-perkuliahan`, kecuali jurnal/presensi untuk Dosen Pengampu kelasnya; auto-fill dari plotting kelas)
+
+## Kebijakan Otorisasi Terbaru
+
+- **Super Admin**: dapat melakukan seluruh mutasi perkuliahan (pertemuan, materi, tugas, quiz, penilaian, pengaturan kelas/modul) pada kelas mana pun, meski bukan dosen pengampu. Super Admin juga boleh mengisi jurnal dan membuka sesi presensi kelas mana pun.
+- **Dosen pengampu**: selain membaca dan berpartisipasi, boleh **mengisi jurnal dan mengelola presensi pada kelas yang diampunya saja** (`PUT .../jurnal`, `POST .../token`, `.../buka-sesi`, `.../token/rotate`, `.../tutup-presensi`, `.../bulk-absensi`, `PATCH .../izin/{id}/proses`). Hak ini ditegakkan di layer service oleh `assertDosenPengampuKelas()`, bukan oleh Gate `lms.manage-perkuliahan`.
+- **Pengelola non-pengampu / dosen non-pengampu / mahasiswa**: tetap dapat **membaca** kelas, mengikuti/berpartisipasi (KRS, kumpul tugas, presensi mahasiswa), serta mengekspor laporan sesuai permission. Tetap **read-only** untuk jurnal/presensi kelas orang lain dan **tidak dapat** menambah/mengubah/menghapus data perkuliahan; endpoint mutasi ditolak `403`.
+- Gate `lms.manage-perkuliahan` diterapkan pada group mutasi umum di `routes/lms.php`, `PUT /pengumpulan/{id}/nilai`, `PUT /attempt-jawaban/{id}/nilai`, `PUT /pengaturan/modul`, dan `POST /api/v1/siakad/perkuliahan/kelas/{kelasId}/pertemuan`. Endpoint jurnal/presensi sengaja berada di luar gate tersebut, pada group `can:siakad.kelas.manage`, lalu dibatasi berdasarkan relasi `dosen_pengampu` di service.
+- `viewer_context` pada overview/pertemuan mengembalikan `can_teach = false` dan `can_configure_kelas = false` untuk dosen/pengelola. Frontend memakai `viewer_mode`/`is_pengampu` untuk tampilan peran, bukan `can_teach`.
+
+### Auto-fill form jurnal/presensi dari plotting kelas
+
+`GET /api/v1/lms/pertemuan/{id}` dan `GET /api/v1/lms/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal` mengembalikan objek `plotting` berisi `hari`, `jam_mulai`, `jam_selesai`, `ruangan_id`, `ruangan_nama`, `ruangan_kode`, `tanggal_default`, dan `jenis_kegiatan_default` dari `siakad_kelas` (plotting). Frontend memakainya sebagai **nilai awal** form: tanggal mengikuti hari kuliah terdekat (termasuk hari ini), jam mulai/selesai dan ruangan mengikuti plotting, jenis kegiatan default `teori`. Isian yang sudah tersimpan selalu lebih prioritas dan tetap dapat diubah oleh dosen pengampu/Super Admin sebelum disimpan.
 
 Controller untuk menangani seluruh aktivitas Learning Management System (LMS) dan Absensi Terintegrasi Perkuliahan. Meliputi manajemen materi perkuliahan multi-file, penugasan mahasiswa dengan auto-sync ke sistem penilaian OBE (`siakad_nilai_komponen_mhs`), absensi token 6-digit dengan masa aktif dinamis, rekapitulasi kehadiran kelas, pengajuan dan persetujuan izin/sakit mahasiswa, serta pengaturan media penyimpanan (Cloudflare R2 atau storage lokal).
 
@@ -25,8 +37,8 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | GET | `/api/v1/lms/tugas/my` | Seluruh daftar tugas mahasiswa di semester aktif | ✅ |
 | GET | `/api/v1/lms/kelas/{kelasId}/overview` | Ringkasan 16 pertemuan kelas, silabus, & progres perkuliahan | ✅ |
 | GET | `/api/v1/lms/kelas/{kelasId}/rekap-absensi` | Rekap kehadiran (dosen: sekelas; mahasiswa: miliknya saja) | ✅ |
-| GET | `/api/v1/lms/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal` | Baca jurnal presensi (mahasiswa ringkasan tanpa bukti; pengelola read-only) | ✅ `siakad.kelas.read` |
-| PUT | `/api/v1/lms/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal` | Simpan jurnal + bukti privat (Dosen Pengampu saja) | ✅ `siakad.kelas.manage` |
+| GET | `/api/v1/lms/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal` | Baca jurnal + `plotting` (mahasiswa ringkasan tanpa bukti; pengelola read-only) | ✅ `siakad.kelas.read` |
+| PUT | `/api/v1/lms/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal` | Simpan jurnal + bukti privat (Dosen Pengampu kelasnya atau Super Admin) | ✅ `siakad.kelas.manage` + resource check |
 | POST | `/api/v1/lms/kelas/{kelasId}/import-materi` | Salin materi dari kelas sumber (pasangan `pertemuan_ke` sama) | ✅ kelola |
 | GET | `/api/v1/lms/kelas/{kelasId}/rekap-matrix` | Matriks kehadiran + peta status per pertemuan | ✅ |
 | GET | `/api/v1/lms/kelas/{kelasId}/ketercapaian` | Ketercapaian MK per komponen OBE (mahasiswa: miliknya saja) | ✅ |
@@ -54,15 +66,15 @@ Controller untuk menangani seluruh aktivitas Learning Management System (LMS) da
 | PUT | `/api/v1/lms/tugas/{tugasId}/kumpulan` | Mahasiswa memperbarui pengumpulan tugasnya (berkas &/atau catatan) | ✅ |
 | DELETE | `/api/v1/lms/tugas/{tugasId}/kumpulan` | Mahasiswa menarik kembali / menghapus pengumpulan tugasnya | ✅ |
 | PUT | `/api/v1/lms/pengumpulan/{pengumpulanId}/nilai` | Dosen memberikan nilai tugas dan auto-sync ke nilai OBE | ✅ |
-| POST | `/api/v1/lms/pertemuan/{pertemuanId}/buka-sesi` | Dosen mengisi jurnal perkuliahan sekaligus membuka sesi presensi (rotasi QR/token 30 detik) | ✅ |
-| POST | `/api/v1/lms/pertemuan/{pertemuanId}/token` | Generate 6-digit token absensi realtime (masa aktif berbatas) | ✅ |
-| POST | `/api/v1/lms/pertemuan/{pertemuanId}/token/rotate` | Putar ulang token umur pendek tiap 30 detik (anti titip-hadir) | ✅ |
-| POST | `/api/v1/lms/pertemuan/{pertemuanId}/tutup-presensi` | Tutup sesi presensi (input token ditolak setelah ini) | ✅ |
+| POST | `/api/v1/lms/pertemuan/{pertemuanId}/buka-sesi` | Dosen Pengampu/Super Admin mengisi jurnal sekaligus membuka sesi presensi (rotasi QR/token 30 detik) | ✅ `siakad.kelas.manage` + resource check |
+| POST | `/api/v1/lms/pertemuan/{pertemuanId}/token` | Generate 6-digit token absensi realtime (Dosen Pengampu kelasnya atau Super Admin) | ✅ `siakad.kelas.manage` + resource check |
+| POST | `/api/v1/lms/pertemuan/{pertemuanId}/token/rotate` | Putar ulang token umur pendek tiap 30 detik (anti titip-hadir) | ✅ `siakad.kelas.manage` + resource check |
+| POST | `/api/v1/lms/pertemuan/{pertemuanId}/tutup-presensi` | Tutup sesi presensi (input token ditolak setelah ini) | ✅ `siakad.kelas.manage` + resource check |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/input-token` | Mahasiswa input token absensi untuk mencatat kehadiran | ✅ |
 | POST | `/api/v1/lms/presensi/scan` | Mahasiswa scan QR presensi (`RAG-PRESENSI:{pertemuan_id}:{token}`) via web/mobile scanner | ✅ |
 | POST | `/api/v1/lms/presensi/check-in` | Alias self check-in mahasiswa untuk aplikasi mobile (kontrak identik dengan `/presensi/scan`) | ✅ `lms.presensi.create` |
 | GET | `/api/v1/lms/presensi/sesi-aktif` | Daftar sesi presensi yang sedang dibuka pada kelas KRS mahasiswa aktif | ✅ |
-| POST | `/api/v1/lms/pertemuan/{pertemuanId}/bulk-absensi` | Dosen menyimpan presensi mahasiswa secara massal/manual | ✅ |
+| POST | `/api/v1/lms/pertemuan/{pertemuanId}/bulk-absensi` | Dosen Pengampu/Super Admin menyimpan presensi mahasiswa secara massal/manual | ✅ `siakad.kelas.manage` + resource check |
 | POST | `/api/v1/lms/pertemuan/{pertemuanId}/izin` | Mahasiswa mengajukan permohonan izin/sakit dengan bukti surat | ✅ |
 | PATCH | `/api/v1/lms/izin/{izinId}/proses` | Dosen menyetujui (disetujui) atau menolak (ditolak) surat izin | ✅ |
 | GET | `/api/v1/lms/download/{type}/{id}` | Dapatkan tautan unduh aman (signed URL / streaming berkas) | ✅ |
@@ -205,8 +217,9 @@ manual dicatat pada audit log LMS.
 ### [GET] `/api/v1/lms/pertemuan`
 
 Daftar pertemuan **agregat level modul** — menggabungkan seluruh kelas yang boleh diakses
-user tanpa parameter `kelasId`, untuk halaman `/lms/pertemuan` di sidebar. Padanan
-module-level dari daftar pertemuan pada halaman detail kelas.
+user tanpa parameter `kelasId`. Endpoint ini dipertahankan untuk integrasi/halaman lama,
+tetapi tidak lagi tampil sebagai menu sidebar: pertemuan diakses dari detail Kelas (`/lms`).
+Padanan module-level dari daftar pertemuan pada halaman detail kelas.
 
 #### Query Parameters
 
@@ -983,7 +996,7 @@ Sama seperti pembaruan, pengumpulan yang sudah dinilai tidak dapat dihapus.
 
 ### [POST] `/api/v1/lms/pertemuan/{pertemuanId}/token`
 
-Menghasilkan 6-digit token acak numerik untuk mahasiswa melakukan presensi mandiri saat sesi perkuliahan berlangsung. Membuka/membuka-ulang sesi (reset penanda tutup).
+Menghasilkan 6-digit token acak numerik untuk mahasiswa melakukan presensi mandiri saat sesi perkuliahan berlangsung. Membuka/membuka-ulang sesi (reset penanda tutup). Hanya **Dosen Pengampu kelas terkait** atau **Super Admin**; bukan Gate `lms.manage-perkuliahan`.
 
 #### Request Body (opsional)
 ```json
@@ -1016,7 +1029,7 @@ Menghasilkan 6-digit token acak numerik untuk mahasiswa melakukan presensi mandi
 
 > Anti titip-hadir (ala Project/lms): putar ulang token dengan umur pendek (`lms_token_rotate_seconds`, default **30 detik**) selama dashboard dosen terbuka. Token lama langsung gugur setelah grace 10 detik. Rotasi dibatasi 15 kali/menit per dosen per pertemuan; kelebihan kuota menghasilkan 429 dengan `retry_after: 60`.
 
-Wajib permission `siakad.kelas.manage`. Tidak ada request body.
+Wajib permission `siakad.kelas.manage` **dan** relasi dosen pengampu pada kelas terkait (atau Super Admin). Tidak ada request body.
 
 #### Path Parameters
 
@@ -1041,7 +1054,7 @@ Wajib permission `siakad.kelas.manage`. Tidak ada request body.
 
 #### Response Error
 
-**403 Forbidden** — tidak memegang `siakad.kelas.manage`.
+**403 Forbidden** — tidak memegang `siakad.kelas.manage`, atau bukan dosen pengampu kelas terkait / Super Admin.
 ```json
 {
     "message": "This action is unauthorized."
@@ -1067,7 +1080,7 @@ Wajib permission `siakad.kelas.manage`. Tidak ada request body.
 
 Dosen menutup sesi presensi. Setelah ditutup: input token mahasiswa ditolak, generate/rotate token ditolak (422). Input manual dosen (`bulk-absensi`) tetap bisa untuk koreksi susulan.
 
-Wajib permission `siakad.kelas.manage`. Tidak ada request body.
+Wajib permission `siakad.kelas.manage` **dan** relasi dosen pengampu pada kelas terkait (atau Super Admin). Tidak ada request body.
 
 #### Path Parameters
 
@@ -1094,7 +1107,7 @@ Wajib permission `siakad.kelas.manage`. Tidak ada request body.
 
 #### Response Error
 
-**403 Forbidden** — tidak memegang `siakad.kelas.manage`.
+**403 Forbidden** — tidak memegang `siakad.kelas.manage`, atau bukan dosen pengampu kelas terkait / Super Admin.
 ```json
 {
     "message": "This action is unauthorized."
@@ -1129,7 +1142,7 @@ Mahasiswa memasukkan kode 6 digit untuk validasi presensi. Syarat: sesi belum di
 
 ### [POST] `/api/v1/lms/pertemuan/{pertemuanId}/bulk-absensi`
 
-Dosen mengisi presensi mahasiswa secara massal/manual untuk satu pertemuan.
+Dosen Pengampu kelas terkait atau Super Admin mengisi presensi mahasiswa secara massal/manual untuk satu pertemuan (`siakad.kelas.manage` + `assertDosenPengampuKelas()` di service).
 
 #### Request Body
 ```json
@@ -1256,7 +1269,7 @@ tanpa duplikat fisik). Wajib permission `siakad.kelas.manage`; tercatat pada `au
 
 #### Response Error
 
-**403 Forbidden** — tidak memegang `siakad.kelas.manage`.
+**403 Forbidden** — tidak memegang `siakad.kelas.manage`, atau bukan dosen pengampu kelas terkait / Super Admin.
 
 ```json
 { "message": "This action is unauthorized." }
@@ -1868,11 +1881,11 @@ cache **24 jam**, di-invalidate saat pengaturan disimpan.
 
 ---
 
-## 9. Presensi Dinamis (Jurnal Dosen + QR/Token Rotasi 30 Detik + Scanner Mahasiswa)
+## 9. Presensi Dinamis (Jurnal Dosen Pengampu + QR/Token Rotasi 30 Detik + Scanner Mahasiswa)
 
 ### [POST] `/api/v1/lms/pertemuan/{pertemuanId}/buka-sesi`
 
-Dosen pengampu mengisi jurnal pertemuan (`materi`, `catatan_pertemuan`, `tanggal`, `jam_mulai`, `jam_selesai`) sekaligus membuka sesi presensi dengan **QR Code & Token 6-Digit yang berputar tiap 30 detik** (`rotate_interval_seconds = 30`). Sekaligus mencatat kehadiran mengajar dosen ke SIMPEG (`SimpegPresensiPengajaranService`).
+Dosen Pengampu kelas terkait (atau Super Admin) mengisi jurnal pertemuan (`materi`, `catatan_pertemuan`, `tanggal`, `jam_mulai`, `jam_selesai`) sekaligus membuka sesi presensi dengan **QR Code & Token 6-Digit yang berputar tiap 30 detik** (`rotate_interval_seconds = 30`). Nilai awal tanggal/jam/ruangan/jenis kegiatan diambil dari plotting kelas dan tetap dapat diubah. Pengelola non-pengampu serta dosen non-pengampu hanya dapat memantau; mutasi ditolak `403`.
 
 #### Request Body
 ```json
@@ -1917,7 +1930,7 @@ Dosen pengampu mengisi jurnal pertemuan (`materi`, `catatan_pertemuan`, `tanggal
 
 | Aturan | Perilaku |
 |---|---|
-| Otorisasi | Hanya **Dosen Pengampu** kelas yang boleh membuka/memutar/menutup sesi. Permission `lms.presensi.manage` dikecualikan dari feature flag. |
+| Otorisasi | **Dosen Pengampu kelasnya** atau **Super Admin** boleh membuka/memutar/menutup sesi (`siakad.kelas.manage` + `assertDosenPengampuKelas()`); bukan Gate `lms.manage-perkuliahan`. Pengelola non-pengampu tetap dapat memantau. Permission `lms.presensi.manage` dikecualikan dari feature flag. |
 | Format QR | `qr_payload = RAG-PRESENSI:{pertemuan_id}:{token}` — sama persis di web dan mobile. |
 | TTL token | `min(lms_token_ttl_minutes * 60, max(60, lms_token_rotate_seconds * 2))` detik sejak rotasi terakhir. |
 | Jendela scan | Diukur dari `token_rotated_at + window_menit`. Sesi yang melewati jendela ditolak dan ditutup oleh `lms:tutup-presensi-otomatis` (tiap 5 menit). |
@@ -1933,7 +1946,7 @@ Contoh error:
 ```
 
 ```json
-{"status":"error","message":"Aksi akademik ini hanya dapat dilakukan oleh Dosen Pengampu kelas terkait."}
+{"status":"error","message":"Anda tidak memiliki hak akses untuk mengelola perkuliahan ini."}
 ```
 
 ### [POST] `/api/v1/lms/presensi/scan`
@@ -2172,6 +2185,16 @@ Menampilkan daftar sesi presensi yang sedang dibuka oleh dosen pada kelas-kelas 
             "updated_at": "2026-11-24T04:38:28+00:00"
         },
         "can_edit": true,
+        "plotting": {
+            "hari": "senin",
+            "jam_mulai": "08:00",
+            "jam_selesai": "10:30",
+            "ruangan_id": 7,
+            "ruangan_nama": "Ruang Jurnal A",
+            "ruangan_kode": "R-JUR-01",
+            "tanggal_default": "2026-11-30",
+            "jenis_kegiatan_default": "teori"
+        },
         "jenis_kegiatan_options": [
             { "value": "teori", "label": "Teori" },
             { "value": "praktikum", "label": "Praktikum" },
@@ -2182,7 +2205,8 @@ Menampilkan daftar sesi presensi yang sedang dibuka oleh dosen pada kelas-kelas 
 }
 ```
 
-> Untuk mahasiswa, `can_edit: false`, `bukti_pembelajaran_path`/`_disk`/`_url` bernilai `null`.
+> `can_edit: true` untuk **Dosen Pengampu kelas terkait** atau **Super Admin**. Pengelola non-pengampu tetap menerima bukti berupa Signed URL, tetapi `can_edit: false` dan PUT ditolak `403`. Untuk mahasiswa, `can_edit: false` dan `bukti_pembelajaran_path`/`_disk`/`_url` bernilai `null`.
+> `plotting` adalah nilai default dari `siakad_kelas` untuk mengisi form: `tanggal_default` mengikuti hari kuliah terdekat (termasuk hari ini), `jenis_kegiatan_default` selalu `teori`. Isian yang sudah disimpan pada `jurnal` lebih prioritas; objek ini hanya fallback dan sama persis juga dikirim pada `GET /api/v1/lms/pertemuan/{id}`.
 > `jenis_kegiatan` adalah closed-set domain (bukan tabel master), dideklarasikan sekali di `Pertemuan::JENIS_KEGIATAN` dan dikembalikan melalui `jenis_kegiatan_options`.
 
 ---
@@ -2191,7 +2215,7 @@ Menampilkan daftar sesi presensi yang sedang dibuka oleh dosen pada kelas-kelas 
 
 > Menyimpan data pertemuan **dan** jurnal dalam satu permintaan, sehingga dosen tidak mengisi dua kali.
 > `Content-Type: multipart/form-data` wajib karena bukti dikirim sebagai berkas.
-> Penulisan dibatasi **Dosen Pengampu kelas** di layer service. Admin/kaprodi bisa memantau lewat GET, tetapi tetap ditolak `403` saat PUT meskipun memiliki `siakad.kelas.manage`.
+> Penulisan diizinkan untuk **Dosen Pengampu kelas terkait** atau **Super Admin** (`siakad.kelas.manage` + `assertDosenPengampuKelas()` di service). Pengelola non-pengampu/dosen non-pengampu/mahasiswa bisa memantau lewat GET, tetapi ditolak `403` saat PUT. Gate `lms.manage-perkuliahan` sengaja tidak dipakai pada endpoint ini.
 
 ### Request Headers
 
@@ -2240,7 +2264,7 @@ Menampilkan daftar sesi presensi yang sedang dibuka oleh dosen pada kelas-kelas 
 }
 ```
 
-**403 Forbidden** — user bukan Dosen Pengampu kelas:
+**403 Forbidden** — user bukan dosen pengampu kelas terkait / Super Admin (atau tidak memiliki permission baca yang sah):
 
 ```json
 {
@@ -2290,5 +2314,5 @@ Menampilkan daftar sesi presensi yang sedang dibuka oleh dosen pada kelas-kelas 
 - **Cakupan Daftar Kelas (`kelas/my`)**: dosen hanya melihat kelas yang diampunya (`dosen_pengampu`), mahasiswa hanya kelas di KRS-nya. Akun tanpa relasi dosen/mahasiswa tidak menerima data apa pun kecuali istimewa (admin/kaprodi). Tanpa parameter `tahun_akademik_id`, daftar dibatasi ke periode aktif (`is_active`); kirim ID periode lain untuk melihat riwayat semester lalu.
 - **Kerahasiaan Data**: Field sensitif seperti token akses storage, credential S3, dan password pengguna tidak akan dikembalikan dalam response API apapun.
 - **Penghapusan Berkas**: Saat materi atau tugas dihapus, berkas fisik yang tersimpan di disk storage akan dibersihkan secara otomatis.
-- **Jurnal Presensi**: Satu baris `siakad_pertemuan` adalah satu-satunya sumber jurnal. Dosen pengampu menulis lewat `PUT .../jurnal`, admin/kaprodi memantau read-only, mahasiswa melihat ringkasan tanpa bukti. Tidak ada tabel jurnal terpisah dan tidak ada sinkronisasi ke PresensiV2.
+- **Jurnal Presensi**: Satu baris `siakad_pertemuan` adalah satu-satunya sumber jurnal. Dosen pengampu menulis jurnal/presensi untuk kelasnya sendiri, Super Admin untuk kelas mana pun; pengelola non-pengampu dan dosen non-pengampu memantau read-only, mahasiswa melihat ringkasan tanpa bukti. Isian awal berasal dari plotting kelas dan tetap dapat diubah. Tidak ada tabel jurnal terpisah dan tidak ada sinkronisasi ke PresensiV2.
 - **Bukti Pembelajaran Privat**: Berkas jurnal tidak pernah diekspos sebagai URL publik/storage langsung. Akses hanya lewat Signed URL 15 menit dari `FileStorageService`.

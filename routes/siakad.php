@@ -393,6 +393,7 @@ Route::prefix('obe')->group(function () {
     Route::post('/soal-kategori', [ObeController::class, 'storeKategoriSoal']);
     Route::delete('/soal-kategori/{id}', [ObeController::class, 'deleteKategoriSoal']);
     Route::post('/soal/{soalId}/opsi', [ObeController::class, 'storeOpsiSoal']);
+    Route::put('/soal/{soalId}/opsi/{opsiId}', [ObeController::class, 'updateOpsiSoal']);
     Route::delete('/soal/{soalId}/opsi/{opsiId}', [ObeController::class, 'deleteOpsiSoal']);
     Route::get('/kelas/{kelasId}/rekap-xlsx', [ObeController::class, 'rekapKelasXlsx']);
     Route::post('/rps/{id}/submit', [ObeController::class, 'submitRps']);

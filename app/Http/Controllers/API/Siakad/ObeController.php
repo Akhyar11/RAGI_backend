@@ -23,6 +23,7 @@ use App\Models\Siakad\BankSoalOpsi;
 use App\Http\Requests\Siakad\Obe\StoreBankSoalRequest;
 use App\Http\Requests\Siakad\Obe\StoreBankSoalKategoriRequest;
 use App\Http\Requests\Siakad\Obe\StoreBankSoalOpsiRequest;
+use App\Http\Requests\Siakad\Obe\UpdateBankSoalOpsiRequest;
 use App\Http\Requests\Siakad\Obe\ImportBankSoalRequest;
 use App\Http\Requests\Siakad\Obe\BulkSoalRequest;
 use App\Http\Requests\Siakad\Obe\BulkMoveSoalRequest;
@@ -2763,9 +2764,11 @@ class ObeController extends Controller
         $maxRows = (int) ($lmsSettings->all()[LmsSetting::KEY_MAX_SOAL_IMPORT] ?? SoalImportService::MAX_ROWS);
 
         $file = $request->file('file');
+        $extension = strtolower((string) $file->getClientOriginalExtension());
         $parsed = SoalImportService::parseFile(
             (string) $file->getRealPath(),
-            min($maxRows, SoalImportService::MAX_ROWS)
+            min($maxRows, SoalImportService::MAX_ROWS),
+            $extension
         );
 
         if (empty($parsed['rows'])) {
@@ -3061,33 +3064,114 @@ class ObeController extends Controller
 
         $soal = BankSoal::findOrFail($soalId);
 
-        $opsi = $soal->opsi()->create($request->validated());
+        $opsi = DB::transaction(function () use ($soal, $request) {
+            $opsi = $soal->opsi()->create($request->validated());
 
-        // Satu soal hanya boleh punya satu opsi benar.
-        if ($opsi->is_benar) {
-            BankSoalOpsi::where('bank_soal_id', $soal->id)
-                ->where('id', '!=', $opsi->id)
-                ->update(['is_benar' => false]);
-        }
+            // Satu soal hanya boleh punya satu opsi benar.
+            if ($opsi->is_benar) {
+                $affectedOpsi = BankSoalOpsi::where('bank_soal_id', $soal->id)
+                    ->where('id', '!=', $opsi->id)
+                    ->where('is_benar', true)
+                    ->get();
 
-        try {
-            AuditLogService::record(
-                module: 'SIAKAD',
-                action: 'create',
-                tableName: 'siakad_bank_soal_opsi',
-                recordId: $opsi->id,
-                oldValues: null,
-                newValues: $opsi->toArray()
-            );
-        } catch (\Throwable $e) {
-            Log::warning('Gagal mencatat audit log opsi bank soal: ' . $e->getMessage());
-        }
+                foreach ($affectedOpsi as $item) {
+                    $oldItem = $item->getOriginal();
+                    $item->update(['is_benar' => false]);
+                    try {
+                        AuditLogService::record(
+                            module: 'SIAKAD',
+                            action: 'update',
+                            tableName: 'siakad_bank_soal_opsi',
+                            recordId: $item->id,
+                            oldValues: $oldItem,
+                            newValues: $item->getChanges()
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning('Gagal mencatat audit log reset opsi bank soal: ' . $e->getMessage());
+                    }
+                }
+            }
+
+            try {
+                AuditLogService::record(
+                    module: 'SIAKAD',
+                    action: 'create',
+                    tableName: 'siakad_bank_soal_opsi',
+                    recordId: $opsi->id,
+                    oldValues: null,
+                    newValues: $opsi->toArray()
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log opsi bank soal: ' . $e->getMessage());
+            }
+
+            return $opsi;
+        });
 
         return response()->json([
             'status' => 'success',
             'message' => 'Opsi jawaban berhasil ditambahkan.',
             'data' => $opsi->fresh(),
         ], 201);
+    }
+
+    public function updateOpsiSoal(UpdateBankSoalOpsiRequest $request, $soalId, $opsiId)
+    {
+        Gate::authorize('siakad.nilai.manage');
+
+        $soal = BankSoal::findOrFail($soalId);
+        $opsi = BankSoalOpsi::where('bank_soal_id', $soal->id)->findOrFail($opsiId);
+
+        $validated = $request->validated();
+        $oldValues = $opsi->getOriginal();
+
+        DB::transaction(function () use ($soal, $opsi, $validated, $oldValues) {
+            $opsi->update($validated);
+
+            // Satu soal hanya boleh punya satu opsi benar.
+            if ($opsi->is_benar) {
+                $affectedOpsi = BankSoalOpsi::where('bank_soal_id', $soal->id)
+                    ->where('id', '!=', $opsi->id)
+                    ->where('is_benar', true)
+                    ->get();
+
+                foreach ($affectedOpsi as $item) {
+                    $oldItem = $item->getOriginal();
+                    $item->update(['is_benar' => false]);
+                    try {
+                        AuditLogService::record(
+                            module: 'SIAKAD',
+                            action: 'update',
+                            tableName: 'siakad_bank_soal_opsi',
+                            recordId: $item->id,
+                            oldValues: $oldItem,
+                            newValues: $item->getChanges()
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning('Gagal mencatat audit log reset opsi bank soal: ' . $e->getMessage());
+                    }
+                }
+            }
+
+            try {
+                AuditLogService::record(
+                    module: 'SIAKAD',
+                    action: 'update',
+                    tableName: 'siakad_bank_soal_opsi',
+                    recordId: $opsi->id,
+                    oldValues: $oldValues,
+                    newValues: $opsi->getChanges()
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log update opsi bank soal: ' . $e->getMessage());
+            }
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Opsi jawaban berhasil diperbarui.',
+            'data' => $opsi->fresh(),
+        ]);
     }
 
     public function deleteOpsiSoal($soalId, $opsiId)

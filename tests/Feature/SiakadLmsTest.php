@@ -33,6 +33,7 @@ class SiakadLmsTest extends TestCase
     use RefreshDatabase;
 
     protected User $userDosen;
+    protected User $superAdmin;
     protected User $userMhs;
     protected Dosen $dosen;
     protected Mahasiswa $mahasiswa;
@@ -54,6 +55,10 @@ class SiakadLmsTest extends TestCase
         $this->userDosen = User::factory()->create([
             'username' => 'dosen.test',
             'email'    => 'dosen@test.ac.id',
+        ]);
+        $this->superAdmin = User::factory()->create([
+            'username' => 'superadmin.test',
+            'email'    => 'superadmin@test.ac.id',
         ]);
         $this->userMhs = User::factory()->create([
             'username' => 'mhs.test',
@@ -174,6 +179,7 @@ class SiakadLmsTest extends TestCase
         }
 
         // 4. Setup Role & Permissions RBAC
+        $roleSuperAdmin = \App\Models\Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin']);
         $roleDosen = \App\Models\Role::firstOrCreate(['slug' => 'dosen_pengajar'], ['name' => 'Dosen Pengajar']);
         $roleMhs = \App\Models\Role::firstOrCreate(['slug' => 'mahasiswa'], ['name' => 'Mahasiswa']);
 
@@ -201,6 +207,7 @@ class SiakadLmsTest extends TestCase
             $createdPerms['siakad.krs.read']->id,
         ]);
 
+        $this->superAdmin->roles()->attach($roleSuperAdmin->id);
         $this->userDosen->roles()->attach($roleDosen->id);
         $this->userMhs->roles()->attach($roleMhs->id);
     }
@@ -278,9 +285,10 @@ class SiakadLmsTest extends TestCase
             ]);
     }
 
-    public function test_dosen_can_manage_materi_dan_upload_file(): void
+    public function test_superadmin_can_manage_materi_dan_upload_file(): void
     {
-        Passport::actingAs($this->userDosen);
+        // Mutasi materi hanya untuk Super Admin (Gate lms.manage-perkuliahan).
+        Passport::actingAs($this->superAdmin);
 
         $fileMock = UploadedFile::fake()->create('slide_pertemuan_1.pdf', 1024, 'application/pdf');
 
@@ -340,7 +348,7 @@ class SiakadLmsTest extends TestCase
 
     public function test_tugas_creation_submission_and_obe_sync(): void
     {
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
 
         // Buat Komponen Penilaian OBE
         $komponenObe = KomponenPenilaian::create([
@@ -352,7 +360,7 @@ class SiakadLmsTest extends TestCase
             'is_aktif'         => true,
         ]);
 
-        // 1. Dosen membuat tugas terhubung OBE
+        // 1. Super Admin membuat tugas terhubung OBE
         $responseTugas = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/tugas", [
             'judul'                 => 'Tugas 1: Framework MVC',
             'deskripsi'             => 'Implementasikan konsep MVC dalam sebuah program mini.',
@@ -381,8 +389,8 @@ class SiakadLmsTest extends TestCase
             'mahasiswa_id' => $this->mahasiswa->id,
         ]);
 
-        // 3. Dosen memberi nilai & auto-sync OBE
-        Passport::actingAs($this->userDosen);
+        // 3. Super Admin memberi nilai & auto-sync OBE
+        Passport::actingAs($this->superAdmin);
         $responseNilai = $this->putJson("/api/v1/lms/pengumpulan/{$pengumpulanId}/nilai", [
             'nilai'          => 88.50,
             'feedback_dosen' => 'Bagus sekali, kode rapi dan modular.',
@@ -404,8 +412,8 @@ class SiakadLmsTest extends TestCase
 
     public function test_token_absensi_realtime_and_student_input(): void
     {
-        // 1. Dosen generate token
-        Passport::actingAs($this->userDosen);
+        // 1. Super Admin generate token
+        Passport::actingAs($this->superAdmin);
         $responseToken = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token");
         $responseToken->assertStatus(200);
 
@@ -436,12 +444,13 @@ class SiakadLmsTest extends TestCase
 
     public function test_token_absensi_tidak_bocor_ke_mahasiswa_melalui_endpoint_baca(): void
     {
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         $tokenRes = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token")->assertOk();
         $token = $tokenRes->json('data.token');
         $this->assertNotEmpty($token);
 
-        // Dosen pengampu tetap memerlukan kode token di layar sesi.
+        // Dosen pengampu tetap memerlukan kode token di layar sesi (hak baca).
+        Passport::actingAs($this->userDosen);
         $dosenDetail = $this->getJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}")->assertOk();
         $this->assertSame($token, $dosenDetail->json('data.pertemuan.token_absensi'));
 
@@ -467,7 +476,7 @@ class SiakadLmsTest extends TestCase
         }
     }
 
-    public function test_pengajuan_izin_dan_persetujuan_dosen(): void
+    public function test_pengajuan_izin_dan_persetujuan_superadmin(): void
     {
         // 1. Mahasiswa mengajukan izin sakit
         Passport::actingAs($this->userMhs);
@@ -492,8 +501,8 @@ class SiakadLmsTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // 2. Dosen memproses izin -> disetujui
-        Passport::actingAs($this->userDosen);
+        // 2. Super Admin memproses izin -> disetujui
+        Passport::actingAs($this->superAdmin);
         $refDisetujui = \Illuminate\Support\Facades\DB::table('spmb_master_referensi')
             ->where('modul', 'siakad')
             ->where('tipe', 'status_persetujuan_izin')
@@ -519,9 +528,9 @@ class SiakadLmsTest extends TestCase
         ]);
     }
 
-    public function test_dosen_can_input_bulk_absensi_and_view_rekap(): void
+    public function test_superadmin_can_input_bulk_absensi_and_view_rekap(): void
     {
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
 
         $refHadir = \Illuminate\Support\Facades\DB::table('spmb_master_referensi')
             ->where('modul', 'siakad')
@@ -603,8 +612,8 @@ class SiakadLmsTest extends TestCase
 
     public function test_mahasiswa_bisa_perbarui_dan_menarik_pengumpulan_tugas(): void
     {
-        // Dosen membuat tugas.
-        Passport::actingAs($this->userDosen);
+        // Super Admin membuat tugas.
+        Passport::actingAs($this->superAdmin);
         $tugasId = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/tugas", [
             'judul'        => 'Tugas Revisi',
             'deskripsi'    => 'Revisi tugas sebelumnya.',
@@ -638,8 +647,8 @@ class SiakadLmsTest extends TestCase
             'catatan_mahasiswa' => 'Versi kedua, sudah diperbaiki.',
         ]);
 
-        // Dosen menilai → pengumpulan terkunci.
-        Passport::actingAs($this->userDosen);
+        // Super Admin menilai → pengumpulan terkunci.
+        Passport::actingAs($this->superAdmin);
         $this->putJson("/api/v1/lms/pengumpulan/{$pengumpulanId}/nilai", ['nilai' => 90])
             ->assertStatus(200);
 
@@ -655,7 +664,7 @@ class SiakadLmsTest extends TestCase
         ]);
 
         // Tugas kedua (belum dinilai) bisa ditarik kembali.
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         $tugasLain = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/tugas", [
             'judul'        => 'Tugas Tarik Kembali',
             'deadline_at'  => now()->addDays(2)->toDateTimeString(),
@@ -671,7 +680,7 @@ class SiakadLmsTest extends TestCase
         $this->assertDatabaseMissing('lms_pengumpulan_tugas', ['id' => $idLain]);
     }
 
-    public function test_dosen_buka_sesi_jurnal_rotasi_30_detik_dan_mahasiswa_scan_qr(): void
+    public function test_superadmin_buka_sesi_jurnal_rotasi_30_detik_dan_mahasiswa_scan_qr(): void
     {
         $permPresensiCreate = \App\Models\Permission::firstOrCreate(
             ['slug' => 'lms.presensi.create'],
@@ -680,8 +689,8 @@ class SiakadLmsTest extends TestCase
         $roleMhs = \App\Models\Role::where('slug', 'mahasiswa')->first();
         $roleMhs?->permissions()->syncWithoutDetaching([$permPresensiCreate->id]);
 
-        // 1. Dosen mengisi jurnal pertemuan & membuka sesi presensi
-        Passport::actingAs($this->userDosen);
+        // 1. Super Admin mengisi jurnal pertemuan & membuka sesi presensi
+        Passport::actingAs($this->superAdmin);
         $resBuka = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/buka-sesi", [
             'materi'            => 'Arsitektur Microservices & API Gateway',
             'catatan_pertemuan' => 'Pembahasan studi kasus autentikasi dan rate limiting.',
@@ -706,8 +715,8 @@ class SiakadLmsTest extends TestCase
             ->assertJsonPath('data.0.pertemuan_id', $this->pertemuan->id)
             ->assertJsonPath('data.0.sudah_absen', false);
 
-        // 3. Dosen memutar token (simulasi auto-rotate 30 detik)
-        Passport::actingAs($this->userDosen);
+        // 3. Super Admin memutar token (simulasi auto-rotate 30 detik)
+        Passport::actingAs($this->superAdmin);
         $resRotate = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token/rotate");
         $resRotate->assertStatus(200)
             ->assertJsonPath('data.rotate_interval_seconds', 30);
@@ -761,7 +770,7 @@ class SiakadLmsTest extends TestCase
             'is_active' => true,
         ]);
 
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         $resBuka = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/buka-sesi", [
             'materi' => 'Pertemuan online via Zoom',
             'mode_presensi' => 'online',
@@ -797,7 +806,7 @@ class SiakadLmsTest extends TestCase
 
         // Flag matikan: sesi offline tetap bisa scan tanpa lokasi.
         SystemSetting::set('lms_presensi_geofence_wajib', 'false');
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         $resBuka = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/buka-sesi", [
             'materi' => 'Pertemuan tatap muka',
             'mode_presensi' => 'offline',
@@ -811,7 +820,7 @@ class SiakadLmsTest extends TestCase
 
         // Flag aktif: lokasi wajib dan harus berada di radius kampus.
         SystemSetting::set('lms_presensi_geofence_wajib', 'true');
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         $resBuka2 = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/buka-sesi", [
             'materi' => 'Pertemuan tatap muka dengan geofence',
             'mode_presensi' => 'offline',
@@ -838,7 +847,7 @@ class SiakadLmsTest extends TestCase
     {
         $this->beriIzinScanPresensiMahasiswa();
 
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         $resBuka = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/buka-sesi", [
             'materi' => 'Sesi dengan jendela pendek',
             'mode_presensi' => 'online',
@@ -846,7 +855,7 @@ class SiakadLmsTest extends TestCase
         ])->assertOk();
         $qr = $resBuka->json('data.qr_payload');
 
-        // Simulasikan dosen berhenti memutar token 10 menit lalu.
+        // Simulasikan pengelola berhenti memutar token 10 menit lalu.
         $this->pertemuan->update(['token_rotated_at' => now()->subMinutes(10)]);
 
         Passport::actingAs($this->userMhs);
@@ -854,7 +863,7 @@ class SiakadLmsTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors(['token']);
 
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token/rotate")
             ->assertStatus(422)
             ->assertJsonValidationErrors(['pertemuan']);
@@ -868,7 +877,7 @@ class SiakadLmsTest extends TestCase
 
     public function test_rotasi_token_dibatasi_15_kali_per_menit(): void
     {
-        $kunci = md5('lms-token-rotate' . $this->userDosen->id . ':' . $this->pertemuan->id);
+        $kunci = md5('lms-token-rotate' . $this->superAdmin->id . ':' . $this->pertemuan->id);
         RateLimiter::clear($kunci);
 
         $this->pertemuan->update([
@@ -878,7 +887,7 @@ class SiakadLmsTest extends TestCase
             'status_pertemuan' => 'berlangsung',
         ]);
 
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         for ($i = 0; $i < 15; $i++) {
             $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token/rotate")
                 ->assertOk();

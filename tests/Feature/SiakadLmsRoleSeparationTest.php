@@ -338,7 +338,7 @@ class SiakadLmsRoleSeparationTest extends TestCase
         }
     }
 
-    public function test_superadmin_without_academic_profile_acts_solely_as_pengelola(): void
+    public function test_superadmin_without_academic_profile_manages_all_classes(): void
     {
         Passport::actingAs($this->superAdmin);
 
@@ -358,11 +358,11 @@ class SiakadLmsRoleSeparationTest extends TestCase
                 ],
             ]);
 
-        // 2. Super Admin dapat memonitor overview kelas & detail pertemuan dengan viewer_mode = 'pengelola'
+        // 2. Super Admin dapat memonitor sekaligus mengelola seluruh kelas (viewer_mode tetap pengelola)
         $overviewRes = $this->getJson("/api/v1/lms/kelas/{$this->kelasA->id}/overview");
         $overviewRes->assertStatus(200)
             ->assertJsonPath('data.viewer_context.viewer_mode', 'pengelola')
-            ->assertJsonPath('data.viewer_context.can_teach', false)
+            ->assertJsonPath('data.viewer_context.can_teach', true)
             ->assertJsonPath('data.viewer_context.can_participate', false)
             ->assertJsonPath('data.viewer_context.can_configure_kelas', true)
             ->assertJsonPath('data.viewer_context.can_export', true);
@@ -370,7 +370,7 @@ class SiakadLmsRoleSeparationTest extends TestCase
         $detailRes = $this->getJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}");
         $detailRes->assertStatus(200)
             ->assertJsonPath('data.viewer_context.viewer_mode', 'pengelola')
-            ->assertJsonPath('data.viewer_context.can_teach', false)
+            ->assertJsonPath('data.viewer_context.can_teach', true)
             ->assertJsonPath('data.viewer_context.can_participate', false);
 
         // 3. Super Admin boleh mengubah konfigurasi kebijakan kelas LMS
@@ -383,40 +383,30 @@ class SiakadLmsRoleSeparationTest extends TestCase
         ]);
         $settingRes->assertStatus(200);
 
-        // 4. Super Admin DILARANG melakukan aksi akademik dosen pengampu (403)
+        // 4. Super Admin DAPAT melakukan seluruh mutasi akademik meski bukan dosen pengampu
         $tipeKontenId = DB::table('spmb_master_referensi')->where('tipe', 'tipe_konten_lms')->where('kode', 'teks')->value('id');
         $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}/materi", [
-            'judul'          => 'Materi Ilegal Superadmin',
+            'judul'          => 'Materi Superadmin',
             'tipe_konten_id' => $tipeKontenId,
-        ])->assertStatus(403);
+        ])->assertStatus(201);
 
         $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}/tugas", [
-            'judul'      => 'Tugas Ilegal Superadmin',
+            'judul'      => 'Tugas Superadmin',
             'maks_nilai' => 100,
-        ])->assertStatus(403);
+        ])->assertStatus(201);
 
         $this->putJson("/api/v1/lms/pengumpulan/{$this->pengumpulanA->id}/nilai", [
             'nilai' => 95,
-        ])->assertStatus(403);
-
-        $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}/token")
-            ->assertStatus(403);
-
-        $statusHadirId = DB::table('spmb_master_referensi')->where('tipe', 'status_absensi')->where('kode', 'hadir')->value('id');
-        $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}/bulk-absensi", [
-            'absensi' => [
-                ['mahasiswa_id' => $this->mhsEnrolled->id, 'status_id' => $statusHadirId],
-            ],
-        ])->assertStatus(403);
+        ])->assertStatus(200);
 
         $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}/quiz", [
-            'judul'       => 'Quiz Ilegal Superadmin',
+            'judul'       => 'Quiz Superadmin',
             'max_attempt' => 1,
-        ])->assertStatus(403);
+        ])->assertStatus(201);
 
         $this->postJson("/api/v1/lms/kelas/{$this->kelasA->id}/tryout", [
-            'judul' => 'Tryout Ilegal Superadmin',
-        ])->assertStatus(403);
+            'judul' => 'Tryout Superadmin',
+        ])->assertStatus(201);
 
         // 5. Super Admin DILARANG melakukan aksi partisipasi mahasiswa (403)
         $this->postJson("/api/v1/lms/tugas/{$this->tugasA->id}/kumpul", [
@@ -469,6 +459,98 @@ class SiakadLmsRoleSeparationTest extends TestCase
 
         $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}/token")
             ->assertStatus(403);
+    }
+
+    public function test_dosen_pengampu_can_manage_jurnal_and_presensi_but_not_other_mutations(): void
+    {
+        Passport::actingAs($this->userDosenA);
+
+        // Dosen A adalah pengampu Kelas A: bisa membaca dan mengisi
+        // jurnal/presensi kelasnya, tetapi bukan mutasi perkuliahan lain.
+        $overviewRes = $this->getJson("/api/v1/lms/kelas/{$this->kelasA->id}/overview");
+        $overviewRes->assertStatus(200)
+            ->assertJsonPath('data.viewer_context.viewer_mode', 'dosen')
+            ->assertJsonPath('data.viewer_context.is_pengampu', true)
+            ->assertJsonPath('data.viewer_context.can_teach', true)
+            ->assertJsonPath('data.viewer_context.can_configure_kelas', true)
+            ->assertJsonPath('data.viewer_context.can_participate', false)
+            ->assertJsonPath('data.viewer_context.can_export', true);
+
+        $this->getJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}")
+            ->assertStatus(200)
+            ->assertJsonPath('data.viewer_context.can_teach', true);
+
+        $jurnalUrl = "/api/v1/lms/kelas/{$this->kelasA->id}/pertemuan/{$this->pertemuanA->id}/jurnal";
+        $this->getJson($jurnalUrl)
+            ->assertStatus(200)
+            ->assertJsonPath('data.can_edit', true)
+            ->assertJsonStructure([
+                'data' => [
+                    'jurnal' => ['pertemuan_id', 'jenis_kegiatan'],
+                    'can_edit',
+                    'plotting' => [
+                        'hari',
+                        'jam_mulai',
+                        'jam_selesai',
+                        'ruangan_id',
+                        'tanggal_default',
+                        'jenis_kegiatan_default',
+                    ],
+                ],
+            ]);
+
+        $this->putJson($jurnalUrl, [
+            'pertemuan_ke'      => 1,
+            'tanggal'           => '2026-10-01',
+            'materi'            => 'Jurnal Dosen A',
+            'catatan_pertemuan' => 'Jurnal diisi oleh dosen pengampu',
+            'status_pertemuan'  => Pertemuan::STATUS_SELESAI,
+            'jenis_kegiatan'    => Pertemuan::JENIS_KEGIATAN_TEORI,
+        ])->assertStatus(200)
+            ->assertJsonPath('data.can_edit', true);
+
+        $this->assertDatabaseHas('siakad_pertemuan', [
+            'id'              => $this->pertemuanA->id,
+            'materi'          => 'Jurnal Dosen A',
+            'status_pertemuan' => Pertemuan::STATUS_SELESAI,
+            'jenis_kegiatan'  => Pertemuan::JENIS_KEGIATAN_TEORI,
+        ]);
+
+        // Sesi presensi pada kelas sendiri boleh dibuka oleh pengampu.
+        $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}/token")
+            ->assertStatus(200);
+
+        $tipeKontenId = DB::table('spmb_master_referensi')->where('tipe', 'tipe_konten_lms')->where('kode', 'teks')->value('id');
+
+        // Dosen pengampu boleh mengelola materi, tugas, quiz, pengaturan kelas, dan nilai pada kelasnya sendiri,
+        // namun tetap ditolak (403) jika mencoba mengakses kelas lain (pertemuanB / kelasB).
+        $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}/materi", [
+            'judul'          => 'Materi Dosen A',
+            'tipe_konten_id' => $tipeKontenId,
+        ])->assertStatus(201);
+
+        $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}/tugas", [
+            'judul'      => 'Tugas Dosen A',
+            'maks_nilai' => 100,
+        ])->assertStatus(201);
+
+        $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanA->id}/quiz", [
+            'judul'       => 'Quiz Dosen A',
+            'max_attempt' => 1,
+        ])->assertStatus(201);
+
+        $this->putJson("/api/v1/lms/kelas/{$this->kelasA->id}/setting", [
+            'total_pertemuan'        => 16,
+            'batas_min_hadir_persen' => 75,
+            'metode_absensi'         => 'keduanya',
+        ])->assertStatus(200);
+
+        $this->putJson("/api/v1/lms/pengumpulan/{$this->pengumpulanA->id}/nilai", [
+            'nilai' => 90,
+        ])->assertStatus(403);
+
+        $this->assertDatabaseHas('lms_materi_pertemuan', ['judul' => 'Materi Dosen A']);
+        $this->assertDatabaseHas('lms_tugas', ['judul' => 'Tugas Dosen A']);
     }
 
     public function test_dashboard_previews_only_tasks_and_materials_in_the_users_classes(): void
@@ -589,14 +671,15 @@ class SiakadLmsRoleSeparationTest extends TestCase
         ])->assertStatus(403);
     }
 
-    public function test_kaprodi_monitors_prodi_classes_readonly_and_teaches_own_assigned_class(): void
+    public function test_kaprodi_monitors_prodi_classes_readonly_without_mutation(): void
     {
         Passport::actingAs($this->userKaprodiA);
 
-        // 1. Kelas A (Prodi A, diampu Dosen A, bukan Kaprodi A) -> mode pengelola (read-only untuk pengajaran)
+        // 1. Kelas A (Prodi A, diampu Dosen A, bukan Kaprodi A) -> mode pengelola (read-only)
         $resKelasA = $this->getJson("/api/v1/lms/kelas/{$this->kelasA->id}/overview");
         $resKelasA->assertStatus(200)
             ->assertJsonPath('data.viewer_context.viewer_mode', 'pengelola')
+            ->assertJsonPath('data.viewer_context.is_pengampu', false)
             ->assertJsonPath('data.viewer_context.can_teach', false)
             ->assertJsonPath('data.viewer_context.can_configure_kelas', false)
             ->assertJsonPath('data.viewer_context.can_export', true);
@@ -607,16 +690,22 @@ class SiakadLmsRoleSeparationTest extends TestCase
             'tipe_konten_id' => $tipeKontenId,
         ])->assertStatus(403);
 
-        // 2. Kelas Kaprodi A (Prodi A, diampu langsung oleh Kaprodi A) -> mode dosen (can_teach = true)
+        // 2. Kelas Kaprodi A (Prodi A, diampu langsung oleh Kaprodi A) -> mode dosen,
+        //    dapat mengajar di kelasnya sendiri namun tetap ditolak di Kelas A & Kelas B.
         $resKelasKaprodi = $this->getJson("/api/v1/lms/kelas/{$this->kelasKaprodiA->id}/overview");
         $resKelasKaprodi->assertStatus(200)
             ->assertJsonPath('data.viewer_context.viewer_mode', 'dosen')
-            ->assertJsonPath('data.viewer_context.can_teach', true);
+            ->assertJsonPath('data.viewer_context.is_pengampu', true)
+            ->assertJsonPath('data.viewer_context.can_teach', true)
+            ->assertJsonPath('data.viewer_context.can_configure_kelas', true)
+            ->assertJsonPath('data.viewer_context.can_export', true);
 
         $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuanKaprodiA->id}/materi", [
             'judul'          => 'Materi Kaprodi di Kelas Sendiri',
             'tipe_konten_id' => $tipeKontenId,
         ])->assertStatus(201);
+
+        $this->assertDatabaseHas('lms_materi_pertemuan', ['judul' => 'Materi Kaprodi di Kelas Sendiri']);
 
         // 3. Kelas B (Prodi B, di luar Prodi Kaprodi A) -> ditolak (403)
         $this->getJson("/api/v1/lms/kelas/{$this->kelasB->id}/overview")

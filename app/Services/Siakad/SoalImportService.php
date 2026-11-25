@@ -11,14 +11,20 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 /**
- * Parser + generator template import bank soal (XLSX/CSV).
+ * Parser + generator template import bank soal (XLSX/CSV/Aiken).
  *
- * Format kolom (baris 1 = header, case-insensitive, spasi/_/-/. diabaikan):
+ * Format spreadsheet (baris 1 = header, case-insensitive, spasi/_/-/. diabaikan):
  *   tipe | pertanyaan | opsi_a..opsi_e | kunci | poin | tingkat_kesulitan | pembahasan
  *
  * - tipe: pg/mc/pilihan_ganda | isian/isian_singkat | uraian/essay
  * - kunci (pilihan_ganda): huruf A-E | kunci (isian/uraian): teks jawaban benar
  * - poin: angka >= 1 (default 10)
+ *
+ * Format Aiken (.txt): blok soal dipisah baris kosong.
+ *   Pertanyaan
+ *   A. Opsi
+ *   B. Opsi
+ *   ANSWER: B
  *
  * Referensi: Project/lms `app/Services/SoalImportService.php` (disesuaikan ke
  * skema RAG: `siakad_bank_soal` + `siakad_bank_soal_opsi`).
@@ -106,8 +112,13 @@ class SoalImportService
      *
      * @return array{rows: array<int, array<string, mixed>>, errors: array<int, string>}
      */
-    public static function parseFile(string $path, int $maxRows = self::MAX_ROWS): array
+    public static function parseFile(string $path, int $maxRows = self::MAX_ROWS, ?string $extension = null): array
     {
+        $ext = strtolower((string) ($extension ?: pathinfo($path, PATHINFO_EXTENSION)));
+        if ($ext === 'txt' || $ext === 'aiken') {
+            return self::parseAikenFile($path, $maxRows);
+        }
+
         $spreadsheet = IOFactory::load($path);
         $sheet = $spreadsheet->getActiveSheet();
         $raw = $sheet->toArray(null, true, true, false);
@@ -272,6 +283,153 @@ class SoalImportService
         }
 
         return ['rows' => $rows, 'errors' => $errors];
+    }
+
+    /**
+     * Parse file Aiken (.txt) menjadi baris soal.
+     *
+     * @return array{rows: array<int, array<string, mixed>>, errors: array<int, string>}
+     */
+    public static function parseAikenFile(string $path, int $maxRows = self::MAX_ROWS): array
+    {
+        $content = file_get_contents($path);
+        if ($content === false || trim($content) === '') {
+            return ['rows' => [], 'errors' => ['File kosong.']];
+        }
+
+        // Hilangkan BOM UTF-8 bila ada.
+        $content = preg_replace('/^\xEF\xBB\xBF/', '', $content) ?? $content;
+        $content = str_replace(["\r\n", "\r"], "\n", $content);
+        $lines = explode("\n", $content);
+
+        $blocks = [];
+        $current = [];
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '') {
+                if (! empty($current)) {
+                    $blocks[] = $current;
+                    $current = [];
+                }
+                continue;
+            }
+            $current[] = $line;
+        }
+        if (! empty($current)) {
+            $blocks[] = $current;
+        }
+
+        if (empty($blocks)) {
+            return ['rows' => [], 'errors' => ['Tidak ada soal Aiken yang ditemukan.']];
+        }
+        if (count($blocks) > $maxRows) {
+            return ['rows' => [], 'errors' => ['Jumlah soal (' . count($blocks) . ") melebihi batas {$maxRows}. Pecah menjadi beberapa file."]];
+        }
+
+        $rows = [];
+        $errors = [];
+        foreach ($blocks as $idx => $block) {
+            $label = 'Soal ' . ($idx + 1);
+            $parsed = self::parseAikenBlock($block, $label);
+            if ($parsed['error'] !== null) {
+                $errors[] = $parsed['error'];
+                continue;
+            }
+            if ($parsed['row'] !== null) {
+                $rows[] = $parsed['row'];
+            }
+        }
+
+        return ['rows' => $rows, 'errors' => $errors];
+    }
+
+    /**
+     * @param  array<int, string>  $block
+     * @return array{row: array<string, mixed>|null, error: string|null}
+     */
+    private static function parseAikenBlock(array $block, string $label): array
+    {
+        $questionLines = [];
+        $options = [];
+        $answer = null;
+        $mode = 'question';
+
+        foreach ($block as $rawLine) {
+            $line = trim($rawLine);
+            if ($line === '') {
+                continue;
+            }
+
+            if (preg_match('/^ANSWER\s*:\s*(.+)$/i', $line, $m)) {
+                $answer = strtoupper(trim($m[1]));
+                $mode = 'meta';
+                continue;
+            }
+
+            // Metadata opsional Aiken/Moodle-like yang diabaikan aman.
+            if (preg_match('/^(ANSWER_EXPLANATION|FEEDBACK|GENERAL_FEEDBACK|CATEGORY|TAGS?)\s*:/i', $line)) {
+                $mode = 'meta';
+                continue;
+            }
+
+            if ($mode === 'question' && preg_match('/^([A-E])[\).]\s*(.+)$/i', $line, $m)) {
+                $mode = 'option';
+                $key = strtoupper($m[1]);
+                $options[$key] = trim($m[2]);
+                continue;
+            }
+
+            if ($mode === 'option' && preg_match('/^([A-E])[\).]\s*(.+)$/i', $line, $m)) {
+                $key = strtoupper($m[1]);
+                $options[$key] = trim($m[2]);
+                continue;
+            }
+
+            if ($mode === 'meta') {
+                // Abaikan baris lanjutan metadata.
+                continue;
+            }
+
+            // Baris pertanyaan (boleh multiline sebelum opsi).
+            $questionLines[] = $line;
+        }
+
+        $question = trim(implode("\n", $questionLines));
+        if ($question === '') {
+            return ['row' => null, 'error' => "{$label}: pertanyaan wajib diisi."];
+        }
+        if (count($options) < 2) {
+            return ['row' => null, 'error' => "{$label}: soal pilihan ganda Aiken minimal 2 opsi (A./B.)."];
+        }
+        if ($answer === null || $answer === '' || ! isset($options[$answer])) {
+            $valid = implode(',', array_keys($options));
+            return ['row' => null, 'error' => "{$label}: ANSWER tidak valid atau tidak cocok dengan opsi ({$valid})."];
+        }
+
+        $opsiRows = [];
+        $urutan = 1;
+        foreach ($options as $key => $teks) {
+            $opsiRows[] = [
+                'teks' => $teks,
+                'gambar_path' => null,
+                'is_benar' => $key === $answer,
+                'urutan' => $urutan++,
+            ];
+        }
+
+        return [
+            'row' => [
+                'tipe_soal' => BankSoal::TIPE_PILIHAN_GANDA,
+                'pertanyaan' => $question,
+                'gambar_path' => null,
+                'bobot' => self::DEFAULT_BOBOT,
+                'kunci_jawaban' => null,
+                'pembahasan' => null,
+                'tingkat_kesulitan' => null,
+                'opsi' => $opsiRows,
+            ],
+            'error' => null,
+        ];
     }
 
     /**

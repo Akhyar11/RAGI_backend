@@ -78,13 +78,14 @@ Kurikulum berbasis capaian (OBE): CPL/CPMK, Profil Lulusan, Bahan Kajian, RPS, R
 | PUT | `/api/v1/siakad/obe/soal/{id}` | Update bank soal (RESTful) | ✅ |
 | DELETE | `/api/v1/siakad/obe/soal/{id}` | Hapus bank soal | ✅ |
 | GET | `/api/v1/siakad/obe/soal/import/template` | Unduh template import bank soal (XLSX) | ✅ |
-| POST | `/api/v1/siakad/obe/soal/import` | Import bank soal dari XLSX/CSV (parsial + laporan error) | ✅ |
+| POST | `/api/v1/siakad/obe/soal/import` | Import bank soal dari XLSX/CSV/TXT Aiken (parsial + laporan error) | ✅ |
 | POST | `/api/v1/siakad/obe/soal/bulk-delete` | Hapus banyak bank soal (skip yang dipakai quiz) | ✅ |
 | POST | `/api/v1/siakad/obe/soal/bulk-move` | Pindahkan banyak bank soal (kategori/RPS/Sub-CPMK) | ✅ |
 | GET | `/api/v1/siakad/obe/soal-kategori` | Daftar kategori bank soal | ✅ |
 | POST | `/api/v1/siakad/obe/soal-kategori` | Buat kategori bank soal | ✅ |
 | DELETE | `/api/v1/siakad/obe/soal-kategori/{id}` | Hapus kategori (soal dilepas, tidak ikut terhapus) | ✅ |
 | POST | `/api/v1/siakad/obe/soal/{soalId}/opsi` | Tambah opsi jawaban pilihan ganda | ✅ |
+| PUT | `/api/v1/siakad/obe/soal/{soalId}/opsi/{opsiId}` | Update opsi jawaban pilihan ganda | ✅ |
 | DELETE | `/api/v1/siakad/obe/soal/{soalId}/opsi/{opsiId}` | Hapus opsi jawaban | ✅ |
 
 ## Query Parameters (berlaku untuk endpoint list)
@@ -2052,9 +2053,9 @@ Content-Disposition: attachment; filename=template-import-bank-soal.xlsx
 
 ### [POST] `/api/v1/siakad/obe/soal/import`
 
-Mengimport bank soal dari file XLSX/XLS/CSV. Baris valid di-import; baris bermasalah **dilewati** dan dilaporkan pada `data.errors` (import bersifat parsial, tidak dibatalkan). Validasi via `ImportBankSoalRequest` (otorisasi `siakad.nilai.manage`).
+Mengimport bank soal dari file XLSX/XLS/CSV atau TXT format Aiken. Baris/soal valid di-import; item bermasalah **dilewati** dan dilaporkan pada `data.errors` (import bersifat parsial, tidak dibatalkan). Validasi via `ImportBankSoalRequest` (otorisasi `siakad.nilai.manage`).
 
-#### Format Kolom File (baris 1 = header, case-insensitive)
+#### Format Spreadsheet (XLSX/XLS/CSV, baris 1 = header, case-insensitive)
 
 | Kolom | Wajib | Keterangan |
 |---|---|---|
@@ -2066,11 +2067,24 @@ Mengimport bank soal dari file XLSX/XLS/CSV. Baris valid di-import; baris bermas
 | `tingkat_kesulitan` | Tidak | `mudah` / `sedang` / `sukar`. |
 | `pembahasan` | Tidak | Pembahasan / kunci diskusi. |
 
-Batas maksimal **500 baris data** per file.
+#### Format Aiken (`.txt`)
+
+Setiap soal dipisah satu baris kosong. Format ini cocok untuk soal pilihan ganda.
+
+```text
+Pertanyaan soal
+A. Opsi A
+B. Opsi B
+C. Opsi C
+D. Opsi D
+ANSWER: B
+```
+
+Catatan Aiken: parser mengenali opsi `A.`–`E.`/`A)`–`E)` dan `ANSWER:`. Metadata opsional seperti `ANSWER_EXPLANATION:` diabaikan. Batas maksimal **500 soal/baris data** per file.
 
 #### Request Body (`multipart/form-data`)
 ```
-file            (file, wajib)  — XLSX / XLS / CSV, maks. 10 MB
+file            (file, wajib)  — XLSX / XLS / CSV / TXT (Aiken), maks. 10 MB
 rps_id          (int, wajib)   — RPS tujuan
 rps_mingguan_id (int, opsional)
 sub_cpmk_id     (int, opsional)
@@ -2090,7 +2104,7 @@ tingkat_kesulitan (string, opsional) — default bila file tidak memuat kolom ts
         "ids": [21, 22, 23],
         "errors": [
             "Baris 6: kunci 'C' tidak cocok dengan opsi yang terisi (A,B).",
-            "Baris 9: tipe 'ngawur' tidak dikenal (gunakan pg/isian/uraian)."
+            "Soal 3: ANSWER tidak valid atau tidak cocok dengan opsi (A,B,C,D)."
         ]
     }
 }
@@ -2103,7 +2117,7 @@ tingkat_kesulitan (string, opsional) — default bila file tidak memuat kolom ts
     "message": "Data yang diberikan tidak valid.",
     "errors": {
         "rps_id": ["RPS tujuan tidak valid."],
-        "file": ["Format file harus XLSX, XLS, atau CSV."]
+        "file": ["Format file harus XLSX, XLS, CSV, atau TXT (Aiken)."]
     }
 }
 ```
@@ -2357,6 +2371,48 @@ Menambahkan opsi jawaban baru untuk soal pilihan ganda. Satu soal hanya boleh pu
     "message": "Validation failed",
     "errors": {
         "teks": ["The teks field is required."]
+    }
+}
+```
+
+---
+
+### [PUT] `/api/v1/siakad/obe/soal/{soalId}/opsi/{opsiId}`
+
+Memperbarui opsi jawaban soal pilihan ganda. Jika `is_benar: true`, opsi lain pada soal yang sama otomatis di-set `false`.
+
+#### Request Body
+```json
+{
+    "teks": "Object-Oriented Programming",
+    "gambar_path": null,
+    "is_benar": true,
+    "urutan": 1
+}
+```
+
+#### Response Sukses (200 OK)
+```json
+{
+    "status": "success",
+    "message": "Opsi jawaban berhasil diperbarui.",
+    "data": {
+        "id": 11,
+        "bank_soal_id": 1,
+        "teks": "Object-Oriented Programming",
+        "is_benar": true,
+        "urutan": 1
+    }
+}
+```
+
+#### Response Error (401 / 403 / 404 / 422)
+```json
+{
+    "status": "error",
+    "message": "Data yang diberikan tidak valid.",
+    "errors": {
+        "teks": ["Teks opsi wajib diisi."]
     }
 }
 ```

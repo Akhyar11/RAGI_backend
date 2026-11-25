@@ -36,6 +36,7 @@ class SiakadLmsDashboardSettingTest extends TestCase
     use RefreshDatabase;
 
     protected User $userAdmin;
+    protected User $superAdmin;
     protected User $userMhs;
     protected User $userDosen;
     protected Mahasiswa $mahasiswa;
@@ -51,6 +52,11 @@ class SiakadLmsDashboardSettingTest extends TestCase
         $this->userAdmin = User::factory()->create([
             'username' => 'admin.lmsdash',
             'email'    => 'admin.lmsdash@test.ac.id',
+        ]);
+
+        $this->superAdmin = User::factory()->create([
+            'username' => 'superadmin.lmsdash',
+            'email'    => 'superadmin.lmsdash@test.ac.id',
         ]);
 
         $this->userMhs = User::factory()->create([
@@ -150,6 +156,7 @@ class SiakadLmsDashboardSettingTest extends TestCase
         ]);
 
         // ── RBAC ──────────────────────────────────────────────────────
+        $roleSuperAdmin = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin']);
         $roleAdmin = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin']);
         $roleMhs   = Role::firstOrCreate(['slug' => 'mahasiswa'], ['name' => 'Mahasiswa']);
         $roleDosen = Role::firstOrCreate(['slug' => 'dosen'], ['name' => 'Dosen']);
@@ -171,6 +178,7 @@ class SiakadLmsDashboardSettingTest extends TestCase
         $roleMhs->permissions()->syncWithoutDetaching([$permKelas->id]);
         $roleDosen->permissions()->syncWithoutDetaching([$permKelas->id]);
 
+        $this->superAdmin->roles()->attach($roleSuperAdmin->id);
         $this->userAdmin->roles()->attach($roleAdmin->id);
         $this->userMhs->roles()->attach($roleMhs->id);
         $this->userDosen->roles()->attach($roleDosen->id);
@@ -334,9 +342,10 @@ class SiakadLmsDashboardSettingTest extends TestCase
         ]);
     }
 
-    public function test_admin_dapat_menyimpan_pengaturan_modul_dan_tercatat_di_audit(): void
+    public function test_superadmin_dapat_menyimpan_pengaturan_modul_dan_tercatat_di_audit(): void
     {
-        Passport::actingAs($this->userAdmin);
+        // Mutasi pengaturan modul hanya untuk Super Admin (Gate lms.manage-perkuliahan).
+        Passport::actingAs($this->superAdmin);
 
         $response = $this->putJson('/api/v1/lms/pengaturan/modul', [
             'lms_max_soal_import'    => 50,
@@ -368,7 +377,7 @@ class SiakadLmsDashboardSettingTest extends TestCase
 
     public function test_pengaturan_modul_menolak_nilai_di_luar_batas(): void
     {
-        Passport::actingAs($this->userAdmin);
+        Passport::actingAs($this->superAdmin);
 
         $this->putJson('/api/v1/lms/pengaturan/modul', ['lms_upload_max_size_mb' => 0])
             ->assertStatus(422)
@@ -377,6 +386,14 @@ class SiakadLmsDashboardSettingTest extends TestCase
         $this->putJson('/api/v1/lms/pengaturan/modul', ['lms_video_max_size_mb' => 5000])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['lms_video_max_size_mb']);
+    }
+
+    public function test_admin_dengan_permission_dapat_mengubah_pengaturan_modul(): void
+    {
+        Passport::actingAs($this->userAdmin);
+
+        $this->putJson('/api/v1/lms/pengaturan/modul', ['lms_upload_max_size_mb' => 10])
+            ->assertStatus(200);
     }
 
     public function test_pengaturan_publik_tanpa_autentikasi_hanya_memuat_key_publik(): void

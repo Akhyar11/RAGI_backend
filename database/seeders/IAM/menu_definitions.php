@@ -401,7 +401,7 @@ return [
     // ── MODUL LMS (STANDALONE, PISAH DARI SIAKAD) ─────
     // Dikelompokkan rapi ke dalam grup hierarkis (Parent & Children):
     // 1. Dashboard LMS (Root)
-    // 2. PEMBELAJARAN (Kelas, Agenda Pertemuan, Diskusi, Notifikasi)
+    // 2. PEMBELAJARAN (Kelas, Diskusi, Notifikasi) — pertemuan diakses dari detail Kelas
     // 3. EVALUASI & CBT (Bank Soal, Tryout / Ujian)
     // 4. MONITORING & LAPORAN (Keaktifan Mengajar Dosen, Monitoring Presensi)
     // 5. PENGATURAN LMS (Pengaturan Kelas, Konfigurasi Modul LMS)
@@ -433,15 +433,6 @@ return [
                 'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
             ],
             [
-                'name' => 'Agenda Pertemuan',
-                'url' => '/lms/pertemuan',
-                'icon' => 'FaCalendarAlt',
-                'module' => 'lms',
-                'permission_slug' => 'siakad.kelas.read',
-                'order_index' => 2,
-                'role_slugs' => ['superadmin', 'admin', 'admin_siakad', 'dosen', 'mahasiswa'],
-            ],
-            [
                 'name' => 'Diskusi',
                 'url' => '/lms/forum',
                 'icon' => 'FaUsers',
@@ -449,7 +440,7 @@ return [
                 // Sama dengan middleware route forum (`lms.forum.*`), bukan
                 // `siakad.kelas.read` yang dipakai menu pembelajaran lainnya.
                 'permission_slug' => 'lms.forum.read',
-                'order_index' => 3,
+                'order_index' => 2,
                 'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
             ],
             [
@@ -458,7 +449,7 @@ return [
                 'icon' => 'FaBell',
                 'module' => 'lms',
                 'permission_slug' => 'siakad.kelas.read',
-                'order_index' => 4,
+                'order_index' => 3,
                 'role_slugs' => ['superadmin', 'admin', 'dosen', 'mahasiswa', 'kaprodi', 'wakil_prodi'],
             ],
         ],

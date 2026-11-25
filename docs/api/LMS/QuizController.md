@@ -4,7 +4,13 @@
 > **Base URL**: `/api/v1/lms`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-10-05  
-> **Diperbarui**: 2026-11-09 (tryout ujian khusus/di luar mata kuliah, multi-dosen kolaborator, & batch peserta berdasarkan kelas/prodi/angkatan/kelas perkuliahan)
+> **Diperbarui**: 2026-11-25 (pengelolaan quiz/tryout dikhususkan untuk Super Admin via Gate `lms.manage-perkuliahan`; dosen/pengelola hanya bisa membaca & mengerjakan)
+
+## Kebijakan Otorisasi Terbaru
+
+- Seluruh endpoint **pengelolaan** quiz/tryout (buat, update, hapus, soal, attempt, peserta, kolaborator) kini memerlukan Gate `lms.manage-perkuliahan` → **Super Admin saja**, meski role dosen memiliki `siakad.kelas.manage`.
+- Penilaian manual (`PUT /attempt-jawaban/{id}/nilai`) juga memerlukan Gate `lms.manage-perkuliahan`. Export hasil tetap mengikuti `siakad.nilai.manage`.
+- Dosen pengampu/pengelola tetap dapat membaca detail quiz, mengerjakan tryout, autosave, dan submit.
 
 Quiz per pertemuan dan tryout level kelas dengan mesin pengerjaan yang sama:
 batch-loading soal (kunci tidak pernah ke client), autosave bulk, auto-grade
@@ -28,11 +34,12 @@ pilihan ganda/isian, penilaian manual uraian, dan auto-sync nilai ke OBE
 
 | Permission | Dipakai untuk |
 |---|---|
-| `siakad.kelas.manage` | Semua endpoint pengelolaan: buat quiz/tryout, update, hapus, lampir/lepas soal (termasuk bulk), daftar attempt, reset attempt, detail attempt, preview quiz, tambah/hapus/salin peserta tryout (perorangan, per kelas, antar-tryout), pencarian mahasiswa |
+| `siakad.kelas.manage` + `lms.manage-perkuliahan` | Endpoint **mutasi** pengelolaan: buat quiz/tryout, update, hapus, lampir/lepas soal (termasuk bulk), reset attempt, tambah/hapus/salin peserta tryout (perorangan, per kelas, antar-tryout), tambah/hapus kolaborator. Gate `lms.manage-perkuliahan` membatasi mutasi hanya untuk Super Admin. |
+| `siakad.kelas.manage` | Endpoint **baca** detail manajemen/laporan: detail quiz (`/quiz/{quizId}/manage`), daftar & detail attempt, preview quiz, pencarian mahasiswa, daftar kolaborator. Dosen pengampu/pengelola tetap bisa melihat tanpa Gate mutasi. |
 | `siakad.kelas.read` | Endpoint baca & pengerjaan mahasiswa: agregat tryout, daftar tryout kelas, detail quiz, start, batch soal, autosave, submit |
-| `siakad.nilai.manage` | Penilaian manual jawaban uraian (`PUT /attempt-jawaban/{id}/nilai`) & export hasil quiz/tryout (`GET /quiz/{quizId}/export/hasil`, `GET /tryout/{quizId}/export/hasil`) |
+| `siakad.nilai.manage` + `lms.manage-perkuliahan` | Penilaian manual jawaban uraian (`PUT /attempt-jawaban/{id}/nilai`) — Gate membatasi penulisan nilai hanya untuk Super Admin. Export hasil (`GET /quiz/{quizId}/export/hasil`, `GET /tryout/{quizId}/export/hasil`) tetap cukup `siakad.nilai.manage`. |
 
-Super admin (sesuai `system_settings.superadmin_role`) melewati seluruh gate.
+Super admin (sesuai `system_settings.superadmin_role`) melewati seluruh gate dan satu-satunya role yang lolos `lms.manage-perkuliahan`.
 
 ## Daftar Endpoint
 
@@ -1169,8 +1176,9 @@ Dosen tidak mengerjakan, hanya melihat.
 
 ## [PUT] /api/v1/lms/attempt-jawaban/{id}/nilai
 
-Dosen menilai manual satu jawaban (soal uraian/isian atau koreksi) beserta respon
-tertulis untuk mahasiswa. Nilai akhir attempt dihitung ulang (`recompute`) dan
+Super Admin menilai manual satu jawaban (soal uraian/isian atau koreksi) beserta
+respon tertulis untuk mahasiswa. Endpoint ini memerlukan Gate `lms.manage-perkuliahan`
+selain `siakad.nilai.manage`. Nilai akhir attempt dihitung ulang (`recompute`) dan
 langsung disinkronkan ke OBE. `is_benar` dikonsistensikan otomatis
 (`poin >= poin maksimum soal`).
 

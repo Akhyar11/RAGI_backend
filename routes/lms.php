@@ -72,7 +72,7 @@ Route::middleware(['can:lms.pengaturan.read'])->group(function () {
     Route::get('/pengaturan/modul', [LmsController::class, 'showPengaturanModul']);
 });
 
-Route::middleware(['can:lms.pengaturan.manage'])->group(function () {
+Route::middleware('can:lms.pengaturan.manage')->group(function () {
     Route::put('/pengaturan/modul', [LmsController::class, 'updatePengaturanModul']);
 });
 
@@ -112,11 +112,44 @@ Route::middleware(['can:lms.forum.manage'])->group(function () {
     Route::delete('/forum/{topikId}', [ForumController::class, 'destroyTopik']);
 });
 
-// Hak Akses Kelola Kelas & Pembelajaran (Dosen Pengajar / Kaprodi / Admin)
+// Hak Akses Baca Detail Manajemen & Laporan.
+// Endpoint GET ini bukan mutasi: dosen pengampu/pengelola tetap boleh melihat
+// detail kelola quiz, daftar attempt, serta mengekspor/mencetak laporan.
 Route::middleware(['can:siakad.kelas.manage'])->group(function () {
-    Route::put('/kelas/{kelasId}/setting', [LmsController::class, 'updateSetting']);
-    // Jurnal presensi lokal: tulis hanya Dosen Pengampu (ditegakkan service).
+    Route::get('/quiz/{quizId}/manage', [QuizController::class, 'showManage']);
+    Route::get('/quiz/{quizId}/attempts', [QuizController::class, 'listAttempts']);
+    Route::get('/attempt/{attemptId}/detail', [QuizController::class, 'attemptDetail']);
+    Route::get('/quiz/{quizId}/preview', [QuizController::class, 'preview']);
+    Route::get('/mahasiswa/search', [QuizController::class, 'searchMahasiswa']);
+    Route::get('/quiz/{quizId}/kolaborator', [QuizController::class, 'listKolaborator']);
+    // Export laporan kelas (CSV/XLSX) — rekap absensi & pengajuan izin.
+    Route::get('/kelas/{kelasId}/export/presensi', [LmsController::class, 'exportPresensi']);
+    Route::get('/kelas/{kelasId}/export/absensi-izin', [LmsController::class, 'exportIzin']);
+    // Cetak laporan PDF (Dompdf) memakai route tersendiri, bukan format pada LmsExportService.
+    Route::get('/kelas/{kelasId}/cetak/kehadiran', [LmsController::class, 'cetakKehadiranKelas']);
+    Route::get('/cetak/rekap-prodi', [LmsController::class, 'cetakRekapProdi']);
+});
+
+// Jurnal & presensi kelas sendiri — Dosen Pengampu atau Super Admin.
+// Permission `siakad.kelas.manage` membawa user ke group ini, tetapi service
+// tetap memeriksa resource: dosen non-pengampu/pengelola ditolak 403.
+// Ini pengecualian yang disengaja dari Gate `lms.manage-perkuliahan`.
+Route::middleware(['can:siakad.kelas.manage'])->group(function () {
     Route::put('/kelas/{kelasId}/pertemuan/{pertemuanId}/jurnal', [LmsController::class, 'updateJurnal']);
+    Route::post('/pertemuan/{pertemuanId}/token', [LmsController::class, 'generateToken']);
+    Route::post('/pertemuan/{pertemuanId}/buka-sesi', [LmsController::class, 'bukaSesiPresensi']);
+    Route::post('/pertemuan/{pertemuanId}/token/rotate', [LmsController::class, 'rotateToken'])->middleware('throttle:lms-token-rotate');
+    Route::post('/pertemuan/{pertemuanId}/tutup-presensi', [LmsController::class, 'tutupPresensi']);
+    Route::post('/pertemuan/{pertemuanId}/bulk-absensi', [LmsController::class, 'bulkAbsensi']);
+    Route::patch('/izin/{izinId}/proses', [LmsController::class, 'prosesIzin']);
+});
+
+// Hak Akses Kelola Kelas & Pembelajaran — Khusus Super Admin.
+// `siakad.kelas.manage` tetap dipertahankan sebagai bare permission modul,
+// sedangkan `lms.manage-perkuliahan` membatasi mutasi akademik hanya untuk
+// Super Admin. Dosen/pengelola masih lolos pada group baca/partisipasi di atas.
+Route::middleware('can:siakad.kelas.manage')->group(function () {
+    Route::put('/kelas/{kelasId}/setting', [LmsController::class, 'updateSetting']);
     Route::post('/pertemuan/{pertemuanId}/materi', [LmsController::class, 'storeMateri']);
     Route::put('/materi/{materiId}', [LmsController::class, 'updateMateri']);
     Route::delete('/materi/{materiId}', [LmsController::class, 'destroyMateri']);
@@ -125,21 +158,13 @@ Route::middleware(['can:siakad.kelas.manage'])->group(function () {
     Route::post('/pertemuan/{pertemuanId}/tugas', [LmsController::class, 'storeTugas']);
     Route::put('/tugas/{tugasId}', [LmsController::class, 'updateTugas']);
     Route::delete('/tugas/{tugasId}', [LmsController::class, 'destroyTugas']);
-    Route::post('/pertemuan/{pertemuanId}/token', [LmsController::class, 'generateToken']);
-    Route::post('/pertemuan/{pertemuanId}/buka-sesi', [LmsController::class, 'bukaSesiPresensi']);
-    Route::post('/pertemuan/{pertemuanId}/token/rotate', [LmsController::class, 'rotateToken'])->middleware('throttle:lms-token-rotate');
-    Route::post('/pertemuan/{pertemuanId}/tutup-presensi', [LmsController::class, 'tutupPresensi']);
     // Quiz — sisi dosen pengelola
     Route::post('/pertemuan/{pertemuanId}/quiz', [QuizController::class, 'store']);
-    Route::get('/quiz/{quizId}/manage', [QuizController::class, 'showManage']);
     Route::put('/quiz/{quizId}', [QuizController::class, 'update']);
     Route::delete('/quiz/{quizId}', [QuizController::class, 'destroy']);
     Route::post('/quiz/{quizId}/soal', [QuizController::class, 'attachSoal']);
     Route::delete('/quiz-soal/{quizSoalId}', [QuizController::class, 'detachSoal']);
-    Route::get('/quiz/{quizId}/attempts', [QuizController::class, 'listAttempts']);
     Route::post('/attempt/{attemptId}/reset', [QuizController::class, 'resetAttempt']);
-    Route::get('/attempt/{attemptId}/detail', [QuizController::class, 'attemptDetail']);
-    Route::get('/quiz/{quizId}/preview', [QuizController::class, 'preview']);
     // Tryout — buat & kelola peserta (level kelas maupun ujian khusus lintas mata kuliah)
     Route::post('/tryout', [QuizController::class, 'storeStandaloneTryout']);
     Route::post('/kelas/{kelasId}/tryout', [QuizController::class, 'storeTryout']);
@@ -147,25 +172,15 @@ Route::middleware(['can:siakad.kelas.manage'])->group(function () {
     Route::post('/quiz/{quizId}/peserta-kelas', [QuizController::class, 'addPesertaByKelas']);
     Route::post('/quiz/{quizId}/peserta-copy', [QuizController::class, 'copyPeserta']);
     Route::post('/quiz/{quizId}/soal/bulk-delete', [QuizController::class, 'bulkDeleteSoal']);
-    Route::get('/mahasiswa/search', [QuizController::class, 'searchMahasiswa']);
     Route::delete('/tryout-peserta/{pesertaId}', [QuizController::class, 'removePeserta']);
     // Manajemen Pertemuan — ubah & hapus
     Route::put('/pertemuan/{pertemuanId}', [LmsController::class, 'updatePertemuan']);
     Route::delete('/pertemuan/{pertemuanId}', [LmsController::class, 'destroyPertemuan']);
-    Route::post('/pertemuan/{pertemuanId}/bulk-absensi', [LmsController::class, 'bulkAbsensi']);
-    Route::patch('/izin/{izinId}/proses', [LmsController::class, 'prosesIzin']);
     // Alur LMS baru: import materi antar-kelas (mutasi, tetap manage)
     Route::post('/kelas/{kelasId}/import-materi', [LmsController::class, 'importMateri']);
     // Quiz — kolaborator dosen (pengawas/pemantau/penginput soal)
-    Route::get('/quiz/{quizId}/kolaborator', [QuizController::class, 'listKolaborator']);
     Route::post('/quiz/{quizId}/kolaborator', [QuizController::class, 'addKolaborator']);
     Route::delete('/quiz-kolaborator/{id}', [QuizController::class, 'removeKolaborator']);
-    // Export laporan kelas (CSV/XLSX) — rekap absensi & pengajuan izin.
-    Route::get('/kelas/{kelasId}/export/presensi', [LmsController::class, 'exportPresensi']);
-    Route::get('/kelas/{kelasId}/export/absensi-izin', [LmsController::class, 'exportIzin']);
-    // Cetak laporan PDF (Dompdf) memakai route tersendiri, bukan format pada LmsExportService.
-    Route::get('/kelas/{kelasId}/cetak/kehadiran', [LmsController::class, 'cetakKehadiranKelas']);
-    Route::get('/cetak/rekap-prodi', [LmsController::class, 'cetakRekapProdi']);
 });
 
 // --- Notifikasi In-App LMS ---

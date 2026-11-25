@@ -59,6 +59,20 @@ class LmsService
         'diajukan',
     ];
 
+    /**
+     * Hari kuliah pada plotting kelas (closed-set sesuai kolom `siakad_kelas.hari`).
+     * Dipakai untuk menghitung tanggal default form jurnal/presensi.
+     */
+    private const HARI_DAY_OF_WEEK = [
+        'senin' => Carbon::MONDAY,
+        'selasa' => Carbon::TUESDAY,
+        'rabu' => Carbon::WEDNESDAY,
+        'kamis' => Carbon::THURSDAY,
+        'jumat' => Carbon::FRIDAY,
+        'sabtu' => Carbon::SATURDAY,
+        'minggu' => Carbon::SUNDAY,
+    ];
+
     public function __construct(protected FileStorageService $files) {}
 
     /**
@@ -209,6 +223,7 @@ class LmsService
         }
 
         $isPengelola = $isGlobalAdmin || $isProdiManager;
+        $isSuperAdmin = $user !== null && $user->isSuperAdmin();
 
         $viewerMode = $isPengampu
             ? 'dosen'
@@ -219,8 +234,8 @@ class LmsService
             'is_pengampu' => $isPengampu,
             'is_peserta_krs' => $isPesertaKrs,
             'is_pengelola' => $isPengelola,
-            'can_teach' => $isPengampu,
-            'can_configure_kelas' => $isPengampu || $isGlobalAdmin,
+            'can_teach' => $isPengampu || $isSuperAdmin,
+            'can_configure_kelas' => $isPengampu || $isGlobalAdmin || $isSuperAdmin,
             'can_participate' => $isPesertaKrs,
             'can_export' => $isPengampu || $isPengelola,
         ];
@@ -242,23 +257,28 @@ class LmsService
 
     /**
      * Pastikan pemanggil adalah Dosen Pengampu resmi pada kelas tersebut.
-     * Administrator / Super Admin atau dosen lain yang tidak mengampu kelas ini ditolak (403).
+     * Super Admin diizinkan mengelola semua kelas; pengelola/dosen non-pengampu ditolak (403).
      */
     public function assertDosenPengampuKelas(int $kelasId, int $userId): void
     {
+        $user = User::find($userId);
+        if ($user !== null && $user->isSuperAdmin()) {
+            return;
+        }
+
         if (!$this->isDosenPengampuKelas($userId, $kelasId)) {
             abort(403, 'Aksi akademik ini hanya dapat dilakukan oleh Dosen Pengampu kelas terkait.');
         }
     }
 
     /**
-     * Pastikan pemanggil berhak mengubah konfigurasi LMS kelas (Dosen Pengampu atau Admin/Superadmin).
+     * Pastikan pemanggil adalah Super Admin untuk mengubah konfigurasi LMS kelas.
      */
     public function assertCanConfigureKelas(int $kelasId, int $userId): void
     {
         $context = $this->resolveKelasViewerContext($kelasId, $userId);
         if (!$context['can_configure_kelas']) {
-            abort(403, 'Anda tidak memiliki izin untuk mengubah pengaturan LMS kelas ini.');
+            abort(403, 'Pengaturan LMS kelas hanya dapat diubah oleh Super Admin.');
         }
     }
 
@@ -635,12 +655,68 @@ class LmsService
     }
 
     /**
+     * Nilai default form jurnal/presensi yang diambil dari plotting kelas.
+     *
+     * Frontend memprioritaskan isian yang sudah tersimpan, lalu memakai payload
+     * ini sebagai fallback. Tanggal default mengikuti hari kuliah terdekat
+     * (termasuk hari ini bila sama), sehingga dosen tinggal mengonfirmasi.
+     *
+     * @return array{
+     *     hari: string|null,
+     *     jam_mulai: string|null,
+     *     jam_selesai: string|null,
+     *     ruangan_id: int|null,
+     *     ruangan_nama: string|null,
+     *     ruangan_kode: string|null,
+     *     tanggal_default: string|null,
+     *     jenis_kegiatan_default: string
+     * }
+     */
+    private function resolvePlottingDefault(Pertemuan $pertemuan): array
+    {
+        $pertemuan->loadMissing('kelas.ruangan');
+        $kelas = $pertemuan->kelas;
+        $hari = $kelas?->hari;
+
+        $tanggalDefault = null;
+        if (is_string($hari) && array_key_exists($hari, self::HARI_DAY_OF_WEEK)) {
+            $base = Carbon::today();
+            $diff = (self::HARI_DAY_OF_WEEK[$hari] - $base->dayOfWeek + 7) % 7;
+            $tanggalDefault = $base->addDays($diff)->toDateString();
+        }
+
+        $jam = static function ($value): ?string {
+            if (!$value) {
+                return null;
+            }
+
+            try {
+                return Carbon::parse((string) $value)->format('H:i');
+            } catch (\Throwable) {
+                return null;
+            }
+        };
+
+        return [
+            'hari' => $hari,
+            'jam_mulai' => $jam($kelas?->jam_mulai),
+            'jam_selesai' => $jam($kelas?->jam_selesai),
+            'ruangan_id' => $kelas?->ruangan_id ? (int) $kelas->ruangan_id : null,
+            'ruangan_nama' => $kelas?->ruangan?->nama,
+            'ruangan_kode' => $kelas?->ruangan?->kode,
+            'tanggal_default' => $tanggalDefault,
+            'jenis_kegiatan_default' => Pertemuan::JENIS_KEGIATAN_TEORI,
+        ];
+    }
+
+    /**
      * Dapatkan detail pertemuan LMS (Materi, Tugas, Absensi, dan Izin).
      */
     public function getPertemuanDetail(int $pertemuanId, ?int $userId = null): array
     {
         $pertemuan = Pertemuan::with([
             'kelas.mataKuliah',
+            'kelas.ruangan',
             'kelas.lmsSetting',
             'materiList.files',
             'tugasList.komponenPenilaian',
@@ -767,6 +843,8 @@ class LmsService
         return [
             'pertemuan' => $pertemuan,
             'viewer_context' => $viewerContext,
+            // Fallback isian form jurnal/presensi dari plotting kelas.
+            'plotting' => $this->resolvePlottingDefault($pertemuan),
             'materi_list' => $materiList,
             'tugas_list' => $tugasList,
             'quiz_list' => $quizList->values(),
@@ -799,14 +877,18 @@ class LmsService
             ? $this->assertCanViewKelas($kelasId, $userId)
             : $this->resolveKelasViewerContext($kelasId, null);
 
-        // Penulisan jurnal hanya untuk Dosen Pengampu. Admin/Kaprodi hanya
-        // memantau (read-only); mahasiswa melihat ringkasan tanpa bukti privat.
-        $canEdit = $userId !== null && $this->isDosenPengampuKelas($userId, $kelasId);
+        // Jurnal & presensi dibuka untuk Dosen Pengampu kelasnya sendiri;
+        // mutasi perkuliahan lain tetap Super Admin-only. Pengelola non-pengampu
+        // tetap read-only meski memiliki permission `siakad.kelas.manage`.
+        $actor = $userId !== null ? User::find($userId) : null;
+        $isPengampu = $userId !== null && $this->isDosenPengampuKelas($userId, $kelasId);
+        $canEdit = ($actor !== null && $actor->isSuperAdmin()) || $isPengampu;
         $canSeeBukti = $canEdit || (bool) ($context['is_pengelola'] ?? false);
 
         return [
             'jurnal' => $this->serializeJurnal($pertemuan, $canSeeBukti),
             'can_edit' => $canEdit,
+            'plotting' => $this->resolvePlottingDefault($pertemuan),
             'jenis_kegiatan_options' => collect(Pertemuan::jenisKegiatanOptions())
                 ->map(fn (string $label, string $value): array => [
                     'value' => $value,

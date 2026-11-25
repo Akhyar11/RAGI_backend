@@ -26,7 +26,7 @@ use Tests\TestCase;
  * FASE 5 — Verifikasi Menyeluruh E2E Modul LMS.
  *
  * Menguji 4 alur penuh sesuai plan_lms_absensi.md:
- *  1. Dosen input materi -> Mahasiswa download file.
+ *  1. Super Admin input materi -> Mahasiswa download file.
  *  2. Token absensi: generate -> mahasiswa input -> absensi tersimpan (+ token salah & kedaluwarsa ditolak).
  *  3. Tugas & OBE sync: buat tugas link OBE -> submit -> nilai -> masuk siakad_nilai_komponen_mhs (+ overwrite + standalone).
  *  4. Izin: ajukan -> approve -> absensi terupdate otomatis (+ tolak tidak mengubah absensi).
@@ -36,6 +36,7 @@ class SiakadLmsE2ETest extends TestCase
     use RefreshDatabase;
 
     protected User $userDosen;
+    protected User $superAdmin;
     protected User $userMhs;
     protected Dosen $dosen;
     protected Mahasiswa $mahasiswa;
@@ -50,6 +51,7 @@ class SiakadLmsE2ETest extends TestCase
         Storage::fake('local');
 
         $this->userDosen = User::factory()->create(['username' => 'dosen.e2e', 'email' => 'dosen.e2e@test.ac.id']);
+        $this->superAdmin = User::factory()->create(['username' => 'superadmin.e2e', 'email' => 'superadmin.e2e@test.ac.id']);
         $this->userMhs = User::factory()->create(['username' => 'mhs.e2e', 'email' => 'mhs.e2e@test.ac.id']);
 
         $this->prodi = ProgramStudi::create([
@@ -157,6 +159,7 @@ class SiakadLmsE2ETest extends TestCase
             );
         }
 
+        $roleSuperAdmin = \App\Models\Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin']);
         $roleDosen = \App\Models\Role::firstOrCreate(['slug' => 'dosen_pengajar'], ['name' => 'Dosen Pengajar']);
         $roleMhs = \App\Models\Role::firstOrCreate(['slug' => 'mahasiswa'], ['name' => 'Mahasiswa']);
 
@@ -184,6 +187,7 @@ class SiakadLmsE2ETest extends TestCase
             $createdPerms['siakad.krs.read']->id,
         ]);
 
+        $this->superAdmin->roles()->attach($roleSuperAdmin->id);
         $this->userDosen->roles()->attach($roleDosen->id);
         $this->userMhs->roles()->attach($roleMhs->id);
     }
@@ -192,8 +196,8 @@ class SiakadLmsE2ETest extends TestCase
 
     public function test_e2e_materi_upload_hingga_mahasiswa_download(): void
     {
-        // 1. Dosen input materi + file
-        Passport::actingAs($this->userDosen);
+        // 1. Super Admin input materi + file (mutasi LMS hanya untuk Super Admin)
+        Passport::actingAs($this->superAdmin);
 
         $refFile = \Illuminate\Support\Facades\DB::table('spmb_master_referensi')
             ->where('modul', 'siakad')->where('tipe', 'tipe_konten_lms')->where('kode', 'file')->first();
@@ -240,8 +244,8 @@ class SiakadLmsE2ETest extends TestCase
     {
         Http::fake();
 
-        // 1. Dosen generate token
-        Passport::actingAs($this->userDosen);
+        // 1. Super Admin generate token
+        Passport::actingAs($this->superAdmin);
         $resToken = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/token");
         $resToken->assertStatus(200)
             ->assertJsonStructure(['status', 'data' => ['token', 'expired_at']]);
@@ -281,7 +285,7 @@ class SiakadLmsE2ETest extends TestCase
 
     public function test_e2e_tugas_obe_sync_dan_overwrite(): void
     {
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
 
         $komponenObe = KomponenPenilaian::create([
             'kelas_id'         => $this->kelas->id,
@@ -313,8 +317,8 @@ class SiakadLmsE2ETest extends TestCase
         $resKumpul->assertStatus(200);
         $pengumpulanId = $resKumpul->json('data.id');
 
-        // 3. Dosen nilai -> masuk OBE
-        Passport::actingAs($this->userDosen);
+        // 3. Super Admin nilai -> masuk OBE
+        Passport::actingAs($this->superAdmin);
         $this->putJson("/api/v1/lms/pengumpulan/{$pengumpulanId}/nilai", [
             'nilai'          => 80.00,
             'feedback_dosen' => 'Cukup baik.',
@@ -326,7 +330,7 @@ class SiakadLmsE2ETest extends TestCase
             'nilai_angka'           => 80.00,
         ]);
 
-        // 4. Dosen revisi nilai -> OBE ter-overwrite (sumber kebenaran = LMS)
+        // 4. Super Admin revisi nilai -> OBE ter-overwrite (sumber kebenaran = LMS)
         $this->putJson("/api/v1/lms/pengumpulan/{$pengumpulanId}/nilai", [
             'nilai'          => 95.00,
             'feedback_dosen' => 'Revisi: sangat baik.',
@@ -355,7 +359,7 @@ class SiakadLmsE2ETest extends TestCase
         ]);
         $resKumpul2->assertStatus(200);
 
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         $this->putJson("/api/v1/lms/pengumpulan/{$resKumpul2->json('data.id')}/nilai", [
             'nilai' => 70.00,
         ])->assertStatus(200);
@@ -375,7 +379,7 @@ class SiakadLmsE2ETest extends TestCase
         $refTolak = \Illuminate\Support\Facades\DB::table('spmb_master_referensi')
             ->where('modul', 'siakad')->where('tipe', 'status_persetujuan_izin')->where('kode', 'ditolak')->first();
 
-        // 1. Mahasiswa ajukan izin -> dosen approve -> absensi otomatis 'sakit'
+        // 1. Mahasiswa ajukan izin -> Super Admin approve -> absensi otomatis 'sakit'
         Passport::actingAs($this->userMhs);
         $resIzin = $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/izin", [
             'tipe_izin_id' => $refSakit->id,
@@ -386,7 +390,7 @@ class SiakadLmsE2ETest extends TestCase
         $izinId = $resIzin->json('data.id');
         $this->assertDatabaseHas('lms_izin_absensi', ['id' => $izinId, 'status' => 'pending']);
 
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         $this->patchJson("/api/v1/lms/izin/{$izinId}/proses", [
             'status_id'     => $refSetuju->id,
             'catatan_dosen' => 'Semoga lekas sembuh.',
@@ -416,7 +420,7 @@ class SiakadLmsE2ETest extends TestCase
         $resIzin2->assertStatus(201);
         $izinId2 = $resIzin2->json('data.id');
 
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
         $this->patchJson("/api/v1/lms/izin/{$izinId2}/proses", [
             'status_id'     => $refTolak->id,
             'catatan_dosen' => 'Surat tidak valid.',
@@ -458,8 +462,8 @@ class SiakadLmsE2ETest extends TestCase
         ]);
         KrsDetail::create(['krs_id' => $krs2->id, 'kelas_id' => $this->kelas->id, 'status' => 'aktif']);
 
-        // Dosen catat hadir untuk keduanya
-        Passport::actingAs($this->userDosen);
+        // Super Admin catat hadir untuk keduanya
+        Passport::actingAs($this->superAdmin);
         $refHadir = \Illuminate\Support\Facades\DB::table('spmb_master_referensi')
             ->where('modul', 'siakad')->where('tipe', 'status_absensi')->where('kode', 'hadir')->first();
         $this->postJson("/api/v1/lms/pertemuan/{$this->pertemuan->id}/bulk-absensi", [

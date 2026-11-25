@@ -31,6 +31,7 @@ class SiakadLmsPresensiTest extends TestCase
     use RefreshDatabase;
 
     protected User $userAdmin;
+    protected User $superAdmin;
     protected User $userMhs;
     protected User $userDosen;
     protected Mahasiswa $mahasiswa;
@@ -45,6 +46,11 @@ class SiakadLmsPresensiTest extends TestCase
         $this->userAdmin = User::factory()->create([
             'username' => 'admin.presensi',
             'email'    => 'admin.presensi@test.ac.id',
+        ]);
+
+        $this->superAdmin = User::factory()->create([
+            'username' => 'superadmin.presensi',
+            'email'    => 'superadmin.presensi@test.ac.id',
         ]);
 
         $this->userMhs = User::factory()->create([
@@ -152,6 +158,7 @@ class SiakadLmsPresensiTest extends TestCase
         ]);
 
         // ── RBAC ──────────────────────────────────────────────────────
+        $roleSuperAdmin = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin']);
         $roleAdmin = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin']);
         $roleMhs   = Role::firstOrCreate(['slug' => 'mahasiswa'], ['name' => 'Mahasiswa']);
         $roleDosen = Role::firstOrCreate(['slug' => 'dosen_pengajar'], ['name' => 'Dosen Pengajar']);
@@ -174,6 +181,7 @@ class SiakadLmsPresensiTest extends TestCase
             $permManageKelas->id,
         ]);
 
+        $this->superAdmin->roles()->attach($roleSuperAdmin->id);
         $this->userAdmin->roles()->attach($roleAdmin->id);
         $this->userMhs->roles()->attach($roleMhs->id);
         $this->userDosen->roles()->attach($roleDosen->id);
@@ -210,6 +218,7 @@ class SiakadLmsPresensiTest extends TestCase
 
     public function test_manual_attendance_accepts_active_custom_status_and_rejects_other_reference_types(): void
     {
+        // Mutasi absensi hanya untuk Super Admin (Gate lms.manage-perkuliahan).
         $customStatus = MasterReferensi::create([
             'tipe' => 'status_absensi',
             'modul' => 'siakad',
@@ -225,7 +234,7 @@ class SiakadLmsPresensiTest extends TestCase
             'is_active' => true,
         ]);
 
-        Passport::actingAs($this->userDosen);
+        Passport::actingAs($this->superAdmin);
 
         $url = "/api/v1/lms/pertemuan/{$this->pertemuan->id}/bulk-absensi";
         $payload = ['absensi' => [[

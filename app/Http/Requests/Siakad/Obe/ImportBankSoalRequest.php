@@ -14,7 +14,7 @@ class ImportBankSoalRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:10240'],
             'rps_id' => 'required|exists:siakad_rps,id',
             'rps_mingguan_id' => 'nullable|exists:siakad_rps_mingguan,id',
             'sub_cpmk_id' => 'nullable|exists:siakad_sub_cpmk,id',
@@ -27,7 +27,7 @@ class ImportBankSoalRequest extends FormRequest
     {
         return [
             'file.required' => 'File import soal wajib diunggah.',
-            'file.mimes' => 'Format file harus XLSX, XLS, atau CSV.',
+            'file.mimes' => 'Format file harus XLSX, XLS, CSV, atau TXT (Aiken).',
             'file.max' => 'Ukuran file import maksimal 10 MB.',
             'rps_id.required' => 'RPS tujuan wajib dipilih.',
             'rps_id.exists' => 'RPS tujuan tidak valid.',

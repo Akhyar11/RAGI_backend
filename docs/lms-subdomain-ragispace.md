@@ -77,7 +77,7 @@ API tetap diarahkan melalui `NEXT_PUBLIC_API_URL` ke endpoint API utama (disaran
 - [ ] DNS resolve `lms.ragispace.com` ke frontend
 - [ ] Halaman LMS terbuka tanpa redirect aneh
 - [ ] Login/auth berfungsi (token/cookie sesuai konfigurasi)
-- [ ] Menu module LMS muncul sesuai role (`/lms`, `/lms/pertemuan`, `/lms/tryout`, `/lms/forum`, `/lms/pengaturan`)
+- [ ] Menu module LMS muncul sesuai role (`/lms`, `/lms/tryout`, `/lms/forum`, `/lms/pengaturan`) — pertemuan diakses dari detail Kelas
 - [ ] API call berhasil (network 200/403 sesuai permission)
 - [ ] File upload/download berfungsi via `FileStorageService`
 - [ ] Cek console browser tanpa CORS error

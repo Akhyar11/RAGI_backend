@@ -156,19 +156,26 @@ class MenuVisibilityTest extends TestCase
         $this->assertContains('/profile/mfa', $urls);
     }
 
-    public function test_lms_learning_navigation_uses_concise_labels_on_existing_routes(): void
+    public function test_lms_learning_navigation_uses_concise_labels_without_agenda_pertemuan(): void
     {
         $menus = Menu::where('module', 'lms')
-            ->whereIn('url', ['#pembelajaran_lms', '/lms', '/lms/pertemuan', '/lms/forum', '/lms/notifikasi'])
+            ->whereIn('url', ['#pembelajaran_lms', '/lms', '/lms/forum', '/lms/notifikasi'])
             ->pluck('name', 'url');
 
         $this->assertSame([
             '#pembelajaran_lms' => 'PEMBELAJARAN',
             '/lms' => 'Kelas',
-            '/lms/pertemuan' => 'Agenda Pertemuan',
             '/lms/forum' => 'Diskusi',
             '/lms/notifikasi' => 'Notifikasi',
         ], $menus->all());
+
+        // Menu agregat pertemuan sengaja dinonaktifkan; pertemuan dibuka
+        // dari detail Kelas sehingga user tidak perlu mencari matakuliah.
+        $pertemuan = Menu::where('module', 'lms')
+            ->where('url', '/lms/pertemuan')
+            ->first();
+
+        $this->assertTrue($pertemuan === null || ! $pertemuan->is_active);
     }
 
     public function test_diskusi_menu_permission_matches_forum_api_permission(): void

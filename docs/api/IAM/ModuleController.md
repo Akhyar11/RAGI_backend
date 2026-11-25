@@ -24,6 +24,8 @@ Controller ini menangani manajemen *Master Modul* sistem (`core_modules`) serta 
 ## GET /api/modules/my-modules
 
 > Mengembalikan daftar modul aktif yang memiliki izin akses bagi user login. Superadmin menerima semua modul aktif; pengguna umum menerima modul yang memiliki setidaknya satu menu berizin bagi perannya.
+>
+> Catatan Admin OBE: pembatasan menu khusus OBE (`siakad_admin_obe_role_menus`) hanya berlaku ketat untuk modul `siakad`. Saat menghimpun daftar modul (`my-menus?module=all`), menu hasil plotting OBE **digabungkan** dengan menu berizin normal. Dengan demikian modul seperti LMS tetap tampil di Modul Switcher walaupun tidak di-plot OBE, dan modul yang hanya tersedia lewat plotting (mis. SIPPM) tidak hilang.
 
 ### Headers
 

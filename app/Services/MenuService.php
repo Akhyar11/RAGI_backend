@@ -90,24 +90,28 @@ class MenuService
         }
 
         // 1b. Dapatkan menu khusus Admin OBE berdasarkan Role (Dosen / Pegawai yang di-set Admin OBE)
-        // Catatan: Pembatasan menu khusus OBE hanya berlaku saat request menu modul 'siakad'.
-        // Modul lain (LMS, SIMPEG, SSO, dll.) tetap mengikuti hak akses normal user.
+        // Pembatasan ketat HANYA berlaku untuk modul 'siakad'. Untuk permintaan
+        // 'all' (dipakai ModuleController saat menyusun module switcher), daftar
+        // plotting OBE digabungkan (union) dengan hak akses normal agar:
+        // - modul lain (mis. LMS) tetap tampil walaupun tidak di-plot OBE;
+        // - menu yang sebelumnya hanya tampil lewat plotting (mis. SIPPM) tidak hilang.
         $adminProdiMenuIds = [];
         if ($isAdminObeProdi && in_array($module, ['siakad', 'all'], true)) {
-            // Cek plotting khusus per role di tabel siakad_admin_obe_role_menus
             $adminProdiMenuIds = \Illuminate\Support\Facades\DB::table('siakad_admin_obe_role_menus')
                 ->whereIn('role_id', $roleIds)
                 ->pluck('menu_id')
                 ->toArray();
         }
 
+        $obeStrict = $isAdminObeProdi && !empty($adminProdiMenuIds) && $module === 'siakad';
+        $obeInclude = $isAdminObeProdi && !empty($adminProdiMenuIds) && $module === 'all';
+
         // 2. Query builder
-        $query = Menu::with(['permission', 'children' => function($cq) use ($roleIds, $permissionSlugs, $isSuperAdmin, $isAdminObeProdi, $adminProdiMenuIds) {
+        $query = Menu::with(['permission', 'children' => function($cq) use ($roleIds, $permissionSlugs, $isSuperAdmin, $obeStrict, $obeInclude, $adminProdiMenuIds) {
             $cq->with('permission')->where('is_active', true);
             if (!$isSuperAdmin) {
-                $cq->where(function($q) use ($roleIds, $permissionSlugs, $isAdminObeProdi, $adminProdiMenuIds) {
-                    // Jika user adalah Admin OBE dan sudah di-plot di siakad_admin_obe_role_menus, strictly ikuti daftar menu tersebut
-                    if ($isAdminObeProdi && !empty($adminProdiMenuIds)) {
+                $cq->where(function($q) use ($roleIds, $permissionSlugs, $obeStrict, $obeInclude, $adminProdiMenuIds) {
+                    if ($obeStrict) {
                         $q->whereIn('id', $adminProdiMenuIds);
                     } else {
                         $q->where(function($permQ) use ($roleIds, $permissionSlugs) {
@@ -127,6 +131,10 @@ class MenuService
                             $pub->whereNull('permission_id')
                                 ->whereDoesntHave('roles');
                         });
+
+                        if ($obeInclude) {
+                            $q->orWhereIn('id', $adminProdiMenuIds);
+                        }
                     }
                 });
             }
@@ -139,8 +147,8 @@ class MenuService
         ->where('is_active', true);
 
         if (!$isSuperAdmin) {
-            $query->where(function($q) use ($roleIds, $permissionSlugs, $isAdminObeProdi, $adminProdiMenuIds) {
-                if ($isAdminObeProdi && !empty($adminProdiMenuIds)) {
+            $query->where(function($q) use ($roleIds, $permissionSlugs, $obeStrict, $obeInclude, $adminProdiMenuIds) {
+                if ($obeStrict) {
                     $q->whereIn('id', $adminProdiMenuIds)
                       ->orWhereHas('children', function($cq) use ($adminProdiMenuIds) {
                           $cq->whereIn('id', $adminProdiMenuIds);
@@ -180,6 +188,13 @@ class MenuService
                                });
                         });
                     });
+
+                    if ($obeInclude) {
+                        $q->orWhereIn('id', $adminProdiMenuIds)
+                          ->orWhereHas('children', function($cq) use ($adminProdiMenuIds) {
+                              $cq->whereIn('id', $adminProdiMenuIds);
+                          });
+                    }
                 }
             });
         }
