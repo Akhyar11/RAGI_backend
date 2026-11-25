@@ -275,6 +275,7 @@ Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvali
 - `siakad_mahasiswa` (Modul `siakad`): sumber dapat dipilih sebagai PDDIKTI Neo Feeder atau Custom API SIAKAD legacy. Mode PDDIKTI memakai action Count untuk total/progres, lalu mengambil `GetListMahasiswa` dan `GetBiodataMahasiswa` dalam batch 500; mode Custom API mempertahankan service legacy.
 - `siakad_dosen` (Modul `siakad`): mode PDDIKTI menghitung total melalui `GetCountDosen`, kemudian job queue mengambil `GetListDosen` dengan limit 500 dan menyimpan setiap halaman sebelum membaca halaman berikutnya. Sync aktual membalas `202 Accepted` dengan `progress_id`; polling memakai endpoint progress yang sama dengan mahasiswa.
 - `siakad_skala_nilai` (Modul `siakad`): mode PDDIKTI menarik `GetListSkalaNilaiProdi` (skala nilai per prodi) lewat queue worker; lihat bagian "Sinkronisasi skala nilai".
+- `siakad_krs` (Modul `siakad`): mode PDDIKTI menarik `GetKRSMahasiswa` (KRS historis per mata kuliah) lewat queue worker; lihat bagian "Sinkronisasi KRS historis".
 - `siakad_kelas` (Modul `siakad`): mode PDDIKTI menarik `GetListKelasKuliah`, lalu assignment dosen aktual dari `GetDosenPengajarKelasKuliah`. Uji koneksi read-only meminta satu record kelas. Sync aktual masuk `SyncPddiktiKelasJob` pada queue `default`, membalas `202 Accepted`, dan dipoll melalui endpoint progress yang sama. Target yang ditulis adalah `siakad_master_kelas` dan metadata pengajar pada `siakad_distribusi_mengajar`; `siakad_jadwal_kelas` (tabel penjadwalan) tidak ditulis; tidak ada peserta/mahasiswa, KRS, nilai, atau pivot peserta yang diimpor. Koordinator OBE baru dibiarkan null.
 - `sikeu_transaksi_kas` (Modul `sikeu`): disinkronkan ke tabel `sikeu_jurnal_umum` dan `sikeu_detail_jurnal_umum` berimbang (Double-Entry) dengan resolusi COA dinamis via `sikeu_mig_akun_mapping`.
 - `sikeu_transaksi_pembayaran` (Modul `sikeu`): disinkronkan ke tabel `sikeu_tagihan_mahasiswa` dan `sikeu_pembayaran` secara idempoten dengan verifikasi NIM mahasiswa di `siakad_mahasiswa`.
@@ -333,6 +334,28 @@ progres lewat `student-sync-progress/{progress_id}`, total dari `GetCountSkalaNi
 - **Hasil** (`result`): `source_total`, `processed`, `created`, `updated`, `synced`, `skipped`, `failed`, `inactive`, `warnings`, `pages`, `expected_total`, `skipped_items`, `warning_items` (maksimal 100 masing-masing).
 - **Batas/paging**: `limit=500`, `order=id_prodi`, maksimum 100 batch (gagal jelas bila tanpa penanda akhir); grup prodi yang terpotong batas batch ditahan dan diproses bersama batch berikutnya karena rentang antar-huruf saling bergantung.
 - Pada data Neo Feeder kampus saat dokumen ini ditulis: 64 baris untuk 12 prodi, semuanya berlaku; 4 baris `T`; 6 peringatan rentang pada 4 prodi.
+
+### Sinkronisasi KRS historis (`siakad_krs`)
+
+`siakad_krs` (Modul `siakad`, sumber `pddikti`) menarik KRS historis dari Neo Feeder `GetKRSMahasiswa` ke `siakad_krs` dan `siakad_krs_detail` lewat queue worker
+(`SyncPddiktiKrsJob`, `202` + `progress_id`, lock `siakad-krs-pddikti-sync:lock`, progres lewat `student-sync-progress/{progress_id}`). Uji Koneksi memanggil `GetKRSMahasiswa` dengan `limit=1` dan tidak menulis target.
+
+- **Model data**: KRS Feeder = mahasiswa x periode x mata kuliah (+ label rombel), tanpa kelas konkret. Detail disimpan dengan `kelas_id` NULL, `mata_kuliah_id` terisi, dan `master_kelas_id` (rombel) bila ditemukan.
+  `siakad_jadwal_kelas` dan `siakad_nilai_mahasiswa` tidak disentuh.
+- **Pemetaan**: `id_registrasi_mahasiswa` → `siakad_mahasiswa.id_feeder_riwayat`; `id_periode` → `siakad_tahun_akademik.id_feeder` (satu KRS per mahasiswa per tahun akademik); `id_matkul` → `siakad_mata_kuliah.id_feeder`
+  (satu detail per mata kuliah pada satu KRS); `id_prodi` + `nama_kelas_kuliah` → `siakad_master_kelas` (prodi + label huruf besar + angkatan dari awalan tahun dua digit). Rombel hanya dicari, tidak dibuat; tidak ditemukan atau ambigu → `master_kelas_id` NULL (dihitung di `without_rombel`).
+- **Status KRS baru**: periode tahun akademik berjalan `disetujui`, periode lampau `dikunci`; `disetujui_oleh` tidak diisi. `total_sks_diambil` = jumlah `total_sks` mata kuliah lokal pada detail aktif.
+- **Tidak menimpa**: KRS yang sudah ada (mis. dari KRS online) dipakai apa adanya (status, kunci keuangan tidak diubah); detail yang sudah ada tidak diubah, kecuali `master_kelas_id` NULL yang kini dapat diisi (`updated`). Tidak ada record yang dihapus.
+- **Membaca per periode**: untuk setiap tahun akademik lokal ber-`id_feeder` (hanya karakter `A-Z a-z 0-9 _ -`, maks. 20 karakter, agar aman dipakai pada filter), `filter=id_periode='…'`, `order=id_registrasi_mahasiswa,id_periode,id_matkul,id_kelas`
+  (kunci unik; diverifikasi live: 14.400 baris dengan 14.400 kunci unik pada periode 20211), `limit=500`, offset deterministik. Batas 200 batch per periode; bila tercapai tanpa penanda akhir sync gagal jelas.
+  Tiap batch disimpan dalam transaksi sendiri sebelum batch berikutnya, dan progres bertambah setelah commit.
+- **Count/progres**: `GetCountKRSMahasiswa` timeout pada Neo Feeder kampus (diverifikasi live, juga dengan filter `id_periode`) sehingga total tidak dipakai: `total` dan `progress` bernilai `null` (indeterminate, tanpa persentase/ETA palsu), dan pesan progres memuat posisi periode ("Periode 20211 (3 dari 168) ...").
+  Sebagai referensi ukuran, `GetCountPesertaKelasKuliah` = 286.780 baris (sekitar 575 halaman, perkiraan 25 menit).
+- **Hasil** (`result`): `source_total`/`processed`, `periods_total`, `periods_done`, `krs_created`, `created` (detail baru), `updated`, `unchanged`, `collapsed` (mata kuliah sama pada KRS yang sama), `synced`, `skipped`, `failed`, `without_rombel`, `pages`,
+  `skipped_by_reason` (jumlah per alasan) dan `skipped_items` (maks. 100).
+- **Alasan skip**: registrasi mahasiswa belum dipetakan; mata kuliah belum dipetakan; periode baris tidak sesuai. Khusus **registrasi lama** (NIM ada di lokal tetapi baris lokal memakai registrasi Feeder lain, mis. alih bentuk/pindah prodi) dilaporkan dengan alasan tersendiri dan **tidak ditempel otomatis**,
+  karena sync mahasiswa menyimpan satu baris per orang (registrasi terbaru) dan prodi/angkatan KRS lama berbeda.
+- Pada data Neo Feeder kampus (periode 20211): 14.400 baris, 1.550 registrasi; dry-run menghasilkan 1.048 KRS dan 10.088 detail (semua berombel), 3.874 baris dilewati karena registrasi mahasiswa tidak terpetakan (435 registrasi: 120 registrasi lama dari orang yang punya registrasi lain, 315 NIM tidak ada di lokal), dan 438 karena mata kuliah belum terpetakan.
 
 Contoh error: `409` (`Sinkronisasi program studi PDDIKTI sedang berjalan. Tunggu hingga selesai.`), `503` (`Sinkronisasi mata kuliah memerlukan queue worker...`), dan progres `failed` dengan pesan upstream aman, mis. `Gagal mengambil data mata kuliah dari Neo Feeder PDDIKTI: ...` atau `Neo Feeder PDDIKTI menolak permintaan daftar mata kuliah.`
 

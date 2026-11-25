@@ -15,6 +15,7 @@ use App\Services\IAM\KurikulumIntegrationSyncService;
 use App\Services\IAM\KelasPddiktiIntegrationSyncService;
 use App\Services\IAM\MataKuliahIntegrationSyncService;
 use App\Services\IAM\ProgramStudiIntegrationSyncService;
+use App\Services\IAM\KrsHistorisIntegrationSyncService;
 use App\Services\IAM\SkalaNilaiIntegrationSyncService;
 use App\Services\IAM\SiakadMahasiswaIntegrationSyncService;
 use App\Services\IAM\SikeuIntegrationSyncService;
@@ -304,6 +305,7 @@ class IamApiIntegrationController extends Controller
                 'dosen' => app(DosenIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 'kelas' => app(KelasPddiktiIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 'skala_nilai' => app(SkalaNilaiIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
+                'krs' => app(KrsHistorisIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 'tahun_akademik' => app(TahunAkademikIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
                 default => app(MataKuliahIntegrationSyncService::class)->testPddiktiConnection($action ?? ''),
             };
@@ -359,7 +361,8 @@ class IamApiIntegrationController extends Controller
         TahunAkademikIntegrationSyncService $tahunAkademikSyncService,
         DosenIntegrationSyncService $dosenSyncService,
         KelasPddiktiIntegrationSyncService $kelasSyncService,
-        SkalaNilaiIntegrationSyncService $skalaNilaiSyncService
+        SkalaNilaiIntegrationSyncService $skalaNilaiSyncService,
+        KrsHistorisIntegrationSyncService $krsSyncService
     ) {
         Gate::authorize('iam.api_integration.manage');
 
@@ -401,6 +404,12 @@ class IamApiIntegrationController extends Controller
             && $integration->source_type === 'pddikti'
             && $integration->key === 'siakad_skala_nilai') {
             return $this->startPddiktiQueuedSync($request, $integration, $oldValues, $skalaNilaiSyncService);
+        }
+
+        if ($integration->module === 'siakad'
+            && $integration->source_type === 'pddikti'
+            && $integration->key === 'siakad_krs') {
+            return $this->startPddiktiQueuedSync($request, $integration, $oldValues, $krsSyncService);
         }
 
         try {
@@ -498,7 +507,7 @@ class IamApiIntegrationController extends Controller
         }
         $progress = null;
         $progressKey = null;
-        foreach (['siakad-mahasiswa-pddikti-sync:', 'siakad-dosen-pddikti-sync:', 'siakad-kelas-pddikti-sync:', 'siakad-prodi-pddikti-sync:', 'siakad-matkul-pddikti-sync:', 'siakad-skala-pddikti-sync:'] as $prefix) {
+        foreach (['siakad-mahasiswa-pddikti-sync:', 'siakad-dosen-pddikti-sync:', 'siakad-kelas-pddikti-sync:', 'siakad-prodi-pddikti-sync:', 'siakad-matkul-pddikti-sync:', 'siakad-skala-pddikti-sync:', 'siakad-krs-pddikti-sync:'] as $prefix) {
             if ($progress = Cache::get($prefix . $progressId)) {
                 $progressKey = $prefix . $progressId;
                 break;
@@ -526,6 +535,7 @@ class IamApiIntegrationController extends Controller
                 str_contains((string) $progressKey, 'prodi') => 'Progres sinkronisasi program studi berhasil diambil.',
                 str_contains((string) $progressKey, 'matkul') => 'Progres sinkronisasi mata kuliah berhasil diambil.',
                 str_contains((string) $progressKey, 'skala') => 'Progres sinkronisasi skala nilai berhasil diambil.',
+                str_contains((string) $progressKey, 'krs') => 'Progres sinkronisasi KRS historis berhasil diambil.',
                 default => 'Progres sinkronisasi mahasiswa berhasil diambil.',
             },
             'data' => $progress,
@@ -576,7 +586,7 @@ class IamApiIntegrationController extends Controller
         Request $request,
         IamApiIntegration $integration,
         array $oldValues,
-        ProgramStudiIntegrationSyncService|MataKuliahIntegrationSyncService|SkalaNilaiIntegrationSyncService $syncService
+        ProgramStudiIntegrationSyncService|MataKuliahIntegrationSyncService|SkalaNilaiIntegrationSyncService|KrsHistorisIntegrationSyncService $syncService
     ): JsonResponse {
         $label = $syncService->syncLabel();
         if ($request->boolean('preview')) {

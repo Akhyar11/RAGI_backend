@@ -81,6 +81,29 @@ trait QueuesPddiktiSync
     }
 
     /**
+     * Request list ke Feeder dengan retry hanya untuk kegagalan jaringan/timeout (halaman besar bisa lambat).
+     * Respons error_code != 0 tidak diulang; pemanggil menanganinya. Batch dan offset tidak berubah.
+     */
+    protected function requestPddiktiWithRetry(string $action, array $params): array
+    {
+        $delaysSeconds = app()->environment('testing') ? [0, 0] : [3, 10];
+        $attempt = 0;
+        while (true) {
+            try {
+                return $this->neoFeeder->request($action, $params);
+            } catch (\Throwable $exception) {
+                if ($attempt >= count($delaysSeconds)) {
+                    throw $exception;
+                }
+                if ($delaysSeconds[$attempt] > 0) {
+                    sleep($delaysSeconds[$attempt]);
+                }
+                $attempt++;
+            }
+        }
+    }
+
+    /**
      * Total dari action count Neo Feeder yang terverifikasi (null bila tidak tersedia/ditolak/timeout: progress indeterminate).
      */
     protected function fetchPddiktiCount(string $action): ?int

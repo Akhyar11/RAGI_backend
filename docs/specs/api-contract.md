@@ -34,6 +34,15 @@
 - Assignment valid digabung ke satu `siakad_distribusi_mengajar` per prodi + tahun akademik + mata kuliah + semester anjuran. Dosen disimpan di `dosen_anggota_ids`/`dosen_anggota_details`, rombel di `kelas_ids`. Detail Feeder berlabel `source=pddikti`; anggota/SKS manual dipertahankan, dan anggota Feeder yang tidak lagi muncul tidak dihapus.
 - `dosen_koordinator_id` tidak disimpulkan dari urutan Feeder. Distribusi baru memakai koordinator null, koordinator existing tidak ditimpa. Distribusi target yang duplikat dilewati. Hasil mencakup `assignment_source_total`, `distributions_created`, `distributions_updated`, jumlah assignment `assignments_synced`, `assignment_skipped`, dan maksimal 100 `assignment_skipped_items`. Mahasiswa/peserta/KRS/nilai tidak diimpor.
 
+## Sync KRS historis PDDIKTI (2026-11-25)
+
+Integrasi `siakad_krs` (action `GetKRSMahasiswa`) berjalan lewat queue worker dengan kontrak yang sama seperti sync PDDIKTI lain (202 + `progress_id`, lock, batch 500, persist per batch).
+Tidak ada perubahan skema: memakai kolom `siakad_krs_detail.mata_kuliah_id`/`master_kelas_id` dan `kelas_id` nullable dari "Skema: KRS historis berbasis mata kuliah".
+Pembacaan per periode (`filter id_periode`, urutan majemuk unik `id_registrasi_mahasiswa,id_periode,id_matkul,id_kelas`, offset deterministik, maks. 200 batch per periode). `GetCountKRSMahasiswa` timeout live (juga dengan filter) sehingga progres indeterminate; posisi periode ada di pesan.
+Aturan: satu KRS per (mahasiswa, tahun akademik) dan satu detail per (KRS, mata kuliah); status baru `disetujui` untuk periode berjalan, `dikunci` untuk periode lampau; KRS/detail yang sudah ada tidak ditimpa (kecuali `master_kelas_id` NULL yang dapat diisi);
+rombel hanya dicari (tidak dibuat); registrasi lama dari orang yang memiliki registrasi lain (alih bentuk/pindah prodi) tidak ditempel ke baris mahasiswa lokal dan dilaporkan dengan alasan tersendiri.
+`siakad_jadwal_kelas` dan `siakad_nilai_mahasiswa` tidak disentuh (nilai ditangani terpisah).
+
 ## Sync skala nilai PDDIKTI (2026-11-25)
 
 Integrasi `siakad_skala_nilai` (action `GetListSkalaNilaiProdi`, count `GetCountSkalaNilaiProdi` diverifikasi live) berjalan lewat queue worker dengan kontrak yang sama seperti prodi/mata kuliah
