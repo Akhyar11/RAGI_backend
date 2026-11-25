@@ -47,9 +47,50 @@ Ikuti `.agent/skills/pddikti-sync-standard/SKILL.md`:
 
 ## 1. Lengkapi pemetaan mata kuliah & prodi (3.109 kelas terlewat)
 Dampak: 2.454 baris dosen ikut terlewat; semua tugas lain bergantung padanya.
-- [ ] Daftar `id_matkul` dan `id_prodi` Feeder dari `GetListKelasKuliah` yang tidak punya padanan lokal (read-only).
-- [ ] Cek `id_feeder` ganda di `siakad_mata_kuliah` dan `siakad_program_studi` ("terhubung ke lebih dari satu data lokal").
-- [ ] Putuskan penyebab: mata kuliah kurikulum lama / prodi di luar 14 / data ganda; lengkapi lewat sync mata kuliah atau perbaikan data.
+
+### Hasil analisis read-only (2026-11-25, `GetListKelasKuliah` 11.935 kelas / 24 halaman)
+Lolos 8.826; terlewat 3.109 (satu kelas bisa kena beberapa penyebab, jadi jumlah di bawah tumpang tindih):
+
+| Penyebab | Kelas | Rincian |
+|---|---|---|
+| Mata kuliah Feeder tidak ada di lokal | 2.838 | 568 mata kuliah berbeda; 78 di antaranya hanya 1 kelas |
+| `id_feeder` prodi ganda di lokal | 316 | `5e76d67c…` dipakai prodi id 2 (`A` / "Teknologi Rekayasa Otomotif", nonaktif) dan id 14 ("D4 Teknologi Rekayasa Otomotif", aktif) |
+| Prodi Feeder tidak ada di lokal | 198 | "D3 Teknologi Otomotif" (`67c27953…`) |
+| `nama_kelas_kuliah` kosong | 21 | data Feeder tidak lengkap |
+| Semester tidak terpetakan / `id_feeder` matkul-semester ganda | 0 | — |
+
+Mata kuliah hilang per prodi (kelas terdampak): D3 Manajemen Informatika 631, D3 Farmasi 627, D3 Komunikasi Massa 469,
+D3 Mesin Otomotif 380, D3 Perhotelan 336, D3 Teknologi Otomotif 199, D3 Sistem Informasi 118, D4 Teknologi Rekayasa Otomotif 48,
+D4 TLM 12, D4 Produksi Media 8, D4 MIK 7, D4 TRPL 3.
+Sync mata kuliah memakai `GetMatkulKurikulum` (mata kuliah di dalam kurikulum yang sudah ada, 36 kurikulum lokal);
+DUGAAN (belum diverifikasi): mata kuliah hilang berasal dari kurikulum lama yang tidak ada di lokal atau tidak terhubung ke kurikulum.
+
+### Temuan cacat sync (2026-11-25, dibuktikan lewat simulasi read-only)
+Feeder: 2.132 mata kuliah; lokal 1.183. Penyebab sync membuang data:
+- `siakad_mata_kuliah.kode_mk` unik global, padahal Feeder boleh memakai kode sama untuk `id_matkul` berbeda (62 kode lintas prodi; 236 dari 568 mata kuliah hilang terhalang ini).
+- Satu mata kuliah hanya boleh satu `kurikulum_id`, padahal `GetMatkulKurikulum` memuat pasangan mata kuliah x kurikulum (63 mata kuliah di >1 kurikulum).
+- 285 mata kuliah hanya ada di `GetListMataKuliah` (tidak di kurikulum mana pun) sehingga tidak pernah ditarik (`kurikulum_id` wajib).
+- `siakad_program_studi.kode_prodi` unik padahal Feeder punya dua prodi berkode 21403 ("D3 Mesin Otomotif" dan "D3 Teknologi Otomotif").
+- Sync memakai KODE sebagai identitas; identitas stabil di Feeder adalah UUID (`id_prodi`, `id_matkul`).
+
+### Migration identitas unik (SUDAH dijalankan di MySQL lokal 2026-11-25; belum di-commit)
+`2026_11_25_110000_add_unique_id_feeder_identity_columns`: UNIQUE `id_feeder` pada prodi, mata kuliah, dosen,
+mahasiswa (`id_feeder`, `id_feeder_biodata`), jadwal_kelas, dosen_pengampu; duplikat digabung (rujukan dipindah, lalu dihapus).
+Tidak unik (referensi): `dosen_penugasan.id_feeder`, `mahasiswa.id_feeder_riwayat`, `feeder_mappings.feeder_id`.
+Data nyata saat ini: satu grup duplikat (prodi id 2 `A` nonaktif dengan 191 mahasiswa + 1 kurikulum + 7 dosen, dan id 14 `21304` aktif tanpa rujukan);
+hasil yang diharapkan: id 14 bertahan, semua rujukan dipindah ke id 14, `source_id` id 2 dibawa ke id 14, id 2 dihapus.
+Tes: `tests/Feature/SiakadFeederIdentityUniqueMigrationTest.php` (7 tes). Regresi: 388 tes SIAKAD/Mobile/IamApi; 48 error + 1 gagal,
+semuanya terbukti sudah ada di baseline (constraint `status` `siakad_mahasiswa`; `test_ineligible_duplicate_does_not_block_later_eligible_student_record`).
+- [x] Dijalankan di MySQL lokal: prodi id 2 digabung ke id 14 (191 mahasiswa, 1 kurikulum, 7 dosen dipindah; `source_id` dibawa); 13 prodi tersisa; 7 unique index terbentuk. Cadangan baris sebelum migrasi: scratchpad `pre_migration_backup.json`; isi baris yang dihapus juga ada di `storage/logs/laravel.log` ("duplikat digabung").
+- [ ] Setelah unique ada: ubah sync prodi/mata kuliah agar mencocokkan lewat `id_feeder` (UUID), bukan kode; longgarkan unique `kode_prodi` dan `kode_mk`.
+
+### Tindakan
+- [x] Daftar mata kuliah/prodi Feeder tanpa padanan lokal (read-only).
+- [x] Cek `id_feeder` ganda (prodi: 1; mata kuliah: 0; semester: 0).
+- [ ] Prodi ganda: putuskan untuk prodi id 2 (`A`, nonaktif) — kosongkan `id_feeder`, gabung, atau hapus (perubahan data, butuh persetujuan).
+- [ ] Prodi "D3 Teknologi Otomotif": jalankan sync prodi (`GetProdi`) atau tambahkan; periksa apakah itu nama baru "D3 Mesin Otomotif" (id 10).
+- [ ] Mata kuliah hilang: verifikasi apakah ada di `GetListMataKuliah` tetapi tidak di `GetMatkulKurikulum`/kurikulum lokal; tentukan sumber penarikan.
+- [ ] Kelas dengan `nama_kelas_kuliah` kosong (21): tentukan kebijakan (lewati atau beri label).
 - [ ] Jalankan ulang sync kelas; target: jumlah skip turun, `assignments_synced` naik.
 - **Selesai bila:** sisa skip hanya yang disengaja dan terdokumentasi.
 

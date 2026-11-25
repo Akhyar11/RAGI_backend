@@ -34,6 +34,32 @@
 - Assignment valid digabung ke satu `siakad_distribusi_mengajar` per prodi + tahun akademik + mata kuliah + semester anjuran. Dosen disimpan di `dosen_anggota_ids`/`dosen_anggota_details`, rombel di `kelas_ids`. Detail Feeder berlabel `source=pddikti`; anggota/SKS manual dipertahankan, dan anggota Feeder yang tidak lagi muncul tidak dihapus.
 - `dosen_koordinator_id` tidak disimpulkan dari urutan Feeder. Distribusi baru memakai koordinator null, koordinator existing tidak ditimpa. Distribusi target yang duplikat dilewati. Hasil mencakup `assignment_source_total`, `distributions_created`, `distributions_updated`, jumlah assignment `assignments_synced`, `assignment_skipped`, dan maksimal 100 `assignment_skipped_items`. Mahasiswa/peserta/KRS/nilai tidak diimpor.
 
+## Skema: `id_feeder` sebagai identitas unik (2026-11-25)
+
+Kolom `id_feeder` yang berfungsi sebagai **identitas** entitas Neo Feeder wajib unik. Kolom yang hanya **referensi/atribut**
+tidak dibuat unik.
+
+| Tabel | Kolom | Status | Arti di Feeder |
+|---|---|---|---|
+| `siakad_program_studi` | `id_feeder` | UNIQUE (baru) | `id_prodi` |
+| `siakad_mata_kuliah` | `id_feeder` | UNIQUE (baru) | `id_matkul` |
+| `siakad_dosen` | `id_feeder` | UNIQUE (baru) | `id_dosen` |
+| `siakad_mahasiswa` | `id_feeder`, `id_feeder_biodata` | UNIQUE (baru) | `id_mahasiswa`; kunci pencocokan sync mahasiswa |
+| `siakad_jadwal_kelas` | `id_feeder` | UNIQUE (baru) | `id_kelas_kuliah` |
+| `siakad_dosen_pengampu` | `id_feeder` | UNIQUE (baru) | `id_aktivitas_mengajar` |
+| `siakad_kurikulum`, `siakad_tahun_akademik` | `id_feeder` | sudah UNIQUE | — |
+| `siakad_dosen_penugasan` | `id_feeder` | TIDAK unik (referensi) | `id_registrasi_dosen`, berulang per tahun akademik |
+| `siakad_mahasiswa` | `id_feeder_riwayat` | TIDAK unik (atribut) | `id_registrasi_mahasiswa` aktif |
+| `siakad_feeder_mappings` | `feeder_id` | TIDAK unik (tabel pemetaan) | — |
+
+Migration `2026_11_25_110000_add_unique_id_feeder_identity_columns` (data dahulu, lalu indeks):
+1. `''` pada kolom identitas diubah menjadi NULL (NULL boleh berulang pada unique index).
+2. Grup baris dengan nilai sama dideduplikasi. Baris bertahan: tidak soft-delete, lalu `is_active` aktif, lalu `id` terkecil.
+3. Seluruh rujukan (foreign key, plus kolom `program_studi_id`/`prodi_id` tanpa FK pada prodi) dipindah ke baris bertahan sebelum baris duplikat dihapus permanen.
+   Nilai `source_id`/`source_kode_prodi` baris duplikat dibawa ke baris bertahan bila kosong (prodi).
+4. Setiap grup diproses dalam transaksi; konflik unique saat memindahkan rujukan menggagalkan migration dengan pesan jelas tanpa mengubah grup itu.
+5. Baris yang dihapus dicatat di log (`Log::warning`) sebagai JSON. Penghapusan tidak dapat dibatalkan oleh `down()`.
+
 ## Skema: KRS historis berbasis mata kuliah (2026-11-25) — migration + pembaca DIIMPLEMENTASI, impor Feeder belum
 
 Latar: `siakad_jadwal_kelas` tidak diisi dari Neo Feeder. KRS Feeder (`GetKRSMahasiswa`) berisi mahasiswa x periode x
