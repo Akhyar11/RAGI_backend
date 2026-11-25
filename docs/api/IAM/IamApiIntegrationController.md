@@ -269,9 +269,9 @@ Tes PDDIKTI dapat dikirim dengan body `{"source_type":"pddikti"}` atau menggunak
 ## POST /api/api-integrations/{id}/sync
 
 Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvalidasi kontrak dan referensi master, lalu menerapkan data ke target yang didukung. Modul dan key yang didukung saat ini:
-- `siakad_program_studi` (Modul `siakad`): sumber dapat dipilih sebagai PDDIKTI Neo Feeder (`GetProdi`) atau Custom API. Mode PDDIKTI menyimpan UUID `id_prodi` ke `siakad_program_studi.id_feeder`, sekaligus `source_id`; mode Custom API memakai validasi referensi jenjang/akreditasi yang sudah ada.
+- `siakad_program_studi` (Modul `siakad`): sumber dapat dipilih sebagai PDDIKTI Neo Feeder (`GetProdi`) atau Custom API. Mode PDDIKTI menyimpan UUID `id_prodi` ke `siakad_program_studi.id_feeder` (unik), sekaligus `source_id`. Identitas prodi adalah UUID, bukan kode: baris lokal yang sudah terhubung ke UUID Feeder lain bukan kandidat adopsi, dan UUID baru dengan kode yang sudah dipakai dibuat sebagai prodi baru dengan `kode_prodi` lokal `{kode}-{8 karakter UUID}` (kode resmi tetap di `kode_prodi_dikti`); mode Custom API memakai validasi referensi jenjang/akreditasi yang sudah ada.
 - `siakad_kurikulum` (Modul `siakad`): mode PDDIKTI menarik `GetListKurikulum`, memetakan `id_prodi` ke UUID Feeder program studi, lalu menyimpan UUID kurikulum di `siakad_kurikulum.id_feeder`.
-- `siakad_mata_kuliah` (Modul `siakad`): sumber dipilih melalui `source_type`. Mode `pddikti` menarik relasi mata kuliah-kurikulum via Neo Feeder `GetMatkulKurikulum`; mode `custom_api` memakai endpoint dan kredensial manual.
+- `siakad_mata_kuliah` (Modul `siakad`): sumber dipilih melalui `source_type`. Mode `pddikti` menarik relasi mata kuliah-kurikulum via Neo Feeder `GetMatkulKurikulum`. Identitas mata kuliah adalah `id_matkul` (`siakad_mata_kuliah.id_feeder`, unik): satu `id_matkul` menjadi satu baris lokal walau muncul di beberapa kurikulum (dipakai kurikulum berlaku terbaru; penempatan lokal yang sudah ada tidak dipindah), kode mata kuliah unik per kurikulum (bukan global), `sks_tatap_muka`/`sks_praktek` bernilai `null` dianggap 0, dan baris lama tanpa `id_feeder` diadopsi bila kurikulum dan kodenya sama. Hasil memuat `distinct_courses` dan `multi_curriculum`. Request `GetMatkulKurikulum` diulang maksimal 2 kali (jeda 3 dan 10 detik) hanya untuk timeout/kegagalan jaringan; respons `error_code` bukan 0 tidak diulang. Mata kuliah yang tidak termasuk kurikulum mana pun (hanya ada di `GetListMataKuliah`) belum ditarik; mode `custom_api` memakai endpoint dan kredensial manual.
 - `siakad_mahasiswa` (Modul `siakad`): sumber dapat dipilih sebagai PDDIKTI Neo Feeder atau Custom API SIAKAD legacy. Mode PDDIKTI memakai action Count untuk total/progres, lalu mengambil `GetListMahasiswa` dan `GetBiodataMahasiswa` dalam batch 500; mode Custom API mempertahankan service legacy.
 - `siakad_dosen` (Modul `siakad`): mode PDDIKTI menghitung total melalui `GetCountDosen`, kemudian job queue mengambil `GetListDosen` dengan limit 500 dan menyimpan setiap halaman sebelum membaca halaman berikutnya. Sync aktual membalas `202 Accepted` dengan `progress_id`; polling memakai endpoint progress yang sama dengan mahasiswa.
 - `siakad_kelas` (Modul `siakad`): mode PDDIKTI menarik `GetListKelasKuliah`, lalu assignment dosen aktual dari `GetDosenPengajarKelasKuliah`. Uji koneksi read-only meminta satu record kelas. Sync aktual masuk `SyncPddiktiKelasJob` pada queue `default`, membalas `202 Accepted`, dan dipoll melalui endpoint progress yang sama. Target yang ditulis adalah `siakad_master_kelas` dan metadata pengajar pada `siakad_distribusi_mengajar`; `siakad_jadwal_kelas` (tabel penjadwalan) tidak ditulis; tidak ada peserta/mahasiswa, KRS, nilai, atau pivot peserta yang diimpor. Koordinator OBE baru dibiarkan null.
@@ -290,6 +290,32 @@ Mengambil seluruh halaman data dari konfigurasi endpoint yang tersimpan, memvali
 Umumnya tidak memerlukan body. URL, token, tipe autentikasi, dan status aktif menggunakan konfigurasi integrasi yang tersimpan. Khusus integrasi `siakad_mahasiswa` sumber PDDIKTI, body opsional `{"preview": true}` meminta pratinjau read-only. Tanpa `preview: true`, endpoint menjadwalkan sync tulis pada queue `default` dan merespons `202 Accepted` dengan `data.progress_id`. Pastikan worker memproses queue `default`.
 
 Untuk `siakad_dosen`, sync aktual dijalankan oleh queue worker dan mengembalikan `202 Accepted` beserta `data.progress_id`. `preview: true` ditolak; gunakan Uji Koneksi untuk pemeriksaan read-only. Proses worker juga memperbarui/membuat data pegawai SIMPEG, menyelaraskan riwayat pendidikan, serta dapat membuat atau menautkan akun SSO untuk dosen aktif. Tinjau cakupan tersebut sebelum menjalankan sync di produksi. Bila `GetCountDosen` tidak tersedia, progres menunjukkan record yang sudah diproses dengan total/persentase indeterminate.
+
+Untuk `siakad_program_studi` dan `siakad_mata_kuliah` dengan `source_type: pddikti`, sync aktual juga dijalankan oleh worker queue `default`
+(`SyncPddiktiProgramStudiJob` / `SyncPddiktiMataKuliahJob`) dan `POST /api/admin/api-integrations/{id}/sync` mengembalikan `202 Accepted`
+dengan `data.progress_id` (bukan lagi hasil sinkron `200`). Sumber `custom_api` tetap sinkron seperti sebelumnya.
+
+- **Pratinjau** tidak tersedia (`422`); gunakan Uji Koneksi (read-only, tidak menulis target). `QUEUE_CONNECTION=sync` ditolak dengan `503` agar import panjang tidak berjalan di request HTTP.
+- **Lock** per integrasi (`siakad-prodi-pddikti-sync:lock`, `siakad-matkul-pddikti-sync:lock`): sync kedua saat masih berjalan dijawab `409`. Lock dilepas pada sukses, gagal, maupun worker mati.
+- **Progres**: `GET /api/admin/api-integrations/student-sync-progress/{progress_id}` (hanya peminta atau superadmin; kedaluwarsa 2 jam). Status `queued` → `running` → `completed`/`failed`, dengan `processed`, `total`, `progress`, `message`, dan `result`.
+- **Total/progress**: memakai action count Neo Feeder yang terverifikasi live: `GetCountProdi` dan `GetCountMatkulKurikulum`. Bila action count ditolak/timeout, `total` dan `progress` bernilai `null` (indeterminate; tanpa persentase atau ETA palsu). Persen maksimum 99 sampai job selesai.
+- **Batch**: `limit=500`, offset deterministik, maksimum 100 batch; bila batas tercapai tanpa penanda akhir job gagal dengan pesan jelas (bukan sukses parsial). Tiap batch divalidasi dan disimpan dalam transaksi sendiri sebelum batch berikutnya diminta, dan progres bertambah setelah commit. Data absen di sumber tidak dihapus.
+- **Mata kuliah**: data diurut `id_matkul`; `id_matkul` yang terpotong batas batch ditahan dan diproses bersama batch berikutnya agar pasangan multi-kurikulum tetap menjadi satu baris lokal.
+- **Hasil** (`result`): `source_total`/`processed` (baris dibaca), `created`, `updated`, `synced`, `skipped`, `failed`, `pages`, `expected_total`, `skipped_items` (maks. 100 alasan), dan khusus mata kuliah `distinct_courses` dan `multi_curriculum`.
+
+Contoh respons enqueue (`202`):
+
+```json
+{ "status": "success", "message": "Sinkronisasi program studi PDDIKTI dijadwalkan. Progres diperbarui selama proses berjalan.", "data": { "progress_id": "6c0e8f8a-1f0e-4b7e-9b25-0a8a3b3a7f11" } }
+```
+
+Contoh progres selesai:
+
+```json
+{ "status": "success", "message": "Progres sinkronisasi program studi berhasil diambil.", "data": { "status": "completed", "phase": "completed", "progress": 100, "processed": 14, "total": 14, "message": "Sinkronisasi program studi PDDIKTI selesai.", "result": { "source_total": 14, "created": 1, "updated": 13, "synced": 14, "skipped": 0, "failed": 0, "pages": 1, "expected_total": 14, "skipped_items": [] } } }
+```
+
+Contoh error: `409` (`Sinkronisasi program studi PDDIKTI sedang berjalan. Tunggu hingga selesai.`), `503` (`Sinkronisasi mata kuliah memerlukan queue worker...`), dan progres `failed` dengan pesan upstream aman, mis. `Gagal mengambil data mata kuliah dari Neo Feeder PDDIKTI: ...` atau `Neo Feeder PDDIKTI menolak permintaan daftar mata kuliah.`
 
 Untuk `siakad_kelas`, sync aktual dijalankan oleh worker queue `default` dan mengembalikan `202 Accepted` dengan `progress_id`. Tidak ada `preview`; gunakan Uji Koneksi sebagai pemeriksaan read-only. `GetCountKelasKuliahWs` tercantum di User Guide Neo Feeder 2.0 tetapi request live ke Feeder kampus timeout, sehingga worker tidak memanggil action count. Worker membaca `GetListKelasKuliah` sampai batch terakhir kurang dari 500; progress menampilkan jumlah terbaca tanpa total/persentase. Jalankan worker queue default agar status bergerak dari `queued` ke status terminal.
 

@@ -6,17 +6,20 @@ use App\Models\IamApiIntegration;
 use App\Models\Siakad\Kurikulum;
 use App\Models\Siakad\MataKuliah;
 use App\Models\Siakad\ProgramStudi;
-use App\Services\AuditLogService;
+use App\Services\IAM\Concerns\QueuesPddiktiSync;
+use App\Services\IAM\Contracts\QueuedPddiktiSyncService;
 use App\Services\Siakad\NeoFeederService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
-class MataKuliahIntegrationSyncService
+class MataKuliahIntegrationSyncService implements QueuedPddiktiSyncService
 {
+    use QueuesPddiktiSync;
+
     private const MAX_SOURCE_PAGES = 100;
     private const PDDIKTI_BATCH_SIZE = 500;
+    private const PROGRESS_PREFIX = 'siakad-matkul-pddikti-sync:';
 
     public function __construct(private NeoFeederService $neoFeeder) {}
 
@@ -31,7 +34,7 @@ class MataKuliahIntegrationSyncService
         }
 
         if (($integration->source_type ?? 'custom_api') === 'pddikti') {
-            return $this->syncPddikti();
+            throw new ApiIntegrationSyncException('Sinkronisasi mata kuliah PDDIKTI berjalan melalui queue worker (queuePddikti).', 409);
         }
 
         if (empty($integration->url_api)) {
@@ -164,179 +167,302 @@ class MataKuliahIntegrationSyncService
         ];
     }
 
-    private function syncPddikti(): array
+    public function progressPrefix(): string
     {
-        $rows = $this->fetchPddiktiRows();
-
-        return DB::transaction(function () use ($rows): array {
-            $result = [
-                'source_total' => count($rows),
-                'created' => 0,
-                'updated' => 0,
-                'skipped' => 0,
-                'skipped_items' => [],
-            ];
-            $seenSourceIds = [];
-            $seenCodes = [];
-
-            foreach ($rows as $index => $row) {
-                if (!is_array($row)) {
-                    $this->skip($result, $index, $row, 'Item Neo Feeder bukan object data.');
-                    continue;
-                }
-
-                $sourceId = trim((string) ($row['id_matkul'] ?? ''));
-                $courseCode = trim((string) ($row['kode_mata_kuliah'] ?? ''));
-                if ($sourceId === '' || $courseCode === '') {
-                    $this->skip($result, $index, $row, 'ID atau kode mata kuliah Neo Feeder kosong.');
-                    continue;
-                }
-                if (isset($seenSourceIds[$sourceId]) || isset($seenCodes[$courseCode])) {
-                    $this->skip($result, $index, $row, 'ID atau kode mata kuliah duplikat dalam data PDDIKTI.');
-                    continue;
-                }
-                $seenSourceIds[$sourceId] = true;
-                $seenCodes[$courseCode] = true;
-
-                $program = ProgramStudi::query()->where('id_feeder', (string) ($row['id_prodi'] ?? ''))->first();
-                if (!$program) {
-                    $this->skip($result, $index, $row, 'Program studi PDDIKTI belum dipetakan ke ID Feeder di SIAKAD.');
-                    continue;
-                }
-
-                $feederCurriculumId = trim((string) ($row['id_kurikulum'] ?? ''));
-                $curriculum = $feederCurriculumId !== ''
-                    ? Kurikulum::withTrashed()->where('id_feeder', $feederCurriculumId)->first()
-                    : null;
-                if ($curriculum && (int) $curriculum->program_studi_id !== (int) $program->id) {
-                    $this->skip($result, $index, $row, 'ID kurikulum PDDIKTI sudah dipetakan ke program studi lain.');
-                    continue;
-                }
-
-                if (!$curriculum) {
-                    $this->skip($result, $index, $row, 'Kurikulum PDDIKTI belum dimigrasikan. Jalankan sinkronisasi kurikulum terlebih dahulu.');
-                    continue;
-                }
-                if ($curriculum->trashed()) {
-                    $this->skip($result, $index, $row, 'Kurikulum tujuan sudah dihapus di SIAKAD.');
-                    continue;
-                }
-                if ($feederCurriculumId !== '' && empty($curriculum->id_feeder)) {
-                    $oldCurriculumValues = $curriculum->getOriginal();
-                    $curriculum->update(['id_feeder' => $feederCurriculumId]);
-                    $newCurriculumValues = $curriculum->getChanges();
-                    try {
-                        AuditLogService::record(
-                            module: 'SIAKAD',
-                            action: 'update',
-                            tableName: 'siakad_kurikulum',
-                            recordId: $curriculum->id,
-                            oldValues: $oldCurriculumValues,
-                            newValues: $newCurriculumValues,
-                            request: request(),
-                        );
-                    } catch (\Throwable $exception) {
-                        Log::warning('Gagal mencatat audit log mapping kurikulum Neo Feeder: ' . $exception->getMessage(), [
-                            'kurikulum_id' => $curriculum->id,
-                        ]);
-                    }
-                }
-
-                $normalized = $this->normalizePddiktiCourse($row, $curriculum);
-                $validationError = $this->validateRow($normalized);
-                if ($validationError !== null) {
-                    $this->skip($result, $index, $row, $validationError);
-                    continue;
-                }
-
-                $existing = MataKuliah::withTrashed()->where('source_id', $sourceId)->first();
-                if (!$existing) {
-                    $existingByCode = MataKuliah::withTrashed()->where('kode_mk', $courseCode)->first();
-                    if ($existingByCode && $existingByCode->source_id !== null && $existingByCode->source_id !== $sourceId) {
-                        $this->skip($result, $index, $row, 'Kode mata kuliah sudah dipetakan ke source ID lain.');
-                        continue;
-                    }
-                    $existing = $existingByCode;
-                }
-                if ($existing?->trashed()) {
-                    $this->skip($result, $index, $row, 'Mata kuliah PDDIKTI sudah dihapus di SIAKAD.');
-                    continue;
-                }
-                if ($existing && (int) $existing->kurikulum_id !== (int) $curriculum->id) {
-                    $this->skip($result, $index, $row, 'Mata kuliah sudah terhubung ke kurikulum lain; perlu rekonsiliasi manual.');
-                    continue;
-                }
-
-                $attributes = [
-                    'kurikulum_id' => $curriculum->id,
-                    'source_id' => $sourceId,
-                    'id_feeder' => $sourceId,
-                    'kode_mk' => $courseCode,
-                    'nama' => trim((string) $row['nama_mata_kuliah']),
-                    'sks_teori' => $normalized['sks_teori'],
-                    'sks_praktik' => $normalized['sks_praktik'],
-                    'total_sks' => $normalized['total_sks'],
-                    'semester_anjuran' => $normalized['semester_anjuran'],
-                    'tipe' => $normalized['tipe'],
-                    'is_active' => $normalized['is_active'],
-                ];
-
-                if ($existing) {
-                    $existing->update($attributes);
-                    $result['updated']++;
-                } else {
-                    MataKuliah::create($attributes);
-                    $result['created']++;
-                }
-            }
-
-            return $result;
-        });
+        return self::PROGRESS_PREFIX;
     }
 
-    private function fetchPddiktiRows(): array
+    public function syncLabel(): string
     {
-        $rows = [];
-        $offset = 0;
-        $limit = self::PDDIKTI_BATCH_SIZE;
+        return 'mata kuliah';
+    }
 
-        for ($page = 0; $page < self::MAX_SOURCE_PAGES; $page++) {
-            try {
-                $response = $this->neoFeeder->request('GetMatkulKurikulum', [
-                    'order' => 'id_kurikulum',
-                    'limit' => $limit,
-                    'offset' => $offset,
-                ]);
-            } catch (\Throwable $exception) {
-                throw new ApiIntegrationSyncException('Gagal mengambil data mata kuliah dari Neo Feeder PDDIKTI: ' . $exception->getMessage(), 502);
-            }
+    protected function jobClass(): string
+    {
+        return \App\Jobs\SyncPddiktiMataKuliahJob::class;
+    }
 
-            if (($response['error_code'] ?? null) !== 0) {
-                throw new ApiIntegrationSyncException('Neo Feeder PDDIKTI menolak permintaan daftar mata kuliah.', 502);
-            }
-
-            $batch = $response['data'] ?? [];
-            if (!is_array($batch)) {
-                throw new ApiIntegrationSyncException('Respons GetMatkulKurikulum dari Neo Feeder tidak valid.', 502);
-            }
-            if ($batch !== [] && !array_is_list($batch)) {
-                $batch = [$batch];
-            }
-            $rows = array_merge($rows, $batch);
-            if (count($batch) < $limit) {
-                return $rows;
-            }
-            $offset += $limit;
+    /**
+     * Dijalankan worker queue: baca GetMatkulKurikulum per batch 500 (urut id_matkul), persist setiap batch
+     * (transaksi) sebelum batch berikutnya. Progress berbasis GetCountMatkulKurikulum bila tersedia.
+     *
+     * GetMatkulKurikulum memuat pasangan mata kuliah x kurikulum. Identitas mata kuliah adalah id_matkul
+     * (siakad_mata_kuliah.id_feeder, unik), jadi satu id_matkul menjadi satu baris lokal. Karena data diurut
+     * menurut id_matkul, kemunculan id_matkul yang terpotong batas batch ditahan dan diproses bersama batch berikutnya.
+     */
+    public function processPddikti(IamApiIntegration $integration, ?string $progressId = null): array
+    {
+        if (!in_array('pddikti', $integration->supported_sources ?? [], true)) {
+            throw new ApiIntegrationSyncException('Integrasi mata kuliah tidak mendukung sumber PDDIKTI.');
         }
 
-        throw new ApiIntegrationSyncException('Data mata kuliah PDDIKTI melebihi batas 100 halaman per proses sync.', 422);
+        $total = $this->fetchPddiktiCount('GetCountMatkulKurikulum');
+        $result = [
+            'source_total' => 0,
+            'processed' => 0,
+            'distinct_courses' => 0,
+            'created' => 0,
+            'updated' => 0,
+            'synced' => 0,
+            'skipped' => 0,
+            'failed' => 0,
+            'multi_curriculum' => 0,
+            'pages' => 0,
+            'expected_total' => $total,
+            'skipped_items' => [],
+        ];
+        $this->updatePddiktiProgress($progressId, [
+            'status' => 'running', 'phase' => 'reading', 'progress' => $total === null ? null : 0,
+            'processed' => 0, 'total' => $total, 'result' => $result,
+            'message' => $total === null ? 'Membaca mata kuliah dari PDDIKTI; total belum diketahui.' : "Membaca {$total} relasi mata kuliah-kurikulum dari PDDIKTI.",
+        ]);
+
+        $carry = [];
+        $offset = 0;
+        for ($page = 0; $page < self::MAX_SOURCE_PAGES; $page++) {
+            $batch = $this->fetchPddiktiBatch($offset);
+            $count = count($batch);
+            $isLast = $count < self::PDDIKTI_BATCH_SIZE;
+
+            $groups = $carry;
+            $lastId = array_key_last($carry);
+            foreach ($batch as $index => $row) {
+                if (!is_array($row)) {
+                    $this->skip($result, $offset + $index, $row, 'Item Neo Feeder bukan object data.');
+                    continue;
+                }
+                $sourceId = trim((string) ($row['id_matkul'] ?? ''));
+                if ($sourceId === '' || trim((string) ($row['kode_mata_kuliah'] ?? '')) === '') {
+                    $this->skip($result, $offset + $index, $row, 'ID atau kode mata kuliah Neo Feeder kosong.');
+                    continue;
+                }
+                $groups[$sourceId][] = ['index' => $offset + $index, 'row' => $row];
+                $lastId = $sourceId;
+            }
+
+            $carry = [];
+            if (!$isLast && $lastId !== null && isset($groups[$lastId])) {
+                $carry[$lastId] = $groups[$lastId];
+                unset($groups[$lastId]);
+            }
+
+            DB::transaction(function () use ($groups, &$result): void {
+                foreach ($groups as $sourceId => $entries) {
+                    $result['distinct_courses']++;
+                    $this->importPddiktiCourse((string) $sourceId, $entries, $result);
+                }
+            });
+
+            $result['processed'] += $count;
+            $result['source_total'] = $result['processed'];
+            $result['synced'] = $result['created'] + $result['updated'];
+            if ($count > 0) {
+                $result['pages']++;
+            }
+            $this->updatePddiktiProgress($progressId, [
+                'status' => 'running', 'phase' => 'saving',
+                'progress' => $this->pddiktiProgressPercent($result['processed'], $total),
+                'processed' => $result['processed'], 'total' => $total, 'result' => $result,
+                'message' => "Sudah memproses {$result['processed']} relasi mata kuliah dari PDDIKTI.",
+            ]);
+            unset($batch, $groups);
+            if ($isLast) {
+                return $result;
+            }
+            $offset += self::PDDIKTI_BATCH_SIZE;
+        }
+
+        throw new ApiIntegrationSyncException('Data mata kuliah PDDIKTI mencapai batas ' . self::MAX_SOURCE_PAGES . ' batch tanpa penanda akhir; sinkronisasi tidak dinyatakan selesai.', 422);
+    }
+
+    /**
+     * @param list<array{index: int, row: array}> $entries seluruh kemunculan id_matkul pada kurikulum berbeda
+     */
+    private function importPddiktiCourse(string $sourceId, array $entries, array &$result): void
+    {
+        $first = $entries[0];
+        $candidates = [];
+        $firstReason = null;
+        foreach ($entries as $entry) {
+            $row = $entry['row'];
+            $program = ProgramStudi::query()->where('id_feeder', (string) ($row['id_prodi'] ?? ''))->first();
+            if (!$program) {
+                $firstReason ??= 'Program studi PDDIKTI belum dipetakan ke ID Feeder di SIAKAD.';
+                continue;
+            }
+            $feederCurriculumId = trim((string) ($row['id_kurikulum'] ?? ''));
+            $curriculum = $feederCurriculumId !== ''
+                ? Kurikulum::withTrashed()->where('id_feeder', $feederCurriculumId)->first()
+                : null;
+            if (!$curriculum) {
+                $firstReason ??= 'Kurikulum PDDIKTI belum dimigrasikan. Jalankan sinkronisasi kurikulum terlebih dahulu.';
+                continue;
+            }
+            if ((int) $curriculum->program_studi_id !== (int) $program->id) {
+                $firstReason ??= 'ID kurikulum PDDIKTI sudah dipetakan ke program studi lain.';
+                continue;
+            }
+            if ($curriculum->trashed()) {
+                $firstReason ??= 'Kurikulum tujuan sudah dihapus di SIAKAD.';
+                continue;
+            }
+            $candidates[] = ['entry' => $entry, 'curriculum' => $curriculum];
+        }
+
+        if ($candidates === []) {
+            $this->skip($result, $first['index'], $first['row'], $firstReason ?? 'Kurikulum PDDIKTI tidak dapat dipetakan.');
+
+            return;
+        }
+
+        // Satu baris lokal hanya punya satu kurikulum: pakai kurikulum berlaku terbaru (tahun_berlaku, lalu id).
+        usort($candidates, fn (array $a, array $b): int => [(int) $b['curriculum']->tahun_berlaku, (int) $b['curriculum']->id]
+            <=> [(int) $a['curriculum']->tahun_berlaku, (int) $a['curriculum']->id]);
+        $chosen = $candidates[0];
+        if (count(array_unique(array_map(fn (array $c) => $c['curriculum']->id, $candidates))) > 1) {
+            $result['multi_curriculum']++;
+        }
+
+        $row = $chosen['entry']['row'];
+        $index = $chosen['entry']['index'];
+        $curriculum = $chosen['curriculum'];
+        $courseCode = trim((string) $row['kode_mata_kuliah']);
+
+        $normalized = $this->normalizePddiktiCourse($row, $curriculum);
+        $validationError = $this->validateRow($normalized);
+        if ($validationError !== null) {
+            $this->skip($result, $index, $row, $validationError);
+
+            return;
+        }
+
+        // Pencocokan: id_feeder, lalu source_id, lalu adopsi baris lama pada kurikulum yang sama dengan kode sama.
+        $existing = MataKuliah::withTrashed()->where('id_feeder', $sourceId)->first()
+            ?? MataKuliah::withTrashed()->where('source_id', $sourceId)->first();
+        if (!$existing) {
+            $sameCode = MataKuliah::withTrashed()
+                ->where('kurikulum_id', $curriculum->id)
+                ->where('kode_mk', $courseCode)
+                ->first();
+            if ($sameCode) {
+                if ($sameCode->id_feeder !== null && $sameCode->id_feeder !== $sourceId) {
+                    $this->skip($result, $index, $row, 'Kode mata kuliah sudah dipakai mata kuliah Feeder lain pada kurikulum yang sama.');
+
+                    return;
+                }
+                if ($sameCode->source_id !== null && $sameCode->source_id !== $sourceId) {
+                    $this->skip($result, $index, $row, 'Kode mata kuliah sudah dipetakan ke source ID lain.');
+
+                    return;
+                }
+                $existing = $sameCode;
+            }
+        }
+        if ($existing?->trashed()) {
+            $this->skip($result, $index, $row, 'Mata kuliah PDDIKTI sudah dihapus di SIAKAD.');
+
+            return;
+        }
+
+        $attributes = [
+            'source_id' => $sourceId,
+            'id_feeder' => $sourceId,
+            'kode_mk' => $courseCode,
+            'nama' => trim((string) $row['nama_mata_kuliah']),
+            'sks_teori' => $normalized['sks_teori'],
+            'sks_praktik' => $normalized['sks_praktik'],
+            'total_sks' => $normalized['total_sks'],
+            'semester_anjuran' => $normalized['semester_anjuran'],
+            'tipe' => $normalized['tipe'],
+            'is_active' => $normalized['is_active'],
+        ];
+
+        if ($existing) {
+            // Penempatan kurikulum lokal dipertahankan; hanya kode yang berubah perlu dicek bentrok.
+            $codeTaken = MataKuliah::withTrashed()
+                ->where('kurikulum_id', $existing->kurikulum_id)
+                ->where('kode_mk', $courseCode)
+                ->whereKeyNot($existing->getKey())
+                ->exists();
+            if ($codeTaken) {
+                $this->skip($result, $index, $row, 'Kode mata kuliah sudah dipakai mata kuliah lain pada kurikulum yang sama.');
+
+                return;
+            }
+            $existing->update($attributes);
+            $result['updated']++;
+
+            return;
+        }
+
+        MataKuliah::create($attributes + ['kurikulum_id' => $curriculum->id]);
+        $result['created']++;
+    }
+
+    /**
+     * Request list ke Feeder dengan retry hanya untuk kegagalan jaringan/timeout (halaman ~300 KB bisa lambat).
+     * Respons error_code != 0 tidak diulang. Batch tetap 500 dan offset tidak berubah.
+     */
+    private function requestWithRetry(string $action, array $params): array
+    {
+        $delaysSeconds = app()->environment('testing') ? [0, 0] : [3, 10];
+        $attempt = 0;
+        while (true) {
+            try {
+                return $this->neoFeeder->request($action, $params);
+            } catch (\Throwable $exception) {
+                if ($attempt >= count($delaysSeconds)) {
+                    throw $exception;
+                }
+                if ($delaysSeconds[$attempt] > 0) {
+                    sleep($delaysSeconds[$attempt]);
+                }
+                $attempt++;
+            }
+        }
+    }
+
+    private function fetchPddiktiBatch(int $offset): array
+    {
+        try {
+            $response = $this->requestWithRetry('GetMatkulKurikulum', [
+                'order' => 'id_matkul',
+                'limit' => self::PDDIKTI_BATCH_SIZE,
+                'offset' => $offset,
+            ]);
+        } catch (\Throwable $exception) {
+            throw new ApiIntegrationSyncException('Gagal mengambil data mata kuliah dari Neo Feeder PDDIKTI: ' . $exception->getMessage(), 502);
+        }
+
+        if (($response['error_code'] ?? null) !== 0) {
+            throw new ApiIntegrationSyncException('Neo Feeder PDDIKTI menolak permintaan daftar mata kuliah.', 502);
+        }
+
+        $batch = $response['data'] ?? [];
+        if (!is_array($batch)) {
+            throw new ApiIntegrationSyncException('Respons GetMatkulKurikulum dari Neo Feeder tidak valid.', 502);
+        }
+        if ($batch !== [] && !array_is_list($batch)) {
+            $batch = [$batch];
+        }
+        if (count($batch) > self::PDDIKTI_BATCH_SIZE) {
+            throw new ApiIntegrationSyncException('GetMatkulKurikulum mengembalikan lebih dari ' . self::PDDIKTI_BATCH_SIZE . ' record dalam satu batch.', 502);
+        }
+
+        return $batch;
     }
 
     private function normalizePddiktiCourse(array $row, Kurikulum $curriculum): array
     {
         $totalSks = $this->normalizePddiktiNumber($row['sks_mata_kuliah'] ?? null);
-        $sksTeori = $this->normalizePddiktiNumber($row['sks_tatap_muka'] ?? null);
-        $sksPraktik = $this->normalizePddiktiNumber($row['sks_praktek'] ?? null);
+        // Feeder mengirim null untuk komponen SKS bernilai 0; null dianggap 0, nilai pecahan tetap tidak valid.
+        $sksTeori = $this->normalizePddiktiSks($row['sks_tatap_muka'] ?? null);
+        $praktikParts = [
+            $this->normalizePddiktiSks($row['sks_praktek'] ?? null),
+            $this->normalizePddiktiSks($row['sks_praktek_lapangan'] ?? null),
+            $this->normalizePddiktiSks($row['sks_simulasi'] ?? null),
+        ];
+        $sksPraktik = in_array(null, $praktikParts, true) ? null : array_sum($praktikParts);
 
         return [
             'source_id' => (string) ($row['id_matkul'] ?? ''),
@@ -350,6 +476,15 @@ class MataKuliahIntegrationSyncService
             'tipe' => (string) ($row['apakah_wajib'] ?? '') === '1' || ($row['apakah_wajib'] ?? null) === 1 ? 'wajib' : 'pilihan',
             'is_active' => $this->isPddiktiCourseActive($row),
         ];
+    }
+
+    private function normalizePddiktiSks(mixed $value): ?int
+    {
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            return 0;
+        }
+
+        return $this->normalizePddiktiNumber($value);
     }
 
     private function normalizePddiktiNumber(mixed $value): ?int
@@ -474,9 +609,9 @@ class MataKuliahIntegrationSyncService
         $result['skipped']++;
         if (count($result['skipped_items']) < 100) {
             $result['skipped_items'][] = [
-                'source_id' => is_array($row) ? ($row['source_id'] ?? null) : null,
-                'item_ref' => is_array($row) ? ($row['kode_mk'] ?? null) : null,
-                'kode_mk' => is_array($row) ? ($row['kode_mk'] ?? null) : null,
+                'source_id' => is_array($row) ? ($row['source_id'] ?? $row['id_matkul'] ?? null) : null,
+                'item_ref' => is_array($row) ? ($row['kode_mk'] ?? $row['kode_mata_kuliah'] ?? null) : null,
+                'kode_mk' => is_array($row) ? ($row['kode_mk'] ?? $row['kode_mata_kuliah'] ?? null) : null,
                 'row' => $index + 1,
                 'reason' => $reason,
             ];

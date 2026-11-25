@@ -986,6 +986,22 @@ class IamApiIntegrationTest extends TestCase
         $releasedLock->release();
     }
 
+    /**
+     * Sync PDDIKTI prodi/mata kuliah kini berjalan di worker queue; tes menjalankan prosesnya langsung
+     * dan membungkus hasilnya seperti respons endpoint agar assertion JSON tetap dipakai.
+     */
+    private function runQueuedPddiktiSync(IamApiIntegration $integration): \Illuminate\Testing\TestResponse
+    {
+        $service = $integration->key === 'siakad_program_studi'
+            ? app(\App\Services\IAM\ProgramStudiIntegrationSyncService::class)
+            : app(\App\Services\IAM\MataKuliahIntegrationSyncService::class);
+        $result = $service->processPddikti($integration->fresh());
+
+        return \Illuminate\Testing\TestResponse::fromBaseResponse(
+            response()->json(['status' => 'success', 'message' => 'ok', 'data' => $result])
+        );
+    }
+
     public function test_program_study_registry_imports_get_prodi_and_stores_feeder_uuid(): void
     {
         app(IamApiIntegrationSeeder::class)->run();
@@ -1018,6 +1034,7 @@ class IamApiIntegrationTest extends TestCase
         SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
         Http::fakeSequence('https://feeder.example.test/ws/live2.php')
             ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => 1], 200) // GetCount* (jumlah tidak dipakai di tes ini)
             ->push(['error_code' => 0, 'data' => [[
                 'id_prodi' => 'program-uuid-77',
                 'kode_program_studi' => '55201',
@@ -1026,8 +1043,7 @@ class IamApiIntegrationTest extends TestCase
                 'status' => 'A',
             ]]], 200);
 
-        $response = $this->actingAs($this->admin, 'api')
-            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+        $response = $this->runQueuedPddiktiSync($integration);
 
         $response->assertStatus(200)
             ->assertJsonPath('data.created', 1)
@@ -1067,6 +1083,7 @@ class IamApiIntegrationTest extends TestCase
         SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
         Http::fakeSequence('https://feeder.example.test/ws/live2.php')
             ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => 1], 200) // GetCount* (jumlah tidak dipakai di tes ini)
             ->push(['error_code' => 0, 'data' => [[
                 'id_prodi' => 'program-uuid-88',
                 'kode_program_studi' => '55202',
@@ -1075,8 +1092,7 @@ class IamApiIntegrationTest extends TestCase
                 'status' => 'A',
             ]]], 200);
 
-        $response = $this->actingAs($this->admin, 'api')
-            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+        $response = $this->runQueuedPddiktiSync($integration);
 
         $response->assertStatus(200)
             ->assertJsonPath('data.created', 1)
@@ -1124,6 +1140,7 @@ class IamApiIntegrationTest extends TestCase
         SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
         Http::fakeSequence('https://feeder.example.test/ws/live2.php')
             ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => 1], 200) // GetCount* (jumlah tidak dipakai di tes ini)
             ->push(['error_code' => 0, 'data' => [[
                 'id_prodi' => 'feeder-uuid-manual-prodi',
                 'kode_program_studi' => '21304',
@@ -1132,8 +1149,7 @@ class IamApiIntegrationTest extends TestCase
                 'status' => 'A',
             ]]], 200);
 
-        $response = $this->actingAs($this->admin, 'api')
-            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+        $response = $this->runQueuedPddiktiSync($integration);
 
         $response->assertStatus(200)
             ->assertJsonPath('data.updated', 1)
@@ -1195,6 +1211,7 @@ class IamApiIntegrationTest extends TestCase
         SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
         Http::fakeSequence('https://feeder.example.test/ws/live2.php')
             ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => 1], 200) // GetCount* (jumlah tidak dipakai di tes ini)
             ->push(['error_code' => 0, 'data' => [
                 [
                     'id_prodi' => 'feeder-uuid-technology',
@@ -1219,8 +1236,7 @@ class IamApiIntegrationTest extends TestCase
                 ],
             ]], 200);
 
-        $response = $this->actingAs($this->admin, 'api')
-            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+        $response = $this->runQueuedPddiktiSync($integration);
 
         $response->assertStatus(200)
             ->assertJsonPath('data.source_total', 3)
@@ -1684,6 +1700,7 @@ class IamApiIntegrationTest extends TestCase
         SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
         Http::fakeSequence('https://feeder.example.test/ws/live2.php')
             ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => 1], 200) // GetCount* (jumlah tidak dipakai di tes ini)
             ->push(['error_code' => 0, 'data' => [[
                 'id_kurikulum' => 'kurikulum-uuid-1',
                 'nama_kurikulum' => 'Kurikulum Teknik Informatika 2024',
@@ -1700,8 +1717,7 @@ class IamApiIntegrationTest extends TestCase
                 'id_kelompok_mata_kuliah' => 'MKK',
             ]]], 200);
 
-        $response = $this->actingAs($this->admin, 'api')
-            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+        $response = $this->runQueuedPddiktiSync($integration);
 
         $response->assertStatus(200)
             ->assertJsonPath('data.source_total', 1)
@@ -2414,6 +2430,7 @@ class IamApiIntegrationTest extends TestCase
         SystemSetting::set('feeder_password', 'credential-is-stored-centrally');
         Http::fakeSequence('https://feeder.example.test/ws/live2.php')
             ->push(['error_code' => 0, 'data' => ['token' => 'runtime-feeder-token']], 200)
+            ->push(['error_code' => 0, 'data' => 1], 200) // GetCount* (jumlah tidak dipakai di tes ini)
             ->push(['error_code' => 0, 'data' => [[
                 'id_kurikulum' => 'not-yet-mapped-curriculum',
                 'nama_kurikulum' => 'Kurikulum belum dimigrasikan',
@@ -2428,8 +2445,7 @@ class IamApiIntegrationTest extends TestCase
                 'apakah_wajib' => 1,
             ]]], 200);
 
-        $response = $this->actingAs($this->admin, 'api')
-            ->postJson("/api/admin/api-integrations/{$integration->id}/sync");
+        $response = $this->runQueuedPddiktiSync($integration);
 
         $response->assertStatus(200)
             ->assertJsonPath('data.created', 0)

@@ -16,7 +16,7 @@ class StoreMataKuliahRequest extends FormRequest
     {
         return [
             'kurikulum_id' => 'required|exists:siakad_kurikulum,id',
-            'kode_mk' => 'required|string|max:20|unique:siakad_mata_kuliah,kode_mk',
+            'kode_mk' => ['required', 'string', 'max:20', \Illuminate\Validation\Rule::unique('siakad_mata_kuliah', 'kode_mk')->where('kurikulum_id', $this->input('kurikulum_id'))],
             'nama' => 'required|string|max:255',
             'sks_teori' => 'required|integer|min:0|max:12',
             'sks_praktik' => 'required|integer|min:0|max:12',

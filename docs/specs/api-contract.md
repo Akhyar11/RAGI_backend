@@ -34,6 +34,30 @@
 - Assignment valid digabung ke satu `siakad_distribusi_mengajar` per prodi + tahun akademik + mata kuliah + semester anjuran. Dosen disimpan di `dosen_anggota_ids`/`dosen_anggota_details`, rombel di `kelas_ids`. Detail Feeder berlabel `source=pddikti`; anggota/SKS manual dipertahankan, dan anggota Feeder yang tidak lagi muncul tidak dihapus.
 - `dosen_koordinator_id` tidak disimpulkan dari urutan Feeder. Distribusi baru memakai koordinator null, koordinator existing tidak ditimpa. Distribusi target yang duplikat dilewati. Hasil mencakup `assignment_source_total`, `distributions_created`, `distributions_updated`, jumlah assignment `assignments_synced`, `assignment_skipped`, dan maksimal 100 `assignment_skipped_items`. Mahasiswa/peserta/KRS/nilai tidak diimpor.
 
+## Sync PDDIKTI prodi dan mata kuliah memakai UUID sebagai identitas (2026-11-25)
+
+**Eksekusi sync (diperbarui 2026-11-25):** sync PDDIKTI prodi dan mata kuliah berjalan lewat queue worker, bukan di request HTTP.
+`POST /api-integrations/{id}/sync` memvalidasi, mengambil lock per integrasi, mencatat progres `queued`, dispatch job setelah commit,
+dan menjawab `202` + `progress_id` (`409` bila sedang berjalan, `503` bila `QUEUE_CONNECTION=sync`, `422` untuk preview).
+Job membaca `GetProdi` / `GetMatkulKurikulum` per batch 500 (offset deterministik, maks. 100 batch, gagal jelas bila tanpa penanda akhir),
+menyimpan tiap batch dalam transaksi sebelum batch berikutnya, memperbarui progres setelah commit, dan melepas lock pada semua jalur terminal.
+Action count terverifikasi live: `GetCountProdi` (`data` = jumlah) dan `GetCountMatkulKurikulum` (`data` = jumlah string); bila action ditolak atau timeout,
+progres indeterminate (tanpa persentase/ETA). Mata kuliah diurut `id_matkul`; kemunculan `id_matkul` yang terpotong batas batch ditahan dan diproses bersama batch berikutnya.
+Tidak ada record target yang dihapus karena absen di sumber. Sumber `custom_api` tetap sinkron.
+
+Cacat yang diperbaiki (dibuktikan dengan data Feeder nyata): sync memakai kode sebagai identitas padahal kode Feeder tidak unik.
+- **Prodi (`GetProdi`)**: baris lokal dengan `id_feeder` lain bukan kandidat adopsi; UUID baru dengan kode terpakai dibuat sebagai prodi baru,
+  `kode_prodi` lokal `{kode}-{8 karakter UUID}` (tetap unik), kode resmi di `kode_prodi_dikti`. Baris lama tanpa identitas tetap diadopsi lewat kode;
+  baris legacy ber-`source_id` berbeda tetap dilewati untuk rekonsiliasi manual. Baris yang sudah ada mempertahankan kode lokalnya bila kode Feeder dipakai prodi lain.
+- **Mata kuliah (`GetMatkulKurikulum`)**: satu `id_matkul` = satu baris lokal (pasangan di banyak kurikulum digabung; kurikulum berlaku terbaru dipakai,
+  penempatan lokal yang sudah ada dipertahankan). Pencocokan: `id_feeder`, `source_id`, lalu adopsi baris tanpa `id_feeder` pada kurikulum dan kode sama.
+  Komponen SKS `null` dari Feeder dianggap 0; `sks_praktik` = praktek + praktek lapangan + simulasi.
+- Skema: `siakad_mata_kuliah.kode_mk` unik per kurikulum (`kurikulum_id`, `kode_mk`) menggantikan unique global
+  (migration `2026_11_25_120000_scope_kode_mk_unique_to_kurikulum`). `StoreMataKuliahRequest` memvalidasi keunikan kode per kurikulum.
+  Sync legacy `SiakadMataKuliahSyncService` mencocokkan kode hanya dalam kurikulum tujuan.
+- Belum dikerjakan: mata kuliah yang tidak ada di kurikulum mana pun (hanya di `GetListMataKuliah`); prodi mata kuliah diturunkan dari
+  `kurikulum->program_studi_id` di banyak fitur sehingga `kurikulum_id` NULL perlu keputusan desain tersendiri.
+
 ## Skema: `id_feeder` sebagai identitas unik (2026-11-25)
 
 Kolom `id_feeder` yang berfungsi sebagai **identitas** entitas Neo Feeder wajib unik. Kolom yang hanya **referensi/atribut**

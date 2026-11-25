@@ -382,6 +382,18 @@ class IamApiIntegrationController extends Controller
             return $this->startPddiktiKelasSync($request, $integration, $oldValues, $kelasSyncService);
         }
 
+        if ($integration->module === 'siakad'
+            && $integration->source_type === 'pddikti'
+            && $integration->key === 'siakad_program_studi') {
+            return $this->startPddiktiQueuedSync($request, $integration, $oldValues, $syncService);
+        }
+
+        if ($integration->module === 'siakad'
+            && $integration->source_type === 'pddikti'
+            && $integration->key === 'siakad_mata_kuliah') {
+            return $this->startPddiktiQueuedSync($request, $integration, $oldValues, $mataKuliahSyncService);
+        }
+
         try {
             $result = match (true) {
                 $integration->module === 'siakad'
@@ -392,10 +404,6 @@ class IamApiIntegrationController extends Controller
                     && $integration->source_type === 'pddikti'
                     && in_array('pddikti', $integration->supported_sources ?? [], true)
                     && ($integration->source_schemas[$integration->source_type]['target_entity'] ?? null) === 'dosen' => $dosenSyncService->sync($integration, $request->user()?->id),
-                $integration->module === 'siakad'
-                    && $integration->source_type === 'pddikti'
-                    && in_array('pddikti', $integration->supported_sources ?? [], true)
-                    && ($integration->source_schemas[$integration->source_type]['target_entity'] ?? null) === 'program_studi' => $syncService->sync($integration),
                 $integration->module === 'siakad'
                     && $integration->source_type === 'pddikti'
                     && in_array('pddikti', $integration->supported_sources ?? [], true)
@@ -481,7 +489,7 @@ class IamApiIntegrationController extends Controller
         }
         $progress = null;
         $progressKey = null;
-        foreach (['siakad-mahasiswa-pddikti-sync:', 'siakad-dosen-pddikti-sync:', 'siakad-kelas-pddikti-sync:'] as $prefix) {
+        foreach (['siakad-mahasiswa-pddikti-sync:', 'siakad-dosen-pddikti-sync:', 'siakad-kelas-pddikti-sync:', 'siakad-prodi-pddikti-sync:', 'siakad-matkul-pddikti-sync:'] as $prefix) {
             if ($progress = Cache::get($prefix . $progressId)) {
                 $progressKey = $prefix . $progressId;
                 break;
@@ -503,11 +511,13 @@ class IamApiIntegrationController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => str_contains((string) $progressKey, 'dosen')
-                ? 'Progres sinkronisasi dosen berhasil diambil.'
-                : (str_contains((string) $progressKey, 'kelas')
-                    ? 'Progres sinkronisasi kelas berhasil diambil.'
-                    : 'Progres sinkronisasi mahasiswa berhasil diambil.'),
+            'message' => match (true) {
+                str_contains((string) $progressKey, 'dosen') => 'Progres sinkronisasi dosen berhasil diambil.',
+                str_contains((string) $progressKey, 'kelas') => 'Progres sinkronisasi kelas berhasil diambil.',
+                str_contains((string) $progressKey, 'prodi') => 'Progres sinkronisasi program studi berhasil diambil.',
+                str_contains((string) $progressKey, 'matkul') => 'Progres sinkronisasi mata kuliah berhasil diambil.',
+                default => 'Progres sinkronisasi mahasiswa berhasil diambil.',
+            },
             'data' => $progress,
         ]);
     }
@@ -548,6 +558,47 @@ class IamApiIntegrationController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Sinkronisasi dosen dijadwalkan. Progres diperbarui selama proses berjalan.',
+            'data' => ['progress_id' => $result['progress_id']],
+        ], 202);
+    }
+
+    private function startPddiktiQueuedSync(
+        Request $request,
+        IamApiIntegration $integration,
+        array $oldValues,
+        ProgramStudiIntegrationSyncService|MataKuliahIntegrationSyncService $syncService
+    ): JsonResponse {
+        $label = $syncService->syncLabel();
+        if ($request->boolean('preview')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Pratinjau sinkronisasi {$label} belum tersedia; jalankan Uji Koneksi untuk pemeriksaan read-only.",
+            ], 422);
+        }
+
+        try {
+            $result = $syncService->queuePddikti($integration, $request->user()?->id);
+        } catch (ApiIntegrationSyncException $exception) {
+            return response()->json(['status' => 'error', 'message' => $exception->getMessage()], $exception->statusCode);
+        }
+
+        try {
+            AuditLogService::record(
+                module: 'IAM',
+                action: 'sync_queued',
+                tableName: 'iam_api_integrations',
+                recordId: $integration->id,
+                oldValues: $oldValues,
+                newValues: ['progress_id' => $result['progress_id'], 'status' => 'queued'],
+                request: $request,
+            );
+        } catch (Throwable) {
+            \Illuminate\Support\Facades\Log::warning("Gagal mencatat audit enqueue sync {$label} PDDIKTI.");
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Sinkronisasi {$label} PDDIKTI dijadwalkan. Progres diperbarui selama proses berjalan.",
             'data' => ['progress_id' => $result['progress_id']],
         ], 202);
     }

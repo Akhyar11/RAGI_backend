@@ -25,6 +25,8 @@ class IamApiIntegrationSeeder extends Seeder
                     'pddikti' => [
                         'source' => 'Neo Feeder PDDikti',
                         'action' => 'GetProdi',
+                        'count_action' => 'GetCountProdi',
+                        'count_action_note' => 'GetCountProdi diverifikasi live pada Neo Feeder kampus dan dipakai untuk total/progress; sync berjalan di queue worker per batch 500 dan menyimpan tiap batch sebelum batch berikutnya.',
                         'connection_managed' => true,
                         'target_entity' => 'program_studi',
                         'fields' => [
@@ -43,7 +45,7 @@ class IamApiIntegrationSeeder extends Seeder
                         'type' => 'object',
                         'properties' => [
                             'source_id' => ['type' => ['string', 'integer'], 'description' => 'ID stabil program studi pada sistem sumber, disimpan sebagai referensi rekonsiliasi eksternal.'],
-                            'kode_prodi' => ['type' => 'string', 'description' => 'Kode program studi lokal; dipetakan ke siakad_program_studi.kode_prodi dan harus unik.'],
+                            'kode_prodi' => ['type' => 'string', 'description' => 'Kode program studi lokal; dipetakan ke siakad_program_studi.kode_prodi dan harus unik. Pada sumber PDDIKTI, dua UUID Feeder dengan kode sama dibedakan menjadi {kode}-{8 karakter UUID}; kode resmi tetap di kode_prodi_dikti.'],
                             'kode_prodi_dikti' => ['type' => ['string', 'null'], 'description' => 'Kode program studi PDDIKTI bila tersedia.'],
                             'nama' => ['type' => 'string', 'description' => 'Nama resmi program studi.'],
                             'jenjang' => ['type' => 'string', 'description' => 'Kode jenjang yang harus cocok dengan master referensi SIAKAD jenjang_prodi.'],
@@ -362,17 +364,19 @@ class IamApiIntegrationSeeder extends Seeder
                     'pddikti' => [
                         'source' => 'Neo Feeder PDDikti',
                         'action' => 'GetMatkulKurikulum',
+                        'count_action' => 'GetCountMatkulKurikulum',
+                        'count_action_note' => 'GetCountMatkulKurikulum diverifikasi live pada Neo Feeder kampus dan dipakai untuk total/progress; sync berjalan di queue worker per batch 500 (urut id_matkul) dan menyimpan tiap batch sebelum batch berikutnya.',
                         'connection_managed' => true,
                         'fields' => [
-                            'id_matkul' => 'UUID mata kuliah PDDIKTI',
+                            'id_matkul' => 'UUID mata kuliah PDDIKTI; identitas mata kuliah (siakad_mata_kuliah.id_feeder, unik). Satu id_matkul menjadi satu baris lokal walau muncul di beberapa kurikulum; kurikulum lokal = kurikulum berlaku terbaru.',
                             'id_kurikulum' => 'UUID kurikulum PDDIKTI',
                             'id_prodi' => 'UUID program studi PDDIKTI',
                             'kode_mata_kuliah' => 'Kode mata kuliah',
                             'nama_mata_kuliah' => 'Nama mata kuliah',
                             'semester' => 'Semester anjuran',
                             'sks_mata_kuliah' => 'Total SKS',
-                            'sks_tatap_muka' => 'SKS teori',
-                            'sks_praktek' => 'SKS praktik',
+                            'sks_tatap_muka' => 'SKS teori; null dianggap 0.',
+                            'sks_praktek' => 'SKS praktik; dijumlah dengan sks_praktek_lapangan dan sks_simulasi, null dianggap 0.',
                             'apakah_wajib' => '1 wajib, selainnya pilihan',
                             'nama_kurikulum' => 'Nama kurikulum untuk mapping prodi',
                         ],
@@ -389,7 +393,7 @@ class IamApiIntegrationSeeder extends Seeder
                                 'properties' => [
                                     'source_id' => ['type' => ['string', 'integer'], 'description' => 'ID stabil mata kuliah pada sistem sumber; disimpan untuk rekonsiliasi dan idempotensi.'],
                                     'kurikulum_kode' => ['type' => 'string', 'description' => 'Kode kurikulum yang harus sudah ada dan cocok persis di SIAKAD tujuan.'],
-                                    'kode_mk' => ['type' => 'string', 'description' => 'Kode mata kuliah unik pada SIAKAD tujuan.'],
+                                    'kode_mk' => ['type' => 'string', 'description' => 'Kode mata kuliah, unik per kurikulum pada SIAKAD tujuan (kode yang sama boleh dipakai UUID Feeder berbeda pada kurikulum berbeda).'],
                                     'nama' => ['type' => 'string'],
                                     'sks_teori' => ['type' => 'integer', 'minimum' => 0],
                                     'sks_praktik' => ['type' => 'integer', 'minimum' => 0],

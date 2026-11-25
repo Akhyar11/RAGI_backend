@@ -192,7 +192,7 @@ class SiakadMataKuliahSyncService
 
         $namaKey = $this->normalizeNama($nama);
 
-        // Kode mata kuliah unik global di sistem tujuan: hanya satu baris sumber boleh memakainya.
+        // Konservatif: satu batch legacy tidak boleh memakai kode yang sama dua kali (sumber legacy tidak mengirim identitas kurikulum).
         if (isset($claimedKode[$kodeMk])) {
             $reason = $claimedKode[$kodeMk] === $namaKey ? 'duplicate_kode_mk' : 'kode_mk_conflict';
             $this->skip(
@@ -230,7 +230,7 @@ class SiakadMataKuliahSyncService
             $mataKuliah = MataKuliah::withTrashed()->where('source_id', $sourceId)->first();
 
             if (!$mataKuliah) {
-                $mataKuliah = MataKuliah::withTrashed()->where('kode_mk', $kodeMk)->first();
+                $mataKuliah = MataKuliah::withTrashed()->where('kurikulum_id', $kurikulumModel->id)->where('kode_mk', $kodeMk)->first();
 
                 if ($mataKuliah) {
                     // Baris lokal dengan kode sama namun milik sumber lain tidak boleh ditimpa.
@@ -259,6 +259,7 @@ class SiakadMataKuliahSyncService
             // Baris yang cocok lewat source_id bisa saja berubah kode; pastikan kode baru belum dipakai lokal.
             if ($mataKuliah && $mataKuliah->kode_mk !== $kodeMk) {
                 $kodeTerpakai = MataKuliah::withTrashed()
+                    ->where('kurikulum_id', $mataKuliah->kurikulum_id)
                     ->where('kode_mk', $kodeMk)
                     ->whereKeyNot($mataKuliah->getKey())
                     ->exists();

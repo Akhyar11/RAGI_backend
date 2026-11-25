@@ -84,6 +84,31 @@ semuanya terbukti sudah ada di baseline (constraint `status` `siakad_mahasiswa`;
 - [x] Dijalankan di MySQL lokal: prodi id 2 digabung ke id 14 (191 mahasiswa, 1 kurikulum, 7 dosen dipindah; `source_id` dibawa); 13 prodi tersisa; 7 unique index terbentuk. Cadangan baris sebelum migrasi: scratchpad `pre_migration_backup.json`; isi baris yang dihapus juga ada di `storage/logs/laravel.log` ("duplikat digabung").
 - [ ] Setelah unique ada: ubah sync prodi/mata kuliah agar mencocokkan lewat `id_feeder` (UUID), bukan kode; longgarkan unique `kode_prodi` dan `kode_mk`.
 
+### Perbaikan sync PDDIKTI prodi & mata kuliah (2026-11-25, KODE SIAP; migration `..._120000` BELUM dijalankan di MySQL)
+Ditemukan juga: Feeder mengirim `sks_tatap_muka`/`sks_praktek` = `null` untuk nilai 0 sehingga sync membuang **154 baris** (71 teori + 83 praktik).
+- [x] Prodi: identitas = UUID; UUID baru dengan kode terpakai dibuat sebagai prodi baru (`{kode}-{8 UUID}`, kode resmi di `kode_prodi_dikti`).
+- [x] Mata kuliah: satu `id_matkul` = satu baris (multi-kurikulum digabung, kurikulum terbaru), kode unik per kurikulum, SKS `null` = 0,
+  adopsi baris lama tanpa `id_feeder` pada kurikulum+kode sama, hasil memuat `distinct_courses` dan `multi_curriculum`.
+- [x] Migration `2026_11_25_120000_scope_kode_mk_unique_to_kurikulum` (unique global `kode_mk` diganti `(kurikulum_id, kode_mk)`).
+- [x] `StoreMataKuliahRequest` dan sync legacy dibatasi per kurikulum. Tes: `PddiktiProdiMataKuliahSyncIdentityTest` (10 tes); regresi 398 tes, sisa 48 error + 1 gagal = baseline.
+- [x] Migration `..._120000` dijalankan di MySQL lokal (2026-11-25).
+- [x] Dry-run (transaksi di-rollback, DB nyata tidak berubah) dengan Feeder nyata:
+  prodi 14 sumber -> 1 dibuat ("D3 Teknologi Otomotif"), 13 diperbarui, 0 dilewati;
+  kurikulum 37 -> 1 dibuat ("KURIKULUM TO 2020"), 36 diperbarui, 0 dilewati;
+  mata kuliah 1.762 baris / 1.476 `id_matkul` -> 282 dibuat, 1.183 diperbarui, 11 dilewati (kode sama dipakai mata kuliah Feeder lain pada kurikulum yang sama), 266 mata kuliah ada di >1 kurikulum.
+  Jumlah mata kuliah 1.183 -> 1.465. Dari 568 mata kuliah yang tadinya hilang, 276 kini terpetakan (1.734 kelas terbuka); 292 masih hilang (1.104 kelas):
+  285 tidak ada di kurikulum mana pun + sisa karena kode ganda dalam satu kurikulum.
+- [x] Retry timeout/jaringan ditambahkan pada fetch `GetMatkulKurikulum` (percobaan dry-run pertama gagal timeout 120 dtk tanpa retry).
+- [x] Sync prodi dan mata kuliah PDDIKTI dipindah ke queue worker (diwajibkan auditor 03): `SyncPddiktiProgramStudiJob`, `SyncPddiktiMataKuliahJob`
+  (basis `AbstractSyncPddiktiJob`), trait `QueuesPddiktiSync`, respons `202` + `progress_id`, lock per integrasi (409), `QUEUE_CONNECTION=sync` ditolak (503),
+  batch 500 + persist per batch + progress setelah commit, total dari `GetCountProdi` / `GetCountMatkulKurikulum` (diverifikasi live; fallback indeterminate),
+  mata kuliah diurut `id_matkul` dengan carry-over di batas batch. UI Pengaturan API sudah generik (polling `progress_id`), tidak diubah.
+  Tes: `PddiktiCatalogQueuedSyncTest` (8 tes); regresi 408 tes, sisa 48 error + 1 gagal = baseline.
+- [ ] Sync ulang lewat UI berurutan: prodi -> kurikulum -> mata kuliah -> kelas. WAJIB restart worker queue (kode job baru) sebelum menekan sync prodi/mata kuliah; kurikulum masih sinkron di request HTTP (kecil, 37 baris).
+- [ ] DECISION: 285 mata kuliah tanpa kurikulum (hanya di `GetListMataKuliah`). Prodi mata kuliah diturunkan dari `kurikulum->program_studi_id`
+  di banyak fitur (OBE, RPS, nilai, akses prodi). Pilihan: (a) `kurikulum_id` nullable + tambah `program_studi_id` pada mata kuliah;
+  (b) tempatkan di kurikulum terbaru prodi (mengotori daftar kurikulum). Belum dikerjakan.
+
 ### Tindakan
 - [x] Daftar mata kuliah/prodi Feeder tanpa padanan lokal (read-only).
 - [x] Cek `id_feeder` ganda (prodi: 1; mata kuliah: 0; semester: 0).
