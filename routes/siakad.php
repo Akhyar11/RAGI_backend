@@ -161,6 +161,8 @@ Route::prefix('perkuliahan')->group(function () {
 
     Route::get('/krs', [PerkuliahanController::class, 'listKrs']);
     Route::get('/krs/monitoring', [PerkuliahanController::class, 'monitoringKrsProdi']);
+    Route::get('/krs/monitoring/mahasiswa', [PerkuliahanController::class, 'monitoringKrsMahasiswa']);
+    Route::get('/krs/monitoring/mahasiswa/{mahasiswaId}', [PerkuliahanController::class, 'monitoringKrsMahasiswaDetail'])->whereNumber('mahasiswaId');
     Route::get('/krs/active', [PerkuliahanController::class, 'getActiveKrs']);
     Route::get('/krs/available-classes', [PerkuliahanController::class, 'getAvailableClasses']);
     Route::post('/krs/add-class', [PerkuliahanController::class, 'addClassToKrs']);

@@ -34,6 +34,32 @@
 - Assignment valid digabung ke satu `siakad_distribusi_mengajar` per prodi + tahun akademik + mata kuliah + semester anjuran. Dosen disimpan di `dosen_anggota_ids`/`dosen_anggota_details`, rombel di `kelas_ids`. Detail Feeder berlabel `source=pddikti`; anggota/SKS manual dipertahankan, dan anggota Feeder yang tidak lagi muncul tidak dihapus.
 - `dosen_koordinator_id` tidak disimpulkan dari urutan Feeder. Distribusi baru memakai koordinator null, koordinator existing tidak ditimpa. Distribusi target yang duplikat dilewati. Hasil mencakup `assignment_source_total`, `distributions_created`, `distributions_updated`, jumlah assignment `assignments_synced`, `assignment_skipped`, dan maksimal 100 `assignment_skipped_items`. Mahasiswa/peserta/KRS/nilai tidak diimpor.
 
+## Monitoring KRS per mahasiswa (2026-11-25)
+
+Tanpa perubahan skema; dua endpoint baru, hanya-baca, di bawah `GET /v1/siakad/perkuliahan/krs/monitoring/...` dengan otorisasi `siakad.krs.read` dan pembatasan prodi yang sama dengan monitoring rekap (superadmin bebas; lainnya wajib punya penugasan prodi aktif).
+- `GET .../krs/monitoring/mahasiswa` — daftar mahasiswa beserta status KRS satu periode. Parameter: `tahun_akademik_id` (default periode aktif), `program_studi_id`, `status_krs` (`belum`|`sudah`|`draft`|`diajukan`|`disetujui`|`dikunci`), `angkatan`, `search` (nama/NIM/dosen wali), `terkunci_keuangan` (`ya`|`tidak`), `sks_min`, `sks_max`, `sort_by` (`nim`|`nama_lengkap`|`angkatan`|`krs_sks`), `sort_order`, `per_page` (maks 100). Populasi: mahasiswa aktif pada periode berjalan; pada periode lampau mahasiswa yang punya KRS di periode itu. Setiap item memuat `krs_status` (null = belum mengisi), `krs_sks`, `krs_jumlah_mk`, `semester_ke`, `dosen_wali`, `terkunci_keuangan`.
+- `GET .../krs/monitoring/mahasiswa/{id}` — rincian: `sudah_diambil` (mata kuliah pada periode), `belum_diambil` (mata kuliah kurikulum dengan `semester_anjuran` <= semester ke-N yang belum pernah muncul di KRS mahasiswa pada periode mana pun; `jenis` = `semester_ini`|`tertinggal`), `semester_ke`, `krs`. Acuan "seharusnya" berasal dari kurikulum yang paling banyak dipakai pada KRS mahasiswa (cadangan: kurikulum aktif prodi yang berlaku saat angkatan), sehingga bersifat perkiraan.
+- Monitoring rekap `GET .../krs/monitoring` kini menghitung dari seluruh mahasiswa ber-KRS pada periode (bukan hanya yang aktif sekarang) dan menambah `mahasiswa_ber_krs`, `jumlah_krs`, `total_sks`, `rata_sks`, `jumlah_mk`, `dikunci`; `total_mahasiswa_aktif`, `belum_krs`, `persentase_*` hanya terisi pada periode berjalan (null untuk periode lampau). Summary memuat `periode_berjalan`.
+
+## Akun SSO otomatis pada sync mahasiswa PDDIKTI (2026-11-25)
+
+Tanpa perubahan skema (`core_users`, `core_user_roles`, `siakad_mahasiswa.user_id` sudah ada). Sync `siakad_mahasiswa` (mode PDDIKTI) mendapat fase akhir `accounts` setelah fase biodata (agar email/telepon Feeder sudah tersimpan):
+- Sasaran: mahasiswa hasil Feeder (`id_feeder` terisi) dengan `user_id` kosong. Mahasiswa input manual tanpa `id_feeder` tidak disentuh. Idempoten: sync ulang tidak membuat akun ganda.
+- Akun baru: `username` = NIM, `name` = nama lengkap, `password` = kata sandi bawaan dari konfigurasi `iam.sso.mahasiswa_default_password` (env `SSO_DEFAULT_MAHASISWA_PASSWORD`; tidak ada di kode), di-hash sekali per proses, `phone` dari `telepon`, `is_verified = true`, `referral_code` otomatis, role `mahasiswa`. `email` = email PDDIKTI bila valid dan belum dipakai akun lain, selain itu `{nim}@{iam.sso.placeholder_email_domain}`. `email_kampus` tidak diisi (dikelola alur Google Workspace).
+- `is_active`: `true` kecuali status mahasiswa Non-Aktif (`N`, mencakup lulus/keluar/mutasi) yang dibuat nonaktif agar akun alumni tidak dapat masuk dengan kata sandi bawaan.
+- Akun yang sudah ada dengan username = NIM dan belum terhubung ke dosen/pegawai/mahasiswa lain dihubungkan (kata sandi dan data akunnya TIDAK diubah) dan diberi role `mahasiswa`. Akun yang sudah dihapus, terhubung ke dosen/pegawai/mahasiswa lain, atau ambigu dilewati dengan alasan; tidak ada penebakan atau pembajakan akun.
+- Bila `SSO_DEFAULT_MAHASISWA_PASSWORD` kosong, fase dilewati dan hasil memuat `sso_note`; sync mahasiswa tetap sukses.
+- Hasil sync menambah: `sso_created`, `sso_linked`, `sso_skipped`, `sso_inactive`, `sso_skipped_items` (maks 100: `source_id`, `item_ref` = NIM, `reason`), `sso_note`. Progres memakai `phase = accounts`. Audit non-blocking per batch 500 (`core_users`, tanpa kata sandi).
+- Disarankan memaksa mahasiswa mengganti kata sandi bawaan setelah login pertama (belum ada flag wajib ganti kata sandi di `core_users`).
+
+## Daftar KRS `GET /v1/siakad/perkuliahan/krs` (2026-11-25)
+
+Tidak ada perubahan skema. Perubahan respons/parameter (aditif, kompatibel mundur):
+- Parameter baru `sks_min`/`sks_max` (rentang `total_sks_diambil`), `id` (satu KRS, dipakai halaman detail), `sort_by` (`created_at`, `total_sks_diambil`, `status`, `tahun_akademik_id`; default `created_at`) dan `sort_order` (`asc`/`desc`, default `desc`). `per_page` dibatasi maksimum 100.
+- `meta` kini memuat `last_page`, `from`, `to` selain `current_page`, `per_page`, `total`.
+- `krs_details` memuat relasi `mata_kuliah` dan `master_kelas` agar KRS historis (hasil sync PDDIKTI, `kelas_id` null) tampil per mata kuliah.
+- Mahasiswa non-admin tetap hanya melihat KRS miliknya, termasuk saat memakai parameter `id`.
+
 ## Sync KRS historis PDDIKTI (2026-11-25)
 
 Integrasi `siakad_krs` (action `GetKRSMahasiswa`) berjalan lewat queue worker dengan kontrak yang sama seperti sync PDDIKTI lain (202 + `progress_id`, lock, batch 500, persist per batch).

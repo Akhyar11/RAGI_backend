@@ -335,6 +335,16 @@ progres lewat `student-sync-progress/{progress_id}`, total dari `GetCountSkalaNi
 - **Batas/paging**: `limit=500`, `order=id_prodi`, maksimum 100 batch (gagal jelas bila tanpa penanda akhir); grup prodi yang terpotong batas batch ditahan dan diproses bersama batch berikutnya karena rentang antar-huruf saling bergantung.
 - Pada data Neo Feeder kampus saat dokumen ini ditulis: 64 baris untuk 12 prodi, semuanya berlaku; 4 baris `T`; 6 peringatan rentang pada 4 prodi.
 
+### Akun SSO otomatis pada sync mahasiswa (`siakad_mahasiswa`)
+
+Setelah fase biodata, worker membuat akun SSO untuk mahasiswa hasil Feeder yang belum punya `user_id`
+(`MahasiswaSsoAccountService`): `username` = NIM, role `mahasiswa`, `email` dari biodata Feeder bila valid dan unik
+(selain itu `{nim}@{SSO_PLACEHOLDER_EMAIL_DOMAIN}`), `phone` dari telepon, `is_verified = true`. Kata sandi bawaan dibaca dari
+`SSO_DEFAULT_MAHASISWA_PASSWORD` di `.env` (tidak ditulis di kode, tidak pernah masuk log/audit/respons); bila kosong fase dilewati
+dan `sso_note` menjelaskannya. Mahasiswa berstatus Non-Aktif mendapat akun nonaktif. Akun yang sudah ada tidak diubah
+(hanya dihubungkan bila bebas), akun terhapus/milik orang lain dilewati dengan alasan. Hasil: `sso_created`, `sso_linked`,
+`sso_skipped`, `sso_inactive`, `sso_skipped_items` (maks 100), `sso_note`; progres fase `accounts`. Worker queue yang sama dengan sync mahasiswa.
+
 ### Sinkronisasi KRS historis (`siakad_krs`)
 
 `siakad_krs` (Modul `siakad`, sumber `pddikti`) menarik KRS historis dari Neo Feeder `GetKRSMahasiswa` ke `siakad_krs` dan `siakad_krs_detail` lewat queue worker

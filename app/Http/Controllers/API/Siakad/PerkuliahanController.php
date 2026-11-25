@@ -369,13 +369,21 @@ class PerkuliahanController extends Controller
             'krsDetails.kelas.mataKuliah',
             'krsDetails.kelas.ruangan',
             'krsDetails.kelas.dosenPengampu.dosen',
-            'krsDetails.nilaiMahasiswa'
+            'krsDetails.nilaiMahasiswa',
+            // KRS historis (hasil sync PDDIKTI) berbasis mata kuliah, tanpa kelas jadwal.
+            'krsDetails.mataKuliah',
+            'krsDetails.masterKelas',
         ]);
 
         // Cek jika login sebagai Mahasiswa
         $mhs = $user ? Mahasiswa::where('user_id', $user->id)->first() : null;
         if ($mhs && !$user->isAdmin()) {
             $query->where('mahasiswa_id', $mhs->id);
+        }
+
+        // Detail satu KRS (halaman detail terpisah); tetap melewati pembatasan akses di atas.
+        if ($request->filled('id')) {
+            $query->where('id', $request->integer('id'));
         }
 
         // Cek jika login sebagai Dosen Wali
@@ -414,6 +422,13 @@ class PerkuliahanController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->filled('sks_min')) {
+            $query->where('total_sks_diambil', '>=', $request->integer('sks_min'));
+        }
+        if ($request->filled('sks_max')) {
+            $query->where('total_sks_diambil', '<=', $request->integer('sks_max'));
+        }
+
         if ($request->filled('status_spp')) {
             if ($request->status_spp === 'lunas') {
                 $query->where('locked_by_keuangan', false);
@@ -430,15 +445,23 @@ class PerkuliahanController extends Controller
             });
         }
 
-        $data = $query->orderBy('created_at', 'desc')->paginate($request->integer('per_page', 25));
+        $sortBy = in_array($request->input('sort_by'), ['created_at', 'total_sks_diambil', 'status', 'tahun_akademik_id'], true)
+            ? $request->input('sort_by')
+            : 'created_at';
+        $sortOrder = $request->input('sort_order') === 'asc' ? 'asc' : 'desc';
+
+        $data = $query->orderBy($sortBy, $sortOrder)->paginate(min(100, $request->integer('per_page', 25)));
 
         return response()->json([
             'status' => 'success',
             'data' => $data->items(),
             'meta' => [
                 'current_page' => $data->currentPage(),
+                'last_page' => $data->lastPage(),
                 'per_page' => $data->perPage(),
                 'total' => $data->total(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem(),
             ]
         ]);
     }
@@ -515,7 +538,7 @@ class PerkuliahanController extends Controller
             'status_krs' => ['nullable', 'string', \Illuminate\Validation\Rule::in([self::STATUS_KRS_LENGKAP, self::STATUS_KRS_ADA_BELUM])],
             'status_keuangan' => ['nullable', 'string', \Illuminate\Validation\Rule::in([self::STATUS_KEUANGAN_ADA_TERKUNCI, self::STATUS_KEUANGAN_LUNAS])],
             'progres_krs' => ['nullable', 'string', \Illuminate\Validation\Rule::in([self::PROGRES_KRS_TINGGI, self::PROGRES_KRS_SEDANG, self::PROGRES_KRS_RENDAH])],
-            'sort_by' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['nama_prodi', 'kode_prodi', 'total_mahasiswa_aktif', 'sudah_krs', 'disetujui', 'belum_krs', 'terkunci_keuangan', 'persentase_krs'])],
+            'sort_by' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['nama_prodi', 'kode_prodi', 'total_mahasiswa_aktif', 'sudah_krs', 'mahasiswa_ber_krs', 'jumlah_krs', 'total_sks', 'rata_sks', 'jumlah_mk', 'disetujui', 'belum_krs', 'terkunci_keuangan', 'persentase_krs'])],
             'sort_order' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['asc', 'desc'])],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
@@ -542,53 +565,107 @@ class PerkuliahanController extends Controller
 
         $prodis = $prodiQuery->orderBy('nama')->get();
 
+        $prodiIds = $prodis->pluck('id')->all();
+        // Pembanding "mahasiswa aktif" dan "belum KRS" hanya bermakna pada periode berjalan;
+        // untuk periode lampau status aktif saat ini tidak mencerminkan cakupan saat itu.
+        $periodeBerjalan = (bool) $tahunAkademik->is_active;
+
+        // Rekap KRS periode ini dari SEMUA mahasiswa ber-KRS (bukan hanya yang aktif sekarang).
+        $krsAgg = DB::table('siakad_krs as k')
+            ->join('siakad_mahasiswa as m', 'm.id', '=', 'k.mahasiswa_id')
+            ->whereNull('k.deleted_at')
+            ->where('k.tahun_akademik_id', $taId)
+            ->whereIn('m.program_studi_id', $prodiIds)
+            ->groupBy('m.program_studi_id')
+            ->selectRaw(
+                "m.program_studi_id as pid,
+                 COUNT(*) as jumlah_krs,
+                 COUNT(DISTINCT k.mahasiswa_id) as mhs_krs,
+                 COALESCE(SUM(k.total_sks_diambil), 0) as total_sks,
+                 SUM(k.status = 'draft') as draft,
+                 SUM(k.status = 'diajukan') as diajukan,
+                 SUM(k.status = 'disetujui') as disetujui,
+                 SUM(k.status = 'dikunci') as dikunci,
+                 SUM(k.locked_by_keuangan = 1) as terkunci_keuangan"
+            )
+            ->get()
+            ->keyBy('pid');
+
+        // Jumlah mata kuliah berbeda yang dibuka (KRS historis lewat mata_kuliah_id, KRS lama lewat kelas).
+        $mkAgg = DB::table('siakad_krs_detail as d')
+            ->join('siakad_krs as k', 'k.id', '=', 'd.krs_id')
+            ->join('siakad_mahasiswa as m', 'm.id', '=', 'k.mahasiswa_id')
+            ->leftJoin('siakad_jadwal_kelas as kl', 'kl.id', '=', 'd.kelas_id')
+            ->whereNull('k.deleted_at')
+            ->where('k.tahun_akademik_id', $taId)
+            ->whereIn('m.program_studi_id', $prodiIds)
+            ->groupBy('m.program_studi_id')
+            ->selectRaw('m.program_studi_id as pid, COUNT(DISTINCT COALESCE(d.mata_kuliah_id, kl.mata_kuliah_id)) as jumlah_mk')
+            ->pluck('jumlah_mk', 'pid');
+
+        $aktifAgg = collect();
+        $belumAgg = collect();
+        if ($periodeBerjalan) {
+            $aktifAgg = Mahasiswa::whereIn('program_studi_id', $prodiIds)
+                ->where('status', \App\Models\Siakad\MahasiswaStatus::AKTIF)
+                ->groupBy('program_studi_id')
+                ->selectRaw('program_studi_id as pid, COUNT(*) as c')
+                ->pluck('c', 'pid');
+            $belumAgg = Mahasiswa::whereIn('program_studi_id', $prodiIds)
+                ->where('status', \App\Models\Siakad\MahasiswaStatus::AKTIF)
+                ->whereNotExists(function ($q) use ($taId) {
+                    $q->select(DB::raw(1))
+                        ->from('siakad_krs as kx')
+                        ->whereColumn('kx.mahasiswa_id', 'siakad_mahasiswa.id')
+                        ->where('kx.tahun_akademik_id', $taId)
+                        ->whereNull('kx.deleted_at');
+                })
+                ->groupBy('program_studi_id')
+                ->selectRaw('program_studi_id as pid, COUNT(*) as c')
+                ->pluck('c', 'pid');
+        }
+
         $rekapProdi = [];
 
         foreach ($prodis as $prodi) {
-            $mhsAktifCount = Mahasiswa::where('program_studi_id', $prodi->id)
-                ->where('status', \App\Models\Siakad\MahasiswaStatus::AKTIF)
-                ->count();
+            $a = $krsAgg->get($prodi->id);
+            $mhsKrs = (int) ($a->mhs_krs ?? 0);
+            $jumlahKrs = (int) ($a->jumlah_krs ?? 0);
+            $totalSks = (int) ($a->total_sks ?? 0);
+            $terkunciKeuanganCount = (int) ($a->terkunci_keuangan ?? 0);
 
-            $krsRecords = Krs::whereHas('mahasiswa', function ($q) use ($prodi) {
-                $q->where('program_studi_id', $prodi->id)->where('status', \App\Models\Siakad\MahasiswaStatus::AKTIF);
-            })
-            ->where('tahun_akademik_id', $taId)
-            ->get();
+            $mhsAktifCount = $periodeBerjalan ? (int) $aktifAgg->get($prodi->id, 0) : null;
+            $belumKrsCount = $periodeBerjalan ? (int) $belumAgg->get($prodi->id, 0) : null;
+            $persentaseKrs = $periodeBerjalan && $mhsAktifCount > 0
+                ? round((($mhsAktifCount - $belumKrsCount) / $mhsAktifCount) * 100, 1)
+                : null;
+            $persentaseDisetujui = $periodeBerjalan && $mhsAktifCount > 0
+                ? round(((int) ($a->disetujui ?? 0) / $mhsAktifCount) * 100, 1)
+                : null;
 
-            $draftCount = $krsRecords->where('status', 'draft')->count();
-            $diajukanCount = $krsRecords->where('status', 'diajukan')->count();
-            $disetujuiCount = $krsRecords->where('status', 'disetujui')->count();
-            $terkunciKeuanganCount = $krsRecords->where('locked_by_keuangan', true)->count();
-            $sudahKrsCount = $krsRecords->count();
-            $belumKrsCount = max(0, $mhsAktifCount - $sudahKrsCount);
-
-            $persentaseKrs = $mhsAktifCount > 0 ? round(($sudahKrsCount / $mhsAktifCount) * 100, 1) : 0;
-            $persentaseDisetujui = $mhsAktifCount > 0 ? round(($disetujuiCount / $mhsAktifCount) * 100, 1) : 0;
-
-            // Filter status_krs
-            if ($request->input('status_krs') === self::STATUS_KRS_LENGKAP && $belumKrsCount > 0) {
-                continue;
+            // Filter berbasis pembanding mahasiswa aktif hanya berlaku pada periode berjalan.
+            if ($periodeBerjalan) {
+                if ($request->input('status_krs') === self::STATUS_KRS_LENGKAP && $belumKrsCount > 0) {
+                    continue;
+                }
+                if ($request->input('status_krs') === self::STATUS_KRS_ADA_BELUM && $belumKrsCount === 0) {
+                    continue;
+                }
+                if ($request->input('progres_krs') === self::PROGRES_KRS_TINGGI && $persentaseKrs < self::PROGRES_KRS_TINGGI_MIN) {
+                    continue;
+                }
+                if ($request->input('progres_krs') === self::PROGRES_KRS_SEDANG && ($persentaseKrs < self::PROGRES_KRS_SEDANG_MIN || $persentaseKrs >= self::PROGRES_KRS_TINGGI_MIN)) {
+                    continue;
+                }
+                if ($request->input('progres_krs') === self::PROGRES_KRS_RENDAH && $persentaseKrs >= self::PROGRES_KRS_SEDANG_MIN) {
+                    continue;
+                }
             }
-            if ($request->input('status_krs') === self::STATUS_KRS_ADA_BELUM && $belumKrsCount === 0) {
-                continue;
-            }
 
-            // Filter status_keuangan
             if ($request->input('status_keuangan') === self::STATUS_KEUANGAN_ADA_TERKUNCI && $terkunciKeuanganCount === 0) {
                 continue;
             }
             if ($request->input('status_keuangan') === self::STATUS_KEUANGAN_LUNAS && $terkunciKeuanganCount > 0) {
-                continue;
-            }
-
-            // Filter progres_krs
-            if ($request->input('progres_krs') === self::PROGRES_KRS_TINGGI && $persentaseKrs < self::PROGRES_KRS_TINGGI_MIN) {
-                continue;
-            }
-            if ($request->input('progres_krs') === self::PROGRES_KRS_SEDANG && ($persentaseKrs < self::PROGRES_KRS_SEDANG_MIN || $persentaseKrs >= self::PROGRES_KRS_TINGGI_MIN)) {
-                continue;
-            }
-            if ($request->input('progres_krs') === self::PROGRES_KRS_RENDAH && $persentaseKrs >= self::PROGRES_KRS_SEDANG_MIN) {
                 continue;
             }
 
@@ -598,29 +675,44 @@ class PerkuliahanController extends Controller
                 'nama_prodi' => $prodi->nama,
                 'jenjang' => $prodi->jenjang,
                 'fakultas' => $prodi->fakultas?->nama ?? '-',
-                'total_mahasiswa_aktif' => $mhsAktifCount,
-                'sudah_krs' => $sudahKrsCount,
-                'draft' => $draftCount,
-                'diajukan' => $diajukanCount,
-                'disetujui' => $disetujuiCount,
-                'belum_krs' => $belumKrsCount,
+                'mahasiswa_ber_krs' => $mhsKrs,
+                'jumlah_krs' => $jumlahKrs,
+                'total_sks' => $totalSks,
+                'rata_sks' => $mhsKrs > 0 ? round($totalSks / $mhsKrs, 1) : 0,
+                'jumlah_mk' => (int) $mkAgg->get($prodi->id, 0),
+                'draft' => (int) ($a->draft ?? 0),
+                'diajukan' => (int) ($a->diajukan ?? 0),
+                'disetujui' => (int) ($a->disetujui ?? 0),
+                'dikunci' => (int) ($a->dikunci ?? 0),
                 'terkunci_keuangan' => $terkunciKeuanganCount,
+                // Hanya periode berjalan; null untuk periode lampau.
+                'total_mahasiswa_aktif' => $mhsAktifCount,
+                'sudah_krs' => $mhsKrs,
+                'belum_krs' => $belumKrsCount,
                 'persentase_krs' => $persentaseKrs,
                 'persentase_disetujui' => $persentaseDisetujui,
             ];
         }
 
         // Summary konsisten dihitung dari data hasil filter
-        $totalSemuaMahasiswa = (int) collect($rekapProdi)->sum('total_mahasiswa_aktif');
-        $totalSemuaSudahKrs = (int) collect($rekapProdi)->sum('sudah_krs');
-        $totalSemuaDisetujui = (int) collect($rekapProdi)->sum('disetujui');
-        $totalSemuaDiajukan = (int) collect($rekapProdi)->sum('diajukan');
-        $totalSemuaDraft = (int) collect($rekapProdi)->sum('draft');
-        $totalSemuaBelumKrs = (int) collect($rekapProdi)->sum('belum_krs');
-        $totalSemuaTerkunciKeuangan = (int) collect($rekapProdi)->sum('terkunci_keuangan');
+        $col = collect($rekapProdi);
+        $totalSemuaMahasiswa = $periodeBerjalan ? (int) $col->sum('total_mahasiswa_aktif') : null;
+        $totalSemuaSudahKrs = (int) $col->sum('mahasiswa_ber_krs');
+        $totalSemuaDisetujui = (int) $col->sum('disetujui');
+        $totalSemuaDiajukan = (int) $col->sum('diajukan');
+        $totalSemuaDraft = (int) $col->sum('draft');
+        $totalSemuaDikunci = (int) $col->sum('dikunci');
+        $totalSemuaBelumKrs = $periodeBerjalan ? (int) $col->sum('belum_krs') : null;
+        $totalSemuaTerkunciKeuangan = (int) $col->sum('terkunci_keuangan');
+        $totalSemuaKrs = (int) $col->sum('jumlah_krs');
+        $totalSemuaSks = (int) $col->sum('total_sks');
 
-        $overallPersentaseKrs = $totalSemuaMahasiswa > 0 ? round(($totalSemuaSudahKrs / $totalSemuaMahasiswa) * 100, 1) : 0;
-        $overallPersentaseDisetujui = $totalSemuaMahasiswa > 0 ? round(($totalSemuaDisetujui / $totalSemuaMahasiswa) * 100, 1) : 0;
+        $overallPersentaseKrs = $periodeBerjalan && $totalSemuaMahasiswa > 0
+            ? round((($totalSemuaMahasiswa - $totalSemuaBelumKrs) / $totalSemuaMahasiswa) * 100, 1)
+            : null;
+        $overallPersentaseDisetujui = $periodeBerjalan && $totalSemuaMahasiswa > 0
+            ? round(($totalSemuaDisetujui / $totalSemuaMahasiswa) * 100, 1)
+            : null;
 
         // Sorting sebelum array_slice
         $sortOrder = $request->input('sort_order') === 'desc' ? 'desc' : 'asc';
@@ -651,6 +743,11 @@ class PerkuliahanController extends Controller
                     'total_draft' => $totalSemuaDraft,
                     'total_belum_krs' => $totalSemuaBelumKrs,
                     'total_terkunci_keuangan' => $totalSemuaTerkunciKeuangan,
+                    'periode_berjalan' => $periodeBerjalan,
+                    'total_krs' => $totalSemuaKrs,
+                    'total_dikunci' => $totalSemuaDikunci,
+                    'total_sks' => $totalSemuaSks,
+                    'rata_sks' => $totalSemuaSudahKrs > 0 ? round($totalSemuaSks / $totalSemuaSudahKrs, 1) : 0,
                     'persentase_krs' => $overallPersentaseKrs,
                     'persentase_disetujui' => $overallPersentaseDisetujui,
                 ],
@@ -669,6 +766,279 @@ class PerkuliahanController extends Controller
                 'last_page' => $lastPage,
             ],
         ]);
+    }
+
+    /**
+     * Daftar mahasiswa aktif beserta status KRS pada satu periode, untuk menjawab
+     * "siapa yang belum mengambil KRS". Pembatasan prodi sama dengan monitoring rekap.
+     */
+    public function monitoringKrsMahasiswa(Request $request)
+    {
+        Gate::authorize('siakad.krs.read');
+
+        $user = $request->user();
+        abort_unless($user, 401);
+
+        $request->validate([
+            'tahun_akademik_id' => ['nullable', 'integer', 'exists:siakad_tahun_akademik,id'],
+            'program_studi_id' => ['nullable', 'integer', 'exists:siakad_program_studi,id'],
+            'status_krs' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['belum', 'sudah', 'draft', 'diajukan', 'disetujui', 'dikunci'])],
+            'angkatan' => ['nullable', 'string', 'max:10'],
+            'search' => ['nullable', 'string', 'max:100'],
+            'terkunci_keuangan' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['ya', 'tidak'])],
+            'sks_min' => ['nullable', 'integer', 'min:0'],
+            'sks_max' => ['nullable', 'integer', 'min:0'],
+            'sort_by' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['nim', 'nama_lengkap', 'angkatan', 'krs_sks'])],
+            'sort_order' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['asc', 'desc'])],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $tahunAkademik = $this->resolveMonitoringTahunAkademik($request);
+        $allowedProdiIds = $this->resolveMonitoringProdiScope($user);
+
+        $query = Mahasiswa::query()
+            ->with(['programStudi:id,nama,jenjang', 'dosenWali:id,nama_lengkap'])
+            ->leftJoin('siakad_krs as k', function ($j) use ($tahunAkademik) {
+                $j->on('k.mahasiswa_id', '=', 'siakad_mahasiswa.id')
+                    ->where('k.tahun_akademik_id', $tahunAkademik->id)
+                    ->whereNull('k.deleted_at');
+            })
+            ->select('siakad_mahasiswa.*')
+            ->addSelect([
+                'k.id as krs_id',
+                'k.status as krs_status',
+                'k.total_sks_diambil as krs_sks',
+                'k.locked_by_keuangan as krs_locked',
+                DB::raw('(select count(*) from siakad_krs_detail d where d.krs_id = k.id) as krs_jumlah_mk'),
+            ]);
+
+        // Periode berjalan: populasi = mahasiswa aktif (agar yang belum mengisi terlihat).
+        // Periode lampau: populasi = mahasiswa yang punya KRS pada periode itu, apa pun status sekarang.
+        if ($tahunAkademik->is_active) {
+            $query->where('siakad_mahasiswa.status', \App\Models\Siakad\MahasiswaStatus::AKTIF);
+        } else {
+            $query->whereNotNull('k.id');
+        }
+
+        if ($allowedProdiIds !== null) {
+            $query->whereIn('siakad_mahasiswa.program_studi_id', $allowedProdiIds);
+        }
+        if ($request->filled('program_studi_id')) {
+            $query->where('siakad_mahasiswa.program_studi_id', $request->integer('program_studi_id'));
+        }
+        if ($request->filled('angkatan')) {
+            $query->where('siakad_mahasiswa.angkatan', $request->input('angkatan'));
+        }
+        if ($request->filled('search')) {
+            $term = $request->input('search');
+            $query->where(function ($q) use ($term) {
+                $q->where('siakad_mahasiswa.nama_lengkap', 'like', "%{$term}%")
+                    ->orWhere('siakad_mahasiswa.nim', 'like', "%{$term}%")
+                    ->orWhereHas('dosenWali', fn ($dq) => $dq->where('nama_lengkap', 'like', "%{$term}%"));
+            });
+        }
+        if ($request->input('terkunci_keuangan') === 'ya') {
+            $query->where('k.locked_by_keuangan', true);
+        } elseif ($request->input('terkunci_keuangan') === 'tidak') {
+            $query->where(fn ($q) => $q->whereNull('k.id')->orWhere('k.locked_by_keuangan', false));
+        }
+        if ($request->filled('sks_min')) {
+            $query->where('k.total_sks_diambil', '>=', $request->integer('sks_min'));
+        }
+        if ($request->filled('sks_max')) {
+            $query->where('k.total_sks_diambil', '<=', $request->integer('sks_max'));
+        }
+
+        $statusKrs = $request->input('status_krs');
+        if ($statusKrs === 'belum') {
+            $query->whereNull('k.id');
+        } elseif ($statusKrs === 'sudah') {
+            $query->whereNotNull('k.id');
+        } elseif ($statusKrs) {
+            $query->where('k.status', $statusKrs);
+        }
+
+        $sortBy = $request->input('sort_by', 'nim');
+        $sortColumn = $sortBy === 'krs_sks' ? 'k.total_sks_diambil' : "siakad_mahasiswa.{$sortBy}";
+        $sortOrder = $request->input('sort_order') === 'desc' ? 'desc' : 'asc';
+
+        $paginator = $query->orderBy($sortColumn, $sortOrder)
+            ->paginate(min(100, $request->integer('per_page', 15)));
+
+        $rows = collect($paginator->items())->map(fn ($m) => [
+            'id' => $m->id,
+            'nim' => $m->nim,
+            'nama_lengkap' => $m->nama_lengkap,
+            'angkatan' => $m->angkatan,
+            'program_studi' => $m->programStudi ? ['id' => $m->programStudi->id, 'nama' => $m->programStudi->nama, 'jenjang' => $m->programStudi->jenjang] : null,
+            'dosen_wali' => $m->dosenWali?->nama_lengkap,
+            'semester_ke' => $this->hitungSemesterKe($m->angkatan, $tahunAkademik),
+            'krs_id' => $m->krs_id,
+            'krs_status' => $m->krs_status,
+            'krs_sks' => $m->krs_id ? (int) $m->krs_sks : 0,
+            'krs_jumlah_mk' => $m->krs_id ? (int) $m->krs_jumlah_mk : 0,
+            'terkunci_keuangan' => (bool) $m->krs_locked,
+        ])->values();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Daftar mahasiswa monitoring KRS berhasil dimuat',
+            'data' => [
+                'tahun_akademik' => $tahunAkademik,
+                'periode_berjalan' => (bool) $tahunAkademik->is_active,
+                'items' => $rows,
+            ],
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+        ]);
+    }
+
+    /**
+     * Rincian satu mahasiswa: mata kuliah yang sudah diambil pada periode, serta mata kuliah
+     * kurikulumnya yang belum diambil (semester berjalan dan yang tertinggal). Acuan "seharusnya"
+     * diturunkan dari kurikulum prodi sehingga bersifat perkiraan.
+     */
+    public function monitoringKrsMahasiswaDetail(Request $request, $mahasiswaId)
+    {
+        Gate::authorize('siakad.krs.read');
+
+        $user = $request->user();
+        abort_unless($user, 401);
+
+        $request->validate([
+            'tahun_akademik_id' => ['nullable', 'integer', 'exists:siakad_tahun_akademik,id'],
+        ]);
+
+        $tahunAkademik = $this->resolveMonitoringTahunAkademik($request);
+        $allowedProdiIds = $this->resolveMonitoringProdiScope($user);
+
+        $mhs = Mahasiswa::with(['programStudi:id,nama,jenjang', 'dosenWali:id,nama_lengkap'])->findOrFail($mahasiswaId);
+        abort_if($allowedProdiIds !== null && !in_array((int) $mhs->program_studi_id, array_map('intval', $allowedProdiIds), true), 403, 'Mahasiswa di luar program studi yang ditugaskan.');
+
+        $semesterKe = $this->hitungSemesterKe($mhs->angkatan, $tahunAkademik);
+
+        // Seluruh mata kuliah yang pernah diambil mahasiswa (semua periode) beserta periode asalnya.
+        $diambil = DB::table('siakad_krs_detail as d')
+            ->join('siakad_krs as k', 'k.id', '=', 'd.krs_id')
+            ->leftJoin('siakad_jadwal_kelas as kl', 'kl.id', '=', 'd.kelas_id')
+            ->join('siakad_mata_kuliah as mk', 'mk.id', '=', DB::raw('COALESCE(d.mata_kuliah_id, kl.mata_kuliah_id)'))
+            ->whereNull('k.deleted_at')
+            ->where('k.mahasiswa_id', $mhs->id)
+            ->select('mk.id', 'mk.kode_mk', 'mk.nama', 'mk.total_sks', 'mk.semester_anjuran', 'mk.kategori', 'mk.kurikulum_id', 'k.tahun_akademik_id', 'k.status as krs_status')
+            ->get();
+
+        $periodeIni = $diambil->where('tahun_akademik_id', $tahunAkademik->id)->unique('id')->values();
+        $pernahIds = $diambil->pluck('id')->unique()->all();
+
+        // Kurikulum mahasiswa: yang paling banyak dipakai pada KRS-nya; cadangan kurikulum prodi terbaru yang berlaku.
+        $kurikulumId = $diambil->groupBy('kurikulum_id')->map->count()->sortDesc()->keys()->first();
+        if (!$kurikulumId) {
+            $kurikulumId = DB::table('siakad_kurikulum')
+                ->where('program_studi_id', $mhs->program_studi_id)
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
+                ->orderByRaw('CASE WHEN tahun_berlaku <= ? THEN 0 ELSE 1 END', [(int) $mhs->angkatan])
+                ->orderByDesc('tahun_berlaku')
+                ->value('id');
+        }
+
+        $belum = collect();
+        if ($kurikulumId) {
+            $belum = DB::table('siakad_mata_kuliah')
+                ->where('kurikulum_id', $kurikulumId)
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
+                ->whereNotNull('semester_anjuran')
+                ->where('semester_anjuran', '<=', $semesterKe)
+                ->whereNotIn('id', $pernahIds ?: [0])
+                ->orderBy('semester_anjuran')
+                ->orderBy('kode_mk')
+                ->get(['id', 'kode_mk', 'nama', 'total_sks', 'semester_anjuran', 'kategori'])
+                ->map(fn ($mk) => [
+                    'id' => $mk->id,
+                    'kode_mk' => $mk->kode_mk,
+                    'nama' => $mk->nama,
+                    'total_sks' => (int) $mk->total_sks,
+                    'semester_anjuran' => (int) $mk->semester_anjuran,
+                    'kategori' => $mk->kategori,
+                    'jenis' => (int) $mk->semester_anjuran === $semesterKe ? 'semester_ini' : 'tertinggal',
+                ]);
+        }
+
+        $krs = Krs::where('mahasiswa_id', $mhs->id)->where('tahun_akademik_id', $tahunAkademik->id)->first();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Rincian monitoring KRS mahasiswa berhasil dimuat',
+            'data' => [
+                'tahun_akademik' => $tahunAkademik,
+                'mahasiswa' => [
+                    'id' => $mhs->id,
+                    'nim' => $mhs->nim,
+                    'nama_lengkap' => $mhs->nama_lengkap,
+                    'angkatan' => $mhs->angkatan,
+                    'program_studi' => $mhs->programStudi,
+                    'dosen_wali' => $mhs->dosenWali?->nama_lengkap,
+                ],
+                'semester_ke' => $semesterKe,
+                'krs' => $krs ? [
+                    'id' => $krs->id,
+                    'status' => $krs->status,
+                    'total_sks_diambil' => (int) $krs->total_sks_diambil,
+                    'terkunci_keuangan' => (bool) $krs->locked_by_keuangan,
+                ] : null,
+                'sudah_diambil' => $periodeIni->map(fn ($mk) => [
+                    'id' => $mk->id,
+                    'kode_mk' => $mk->kode_mk,
+                    'nama' => $mk->nama,
+                    'total_sks' => (int) $mk->total_sks,
+                    'semester_anjuran' => $mk->semester_anjuran !== null ? (int) $mk->semester_anjuran : null,
+                    'kategori' => $mk->kategori,
+                ])->values(),
+                'belum_diambil' => $belum->values(),
+                'kurikulum_id' => $kurikulumId,
+            ],
+        ]);
+    }
+
+    private function resolveMonitoringTahunAkademik(Request $request): TahunAkademik
+    {
+        $taId = $request->input('tahun_akademik_id') ?? TahunAkademik::where('is_active', true)->value('id');
+        $tahunAkademik = $taId ? TahunAkademik::find($taId) : null;
+        abort_if(!$tahunAkademik, 404, 'Tahun akademik tidak ditemukan.');
+
+        return $tahunAkademik;
+    }
+
+    /** Null = tanpa pembatasan (superadmin); selain itu daftar id prodi yang boleh diakses (fail-closed). */
+    private function resolveMonitoringProdiScope($user): ?array
+    {
+        if ($user->isSuperAdmin()) {
+            return null;
+        }
+        $allowed = $user->getSiakadProdiIds();
+        abort_if($allowed->isEmpty(), 403, 'Anda tidak memiliki penugasan program studi aktif.');
+
+        return $allowed->all();
+    }
+
+    /** Semester ke-N mahasiswa pada periode: kode periode "TTTTS" (S=1 ganjil, 2 genap, 3 pendek). */
+    private function hitungSemesterKe($angkatan, TahunAkademik $ta): int
+    {
+        $tahun = (int) substr((string) $ta->kode, 0, 4);
+        $jenis = (int) substr((string) $ta->kode, 4, 1);
+        if (!$tahun || !$angkatan) {
+            return 1;
+        }
+        $n = ($tahun - (int) $angkatan) * 2 + ($jenis === 1 ? 1 : 2);
+
+        return max(1, $n);
     }
 
     // --- PENGAMBILAN KRS MAHASISWA & MAHASISWA TRANSFER ---

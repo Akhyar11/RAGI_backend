@@ -227,6 +227,8 @@ return [
         'children' => [
             ['name' => 'Jadwal Perkuliahan', 'url' => '/siakad/perkuliahan/kelas', 'icon' => 'FaCalendarCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.kelas.read', 'order_index' => 1],
             ['name' => 'Kartu Ujian UTS/UAS', 'url' => '/siakad/kartu-ujian', 'icon' => 'FaFileCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.krs.read', 'order_index' => 2],
+            // Portal pengisian KRS mandiri mahasiswa; admin/superadmin otomatis ikut lewat MenuSeeder.
+            ['name' => 'KRS Mandiri', 'url' => '/siakad/krs', 'icon' => 'FaClipboardCheck', 'module' => 'siakad', 'permission_slug' => 'siakad.krs.read', 'role_slugs' => ['mahasiswa', 'admin_siakad'], 'order_index' => 3],
         ]
     ],
     [

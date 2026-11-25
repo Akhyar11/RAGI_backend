@@ -1740,6 +1740,8 @@ class IamApiIntegrationTest extends TestCase
 
     public function test_pddikti_student_preview_does_not_write_and_sync_is_idempotent_without_creating_accounts(): void
     {
+        // Tanpa kata sandi bawaan terkonfigurasi, akun SSO tidak dibuat (tidak bergantung isi .env).
+        config(['iam.sso.mahasiswa_default_password' => null]);
         app(IamApiIntegrationSeeder::class)->run();
         $integration = IamApiIntegration::where('key', 'siakad_mahasiswa')->firstOrFail();
         $integration->update(['source_type' => 'pddikti', 'url_api' => null, 'token' => null]);

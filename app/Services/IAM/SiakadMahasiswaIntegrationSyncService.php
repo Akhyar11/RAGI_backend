@@ -21,7 +21,8 @@ class SiakadMahasiswaIntegrationSyncService
 
     public function __construct(
         private SiakadMahasiswaSyncService $syncService,
-        private NeoFeederService $neoFeeder
+        private NeoFeederService $neoFeeder,
+        private MahasiswaSsoAccountService $ssoAccounts
     ) {}
 
     public function sync(IamApiIntegration $integration, array $options = []): array
@@ -142,6 +143,12 @@ class SiakadMahasiswaIntegrationSyncService
             'biodata_updated' => 0,
             'biodata_skipped' => 0,
             'biodata_failed' => 0,
+            'sso_created' => 0,
+            'sso_linked' => 0,
+            'sso_skipped' => 0,
+            'sso_inactive' => 0,
+            'sso_skipped_items' => [],
+            'sso_note' => null,
             'read_count' => 0,
             'preview' => false,
             'read_only' => false,
@@ -232,7 +239,60 @@ class SiakadMahasiswaIntegrationSyncService
             gc_collect_cycles();
         }
 
+        $this->provisionSsoAccounts($result, $progressId, $workTotal, $actorId);
+
         return $result;
+    }
+
+    /**
+     * Fase akhir: akun SSO (username = NIM) untuk mahasiswa hasil Feeder yang belum punya akun.
+     * Dijalankan setelah biodata agar email/telepon Feeder sudah tersimpan. Gagal/dilewati per
+     * mahasiswa tidak menggagalkan sinkronisasi.
+     */
+    private function provisionSsoAccounts(array &$result, ?string $progressId, int $workTotal, ?int $actorId): void
+    {
+        if (!$this->ssoAccounts->isConfigured()) {
+            $result['sso_note'] = 'Pembuatan akun SSO dilewati: SSO_DEFAULT_MAHASISWA_PASSWORD belum diatur di .env.';
+
+            return;
+        }
+
+        $pending = $this->ssoAccounts->pendingCount();
+        if ($progressId !== null) {
+            $this->updateProgress($progressId, [
+                'phase' => 'accounts',
+                'processed' => 0,
+                'total' => $pending,
+                'phase_processed' => 0,
+                'phase_total' => $pending,
+                'work_processed' => $workTotal,
+                'work_total' => $workTotal,
+                'progress' => 99,
+                'message' => "Membuat akun SSO untuk {$pending} mahasiswa.",
+                'result' => $result,
+            ]);
+        }
+
+        $accounts = $this->ssoAccounts->provisionPending($actorId, function (int $done, int $total) use ($progressId, $workTotal, $result): void {
+            if ($progressId !== null) {
+                $this->updateProgress($progressId, [
+                    'phase' => 'accounts',
+                    'processed' => $done,
+                    'total' => $total,
+                    'phase_processed' => $done,
+                    'phase_total' => $total,
+                    'work_processed' => $workTotal,
+                    'work_total' => $workTotal,
+                    'progress' => 99,
+                    'message' => "Membuat akun SSO: {$done} dari {$total} mahasiswa.",
+                    'result' => $result,
+                ]);
+            }
+        });
+
+        foreach ($accounts as $key => $value) {
+            $result[$key] = $value;
+        }
     }
 
     private function savePddiktiStudentBatch(array $batch, int $offset, array &$result, array &$seenIds, ?int $actorId): void

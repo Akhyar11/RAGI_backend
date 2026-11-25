@@ -1,6 +1,6 @@
 # PerkuliahanController
 
-> **Diperbarui**: 2026-11-09
+> **Diperbarui**: 2026-11-25
 
 > **Modul**: SIAKAD / **Base URL**: `/api/v1/siakad/perkuliahan` / **Autentikasi**: Bearer Token (Sanctum) / **Dibuat/Diperbarui**: 2026-09-25
 
@@ -27,6 +27,8 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 | GET | `/api/v1/siakad/perkuliahan/krs/active` | KRS aktif | ✅ |
 | GET | `/api/v1/siakad/perkuliahan/krs/available-classes` | Kelas tersedia | ✅ |
 | GET | `/api/v1/siakad/perkuliahan/krs/monitoring` | Monitoring & rekapitulasi progres KRS per prodi | ✅ |
+| GET | `/api/v1/siakad/perkuliahan/krs/monitoring/mahasiswa` | Daftar mahasiswa beserta status KRS satu periode (siapa yang belum mengisi) | ✅ |
+| GET | `/api/v1/siakad/perkuliahan/krs/monitoring/mahasiswa/{mahasiswaId}` | Rincian KRS mahasiswa: mata kuliah sudah dan belum diambil | ✅ |
 | POST | `/api/v1/siakad/perkuliahan/krs/add-class` | Tambah kelas ke KRS | ✅ |
 | DELETE | `/api/v1/siakad/perkuliahan/krs/drop-class/{detailId}` | Drop kelas dari KRS | ✅ |
 | POST | `/api/v1/siakad/perkuliahan/krs/submit` | Submit KRS | ✅ |
@@ -161,11 +163,17 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 |---|---|---|---|---|
 | `search` | string | ❌ | — | Cari mahasiswa / NIM |
 | `tahun_akademik_id` | integer | ❌ | tahun akademik aktif | Filter periode |
-| `status` | string | ❌ | — | `draft`, `diajukan`, `disetujui` |
-| `sort_by` | string | ❌ | `created_at` | `created_at`, `updated_at`, `id` |
+| `id` | integer | ❌ | — | Ambil satu KRS (dipakai halaman detail); tetap tunduk pembatasan akses mahasiswa |
+| `program_studi_id` | integer | ❌ | — | Filter prodi mahasiswa |
+| `angkatan` | string | ❌ | — | Filter angkatan mahasiswa |
+| `sks_min` / `sks_max` | integer | ❌ | — | Rentang `total_sks_diambil` |
+| `status` | string | ❌ | — | `draft`, `diajukan`, `disetujui`, `dikunci`, `ditolak` |
+| `sort_by` | string | ❌ | `created_at` | `created_at`, `total_sks_diambil`, `status`, `tahun_akademik_id` (nilai lain jatuh ke `created_at`) |
 | `sort_order` | string | ❌ | `desc` | `asc` / `desc` |
-| `per_page` | integer | ❌ | `15` | Maks. 100 |
+| `per_page` | integer | ❌ | `25` | Maks. 100 |
 | `page` | integer | ❌ | `1` | Halaman |
+
+Respons memuat relasi `mahasiswa.program_studi`, `tahun_akademik`, dan `krs_details` (termasuk `mata_kuliah` dan `master_kelas` untuk KRS historis hasil sync PDDIKTI). Mahasiswa non-admin hanya melihat KRS miliknya.
 
 ### Response Sukses
 
@@ -174,7 +182,7 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 {
     "status": "success",
     "data": [
-        { "id": 9, "mahasiswa_id": 1, "tahun_akademik_id": 1, "total_sks": 20, "status": "draft" }
+        { "id": 9, "mahasiswa_id": 1, "tahun_akademik_id": 1, "total_sks_diambil": 20, "status": "draft" }
     ],
     "meta": { "current_page": 1, "per_page": 15, "total": 1, "last_page": 1, "from": 1, "to": 1 }
 }
@@ -195,6 +203,150 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 {
     "status": "error",
     "message": "Data yang diberikan tidak valid.",
+    "errors": { "tahun_akademik_id": ["The selected tahun akademik id is invalid."] }
+}
+```
+
+---
+
+## [GET] /api/v1/siakad/perkuliahan/krs/monitoring/mahasiswa
+
+Daftar mahasiswa beserta status KRS pada satu periode, untuk menjawab "siapa yang belum mengambil KRS". Otorisasi `siakad.krs.read`; selain superadmin, hanya prodi yang ditugaskan (`getSiakadProdiIds`) yang boleh diakses, tanpa penugasan aktif ditolak 403. Hanya-baca, tidak menulis data.
+
+### Request Headers
+
+| Header | Wajib | Nilai |
+|---|---|---|
+| `Authorization` | ✅ | `Bearer <token>` |
+| `Accept` | ✅ | `application/json` |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|
+| `tahun_akademik_id` | integer | ❌ | TA aktif | Periode. Periode berjalan: populasi mahasiswa aktif; periode lampau: mahasiswa yang punya KRS pada periode itu |
+| `program_studi_id` | integer | ❌ | — | Filter prodi (dibatasi penugasan bila non-superadmin) |
+| `status_krs` | string | ❌ | — | `belum`, `sudah`, `draft`, `diajukan`, `disetujui`, `dikunci`. `belum` hanya bermakna pada periode berjalan |
+| `angkatan` | string | ❌ | — | Filter angkatan |
+| `search` | string | ❌ | — | Nama, NIM, atau nama dosen wali |
+| `terkunci_keuangan` | string | ❌ | — | `ya` (KRS terkunci tunggakan keuangan) / `tidak` |
+| `sks_min` / `sks_max` | integer | ❌ | — | Rentang SKS pada KRS periode (mahasiswa belum mengisi dihitung 0) |
+| `sort_by` | string | ❌ | `nim` | `nim`, `nama_lengkap`, `angkatan`, `krs_sks` |
+| `sort_order` | string | ❌ | `asc` | `asc` / `desc` |
+| `per_page` | integer | ❌ | `15` | Maks. 100 |
+| `page` | integer | ❌ | `1` | Halaman |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Daftar mahasiswa monitoring KRS berhasil dimuat",
+    "data": {
+        "tahun_akademik": { "id": 5, "kode": "20261", "nama": "2026/2027 Ganjil", "is_active": true },
+        "periode_berjalan": true,
+        "items": [
+            {
+                "id": 101, "nim": "A23005", "nama_lengkap": "Faiz Azhar Ramadhani", "angkatan": 2023,
+                "program_studi": { "id": 3, "nama": "Teknologi Rekayasa Otomotif", "jenjang": "D4" },
+                "dosen_wali": "Dosen Wali Uji", "semester_ke": 7,
+                "krs_id": null, "krs_status": null, "krs_sks": 0, "krs_jumlah_mk": 0, "terkunci_keuangan": false
+            }
+        ]
+    },
+    "meta": { "current_page": 1, "last_page": 35, "per_page": 15, "total": 524, "from": 1, "to": 15 }
+}
+```
+`krs_status = null` berarti belum mengisi KRS.
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Anda tidak memiliki penugasan program studi aktif." }
+```
+**404 Not Found**
+```json
+{ "status": "error", "message": "Tahun akademik tidak ditemukan." }
+```
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "The selected status krs is invalid.",
+    "errors": { "status_krs": ["The selected status krs is invalid."] }
+}
+```
+
+---
+
+## [GET] /api/v1/siakad/perkuliahan/krs/monitoring/mahasiswa/{mahasiswaId}
+
+Rincian satu mahasiswa: mata kuliah yang sudah diambil pada periode dan mata kuliah kurikulum yang belum diambil. Otorisasi dan pembatasan prodi sama dengan endpoint daftar; mahasiswa di luar prodi yang ditugaskan ditolak 403. Hanya-baca.
+
+Acuan "belum diambil" diturunkan dari kurikulum (perkiraan): kurikulum yang paling banyak dipakai pada KRS mahasiswa (cadangan: kurikulum aktif prodi yang berlaku untuk angkatannya), mata kuliah aktif dengan `semester_anjuran` ≤ semester ke-N yang belum pernah muncul di KRS mahasiswa pada periode mana pun. `jenis` = `semester_ini` bila `semester_anjuran` sama dengan semester berjalan, selain itu `tertinggal`. Semester ke-N dihitung dari angkatan dan kode periode (`TTTTS`: 1 ganjil, 2 genap). Mata kuliah setara berkode berbeda antarkurikulum dapat tampil sebagai tertinggal.
+
+### Request Headers
+
+| Header | Wajib | Nilai |
+|---|---|---|
+| `Authorization` | ✅ | `Bearer <token>` |
+| `Accept` | ✅ | `application/json` |
+
+### Path & Query Parameters
+
+| Parameter | Lokasi | Type | Required | Default | Deskripsi |
+|---|---|---|---|---|---|
+| `mahasiswaId` | path | integer | ✅ | — | ID mahasiswa |
+| `tahun_akademik_id` | query | integer | ❌ | TA aktif | Periode |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Rincian monitoring KRS mahasiswa berhasil dimuat",
+    "data": {
+        "tahun_akademik": { "id": 5, "kode": "20261", "nama": "2026/2027 Ganjil", "is_active": true },
+        "mahasiswa": { "id": 101, "nim": "A23005", "nama_lengkap": "Faiz Azhar Ramadhani", "angkatan": 2023,
+                       "program_studi": { "id": 3, "nama": "Teknologi Rekayasa Otomotif", "jenjang": "D4" }, "dosen_wali": "Dosen Wali Uji" },
+        "semester_ke": 7,
+        "krs": null,
+        "sudah_diambil": [],
+        "belum_diambil": [
+            { "id": 900, "kode_mk": "TRO-PT-7-6-011", "nama": "PROYEK AKHIR", "total_sks": 6,
+              "semester_anjuran": 7, "kategori": "Wajib", "jenis": "semester_ini" }
+        ],
+        "kurikulum_id": 30
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+**403 Forbidden**
+```json
+{ "status": "error", "message": "Mahasiswa di luar program studi yang ditugaskan." }
+```
+**404 Not Found**
+```json
+{ "status": "error", "message": "Mahasiswa tidak ditemukan." }
+```
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "The selected tahun akademik id is invalid.",
     "errors": { "tahun_akademik_id": ["The selected tahun akademik id is invalid."] }
 }
 ```
@@ -393,6 +545,8 @@ Rincian konversi berstatus `ditolak` atau usulan yang belum mencapai status fina
 
 Monitoring dan rekapitulasi progres pengisian KRS mahasiswa per program studi dengan dukungan filter terintegrasi dan server-side pagination. Nilai `summary` dihitung dari hasil data yang telah difilter dan `prodi` dipaginasi.
 
+**Perubahan 2026-11-25:** rekap dihitung dari SEMUA mahasiswa yang memiliki KRS pada periode (bukan hanya yang berstatus aktif saat ini), sehingga periode lampau hasil sync PDDIKTI terbaca benar. Field baru per prodi: `mahasiswa_ber_krs`, `jumlah_krs`, `total_sks`, `rata_sks`, `jumlah_mk`, `dikunci`. Pembanding mahasiswa aktif (`total_mahasiswa_aktif`, `belum_krs`, `persentase_krs`, `persentase_disetujui`) hanya terisi untuk periode berjalan dan bernilai `null` untuk periode lampau; `summary.periode_berjalan` menandai keduanya. Filter `status_krs` dan `progres_krs` hanya berlaku pada periode berjalan.
+
 ### Request Headers
 
 | Header | Wajib | Nilai |
@@ -409,7 +563,7 @@ Monitoring dan rekapitulasi progres pengisian KRS mahasiswa per program studi de
 | `status_krs` | string | ❌ | — | `lengkap` (100% mengisi) / `ada_belum` (ada belum mengisi) |
 | `status_keuangan` | string | ❌ | — | `ada_terkunci` (tunggakan SIKEU) / `lunas` (bebas tunggakan) |
 | `progres_krs` | string | ❌ | — | `tinggi` (≥ 80%) / `sedang` (50% - 79%) / `rendah` (< 50%) |
-| `sort_by` | string | ❌ | `nama_prodi` | Urutkan berdasarkan: `nama_prodi`, `kode_prodi`, `total_mahasiswa_aktif`, `sudah_krs`, `disetujui`, `belum_krs`, `terkunci_keuangan`, `persentase_krs` |
+| `sort_by` | string | ❌ | `nama_prodi` | Urutkan berdasarkan: `nama_prodi`, `kode_prodi`, `total_mahasiswa_aktif`, `sudah_krs`, `mahasiswa_ber_krs`, `jumlah_krs`, `total_sks`, `rata_sks`, `jumlah_mk`, `disetujui`, `belum_krs`, `terkunci_keuangan`, `persentase_krs` |
 | `sort_order` | string | ❌ | `asc` | Arah urutan: `asc` / `desc` |
 | `page` | integer | ❌ | `1` | Halaman |
 | `limit` / `per_page` | integer | ❌ | `15` | Jumlah data per halaman (maks. 100) |
@@ -436,6 +590,11 @@ Monitoring dan rekapitulasi progres pengisian KRS mahasiswa per program studi de
             "total_draft": 5,
             "total_belum_krs": 15,
             "total_terkunci_keuangan": 8,
+            "periode_berjalan": true,
+            "total_krs": 105,
+            "total_dikunci": 0,
+            "total_sks": 1890,
+            "rata_sks": 18.0,
             "persentase_krs": 87.5,
             "persentase_disetujui": 75.0
         },
@@ -446,6 +605,12 @@ Monitoring dan rekapitulasi progres pengisian KRS mahasiswa per program studi de
                 "nama_prodi": "Teknik Informatika",
                 "jenjang": "S1",
                 "fakultas": "Fakultas Teknik",
+                "mahasiswa_ber_krs": 55,
+                "jumlah_krs": 55,
+                "total_sks": 990,
+                "rata_sks": 18.0,
+                "jumlah_mk": 24,
+                "dikunci": 0,
                 "total_mahasiswa_aktif": 60,
                 "sudah_krs": 55,
                 "draft": 2,

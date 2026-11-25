@@ -114,7 +114,7 @@ class IamApiIntegrationSeeder extends Seeder
                 'name' => 'Sinkronisasi Data Mahasiswa SIAKAD',
                 'module' => 'siakad',
                 'http_method' => 'GET',
-                'description' => 'Sinkronisasi mahasiswa dari PDDIKTI Neo Feeder atau API SIAKAD legacy ke siakad_mahasiswa. Data akademik PDDIKTI mempertahankan NIM sumber; akun/password tetap dikelola IAM lokal.',
+                'description' => 'Sinkronisasi mahasiswa dari PDDIKTI Neo Feeder atau API SIAKAD legacy ke siakad_mahasiswa. Data akademik PDDIKTI mempertahankan NIM sumber; mode PDDIKTI juga membuat akun SSO (username = NIM, role mahasiswa) untuk mahasiswa yang belum punya akun, dengan kata sandi bawaan dari SSO_DEFAULT_MAHASISWA_PASSWORD.',
                 'source_type' => 'pddikti',
                 'supported_sources' => ['pddikti', 'custom_api'],
                 'source_schemas' => [
