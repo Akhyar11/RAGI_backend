@@ -1807,6 +1807,9 @@ satu jalur dijamin berasal dari program studi yang sama.
 
 ## [GET] /api/v1/siakad/obe/kelas/{kelasId}/nilai
 
+> **Catatan (2026-11-25):** field `skala_nilai` pada respons berisi skala aktif yang berlaku untuk prodi kelas (diturunkan dari kurikulum mata kuliah, cadangan `program_studi_id` kelas):
+> skala khusus prodi bila ada (mis. hasil sync PDDIKTI `GetListSkalaNilaiProdi`), jika tidak skala standar (`program_studi_id` NULL). Sebelumnya berisi seluruh skala aktif tanpa penyaringan prodi.
+
 ### Response Sukses
 
 **200 OK**

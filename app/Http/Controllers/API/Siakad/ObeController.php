@@ -1130,7 +1130,7 @@ class ObeController extends Controller
                     ? abs((float) $kelas->mataKuliah->cpmks->sum('bobot_persentase') - 100.0) < 0.01
                     : abs((float) $komponenList->sum('bobot') - 100.0) < 0.01,
                 'kelayakan' => $this->kelayakanInputNilai($kelas, $mode, $komponenList),
-                'skala_nilai' => SkalaNilai::where('is_active', true)->orderBy('bobot_indeks', 'desc')->get(),
+                'skala_nilai' => SkalaNilai::aktifUntukProdi(($kelas->mataKuliah?->kurikulum?->program_studi_id ?? $kelas->program_studi_id) ? (int) ($kelas->mataKuliah?->kurikulum?->program_studi_id ?? $kelas->program_studi_id) : null),
             ]
         ]);
     }

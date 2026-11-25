@@ -105,7 +105,7 @@ Ditemukan juga: Feeder mengirim `sks_tatap_muka`/`sks_praktek` = `null` untuk ni
   mata kuliah diurut `id_matkul` dengan carry-over di batas batch. UI Pengaturan API sudah generik (polling `progress_id`), tidak diubah.
   Tes: `PddiktiCatalogQueuedSyncTest` (8 tes); regresi 408 tes, sisa 48 error + 1 gagal = baseline.
 - [ ] Sync ulang lewat UI berurutan: prodi -> kurikulum -> mata kuliah -> kelas. WAJIB restart worker queue (kode job baru) sebelum menekan sync prodi/mata kuliah; kurikulum masih sinkron di request HTTP (kecil, 37 baris).
-- [ ] DECISION: 285 mata kuliah tanpa kurikulum (hanya di `GetListMataKuliah`). Prodi mata kuliah diturunkan dari `kurikulum->program_studi_id`
+- [x] DITUNDA (diamkan oleh pemilik, 2026-11-25; tugas 1 dianggap selesai): 285 mata kuliah tanpa kurikulum (hanya di `GetListMataKuliah`). Prodi mata kuliah diturunkan dari `kurikulum->program_studi_id`
   di banyak fitur (OBE, RPS, nilai, akses prodi). Pilihan: (a) `kurikulum_id` nullable + tambah `program_studi_id` pada mata kuliah;
   (b) tempatkan di kurikulum terbaru prodi (mengotori daftar kurikulum). Belum dikerjakan.
 
@@ -119,12 +119,19 @@ Ditemukan juga: Feeder mengirim `sks_tatap_muka`/`sks_praktek` = `null` untuk ni
 - [ ] Jalankan ulang sync kelas; target: jumlah skip turun, `assignments_synced` naik.
 - **Selesai bila:** sisa skip hanya yang disengaja dan terdokumentasi.
 
-## 2. Skala nilai
-- Action: `GetListSkalaNilaiProdi` (hlm. 95), count `GetCountSkalaNilaiProdi` (hlm. 93).
-- Target: `siakad_skala_nilai` (kini 9 baris; jangan menimpa data lokal tanpa aturan merge).
-- Dependensi: prodi (`id_feeder`).
-- [ ] Verifikasi kolom tabel vs field Feeder (bobot, nilai huruf, rentang).
-- [ ] Implementasi sync + tes + docs.
+## 2. Skala nilai (KODE SIAP 2026-11-25; migration `..._130000` BELUM dijalankan di MySQL)
+- Action: `GetListSkalaNilaiProdi` (hlm. 95), count `GetCountSkalaNilaiProdi` (hlm. 93; diverifikasi live, `data` = "64").
+- Target: `siakad_skala_nilai`. Field live: `id_bobot_nilai`, `id_prodi`, `nilai_huruf`, `nilai_indeks`, `bobot_nilai_min`, `bobot_nilai_maks`, tanggal efektif (PDF salah menyebut `bobot_minimum/maksimum`).
+- Data Feeder kampus: 64 baris, 12 prodi, semua berlaku; huruf A-E plus `T` (0-0) di 4 prodi.
+- [x] Migration: `id_feeder` unik + `tanggal_mulai_efektif`/`tanggal_akhir_efektif`. [x] `SkalaNilaiIntegrationSyncService` + `SyncPddiktiSkalaNilaiJob` (queue, batch 500, persist per batch, grup prodi di batas batch ditahan).
+- [x] Registry `siakad_skala_nilai` di seeder (idempoten) dan sudah ter-seed di MySQL lokal (tanpa mengubah setelan koneksi). [x] Controller: enqueue 202, Uji Koneksi read-only, progres.
+- [x] Aturan data: rentang bulat dijadikan kontinu hanya bila selisih 1; celah/tumpang tindih dilaporkan sebagai peringatan (tidak ditebak); skala berakhir/versi lama dan huruf berentang kosong (`T`) nonaktif;
+  `is_lulus` mengikuti skala standar untuk huruf yang sama saat create; skala standar lokal tidak disentuh.
+- [x] Konsumen: `SkalaNilai::aktifUntukProdi` dipakai daftar `skala_nilai` di nilai OBE kelas. Catatan: `DokumenService::mutuHuruf` dan konversi transfer di `PerkuliahanController` mencari bobot menurut huruf tanpa prodi dan mengurutkan baris khusus prodi lebih dulu; saat ini bobot huruf sama di semua prodi sehingga hasilnya sama, tetapi ini rawan bila skala prodi berbeda.
+- [x] Tes `PddiktiSkalaNilaiSyncTest` (12 tes). Validasi dengan 64 baris Feeder asli (sqlite sementara): 64 dibuat, 4 nonaktif, 6 peringatan, sync ulang 0 dibuat / 64 diperbarui.
+- PERINGATAN DATA FEEDER (perlu dibereskan di Feeder, bukan di SIAKAD): celah rentang 55-59 (D 45-54 lalu C mulai 60) di D3 Farmasi, D3 Komunikasi Massa, D3 Sistem Informasi, D4 Manajemen Informasi Kesehatan;
+  E 0-45 berimpit dengan D 45-54 di D3 Farmasi dan D3 Komunikasi Massa. Nilai di celah dikonversi memakai skala standar lokal.
+- [ ] Jalankan migration `..._130000` di MySQL lokal; restart worker; jalankan sync skala nilai dari UI (setelah prodi terpetakan).
 - **Selesai bila:** skala nilai per prodi tersedia sebelum nilai ditarik (tugas 5).
 
 ## 3. ~~Kelas kuliah → `siakad_jadwal_kelas` + `siakad_dosen_pengampu`~~ DIBATALKAN

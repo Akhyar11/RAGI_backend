@@ -34,6 +34,16 @@
 - Assignment valid digabung ke satu `siakad_distribusi_mengajar` per prodi + tahun akademik + mata kuliah + semester anjuran. Dosen disimpan di `dosen_anggota_ids`/`dosen_anggota_details`, rombel di `kelas_ids`. Detail Feeder berlabel `source=pddikti`; anggota/SKS manual dipertahankan, dan anggota Feeder yang tidak lagi muncul tidak dihapus.
 - `dosen_koordinator_id` tidak disimpulkan dari urutan Feeder. Distribusi baru memakai koordinator null, koordinator existing tidak ditimpa. Distribusi target yang duplikat dilewati. Hasil mencakup `assignment_source_total`, `distributions_created`, `distributions_updated`, jumlah assignment `assignments_synced`, `assignment_skipped`, dan maksimal 100 `assignment_skipped_items`. Mahasiswa/peserta/KRS/nilai tidak diimpor.
 
+## Sync skala nilai PDDIKTI (2026-11-25)
+
+Integrasi `siakad_skala_nilai` (action `GetListSkalaNilaiProdi`, count `GetCountSkalaNilaiProdi` diverifikasi live) berjalan lewat queue worker dengan kontrak yang sama seperti prodi/mata kuliah
+(202 + `progress_id`, lock, batch 500 urut `id_prodi`, persist per batch, progres indeterminate bila count tidak tersedia; grup prodi yang terpotong batas batch ditahan).
+Skema (`2026_11_25_130000_add_pddikti_identity_and_period_to_siakad_skala_nilai`): `siakad_skala_nilai.id_feeder` (unik, = `id_bobot_nilai`), `tanggal_mulai_efektif`, `tanggal_akhir_efektif`.
+Aturan: skala standar lokal (`program_studi_id` NULL) tidak diubah/dihapus; rentang bulat Feeder dijadikan kontinu hanya bila selisih tepat 1 (84 -> 84.99), celah/tumpang tindih dilaporkan sebagai peringatan dan tidak ditebak;
+skala berakhir dan versi huruf lama diimpor nonaktif; huruf berentang kosong yang bertabrakan dengan huruf berbobot sama nonaktif; `is_lulus` mengikuti skala standar lokal untuk huruf yang sama saat membuat baris.
+Nama field live `bobot_nilai_min`/`bobot_nilai_maks` (PDF manual menyebut `bobot_minimum`/`bobot_maksimum`).
+Konsumen: daftar `skala_nilai` pada respons nilai OBE kelas memakai `SkalaNilai::aktifUntukProdi` (skala khusus prodi bila ada, selain itu skala standar), bukan seluruh skala aktif.
+
 ## Sync PDDIKTI prodi dan mata kuliah memakai UUID sebagai identitas (2026-11-25)
 
 **Eksekusi sync (diperbarui 2026-11-25):** sync PDDIKTI prodi dan mata kuliah berjalan lewat queue worker, bukan di request HTTP.
