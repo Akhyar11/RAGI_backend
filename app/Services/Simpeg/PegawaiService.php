@@ -13,12 +13,70 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Carbon\Carbon;
 
 class PegawaiService
 {
-    public function getFiltered(array $filters = [])
+    /**
+     * Definisi kolom yang dapat diekspor ke Excel.
+     */
+    public const EXPORTABLE_COLUMNS = [
+        'username' => 'Username Akun SSO',
+        'nip' => 'NIP',
+        'nidn' => 'NIDN',
+        'nuptk' => 'NUPTK',
+        'nik' => 'NIK (No. KTP)',
+        'nama_lengkap' => 'Nama Lengkap',
+        'gelar_depan' => 'Gelar Depan',
+        'gelar_belakang' => 'Gelar Belakang',
+        'nama_dan_gelar' => 'Nama Lengkap & Gelar',
+        'jenis_kelamin' => 'Jenis Kelamin',
+        'tempat_lahir' => 'Tempat Lahir',
+        'tanggal_lahir' => 'Tanggal Lahir',
+        'agama' => 'Agama',
+        'email' => 'Email',
+        'telepon' => 'Telepon / No. HP',
+        'alamat' => 'Alamat Domisili',
+        'jenis_pegawai' => 'Jenis Pegawai / Peran',
+        'status_kepegawaian' => 'Status Kepegawaian',
+        'status' => 'Status Keaktifan',
+        'unit_kerja' => 'Unit Kerja / Homebase',
+        'jabatan' => 'Jabatan Struktural',
+        'jabatan_fungsional' => 'Jabatan Fungsional (JAD)',
+        'shift_kerja' => 'Shift Kerja Presensi',
+        'lokasi_presensi' => 'Lokasi Presensi',
+        'tanggal_masuk' => 'Tanggal Masuk / TMT',
+        'nama_bank' => 'Nama Bank',
+        'nomor_rekening' => 'Nomor Rekening',
+        'nama_rekening' => 'Atas Nama Rekening',
+    ];
+
+    /**
+     * Membangun query data pegawai dengan seluruh filter dan pengurutan dinamis.
+     */
+    public function buildFilteredQuery(array $filters = [])
     {
-        $query = Pegawai::with(['user', 'user.roles', 'unitKerja', 'jabatanFungsional', 'shiftTemplate', 'officeLocation', 'riwayatJabatan.jabatan', 'riwayatPendidikan', 'dosen', 'dosen.programStudi', 'roles']);
+        $query = Pegawai::with([
+            'user',
+            'user.roles',
+            'unitKerja',
+            'jabatanFungsional',
+            'shiftTemplate',
+            'officeLocation',
+            'riwayatJabatan.jabatan',
+            'riwayatPendidikan',
+            'dosen',
+            'dosen.programStudi',
+            'roles'
+        ]);
 
         // Sembunyikan akun ber-role Superadmin atau role terestriksi dari daftar pegawai SIMPEG
         $restrictedRoleIds = app(\App\Services\IAM\RestrictedRoleService::class)->getRestrictedRoleIds();
@@ -76,7 +134,229 @@ class PegawaiService
             $query->where('shift_template_id', $filters['shift_template_id']);
         }
 
-        return $query->paginate($filters['per_page'] ?? 15);
+        // Sorting
+        $orderBy = $filters['order_by'] ?? $filters['sort_by'] ?? 'nama_lengkap';
+        $orderDir = strtolower($filters['order_dir'] ?? $filters['sort_dir'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+
+        if (in_array($orderBy, ['nama_lengkap', 'nip', 'nidn', 'nik', 'id', 'created_at', 'status', 'status_kepegawaian'], true)) {
+            $query->orderBy($orderBy, $orderDir);
+        } else {
+            $query->orderBy('nama_lengkap', $orderDir);
+        }
+
+        return $query;
+    }
+
+    public function getFiltered(array $filters = [])
+    {
+        return $this->buildFilteredQuery($filters)->paginate($filters['per_page'] ?? 15);
+    }
+
+    /**
+     * Mengekspor data pegawai sesuai filter aktif dan kolom pilihan ke file Excel (.xlsx).
+     */
+    public function exportPegawai(array $filters = [], array $selectedColumns = []): StreamedResponse
+    {
+        // Jika kolom tidak dipilih atau kosong, gunakan semua kolom yang tersedia
+        if (empty($selectedColumns)) {
+            $columnsToExport = array_keys(self::EXPORTABLE_COLUMNS);
+        } else {
+            $columnsToExport = array_values(array_intersect($selectedColumns, array_keys(self::EXPORTABLE_COLUMNS)));
+            if (empty($columnsToExport)) {
+                $columnsToExport = array_keys(self::EXPORTABLE_COLUMNS);
+            }
+        }
+
+        $query = $this->buildFilteredQuery($filters);
+        $pegawaiList = $query->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Data Pegawai');
+
+        // 1. Judul dan Metadata Laporan
+        $sheet->setCellValue('A1', 'SISTEM INFORMASI MANAJEMEN KEPEGAWAIAN (SIMPEG)');
+        $sheet->setCellValue('A2', 'DATA DIREKTORI PEGAWAI (DOSEN & TENDIK)');
+
+        $activeFiltersInfo = [];
+        if (!empty($filters['search'])) $activeFiltersInfo[] = "Pencarian: '{$filters['search']}'";
+        if (!empty($filters['status'])) $activeFiltersInfo[] = "Status: '{$filters['status']}'";
+        if (!empty($filters['jenis_pegawai'])) $activeFiltersInfo[] = "Jenis: '{$filters['jenis_pegawai']}'";
+        $filterSubtitle = empty($activeFiltersInfo) ? 'Filter: Semua Data (Tanpa Filter)' : 'Filter: ' . implode(' | ', $activeFiltersInfo);
+
+        $sheet->setCellValue('A3', $filterSubtitle);
+        $sheet->setCellValue('A4', 'Tanggal Unduh: ' . Carbon::now()->translatedFormat('d F Y H:i:s') . ' WIB | Total Data: ' . $pegawaiList->count() . ' Pegawai');
+
+        $sheet->getStyle('A1:A2')->getFont()->setBold(true)->setSize(12);
+        $sheet->getStyle('A3:A4')->getFont()->setSize(9)->getColor()->setRGB('475569'); // Slate 600
+
+        // 2. Header Kolom
+        $headerRow = 6;
+        $sheet->setCellValue('A' . $headerRow, 'No');
+
+        $colIndex = 2; // Mulai dari Kolom B
+        foreach ($columnsToExport as $colKey) {
+            $colLetter = Coordinate::stringFromColumnIndex($colIndex);
+            $sheet->setCellValue($colLetter . $headerRow, self::EXPORTABLE_COLUMNS[$colKey]);
+            $colIndex++;
+        }
+
+        $lastColLetter = Coordinate::stringFromColumnIndex($colIndex - 1);
+
+        // Styling Header Kolom
+        $sheet->getStyle("A{$headerRow}:{$lastColLetter}{$headerRow}")->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '1E293B'], // Slate 800
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+        ]);
+        $sheet->getRowDimension($headerRow)->setRowHeight(26);
+
+        // 3. Isi Data Baris per Baris
+        $currentRow = $headerRow + 1;
+        $no = 1;
+
+        foreach ($pegawaiList as $pegawai) {
+            $sheet->setCellValue("A{$currentRow}", $no++);
+            $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+            $colIndex = 2;
+            foreach ($columnsToExport as $colKey) {
+                $colLetter = Coordinate::stringFromColumnIndex($colIndex);
+                $value = $this->resolvePegawaiColumnValue($pegawai, $colKey);
+
+                // Kolom identitas angka diatur tipe string agar Excel tidak mengubah jadi scientific notation
+                if (in_array($colKey, ['nip', 'nidn', 'nuptk', 'nik', 'nomor_rekening', 'telepon'], true)) {
+                    $sheet->setCellValueExplicit($colLetter . $currentRow, (string) $value, DataType::TYPE_STRING);
+                    $sheet->getStyle($colLetter . $currentRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                } else {
+                    $sheet->setCellValue($colLetter . $currentRow, $value);
+                }
+
+                $colIndex++;
+            }
+
+            // Alternating row background (zebra striping)
+            if ($currentRow % 2 === 0) {
+                $sheet->getStyle("A{$currentRow}:{$lastColLetter}{$currentRow}")->getFill()->applyFromArray([
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => 'F8FAFC'], // Slate 50
+                ]);
+            }
+
+            $currentRow++;
+        }
+
+        $lastDataRow = max($currentRow - 1, $headerRow);
+
+        // Border tabel
+        $sheet->getStyle("A{$headerRow}:{$lastColLetter}{$lastDataRow}")->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['rgb' => 'CBD5E1'], // Slate 300
+                ],
+            ],
+            'alignment' => [
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+        ]);
+
+        // Auto width untuk seluruh kolom
+        $sheet->getColumnDimension('A')->setWidth(6);
+        for ($c = 2; $c < $colIndex; $c++) {
+            $colLetter = Coordinate::stringFromColumnIndex($c);
+            $sheet->getColumnDimension($colLetter)->setAutoSize(true);
+        }
+
+        $filename = 'data_pegawai_simpeg_' . Carbon::now()->format('Ymd_His') . '.xlsx';
+
+        return new StreamedResponse(
+            function () use ($spreadsheet) {
+                $writer = new Xlsx($spreadsheet);
+                $writer->save('php://output');
+            },
+            200,
+            [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                'Cache-Control' => 'max-age=0',
+            ]
+        );
+    }
+
+    /**
+     * Memetakan nilai data kolom pegawai untuk keperluan ekspor.
+     */
+    protected function resolvePegawaiColumnValue(Pegawai $pegawai, string $colKey): string
+    {
+        switch ($colKey) {
+            case 'username':
+                return $pegawai->user?->username ?? '-';
+            case 'nip':
+                return $pegawai->nip ?? '-';
+            case 'nidn':
+                return $pegawai->nidn ?? '-';
+            case 'nuptk':
+                return $pegawai->nuptk ?? '-';
+            case 'nik':
+                return $pegawai->nik ?? '-';
+            case 'nama_lengkap':
+                return $pegawai->nama_lengkap ?? '-';
+            case 'gelar_depan':
+                return $pegawai->gelar_depan ?? '';
+            case 'gelar_belakang':
+                return $pegawai->gelar_belakang ?? '';
+            case 'nama_dan_gelar':
+                return $pegawai->nama_gelar ?: ($pegawai->nama_lengkap ?? '-');
+            case 'jenis_kelamin':
+                return $pegawai->jenis_kelamin === 'L' ? 'Laki-laki' : ($pegawai->jenis_kelamin === 'P' ? 'Perempuan' : ($pegawai->jenis_kelamin ?? '-'));
+            case 'tempat_lahir':
+                return $pegawai->tempat_lahir ?? '-';
+            case 'tanggal_lahir':
+                return $pegawai->tanggal_lahir ? Carbon::parse($pegawai->tanggal_lahir)->format('d/m/Y') : '-';
+            case 'agama':
+                return $pegawai->agama ?? '-';
+            case 'email':
+                return $pegawai->user?->email ?? ($pegawai->email ?? '-');
+            case 'telepon':
+                return $pegawai->telepon ?? '-';
+            case 'alamat':
+                return $pegawai->alamat ?? '-';
+            case 'jenis_pegawai':
+                $roleNames = $pegawai->roles->pluck('name')->filter()->implode(', ');
+                return $roleNames ?: ($pegawai->jenis_pegawai ?? '-');
+            case 'status_kepegawaian':
+                return ucwords(str_replace('_', ' ', $pegawai->status_kepegawaian ?? '-'));
+            case 'status':
+                return ucfirst($pegawai->status ?? '-');
+            case 'unit_kerja':
+                return $pegawai->unitKerja?->nama ?? '-';
+            case 'jabatan':
+                $activeJabatan = $pegawai->riwayatJabatan->first(fn($rj) => $rj->is_active)?->jabatan?->nama;
+                return $activeJabatan ?? ($pegawai->riwayatJabatan->first()?->jabatan?->nama ?? '-');
+            case 'jabatan_fungsional':
+                return $pegawai->jabatanFungsional?->nama ?? '-';
+            case 'shift_kerja':
+                return $pegawai->shiftTemplate?->name ?? '-';
+            case 'lokasi_presensi':
+                return $pegawai->officeLocation?->name ?? '-';
+            case 'tanggal_masuk':
+                return $pegawai->tanggal_masuk ? Carbon::parse($pegawai->tanggal_masuk)->format('d/m/Y') : '-';
+            case 'nama_bank':
+                return $pegawai->nama_bank ?? '-';
+            case 'nomor_rekening':
+                return $pegawai->nomor_rekening ?? '-';
+            case 'nama_rekening':
+                return $pegawai->nama_rekening ?? '-';
+            default:
+                return '-';
+        }
     }
 
     public function create(array $data)

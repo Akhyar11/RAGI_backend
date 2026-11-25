@@ -174,7 +174,7 @@
 | JabatanController | Formasi jabatan struktural, fungsional, dan teknis pada unit kerja | [docs/api/SIMPEG/JabatanController.md](api/SIMPEG/JabatanController.md) |
 | JabatanFungsionalController | Master jenjang jabatan fungsional akademik dosen (termasuk Tenaga Pengajar) dan angka kredit | [docs/api/SIMPEG/JabatanFungsionalController.md](api/SIMPEG/JabatanFungsionalController.md) |
 | RiwayatController | Riwayat penugasan jabatan struktural/fungsional dan riwayat pendidikan pegawai | [docs/api/SIMPEG/RiwayatController.md](api/SIMPEG/RiwayatController.md) |
-| PegawaiController | Manajemen master data pegawai, multi-role SSO, import massal, & reset biometrik | [docs/api/SIMPEG/PegawaiController.md](api/SIMPEG/PegawaiController.md) |
+| PegawaiController | Manajemen master data pegawai, multi-role SSO, import massal, export Excel kustom kolom & filter aktif, serta reset biometrik | [docs/api/SIMPEG/PegawaiController.md](api/SIMPEG/PegawaiController.md) |
 | PresensiController | Presensi biometrik mobile (Android Flutter), validasi wajah Python, bundle siklus 26 - 25 & matriks harian | [docs/api/SIMPEG/PresensiController.md](api/SIMPEG/PresensiController.md) |
 | PresensiPengajaranController | Monitoring bulanan pertemuan/presensi dosen berbasis penugasan SIAKAD, cut-off, dan izin khusus | [docs/api/SIMPEG/PresensiPengajaranController.md](api/SIMPEG/PresensiPengajaranController.md) |
 | AttendanceController | Endpoint mobile presensi: status harian, scan masuk/pulang, toleransi cutoff, izin & rekap | [docs/api/API/AttendanceController.md](api/API/AttendanceController.md) |

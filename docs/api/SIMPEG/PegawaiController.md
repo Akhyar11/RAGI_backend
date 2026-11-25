@@ -17,6 +17,7 @@ Controller ini mengelola master data pegawai di lingkungan universitas/institusi
 | GET | `/api/simpeg/pegawai/roles` | Daftar opsi role aktif SSO untuk jenis pegawai | ✅ |
 | GET | `/api/simpeg/pegawai/template` | Mengunduh template file CSV impor pegawai | ✅ |
 | POST | `/api/simpeg/pegawai/import` | Mengimpor berkas data pegawai massal (.csv, .xlsx) | ✅ |
+| GET | `/api/simpeg/pegawai/export` | Mengekspor data pegawai terfilter dengan kolom kustom (.xlsx) | ✅ |
 | GET | `/api/simpeg/pegawai/me` | Profil data pegawai dari user yang sedang login | ✅ |
 | GET | `/api/simpeg/pegawai` | Daftar data pegawai (dengan pagination & filter) | ✅ |
 | POST | `/api/simpeg/pegawai` | Tambah data pegawai baru (multi-role SSO & shift) | ✅ |
@@ -144,6 +145,96 @@ Content-Type: multipart/form-data
   "message": "Berkas yang diunggah tidak valid atau kolom wajib tidak lengkap.",
   "errors": {
     "file": ["Format berkas tidak didukung. Harap unggah berkas .csv atau .xlsx."]
+  }
+}
+```
+
+---
+
+## GET /api/simpeg/pegawai/export
+
+> Mengekspor data direktori pegawai (dosen & tendik) ke berkas Excel (`.xlsx`) dengan format terstruktur rapi. Mendukung filter data aktif (pencarian, unit kerja, jenis pegawai, shift, status kepegawaian, pengurutan) serta pemilihan kolom kustom yang dicentang oleh administrator (termasuk kolom `username` akun login SSO).
+
+### Headers
+```http
+Authorization: Bearer <token>
+Accept: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json
+```
+
+### Query Parameters
+| Parameter | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `search` | string | ❌ | Kata kunci pencarian (nama, NIP, NIDN, NUPTK, NIK) |
+| `unit_kerja_id` | integer | ❌ | Filter ID Unit Kerja / Homebase (`exists:simpeg_unit_kerja,id`) |
+| `jenis_pegawai` | string | ❌ | Filter jenis pegawai / slug peran (`dosen`, `tendik`, dll.) |
+| `role_id` | integer | ❌ | Filter ID Role SSO (`exists:core_roles,id`) |
+| `status` | string | ❌ | Filter status keaktifan (`aktif`, `non_aktif`, `pensiun`, `meninggal`) |
+| `shift_template_id` | integer | ❌ | Filter ID template shift presensi kerja (`exists:simpeg_shift_templates,id`) |
+| `order_by` | string | ❌ | Kolom pengurutan data (`nama_lengkap`, `nip`, `nidn`, `created_at`, `tanggal_masuk`) |
+| `order_dir` | string | ❌ | Arah pengurutan (`asc` atau `desc`) |
+| `columns` | array/string | ❌ | Daftar kolom yang dipilih untuk diekspor (array `columns[]=username&columns[]=nip` atau string dipisahkan koma `username,nip`). Jika dikosongkan, seluruh kolom standar akan diekspor |
+
+### Kolom Ekspor yang Tersedia (`columns`)
+- `username`: Username Akun Login SSO (`core_users.username`)
+- `nip`: Nomor Induk Pegawai
+- `nidn`: Nomor Induk Dosen Nasional
+- `nuptk`: Nomor Unik Pendidik dan Tenaga Kependidikan
+- `nik`: Nomor Induk Kependudukan (KTP)
+- `nama_lengkap`: Nama Lengkap (tanpa gelar)
+- `gelar_depan`: Gelar Depan (mis. Dr., Ir.)
+- `gelar_belakang`: Gelar Belakang (mis. M.Kom., Ph.D.)
+- `nama_dan_gelar`: Nama Lengkap beserta Gelar
+- `jenis_kelamin`: Jenis Kelamin (Laki-laki / Perempuan)
+- `tempat_lahir`: Tempat Lahir
+- `tanggal_lahir`: Tanggal Lahir (DD/MM/YYYY)
+- `agama`: Agama
+- `email`: Alamat Email Akun / Pegawai
+- `telepon`: Nomor Telepon / HP
+- `alamat`: Alamat Domisili
+- `jenis_pegawai`: Jenis Pegawai / Peran SSO
+- `status_kepegawaian`: Status Kepegawaian (Tetap Yayasan, Kontrak, PNS, dll.)
+- `status`: Status Keaktifan (Aktif, Non-Aktif, Pensiun, Meninggal)
+- `unit_kerja`: Unit Kerja / Fakultas / Program Studi
+- `jabatan`: Jabatan Struktural Aktif
+- `jabatan_fungsional`: Jabatan Akademik Dosen (JAD)
+- `shift_kerja`: Shift Kerja Presensi
+- `lokasi_presensi`: Lokasi Kantor Presensi
+- `tanggal_masuk`: Tanggal Masuk / TMT Pegawai
+- `nama_bank`: Nama Bank Rekening
+- `nomor_rekening`: Nomor Rekening Bank
+- `nama_rekening`: Atas Nama Pemilik Rekening
+
+### Response Success (200 OK)
+- **Content-Type**: `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+- **Content-Disposition**: `attachment; filename="data_pegawai_simpeg_YYYYMMDD_HHmmss.xlsx"`
+- **Body**: Binary Stream data spreadsheet Excel (.xlsx)
+
+### Response Error (401 Unauthorized)
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+### Response Error (403 Forbidden)
+```json
+{
+  "status": "error",
+  "message": "Anda tidak memiliki hak akses (permission) untuk mengekspor Data Pegawai."
+}
+```
+
+### Response Error (422 Unprocessable Content)
+```json
+{
+  "message": "The columns.0 field is invalid.",
+  "errors": {
+    "columns.0": [
+      "The selected columns.0 is invalid."
+    ],
+    "unit_kerja_id": [
+      "The selected unit kerja id is invalid."
+    ]
   }
 }
 ```

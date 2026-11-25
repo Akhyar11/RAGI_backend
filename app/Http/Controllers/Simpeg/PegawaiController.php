@@ -86,6 +86,73 @@ class PegawaiController extends Controller
         ]);
     }
 
+    /**
+     * Mengekspor data pegawai terfilter dengan kolom kustom ke Excel (.xlsx).
+     */
+    public function export(Request $request)
+    {
+        $user = $request->user();
+        if (!$user->hasPermission('simpeg.pegawai.export') && !$user->hasPermission('simpeg.pegawai.read') && !$user->hasPermission('simpeg.pegawai.manage')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki hak akses (permission) untuk mengekspor Data Pegawai.'
+            ], 403);
+        }
+
+        if (is_string($request->input('columns'))) {
+            $request->merge([
+                'columns' => array_filter(explode(',', $request->input('columns'))),
+            ]);
+        }
+
+        $validColumns = array_keys(PegawaiService::EXPORTABLE_COLUMNS);
+        $validated = $request->validate([
+            'search' => 'nullable|string|max:255',
+            'unit_kerja_id' => 'nullable|integer|exists:simpeg_unit_kerja,id',
+            'role_id' => 'nullable|integer|exists:core_roles,id',
+            'jenis_pegawai' => 'nullable|string|max:50',
+            'shift_template_id' => 'nullable|integer|exists:simpeg_shift_templates,id',
+            'status' => 'nullable|string|max:50',
+            'order_by' => 'nullable|string|in:nama_lengkap,nip,nidn,created_at,tanggal_masuk',
+            'order_dir' => 'nullable|string|in:asc,desc,ASC,DESC',
+            'sort_by' => 'nullable|string|in:nama_lengkap,nip,nidn,created_at,tanggal_masuk',
+            'sort_dir' => 'nullable|string|in:asc,desc,ASC,DESC',
+            'columns' => 'nullable|array',
+            'columns.*' => ['string', \Illuminate\Validation\Rule::in($validColumns)],
+        ]);
+
+        $selectedColumns = $validated['columns'] ?? [];
+        $filters = array_filter([
+            'search' => $validated['search'] ?? null,
+            'unit_kerja_id' => $validated['unit_kerja_id'] ?? null,
+            'role_id' => $validated['role_id'] ?? null,
+            'jenis_pegawai' => $validated['jenis_pegawai'] ?? null,
+            'shift_template_id' => $validated['shift_template_id'] ?? null,
+            'status' => $validated['status'] ?? null,
+            'order_by' => $validated['order_by'] ?? $validated['sort_by'] ?? null,
+            'order_dir' => $validated['order_dir'] ?? $validated['sort_dir'] ?? null,
+        ], fn($v) => !is_null($v) && $v !== '');
+
+        try {
+            AuditLogService::record(
+                module: 'simpeg',
+                action: 'export',
+                tableName: 'simpeg_pegawai',
+                recordId: null,
+                oldValues: null,
+                newValues: [
+                    'filters' => $filters,
+                    'columns' => $selectedColumns,
+                ],
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log ekspor data pegawai: ' . $e->getMessage());
+        }
+
+        return $this->pegawaiService->exportPegawai($filters, $selectedColumns);
+    }
+
     public function me(Request $request)
     {
         $user = $request->user();
