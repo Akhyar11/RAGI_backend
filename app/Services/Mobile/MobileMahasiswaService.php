@@ -331,14 +331,14 @@ class MobileMahasiswaService
             ->get();
 
         $daftarKhs = $khsList->map(function (Khs $khs) use ($mahasiswa) {
-            $nilaiSemester = NilaiMahasiswa::with(['krsDetail.kelas.mataKuliah'])
+            $nilaiSemester = NilaiMahasiswa::with(['krsDetail.kelas.mataKuliah', 'krsDetail.mataKuliah'])
                 ->whereHas('krsDetail.krs', function ($q) use ($mahasiswa, $khs) {
                     $q->where('mahasiswa_id', $mahasiswa->id)
                         ->where('tahun_akademik_id', $khs->tahun_akademik_id);
                 })
                 ->get()
                 ->map(function (NilaiMahasiswa $n) {
-                    $mk = $n->krsDetail?->kelas?->mataKuliah;
+                    $mk = $n->krsDetail?->mata_kuliah_efektif;
                     $sks = (int) ($mk?->total_sks ?? 0);
                     $mutu = (float) ($n->bobot_mutu ?? 0);
 
@@ -389,6 +389,7 @@ class MobileMahasiswaService
         $nilaiList = NilaiMahasiswa::with([
             'krsDetail.krs.tahunAkademik',
             'krsDetail.kelas.mataKuliah',
+            'krsDetail.mataKuliah',
         ])
             ->whereHas('krsDetail.krs', fn ($q) => $q->where('mahasiswa_id', $mahasiswa->id))
             ->where('is_final', true)
@@ -400,7 +401,7 @@ class MobileMahasiswaService
         $totalBobotMutu = 0.0;
 
         foreach ($nilaiList as $n) {
-            $mk = $n->krsDetail?->kelas?->mataKuliah;
+            $mk = $n->krsDetail?->mata_kuliah_efektif;
             $sks = (int) ($mk?->total_sks ?? 0);
             $mutu = (float) ($n->bobot_mutu ?? 0);
             $huruf = strtoupper(trim((string) $n->nilai_huruf));

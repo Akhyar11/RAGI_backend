@@ -799,3 +799,5 @@ Nilai `status` pada create, update, update status tunggal/bulk, dan filter dafta
 | `N` | Non-Aktif |
 | `L` | Lulus |
 | `U` | Menunggu Ujian |
+
+> **Catatan (2026-11-25):** kode, nama, dan SKS mata kuliah pada data KRS dibaca dari mata kuliah efektif (`kelas.mata_kuliah`, atau `mata_kuliah` bila baris KRS historis tidak memiliki kelas).

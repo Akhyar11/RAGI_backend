@@ -83,19 +83,19 @@ class DokumenService
             }
         }
 
-        $nilaiList = NilaiMahasiswa::with('krsDetail.kelas.mataKuliah')
+        $nilaiList = NilaiMahasiswa::with(['krsDetail.kelas.mataKuliah', 'krsDetail.mataKuliah'])
             ->whereHas('krsDetail.krs', fn($q) => $q->where('mahasiswa_id', $mhsId))
             ->where('is_final', true)
             ->get();
         $best = [];
         foreach ($nilaiList as $n) {
-            $mkId = $n->krsDetail?->kelas?->mataKuliah?->id ?? ('krs-' . $n->krs_detail_id);
+            $mkId = $n->krsDetail?->mata_kuliah_efektif?->id ?? ('krs-' . $n->krs_detail_id);
             if (!isset($best[$mkId]) || (float) $n->bobot_mutu > (float) $best[$mkId]->bobot_mutu) {
                 $best[$mkId] = $n;
             }
         }
         foreach ($best as $n) {
-            $sks = $n->krsDetail?->kelas?->mataKuliah?->total_sks ?? 3;
+            $sks = $n->krsDetail?->mata_kuliah_efektif?->total_sks ?? 3;
             $totalDiambil += $sks;
             if (($n->nilai_huruf ?? 'E') !== 'E') {
                 $totalLulus += $sks;

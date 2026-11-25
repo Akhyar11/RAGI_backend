@@ -34,6 +34,23 @@
 - Assignment valid digabung ke satu `siakad_distribusi_mengajar` per prodi + tahun akademik + mata kuliah + semester anjuran. Dosen disimpan di `dosen_anggota_ids`/`dosen_anggota_details`, rombel di `kelas_ids`. Detail Feeder berlabel `source=pddikti`; anggota/SKS manual dipertahankan, dan anggota Feeder yang tidak lagi muncul tidak dihapus.
 - `dosen_koordinator_id` tidak disimpulkan dari urutan Feeder. Distribusi baru memakai koordinator null, koordinator existing tidak ditimpa. Distribusi target yang duplikat dilewati. Hasil mencakup `assignment_source_total`, `distributions_created`, `distributions_updated`, jumlah assignment `assignments_synced`, `assignment_skipped`, dan maksimal 100 `assignment_skipped_items`. Mahasiswa/peserta/KRS/nilai tidak diimpor.
 
+## Skema: KRS historis berbasis mata kuliah (2026-11-25) — migration + pembaca DIIMPLEMENTASI, impor Feeder belum
+
+Latar: `siakad_jadwal_kelas` tidak diisi dari Neo Feeder. KRS Feeder (`GetKRSMahasiswa`) berisi mahasiswa x periode x
+mata kuliah (+ label rombel `nama_kelas_kuliah`), tanpa kelas konkret. Pendekatan: tambahan skema tanpa membongkar alur kelas.
+
+Perubahan `siakad_krs_detail` (migration `2026_11_25_100000_add_mata_kuliah_and_rombel_to_siakad_krs_detail_table`, aditif):
+- `kelas_id` menjadi **nullable** (FK ke `siakad_jadwal_kelas` tetap ada).
+- Tambah `mata_kuliah_id` (nullable, FK `siakad_mata_kuliah`, indexed) dan `master_kelas_id` (nullable, FK `siakad_master_kelas`, rombel).
+- Aturan: baris dari alur KRS online tetap mengisi `kelas_id`; baris impor Feeder mengisi `mata_kuliah_id` (+ `master_kelas_id`) dan `kelas_id` NULL.
+- Pembaca nilai/IPK memakai mata kuliah efektif: `krs_detail.kelas.mataKuliah` bila ada, jika tidak `krs_detail.mata_kuliah_id`.
+  Periode (tahun akademik) selalu dari `siakad_krs.tahun_akademik_id`, bukan dari kelas.
+- Baris lama/KRS online mengisi `mata_kuliah_id` dari kelasnya (backfill migration + `KrsService::addClass`).
+- Tanpa unique baru pada `(krs_id, mata_kuliah_id)`: satu MK dapat diambil pada kelas teori dan praktik; idempotensi impor dijaga di importer.
+- Fitur berbasis kelas (LMS, kuis, forum, presensi, notifikasi, kuota/bentrok KRS online) tidak berlaku untuk baris tanpa kelas.
+
+Tidak berubah: `siakad_dosen_pengampu.kelas_id` tetap wajib (pengampu per mata kuliah ada di `siakad_distribusi_mengajar`).
+
 ## Kode diskon pendaftaran SPMB (2026-11-16)
 
 - `POST /api/spmb/pendaftaran/biodata` hanya menyimpan/memperbarui draft biodata dan pilihan `kode_diskon`; endpoint ini tidak menerbitkan invoice dan tidak mengklaim kuota kode.

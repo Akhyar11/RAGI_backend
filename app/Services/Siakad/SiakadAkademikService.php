@@ -21,7 +21,7 @@ class SiakadAkademikService
                 return $existing;
             }
             // Ambil semua KRS yang disetujui/dikunci di semester ini
-            $krs = Krs::with(['krsDetails.nilaiMahasiswa', 'krsDetails.kelas.mataKuliah'])
+            $krs = Krs::with(['krsDetails.nilaiMahasiswa', 'krsDetails.kelas.mataKuliah', 'krsDetails.mataKuliah'])
                 ->where('mahasiswa_id', $mahasiswaId)
                 ->where('tahun_akademik_id', $tahunAkademikId)
                 ->whereIn('status', ['disetujui', 'dikunci'])
@@ -36,7 +36,10 @@ class SiakadAkademikService
                 if ($detail->status != 'aktif') continue;
                 if (!$detail->nilaiMahasiswa || !$detail->nilaiMahasiswa->is_final) continue;
 
-                $sks = $detail->kelas->mataKuliah->total_sks;
+                $mataKuliah = $detail->mata_kuliah_efektif;
+                if (!$mataKuliah) continue;
+
+                $sks = $mataKuliah->total_sks;
                 $totalSksSemester += $sks;
                 $totalMutuSemester += ($sks * $detail->nilaiMahasiswa->bobot_mutu);
             }
@@ -51,7 +54,7 @@ class SiakadAkademikService
 
             // Hitung IPK Keseluruhan (Sederhana: Rata-rata dari semua KRS yang memiliki nilai final)
             // Di implementasi nyata, perlu mempertimbangkan mengulang matakuliah (ambil nilai tertinggi)
-            $allFinalKrs = Krs::with(['krsDetails.nilaiMahasiswa', 'krsDetails.kelas.mataKuliah'])
+            $allFinalKrs = Krs::with(['krsDetails.nilaiMahasiswa', 'krsDetails.kelas.mataKuliah', 'krsDetails.mataKuliah'])
                 ->where('mahasiswa_id', $mahasiswaId)
                 ->whereIn('status', ['disetujui', 'dikunci'])
                 ->get();
@@ -66,8 +69,11 @@ class SiakadAkademikService
                 foreach ($krsRecord->krsDetails as $detail) {
                     if ($detail->status != 'aktif' || !$detail->nilaiMahasiswa || !$detail->nilaiMahasiswa->is_final) continue;
                     
-                    $mkId = $detail->kelas->mata_kuliah_id;
-                    $sks = $detail->kelas->mataKuliah->total_sks;
+                    $mataKuliah = $detail->mata_kuliah_efektif;
+                    if (!$mataKuliah) continue;
+
+                    $mkId = $mataKuliah->id;
+                    $sks = $mataKuliah->total_sks;
                     $mutu = $detail->nilaiMahasiswa->bobot_mutu;
 
                     if (!isset($nilaiTertinggi[$mkId]) || $mutu > $nilaiTertinggi[$mkId]['mutu']) {

@@ -123,7 +123,7 @@ class MahasiswaController extends Controller
 
     public function show($id)
     {
-        $mhs = Mahasiswa::with(['programStudi', 'dosenWali', 'konversiTransfer.details.mataKuliahDiakui', 'krs.krsDetails.kelas.mataKuliah', 'khs'])->findOrFail($id);
+        $mhs = Mahasiswa::with(['programStudi', 'dosenWali', 'konversiTransfer.details.mataKuliahDiakui', 'krs.krsDetails.kelas.mataKuliah', 'krs.krsDetails.mataKuliah', 'khs'])->findOrFail($id);
 
         return response()->json([
             'status' => 'success',

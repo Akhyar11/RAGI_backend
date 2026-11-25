@@ -728,7 +728,7 @@ class PerkuliahanController extends Controller
         }
 
         // Hitung nilai IPK, IPS, dan Total SKS Lulus riil
-        $transkripNilai = NilaiMahasiswa::with(['krsDetail.kelas.mataKuliah'])
+        $transkripNilai = NilaiMahasiswa::with(['krsDetail.kelas.mataKuliah', 'krsDetail.mataKuliah'])
             ->whereHas('krsDetail.krs', fn($q) => $q->where('mahasiswa_id', $mhs->id))
             ->where('is_final', true)
             ->get();
@@ -766,7 +766,7 @@ class PerkuliahanController extends Controller
         }
 
         foreach ($transkripNilai as $tn) {
-            $sks = $tn->krsDetail?->kelas?->mataKuliah?->total_sks ?? 3;
+            $sks = $tn->krsDetail?->mata_kuliah_efektif?->total_sks ?? 3;
             $mutu = (float) $tn->bobot_mutu;
             if ($tn->nilai_huruf !== 'E' && $tn->nilai_huruf !== 'D') {
                 $totalSksLulus += $sks;
@@ -784,7 +784,7 @@ class PerkuliahanController extends Controller
         $krsSks = 0;
         $krsMutu = 0;
         foreach ($krsNilai as $kn) {
-            $sks = $kn->krsDetail?->kelas?->mataKuliah?->total_sks ?? 3;
+            $sks = $kn->krsDetail?->mata_kuliah_efektif?->total_sks ?? 3;
             $mutu = (float) $kn->bobot_mutu;
             $krsSks += $sks;
             $krsMutu += ($mutu * $sks);

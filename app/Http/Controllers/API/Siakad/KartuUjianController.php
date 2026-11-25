@@ -50,14 +50,14 @@ class KartuUjianController extends Controller
 
         $token = $this->kartuService->terbitkan($mhs, (int) $ta->id, $validated['tipe_ujian'], $request->ip(), $request->userAgent());
 
-        $krs = Krs::with(['krsDetails.kelas.mataKuliah', 'krsDetails.kelas.ruangan', 'krsDetails.kelas.dosenPengampu.dosen'])
+        $krs = Krs::with(['krsDetails.kelas.mataKuliah', 'krsDetails.mataKuliah', 'krsDetails.kelas.ruangan', 'krsDetails.kelas.dosenPengampu.dosen'])
             ->where('mahasiswa_id', $mhs->id)
             ->where('tahun_akademik_id', $ta->id)
             ->first();
         $jadwal = ($krs?->krsDetails ?? collect())->map(fn($d) => [
-            'kode_mk' => $d->kelas?->mataKuliah?->kode_mk,
-            'nama_mk' => $d->kelas?->mataKuliah?->nama,
-            'sks' => $d->kelas?->mataKuliah?->total_sks,
+            'kode_mk' => $d->mata_kuliah_efektif?->kode_mk,
+            'nama_mk' => $d->mata_kuliah_efektif?->nama,
+            'sks' => $d->mata_kuliah_efektif?->total_sks,
             'kelas' => $d->kelas?->nama_kelas,
             'hari' => $d->kelas?->hari,
             'jam' => $d->kelas?->jam_mulai && $d->kelas?->jam_selesai

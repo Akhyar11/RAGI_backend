@@ -37,6 +37,7 @@ class NilaiKoreksiService
             ->with([
                 'krsDetail.krs.mahasiswa:id,nim,nama_lengkap',
                 'krsDetail.kelas.mataKuliah:id,kode_mk,nama,kurikulum_id',
+                'krsDetail.mataKuliah:id,kode_mk,nama,kurikulum_id',
                 'nilaiKomponenMahasiswa.komponenPenilaian:id,nama_komponen',
                 'ketercapaianCpmkMahasiswa.cpmk:id,kode_cpmk,deskripsi',
                 'diajukanOleh:id,name,username',
@@ -66,6 +67,10 @@ class NilaiKoreksiService
                             ->orWhere('nama_lengkap', 'like', "%{$search}%");
                     })
                     ->orWhereHas('krsDetail.kelas.mataKuliah', function ($mataKuliahQuery) use ($search) {
+                        $mataKuliahQuery->where('kode_mk', 'like', "%{$search}%")
+                            ->orWhere('nama', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('krsDetail.mataKuliah', function ($mataKuliahQuery) use ($search) {
                         $mataKuliahQuery->where('kode_mk', 'like', "%{$search}%")
                             ->orWhere('nama', 'like', "%{$search}%");
                     });
@@ -168,10 +173,10 @@ class NilaiKoreksiService
     private function resolveConventionalTarget(int $id): array
     {
         $grade = NilaiMahasiswa::query()
-            ->with('krsDetail.kelas.tahunAkademik')
+            ->with(['krsDetail.kelas.tahunAkademik', 'krsDetail.krs.tahunAkademik'])
             ->lockForUpdate()
             ->findOrFail($id);
-        if (($grade->krsDetail?->kelas?->tahunAkademik?->mode_penilaian ?? 'konvensional') !== 'konvensional') {
+        if ((($grade->krsDetail?->kelas?->tahunAkademik ?? $grade->krsDetail?->krs?->tahunAkademik)?->mode_penilaian ?? 'konvensional') !== 'konvensional') {
             throw ValidationException::withMessages(['nilai_mahasiswa_id' => 'Nilai ini tidak menggunakan mode konvensional.']);
         }
 
@@ -187,10 +192,10 @@ class NilaiKoreksiService
     private function resolveComponentTarget(int $id): array
     {
         $score = NilaiKomponenMahasiswa::query()
-            ->with('krsDetail.kelas.tahunAkademik')
+            ->with(['krsDetail.kelas.tahunAkademik', 'krsDetail.krs.tahunAkademik'])
             ->lockForUpdate()
             ->findOrFail($id);
-        if (($score->krsDetail?->kelas?->tahunAkademik?->mode_penilaian ?? 'semi_obe') !== 'semi_obe') {
+        if ((($score->krsDetail?->kelas?->tahunAkademik ?? $score->krsDetail?->krs?->tahunAkademik)?->mode_penilaian ?? 'semi_obe') !== 'semi_obe') {
             throw ValidationException::withMessages(['nilai_komponen_mahasiswa_id' => 'Koreksi komponen hanya tersedia pada mode semi-OBE.']);
         }
 
@@ -205,10 +210,10 @@ class NilaiKoreksiService
     private function resolveCpmkTarget(int $id): array
     {
         $score = KetercapaianCpmkMahasiswa::query()
-            ->with('krsDetail.kelas.tahunAkademik')
+            ->with(['krsDetail.kelas.tahunAkademik', 'krsDetail.krs.tahunAkademik'])
             ->lockForUpdate()
             ->findOrFail($id);
-        if (($score->krsDetail?->kelas?->tahunAkademik?->mode_penilaian ?? 'semi_obe') !== 'full_obe') {
+        if ((($score->krsDetail?->kelas?->tahunAkademik ?? $score->krsDetail?->krs?->tahunAkademik)?->mode_penilaian ?? 'semi_obe') !== 'full_obe') {
             throw ValidationException::withMessages(['ketercapaian_cpmk_mahasiswa_id' => 'Koreksi skor CPMK langsung hanya tersedia pada mode OBE penuh.']);
         }
 

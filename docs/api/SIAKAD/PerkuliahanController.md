@@ -148,6 +148,13 @@ Kelas, KRS, nilai, transkrip, pertemuan & absensi. Validasi `program_studi_id` m
 
 ## [GET] /api/v1/siakad/perkuliahan/krs
 
+> **Catatan baris KRS historis (2026-11-25):** `krs_details[]` kini dapat berasal dari impor Neo Feeder tanpa kelas.
+> Pada baris tersebut `kelas_id` dan `kelas` bernilai `null`, sedangkan `mata_kuliah_id`, `mata_kuliah` (relasi `mataKuliah`),
+> dan `master_kelas_id` (rombel) terisi. Baris dari KRS online tetap memiliki `kelas` dan juga menyalin `mata_kuliah_id`.
+> Perhitungan IPS/IPK, SKS, prasyarat, dan transkrip memakai mata kuliah efektif (`kelas.mata_kuliah` bila ada, jika tidak `mata_kuliah`).
+> Klien tidak boleh menganggap `kelas` selalu ada.
+
+
 ### Query Parameters
 
 | Parameter | Type | Required | Default | Deskripsi |

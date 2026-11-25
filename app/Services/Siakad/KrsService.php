@@ -125,7 +125,7 @@ class KrsService
         }
 
         $nilai = NilaiMahasiswa::whereHas('krsDetail.krs', fn($q) => $q->where('mahasiswa_id', $mahasiswaId))
-            ->whereHas('krsDetail.kelas', fn($q) => $q->where('mata_kuliah_id', $mataKuliahId))
+            ->whereHas('krsDetail', fn($q) => $q->untukMataKuliah($mataKuliahId))
             ->where('is_final', true)
             ->orderByDesc('bobot_mutu')
             ->first();
@@ -159,7 +159,7 @@ class KrsService
     public function hasPernahAmbil(int $mahasiswaId, int $mataKuliahId): bool
     {
         return KrsDetail::whereHas('krs', fn($q) => $q->where('mahasiswa_id', $mahasiswaId))
-            ->whereHas('kelas', fn($q) => $q->where('mata_kuliah_id', $mataKuliahId))
+            ->untukMataKuliah($mataKuliahId)
             ->exists();
     }
 
@@ -348,11 +348,14 @@ class KrsService
             $this->assertTidakDuplikatMk($krs, $kelas);
             $this->assertTidakBentrok($krs, $kelas);
 
-            $detail = KrsDetail::firstOrCreate(['krs_id' => $krs->id, 'kelas_id' => $kelas->id]);
+            $detail = KrsDetail::firstOrCreate(
+                ['krs_id' => $krs->id, 'kelas_id' => $kelas->id],
+                ['mata_kuliah_id' => $kelas->mata_kuliah_id]
+            );
             NilaiMahasiswa::firstOrCreate(['krs_detail_id' => $detail->id]);
 
-            $totalSks = $krs->krsDetails()->with('kelas.mataKuliah')->get()
-                ->sum(fn($d) => $d->kelas?->mataKuliah?->total_sks ?? 0);
+            $totalSks = $krs->krsDetails()->with(['kelas.mataKuliah', 'mataKuliah'])->get()
+                ->sum(fn($d) => $d->mata_kuliah_efektif?->total_sks ?? 0);
             $maxSks = $this->maxSksByIpk($ipk, $mhs->program_studi_id ? (int) $mhs->program_studi_id : null);
             if ($totalSks > $maxSks) {
                 abort(response()->json([

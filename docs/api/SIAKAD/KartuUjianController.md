@@ -213,3 +213,5 @@ Menonaktifkan kartu bermasalah (QR tidak valid lagi). Auth: ✅ `siakad.mahasisw
 > - Mencetak ulang kartu yang sama menyegarkan token + tanggal cetak (QR lama otomatis mati karena token unik per baris).
 > - Penerbitan tercatat di `audit_logs` via `KartuUjianTokenObserver` (modul `SIAKAD`).
 > - Token acak 48 karakter — tidak dapat ditebak dari NIM.
+
+> **Catatan (2026-11-25):** kode, nama, dan SKS mata kuliah pada data KRS dibaca dari mata kuliah efektif (`kelas.mata_kuliah`, atau `mata_kuliah` bila baris KRS historis tidak memiliki kelas).
