@@ -10,6 +10,9 @@ class Role extends Model
 {
     use HasFactory;
 
+    /** Slug role calon mahasiswa (selaras dengan RoleSeeder). */
+    public const SLUG_CALON_MAHASISWA = 'calon_mhs';
+
     protected $table = 'core_roles';
 
     public function permissions()

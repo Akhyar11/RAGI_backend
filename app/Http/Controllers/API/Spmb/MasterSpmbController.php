@@ -45,7 +45,17 @@ class MasterSpmbController extends Controller
         }
 
         if ($request->filled('status')) {
-            $query->where('is_active', filter_var($request->input('status'), FILTER_VALIDATE_BOOLEAN));
+            // Menerima true/false/1/0 maupun aktif/nonaktif. Nilai teks seperti "aktif"
+            // sebelumnya terbaca false oleh filter_var sehingga hanya jalur nonaktif yang tampil.
+            $status = strtolower(trim((string) $request->input('status')));
+            $isActive = match ($status) {
+                'aktif', 'active' => true,
+                'nonaktif', 'tidak_aktif', 'inactive' => false,
+                default => filter_var($status, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE),
+            };
+            if ($isActive !== null) {
+                $query->where('is_active', $isActive);
+            }
         }
 
         $allowedSorts = ['id', 'kode', 'nama', 'created_at'];

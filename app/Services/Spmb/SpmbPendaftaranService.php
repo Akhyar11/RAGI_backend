@@ -49,6 +49,146 @@ class SpmbPendaftaranService
         $pendaftaran->update(['status' => 'submitted']);
     }
 
+    /**
+     * Admin mengubah data pendaftar. Hanya field yang dikirim yang diubah;
+     * perubahan dicatat di audit log. Pendaftar yang sudah dikonversi dikunci.
+     */
+    public function updateByAdmin(PendaftaranCalonMhs $pendaftaran, array $data, ?\Illuminate\Http\Request $request = null): PendaftaranCalonMhs
+    {
+        if ($pendaftaran->status === PendaftaranCalonMhs::STATUS_MAHASISWA_BARU) {
+            throw ValidationException::withMessages([
+                'status' => 'Data pendaftar yang sudah dikonversi menjadi mahasiswa tidak dapat diubah.',
+            ]);
+        }
+
+        $hasEmail = array_key_exists('email', $data);
+        $email = $data['email'] ?? null;
+        $hasReferrer = array_key_exists('referrer_user_id', $data);
+        $referrerId = $data['referrer_user_id'] ?? null;
+        $hasThirdParty = array_key_exists('pihak_ketiga_user_ids', $data);
+        $thirdPartyIds = array_values($data['pihak_ketiga_user_ids'] ?? []);
+        unset($data['email'], $data['referrer_user_id'], $data['pihak_ketiga_user_ids']);
+
+        if (! empty($data['kewarganegaraan_id'])) {
+            $data['kewarganegaraan'] = \App\Models\System\MasterReferensi::query()
+                ->whereKey($data['kewarganegaraan_id'])->value('nama');
+        }
+        if (isset($data['kode_negara_kewarganegaraan'])) {
+            $data['kode_negara_kewarganegaraan'] = strtoupper($data['kode_negara_kewarganegaraan']);
+        }
+
+        // Snapshot nilai lama SEBELUM perubahan (model, akun, dan relasi).
+        $oldValues = $pendaftaran->getOriginal();
+        $oldExtra = [
+            'email' => $pendaftaran->user?->email,
+            'referrer_user_id' => $pendaftaran->referrer_user_id,
+            'pihak_ketiga_user_ids' => $pendaftaran->pihakKetiga()->pluck('user_id')->map(fn ($v) => (int) $v)->all(),
+        ];
+
+        $audit = DB::transaction(function () use ($pendaftaran, $data, $hasEmail, $email, $hasReferrer, $referrerId, $hasThirdParty, $thirdPartyIds, $oldValues, $oldExtra) {
+            $pendaftaran->fill($data)->save();
+            $new = $pendaftaran->getChanges();
+            unset($new['updated_at']);
+            $old = array_intersect_key($oldValues, $new);
+
+            $user = $pendaftaran->user;
+            if ($user) {
+                $userChanges = [];
+                if ($hasEmail && $email !== $user->email) {
+                    $userChanges['email'] = $email;
+                }
+                if (isset($data['nama_lengkap']) && $data['nama_lengkap'] !== $user->name) {
+                    $userChanges['name'] = $data['nama_lengkap'];
+                }
+                if (array_key_exists('no_hp', $data) && $data['no_hp'] !== $user->phone) {
+                    $userChanges['phone'] = $data['no_hp'];
+                }
+                if ($userChanges !== []) {
+                    $user->forceFill($userChanges)->save();
+                    if (isset($userChanges['email'])) {
+                        $new['email'] = $email;
+                        $old['email'] = $oldExtra['email'];
+                    }
+                }
+            }
+
+            $relationChanges = [];
+            if ($hasReferrer) {
+                $this->syncReferrer($pendaftaran, $referrerId, $relationChanges);
+            }
+            if ($hasThirdParty) {
+                $this->syncThirdParties($pendaftaran, $thirdPartyIds, $relationChanges);
+            }
+            foreach ($relationChanges as $key => $value) {
+                $new[$key] = $value;
+                $old[$key] = $oldExtra[$key];
+            }
+
+            return ['new' => $new, 'old' => $old];
+        });
+
+        if ($audit['new'] !== []) {
+            try {
+                AuditLogService::record(
+                    module: 'SPMB',
+                    action: 'pendaftaran_diedit',
+                    tableName: $pendaftaran->getTable(),
+                    recordId: $pendaftaran->id,
+                    oldValues: $audit['old'],
+                    newValues: $audit['new'],
+                    request: $request,
+                );
+            } catch (\Throwable $exception) {
+                Log::warning('Gagal mencatat audit log edit pendaftaran: '.$exception->getMessage());
+            }
+        }
+
+        return $pendaftaran->fresh([
+            'gelombangPenerimaan.jalurMasuk', 'programStudi', 'programStudiPilihan2',
+            'user:id,username,name,email', 'referrer:id,username,name,referral_code', 'pihakKetiga',
+        ]);
+    }
+
+    private function syncReferrer(PendaftaranCalonMhs $pendaftaran, ?int $referrerId, array &$changes): void
+    {
+        if ((int) $pendaftaran->referrer_user_id === (int) $referrerId) {
+            return;
+        }
+
+        if ($referrerId) {
+            $referrer = \App\Models\User::query()->findOrFail($referrerId);
+            $this->referralService->attachToPendaftaran($pendaftaran, $referrer->referral_code);
+        } else {
+            $usage = $pendaftaran->referralUsage;
+            if ($usage && $usage->status !== \App\Models\Spmb\ReferralUsage::STATUS_CLAIMED) {
+                throw ValidationException::withMessages([
+                    'referrer_user_id' => 'Referral yang sudah diproses tidak dapat dihapus.',
+                ]);
+            }
+            $usage?->delete();
+            $pendaftaran->update(['used_referral_code' => null, 'referrer_user_id' => null, 'referral_validated_at' => null]);
+        }
+        $changes['referrer_user_id'] = $referrerId;
+    }
+
+    private function syncThirdParties(PendaftaranCalonMhs $pendaftaran, array $userIds, array &$changes): void
+    {
+        $current = $pendaftaran->pihakKetiga()->pluck('user_id')->map(fn ($v) => (int) $v)->all();
+        $new = array_map('intval', $userIds);
+        if ($current === $new) {
+            return;
+        }
+
+        $pendaftaran->pihakKetiga()->delete();
+        $users = \App\Models\User::query()->whereIn('id', $new)->get(['id', 'name'])->keyBy('id');
+        foreach ($new as $index => $userId) {
+            if ($user = $users->get($userId)) {
+                $pendaftaran->pihakKetiga()->create(['user_id' => $user->id, 'nama' => $user->name, 'urutan' => $index]);
+            }
+        }
+        $changes['pihak_ketiga_user_ids'] = $new;
+    }
+
     private function validateIdentitasPendaftar(PendaftaranCalonMhs $pendaftaran): void
     {
         if (! $pendaftaran->tanggal_lahir || $pendaftaran->tanggal_lahir->isFuture() || $pendaftaran->tanggal_lahir->isToday()) {

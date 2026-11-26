@@ -9,6 +9,7 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan cal
 | Method | Endpoint | Fungsi | Auth |
 |---|---|---|---|
 | GET | `/api/spmb/pendaftaran` | Daftar semua pendaftar (filter, sorting, paginasi) | ✅ `spmb.manage` |
+| PUT | `/api/spmb/pendaftaran/{id}` | Admin mengubah data pendaftar selengkap form pendaftaran manual | ✅ `spmb.manage` |
 | POST | `/api/spmb/pendaftaran/sync-external` | Sinkronisasi pendaftar dari API sistem eksternal via IAM | ✅ `spmb.manage` |
 | GET | `/api/spmb/pendaftaran/{id}` | Detail pendaftaran milik sendiri atau pendaftar mana pun untuk pengelola | ✅ |
 | GET | `/api/spmb/pendaftaran/{id}/sk-lulus` | Unduh PDF SK bernomor resmi Arsip milik sendiri atau pendaftar mana pun untuk pengelola | ✅ |
@@ -597,3 +598,130 @@ Jika Arsip sudah menyetujui permohonan tetapi nomor INDO tidak ditemukan, error 
 ## Konversi dengan beberapa tagihan (2026-11-11)
 
 Guard konversi memeriksa seluruh tagihan daftar ulang calon. Selama ada satu tagihan yang belum lunas, konversi memerlukan override `force` oleh petugas yang memang berwenang. Tagihan terakhir yang lunas tidak mewakili status semua kanal.
+
+---
+
+## PUT /api/spmb/pendaftaran/{id}
+
+> Admin mengubah data pendaftar dengan cakupan yang sama seperti form pendaftaran manual. Hanya field yang dikirim yang diubah. Diperbarui: 2026-11-26.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body (JSON, semua field opsional)
+
+Daftar lengkap field dan aturan ada di `docs/specs/api-contract.md` bagian "Edit Data Pendaftar (Admin)". Kelompok: pendaftaran (`gelombang_id`, prodi 1/2, info daftar), identitas dan akun (`email`, `nama_lengkap`, kewarganegaraan/paspor/NIK, data lahir, `status_sipil`, `no_hp`), domisili, pendidikan dan keluarga, serta relasi (`referrer_user_id`, `pihak_ketiga_user_ids`).
+
+~~~json
+{
+  "nama_lengkap": "RISKA EDIT",
+  "tahun_lulus": "2023",
+  "gelombang_id": 1,
+  "email": "riska.baru@example.com",
+  "referrer_user_id": null,
+  "pihak_ketiga_user_ids": []
+}
+~~~
+
+### Perilaku
+
+- `email`, `nama_lengkap`, dan `no_hp` juga memperbarui akun `core_users` pendaftar.
+- `kewarganegaraan_id` mengisi label `kewarganegaraan` otomatis; untuk WNA paspor, negara penerbit, negara kewarganegaraan, dan kode negara wajib dan NIK harus kosong.
+- `referrer_user_id` mengganti/menghapus referral selama status masih `draft`/`submitted`; `pihak_ketiga_user_ids` menggantikan seluruh daftar pihak ketiga.
+- Pendaftar berstatus `mahasiswa_baru` dikunci.
+
+### Response 200
+
+~~~json
+{
+  "status": "success",
+  "message": "Data pendaftar berhasil diperbarui.",
+  "data": {
+    "id": 1,
+    "gelombang_id": null,
+    "user_id": 3,
+    "program_studi_id": 1,
+    "no_pendaftaran": "202720001",
+    "nama_lengkap": "RISKA EDIT",
+    "nik": null,
+    "tanggal_lahir": "2005-08-26T00:00:00.000000Z",
+    "tahun_lulus": "2023",
+    "status": "submitted",
+    "status_pembayaran": "lunas",
+    "sumber_pendaftaran": "import",
+    "updated_at": "2026-11-26T04:42:23.000000Z",
+    "gelombang_penerimaan": null,
+    "program_studi": {
+      "id": 1,
+      "nama": "Farmasi"
+    },
+    "user": {
+      "id": 3,
+      "username": "cm_rrachmawati26_ihhvjq",
+      "name": "RISKA EDIT",
+      "email": "rrachmawati26@gmail.com",
+      "is_superadmin": false,
+      "is_admin": false,
+      "referral_code": "REF-WHDMCK"
+    },
+    "pihak_ketiga": [],
+    "...": "field pendaftaran lainnya"
+  }
+}
+~~~
+
+### Response 401
+
+~~~json
+{
+  "status": "error",
+  "message": "Token tidak valid atau sesi telah berakhir."
+}
+~~~
+
+### Response 403
+
+~~~json
+{
+  "status": "error",
+  "message": "Unauthorized access. Menu ini belum diaktifkan untuk role Anda di database."
+}
+~~~
+
+### Response 404
+
+~~~json
+{
+  "status": "error",
+  "message": "PendaftaranCalonMhs tidak ditemukan."
+}
+~~~
+
+### Response 422
+
+~~~json
+{
+  "status": "error",
+  "message": "The nik field must be 16 digits.",
+  "errors": {
+    "nik": [
+      "The nik field must be 16 digits."
+    ]
+  }
+}
+~~~
+
+~~~json
+{
+  "status": "error",
+  "message": "Data pendaftar yang sudah dikonversi menjadi mahasiswa tidak dapat diubah.",
+  "errors": { "status": ["Data pendaftar yang sudah dikonversi menjadi mahasiswa tidak dapat diubah."] }
+}
+~~~
+
+Setiap perubahan pada PUT dicatat di audit log (`SPMB` / `pendaftaran_diedit`) berisi nilai lama dan baru (termasuk email, referral, dan pihak ketiga). Endpoint penambahan bukti transfer terdokumentasi di `PendaftaranManualController.md`.

@@ -169,6 +169,41 @@ class SpmbPendaftaranManualService
         }
     }
 
+    /** Menambahkan bukti transfer (privat) pada pendaftaran yang sudah ada. */
+    public function addProof(PendaftaranCalonMhs $pendaftaran, \Illuminate\Http\UploadedFile $file, int $adminId, Request $request): PendaftaranBuktiPembayaran
+    {
+        $path = $this->fileStorage->store($file, 'spmb/bukti_transfer_manual', null, true);
+        $originalName = basename(str_replace('\\', '/', $file->getClientOriginalName()));
+        $originalName = preg_replace('/[\x00-\x1F\x7F]/u', '', $originalName) ?: 'bukti-transfer';
+
+        try {
+            $proof = $pendaftaran->buktiPembayaranManual()->create([
+                'file_path' => $path,
+                'original_name' => substr($originalName, 0, 255),
+                'status' => PendaftaranBuktiPembayaran::STATUS_MENUNGGU_VERIFIKASI,
+                'diunggah_oleh' => $adminId,
+            ]);
+        } catch (Throwable $exception) {
+            $this->fileStorage->delete($path, null, true);
+            throw $exception;
+        }
+
+        try {
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'bukti_transfer_ditambahkan',
+                tableName: $proof->getTable(),
+                recordId: $proof->id,
+                newValues: ['pendaftaran_id' => $pendaftaran->id, 'file_name' => $proof->original_name],
+                request: $request,
+            );
+        } catch (Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('Gagal mencatat audit log bukti transfer: '.$exception->getMessage());
+        }
+
+        return $proof;
+    }
+
     public function createThirdPartyAccount(array $data, int $adminId, Request $request): array
     {
         $roleSlug = SystemSetting::get('third_party_registration_role');
@@ -219,7 +254,7 @@ class SpmbPendaftaranManualService
         });
     }
 
-    private function generateUsername(string $email, string $prefix = 'cm'): string
+    public function generateUsername(string $email, string $prefix = 'cm'): string
     {
         $base = Str::slug(Str::before($email, '@'), '_');
         $base = substr($base !== '' ? $base : 'account', 0, 24);

@@ -12,6 +12,12 @@ return [
     |--------------------------------------------------------------------------
     */
 
+    'import' => [
+        // Password awal akun calon mahasiswa hasil import Excel legacy.
+        'default_password' => env('SPMB_IMPORT_DEFAULT_PASSWORD') ?: 'indonusa',
+        'max_file_kb' => 10240,
+    ],
+
     'referral' => [
         // Minimal pembayaran biaya daftar ulang (Rupiah) agar referral dianggap
         // layak dicairkan.

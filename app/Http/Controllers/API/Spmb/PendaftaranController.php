@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Spmb;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Spmb\UpdatePendaftaranRequest;
 use App\Models\Arsip\RequestNomorSurat;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\DokumenPendaftaran;
@@ -108,7 +109,7 @@ class PendaftaranController extends Controller
         ];
         if ($request->user()?->hasPermission('spmb.manage')) {
             $relations = array_merge($relations, [
-                'pihakKetiga:id,pendaftaran_id,nama,urutan',
+                'pihakKetiga:id,pendaftaran_id,user_id,nama,urutan',
                 'buktiPembayaranManual:id,pendaftaran_id,original_name,status,diunggah_oleh,diverifikasi_oleh,diverifikasi_at,catatan_verifikasi,created_at',
                 'adminPenginput:id,username,name',
             ]);
@@ -131,6 +132,24 @@ class PendaftaranController extends Controller
             'data' => array_merge($pendaftaran->toArray(), [
                 'daftar_ulang' => $daftarUlang,
             ])
+        ]);
+    }
+
+    /**
+     * Admin mengubah data pendaftar.
+     */
+    public function update(UpdatePendaftaranRequest $request, int $id): JsonResponse
+    {
+        $pendaftaran = $this->pendaftaranService->updateByAdmin(
+            PendaftaranCalonMhs::findOrFail($id),
+            $request->validated(),
+            $request,
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data pendaftar berhasil diperbarui.',
+            'data' => $pendaftaran,
         ]);
     }
 

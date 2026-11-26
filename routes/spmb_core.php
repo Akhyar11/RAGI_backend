@@ -6,6 +6,7 @@ use App\Http\Controllers\API\Spmb\HasilSeleksiController;
 use App\Http\Controllers\API\Spmb\LaporanSpmbController;
 use App\Http\Controllers\API\Spmb\MasterSpmbController;
 use App\Http\Controllers\API\Spmb\PendaftaranController;
+use App\Http\Controllers\API\Spmb\PendaftaranImportController;
 use App\Http\Controllers\API\Spmb\PendaftaranManualController;
 use App\Http\Controllers\API\Spmb\PotonganCalonController;
 use App\Http\Controllers\API\Spmb\SpmbKuotaProdiController;
@@ -53,6 +54,7 @@ Route::post('pendaftaran/reset', [CalonMahasiswaController::class, 'resetPendaft
 Route::middleware('can:spmb.manage')->post('pendaftaran/sync-external', [PendaftaranController::class, 'syncExternal']);
 
 Route::get('pendaftaran/{id}', [PendaftaranController::class, 'show']);
+Route::middleware('can:spmb.manage')->put('pendaftaran/{id}', [PendaftaranController::class, 'update'])->whereNumber('id');
 Route::get('pendaftaran/{id}/sk-lulus', [PendaftaranController::class, 'downloadSkLulus']);
 Route::middleware('can:spmb.manage')->post('pendaftaran/{id}/terbitkan-sk', [PendaftaranController::class, 'terbitkanSk']);
 Route::middleware('can:spmb.manage')->post('pendaftaran/{id}/status', [PendaftaranController::class, 'updateStatus']);
@@ -130,5 +132,12 @@ Route::middleware('can:spmb.manage')->get('pendaftaran/manual/referrers', [Penda
 Route::middleware('can:spmb.manage')->get('pendaftaran/manual/third-parties', [PendaftaranManualController::class, 'thirdParties']);
 Route::middleware('can:spmb.manage')->post('pendaftaran/manual/third-parties', [PendaftaranManualController::class, 'storeThirdParty']);
 Route::middleware('can:spmb.manage')->post('pendaftaran/manual', [PendaftaranManualController::class, 'store']);
+
+// Import pendaftar dari Excel sistem lama (preview lalu simpan) — Admin SPMB.
+Route::middleware('can:spmb.manage')->get('pendaftaran/import/template', [PendaftaranImportController::class, 'template']);
+Route::middleware('can:spmb.manage')->post('pendaftaran/import/preview', [PendaftaranImportController::class, 'preview']);
+Route::middleware('can:spmb.manage')->post('pendaftaran/import', [PendaftaranImportController::class, 'import']);
+Route::middleware('can:spmb.manage')->post('pendaftaran/{id}/bukti-transfer', [PendaftaranManualController::class, 'storeProof'])
+    ->whereNumber('id');
 Route::middleware('can:spmb.manage')->get('pendaftaran/{id}/bukti-transfer/{proofId}', [PendaftaranManualController::class, 'downloadProof'])
     ->whereNumber(['id', 'proofId']);

@@ -134,8 +134,8 @@ class SystemSettingController extends Controller
         }
 
         $defaultBranding = [
-            'system_logo_url'       => (string) SystemSetting::get('system_logo_url', ''),
-            'login_banner_url'      => (string) SystemSetting::get('login_banner_url', ''),
+            'system_logo_url'       => $this->freshBrandingUrl('system_logo_url', 'system_logo_path'),
+            'login_banner_url'      => $this->freshBrandingUrl('login_banner_url'),
             'login_banner_title'    => (string) SystemSetting::get('login_banner_title', 'SSO Campus'),
             'login_banner_subtitle' => (string) SystemSetting::get('login_banner_subtitle', 'Enterprise Identity Platform'),
         ];
@@ -375,6 +375,30 @@ class SystemSettingController extends Controller
     }
 
     /**
+     * URL aset branding (logo/banner) yang selalu valid.
+     *
+     * URL file privat bertanda tangan (`files/view?expires=...`) berlaku sementara. Bila
+     * URL lama tersimpan di setting, ia akan kedaluwarsa dan menghasilkan 403. Karena itu
+     * URL dibuat ulang dari path file setiap kali diminta.
+     */
+    private function freshBrandingUrl(string $urlKey, ?string $pathKey = null): string
+    {
+        $stored = (string) SystemSetting::get($urlKey, '');
+        $path = $pathKey ? (string) SystemSetting::get($pathKey, '') : '';
+
+        if ($path === '' && $stored !== '' && str_contains($stored, 'files/view')) {
+            parse_str((string) parse_url($stored, PHP_URL_QUERY), $query);
+            $path = (string) ($query['path'] ?? '');
+        }
+
+        if ($path === '') {
+            return $stored;
+        }
+
+        return (string) (app(\App\Services\Storage\FileStorageService::class)->url($path) ?: $stored);
+    }
+
+    /**
      * Mengambil konfigurasi publik branding login (banner, judul, slogan) tanpa autentikasi.
      */
     public function getPublicBranding()
@@ -382,8 +406,8 @@ class SystemSettingController extends Controller
         return response()->json([
             'status' => 'success',
             'data'   => [
-                'system_logo_url'       => (string) SystemSetting::get('system_logo_url', ''),
-                'login_banner_url'      => (string) SystemSetting::get('login_banner_url', ''),
+                'system_logo_url'       => $this->freshBrandingUrl('system_logo_url', 'system_logo_path'),
+                'login_banner_url'      => $this->freshBrandingUrl('login_banner_url'),
                 'login_banner_title'    => (string) SystemSetting::get('login_banner_title', 'SSO Campus'),
                 'login_banner_subtitle' => (string) SystemSetting::get('login_banner_subtitle', 'Enterprise Identity Platform'),
             ],

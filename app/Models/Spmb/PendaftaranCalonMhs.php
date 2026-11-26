@@ -87,6 +87,8 @@ class PendaftaranCalonMhs extends Model
         'nama_ortu',
         'alamat_ortu',
         'telp_ortu',
+        'pekerjaan_ortu',
+        'data_import',
         'nama_wali',
         'telepon_wali',
         'telepon_ayah',
@@ -121,6 +123,7 @@ class PendaftaranCalonMhs extends Model
         'sk_generated_at' => 'datetime',
         'nilai_rata_rapor' => 'decimal:2',
         'kelompok_ukt' => 'integer',
+        'data_import' => 'array',
     ];
 
     protected $appends = [

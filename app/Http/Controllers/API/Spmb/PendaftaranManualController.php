@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Spmb;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Spmb\StoreBuktiTransferRequest;
 use App\Http\Requests\Spmb\StorePendaftaranManualRequest;
 use App\Http\Requests\Spmb\StorePendaftaranManualThirdPartyRequest;
 use App\Models\Role;
@@ -127,6 +128,22 @@ class PendaftaranManualController extends Controller
             'status' => 'success',
             'message' => 'Pendaftaran manual berhasil dibuat. Simpan password sementara sebelum menutup halaman ini.',
             'data' => $created,
+        ], 201);
+    }
+
+    public function storeProof(StoreBuktiTransferRequest $request, int $id): JsonResponse
+    {
+        $proof = $this->service->addProof(
+            PendaftaranCalonMhs::findOrFail($id),
+            $request->file('bukti_transfer'),
+            (int) $request->user()->id,
+            $request,
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Bukti transfer berhasil ditambahkan.',
+            'data' => $proof,
         ], 201);
     }
 

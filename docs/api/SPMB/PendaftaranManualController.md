@@ -12,6 +12,7 @@ Admin SPMB mencatat pendaftaran dari formulir kertas. Akun calon dibuat otomatis
 | GET | `/api/spmb/pendaftaran/manual/third-parties` | Mencari akun dengan role pihak ketiga yang dikonfigurasi | Bearer Token (`spmb.manage`) |
 | POST | `/api/spmb/pendaftaran/manual/third-parties` | Membuat akun dengan role pihak ketiga yang dikonfigurasi | Bearer Token (`spmb.manage`) |
 | POST | `/api/spmb/pendaftaran/manual` | Membuat akun calon dan pendaftaran manual beserta lampiran opsional | Bearer Token (`spmb.manage`) |
+| POST | `/api/spmb/pendaftaran/{id}/bukti-transfer` | Menambah bukti transfer privat pada pendaftaran yang sudah ada | Bearer Token (`spmb.manage`) |
 | GET | `/api/spmb/pendaftaran/{id}/bukti-transfer/{proofId}` | Mengunduh bukti transfer privat | Bearer Token (`spmb.manage`) |
 
 ## Headers
@@ -254,3 +255,82 @@ Contoh envelope error API:
   "errors": { "pihak_ketiga_user_ids.0": ["Akun pihak ketiga tidak sesuai dengan role yang dikonfigurasi."] }
 }
 ~~~
+
+## [POST] `/api/spmb/pendaftaran/{id}/bukti-transfer`
+
+> Menambahkan bukti transfer privat. Status awal `menunggu_verifikasi`; tidak mengubah status pembayaran. Diperbarui: 2026-11-26.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `multipart/form-data` | ✅ |
+
+### Request Body (multipart)
+
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `bukti_transfer` | file | ✅ | jpg, jpeg, png, atau pdf; maksimal 10 MB |
+
+### Response 201
+
+~~~json
+{
+  "status": "success",
+  "message": "Bukti transfer berhasil ditambahkan.",
+  "data": {
+    "pendaftaran_id": 1,
+    "original_name": "bukti.pdf",
+    "status": "menunggu_verifikasi",
+    "diunggah_oleh": 1,
+    "updated_at": "2026-11-26T04:30:00.000000Z",
+    "created_at": "2026-11-26T04:30:00.000000Z",
+    "id": 1
+  }
+}
+~~~
+
+### Response 401
+
+~~~json
+{
+  "status": "error",
+  "message": "Token tidak valid atau sesi telah berakhir."
+}
+~~~
+
+### Response 403
+
+~~~json
+{
+  "status": "error",
+  "message": "Unauthorized access. Menu ini belum diaktifkan untuk role Anda di database."
+}
+~~~
+
+### Response 404
+
+~~~json
+{
+  "status": "error",
+  "message": "PendaftaranCalonMhs tidak ditemukan."
+}
+~~~
+
+### Response 422
+
+~~~json
+{
+  "status": "error",
+  "message": "The bukti transfer field is required.",
+  "errors": {
+    "bukti_transfer": [
+      "The bukti transfer field is required."
+    ]
+  }
+}
+~~~
+
+Unggahan dicatat di audit log (`SPMB` / `bukti_transfer_ditambahkan`).
