@@ -616,7 +616,7 @@ Guard konversi memeriksa seluruh tagihan daftar ulang calon. Selama ada satu tag
 
 ### Request Body (JSON, semua field opsional)
 
-Daftar lengkap field dan aturan ada di `docs/specs/api-contract.md` bagian "Edit Data Pendaftar (Admin)". Kelompok: pendaftaran (`jalur_masuk_id`, `gelombang_id`, prodi 1/2, info daftar; gelombang harus umum atau dipetakan ke jalur yang sama, selain itu 422 pada `gelombang_id`), identitas dan akun (`email`, `nama_lengkap`, kewarganegaraan/paspor/NIK, data lahir, `status_sipil`, `no_hp`), domisili, pendidikan dan keluarga, serta relasi (`referrer_user_id`, `pihak_ketiga_user_ids`).
+Daftar lengkap field dan aturan ada di `docs/specs/api-contract.md` bagian "Edit Data Pendaftar (Admin)". Kelompok: pendaftaran (`jalur_masuk_id`, `gelombang_id`, prodi 1/2, info daftar; gelombang harus umum atau memetakan jalur tersebut, selain itu 422 pada `gelombang_id`), identitas dan akun (`email`, `nama_lengkap`, kewarganegaraan/paspor/NIK, data lahir, `status_sipil`, `no_hp`), domisili, pendidikan dan keluarga, serta relasi (`referrer_user_id`, `pihak_ketiga_user_ids`).
 
 ~~~json
 {

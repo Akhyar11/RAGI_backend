@@ -2,13 +2,9 @@
 
 namespace App\Models\Spmb;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Spmb\JalurMasuk;
-use App\Models\Spmb\PendaftaranCalonMhs;
-use App\Models\Spmb\KuesionerSpmb;
-use App\Models\Spmb\PengumumanSpmb;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 class GelombangPenerimaan extends Model
@@ -39,7 +35,7 @@ class GelombangPenerimaan extends Model
         'potongan_biaya_daftar_ulang' => 'decimal:2',
     ];
 
-    protected $appends = ['pendaftaran_dibuka'];
+    protected $appends = ['pendaftaran_dibuka', 'jalur_masuk_ids'];
 
     /**
      * API exposes recurring periods as MM-DD. The old required DATE columns
@@ -94,13 +90,19 @@ class GelombangPenerimaan extends Model
     /** Gelombang umum: tidak dipetakan ke jalur mana pun. */
     public function scopeUmum(Builder $query): Builder
     {
-        return $query->whereNull('jalur_masuk_id');
+        return $query->whereNull('jalur_masuk_id')->whereDoesntHave('daftarJalur');
     }
 
-    /** Gelombang yang dipetakan khusus ke jalur tertentu. */
+    /**
+     * Gelombang yang dipetakan ke jalur tertentu (tabel penghubung). Kolom lama jalur_masuk_id
+     * hanya dibaca untuk gelombang yang belum punya baris penghubung.
+     */
     public function scopeUntukJalur(Builder $query, int $jalurMasukId): Builder
     {
-        return $query->where('jalur_masuk_id', $jalurMasukId);
+        return $query->where(function (Builder $q) use ($jalurMasukId) {
+            $q->whereHas('daftarJalur', fn (Builder $j) => $j->where('spmb_jalur_masuk.id', $jalurMasukId))
+                ->orWhere(fn (Builder $legacy) => $legacy->where('jalur_masuk_id', $jalurMasukId)->whereDoesntHave('daftarJalur'));
+        });
     }
 
     public function scopePendaftaranDibuka(Builder $query, ?Carbon $now = null): Builder
@@ -156,6 +158,51 @@ class GelombangPenerimaan extends Model
     public function jalurMasuk()
     {
         return $this->belongsTo(JalurMasuk::class, 'jalur_masuk_id');
+    }
+
+    /** Jalur yang dipetakan ke gelombang ini (banyak jalur). Kosong = gelombang umum. */
+    public function daftarJalur()
+    {
+        return $this->belongsToMany(JalurMasuk::class, 'spmb_gelombang_jalur_masuk', 'gelombang_id', 'jalur_masuk_id')
+            ->select('spmb_jalur_masuk.id', 'spmb_jalur_masuk.kode', 'spmb_jalur_masuk.nama')
+            ->orderBy('spmb_jalur_masuk.nama');
+    }
+
+    /** @return list<int> ID jalur yang dipetakan (tabel penghubung, atau kolom lama sebagai cadangan). */
+    public function jalurIds(): array
+    {
+        $ids = ($this->relationLoaded('daftarJalur') ? $this->daftarJalur : $this->daftarJalur()->get())
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        $legacyId = $this->attributes['jalur_masuk_id'] ?? null;
+        if ($ids === [] && $legacyId) {
+            return [(int) $legacyId];
+        }
+
+        return $ids;
+    }
+
+    public function isUmum(): bool
+    {
+        return $this->jalurIds() === [];
+    }
+
+    public function isDipetakanKeJalur(int $jalurMasukId): bool
+    {
+        return in_array($jalurMasukId, $this->jalurIds(), true);
+    }
+
+    /** ID jalur bila gelombang dipetakan ke tepat satu jalur; selain itu null. */
+    public function singleJalurId(): ?int
+    {
+        $ids = $this->jalurIds();
+
+        return count($ids) === 1 ? $ids[0] : null;
+    }
+
+    public function getJalurMasukIdsAttribute(): array
+    {
+        return $this->jalurIds();
     }
 
     /** @deprecated Recurring periods do not encode a registration year. Use the candidate's created_at. */

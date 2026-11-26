@@ -32,7 +32,7 @@ class SpmbGelombangResolver
     public function forJalur(int $jalurMasukId, bool $requireOpen = false): array
     {
         $active = fn () => GelombangPenerimaan::query()
-            ->with('jalurMasuk')
+            ->with(['jalurMasuk', 'daftarJalur'])
             ->where('status', GelombangPenerimaan::STATUS_AKTIF)
             ->when($requireOpen, fn ($q) => $q->pendaftaranDibuka())
             ->orderBy('id');
@@ -58,19 +58,19 @@ class SpmbGelombangResolver
     }
 
     /**
-     * Gelombang boleh dipakai bila umum (tanpa jalur) atau dipetakan ke jalur yang sama.
+     * Gelombang boleh dipakai bila umum (tanpa jalur) atau salah satu jalur pemetaannya adalah jalur yang sama.
      *
      * @throws ValidationException
      */
     public function assertCompatible(?GelombangPenerimaan $gelombang, ?int $jalurMasukId, string $field = 'gelombang_id'): void
     {
-        if (! $gelombang || ! $jalurMasukId || $gelombang->jalur_masuk_id === null) {
+        if (! $gelombang || ! $jalurMasukId || $gelombang->isUmum()) {
             return;
         }
 
-        if ((int) $gelombang->jalur_masuk_id !== (int) $jalurMasukId) {
+        if (! $gelombang->isDipetakanKeJalur((int) $jalurMasukId)) {
             throw ValidationException::withMessages([
-                $field => 'Gelombang yang dipilih dipetakan ke jalur lain. Pilih gelombang umum atau gelombang untuk jalur ini.',
+                $field => 'Gelombang yang dipilih tidak berlaku untuk jalur ini. Pilih gelombang umum atau gelombang yang dipetakan ke jalur ini.',
             ]);
         }
     }

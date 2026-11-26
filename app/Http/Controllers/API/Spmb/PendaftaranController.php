@@ -65,7 +65,7 @@ class PendaftaranController extends Controller
             $query->where(function ($q) use ($jalurId) {
                 $q->where('jalur_masuk_id', $jalurId)
                     ->orWhere(fn ($legacy) => $legacy->whereNull('jalur_masuk_id')
-                        ->whereHas('gelombangPenerimaan', fn ($g) => $g->where('jalur_masuk_id', $jalurId)));
+                        ->whereHas('gelombangPenerimaan', fn ($g) => $g->untukJalur($jalurId)));
             });
         }
 

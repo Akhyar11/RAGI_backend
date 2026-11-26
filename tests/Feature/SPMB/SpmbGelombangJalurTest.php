@@ -54,13 +54,18 @@ class SpmbGelombangJalurTest extends TestCase
         $this->wni = MasterReferensi::create(['tipe' => 'kewarganegaraan', 'kode' => 'WNI', 'nama' => 'Warga Negara Indonesia', 'is_active' => true]);
     }
 
-    private function gelombang(?JalurMasuk $jalur, string $nama, string $status = 'aktif'): GelombangPenerimaan
+    /** @param JalurMasuk|array<int,JalurMasuk>|null $jalur satu jalur, banyak jalur, atau null (gelombang umum) */
+    private function gelombang(JalurMasuk|array|null $jalur, string $nama, string $status = 'aktif'): GelombangPenerimaan
     {
-        return GelombangPenerimaan::create([
-            'jalur_masuk_id' => $jalur?->id, 'nama' => $nama, 'tanggal_buka' => '01-01',
+        $gelombang = GelombangPenerimaan::create([
+            'nama' => $nama, 'tanggal_buka' => '01-01',
             'tanggal_tutup' => '12-31', 'kuota_total' => 10, 'kuota_terisi' => 0,
             'biaya_pendaftaran' => 0, 'status' => $status,
         ]);
+        $ids = collect(is_array($jalur) ? $jalur : [$jalur])->filter()->map(fn ($j) => $j->id)->all();
+        $gelombang->daftarJalur()->sync($ids);
+
+        return $gelombang;
     }
 
     private function resolve(JalurMasuk $jalur, string $konteks = 'manual'): array
@@ -251,5 +256,116 @@ class SpmbGelombangJalurTest extends TestCase
         $this->actingAs($calon, 'api')->getJson($url.'&konteks=online')->assertOk();
         $this->actingAs($this->admin, 'api')->getJson($url)->assertOk();
         $this->actingAs($this->admin, 'api')->getJson($url.'&konteks=lainnya')->assertStatus(422)->assertJsonValidationErrors('konteks');
+    }
+
+    public function test_master_gelombang_can_be_mapped_to_multiple_jalur_and_updated(): void
+    {
+        $response = $this->actingAs($this->admin, 'api')->postJson('/api/spmb/gelombang', [
+            'nama' => 'Gelombang Multi', 'tanggal_buka' => '01-01', 'tanggal_tutup' => '03-31',
+            'kuota_total' => 50, 'status' => 'aktif', 'jalur_masuk_ids' => [$this->jalurA->id, $this->jalurB->id],
+        ])->assertStatus(201);
+
+        $id = $response->json('data.id');
+        $this->assertEqualsCanonicalizing([$this->jalurA->id, $this->jalurB->id], $response->json('data.jalur_masuk_ids'));
+        $this->assertEqualsCanonicalizing(['Jalur A', 'Jalur B'], collect($response->json('data.daftar_jalur'))->pluck('nama')->all());
+        $this->assertDatabaseCount('spmb_gelombang_jalur_masuk', 2);
+
+        $payload = ['nama' => 'Gelombang Multi', 'tanggal_buka' => '01-01', 'tanggal_tutup' => '03-31', 'kuota_total' => 50, 'status' => 'aktif'];
+
+        // Tanpa jalur_masuk_ids: pemetaan dibiarkan.
+        $this->actingAs($this->admin, 'api')->putJson("/api/spmb/gelombang/{$id}", $payload)->assertOk();
+        $this->assertDatabaseCount('spmb_gelombang_jalur_masuk', 2);
+
+        // Mengganti pemetaan.
+        $this->actingAs($this->admin, 'api')->putJson("/api/spmb/gelombang/{$id}", $payload + ['jalur_masuk_ids' => [$this->jalurB->id]])
+            ->assertOk()->assertJsonPath('data.jalur_masuk_ids', [$this->jalurB->id]);
+
+        // Array kosong menjadikannya gelombang umum.
+        $this->actingAs($this->admin, 'api')->putJson("/api/spmb/gelombang/{$id}", $payload + ['jalur_masuk_ids' => []])
+            ->assertOk()->assertJsonPath('data.jalur_masuk_ids', []);
+        $this->assertDatabaseCount('spmb_gelombang_jalur_masuk', 0);
+
+        // Duplikat dan jalur tak dikenal ditolak.
+        $this->actingAs($this->admin, 'api')->putJson("/api/spmb/gelombang/{$id}", $payload + ['jalur_masuk_ids' => [$this->jalurA->id, $this->jalurA->id]])
+            ->assertStatus(422)->assertJsonValidationErrors('jalur_masuk_ids.0');
+        $this->actingAs($this->admin, 'api')->putJson("/api/spmb/gelombang/{$id}", $payload + ['jalur_masuk_ids' => [99999]])
+            ->assertStatus(422)->assertJsonValidationErrors('jalur_masuk_ids.0');
+    }
+
+    public function test_gelombang_mapped_to_several_jalur_is_resolved_for_each_and_excluded_for_others(): void
+    {
+        $jalurC = JalurMasuk::create(['kode' => 'JC', 'nama' => 'Jalur C', 'is_active' => true]);
+        $multi = $this->gelombang([$this->jalurA, $this->jalurB], 'Gelombang AB');
+        $umum = $this->gelombang(null, 'Umum 1');
+
+        $forA = $this->resolve($this->jalurA);
+        $forB = $this->resolve($this->jalurB);
+        $this->assertSame('otomatis', $forA['mode']);
+        $this->assertSame($multi->id, $forA['gelombang']['id']);
+        $this->assertSame($multi->id, $forB['gelombang']['id']);
+        $this->assertEqualsCanonicalizing([$this->jalurA->id, $this->jalurB->id], $forA['gelombang']['jalur_masuk_ids']);
+
+        // Jalur C tidak ditawari gelombang yang dipetakan ke jalur lain.
+        $forC = $this->resolve($jalurC);
+        $this->assertSame('pilih', $forC['mode']);
+        $this->assertSame([$umum->id], collect($forC['options'])->pluck('id')->all());
+    }
+
+    public function test_manual_registration_accepts_any_of_the_gelombang_jalur_and_rejects_others(): void
+    {
+        $jalurC = JalurMasuk::create(['kode' => 'JC', 'nama' => 'Jalur C', 'is_active' => true]);
+        $multi = $this->gelombang([$this->jalurA, $this->jalurB], 'Gelombang AB');
+
+        $this->actingAs($this->admin, 'api')->postJson('/api/spmb/pendaftaran/manual', $this->manualPayload([
+            'jalur_masuk_id' => $this->jalurB->id, 'gelombang_id' => $multi->id,
+        ]))->assertStatus(201);
+        $this->assertDatabaseHas('spmb_pendaftaran_calon_mhs', ['gelombang_id' => $multi->id, 'jalur_masuk_id' => $this->jalurB->id]);
+
+        $this->actingAs($this->admin, 'api')->postJson('/api/spmb/pendaftaran/manual', $this->manualPayload([
+            'email' => 'c@test.com', 'nik' => '3372010101010009', 'jalur_masuk_id' => $jalurC->id, 'gelombang_id' => $multi->id,
+        ]))->assertStatus(422)->assertJsonValidationErrors('gelombang_id');
+    }
+
+    public function test_legacy_single_jalur_column_is_still_honoured_when_no_mapping_rows_exist(): void
+    {
+        $legacy = GelombangPenerimaan::create([
+            'jalur_masuk_id' => $this->jalurA->id, 'nama' => 'Legacy A', 'tanggal_buka' => '01-01',
+            'tanggal_tutup' => '12-31', 'kuota_total' => 10, 'kuota_terisi' => 0, 'biaya_pendaftaran' => 0, 'status' => 'aktif',
+        ]);
+
+        $this->assertSame([$this->jalurA->id], $legacy->jalurIds());
+        $this->assertSame($this->jalurA->id, $legacy->singleJalurId());
+        $this->assertSame($legacy->id, $this->resolve($this->jalurA)['gelombang']['id']);
+        $this->assertSame('tidak_tersedia', $this->resolve($this->jalurB)['mode']);
+    }
+
+    public function test_pivot_migration_moves_legacy_jalur_into_mapping_table(): void
+    {
+        // Simulasi data sebelum migrasi: gelombang dengan kolom lama terisi dan tanpa baris penghubung.
+        $g = GelombangPenerimaan::create([
+            'jalur_masuk_id' => $this->jalurA->id, 'nama' => 'Sebelum Migrasi', 'tanggal_buka' => '01-01',
+            'tanggal_tutup' => '12-31', 'kuota_total' => 10, 'kuota_terisi' => 0, 'biaya_pendaftaran' => 0, 'status' => 'aktif',
+        ]);
+        \Illuminate\Support\Facades\DB::table('spmb_gelombang_jalur_masuk')->delete();
+
+        $migration = require base_path('database/migrations/2026_11_26_300000_create_spmb_gelombang_jalur_masuk_pivot.php');
+        \Illuminate\Support\Facades\Schema::drop('spmb_gelombang_jalur_masuk');
+        $migration->up();
+
+        $this->assertDatabaseHas('spmb_gelombang_jalur_masuk', ['gelombang_id' => $g->id, 'jalur_masuk_id' => $this->jalurA->id]);
+        $this->assertNull(\Illuminate\Support\Facades\DB::table('spmb_gelombang_penerimaan')->where('id', $g->id)->value('jalur_masuk_id'));
+        $this->assertSame([$this->jalurA->id], $g->fresh()->jalurIds());
+    }
+
+    public function test_jalur_ids_does_not_fail_when_model_is_loaded_with_limited_columns(): void
+    {
+        $this->gelombang([$this->jalurA, $this->jalurB], 'Gelombang AB');
+        $this->gelombang(null, 'Umum 1');
+
+        $partial = GelombangPenerimaan::query()->select('id', 'nama')->orderBy('id')->get();
+
+        $this->assertEqualsCanonicalizing([$this->jalurA->id, $this->jalurB->id], $partial[0]->jalurIds());
+        $this->assertSame([], $partial[1]->jalurIds());
+        $this->assertTrue($partial[1]->isUmum());
     }
 }

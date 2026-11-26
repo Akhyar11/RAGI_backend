@@ -377,10 +377,10 @@ class SpmbPendaftaranService
                         $validated['gelombang_id'] = $resolved['gelombang']->id;
                     }
                 }
-                // Gelombang khusus jalur menentukan jalur bila jalur belum dikirim.
+                // Gelombang yang hanya dipetakan ke satu jalur menentukan jalur bila jalur belum dikirim.
                 if (! empty($validated['gelombang_id']) && empty($validated['jalur_masuk_id'])) {
                     $validated['jalur_masuk_id'] = GelombangPenerimaan::query()
-                        ->whereKey($validated['gelombang_id'])->value('jalur_masuk_id');
+                        ->find($validated['gelombang_id'])?->singleJalurId();
                 }
             }
 

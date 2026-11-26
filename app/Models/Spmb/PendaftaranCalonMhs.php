@@ -2,19 +2,12 @@
 
 namespace App\Models\Spmb;
 
+use App\Models\Arsip\RequestNomorSurat;
+use App\Models\User;
+use App\Services\Storage\FileStorageService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\User;
-use App\Models\Spmb\MasterProgramStudi;
-use App\Models\Spmb\GelombangPenerimaan;
-use App\Models\Spmb\DokumenPendaftaran;
-use App\Models\Spmb\PembayaranSpmb;
-use App\Models\Spmb\PesertaUjianSpmb;
-use App\Models\Spmb\JawabanKuesionerSpmb;
-use App\Models\Spmb\NilaiSeleksi;
-use App\Models\Spmb\HasilSeleksi;
-use App\Models\Spmb\SpmbStatusHistory;
 
 class PendaftaranCalonMhs extends Model
 {
@@ -22,16 +15,24 @@ class PendaftaranCalonMhs extends Model
 
     // ── Nilai status pendaftaran (kolom string, bukan enum) ──────────
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_SUBMITTED = 'submitted';
+
     public const STATUS_VERIFIED = 'verified';
+
     public const STATUS_LULUS_ADMINISTRASI = 'lulus_administrasi';
+
     public const STATUS_GAGAL_ADMINISTRASI = 'gagal_administrasi';
+
     public const STATUS_MAHASISWA_BARU = 'mahasiswa_baru';
 
     // ── Nilai status pembayaran ──────────────────────────────────────
     public const STATUS_PEMBAYARAN_BELUM = 'belum_bayar';
+
     public const STATUS_PEMBAYARAN_SEBAGIAN = 'sebagian';
+
     public const STATUS_PEMBAYARAN_LUNAS = 'lunas';
+
     public const STATUS_PEMBAYARAN_GRATIS = 'gratis';
 
     protected $table = 'spmb_pendaftaran_calon_mhs';
@@ -137,12 +138,12 @@ class PendaftaranCalonMhs extends Model
             return null;
         }
 
-        return app(\App\Services\Storage\FileStorageService::class)->url($this->sk_file_path);
+        return app(FileStorageService::class)->url($this->sk_file_path);
     }
 
     public function skArsipRequest()
     {
-        return $this->belongsTo(\App\Models\Arsip\RequestNomorSurat::class, 'sk_arsip_request_id');
+        return $this->belongsTo(RequestNomorSurat::class, 'sk_arsip_request_id');
     }
 
     public function gelombangPenerimaan()
@@ -161,19 +162,25 @@ class PendaftaranCalonMhs extends Model
     }
 
     /**
-     * Jalur masuk efektif pendaftar: jalur yang disimpan pada pendaftar, atau jalur
-     * milik gelombangnya untuk data lama yang belum memiliki jalur sendiri.
+     * Jalur masuk efektif pendaftar: jalur yang disimpan pada pendaftar, atau jalur gelombangnya
+     * untuk data lama bila gelombang dipetakan ke tepat satu jalur.
      */
     public function resolveJalurMasukId(): ?int
     {
-        $id = $this->jalur_masuk_id ?? $this->gelombangPenerimaan?->jalur_masuk_id;
+        $id = $this->jalur_masuk_id ?? $this->gelombangPenerimaan?->singleJalurId();
 
         return $id ? (int) $id : null;
     }
 
     public function resolveJalurMasuk(): ?JalurMasuk
     {
-        return $this->jalurMasuk ?? $this->gelombangPenerimaan?->jalurMasuk;
+        if ($this->jalur_masuk_id) {
+            return $this->jalurMasuk;
+        }
+
+        $id = $this->gelombangPenerimaan?->singleJalurId();
+
+        return $id ? JalurMasuk::find($id) : null;
     }
 
     public function user()
@@ -265,5 +272,4 @@ class PendaftaranCalonMhs extends Model
     {
         return $this->hasOne(HasilSeleksi::class, 'pendaftaran_id');
     }
-
 }

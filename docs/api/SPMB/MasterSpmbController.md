@@ -172,7 +172,7 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 |---|---|---|---|
 | `search` | string | - | Pencarian kata kunci pada nama gelombang |
 | `nama` | string | - | Filter spesifik berdasarkan nama gelombang |
-| `jalur_masuk_id` | integer | - | Filter berdasarkan ID master jalur penerimaan |
+| `jalur_masuk_id` | integer | - | Filter gelombang yang dipetakan ke jalur ini (salah satu jalurnya) |
 | `umum` | boolean | - | `true` hanya menampilkan gelombang umum (tidak dipetakan ke jalur) |
 | `tanggal_buka` | string | - | Filter periode tanggal buka minimal (format `MM-DD`) |
 | `tanggal_tutup` | string | - | Filter periode tanggal tutup maksimal (format `MM-DD`) |
@@ -300,6 +300,48 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
       "kuota_terisi": 0,
       "status": "aktif",
       "pendaftaran_dibuka": true
+    },
+    "options": []
+  }
+}
+```
+
+### Response 200 — otomatis untuk gelombang yang dipetakan ke banyak jalur
+
+Gelombang yang sama dikembalikan untuk setiap jalur pemetaannya; `jalur_masuk_ids` memuat seluruh jalur gelombang.
+
+```json
+{
+  "status": "success",
+  "message": "Gelombang untuk jalur berhasil ditentukan.",
+  "data": {
+    "jalur_masuk_id": 2,
+    "mode": "otomatis",
+    "sumber": "terpetakan",
+    "gelombang": {
+      "id": 1,
+      "nama": "Gelombang 1",
+      "tanggal_buka": "01-01",
+      "tanggal_tutup": "03-31",
+      "kuota_total": 100,
+      "status": "aktif",
+      "pendaftaran_dibuka": false,
+      "jalur_masuk_ids": [
+        1,
+        2
+      ],
+      "daftar_jalur": [
+        {
+          "id": 1,
+          "kode": "JA",
+          "nama": "Jalur A"
+        },
+        {
+          "id": 2,
+          "kode": "JB",
+          "nama": "Jalur B"
+        }
+      ]
     },
     "options": []
   }
@@ -460,7 +502,7 @@ Tidak berlaku: jalur yang tidak ditemukan menghasilkan 422 pada `jalur_masuk_id`
 
 ## [POST] /api/spmb/master/gelombang
 
-> Membuat periode, kuota, dan status gelombang penerimaan. `jalur_masuk_id` bersifat opsional: gelombang tanpa jalur adalah gelombang umum, sedangkan gelombang dengan jalur khusus untuk jalur itu. Nominal biaya dikelola melalui Master Biaya dan Komponen Biaya SPMB. `status: aktif` mengaktifkan jadwal; backend menghitung `pendaftaran_dibuka` dari tanggal saat ini di zona waktu `SPMB_TIMEZONE` (default `Asia/Jakarta`).
+> Membuat periode, kuota, dan status gelombang penerimaan. Satu gelombang dapat dipetakan ke banyak jalur lewat `jalur_masuk_ids` (pilihan ganda). Gelombang tanpa jalur adalah gelombang umum. Pada PUT, `jalur_masuk_ids` yang tidak dikirim membiarkan pemetaan; array kosong menjadikannya gelombang umum. Nominal biaya dikelola melalui Master Biaya dan Komponen Biaya SPMB. `status: aktif` mengaktifkan jadwal; backend menghitung `pendaftaran_dibuka` dari tanggal saat ini di zona waktu `SPMB_TIMEZONE` (default `Asia/Jakarta`).
 
 ### Headers
 
@@ -474,7 +516,8 @@ Tidak berlaku: jalur yang tidak ditemukan menghasilkan 422 pada `jalur_masuk_id`
 
 ```json
 {
-    "jalur_masuk_id": "integer, nullable, exists:spmb_jalur_masuk,id (kosong = gelombang umum yang dapat dipakai jalur mana pun)",
+    "jalur_masuk_ids": "array<integer>, nullable, tiap id exists:spmb_jalur_masuk,id dan unik (kosong/tidak dikirim = gelombang umum untuk semua jalur; pilihan ganda)",
+    "jalur_masuk_id": "integer, nullable (lama; dilipat ke jalur_masuk_ids)",
     "nama": "string, required",
     "tanggal_buka": "string, required (MM-DD; recurring annual period)",
     "tanggal_tutup": "string, required (MM-DD; recurring annual period)",
@@ -564,6 +607,57 @@ Request tanpa `jalur_masuk_id` menghasilkan gelombang umum:
 }
 ```
 
+### Contoh: gelombang untuk banyak jalur
+
+Request dengan `jalur_masuk_ids` memetakan gelombang ke beberapa jalur sekaligus:
+
+```json
+{
+  "status": "success",
+  "message": "Gelombang penerimaan berhasil dibuat.",
+  "data": {
+    "id": 1,
+    "nama": "Gelombang 1",
+    "tanggal_buka": "01-01",
+    "tanggal_tutup": "03-31",
+    "kuota_total": 100,
+    "status": "aktif",
+    "pendaftaran_dibuka": false,
+    "jalur_masuk_ids": [
+      1,
+      2
+    ],
+    "daftar_jalur": [
+      {
+        "id": 1,
+        "kode": "JA",
+        "nama": "Jalur A"
+      },
+      {
+        "id": 2,
+        "kode": "JB",
+        "nama": "Jalur B"
+      }
+    ]
+  }
+}
+```
+
+Id jalur yang tidak dikenal menghasilkan 422:
+
+```json
+{
+  "status": "error",
+  "message": "The selected jalur_masuk_ids.0 is invalid.",
+  "errors": {
+    "jalur_masuk_ids.0": [
+      "The selected jalur_masuk_ids.0 is invalid."
+    ]
+  }
+}
+```
+
+
 ## [PUT] /api/spmb/master/gelombang/{id}
 
 > Memperbarui data gelombang penerimaan. Body mengikuti aturan validasi yang sama dengan POST.
@@ -580,7 +674,8 @@ Request tanpa `jalur_masuk_id` menghasilkan gelombang umum:
 
 ```json
 {
-    "jalur_masuk_id": "integer, nullable, exists:spmb_jalur_masuk,id (kosong = gelombang umum yang dapat dipakai jalur mana pun)",
+    "jalur_masuk_ids": "array<integer>, nullable, tiap id exists:spmb_jalur_masuk,id dan unik (kosong/tidak dikirim = gelombang umum untuk semua jalur; pilihan ganda)",
+    "jalur_masuk_id": "integer, nullable (lama; dilipat ke jalur_masuk_ids)",
     "nama": "string, required",
     "tanggal_buka": "string, required (MM-DD; recurring annual period)",
     "tanggal_tutup": "string, required (MM-DD; recurring annual period)",

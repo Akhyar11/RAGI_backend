@@ -168,14 +168,14 @@ class MasterSpmbController extends Controller
      */
     public function getGelombang(Request $request): JsonResponse
     {
-        $query = GelombangPenerimaan::with(['jalurMasuk']);
+        $query = GelombangPenerimaan::with(['jalurMasuk', 'daftarJalur']);
 
         if ($request->filled('nama')) {
             $query->where('nama', 'like', '%' . $request->nama . '%');
         }
 
         if ($request->filled('jalur_masuk_id')) {
-            $query->where('jalur_masuk_id', $request->jalur_masuk_id);
+            $query->untukJalur($request->integer('jalur_masuk_id'));
         }
 
         if ($request->boolean('umum')) {
@@ -273,7 +273,7 @@ class MasterSpmbController extends Controller
      */
     public function showGelombang($id): JsonResponse
     {
-        $gelombang = GelombangPenerimaan::with(['jalurMasuk'])->findOrFail($id);
+        $gelombang = GelombangPenerimaan::with(['jalurMasuk', 'daftarJalur'])->findOrFail($id);
         return response()->json([
             'status' => 'success',
             'message' => 'Data detail gelombang berhasil dimuat.',
@@ -288,6 +288,8 @@ class MasterSpmbController extends Controller
     {
         $validated = $request->validate([
             'jalur_masuk_id' => 'nullable|exists:spmb_jalur_masuk,id',
+            'jalur_masuk_ids' => 'nullable|array',
+            'jalur_masuk_ids.*' => 'integer|distinct|exists:spmb_jalur_masuk,id',
             'nama' => 'required|string',
             'tanggal_buka' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
             'tanggal_tutup' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
@@ -300,8 +302,16 @@ class MasterSpmbController extends Controller
 
         $this->validateCyclePeriodDates($validated);
 
-        $gelombang = GelombangPenerimaan::create($validated)->refresh();
-        $gelombang->load(['jalurMasuk']);
+        $jalurIds = $this->extractJalurIds($validated);
+        unset($validated['jalur_masuk_id'], $validated['jalur_masuk_ids']);
+
+        $gelombang = \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $jalurIds) {
+            $created = GelombangPenerimaan::create($validated)->refresh();
+            $created->daftarJalur()->sync($jalurIds);
+
+            return $created;
+        });
+        $gelombang->load(['jalurMasuk', 'daftarJalur']);
 
         return response()->json([
             'status' => 'success',
@@ -319,6 +329,8 @@ class MasterSpmbController extends Controller
 
         $validated = $request->validate([
             'jalur_masuk_id' => 'nullable|exists:spmb_jalur_masuk,id',
+            'jalur_masuk_ids' => 'nullable|array',
+            'jalur_masuk_ids.*' => 'integer|distinct|exists:spmb_jalur_masuk,id',
             'nama' => 'required|string',
             'tanggal_buka' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
             'tanggal_tutup' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
@@ -331,8 +343,21 @@ class MasterSpmbController extends Controller
 
         $this->validateCyclePeriodDates($validated);
 
-        $gelombang->update($validated);
-        $gelombang->load(['jalurMasuk']);
+        // Pemetaan jalur hanya diubah bila dikirim; array kosong = gelombang umum.
+        $syncJalur = $request->exists('jalur_masuk_ids') || $request->exists('jalur_masuk_id');
+        $jalurIds = $syncJalur ? $this->extractJalurIds($validated) : [];
+        unset($validated['jalur_masuk_id'], $validated['jalur_masuk_ids']);
+        if ($syncJalur) {
+            $validated['jalur_masuk_id'] = null; // kolom lama tidak dipakai lagi
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($gelombang, $validated, $syncJalur, $jalurIds) {
+            $gelombang->update($validated);
+            if ($syncJalur) {
+                $gelombang->daftarJalur()->sync($jalurIds);
+            }
+        });
+        $gelombang->refresh()->load(['jalurMasuk', 'daftarJalur']);
 
         return response()->json([
             'status' => 'success',
@@ -353,6 +378,22 @@ class MasterSpmbController extends Controller
             'status' => 'success',
             'message' => 'Gelombang penerimaan berhasil dihapus.'
         ]);
+    }
+
+    /**
+     * Kumpulkan ID jalur dari `jalur_masuk_ids` (pilihan ganda) dan `jalur_masuk_id` tunggal lama.
+     *
+     * @param  array<string,mixed>  $validated
+     * @return list<int>
+     */
+    private function extractJalurIds(array $validated): array
+    {
+        $ids = array_map('intval', $validated['jalur_masuk_ids'] ?? []);
+        if (! empty($validated['jalur_masuk_id'])) {
+            $ids[] = (int) $validated['jalur_masuk_id'];
+        }
+
+        return array_values(array_unique($ids));
     }
 
     /**
