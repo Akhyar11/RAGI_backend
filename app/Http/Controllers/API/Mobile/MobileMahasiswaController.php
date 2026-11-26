@@ -664,6 +664,49 @@ class MobileMahasiswaController extends Controller
     }
 
     /**
+     * GET /api/v1/mobile/mahasiswa/sikeu/komponen-pembayaran
+     * Pembayaran wajib (semester berjalan) & pembayaran mendatang berdasarkan angkatan/prodi.
+     */
+    public function sikeuKomponenPembayaran(Request $request): JsonResponse
+    {
+        Gate::authorize('sikeu.tagihan.read');
+        $data = $this->mobileService->getSikeuKomponenPembayaran($request->user()->id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Komponen pembayaran wajib dan mendatang berhasil dimuat.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/mahasiswa/sikeu/buat-tagihan
+     * Mahasiswa memilih komponen SettingTarif untuk dibuatkan tagihan/invoice mandiri.
+     */
+    public function sikeuBuatTagihan(Request $request): JsonResponse
+    {
+        Gate::authorize('sikeu.pembayaran.create');
+        $mhs = $this->mobileService->resolveAuthenticatedMahasiswa($request->user()->id);
+        $validated = $request->validate([
+            'setting_tarif_ids'   => ['required', 'array', 'min:1'],
+            'setting_tarif_ids.*' => ['integer', 'exists:sikeu_setting_tarif,id'],
+            'bank_kode'           => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $data = $this->checkoutService->createTagihanMandiri(
+            $mhs,
+            $validated['setting_tarif_ids'],
+            (string) ($validated['bank_kode'] ?? 'BSN'),
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Tagihan & invoice berhasil dibuat.',
+            'data' => $data,
+        ], 201);
+    }
+
+    /**
      * GET /api/v1/mobile/mahasiswa/sikeu/payment-channels
      * Kanal pembayaran aktif yang dikonfigurasi admin (Midtrans / Xendit / BSN H2H).
      */

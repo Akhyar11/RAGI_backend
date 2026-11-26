@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/mobile/mahasiswa`  
 > **Autentikasi**: Bearer Token (`auth:api`) + wajib memiliki profil `Mahasiswa` (`siakad_mahasiswa.user_id`)  
 > **Dibuat**: 2026-11-09  
-> **Diperbarui**: 2026-11-09
+> **Diperbarui**: 2026-11-26
 
 ## Aturan Otorisasi & Periode Aktif
 
@@ -40,6 +40,8 @@
 | GET | `/api/v1/mobile/mahasiswa/sikeu/pembayaran` | Riwayat transaksi pembayaran & nomor kwitansi resmi | ✅ `sikeu.tagihan.read` |
 | GET | `/api/v1/mobile/mahasiswa/sikeu/beasiswa` | Riwayat penerimaan beasiswa mahasiswa | ✅ `sikeu.tagihan.read` |
 | GET | `/api/v1/mobile/mahasiswa/sikeu/dispensasi` | Riwayat pengajuan dispensasi cicilan/penundaan pembayaran & peringatan tunggakan | ✅ `sikeu.dispensasi.read` |
+| GET | `/api/v1/mobile/mahasiswa/sikeu/komponen-pembayaran` | Komponen pembayaran wajib (semester berjalan) & mendatang berdasarkan angkatan/prodi | ✅ `sikeu.tagihan.read` |
+| POST | `/api/v1/mobile/mahasiswa/sikeu/buat-tagihan` | Buat tagihan & invoice mandiri dari komponen `setting_tarif_ids` yang dipilih mahasiswa | ✅ `sikeu.pembayaran.create` |
 | GET | `/api/v1/mobile/mahasiswa/sikeu/payment-channels` | Kanal pembayaran aktif yang dikonfigurasi admin (Midtrans / Xendit / BSN H2H) | ✅ `sikeu.tagihan.read` |
 | POST | `/api/v1/mobile/mahasiswa/sikeu/invoice-batch` | Checklist tagihan mahasiswa -> buat invoice gabungan & VA (termasuk BSN) | ✅ `sikeu.pembayaran.create` |
 | POST | `/api/v1/mobile/mahasiswa/sikeu/tagihan/{id}/terbitkan-h2h` | Terbitkan billing H2H BSN milik mahasiswa yang sedang login | ✅ `sikeu.pembayaran.create` |
@@ -1345,3 +1347,114 @@ Tidak memerlukan request body (opsional payload kosong `{}`).
 * **`404 Not Found`**: Tagihan tidak ditemukan atau bukan milik akun mahasiswa.
 * **`422 Unprocessable Entity`**: Tagihan sudah lunas, sisa nominal Rp 0, atau kredensial gateway belum lengkap.
 * **`502 Bad Gateway`**: Upstream Payment Gateway gagal merespons atau membuat sesi transaksi.
+
+
+---
+
+## 27. Komponen Pembayaran Wajib & Mendatang — `GET /api/v1/mobile/mahasiswa/sikeu/komponen-pembayaran`
+
+> Mengambil daftar komponen tarif (`sikeu_setting_tarif`) yang berlaku untuk angkatan & program studi mahasiswa, terbagi menjadi `pembayaran_wajib` (semester berjalan/rutin) dan `pembayaran_mendatang` (semester berikutnya).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses (`200 OK`)
+
+```json
+{
+    "status": "success",
+    "message": "Komponen pembayaran wajib dan mendatang berhasil dimuat.",
+    "data": {
+        "angkatan": 2023,
+        "semester_berjalan": 6,
+        "pembayaran_wajib": [
+            {
+                "setting_tarif_id": 12,
+                "master_biaya_id": 4,
+                "kode": "SPP",
+                "nama": "SPP Semester",
+                "tipe": "perkuliahan",
+                "nominal": 400000,
+                "semester": 6,
+                "is_recurring": true,
+                "keterangan": null
+            }
+        ],
+        "pembayaran_mendatang": [
+            {
+                "setting_tarif_id": 18,
+                "master_biaya_id": 7,
+                "kode": "KMHS-7",
+                "nama": "Kemahasiswaan 7",
+                "tipe": "kemahasiswaan",
+                "nominal": 50000,
+                "semester": 7,
+                "is_recurring": false,
+                "keterangan": null
+            }
+        ]
+    }
+}
+```
+
+### Response Error
+
+* **`401 Unauthorized`**: Token belum login atau tidak valid.
+* **`403 Forbidden`**: Tidak memiliki izin `sikeu.tagihan.read`.
+
+---
+
+## 28. Buat Tagihan & Invoice Mandiri — `POST /api/v1/mobile/mahasiswa/sikeu/buat-tagihan`
+
+> Mahasiswa memilih satu atau beberapa komponen `setting_tarif_ids` untuk dibuatkan `TagihanMahasiswa` beserta rincian `TagihanDetail` dan Virtual Account (BSN `73131013` + NIM/No. Daftar).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "setting_tarif_ids": [12, 18],
+    "bank_kode": "BSN"
+}
+```
+
+| Field | Type | Required | Validasi |
+|---|---|---|---|
+| `setting_tarif_ids` | integer[] | ✅ | `required\|array\|min:1`, tiap item `exists:sikeu_setting_tarif,id` |
+| `bank_kode` | string | ❌ | Maks 20 karakter, default `BSN` |
+
+### Response Sukses (`201 Created`)
+
+```json
+{
+    "status": "success",
+    "message": "Tagihan & invoice berhasil dibuat.",
+    "data": {
+        "tagihan_id": 105,
+        "invoice_number": "INV-INV-MHS-B23064-20261126181500",
+        "virtual_account": {
+            "bank": "Bank BSN (Virtual Account)",
+            "bank_kode": "BSN",
+            "va_number": "73131013B23064",
+            "nominal_instruksi": 450000
+        }
+    }
+}
+```
+
+### Response Error
+
+* **`401 Unauthorized`**: Token belum login atau tidak valid.
+* **`403 Forbidden`**: Tidak memiliki izin `sikeu.pembayaran.create`.
+* **`422 Unprocessable Entity`**: `setting_tarif_ids` kosong atau komponen tarif tidak aktif.

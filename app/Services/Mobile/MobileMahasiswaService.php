@@ -719,4 +719,74 @@ class MobileMahasiswaService
             'dispensasi' => $items,
         ];
     }
+
+    /**
+     * SIKEU: Komponen Pembayaran Wajib (semester berjalan) & Mendatang (semester berikutnya)
+     * berdasarkan SettingTarif angkatan, program studi, dan semester aktif.
+     */
+    public function getSikeuKomponenPembayaran(int $userId): array
+    {
+        $mahasiswa = $this->resolveAuthenticatedMahasiswa($userId);
+        $periode = $this->resolveEffectiveTahunAkademik();
+        $angkatan = (int) ($mahasiswa->angkatan ?: date('Y'));
+        $tahunMulai = (int) ($periode?->tahun_mulai ?: date('Y'));
+        $kodePeriode = strtolower((string) ($periode?->kode ?? $periode?->nama ?? ''));
+        $isGenap = str_contains($kodePeriode, 'genap') || str_ends_with($kodePeriode, '2');
+        $semesterBerjalan = max(1, (($tahunMulai - $angkatan) * 2) + ($isGenap ? 2 : 1));
+
+        $tarifs = \App\Models\Sikeu\SettingTarif::with('masterBiaya')
+            ->where(function ($q) use ($angkatan) {
+                $q->where('tahun_angkatan', $angkatan)
+                    ->orWhereNull('tahun_angkatan');
+            })
+            ->where('is_active', true)
+            ->get();
+
+        $grouped = $tarifs->groupBy('master_biaya_id');
+        $masterBiayas = \App\Models\Sikeu\MasterBiaya::where('is_active', true)->get();
+
+        $wajib = [];
+        $mendatang = [];
+
+        foreach ($masterBiayas as $mb) {
+            $items = $grouped->get($mb->id, collect());
+            $prodiTarif = $mahasiswa->program_studi_id
+                ? $items->firstWhere('program_studi_id', $mahasiswa->program_studi_id)
+                : null;
+            $globalTarif = $items->first(fn ($t) => $t->program_studi_id === null);
+            $selected = $prodiTarif ?: $globalTarif;
+
+            if (! $selected) {
+                continue;
+            }
+
+            $sem = $selected->semester !== null ? (int) $selected->semester : null;
+            $entry = [
+                'setting_tarif_id' => $selected->id,
+                'master_biaya_id' => $mb->id,
+                'kode' => $mb->kode,
+                'nama' => $mb->nama,
+                'tipe' => $mb->tipe,
+                'nominal' => (float) $selected->nominal,
+                'semester' => $sem,
+                'is_recurring' => (bool) $mb->is_recurring,
+                'keterangan' => $selected->keterangan,
+            ];
+
+            if ($sem === null || $sem <= $semesterBerjalan) {
+                $wajib[] = $entry;
+            } else {
+                $mendatang[] = $entry;
+            }
+        }
+
+        usort($mendatang, fn ($a, $b) => ($a['semester'] ?? 99) <=> ($b['semester'] ?? 99));
+
+        return [
+            'angkatan' => $angkatan,
+            'semester_berjalan' => $semesterBerjalan,
+            'pembayaran_wajib' => $wajib,
+            'pembayaran_mendatang' => $mendatang,
+        ];
+    }
 }

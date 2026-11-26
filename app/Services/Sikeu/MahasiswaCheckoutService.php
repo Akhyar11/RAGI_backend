@@ -48,7 +48,8 @@ class MahasiswaCheckoutService
             case 'MANDIRI':
                 return VaNumberService::generate($cleanId, '70012');
             case 'BSN':
-                return VaNumberService::generate($cleanId, '90012');
+                $institutionCode = (string) config('services.bsn.va_prefix', '73131013');
+                return $institutionCode . preg_replace('/\s+/', '', trim($identifier));
             case 'BRI':
                 return VaNumberService::generate($cleanId, '12345');
             case 'BSI':
@@ -309,37 +310,43 @@ class MahasiswaCheckoutService
             ->timeout(20);
         $returnUrl = rtrim((string) config('app.frontend_url', config('app.url')), '/');
 
-        if ($active->gateway_name === PaymentGatewayConfig::MIDTRANS) {
-            $endpoint = $active->environment === 'production'
-                ? 'https://app.midtrans.com/snap/v1/transactions'
-                : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
-            $response = $client->post($endpoint, [
-                'transaction_details' => ['order_id' => $orderId, 'gross_amount' => $sisa],
-                'customer_details' => array_filter([
-                    'first_name' => Str::limit($mhs->nama_lengkap ?? 'Mahasiswa', 50, ''),
-                    'email' => $mhs->email ?: $userEmail,
-                    'phone' => $mhs->telepon,
-                ]),
-                'expiry' => ['unit' => 'hours', 'duration' => 24],
-                'callbacks' => ['finish' => $returnUrl],
-            ]);
-            $url = $response->json('redirect_url');
-            $token = $response->json('token');
-            $providerId = null;
-        } else {
-            $response = $client->post('https://api.xendit.co/v2/invoices', [
-                'external_id' => $orderId,
-                'amount' => $sisa,
-                'currency' => 'IDR',
-                'invoice_duration' => 86400,
-                'description' => 'Pembayaran ' . $tagihan->nomor_tagihan,
-                'payer_email' => $mhs->email ?: $userEmail ?: 'mahasiswa@poltekindonusa.ac.id',
-                'success_redirect_url' => $returnUrl,
-                'failure_redirect_url' => $returnUrl,
-            ]);
-            $url = $response->json('invoice_url');
-            $token = null;
-            $providerId = $response->json('id');
+        try {
+            if ($active->gateway_name === PaymentGatewayConfig::MIDTRANS) {
+                $endpoint = $active->environment === 'production'
+                    ? 'https://app.midtrans.com/snap/v1/transactions'
+                    : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
+                $response = $client->post($endpoint, [
+                    'transaction_details' => ['order_id' => $orderId, 'gross_amount' => $sisa],
+                    'customer_details' => array_filter([
+                        'first_name' => Str::limit($mhs->nama_lengkap ?? 'Mahasiswa', 50, ''),
+                        'email' => $mhs->email ?: $userEmail,
+                        'phone' => $mhs->telepon,
+                    ]),
+                    'expiry' => ['unit' => 'hours', 'duration' => 24],
+                    'callbacks' => ['finish' => $returnUrl],
+                ]);
+                $url = $response->json('redirect_url');
+                $token = $response->json('token');
+                $providerId = null;
+            } else {
+                $response = $client->post('https://api.xendit.co/v2/invoices', [
+                    'external_id' => $orderId,
+                    'amount' => $sisa,
+                    'currency' => 'IDR',
+                    'invoice_duration' => 86400,
+                    'description' => 'Pembayaran ' . $tagihan->nomor_tagihan,
+                    'payer_email' => $mhs->email ?: $userEmail ?: 'mahasiswa@poltekindonusa.ac.id',
+                    'success_redirect_url' => $returnUrl,
+                    'failure_redirect_url' => $returnUrl,
+                ]);
+                $url = $response->json('invoice_url');
+                $token = null;
+                $providerId = $response->json('id');
+            }
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            $attempt->update(['status' => 'failed']);
+            Log::error('Koneksi ke gateway pembayaran terputus', ['tagihan_id' => $tagihan->id, 'error' => $e->getMessage()]);
+            throw new HttpException(502, 'Koneksi ke penyedia payment gateway terputus. Silakan coba lagi.');
         }
 
         if (! $response->successful() || empty($url)) {
@@ -400,5 +407,74 @@ class MahasiswaCheckoutService
             'redirect_url' => $url,
             'expires_at' => $attempt->expires_at,
         ];
+    }
+
+    /**
+     * Buat tagihan & invoice mandiri dari daftar SettingTarif yang dipilih mahasiswa.
+     */
+    public function createTagihanMandiri(Mahasiswa $mhs, array $settingTarifIds, string $bankCode = 'BSN'): array
+    {
+        $tarifs = \App\Models\Sikeu\SettingTarif::with('masterBiaya')
+            ->whereIn('id', $settingTarifIds)
+            ->where('is_active', true)
+            ->get();
+
+        if ($tarifs->isEmpty()) {
+            throw ValidationException::withMessages([
+                'setting_tarif_ids' => ['Komponen tarif yang dipilih tidak ditemukan.'],
+            ]);
+        }
+
+        $totalNominal = (float) $tarifs->sum('nominal');
+        $nomorTagihan = 'INV-MHS-' . $mhs->nim . '-' . date('YmdHis');
+
+        $tagihan = \Illuminate\Support\Facades\DB::transaction(function () use ($mhs, $tarifs, $totalNominal, $nomorTagihan) {
+            $t = TagihanMahasiswa::create([
+                'mahasiswa_id'     => $mhs->id,
+                'nomor_tagihan'    => $nomorTagihan,
+                'total_tagihan'    => $totalNominal,
+                'total_potongan'   => 0,
+                'total_denda'      => 0,
+                'total_bayar'      => 0,
+                'status'           => 'belum_bayar',
+                'jatuh_tempo'      => now()->addDays(30)->format('Y-m-d'),
+                'catatan_approval' => $tarifs->map(fn ($x) => $x->masterBiaya?->nama)->filter()->implode(', '),
+            ]);
+
+            foreach ($tarifs as $tr) {
+                \App\Models\Sikeu\TagihanDetail::create([
+                    'tagihan_id'      => $t->id,
+                    'master_biaya_id' => $tr->master_biaya_id,
+                    'keterangan'      => $tr->masterBiaya?->nama ?? 'Komponen Biaya',
+                    'nominal'         => (float) $tr->nominal,
+                    'potongan'        => 0,
+                    'nominal_bersih'  => (float) $tr->nominal,
+                ]);
+            }
+
+            return $t;
+        });
+
+        try {
+            AuditLogService::record(
+                action: 'create',
+                module: 'sikeu',
+                targetModel: TagihanMahasiswa::class,
+                targetId: $tagihan->id,
+                oldValues: null,
+                newValues: [
+                    'nomor_tagihan' => $tagihan->nomor_tagihan,
+                    'mahasiswa_id'  => $tagihan->mahasiswa_id,
+                    'total_tagihan' => $tagihan->total_tagihan,
+                ],
+                description: "Mahasiswa {$mhs->nim} membuat tagihan mandiri {$tagihan->nomor_tagihan}",
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log buat tagihan mandiri: ' . $e->getMessage());
+        }
+
+        $invoice = $this->generateBatchInvoice($mhs->id, [$tagihan->id], strtoupper($bankCode));
+
+        return $invoice + ['tagihan_id' => $tagihan->id];
     }
 }

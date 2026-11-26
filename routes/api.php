@@ -1298,6 +1298,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/sikeu/pembayaran', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuPembayaran']);
             Route::get('/sikeu/beasiswa', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuBeasiswa']);
             Route::get('/sikeu/dispensasi', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuDispensasi']);
+            Route::get('/sikeu/komponen-pembayaran', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuKomponenPembayaran']);
+            Route::post('/sikeu/buat-tagihan', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuBuatTagihan']);
             Route::get('/sikeu/payment-channels', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuPaymentChannels']);
             Route::post('/sikeu/invoice-batch', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuInvoiceBatch']);
             Route::post('/sikeu/tagihan/{id}/terbitkan-h2h', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'sikeuTerbitkanH2h'])->whereNumber('id');
