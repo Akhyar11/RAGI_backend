@@ -5,6 +5,8 @@ namespace App\Http\Controllers\API\Mobile;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Siakad\Lms\AjukanIzinRequest;
 use App\Models\Lms\ForumTopik;
+use App\Models\Siakad\Mahasiswa;
+use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\Mobile\MobileMahasiswaService;
 use App\Services\Siakad\ForumService;
@@ -13,7 +15,9 @@ use App\Services\Siakad\QuizService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class MobileMahasiswaController extends Controller
 {
@@ -23,6 +27,95 @@ class MobileMahasiswaController extends Controller
         private QuizService $quizService,
         private ForumService $forumService,
     ) {}
+
+    /**
+     * POST /api/v1/mobile/mahasiswa/auth/login
+     * Login khusus aplikasi mobile mahasiswa (MyIn-U Student) tanpa gate Turnstile web.
+     */
+    public function login(Request $request): JsonResponse
+    {
+        $loginInput = trim((string) (
+            $request->input('identifier')
+            ?? $request->input('login')
+            ?? $request->input('username')
+            ?? $request->input('email')
+            ?? $request->input('nim')
+            ?? ''
+        ));
+        $password = (string) ($request->input('password') ?? '');
+
+        if ($loginInput === '' || $password === '') {
+            throw ValidationException::withMessages([
+                'identifier' => ['NIM / email / username dan kata sandi wajib diisi.'],
+            ]);
+        }
+
+        $user = User::where('email', $loginInput)
+            ->orWhere('username', $loginInput)
+            ->first();
+
+        if (! $user) {
+            $mhsByNim = Mahasiswa::where('nim', $loginInput)->first();
+            if ($mhsByNim && $mhsByNim->user_id) {
+                $user = User::find($mhsByNim->user_id);
+            }
+        }
+
+        if (! $user || ! Hash::check($password, $user->password)) {
+            throw ValidationException::withMessages([
+                'identifier' => ['Kredensial login tidak cocok dengan data kami.'],
+            ]);
+        }
+
+        if (! $user->is_active) {
+            throw ValidationException::withMessages([
+                'identifier' => ['Akun Anda berstatus non-aktif. Silakan hubungi administrator.'],
+            ]);
+        }
+
+        if (! $user->hasRole('mahasiswa') && ! Mahasiswa::where('user_id', $user->id)->exists()) {
+            throw ValidationException::withMessages([
+                'identifier' => ['Akun ini tidak memiliki akses ke aplikasi mobile mahasiswa.'],
+            ]);
+        }
+
+        $profilMahasiswa = $this->mobileService->getProfilSiakad($user->id);
+
+        $tokenName = (string) ($request->input('device_name') ?: 'myinu-student-mobile');
+        $tokenResult = $user->createToken($tokenName);
+        $token = $tokenResult->plainTextToken ?? $tokenResult->accessToken;
+
+        try {
+            $user->update(['last_login_at' => now()]);
+            AuditLogService::record(
+                module: 'IAM',
+                action: 'login',
+                tableName: 'iam_users',
+                recordId: $user->id,
+                request: $request
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mencatat audit log login mobile mahasiswa: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Login mahasiswa berhasil.',
+            'data' => [
+                'token' => $token,
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $profilMahasiswa['nama_lengkap'] ?? $user->username,
+                    'username' => $user->username,
+                    'email' => $user->email,
+                    'roles' => $user->roles->pluck('slug')->values(),
+                ],
+                'mahasiswa' => $profilMahasiswa,
+            ],
+        ]);
+    }
 
     /**
      * GET /api/v1/mobile/mahasiswa/home

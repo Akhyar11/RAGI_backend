@@ -15,6 +15,7 @@
 
 | Method | Endpoint | Fungsi | Auth / Permission |
 |---|---|---|---|
+| POST | `/api/v1/mobile/mahasiswa/auth/login` | Login khusus aplikasi mobile mahasiswa (MyIn-U Student) tanpa gate Turnstile web | ❌ Publik |
 | GET | `/api/v1/mobile/mahasiswa/home` | Beranda terpadu (Profil, Periode Aktif, Sesi Presensi Aktif 30d, Jadwal Hari Ini, Ringkasan LMS, & Tagihan SIKEU) | ✅ `siakad.kelas.read` |
 | GET | `/api/v1/mobile/mahasiswa/periode` | Daftar seluruh periode akademik + penanda periode aktif (`active_periode_id`) | ✅ `siakad.kelas.read` |
 | GET | `/api/v1/mobile/mahasiswa/presensi/sesi-aktif` | Daftar sesi presensi kelas yang sedang dibuka dosen pada hari ini | ✅ `siakad.kelas.read` |
@@ -49,6 +50,64 @@
 | `Authorization` | `Bearer {token}` | ✅ |
 | `Accept` | `application/json` | ✅ |
 | `Content-Type` | `application/json` (atau `multipart/form-data` untuk upload izin) | Hanya POST |
+
+---
+
+## 0. POST /api/v1/mobile/mahasiswa/auth/login
+
+> Login khusus aplikasi mobile mahasiswa (MyIn-U Student) tanpa gate Turnstile web. Mendukung autentikasi menggunakan `nim`, `username`, atau `email`.
+
+### Request Body
+
+```json
+{
+    "login": "202401001",
+    "password": "password123",
+    "device_name": "myinu-student-mobile"
+}
+```
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Login mahasiswa berhasil.",
+    "data": {
+        "token": "eyJ0eXAiOiJKV1QiLCJhbGciOi...",
+        "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOi...",
+        "token_type": "Bearer",
+        "user": {
+            "id": 12,
+            "name": "Budi Santoso",
+            "username": "202401001",
+            "email": "budi@kampus.ac.id",
+            "roles": ["mahasiswa"]
+        },
+        "mahasiswa": {
+            "id": 45,
+            "nim": "202401001",
+            "nama_lengkap": "Budi Santoso",
+            "prodi": "D3 Teknik Informatika"
+        }
+    }
+}
+```
+
+### Response Error
+
+- **422 Unprocessable Entity (Kredensial Salah / Akun Non-Aktif / Bukan Mahasiswa)**:
+  ```json
+  {
+      "status": "error",
+      "message": "Data yang diberikan tidak valid.",
+      "errors": {
+          "identifier": [
+              "Kredensial login tidak cocok dengan data kami."
+          ]
+      }
+  }
+  ```
 
 ## Response Error Standar (Berlaku untuk Seluruh Endpoint)
 
