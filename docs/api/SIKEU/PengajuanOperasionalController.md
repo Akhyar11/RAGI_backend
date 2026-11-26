@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/sikeu/pengajuan-operasional`  
 > **Autentikasi**: Bearer Token (Sanctum)  
 > **Dibuat**: 2026-09-25  
-> **Diperbarui**: 2026-11-25  
+> **Diperbarui**: 2026-11-26  
 >
 > **Otorisasi RBAC**:
 > - `GET index` / `show`: `sikeu.pengajuan.read`, `sikeu.pengajuan.create`, `sikeu.pengajuan.approve`, atau `sikeu.kas.manage` (atau Super Admin / Admin).
@@ -54,6 +54,17 @@ Batch gaji: `jenis_pengajuan = lainnya`, `kategori = non_barang`, status awal `p
 ### GET /api/v1/sikeu/pengajuan-operasional?sumber=gaji_simpeg
 
 **Response Sukses (200 OK):** envelope standar `{status, message, data[], meta, filters}`; tiap baris memuat `sumber_type`, `sumber_id`, `nomor_pengajuan` (`GAJI-YYYYMM-XXXX`), `nominal_diajukan` (total bersih), `status`.
+
+### POST /api/v1/sikeu/pengajuan-operasional/{id}/approve
+
+Persetujuan berjenjang (`pending_sarpras` → `pending_keuangan` → `pending_direktur` → `disetujui`).
+
+| Field | Type | Required | Deskripsi |
+|---|---|---|---|
+| `aksi` | string | ✅ | `approve` atau `reject` |
+| `catatan` | string | ❌ | Catatan persetujuan/penolakan (maks 1000 karakter) |
+| `unit_kas_id` | integer | ❌ | ID master unit kas (`sikeu_unit_kas.id`) untuk plotting sumber dana oleh Bagian Keuangan pada tahap `pending_keuangan` |
+| `nominal_disetujui` | numeric | ❌ | Nominal yang disetujui (`min:1`) |
 
 ### Response Error
 

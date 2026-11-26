@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Simpeg\Pegawai;
 use App\Models\User;
 use App\Services\PythonFaceService;
+use App\Services\Storage\FileStorageService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,8 +16,22 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     public function __construct(
-        protected PythonFaceService $faceService
+        protected PythonFaceService $faceService,
+        protected ?FileStorageService $fileStorageService = null
     ) {}
+
+    protected function resolveAvatarUrl(User $user): ?string
+    {
+        if (empty($user->avatar_path)) {
+            return null;
+        }
+        $storage = $this->fileStorageService ?? app(FileStorageService::class);
+        $resolved = $storage->url($user->avatar_path);
+        if (!$resolved) {
+            return null;
+        }
+        return str_starts_with($resolved, '/') ? url($resolved) : $resolved;
+    }
 
     /**
      * Cari pegawai SIMPEG yang benar-benar tertaut dengan akun.
@@ -121,6 +136,7 @@ class AuthController extends Controller
                     'username' => $user->username,
                     'email' => $user->email,
                     'referral_code' => $user->referral_code,
+                    'avatar_url' => $this->resolveAvatarUrl($user),
                     'roles' => $user->roles->pluck('slug')->values(),
                 ],
                 'employee' => [
@@ -168,6 +184,7 @@ class AuthController extends Controller
                     'username' => $user->username,
                     'email' => $user->email,
                     'referral_code' => $user->referral_code,
+                    'avatar_url' => $this->resolveAvatarUrl($user),
                     'roles' => $user->roles->pluck('slug')->values(),
                 ],
                 'employee' => [

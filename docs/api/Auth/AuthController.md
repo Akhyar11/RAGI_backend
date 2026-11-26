@@ -4,7 +4,7 @@
 > **Base URL**: `/api/v1/auth`  
 > **Autentikasi**: Bearer Token (Passport / Sanctum) — kecuali endpoint publik  
 > **Dibuat**: 2026-09-14  
-> **Diperbarui**: 2026-11-22  
+> **Diperbarui**: 2026-11-26  
 
 Dokumentasi endpoint API autentikasi dan biometrik untuk aplikasi mobile staf, dosen, dan portal SIMPEG terintegrasi. Menangani login multi-identifier, profil akun tersinkronisasi SIMPEG, persetujuan UU PDP biometrik, pendaftaran foto wajah multi-pose (server-side verification), dan logout.
 
@@ -69,6 +69,7 @@ Dokumentasi endpoint API autentikasi dan biometrik untuk aplikasi mobile staf, d
       "username": "budisantoso",
       "email": "budi@univ.ac.id",
       "referral_code": "REF-BUDI15",
+      "avatar_url": "https://api.example.com/storage/avatars/budi.jpg",
       "roles": ["dosen", "dpa"]
     },
     "employee": {
@@ -152,6 +153,7 @@ Dokumentasi endpoint API autentikasi dan biometrik untuk aplikasi mobile staf, d
       "username": "budisantoso",
       "email": "budi@univ.ac.id",
       "referral_code": "REF-BUDI15",
+      "avatar_url": "https://api.example.com/storage/avatars/budi.jpg",
       "roles": ["dosen", "dpa"]
     },
     "employee": {

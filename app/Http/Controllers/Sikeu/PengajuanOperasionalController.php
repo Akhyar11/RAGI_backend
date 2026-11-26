@@ -205,6 +205,8 @@ class PengajuanOperasionalController extends Controller
         $request->validate([
             'aksi' => 'required|in:approve,reject',
             'catatan' => 'nullable|string|max:1000',
+            'unit_kas_id' => 'nullable|integer|exists:sikeu_unit_kas,id',
+            'nominal_disetujui' => 'nullable|numeric|min:1',
         ]);
 
         if ($denied = $this->authorizeAnyPermission($request, ['sikeu.pengajuan.approve', 'sikeu.kas.manage'], 'Anda tidak memiliki hak akses untuk memproses persetujuan pengajuan.')) {
@@ -213,7 +215,13 @@ class PengajuanOperasionalController extends Controller
 
         try {
             $pengajuan = PengajuanPencairanKas::findOrFail($id);
-            $result = $this->service->approve($pengajuan, $request->aksi, $request->catatan, $request);
+            $result = $this->service->approve(
+                $pengajuan,
+                $request->aksi,
+                $request->catatan,
+                $request,
+                $request->only(['unit_kas_id', 'nominal_disetujui'])
+            );
 
             return response()->json([
                 'status' => 'success',

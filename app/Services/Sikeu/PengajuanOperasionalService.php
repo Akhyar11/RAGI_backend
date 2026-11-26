@@ -337,7 +337,7 @@ class PengajuanOperasionalService
      * Approval bertahap. Urutan barang: pending_sarpras -> pending_keuangan -> pending_direktur -> disetujui.
      * Non-barang: pending_keuangan -> pending_direktur -> disetujui.
      */
-    public function approve(PengajuanPencairanKas $pengajuan, string $aksi, ?string $catatan, ?Request $request = null): PengajuanPencairanKas
+    public function approve(PengajuanPencairanKas $pengajuan, string $aksi, ?string $catatan, ?Request $request = null, array $extra = []): PengajuanPencairanKas
     {
         $tahapSaatIni = $pengajuan->status;
         $roleMap = [
@@ -411,16 +411,27 @@ class PengajuanOperasionalService
                         'status' => 'pending_keuangan',
                     ]);
                 } elseif ($tahapSaatIni === 'pending_keuangan') {
-                    $pengajuan->update([
+                    $updateData = [
                         'approved_keuangan_by' => $userId,
                         'approved_keuangan_at' => now(),
                         'status' => 'pending_direktur',
-                    ]);
+                    ];
+                    if (!empty($extra['unit_kas_id'])) {
+                        $unitKas = UnitKas::find((int) $extra['unit_kas_id']);
+                        if (!$unitKas || !$unitKas->status) {
+                            throw new \InvalidArgumentException('Unit kas sumber dana tidak valid / tidak aktif.');
+                        }
+                        $updateData['unit_kas_id'] = $unitKas->id;
+                    }
+                    if (isset($extra['nominal_disetujui']) && $extra['nominal_disetujui'] !== '' && $extra['nominal_disetujui'] !== null) {
+                        $updateData['nominal_disetujui'] = (float) $extra['nominal_disetujui'];
+                    }
+                    $pengajuan->update($updateData);
                 } elseif ($tahapSaatIni === 'pending_direktur') {
                     $pengajuan->update([
                         'approved_direktur_by' => $userId,
                         'approved_direktur_at' => now(),
-                        'nominal_disetujui' => $pengajuan->nominal_diajukan,
+                        'nominal_disetujui' => ((float) $pengajuan->nominal_disetujui) > 0 ? $pengajuan->nominal_disetujui : $pengajuan->nominal_diajukan,
                         'status' => 'disetujui',
                     ]);
                 }
@@ -430,20 +441,22 @@ class PengajuanOperasionalService
         });
 
         // Audit log di luar transaksi agar tidak me-rollback approval.
-        if ($request) {
-            try {
-                AuditLogService::record(
-                    module: 'SIKEU',
-                    action: $aksi,
-                    tableName: 'sikeu_pengajuan_pencairan_kas',
-                    recordId: $pengajuan->id,
-                    oldValues: ['status' => $tahapSaatIni],
-                    newValues: ['status' => $pengajuan->status, 'role' => $role],
-                    request: $request,
-                );
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('AuditLog approval pengajuan dilewati: ' . $e->getMessage());
-            }
+        try {
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: $aksi,
+                tableName: 'sikeu_pengajuan_pencairan_kas',
+                recordId: $pengajuan->id,
+                oldValues: ['status' => $tahapSaatIni],
+                newValues: [
+                    'status' => $pengajuan->status,
+                    'role' => $role,
+                    'unit_kas_id' => $pengajuan->unit_kas_id,
+                ],
+                request: $request,
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('AuditLog approval pengajuan dilewati: ' . $e->getMessage());
         }
 
         return $pengajuan->fresh(['items', 'fakultas', 'ruangan', 'unitKas', 'historyApproval']);
@@ -572,19 +585,20 @@ class PengajuanOperasionalService
             return $pengajuan->fresh(['items', 'unitKas']);
         });
 
-        if ($request) {
-            try {
-                AuditLogService::record(
-                    module: 'SIKEU',
-                    action: 'pencairan',
-                    tableName: 'sikeu_pengajuan_pencairan_kas',
-                    recordId: $pengajuan->id,
-                    newValues: ['nominal' => (float) ($data['nominal_cair'] ?? $pengajuan->nominal_disetujui)],
-                    request: $request,
-                );
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('AuditLog pencairan operasional dilewati: ' . $e->getMessage());
-            }
+        try {
+            AuditLogService::record(
+                module: 'SIKEU',
+                action: 'pencairan',
+                tableName: 'sikeu_pengajuan_pencairan_kas',
+                recordId: $pengajuan->id,
+                newValues: [
+                    'nominal' => (float) ($data['nominal_cair'] ?? $pengajuan->nominal_disetujui),
+                    'unit_kas_id' => $pengajuan->unit_kas_id,
+                ],
+                request: $request,
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('AuditLog pencairan operasional dilewati: ' . $e->getMessage());
         }
 
         return $pengajuan;
