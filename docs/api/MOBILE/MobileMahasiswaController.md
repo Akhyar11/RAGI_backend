@@ -40,6 +40,10 @@
 | GET | `/api/v1/mobile/mahasiswa/sikeu/pembayaran` | Riwayat transaksi pembayaran & nomor kwitansi resmi | ✅ `sikeu.tagihan.read` |
 | GET | `/api/v1/mobile/mahasiswa/sikeu/beasiswa` | Riwayat penerimaan beasiswa mahasiswa | ✅ `sikeu.tagihan.read` |
 | GET | `/api/v1/mobile/mahasiswa/sikeu/dispensasi` | Riwayat pengajuan dispensasi cicilan/penundaan pembayaran & peringatan tunggakan | ✅ `sikeu.dispensasi.read` |
+| GET | `/api/v1/mobile/mahasiswa/sikeu/payment-channels` | Kanal pembayaran aktif yang dikonfigurasi admin (Midtrans / Xendit / BSN H2H) | ✅ `sikeu.tagihan.read` |
+| POST | `/api/v1/mobile/mahasiswa/sikeu/invoice-batch` | Checklist tagihan mahasiswa -> buat invoice gabungan & VA (termasuk BSN) | ✅ `sikeu.pembayaran.create` |
+| POST | `/api/v1/mobile/mahasiswa/sikeu/tagihan/{id}/terbitkan-h2h` | Terbitkan billing H2H BSN milik mahasiswa yang sedang login | ✅ `sikeu.pembayaran.create` |
+| POST | `/api/v1/mobile/mahasiswa/sikeu/tagihan/{id}/checkout` | Buat transaksi Payment Gateway aktif (Midtrans Snap / Xendit) untuk tagihan mahasiswa | ✅ `sikeu.pembayaran.create` |
 
 ---
 
@@ -1119,3 +1123,225 @@ Tidak ada query parameter.
     }
 }
 ```
+
+---
+
+## 24. GET `/api/v1/mobile/mahasiswa/sikeu/payment-channels`
+
+> Mengambil informasi kanal pembayaran aktif yang dikonfigurasi admin (Midtrans, Xendit, atau BSN H2H).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Query Parameters
+
+Tidak ada query parameter.
+
+### Response Sukses (`200 OK`)
+
+```json
+{
+    "status": "success",
+    "message": "Kanal pembayaran aktif berhasil dimuat.",
+    "data": {
+        "active_gateway": {
+            "id": 1,
+            "gateway_name": "midtrans",
+            "environment": "sandbox",
+            "is_active": true,
+            "is_default": true
+        },
+        "bsn_h2h_active": true
+    }
+}
+```
+
+### Response Error
+
+* **`401 Unauthorized`**: Token tidak valid atau sesi berakhir.
+* **`403 Forbidden`**: Pengguna tidak memiliki hak akses `sikeu.tagihan.read` atau bukan profil mahasiswa.
+
+---
+
+## 25. POST `/api/v1/mobile/mahasiswa/sikeu/invoice-batch`
+
+> Membuat consolidated official invoice & nomor Virtual Account (VA) untuk checklist beberapa tagihan mahasiswa terpilih.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+```json
+{
+    "tagihan_ids": [5, 6],
+    "bank_kode": "BSN"
+}
+```
+
+### Response Sukses (`201 Created`)
+
+```json
+{
+    "status": "success",
+    "message": "Invoice berhasil dibuat.",
+    "data": {
+        "invoice_number": "INV-GABUNGAN-20261126-ABCD",
+        "tanggal_terbit": "2026-11-26",
+        "jatuh_tempo": "2026-12-26",
+        "periode": "Semester 1",
+        "mahasiswa": {
+            "nama": "Ahmad Fauzi",
+            "nim": "20240001",
+            "prodi": "Teknik Informatika",
+            "angkatan": 2024
+        },
+        "virtual_account": {
+            "bank": "Bank BSN (Virtual Account)",
+            "bank_kode": "BSN",
+            "va_number": "9001220240001",
+            "nominal_instruksi": 7500000,
+            "expired_at": "2026-12-26 15:30:00"
+        },
+        "ringkasan": {
+            "subtotal": 7500000,
+            "potongan": 0,
+            "denda": 0,
+            "total_dibayar": 0,
+            "sisa_tagihan": 7500000,
+            "status": "belum_bayar",
+            "jumlah_tagihan_terpilih": 2
+        },
+        "items": [
+            {
+                "deskripsi": "UKT Semester 1",
+                "nama_biaya": "UKT",
+                "tagihan_nomor": "INV-MHS-20260920-001",
+                "nominal": 3750000,
+                "potongan": 0,
+                "nominal_bersih": 3750000
+            }
+        ]
+    }
+}
+```
+
+### Response Error
+
+* **`401 Unauthorized`**: Token kedaluwarsa / belum login.
+* **`403 Forbidden`**: Pengguna tidak memiliki permission `sikeu.pembayaran.create`.
+* **`422 Unprocessable Entity`**: Tagihan tidak ditemukan atau tidak ada tagihan terpilih.
+
+---
+
+## 26. POST `/api/v1/mobile/mahasiswa/sikeu/tagihan/{id}/terbitkan-h2h`
+
+> Menerbitkan nomor billing H2H Bank Syariah Nasional (BSN) untuk tagihan milik mahasiswa yang sedang login.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### URL Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID tagihan mahasiswa (`sikeu_tagihan_mahasiswa.id`) |
+
+### Request Body
+
+```json
+{
+    "force": false
+}
+```
+
+### Response Sukses (`200 OK`)
+
+```json
+{
+    "status": "success",
+    "message": "Billing H2H terbit. CUSTID 20240001 siap dibayar via BSN.",
+    "data": {
+        "custid": "20240001",
+        "billnm": "Ahmad Fauzi",
+        "amount": 3750000,
+        "tagihan": {
+            "id": 5,
+            "nomor_tagihan": "INV-MHS-20260920-001",
+            "h2h_custid": "20240001",
+            "total_tagihan": 3750000,
+            "status": "belum_bayar"
+        }
+    }
+}
+```
+
+### Response Error
+
+* **`401 Unauthorized`**: Token kedaluwarsa.
+* **`403 Forbidden`**: Akses ditolak (`sikeu.pembayaran.create`).
+* **`404 Not Found`**: Tagihan tidak ditemukan atau bukan milik mahasiswa yang login.
+* **`502 Bad Gateway`**: Gagal berkomunikasi dengan layanan BSN H2H upstream.
+
+---
+
+## 27. POST `/api/v1/mobile/mahasiswa/sikeu/tagihan/{id}/checkout`
+
+> Menginisiasi transaksi online Payment Gateway (Midtrans Snap Token / Xendit Invoice) untuk tagihan mahasiswa.
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### URL Parameters
+
+| Parameter | Type | Required | Deskripsi |
+|---|---|---|---|
+| `id` | integer | ✅ | ID tagihan mahasiswa (`sikeu_tagihan_mahasiswa.id`) |
+
+### Request Body
+
+Tidak memerlukan request body (opsional payload kosong `{}`).
+
+### Response Sukses (`201 Created`)
+
+```json
+{
+    "status": "success",
+    "message": "Transaksi pembayaran berhasil dibuat.",
+    "data": {
+        "gateway_name": "midtrans",
+        "order_id": "TAG-5-1732634400",
+        "amount": 3750000,
+        "token": "snap-token-xyz-123",
+        "redirect_url": "https://app.sandbox.midtrans.com/snap/v2/vtweb/snap-token-xyz-123",
+        "expires_at": "2026-11-27T15:30:00.000000Z"
+    }
+}
+```
+
+### Response Error
+
+* **`401 Unauthorized`**: Token belum login atau tidak valid.
+* **`403 Forbidden`**: Tidak memiliki izin `sikeu.pembayaran.create`.
+* **`404 Not Found`**: Tagihan tidak ditemukan atau bukan milik akun mahasiswa.
+* **`422 Unprocessable Entity`**: Tagihan sudah lunas, sisa nominal Rp 0, atau kredensial gateway belum lengkap.
+* **`502 Bad Gateway`**: Upstream Payment Gateway gagal merespons atau membuat sesi transaksi.

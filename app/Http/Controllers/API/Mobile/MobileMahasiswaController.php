@@ -12,6 +12,7 @@ use App\Services\Mobile\MobileMahasiswaService;
 use App\Services\Siakad\ForumService;
 use App\Services\Siakad\LmsService;
 use App\Services\Siakad\QuizService;
+use App\Services\Sikeu\MahasiswaCheckoutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -26,6 +27,7 @@ class MobileMahasiswaController extends Controller
         private LmsService $lmsService,
         private QuizService $quizService,
         private ForumService $forumService,
+        private MahasiswaCheckoutService $checkoutService,
     ) {}
 
     /**
@@ -659,5 +661,90 @@ class MobileMahasiswaController extends Controller
             'message' => 'Daftar dispensasi pembayaran mahasiswa berhasil diambil.',
             'data' => $data,
         ]);
+    }
+
+    /**
+     * GET /api/v1/mobile/mahasiswa/sikeu/payment-channels
+     * Kanal pembayaran aktif yang dikonfigurasi admin (Midtrans / Xendit / BSN H2H).
+     */
+    public function sikeuPaymentChannels(Request $request): JsonResponse
+    {
+        Gate::authorize('sikeu.tagihan.read');
+        $this->mobileService->resolveAuthenticatedMahasiswa($request->user()->id);
+        $data = $this->checkoutService->getPaymentChannels();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Kanal pembayaran aktif berhasil dimuat.',
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/mahasiswa/sikeu/invoice-batch
+     * Checklist tagihan mahasiswa -> buat invoice gabungan & VA (termasuk BSN).
+     */
+    public function sikeuInvoiceBatch(Request $request): JsonResponse
+    {
+        Gate::authorize('sikeu.pembayaran.create');
+        $mhs = $this->mobileService->resolveAuthenticatedMahasiswa($request->user()->id);
+
+        $validated = $request->validate([
+            'tagihan_ids'   => ['nullable', 'array'],
+            'tagihan_ids.*' => ['integer', 'exists:sikeu_tagihan_mahasiswa,id'],
+            'tagihan_id'    => ['nullable', 'integer', 'exists:sikeu_tagihan_mahasiswa,id'],
+            'bank_kode'     => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $tagihanIds = (array) ($validated['tagihan_ids'] ?? []);
+        if (empty($tagihanIds) && !empty($validated['tagihan_id'])) {
+            $tagihanIds = [(int) $validated['tagihan_id']];
+        }
+        $bankCode = (string) ($validated['bank_kode'] ?? 'BSN');
+
+        $invoice = $this->checkoutService->generateBatchInvoice($mhs->id, $tagihanIds, $bankCode);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Invoice berhasil dibuat.',
+            'data' => $invoice,
+        ], 201);
+    }
+
+    /**
+     * POST /api/v1/mobile/mahasiswa/sikeu/tagihan/{id}/terbitkan-h2h
+     * Terbitkan billing H2H BSN milik mahasiswa yang sedang login.
+     */
+    public function sikeuTerbitkanH2h(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('sikeu.pembayaran.create');
+        $mhs = $this->mobileService->resolveAuthenticatedMahasiswa($request->user()->id);
+        $res = $this->checkoutService->terbitkanH2h($mhs, $id, $request->boolean('force'));
+        $hasil = $res['hasil'];
+
+        return response()->json([
+            'status' => 'success',
+            'message' => !empty($hasil['reused'])
+                ? "Billing H2H sudah terbit (CUSTID {$hasil['custid']})."
+                : "Billing H2H terbit. CUSTID {$hasil['custid']} siap dibayar via BSN.",
+            'data' => $hasil + ['tagihan' => $res['tagihan']],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/mobile/mahasiswa/sikeu/tagihan/{id}/checkout
+     * Buat transaksi Payment Gateway aktif (Midtrans Snap / Xendit) untuk tagihan mahasiswa.
+     */
+    public function sikeuCheckoutGateway(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('sikeu.pembayaran.create');
+        $mhs = $this->mobileService->resolveAuthenticatedMahasiswa($request->user()->id);
+        $data = $this->checkoutService->checkoutGateway($mhs, $id, $request->user()->email);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Transaksi pembayaran berhasil dibuat.',
+            'data' => $data,
+        ], 201);
     }
 }

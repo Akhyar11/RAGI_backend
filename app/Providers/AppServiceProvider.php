@@ -271,6 +271,12 @@ class AppServiceProvider extends ServiceProvider
                 || (int) $pendaftaran->user_id === (int) $user->id;
         });
 
+        // Otorisasi inisiasi pembayaran/checkout tagihan mahasiswa
+        Gate::define('sikeu.pembayaran.create', function (User $user) {
+            return $user->isSuperAdmin()
+                || $user->hasPermission('sikeu.pembayaran.create');
+        });
+
         Passport::$validateKeyPermissions = false;
 
         // Arahkan Passport ke halaman login SSO kustom kita
