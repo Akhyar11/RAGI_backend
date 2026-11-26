@@ -12,6 +12,7 @@ use App\Http\Requests\Mobile\StoreMobileSuratTugasRequest;
 use App\Http\Requests\Mobile\StoreMobileLpjRequest;
 use App\Http\Requests\Mobile\StoreMobileSkPegawaiRequest;
 use App\Http\Requests\Mobile\StoreMobileEfileRequest;
+use App\Http\Requests\Mobile\UpdateMobileEfileRequest;
 use App\Models\Siakad\AbsensiMahasiswa;
 use App\Models\Siakad\Krs;
 use App\Models\Siakad\Mahasiswa;
@@ -1527,6 +1528,86 @@ class MobileStaffController extends Controller
                 'message' => 'Dokumen e-file berhasil diunggah.',
                 'data' => $dokumen,
             ], 201);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'errors' => ['error' => [$e->getMessage()]],
+            ], 422);
+        }
+    }
+
+    /** PUT/PATCH/POST /api/v1/mobile/staff/arsip/e-file/{id} */
+    public function updateArsipEfile(UpdateMobileEfileRequest $request, int $id): JsonResponse
+    {
+        Gate::authorize('simpeg.dokumen.update');
+
+        try {
+            $dokumen = $this->simpegService->updateArsipEfile(
+                $request->user(),
+                $id,
+                $request->validated(),
+                $request->file('file')
+            );
+            $audit = $dokumen['audit'];
+            unset($dokumen['audit']);
+
+            try {
+                AuditLogService::record(
+                    module: $audit['module'],
+                    action: $audit['action'],
+                    tableName: $audit['table_name'],
+                    recordId: (int) $audit['record_id'],
+                    oldValues: $audit['old_values'],
+                    newValues: $audit['new_values'],
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log ubah e-file mobile: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Dokumen e-file berhasil diperbarui.',
+                'data' => $dokumen,
+            ]);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'errors' => ['error' => [$e->getMessage()]],
+            ], 422);
+        }
+    }
+
+    /** DELETE /api/v1/mobile/staff/arsip/e-file/{id} */
+    public function destroyArsipEfile(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('simpeg.dokumen.delete');
+
+        try {
+            $result = $this->simpegService->deleteArsipEfile($request->user(), $id);
+            $audit = $result['audit'];
+
+            try {
+                AuditLogService::record(
+                    module: $audit['module'],
+                    action: $audit['action'],
+                    tableName: $audit['table_name'],
+                    recordId: (int) $audit['record_id'],
+                    oldValues: $audit['old_values'],
+                    newValues: $audit['new_values'],
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mencatat audit log hapus e-file mobile: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Dokumen e-file berhasil dihapus.',
+                'data' => null,
+            ]);
         } catch (\DomainException $e) {
             return response()->json([
                 'status' => 'error',

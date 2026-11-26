@@ -66,6 +66,8 @@ Error: 400/401/403/404/422 `{status:"error",message:"...",errors:{...}}` (`error
 | GET | `/api/v1/mobile/staff/arsip/e-file` | Dokumen e-file kepegawaian pribadi staf | ✅ Bearer Token (`auth:api`) |
 | POST | `/api/v1/mobile/staff/arsip/e-file` | Unggah dokumen e-file pribadi ke penyimpanan privat | ✅ Bearer Token (`auth:api` / `simpeg.dokumen.create`) |
 | GET | `/api/v1/mobile/staff/arsip/e-file/{id}` | Detail satu dokumen e-file milik pegawai login | ✅ Bearer Token (`auth:api` / `simpeg.dokumen.read`) |
+| PUT/PATCH/POST | `/api/v1/mobile/staff/arsip/e-file/{id}` | Ubah metadata atau ganti berkas dokumen e-file pribadi | ✅ Bearer Token (`auth:api` / `simpeg.dokumen.update`) |
+| DELETE | `/api/v1/mobile/staff/arsip/e-file/{id}` | Hapus dokumen e-file pribadi dari database & storage | ✅ Bearer Token (`auth:api` / `simpeg.dokumen.delete`) |
 | GET | `/api/v1/mobile/staff/arsip/e-file/{id}/download` | Tautan unduh signed URL (15 menit) untuk e-file privat | ✅ Bearer Token (`auth:api` / `simpeg.dokumen.read`) |
 | GET | `/api/v1/mobile/staff/arsip/surat` | Arsip persuratan dan surat tugas terkait staf | ✅ Bearer Token (`auth:api`) |
 | GET | `/api/v1/mobile/staff/lms/bahan-ajar` | Daftar bahan ajar perkuliahan & RPS kelas dosen | ✅ Bearer Token (`auth:api`) |
@@ -4006,5 +4008,108 @@ Response berupa biner PDF (bukan JSON):
 ### Catatan Tambahan
 
 > Gunakan `file_url` tepat sebelum mengunduh; tautan kedaluwarsa setelah 900 detik dan tidak memerlukan Bearer token karena sudah bertanda-tangan.
+
+---
+
+## 52. PUT/PATCH/POST /api/v1/mobile/staff/arsip/e-file/{id}
+
+> Memperbarui metadata (`nama_dokumen`, `jenis_dokumen`) dan/atau mengganti berkas dokumen e-file pribadi (`multipart/form-data`).
+
+### Request Body
+
+| Field | Type | Required | Deskripsi |
+|---|---|---|---|
+| `nama_dokumen` | string | ❌ | Nama dokumen baru (maks 255 karakter) |
+| `jenis_dokumen` | string | ❌ | Salah satu nilai `DokumenPegawai::JENIS_DOKUMEN` |
+| `file` | file | ❌ | Berkas pengganti (`pdf`, `jpg`, `jpeg`, `png`, maks 5MB) |
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Dokumen e-file berhasil diperbarui.",
+    "data": {
+        "id": "1",
+        "title": "KTP Pegawai Terbaru",
+        "status": "pending"
+    }
+}
+```
+
+### Response Error
+
+- **401 Unauthorized**:
+  ```json
+  {
+      "status": "error",
+      "message": "Unauthenticated."
+  }
+  ```
+- **403 Forbidden**:
+  ```json
+  {
+      "status": "error",
+      "message": "Anda tidak memiliki izin untuk mengubah dokumen ini."
+  }
+  ```
+- **404 Not Found**:
+  ```json
+  {
+      "status": "error",
+      "message": "Dokumen e-file tidak ditemukan."
+  }
+  ```
+- **422 Unprocessable Entity**:
+  ```json
+  {
+      "status": "error",
+      "message": "Data yang diberikan tidak valid.",
+      "errors": {
+          "nama_dokumen": ["The nama dokumen must not be greater than 255 characters."]
+      }
+  }
+  ```
+
+---
+
+## 53. DELETE /api/v1/mobile/staff/arsip/e-file/{id}
+
+> Menghapus dokumen e-file pribadi beserta berkas fisiknya di storage privat.
+
+### Response Sukses (200 OK)
+
+```json
+{
+    "status": "success",
+    "message": "Dokumen e-file berhasil dihapus.",
+    "data": null
+}
+```
+
+### Response Error
+
+- **401 Unauthorized**:
+  ```json
+  {
+      "status": "error",
+      "message": "Unauthenticated."
+  }
+  ```
+- **403 Forbidden**:
+  ```json
+  {
+      "status": "error",
+      "message": "Anda tidak memiliki izin untuk menghapus dokumen ini."
+  }
+  ```
+- **404 Not Found**:
+  ```json
+  {
+      "status": "error",
+      "message": "Dokumen e-file tidak ditemukan."
+  }
+  ```
+
 
 

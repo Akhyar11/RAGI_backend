@@ -1232,6 +1232,8 @@ Route::middleware('auth:api')->prefix('arsip')->group(function () {
 Route::prefix('v1')->group(function () {
     // 1. Publik / Auth Mobile App (Flutter)
     Route::post('/auth/login', [App\Http\Controllers\API\AuthController::class, 'login']);
+    Route::post('/mobile/mahasiswa/auth/login', [App\Http\Controllers\API\Mobile\MobileMahasiswaController::class, 'login'])
+        ->middleware('throttle:login');
 
     // 2. Microservice Python Face Recognition (Port 8001)
     // Health tetap publik untuk monitoring; endpoint biometrik wajib auth dan permission.
@@ -1375,6 +1377,8 @@ Route::prefix('v1')->group(function () {
                 Route::get('/e-file', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listArsipEfile']);
                 Route::post('/e-file', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'storeArsipEfile']);
                 Route::get('/e-file/{id}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'showArsipEfile'])->whereNumber('id');
+                Route::match(['put', 'patch', 'post'], '/e-file/{id}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'updateArsipEfile'])->whereNumber('id');
+                Route::delete('/e-file/{id}', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'destroyArsipEfile'])->whereNumber('id');
                 Route::get('/e-file/{id}/download', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'downloadArsipEfile'])->whereNumber('id');
                 Route::get('/surat', [App\Http\Controllers\API\Mobile\MobileStaffController::class, 'listArsipSurat']);
             });

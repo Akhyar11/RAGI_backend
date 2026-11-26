@@ -797,4 +797,52 @@ class MobileStaffSimpegService
 
         return $detail;
     }
+
+    public function updateArsipEfile(User $user, int $id, array $data, $file = null): array
+    {
+        $dokumen = $this->resolveEfileForUser($user, $id);
+        $oldValues = $dokumen->only(['nama_dokumen', 'jenis_dokumen', 'file_path', 'file_size', 'status_verifikasi']);
+
+        if (array_key_exists('nama_dokumen', $data)) {
+            $dokumen->nama_dokumen = $data['nama_dokumen'];
+        }
+        if (array_key_exists('jenis_dokumen', $data)) {
+            $dokumen->jenis_dokumen = $data['jenis_dokumen'];
+        }
+        if ($file) {
+            if ($dokumen->file_path) {
+                $this->fileStorageService->delete($dokumen->file_path, private: true);
+            }
+            $dokumen->file_path = $this->fileStorageService->store($file, 'simpeg/e-file', private: true);
+            $dokumen->file_size = $this->formatMobileFileSize((int) $file->getSize());
+            $dokumen->status_verifikasi = 'pending';
+        }
+        $dokumen->save();
+
+        $detail = $this->getArsipEfileDetail($user, $dokumen->id);
+        $detail['audit'] = $this->mobileAudit(
+            'simpeg_dokumen_pegawai',
+            $dokumen->id,
+            $dokumen->only(['nama_dokumen', 'jenis_dokumen', 'file_path', 'file_size', 'status_verifikasi']),
+            $oldValues,
+            'update_efile'
+        );
+
+        return $detail;
+    }
+
+    public function deleteArsipEfile(User $user, int $id): array
+    {
+        $dokumen = $this->resolveEfileForUser($user, $id);
+        $oldValues = $dokumen->only(['pegawai_id', 'nama_dokumen', 'jenis_dokumen', 'file_path', 'file_size', 'status_verifikasi']);
+
+        if ($dokumen->file_path) {
+            $this->fileStorageService->delete($dokumen->file_path, private: true);
+        }
+        $dokumen->delete();
+
+        return [
+            'audit' => $this->mobileAudit('simpeg_dokumen_pegawai', $id, null, $oldValues, 'delete_efile'),
+        ];
+    }
 }

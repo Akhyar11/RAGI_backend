@@ -445,7 +445,7 @@ class PermissionSeeder extends Seeder
                 // SIMPEG mandiri
                 'simpeg.dashboard.read',
                 'simpeg.pegawai.read',
-                'simpeg.dokumen.read', 'simpeg.dokumen.create',
+                'simpeg.dokumen.read', 'simpeg.dokumen.create', 'simpeg.dokumen.update', 'simpeg.dokumen.delete',
                 'simpeg.cuti.read', 'simpeg.cuti.create',
                 'simpeg.presensi.read', 'simpeg.presensi.create',
                 'simpeg.payroll.read',
@@ -456,6 +456,8 @@ class PermissionSeeder extends Seeder
                 'simpeg.kebijakan_pedoman.read',
                 'simpeg.usulan_jafung.read', 'simpeg.usulan_jafung.create',
                 'simpeg.kinerja.read', 'simpeg.kinerja.create',
+                // SIKEU (pengajuan kas / reimbursement mandiri)
+                'sikeu.pengajuan.read', 'sikeu.pengajuan.create',
                 // SIPPM mandiri
                 'sippm.dashboard.read',
                 'sippm.proposal.read', 'sippm.proposal.create', 'sippm.proposal.update', 'sippm.proposal.submit',
@@ -502,7 +504,7 @@ class PermissionSeeder extends Seeder
             $tendikSlugs = [
                 'simpeg.dashboard.read',
                 'simpeg.pegawai.read',
-                'simpeg.dokumen.read', 'simpeg.dokumen.create',
+                'simpeg.dokumen.read', 'simpeg.dokumen.create', 'simpeg.dokumen.update', 'simpeg.dokumen.delete',
                 'simpeg.cuti.read', 'simpeg.cuti.create',
                 'simpeg.presensi.read', 'simpeg.presensi.create',
                 'simpeg.payroll.read',
@@ -512,6 +514,8 @@ class PermissionSeeder extends Seeder
                 'simpeg.sk_pegawai.read', 'simpeg.sk_pegawai.create', 'simpeg.sk_pegawai.update', 'simpeg.sk_pegawai.delete',
                 'simpeg.kebijakan_pedoman.read',
                 'simpeg.kinerja.read', 'simpeg.kinerja.create',
+                // SIKEU (pengajuan kas / reimbursement mandiri)
+                'sikeu.pengajuan.read', 'sikeu.pengajuan.create',
             ];
             $perms = Permission::whereIn('slug', $tendikSlugs)->get();
             foreach ($perms as $p) {
