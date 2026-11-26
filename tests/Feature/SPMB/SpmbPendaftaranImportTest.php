@@ -317,4 +317,32 @@ class SpmbPendaftaranImportTest extends TestCase
         $this->assertCount(2, $names('status=ngawur'));
         $this->assertCount(2, $names(''));
     }
+
+    public function test_pendaftaran_list_can_be_filtered_by_gelombang_and_jalur(): void
+    {
+        $this->actingAs($this->admin, 'api')->postJson('/api/spmb/pendaftaran/import', ['file' => $this->upload([
+            $this->row(),
+            $this->row([1 => 202720002, 8 => 'b@test.com']),
+        ])])->assertStatus(201);
+
+        $jalurA = \App\Models\Spmb\JalurMasuk::create(['kode' => 'JA', 'nama' => 'Jalur A', 'is_active' => true]);
+        $jalurB = \App\Models\Spmb\JalurMasuk::create(['kode' => 'JB', 'nama' => 'Jalur B', 'is_active' => true]);
+        $make = fn ($jalur, $nama) => \App\Models\Spmb\GelombangPenerimaan::create([
+            'jalur_masuk_id' => $jalur->id, 'nama' => $nama, 'tanggal_buka' => '2026-01-01',
+            'tanggal_tutup' => '2026-12-31', 'kuota_total' => 10, 'kuota_terisi' => 0,
+            'biaya_pendaftaran' => 0, 'status' => 'aktif',
+        ]);
+        $gelA = $make($jalurA, 'Gel A');
+        $gelB = $make($jalurB, 'Gel B');
+        PendaftaranCalonMhs::where('no_pendaftaran', '202720001')->update(['gelombang_id' => $gelA->id]);
+        PendaftaranCalonMhs::where('no_pendaftaran', '202720002')->update(['gelombang_id' => $gelB->id]);
+
+        $numbers = fn (string $query) => collect(
+            $this->actingAs($this->admin, 'api')->getJson('/api/spmb/pendaftaran?'.$query)->assertOk()->json('data.data')
+        )->pluck('no_pendaftaran')->all();
+
+        $this->assertSame(['202720001'], $numbers('jalur_masuk_id='.$jalurA->id));
+        $this->assertSame(['202720002'], $numbers('gelombang_id='.$gelB->id));
+        $this->assertCount(2, $numbers(''));
+    }
 }

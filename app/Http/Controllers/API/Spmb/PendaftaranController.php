@@ -57,6 +57,11 @@ class PendaftaranController extends Controller
             $query->where('gelombang_id', $request->gelombang_id);
         }
 
+        // Filter by Jalur Masuk (mengikuti jalur pada gelombang pendaftar)
+        if ($request->filled('jalur_masuk_id')) {
+            $query->whereHas('gelombangPenerimaan', fn ($q) => $q->where('jalur_masuk_id', $request->integer('jalur_masuk_id')));
+        }
+
         // Filter by Kode Referral
         if ($request->filled('referral_code')) {
             $query->where('used_referral_code', 'like', '%' . $request->input('referral_code') . '%');

@@ -40,6 +40,7 @@ Menangani data pendaftaran calon mahasiswa untuk sisi admin/panitia SPMB dan cal
 | `status` | string | ❌ | — | Filter status pendaftaran |
 | `status_pembayaran` | string | ❌ | — | Filter status pembayaran pendaftaran |
 | `gelombang_id` | integer | ❌ | — | Filter berdasarkan gelombang |
+| `jalur_masuk_id` | integer | ❌ | — | Filter berdasarkan jalur masuk pada gelombang pendaftar |
 | `referral_code` | string | ❌ | — | Filter kode referral terpakai |
 | `sort_by` / `order_by` | string | ❌ | `created_at` | Kolom pengurutan |
 | `sort_order` / `order_dir` | string | ❌ | `desc` | Arah urutan: `asc` / `desc` |
