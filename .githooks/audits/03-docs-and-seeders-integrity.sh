@@ -102,13 +102,18 @@ EOF
 
 AI_EXIT_CODE=1
 if command -v agy &> /dev/null; then
-    RESULT=$(timeout 180s agy --model gemini-3.8-flash-low --disable-slash-commands --print "$(cat "$PROMPT_FILE")" < /dev/null 2>&1)
+    RESULT=$(timeout "${AGY_TIMEOUT:-180}s" agy --model gemini-3.8-flash-low --disable-slash-commands --print "$(cat "$PROMPT_FILE")" < /dev/null 2>&1)
     AI_EXIT_CODE=$?
 fi
 
+REVIEWER="reviewer utama (agy)"
 if [ $AI_EXIT_CODE -ne 0 ] && [ -x "$OPENCODE_BIN" ]; then
-    RESULT=$(timeout 90s "$OPENCODE_BIN" run -m "$MODEL" "$(cat "$PROMPT_FILE")" 2>&1)
+    # Reviewer utama gagal (kuota habis/timeout): pakai reviewer cadangan. Batas waktu dapat
+    # diatur lewat AUDIT_FALLBACK_TIMEOUT (detik); model cadangan gratis dapat lambat pada diff besar.
+    echo "↪️ [Audit 3/3] Reviewer utama tidak tersedia, memakai reviewer cadangan ($MODEL), batas ${AUDIT_FALLBACK_TIMEOUT:-300}s..."
+    RESULT=$(timeout "${AUDIT_FALLBACK_TIMEOUT:-300}s" "$OPENCODE_BIN" run -m "$MODEL" "$(cat "$PROMPT_FILE")" 2>&1)
     AI_EXIT_CODE=$?
+    REVIEWER="reviewer cadangan ($MODEL)"
 fi
 
 rm -f "$PROMPT_FILE"
@@ -134,5 +139,5 @@ elif ! echo "$RESULT" | grep -qi "PASSED"; then
     exit 1
 fi
 
-echo "✅ [Audit 3/3: Docs, Seeders & PDDIKTI Sync] PASSED (Divalidasi AI reviewer)."
+echo "✅ [Audit 3/3: Docs, Seeders & PDDIKTI Sync] PASSED (Divalidasi $REVIEWER)."
 exit 0
