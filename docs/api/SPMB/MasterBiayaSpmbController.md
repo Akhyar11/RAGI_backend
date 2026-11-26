@@ -368,7 +368,7 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
 
 ## [POST] /api/spmb/master/biaya
 
-> Idempoten untuk pasangan `(jalur_masuk_id, program_studi_id)`.
+> Mode tunggal idempoten untuk pasangan `(jalur_masuk_id, program_studi_id)`. Mode banyak (`jalur_masuk_ids` + `program_studi_ids`) membuat satu baris per kombinasi dan melewati kombinasi yang sudah ada.
 
 ### Request Body
 
@@ -417,6 +417,139 @@ Sama seperti POST (tanpa `kode` unik konflik, unik diabaikan untuk dirinya sendi
     "errors": { "items.0.nominal": ["The items.0.nominal field is required."] }
 }
 ```
+
+### Mode banyak jalur dan program studi (diperbarui 2026-11-26)
+
+Kirim `jalur_masuk_ids` (maks 50) dan `program_studi_ids` (maks 100, kombinasi maks 200) sebagai pengganti `jalur_masuk_id`/`program_studi_id`. Backend membuat **satu baris per kombinasi** dengan rincian komponen, evidence, `is_active`, dan `keterangan` yang sama. Kombinasi yang sudah ada (termasuk yang dihapus lunak) **dilewati, tidak ditimpa**. Dokumen pendukung (jika `evidence_type=upload`) diunggah sekali dan dipakai bersama; berkas tidak dihapus selama masih dirujuk baris lain.
+
+#### Request Body
+
+```json
+{
+    "jalur_masuk_ids": [1, 2],
+    "program_studi_ids": [1, 2],
+    "evidence_type": "arsip",
+    "nomor_sk": "101/SK/OK/X/2026",
+    "is_active": true,
+    "items": [
+        { "komponen_biaya_id": 1, "nominal": 200000, "dibebankan_saat_pendaftaran": true },
+        { "komponen_biaya_id": 2, "nominal": 3000000, "dibebankan_saat_pendaftaran": false }
+    ]
+}
+```
+
+#### Response 201 (sebagian kombinasi dilewati)
+
+```json
+{
+  "status": "success",
+  "message": "3 master biaya dibuat, 1 dilewati karena kombinasinya sudah ada.",
+  "data": {
+    "dibuat": [
+      {
+        "id": 2,
+        "jalur_masuk_id": 1,
+        "program_studi_id": 2,
+        "nomor_sk": "101/SK/OK/X/2026",
+        "total_biaya": "3200000.00",
+        "is_active": true,
+        "jalur_masuk": {
+          "id": 1,
+          "kode": "JA",
+          "nama": "Jalur A"
+        },
+        "program_studi": {
+          "id": 2,
+          "nama": "Perhotelan",
+          "jenjang": "D3"
+        }
+      },
+      {
+        "id": 3,
+        "jalur_masuk_id": 2,
+        "program_studi_id": 1,
+        "nomor_sk": "101/SK/OK/X/2026",
+        "total_biaya": "3200000.00",
+        "is_active": true,
+        "jalur_masuk": {
+          "id": 2,
+          "kode": "JB",
+          "nama": "Jalur B"
+        },
+        "program_studi": {
+          "id": 1,
+          "nama": "Farmasi",
+          "jenjang": "D3"
+        }
+      }
+    ],
+    "dilewati": [
+      {
+        "jalur_masuk_id": 1,
+        "program_studi_id": 1,
+        "jalur": "Jalur A",
+        "program_studi": "[D3] Farmasi",
+        "alasan": "sudah_ada"
+      }
+    ],
+    "ringkasan": {
+      "total": 4,
+      "dibuat": 3,
+      "dilewati": 1
+    }
+  }
+}
+```
+
+#### Response 422 (semua kombinasi sudah ada)
+
+```json
+{
+  "status": "error",
+  "message": "Semua kombinasi jalur dan program studi yang dipilih sudah memiliki master biaya.",
+  "errors": {
+    "program_studi_ids": [
+      "Semua kombinasi jalur dan program studi yang dipilih sudah memiliki master biaya."
+    ]
+  }
+}
+```
+
+#### Response 422 (validasi)
+
+```json
+{
+  "status": "error",
+  "message": "The selected jalur_masuk_ids.0 is invalid.",
+  "errors": {
+    "jalur_masuk_ids.0": [
+      "The selected jalur_masuk_ids.0 is invalid."
+    ]
+  }
+}
+```
+
+#### Response 401
+
+```json
+{
+  "status": "error",
+  "message": "Token tidak valid atau sesi telah berakhir."
+}
+```
+
+#### Response 403
+
+```json
+{
+  "status": "error",
+  "message": "Unauthorized access. Menu ini belum diaktifkan untuk role Anda di database."
+}
+```
+
+#### Response 404
+
+Tidak berlaku untuk mode ini: id jalur/prodi yang tidak ditemukan menghasilkan 422 pada `jalur_masuk_ids.N`/`program_studi_ids.N`.
 
 ---
 

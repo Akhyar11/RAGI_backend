@@ -256,6 +256,24 @@ class MasterBiayaSpmbController extends Controller
 
     public function store(StoreMasterBiayaRequest $request): JsonResponse
     {
+        if ($request->isBulk()) {
+            $result = $this->service->createBiayaBulk($request->validated(), $request);
+            $dibuat = $result['dibuat']->count();
+            $dilewati = count($result['dilewati']);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => $dilewati > 0
+                    ? "{$dibuat} master biaya dibuat, {$dilewati} dilewati karena kombinasinya sudah ada."
+                    : "{$dibuat} master biaya berhasil dibuat.",
+                'data' => [
+                    'dibuat' => $result['dibuat']->values(),
+                    'dilewati' => $result['dilewati'],
+                    'ringkasan' => ['total' => $dibuat + $dilewati, 'dibuat' => $dibuat, 'dilewati' => $dilewati],
+                ],
+            ], 201);
+        }
+
         $masterBiaya = $this->service->createBiaya($request->validated());
 
         return response()->json([

@@ -8,6 +8,10 @@ use App\Models\Spmb\MasterKomponenBiaya;
 use App\Models\Sikeu\PaymentGatewayConfig;
 use App\Services\Storage\FileStorageService;
 use Illuminate\Support\Collection;
+use App\Models\Spmb\JalurMasuk;
+use App\Models\Siakad\ProgramStudi;
+use App\Services\AuditLogService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -193,6 +197,26 @@ class MasterBiayaService
         return (bool) $komponen->restore();
     }
 
+    /**
+     * Hapus berkas evidence hanya bila tidak lagi dirujuk master biaya lain (berkas dapat dipakai
+     * bersama oleh baris yang dibuat dalam satu permintaan banyak kombinasi).
+     */
+    private function deleteEvidenceIfUnused(?string $path, int $exceptId): void
+    {
+        if (! $path) {
+            return;
+        }
+
+        $stillUsed = MasterBiaya::withTrashed()
+            ->where('dokumen_pendukung_path', $path)
+            ->where('id', '!=', $exceptId)
+            ->exists();
+
+        if (! $stillUsed) {
+            app(FileStorageService::class)->delete($path, private: true);
+        }
+    }
+
     public function createBiaya(array $data): MasterBiaya
     {
         $file = $data['dokumen_pendukung'] ?? null;
@@ -200,14 +224,16 @@ class MasterBiayaService
         unset($data['dokumen_pendukung'], $data['evidence_type']);
         $uploadedPath = $file ? app(FileStorageService::class)->store($file, 'spmb/master-biaya', private: true) : null;
         $oldPath = null;
+        $oldOwnerId = null;
 
         try {
-            $created = DB::transaction(function () use ($data, $evidenceType, $uploadedPath, &$oldPath) {
+            $created = DB::transaction(function () use ($data, $evidenceType, $uploadedPath, &$oldPath, &$oldOwnerId) {
                 $existing = MasterBiaya::query()
                     ->where('jalur_masuk_id', $data['jalur_masuk_id'])
                     ->where('program_studi_id', $data['program_studi_id'])
                     ->first();
                 $oldPath = $existing?->dokumen_pendukung_path;
+                $oldOwnerId = $existing?->id;
 
                 $masterBiaya = MasterBiaya::updateOrCreate(
                     [
@@ -249,7 +275,7 @@ class MasterBiayaService
             });
 
             if ($oldPath && $oldPath !== $uploadedPath) {
-                app(FileStorageService::class)->delete($oldPath, private: true);
+                $this->deleteEvidenceIfUnused($oldPath, (int) $oldOwnerId);
             }
 
             return $created;
@@ -260,6 +286,131 @@ class MasterBiayaService
 
             throw $exception;
         }
+    }
+
+    /**
+     * Buat master biaya untuk banyak kombinasi jalur × program studi (satu baris per kombinasi).
+     * Kombinasi yang sudah ada (termasuk yang dihapus lunak) dilewati, tidak ditimpa.
+     *
+     * @return array{dibuat: \Illuminate\Support\Collection<int, MasterBiaya>, dilewati: list<array<string,mixed>>}
+     */
+    public function createBiayaBulk(array $data, ?Request $request = null): array
+    {
+        $jalurIds = $this->collectIds($data, 'jalur_masuk_id', 'jalur_masuk_ids');
+        $prodiIds = $this->collectIds($data, 'program_studi_id', 'program_studi_ids');
+        $evidenceType = $data['evidence_type'];
+        $file = $data['dokumen_pendukung'] ?? null;
+
+        // Unique index (jalur, prodi) mencakup baris terhapus, jadi periksa dengan withTrashed.
+        $existing = MasterBiaya::withTrashed()
+            ->whereIn('jalur_masuk_id', $jalurIds)
+            ->whereIn('program_studi_id', $prodiIds)
+            ->get(['id', 'jalur_masuk_id', 'program_studi_id', 'deleted_at'])
+            ->keyBy(fn ($row) => $row->jalur_masuk_id.'-'.$row->program_studi_id);
+
+        $jalurNames = JalurMasuk::whereIn('id', $jalurIds)->pluck('nama', 'id');
+        $prodiNames = ProgramStudi::whereIn('id', $prodiIds)->get(['id', 'nama', 'jenjang'])
+            ->mapWithKeys(fn ($p) => [$p->id => trim(($p->jenjang ? "[{$p->jenjang}] " : '').$p->nama)]);
+
+        $combinations = [];
+        $skipped = [];
+        foreach ($jalurIds as $jalurId) {
+            foreach ($prodiIds as $prodiId) {
+                $found = $existing->get($jalurId.'-'.$prodiId);
+                if ($found) {
+                    $skipped[] = [
+                        'jalur_masuk_id' => $jalurId,
+                        'program_studi_id' => $prodiId,
+                        'jalur' => $jalurNames[$jalurId] ?? null,
+                        'program_studi' => $prodiNames[$prodiId] ?? null,
+                        'alasan' => $found->deleted_at ? 'terhapus' : 'sudah_ada',
+                    ];
+
+                    continue;
+                }
+                $combinations[] = [$jalurId, $prodiId];
+            }
+        }
+
+        if ($combinations === []) {
+            throw ValidationException::withMessages([
+                'program_studi_ids' => 'Semua kombinasi jalur dan program studi yang dipilih sudah memiliki master biaya.',
+            ]);
+        }
+
+        $uploadedPath = $file ? app(FileStorageService::class)->store($file, 'spmb/master-biaya', private: true) : null;
+
+        try {
+            $created = DB::transaction(function () use ($combinations, $data, $evidenceType, $uploadedPath) {
+                $rows = collect();
+                foreach ($combinations as [$jalurId, $prodiId]) {
+                    $biaya = MasterBiaya::create([
+                        'jalur_masuk_id' => $jalurId,
+                        'program_studi_id' => $prodiId,
+                        'nomor_sk' => $evidenceType === 'arsip' ? $data['nomor_sk'] : null,
+                        'dokumen_pendukung_path' => $evidenceType === 'upload' ? $uploadedPath : null,
+                        'is_active' => $data['is_active'] ?? true,
+                        'keterangan' => $data['keterangan'] ?? null,
+                    ]);
+
+                    $total = 0;
+                    foreach ($data['items'] ?? [] as $item) {
+                        $nominal = (float) $item['nominal'];
+                        $total += $nominal;
+                        MasterBiayaItem::create([
+                            'master_biaya_id' => $biaya->id,
+                            'komponen_biaya_id' => $item['komponen_biaya_id'],
+                            'nominal' => $nominal,
+                            'dibebankan_saat_pendaftaran' => (bool) ($item['dibebankan_saat_pendaftaran'] ?? false),
+                            'berlaku_diskon' => (bool) ($item['berlaku_diskon'] ?? false),
+                            'keterangan' => $item['keterangan'] ?? null,
+                        ]);
+                    }
+                    $biaya->update(['total_biaya' => $total]);
+                    $rows->push($biaya);
+                }
+
+                return $rows;
+            });
+        } catch (Throwable $exception) {
+            if ($uploadedPath) {
+                app(FileStorageService::class)->delete($uploadedPath, private: true);
+            }
+
+            throw $exception;
+        }
+
+        $created->each->load(['items.komponenBiaya', 'programStudi', 'jalurMasuk', 'arsipNomorSurat']);
+
+        try {
+            AuditLogService::record(
+                module: 'SPMB',
+                action: 'master_biaya_dibuat_massal',
+                tableName: (new MasterBiaya)->getTable(),
+                newValues: [
+                    'dibuat' => $created->pluck('id')->all(),
+                    'dilewati' => count($skipped),
+                    'jalur_masuk_ids' => $jalurIds,
+                    'program_studi_ids' => $prodiIds,
+                ],
+                request: $request,
+            );
+        } catch (Throwable $exception) {
+            Log::warning('Gagal mencatat audit log master biaya massal: '.$exception->getMessage());
+        }
+
+        return ['dibuat' => $created, 'dilewati' => $skipped];
+    }
+
+    /** @return list<int> */
+    private function collectIds(array $data, string $singleKey, string $manyKey): array
+    {
+        $ids = array_map('intval', $data[$manyKey] ?? []);
+        if (! empty($data[$singleKey])) {
+            $ids[] = (int) $data[$singleKey];
+        }
+
+        return array_values(array_unique($ids));
     }
 
     public function updateBiaya(MasterBiaya $biaya, array $data): MasterBiaya
@@ -333,7 +484,7 @@ class MasterBiayaService
             });
 
             if ($oldPath) {
-                app(FileStorageService::class)->delete($oldPath, private: true);
+                $this->deleteEvidenceIfUnused($oldPath, (int) $biaya->id);
             }
 
             return $updated;
