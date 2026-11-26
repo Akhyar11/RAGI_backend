@@ -31,7 +31,7 @@ class StorePendaftaranManualRequest extends FormRequest
     {
         return [
             'email' => ['required', 'email', 'max:255', 'unique:core_users,email'],
-            'gelombang_id' => ['required', 'integer', 'exists:spmb_gelombang_penerimaan,id'],
+            'gelombang_id' => ['nullable', 'integer', 'exists:spmb_gelombang_penerimaan,id'],
             'jalur_masuk_id' => ['required', 'integer', 'exists:spmb_jalur_masuk,id'],
             'master_tipe_jalur_id' => ['prohibited'],
             'program_studi_id' => [

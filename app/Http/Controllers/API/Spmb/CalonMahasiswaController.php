@@ -246,7 +246,7 @@ class CalonMahasiswaController extends Controller
             }
 
             $details = app(MasterBiayaService::class)->buildDetailBebanPendaftaran(
-                $locked->gelombangPenerimaan?->jalur_masuk_id,
+                $locked->resolveJalurMasukId(),
                 $locked->program_studi_id,
                 $locked->gelombang_id,
             );

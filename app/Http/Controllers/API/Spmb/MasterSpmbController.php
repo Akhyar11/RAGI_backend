@@ -4,6 +4,8 @@ namespace App\Http\Controllers\API\Spmb;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Spmb\GetBiayaPendaftaranRequest;
+use App\Http\Requests\Spmb\ResolveGelombangRequest;
+use App\Services\Spmb\SpmbGelombangResolver;
 use App\Models\Spmb\JalurMasuk;
 use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\System\MasterReferensi;
@@ -176,6 +178,10 @@ class MasterSpmbController extends Controller
             $query->where('jalur_masuk_id', $request->jalur_masuk_id);
         }
 
+        if ($request->boolean('umum')) {
+            $query->umum();
+        }
+
         if ($request->filled('tanggal_buka')) {
             $query->where('tanggal_buka_siklus', '>=', $request->tanggal_buka);
         }
@@ -242,6 +248,27 @@ class MasterSpmbController extends Controller
     }
 
     /**
+     * Tentukan gelombang untuk jalur masuk yang dipilih (otomatis, pilih, atau tidak tersedia).
+     */
+    public function resolveGelombang(ResolveGelombangRequest $request, SpmbGelombangResolver $resolver): JsonResponse
+    {
+        $jalurId = $request->integer('jalur_masuk_id');
+        $result = $resolver->forJalur($jalurId, $request->input('konteks') === SpmbGelombangResolver::KONTEKS_ONLINE);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Gelombang untuk jalur berhasil ditentukan.',
+            'data' => [
+                'jalur_masuk_id' => $jalurId,
+                'mode' => $result['mode'],
+                'sumber' => $result['sumber'],
+                'gelombang' => $result['gelombang'],
+                'options' => $result['options']->values(),
+            ],
+        ]);
+    }
+
+    /**
      * Show Gelombang
      */
     public function showGelombang($id): JsonResponse
@@ -260,7 +287,7 @@ class MasterSpmbController extends Controller
     public function storeGelombang(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
+            'jalur_masuk_id' => 'nullable|exists:spmb_jalur_masuk,id',
             'nama' => 'required|string',
             'tanggal_buka' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
             'tanggal_tutup' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
@@ -273,7 +300,7 @@ class MasterSpmbController extends Controller
 
         $this->validateCyclePeriodDates($validated);
 
-        $gelombang = GelombangPenerimaan::create($validated);
+        $gelombang = GelombangPenerimaan::create($validated)->refresh();
         $gelombang->load(['jalurMasuk']);
 
         return response()->json([
@@ -291,7 +318,7 @@ class MasterSpmbController extends Controller
         $gelombang = GelombangPenerimaan::findOrFail($id);
 
         $validated = $request->validate([
-            'jalur_masuk_id' => 'required|exists:spmb_jalur_masuk,id',
+            'jalur_masuk_id' => 'nullable|exists:spmb_jalur_masuk,id',
             'nama' => 'required|string',
             'tanggal_buka' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],
             'tanggal_tutup' => ['required', 'string', 'regex:/^\\d{2}-\\d{2}$/'],

@@ -2,6 +2,7 @@
 
 namespace App\Services\Spmb;
 
+use App\Models\Spmb\GelombangPenerimaan;
 use App\Models\Spmb\PendaftaranCalonMhs;
 use App\Models\Spmb\HasilSeleksi;
 use App\Models\Spmb\SpmbKuotaProdi;
@@ -86,7 +87,13 @@ class SpmbPendaftaranService
         ];
 
         $audit = DB::transaction(function () use ($pendaftaran, $data, $hasEmail, $email, $hasReferrer, $referrerId, $hasThirdParty, $thirdPartyIds, $oldValues, $oldExtra) {
-            $pendaftaran->fill($data)->save();
+            $pendaftaran->fill($data);
+            app(SpmbGelombangResolver::class)->assertCompatible(
+                $pendaftaran->gelombang_id ? GelombangPenerimaan::query()->find($pendaftaran->gelombang_id) : null,
+                $pendaftaran->jalur_masuk_id ? (int) $pendaftaran->jalur_masuk_id : null,
+                'gelombang_id',
+            );
+            $pendaftaran->save();
             $new = $pendaftaran->getChanges();
             unset($new['updated_at']);
             $old = array_intersect_key($oldValues, $new);
@@ -144,7 +151,7 @@ class SpmbPendaftaranService
         }
 
         return $pendaftaran->fresh([
-            'gelombangPenerimaan.jalurMasuk', 'programStudi', 'programStudiPilihan2',
+            'gelombangPenerimaan.jalurMasuk', 'jalurMasuk', 'programStudi', 'programStudiPilihan2',
             'user:id,username,name,email', 'referrer:id,username,name,referral_code', 'pihakKetiga',
         ]);
     }
@@ -224,7 +231,7 @@ class SpmbPendaftaranService
      */
     private function validateBerkasWajib(PendaftaranCalonMhs $pendaftaran): void
     {
-        $jalurMasukId = $pendaftaran->gelombangPenerimaan?->jalur_masuk_id;
+        $jalurMasukId = $pendaftaran->resolveJalurMasukId();
 
         if (! $jalurMasukId) {
             return;
@@ -357,10 +364,25 @@ class SpmbPendaftaranService
                     $q->where('tipe_referensi', 'spmb_pendaftaran')->orWhereNull('tipe_referensi');
                 })
                 ->exists();
-            if ($existing && ! empty($existing->gelombang_id) && ($hasRegistrationBill || $existing->status !== 'draft')) {
+            $locked = $existing && ! empty($existing->gelombang_id) && ($hasRegistrationBill || $existing->status !== 'draft');
+            if ($locked) {
                 $validated['gelombang_id'] = $existing->gelombang_id;
+                $validated['jalur_masuk_id'] = $existing->jalur_masuk_id;
+            } else {
+                $resolver = app(SpmbGelombangResolver::class);
+                // Jalur dipilih lebih dulu; gelombang otomatis bila hanya ada satu yang cocok.
+                if (! empty($validated['jalur_masuk_id']) && empty($validated['gelombang_id'])) {
+                    $resolved = $resolver->forJalur((int) $validated['jalur_masuk_id'], true);
+                    if ($resolved['mode'] === SpmbGelombangResolver::MODE_OTOMATIS) {
+                        $validated['gelombang_id'] = $resolved['gelombang']->id;
+                    }
+                }
+                // Gelombang khusus jalur menentukan jalur bila jalur belum dikirim.
+                if (! empty($validated['gelombang_id']) && empty($validated['jalur_masuk_id'])) {
+                    $validated['jalur_masuk_id'] = GelombangPenerimaan::query()
+                        ->whereKey($validated['gelombang_id'])->value('jalur_masuk_id');
+                }
             }
-            unset($validated['jalur_masuk_id']);
 
             // Sanitasi input: jika nik kosong string, jadikan null agar tidak memicu duplikat unique key
             if (array_key_exists('nik', $validated)) {
@@ -605,7 +627,7 @@ class SpmbPendaftaranService
         \Carbon\Carbon::setLocale('id');
 
         $pendaftaran->loadMissing([
-            'gelombangPenerimaan.jalurMasuk',
+            'gelombangPenerimaan.jalurMasuk', 'jalurMasuk',
             'programStudi',
             'programStudiPilihan2',
             'hasilSeleksi.programStudiDiterima',
@@ -613,7 +635,7 @@ class SpmbPendaftaranService
             'user',
         ]);
 
-        $jalurId = $pendaftaran->gelombangPenerimaan?->jalur_masuk_id;
+        $jalurId = $pendaftaran->resolveJalurMasukId();
         $gelombangId = $pendaftaran->gelombang_id;
 
         if (!$template) {
@@ -651,7 +673,7 @@ class SpmbPendaftaranService
             'asal_sekolah' => $pendaftaran->asal_sekolah ?? $pendaftaran->asal_pt ?? '-',
             'prodi_diterima' => $prodiDiterimaNama,
             'jenjang' => $jenjangDiterima,
-            'jalur' => $pendaftaran->gelombangPenerimaan?->jalurMasuk?->nama ?? 'Reguler',
+            'jalur' => $pendaftaran->resolveJalurMasuk()?->nama ?? config('spmb.label_jalur_default'),
             'gelombang' => $pendaftaran->gelombangPenerimaan?->nama ?? 'Gelombang Utama',
             'tahun_akademik' => $tahunAkademikNama,
             'tanggal_penetapan' => $tanggalPenetapan,
@@ -816,9 +838,9 @@ class SpmbPendaftaranService
      */
     public function terbitkanDanArsipkanSk(PendaftaranCalonMhs $pendaftaran, int $userId): array
     {
-        $pendaftaran->loadMissing(['gelombangPenerimaan.jalurMasuk']);
+        $pendaftaran->loadMissing(['gelombangPenerimaan.jalurMasuk', 'jalurMasuk']);
 
-        $jalurId = $pendaftaran->gelombangPenerimaan?->jalur_masuk_id;
+        $jalurId = $pendaftaran->resolveJalurMasukId();
         $template = $this->resolveTemplateSurat($jalurId, $pendaftaran->gelombang_id, 'sk_lulus');
 
         $arsipRequest = $pendaftaran->skArsipRequest()->with('nomorSurat')->first();

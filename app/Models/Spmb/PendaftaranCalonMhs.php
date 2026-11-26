@@ -38,6 +38,7 @@ class PendaftaranCalonMhs extends Model
 
     protected $fillable = [
         'gelombang_id',
+        'jalur_masuk_id',
         'user_id',
         'program_studi_id',
         'program_studi_pilihan2_id',
@@ -152,6 +153,27 @@ class PendaftaranCalonMhs extends Model
     public function gelombang_penerimaan()
     {
         return $this->gelombangPenerimaan();
+    }
+
+    public function jalurMasuk()
+    {
+        return $this->belongsTo(JalurMasuk::class, 'jalur_masuk_id');
+    }
+
+    /**
+     * Jalur masuk efektif pendaftar: jalur yang disimpan pada pendaftar, atau jalur
+     * milik gelombangnya untuk data lama yang belum memiliki jalur sendiri.
+     */
+    public function resolveJalurMasukId(): ?int
+    {
+        $id = $this->jalur_masuk_id ?? $this->gelombangPenerimaan?->jalur_masuk_id;
+
+        return $id ? (int) $id : null;
+    }
+
+    public function resolveJalurMasuk(): ?JalurMasuk
+    {
+        return $this->jalurMasuk ?? $this->gelombangPenerimaan?->jalurMasuk;
     }
 
     public function user()

@@ -46,7 +46,7 @@ class DaftarUlangController extends Controller
         // Biaya daftar ulang disusun oleh service (fallback otomatis ke SIKEU).
         $prodiId = $hasil->program_studi_diterima_id ?? $pendaftaran->program_studi_id;
         $masterBiayaService = app(MasterBiayaService::class);
-        $details = $masterBiayaService->buildDetailBebanDaftarUlang($pendaftaran->gelombangPenerimaan?->jalur_masuk_id, $prodiId);
+        $details = $masterBiayaService->buildDetailBebanDaftarUlang($pendaftaran->resolveJalurMasukId(), $prodiId);
 
         // Potongan daftar ulang = diskon default gelombang + potongan kustom calon (stacking).
         $potongan = app(\App\Services\Spmb\SpmbPotonganCalonService::class)

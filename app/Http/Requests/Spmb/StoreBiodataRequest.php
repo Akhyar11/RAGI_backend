@@ -99,11 +99,16 @@ class StoreBiodataRequest extends FormRequest
     {
         return [function ($validator): void {
             if ($this->filled('gelombang_id') && $this->filled('jalur_masuk_id')) {
-                $gelombangJalurId = DB::table('spmb_gelombang_penerimaan')
-                    ->where('id', $this->integer('gelombang_id'))
-                    ->value('jalur_masuk_id');
-                if ((int) $gelombangJalurId !== $this->integer('jalur_masuk_id')) {
-                    $validator->errors()->add('jalur_masuk_id', 'Jalur pendaftaran harus sesuai dengan jalur pada gelombang yang dipilih.');
+                try {
+                    app(\App\Services\Spmb\SpmbGelombangResolver::class)->assertCompatible(
+                        \App\Models\Spmb\GelombangPenerimaan::query()->find($this->integer('gelombang_id')),
+                        $this->integer('jalur_masuk_id'),
+                        'jalur_masuk_id',
+                    );
+                } catch (\Illuminate\Validation\ValidationException $e) {
+                    foreach ($e->errors() as $field => $messages) {
+                        $validator->errors()->add($field, $messages[0]);
+                    }
                 }
             }
 

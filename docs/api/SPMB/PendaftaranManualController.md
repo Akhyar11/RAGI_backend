@@ -137,7 +137,8 @@ Membuat akun role `calon_mhs` serta pendaftaran dengan status `submitted`, sumbe
 | Field | Tipe | Wajib | Aturan |
 |---|---|---:|---|
 | `email` | string | Ya | Email valid dan unik di `core_users` |
-| `gelombang_id` | integer | Ya | Harus menunjuk gelombang berstatus aktif |
+| `jalur_masuk_id` | integer | Ya | Jalur pilihan; disimpan pada pendaftar dan dipakai untuk biaya, berkas, dan surat |
+| `gelombang_id` | integer | Tidak | Gelombang aktif yang umum atau dipetakan ke jalur yang sama. Bila kosong, backend memakai gelombang otomatis untuk jalur (lihat `GET /api/spmb/gelombang/resolve`); bila tidak dapat ditentukan, dijawab 422 |
 | `master_tipe_jalur_id` | integer | Ya | ID tipe jalur yang tersedia |
 | `program_studi_id` | integer | Ya | ID program studi aktif |
 | `program_studi_pilihan2_id` | integer/null | Tidak | Program studi kedua; harus berbeda dari pilihan pertama |
@@ -334,3 +335,19 @@ Contoh envelope error API:
 ~~~
 
 Unggahan dicatat di audit log (`SPMB` / `bukti_transfer_ditambahkan`).
+
+## Pemilihan gelombang berbasis jalur (diperbarui 2026-11-26)
+
+Pilih `jalur_masuk_id` lebih dulu. Gelombang yang dikirim harus umum (tanpa jalur) atau dipetakan ke jalur yang sama. Contoh respons 422 bila gelombang dipetakan ke jalur lain:
+
+```json
+{
+  "status": "error",
+  "message": "Gelombang yang dipilih dipetakan ke jalur lain. Pilih gelombang umum atau gelombang untuk jalur ini.",
+  "errors": {
+    "gelombang_id": [
+      "Gelombang yang dipilih dipetakan ke jalur lain. Pilih gelombang umum atau gelombang untuk jalur ini."
+    ]
+  }
+}
+```

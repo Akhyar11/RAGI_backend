@@ -75,7 +75,8 @@ Rincian biaya hanya berasal dari komponen Master Biaya yang ditandai `dibebankan
 
 | Parameter | Type | Required | Deskripsi |
 |---|---|---|---|
-| `gelombang_id` | integer | ❌ | ID Gelombang penerimaan |
+| `jalur_masuk_id` | integer | ❌ | Jalur pendaftaran pilihan; disimpan pada pendaftaran. Bila `gelombang_id` kosong, gelombang ditentukan otomatis jika hanya ada satu gelombang aktif (dalam periode buka) yang cocok untuk jalur (lihat `GET /api/spmb/gelombang/resolve`) |
+| `gelombang_id` | integer | ❌ | ID Gelombang penerimaan; harus gelombang umum atau dipetakan ke `jalur_masuk_id` yang sama, selain itu 422 pada `jalur_masuk_id` |
 | `program_studi_id` | integer | ❌ | ID Program studi pilihan 1 |
 | `program_studi_pilihan2_id` | integer | ❌ | ID Program studi pilihan 2 |
 | `master_tipe_jalur_id` | integer | ❌ | Referensi master tipe jalur |

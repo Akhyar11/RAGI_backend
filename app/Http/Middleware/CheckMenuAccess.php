@@ -17,6 +17,7 @@ class CheckMenuAccess
         'GET /spmb/prodi',
         'GET /spmb/jalur',
         'GET /spmb/gelombang',
+        'GET /spmb/gelombang/resolve',
         'GET /spmb/tahun-akademik',
         'GET /spmb/master-jalur-kelas',
         'GET /spmb/tarif',

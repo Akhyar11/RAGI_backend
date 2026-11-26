@@ -111,6 +111,7 @@ class UpdatePendaftaranRequest extends FormRequest
             'program_studi_id' => ['sometimes', 'required', 'integer', $activeProdi()],
             'program_studi_pilihan2_id' => ['sometimes', 'nullable', 'integer', 'different:program_studi_id', $activeProdi()],
             'gelombang_id' => ['sometimes', 'nullable', 'integer', 'exists:spmb_gelombang_penerimaan,id'],
+            'jalur_masuk_id' => ['sometimes', 'nullable', 'integer', 'exists:spmb_jalur_masuk,id'],
         ];
     }
 

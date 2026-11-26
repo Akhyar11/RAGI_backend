@@ -37,6 +37,7 @@ class PendaftaranController extends Controller
 
         $query = PendaftaranCalonMhs::with([
             'gelombangPenerimaan.jalurMasuk',
+            'jalurMasuk',
             'programStudi',
             'programStudiPilihan2',
             'user'
@@ -59,7 +60,13 @@ class PendaftaranController extends Controller
 
         // Filter by Jalur Masuk (mengikuti jalur pada gelombang pendaftar)
         if ($request->filled('jalur_masuk_id')) {
-            $query->whereHas('gelombangPenerimaan', fn ($q) => $q->where('jalur_masuk_id', $request->integer('jalur_masuk_id')));
+            // Jalur pendaftar; data lama tanpa jalur sendiri mengikuti jalur gelombangnya.
+            $jalurId = $request->integer('jalur_masuk_id');
+            $query->where(function ($q) use ($jalurId) {
+                $q->where('jalur_masuk_id', $jalurId)
+                    ->orWhere(fn ($legacy) => $legacy->whereNull('jalur_masuk_id')
+                        ->whereHas('gelombangPenerimaan', fn ($g) => $g->where('jalur_masuk_id', $jalurId)));
+            });
         }
 
         // Filter by Kode Referral
@@ -103,6 +110,7 @@ class PendaftaranController extends Controller
     {
         $relations = [
             'gelombangPenerimaan',
+            'jalurMasuk',
             'programStudi',
             'programStudiPilihan2',
             'dokumenPendaftaran',

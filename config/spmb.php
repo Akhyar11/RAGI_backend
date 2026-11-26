@@ -12,6 +12,9 @@ return [
     |--------------------------------------------------------------------------
     */
 
+    // Label jalur bila pendaftar belum memiliki jalur (mis. data import legacy).
+    'label_jalur_default' => env('SPMB_LABEL_JALUR_DEFAULT', 'Reguler'),
+
     'import' => [
         // Password awal akun calon mahasiswa hasil import Excel legacy.
         'default_password' => env('SPMB_IMPORT_DEFAULT_PASSWORD') ?: 'indonusa',

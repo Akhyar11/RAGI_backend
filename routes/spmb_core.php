@@ -33,6 +33,7 @@ Route::get('sekolah-mitra', [SpmbSekolahMitraController::class, 'index']);
 Route::post('sekolah-mitra', [SpmbSekolahMitraController::class, 'store']);
 
 Route::get('gelombang', [MasterSpmbController::class, 'getGelombang']);
+Route::get('gelombang/resolve', [MasterSpmbController::class, 'resolveGelombang']);
 Route::get('gelombang/{id}', [MasterSpmbController::class, 'showGelombang']);
 Route::post('gelombang', [MasterSpmbController::class, 'storeGelombang']);
 Route::put('gelombang/{id}', [MasterSpmbController::class, 'updateGelombang']);

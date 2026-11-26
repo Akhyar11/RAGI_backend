@@ -22,6 +22,7 @@ class SpmbPendaftaranManualService
     public function __construct(
         private readonly SpmbReferralService $referralService,
         private readonly FileStorageService $fileStorage,
+        private readonly SpmbGelombangResolver $gelombangResolver,
     ) {}
 
     public function create(array $data, int $adminId, Request $request): array
@@ -38,18 +39,24 @@ class SpmbPendaftaranManualService
 
         try {
             return DB::transaction(function () use ($data, $email, $adminId, $request, $referrerId, $thirdPartyIds, $proof, $proofPath) {
+                $jalurId = (int) $data['jalur_masuk_id'];
+                if (empty($data['gelombang_id'])) {
+                    $resolved = $this->gelombangResolver->forJalur($jalurId);
+                    if ($resolved['mode'] !== SpmbGelombangResolver::MODE_OTOMATIS) {
+                        throw ValidationException::withMessages([
+                            'gelombang_id' => 'Gelombang belum dapat ditentukan otomatis untuk jalur ini. Pilih gelombang aktif.',
+                        ]);
+                    }
+                    $data['gelombang_id'] = $resolved['gelombang']->id;
+                }
+
                 $gelombang = GelombangPenerimaan::query()->lockForUpdate()->findOrFail($data['gelombang_id']);
                 if ($gelombang->status !== 'aktif') {
                     throw ValidationException::withMessages([
                         'gelombang_id' => 'Pendaftaran manual hanya dapat menggunakan gelombang berstatus aktif.',
                     ]);
                 }
-                if ((int) $gelombang->jalur_masuk_id !== (int) $data['jalur_masuk_id']) {
-                    throw ValidationException::withMessages([
-                        'jalur_masuk_id' => 'Jalur pendaftaran harus sesuai dengan jalur pada gelombang yang dipilih.',
-                    ]);
-                }
-                unset($data['jalur_masuk_id']);
+                $this->gelombangResolver->assertCompatible($gelombang, $jalurId);
 
                 $calonRole = Role::where('slug', 'calon_mhs')->first();
                 if (! $calonRole) {

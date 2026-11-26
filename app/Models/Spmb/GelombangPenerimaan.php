@@ -15,6 +15,9 @@ class GelombangPenerimaan extends Model
 {
     use HasFactory;
 
+    /** Status gelombang yang dipakai untuk pendaftaran. */
+    public const STATUS_AKTIF = 'aktif';
+
     protected $table = 'spmb_gelombang_penerimaan';
 
     protected $fillable = [
@@ -86,6 +89,18 @@ class GelombangPenerimaan extends Model
         return $start <= $end
             ? $today >= $start && $today <= $end
             : $today >= $start || $today <= $end;
+    }
+
+    /** Gelombang umum: tidak dipetakan ke jalur mana pun. */
+    public function scopeUmum(Builder $query): Builder
+    {
+        return $query->whereNull('jalur_masuk_id');
+    }
+
+    /** Gelombang yang dipetakan khusus ke jalur tertentu. */
+    public function scopeUntukJalur(Builder $query, int $jalurMasukId): Builder
+    {
+        return $query->where('jalur_masuk_id', $jalurMasukId);
     }
 
     public function scopePendaftaranDibuka(Builder $query, ?Carbon $now = null): Builder

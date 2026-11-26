@@ -226,7 +226,7 @@ class SpmbKodeDiskonService
             $this->assertCodeIsUsable($discountCode);
             $this->assertScopeMatches(
                 $discountCode,
-                (int) $lockedApplication->gelombangPenerimaan?->jalur_masuk_id,
+                (int) $lockedApplication->resolveJalurMasukId(),
                 (int) $lockedApplication->gelombang_id,
             );
             $eligibleDetails = array_values(array_filter(

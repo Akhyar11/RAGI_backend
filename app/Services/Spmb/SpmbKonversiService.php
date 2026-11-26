@@ -44,7 +44,7 @@ class SpmbKonversiService
                     }
                 })->first();
 
-            $jalurKelasNama = $pendaftaran->gelombangPenerimaan?->jalurMasuk?->nama ?? $pendaftaran->jalur_masuk ?? 'Reguler';
+            $jalurKelasNama = $pendaftaran->resolveJalurMasuk()?->nama ?? $pendaftaran->jalur_masuk ?? config('spmb.label_jalur_default');
             $kelompokUkt = $pendaftaran->kelompok_ukt ?? 3;
             $kelas = $this->resolveKelas($pendaftaran);
 

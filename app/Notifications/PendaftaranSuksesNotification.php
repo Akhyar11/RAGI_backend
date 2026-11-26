@@ -43,7 +43,7 @@ class PendaftaranSuksesNotification extends Notification implements ShouldQueue
                     ->greeting('Halo, ' . $this->pendaftaran->nama_lengkap)
                     ->line('Selamat! Registrasi pendaftaran SPMB Anda telah berhasil diterima sistem.')
                     ->line('Nomor Pendaftaran Anda: **' . $this->pendaftaran->no_pendaftaran . '**')
-                    ->line('Jalur: ' . ($this->pendaftaran->gelombangPenerimaan->jalurMasuk->nama ?? 'Jalur SPMB'))
+                    ->line('Jalur: ' . ($this->pendaftaran->resolveJalurMasuk()?->nama ?? 'Jalur SPMB'))
                     ->line('Silakan login ke portal untuk melengkapi berkas dan melanjutkan tahapan berikutnya.')
                     ->action('Login ke Dashboard SPMB', url($frontendUrl . '/login'))
                     ->line('Terima kasih telah mendaftar.');
