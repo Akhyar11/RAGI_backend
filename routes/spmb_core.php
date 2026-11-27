@@ -11,6 +11,7 @@ use App\Http\Controllers\API\Spmb\PendaftaranManualController;
 use App\Http\Controllers\API\Spmb\PotonganCalonController;
 use App\Http\Controllers\API\Spmb\SpmbKuotaProdiController;
 use App\Http\Controllers\API\Spmb\SpmbSekolahMitraController;
+use App\Http\Controllers\API\Spmb\MasterSekolahController;
 use App\Http\Controllers\API\Spmb\SpmbKodeDiskonController;
 
 
@@ -142,3 +143,9 @@ Route::middleware('can:spmb.manage')->post('pendaftaran/{id}/bukti-transfer', [P
     ->whereNumber('id');
 Route::middleware('can:spmb.manage')->get('pendaftaran/{id}/bukti-transfer/{proofId}', [PendaftaranManualController::class, 'downloadProof'])
     ->whereNumber(['id', 'proofId']);
+
+// Master sekolah asal (hasil Create dari form pendaftaran)
+Route::middleware('auth:api')->group(function () {
+    Route::get('master-sekolah', [MasterSekolahController::class, 'index']);
+    Route::post('master-sekolah', [MasterSekolahController::class, 'store']);
+});

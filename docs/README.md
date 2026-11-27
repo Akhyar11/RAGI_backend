@@ -56,6 +56,7 @@
 | HasilSeleksiController | Penetapan hasil seleksi/kelulusan calon mahasiswa | [docs/api/SPMB/HasilSeleksiController.md](api/SPMB/HasilSeleksiController.md) |
 | LaporanSpmbController | Statistik & export laporan pendaftaran SPMB | [docs/api/SPMB/LaporanSpmbController.md](api/SPMB/LaporanSpmbController.md) |
 | TemplateSuratSpmbController | Manajemen template surat kelulusan (SK Tanda Lulus) dinamis & pratinjau PDF | [docs/api/SPMB/TemplateSuratSpmbController.md](api/SPMB/TemplateSuratSpmbController.md) |
+| MasterSekolahController | Master sekolah asal hasil Create pada form pendaftaran (cari & tambah, idempoten) | [docs/api/SPMB/MasterSekolahController.md](api/SPMB/MasterSekolahController.md) |
 
 ---
 
