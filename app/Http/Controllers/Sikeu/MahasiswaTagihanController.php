@@ -219,11 +219,20 @@ class MahasiswaTagihanController extends Controller
 
     /**
      * GET /api/v1/sikeu/mahasiswa/payment-channels
-     * List available payment channels for student from Xendit gateway
+     * List available payment channels for student filtered by active PaymentGatewayConfig
      */
     public function paymentChannels()
     {
-        $channels = [
+        $activeGateways = \App\Models\Sikeu\PaymentGatewayConfig::where('is_active', true)
+            ->pluck('gateway_name')
+            ->flip();
+
+        $bsnActive = $activeGateways->has(\App\Models\Sikeu\PaymentGatewayConfig::H2H);
+        $pgActive = $activeGateways->has(\App\Models\Sikeu\PaymentGatewayConfig::XENDIT)
+            || $activeGateways->has(\App\Models\Sikeu\PaymentGatewayConfig::MIDTRANS);
+        $manualActive = $activeGateways->has(\App\Models\Sikeu\PaymentGatewayConfig::REKENING_MANUAL);
+
+        $allChannels = [
             [
                 'id' => 'BSN',
                 'name' => 'Bank BSN (Virtual Account H2H)',
@@ -235,7 +244,7 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Otomatis Realtime',
                 'description' => 'VA Host-to-Host BSN (CUSTID = No. Pendaftaran), verifikasi otomatis & masuk saldo BSN',
                 'fee' => 0,
-                'is_active' => true,
+                'is_active' => $bsnActive,
             ],
             [
                 'id' => 'MANDIRI',
@@ -248,7 +257,7 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Otomatis Realtime',
                 'description' => 'Livin\' by Mandiri, ATM Mandiri, & Internet Banking',
                 'fee' => 0,
-                'is_active' => true,
+                'is_active' => $pgActive,
             ],
             [
                 'id' => 'BRI',
@@ -261,7 +270,7 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Otomatis Realtime',
                 'description' => 'BRImo, ATM BRI, & Agen BRILink',
                 'fee' => 0,
-                'is_active' => true,
+                'is_active' => $pgActive,
             ],
             [
                 'id' => 'BCA',
@@ -274,7 +283,7 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Otomatis Realtime',
                 'description' => 'myBCA, BCA mobile, KlikBCA, & ATM BCA',
                 'fee' => 0,
-                'is_active' => true,
+                'is_active' => $pgActive,
             ],
             [
                 'id' => 'PERMATA',
@@ -287,7 +296,7 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Otomatis Realtime',
                 'description' => 'PermataMobile X, PermataNet, & ATM Permata',
                 'fee' => 0,
-                'is_active' => true,
+                'is_active' => $pgActive,
             ],
             [
                 'id' => 'QRIS',
@@ -300,7 +309,7 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Scan & Bayar',
                 'description' => 'GoPay, OVO, ShopeePay, DANA, LinkAja, BCA, Mandiri, dll.',
                 'fee' => 0,
-                'is_active' => true,
+                'is_active' => $pgActive,
             ],
             [
                 'id' => 'MANUAL',
@@ -313,13 +322,16 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Upload Bukti',
                 'description' => 'Transfer ke rekening BNI/BSN kampus lalu unggah bukti, diverifikasi keuangan',
                 'fee' => 0,
-                'is_active' => true,
+                'is_active' => $manualActive,
             ],
         ];
 
+        $channels = array_values(array_filter($allChannels, fn ($ch) => $ch['is_active']));
+
         return response()->json([
             'status' => 'success',
-            'data' => $channels
+            'message' => 'Daftar saluran pembayaran berhasil diambil.',
+            'data' => $channels,
         ]);
     }
 
