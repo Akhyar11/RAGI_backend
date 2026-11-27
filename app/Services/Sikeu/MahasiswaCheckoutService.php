@@ -248,7 +248,29 @@ class MahasiswaCheckoutService
             ];
         }
 
-        if (empty($active->api_key_encrypted)) {
+        $rawEncryptedKey = $active->getRawOriginal('api_key_encrypted');
+        if (empty($rawEncryptedKey)) {
+            throw ValidationException::withMessages(['gateway' => 'Kredensial Payment Gateway aktif belum dikonfigurasi admin.']);
+        }
+
+        try {
+            $apiKey = Crypt::decryptString($rawEncryptedKey);
+        } catch (\Throwable $e) {
+            try {
+                $apiKey = $active->api_key_encrypted;
+            } catch (\Throwable $inner) {
+                Log::error('Gagal mendekripsi API key payment gateway', [
+                    'gateway_id' => $active->id,
+                    'gateway_name' => $active->gateway_name,
+                    'error' => $inner->getMessage(),
+                ]);
+                throw ValidationException::withMessages([
+                    'gateway' => 'Kredensial Payment Gateway tidak dapat didekripsi. Silakan simpan ulang Server Key di pengaturan Payment Gateway admin.',
+                ]);
+            }
+        }
+
+        if (empty($apiKey)) {
             throw ValidationException::withMessages(['gateway' => 'Kredensial Payment Gateway aktif belum dikonfigurasi admin.']);
         }
 
@@ -298,13 +320,6 @@ class MahasiswaCheckoutService
             Log::warning('Gagal mencatat audit log create checkout attempt: ' . $e->getMessage());
         }
 
-        $apiKey = $active->api_key_encrypted;
-        try {
-            $apiKey = Crypt::decryptString($active->getRawOriginal('api_key_encrypted'));
-        } catch (\Throwable) {
-            $apiKey = $active->api_key_encrypted;
-        }
-
         $client = Http::withBasicAuth($apiKey, '')
             ->acceptJson()
             ->timeout(20);
@@ -315,7 +330,9 @@ class MahasiswaCheckoutService
                 $endpoint = $active->environment === 'production'
                     ? 'https://app.midtrans.com/snap/v1/transactions'
                     : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
-                $response = $client->post($endpoint, [
+                $response = $client->withHeaders([
+                    'X-Override-Notification' => rtrim((string) config('app.url'), '/') . '/api/v1/sikeu/callback/midtrans',
+                ])->post($endpoint, [
                     'transaction_details' => ['order_id' => $orderId, 'gross_amount' => $sisa],
                     'customer_details' => array_filter([
                         'first_name' => Str::limit($mhs->nama_lengkap ?? 'Mahasiswa', 50, ''),

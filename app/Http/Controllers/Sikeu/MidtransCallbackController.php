@@ -412,8 +412,9 @@ class MidtransCallbackController extends Controller
         try {
             $response = Http::withBasicAuth($serverKey, '')
                 ->withHeaders([
-                    'Accept'       => 'application/json',
-                    'Content-Type' => 'application/json',
+                    'Accept'                  => 'application/json',
+                    'Content-Type'            => 'application/json',
+                    'X-Override-Notification' => rtrim((string) config('app.url'), '/') . '/api/v1/sikeu/callback/midtrans',
                 ])
                 ->timeout(15)
                 ->post($snapEndpoint, $snapPayload);

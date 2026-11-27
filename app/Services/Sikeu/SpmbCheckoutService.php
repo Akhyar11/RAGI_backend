@@ -90,7 +90,9 @@ class SpmbCheckoutService
         try {
             if ($gateway->gateway_name === PaymentGatewayConfig::MIDTRANS) {
                 $endpoint = $gateway->environment === 'production' ? 'https://app.midtrans.com/snap/v1/transactions' : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
-                $response = $client->post($endpoint, [
+                $response = $client->withHeaders([
+                    'X-Override-Notification' => rtrim((string) config('app.url'), '/') . '/api/v1/sikeu/callback/midtrans',
+                ])->post($endpoint, [
                     'transaction_details' => ['order_id' => $attempt->order_id, 'gross_amount' => $amount],
                     'customer_details' => array_filter(['first_name' => Str::limit($application->nama_lengkap, 50, ''),
                         'email' => $application->email ?: $application->user?->email, 'phone' => $application->no_hp]),
