@@ -12,6 +12,8 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 |---|---|---|---|
 | GET | `/api/spmb/master/tahun-akademik` | Mendapatkan daftar master tahun akademik aktif | ✅ Admin / Staff |
 | GET | `/api/spmb/master/jalur` | Mendapatkan daftar jalur seleksi penerimaan | ✅ Admin / Staff |
+| POST | `/api/spmb/jalur` | Membuat jalur masuk baru | ✅ `spmb.manage` |
+| PUT | `/api/spmb/jalur/{id}` | Memperbarui jalur masuk | ✅ `spmb.manage` |
 | GET | `/api/spmb/master/gelombang` | Mendapatkan daftar gelombang penerimaan berpaginasi | ✅ Admin / Staff |
 | GET | `/api/spmb/gelombang/resolve` | Menentukan gelombang (otomatis/pilih/tidak tersedia) untuk jalur yang dipilih | ✅ Admin SPMB / Calon Mhs |
 | GET | `/api/spmb/master/gelombang/{id}` | Mendapatkan detail informasi gelombang penerimaan | ✅ Admin / Staff |
@@ -80,6 +82,8 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 
 ---
 
+> **Pilihan Perguruan Tinggi**: field `pilih_perguruan_tinggi` pada jalur menentukan apakah form registrasi dan input manual mengaktifkan isian perguruan tinggi asal. Lihat bagian POST/PUT jalur di bawah. Diperbarui: 2026-11-27.
+
 ## [GET] /api/spmb/master/jalur
 
 > Mengambil daftar master jalur seleksi penerimaan mahasiswa baru.
@@ -114,6 +118,8 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
             "id": 1,
             "kode": "REG",
             "nama": "Reguler",
+            "ada_wawancara": false,
+            "pilih_perguruan_tinggi": false,
             "is_active": true,
             "created_at": "2026-09-21T00:00:00.000000Z"
         }
@@ -154,6 +160,151 @@ Dokumentasi API untuk referensi master SPMB meliputi tahun akademik, jalur penda
 ```
 
 ---
+
+## [POST] /api/spmb/jalur
+
+> Membuat jalur masuk baru. Diperbarui: 2026-11-27 (menambah `pilih_perguruan_tinggi`).
+
+### Headers
+
+| Header | Nilai | Wajib |
+|---|---|---|
+| `Authorization` | `Bearer <access_token>` | ✅ |
+| `Accept` | `application/json` | ✅ |
+| `Content-Type` | `application/json` | ✅ |
+
+### Request Body
+
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `kode` | string | ✅ | Kode unik jalur |
+| `nama` | string | ✅ | Nama jalur |
+| `deskripsi` | string | - | Keterangan jalur |
+| `ada_wawancara` | boolean | ✅ | Pendaftar jalur ini wajib wawancara |
+| `pilih_perguruan_tinggi` | boolean | - | Mengaktifkan isian perguruan tinggi asal pada form registrasi dan input manual. Default `false` bila tidak dikirim |
+| `is_active` | boolean | ✅ | Jalur aktif dapat dipilih saat pendaftaran |
+
+```json
+{
+    "kode": "TRF",
+    "nama": "Transfer",
+    "deskripsi": "Alih jenjang / pindahan",
+    "ada_wawancara": false,
+    "pilih_perguruan_tinggi": true,
+    "is_active": true
+}
+```
+
+### Response Sukses
+
+**201 Created**
+```json
+{
+    "status": "success",
+    "message": "Jalur masuk berhasil dibuat.",
+    "data": {
+        "id": 2,
+        "kode": "TRF",
+        "nama": "Transfer",
+        "deskripsi": "Alih jenjang / pindahan",
+        "ada_wawancara": false,
+        "pilih_perguruan_tinggi": true,
+        "is_active": true,
+        "created_at": "2026-11-27T07:00:00.000000Z",
+        "updated_at": "2026-11-27T07:00:00.000000Z"
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**422 Unprocessable Entity** (mis. `pilih_perguruan_tinggi` bukan boolean, atau `kode` sudah dipakai)
+```json
+{
+    "status": "error",
+    "message": "The pilih perguruan tinggi field must be true or false.",
+    "errors": { "pilih_perguruan_tinggi": ["The pilih perguruan tinggi field must be true or false."] }
+}
+```
+
+## [PUT] /api/spmb/jalur/{id}
+
+> Memperbarui jalur masuk. Body sama dengan POST; `pilih_perguruan_tinggi` bersifat opsional dan **tidak berubah** bila tidak dikirim. Diperbarui: 2026-11-27.
+
+### Request Body
+
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `kode` | string | ✅ | Kode unik jalur (unik selain baris ini) |
+| `nama` | string | ✅ | Nama jalur |
+| `deskripsi` | string | - | Keterangan jalur |
+| `ada_wawancara` | boolean | ✅ | Pendaftar jalur ini wajib wawancara |
+| `pilih_perguruan_tinggi` | boolean | - | Mengaktifkan isian perguruan tinggi asal; tidak dikirim berarti nilai lama dipertahankan |
+| `is_active` | boolean | ✅ | Status aktif jalur |
+
+```json
+{
+    "kode": "TRF",
+    "nama": "Transfer",
+    "ada_wawancara": false,
+    "pilih_perguruan_tinggi": false,
+    "is_active": true
+}
+```
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Jalur masuk berhasil diperbarui.",
+    "data": {
+        "id": 2,
+        "kode": "TRF",
+        "nama": "Transfer",
+        "ada_wawancara": false,
+        "pilih_perguruan_tinggi": false,
+        "is_active": true
+    }
+}
+```
+
+### Response Error
+
+**401 Unauthorized**
+```json
+{ "status": "error", "message": "Unauthenticated." }
+```
+
+**403 Forbidden**
+```json
+{ "status": "error", "message": "This action is unauthorized." }
+```
+
+**404 Not Found**
+```json
+{ "status": "error", "message": "Data tidak ditemukan." }
+```
+
+**422 Unprocessable Entity**
+```json
+{
+    "status": "error",
+    "message": "The kode field is required.",
+    "errors": { "kode": ["The kode field is required."] }
+}
+```
 
 ## [GET] /api/spmb/master/gelombang
 

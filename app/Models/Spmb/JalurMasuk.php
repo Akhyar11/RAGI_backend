@@ -17,12 +17,14 @@ class JalurMasuk extends Model
         'deskripsi',
         'is_active',
         'ada_wawancara',
+        'pilih_perguruan_tinggi',
     ];
 
     protected $hidden = ['pivot'];
 
     protected $casts = [
         'ada_wawancara' => 'boolean',
+        'pilih_perguruan_tinggi' => 'boolean',
         'is_active' => 'boolean',
     ];
 

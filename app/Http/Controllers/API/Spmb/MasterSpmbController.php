@@ -113,6 +113,7 @@ class MasterSpmbController extends Controller
             'nama' => 'required|string',
             'deskripsi' => 'nullable|string',
             'ada_wawancara' => 'required|boolean',
+            'pilih_perguruan_tinggi' => 'sometimes|boolean',
             'is_active' => 'required|boolean',
         ]);
 
@@ -137,6 +138,7 @@ class MasterSpmbController extends Controller
             'nama' => 'required|string',
             'deskripsi' => 'nullable|string',
             'ada_wawancara' => 'required|boolean',
+            'pilih_perguruan_tinggi' => 'sometimes|boolean',
             'is_active' => 'required|boolean',
         ]);
 

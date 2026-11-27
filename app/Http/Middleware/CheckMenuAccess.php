@@ -22,6 +22,9 @@ class CheckMenuAccess
         'GET /spmb/master-jalur-kelas',
         'GET /spmb/tarif',
         'GET /spmb/sekolah-mitra',
+        // Master sekolah asal untuk opsi Create pada form pendaftaran (izin dicek di controller)
+        'GET /spmb/master-sekolah',
+        'POST /spmb/master-sekolah',
         // Pendaftaran mandiri calon mahasiswa
         'GET /spmb/pendaftaran/me',
         'GET /spmb/pendaftaran/{id}',

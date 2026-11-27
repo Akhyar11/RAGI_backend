@@ -19,6 +19,8 @@ Mengelola **master sekolah asal** (`spmb_master_sekolah`): sekolah yang belum ad
 | GET | `/api/spmb/master-sekolah` | Cari sekolah asal (berpaginasi) | ✅ `spmb.manage` atau `spmb.pendaftaran.read` |
 | POST | `/api/spmb/master-sekolah` | Tambah sekolah asal (idempoten) | ✅ `spmb.manage` atau `spmb.pendaftaran.create` |
 
+Kedua endpoint terdaftar pada `PUBLIC_PATHS` middleware `CheckMenuAccess` (tidak memerlukan menu), sehingga admin SPMB non-superadmin dan calon mahasiswa dapat memakainya; autentikasi tetap wajib dan izin dicek di controller (`403` bila tidak memiliki izin).
+
 Aksi `POST` dicatat pada audit log (`SPMB` / `master_sekolah_dibuat`, `master_sekolah_alamat_diperbarui`).
 
 ## GET `/api/spmb/master-sekolah`
