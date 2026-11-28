@@ -207,13 +207,18 @@ class ExternalTagihanController extends Controller
         })->filter()->implode(', ') ?: ($t?->catatan_approval ?? 'Tagihan Mahasiswa');
 
         $isValid = ($pembayaran->status === 'success');
+        $channelUpper = strtoupper((string) $pembayaran->channel_bayar);
         $channelName = match ($pembayaran->channel_bayar) {
             'LOKET_TUNAI' => 'Tunai di Loket Kasir Kampus',
             'LOKET_TRANSFER' => 'Transfer Manual Rekening Resmi Kampus',
             'TRANSFER_BANK', 'MIGRASI', 'LEGACY' => 'Transfer Bank (Migrasi / Manual)',
-            default => str_contains(strtoupper((string) $pembayaran->channel_bayar), 'XENDIT') || str_contains(strtoupper((string) $pembayaran->channel_bayar), 'VA')
-                ? 'Virtual Account Online (Xendit)'
-                : ($pembayaran->channel_bayar ?: 'Transfer Bank'),
+            default => str_contains($channelUpper, 'MIDTRANS')
+                ? 'Pembayaran Online (Midtrans — ' . trim(str_replace('MIDTRANS_', '', $channelUpper)) . ')'
+                : (str_contains($channelUpper, 'H2H') || str_contains($channelUpper, 'BSN')
+                    ? 'Virtual Account H2H (BTN Syariah / BSN)'
+                    : (str_contains($channelUpper, 'XENDIT') || str_contains($channelUpper, 'VA')
+                        ? 'Virtual Account Online (Xendit)'
+                        : ($pembayaran->channel_bayar ?: 'Transfer Bank'))),
         };
 
         $kasirName = match ($pembayaran->channel_bayar) {

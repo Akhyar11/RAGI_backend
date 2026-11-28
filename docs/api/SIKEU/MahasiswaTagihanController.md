@@ -47,3 +47,42 @@
     ]
 }
 ```
+
+
+---
+
+## GET /api/v1/sikeu/mahasiswa/payment-channels
+
+> Mengambil daftar kanal pembayaran yang tersedia untuk mahasiswa, difilter berdasarkan konfigurasi `PaymentGatewayConfig` yang aktif (`bsn_h2h`, `xendit`, `midtrans`, `rekening_manual`).
+
+### Headers
+
+| Key | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | ✅ |
+| `Accept` | `application/json` | ✅ |
+
+### Response Sukses
+
+**200 OK**
+```json
+{
+    "status": "success",
+    "message": "Daftar saluran pembayaran berhasil diambil.",
+    "data": [
+        {
+            "id": "BSN",
+            "name": "Bank BSN (Virtual Account H2H)",
+            "code": "BSN",
+            "type": "VIRTUAL_ACCOUNT",
+            "category": "va",
+            "prefix": "90012",
+            "logo_color": "from-teal-700 to-emerald-800",
+            "badge": "Otomatis Realtime",
+            "description": "VA Host-to-Host BSN (CUSTID = No. Pendaftaran), verifikasi otomatis & masuk saldo BSN",
+            "fee": 0,
+            "is_active": true
+        }
+    ]
+}
+```

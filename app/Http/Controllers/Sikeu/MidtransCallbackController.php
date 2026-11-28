@@ -89,7 +89,7 @@ class MidtransCallbackController extends Controller
             ], 404);
         }
 
-        abort_if($tagihan->payment_gateway_config_id !== null, 422, 'Pembayaran tagihan ini wajib menggunakan checkout yang diterbitkan.');
+        abort_if($tagihan->payment_gateway_config_id !== null && $tagihan->calon_mahasiswa_id !== null, 422, 'Pembayaran tagihan ini wajib menggunakan checkout yang diterbitkan.');
 
         // 4. Proses Status Pembayaran
         $nominal = (float) $grossAmount;
@@ -340,7 +340,7 @@ class MidtransCallbackController extends Controller
             ], 422);
         }
 
-        if ($tagihan->payment_gateway_config_id) {
+        if ($tagihan->payment_gateway_config_id && $tagihan->calon_mahasiswa_id) {
             abort_unless($tagihan->payment_gateway_name === \App\Models\Sikeu\PaymentGatewayConfig::MIDTRANS, 422, 'Tagihan menggunakan kanal pembayaran lain.');
             $checkout = app(\App\Services\Sikeu\SpmbCheckoutService::class)->checkout($tagihan->id);
             $attempt = \App\Models\Sikeu\PaymentCheckout::where('order_id', $checkout['order_id'])->firstOrFail();

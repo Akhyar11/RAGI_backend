@@ -228,11 +228,24 @@ class MahasiswaTagihanController extends Controller
             ->flip();
 
         $bsnActive = $activeGateways->has(\App\Models\Sikeu\PaymentGatewayConfig::H2H);
-        $pgActive = $activeGateways->has(\App\Models\Sikeu\PaymentGatewayConfig::XENDIT)
-            || $activeGateways->has(\App\Models\Sikeu\PaymentGatewayConfig::MIDTRANS);
+        $midtransActive = $activeGateways->has(\App\Models\Sikeu\PaymentGatewayConfig::MIDTRANS);
+        $xenditActive = $activeGateways->has(\App\Models\Sikeu\PaymentGatewayConfig::XENDIT);
         $manualActive = $activeGateways->has(\App\Models\Sikeu\PaymentGatewayConfig::REKENING_MANUAL);
 
         $allChannels = [
+            [
+                'id' => 'MIDTRANS',
+                'name' => 'Midtrans Snap (VA Bank, QRIS, E-Wallet, Kartu)',
+                'code' => 'MIDTRANS',
+                'type' => 'SNAP',
+                'category' => 'instant',
+                'prefix' => 'SNAP',
+                'logo_color' => 'from-blue-600 to-indigo-700',
+                'badge' => 'Snap Popup',
+                'description' => 'BCA VA, BRI VA, Mandiri, Permata, QRIS, GoPay, ShopeePay, Kartu Kredit/Debit',
+                'fee' => 0,
+                'is_active' => $midtransActive,
+            ],
             [
                 'id' => 'BSN',
                 'name' => 'Bank BSN (Virtual Account H2H)',
@@ -257,7 +270,7 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Otomatis Realtime',
                 'description' => 'Livin\' by Mandiri, ATM Mandiri, & Internet Banking',
                 'fee' => 0,
-                'is_active' => $pgActive,
+                'is_active' => $xenditActive,
             ],
             [
                 'id' => 'BRI',
@@ -270,7 +283,7 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Otomatis Realtime',
                 'description' => 'BRImo, ATM BRI, & Agen BRILink',
                 'fee' => 0,
-                'is_active' => $pgActive,
+                'is_active' => $xenditActive,
             ],
             [
                 'id' => 'BCA',
@@ -283,7 +296,7 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Otomatis Realtime',
                 'description' => 'myBCA, BCA mobile, KlikBCA, & ATM BCA',
                 'fee' => 0,
-                'is_active' => $pgActive,
+                'is_active' => $xenditActive,
             ],
             [
                 'id' => 'PERMATA',
@@ -296,7 +309,7 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Otomatis Realtime',
                 'description' => 'PermataMobile X, PermataNet, & ATM Permata',
                 'fee' => 0,
-                'is_active' => $pgActive,
+                'is_active' => $xenditActive,
             ],
             [
                 'id' => 'QRIS',
@@ -309,7 +322,7 @@ class MahasiswaTagihanController extends Controller
                 'badge' => 'Scan & Bayar',
                 'description' => 'GoPay, OVO, ShopeePay, DANA, LinkAja, BCA, Mandiri, dll.',
                 'fee' => 0,
-                'is_active' => $pgActive,
+                'is_active' => $xenditActive,
             ],
             [
                 'id' => 'MANUAL',
