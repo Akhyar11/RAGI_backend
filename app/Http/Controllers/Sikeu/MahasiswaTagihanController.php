@@ -245,6 +245,8 @@ class MahasiswaTagihanController extends Controller
                 'description' => 'BCA VA, BRI VA, Mandiri, Permata, QRIS, GoPay, ShopeePay, Kartu Kredit/Debit',
                 'fee' => 0,
                 'is_active' => $midtransActive,
+                'is_direct_gateway' => true,
+                'checkout_label' => 'Bayar via Midtrans Snap',
             ],
             [
                 'id' => 'BSN',
